@@ -131,7 +131,7 @@ const BOMCreation = () => {
     try {
       setIncomingLoading(true);
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/sales-orders/incoming?department=DESIGN_ENG`, {
+      const response = await fetch(`${API_BASE}/sales-orders/incoming?department=DESIGN_ENG&includeAccepted=true`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!response.ok) throw new Error('Failed to fetch incoming design requests');
@@ -160,11 +160,6 @@ const BOMCreation = () => {
       if (!response.ok) throw new Error('Failed to approve item');
 
       successToast('Item approved and moved to Process list');
-
-      // Update local state if in review modal
-      setReviewDetails(prev => prev.map(item => 
-        item.id === itemId ? { ...item, status: 'Approved ', item_status: 'Approved ' } : item
-      ));
 
       fetchOrders();
       fetchIncomingRequests();
@@ -210,17 +205,6 @@ const BOMCreation = () => {
 
         successToast('Item marked as rejected');
         
-        // Update local state if in review modal
-        setReviewDetails(prev => prev.map(item => 
-          item.id === itemId ? { 
-            ...item, 
-            status: 'REJECTED', 
-            item_status: 'REJECTED',
-            rejection_reason: reason,
-            item_rejection_reason: reason
-          } : item
-        ));
-
         fetchOrders();
         fetchIncomingRequests();
       } catch (error) {
@@ -930,22 +914,34 @@ const BOMCreation = () => {
                           </div>
                         </td>
                         <td className="px-4 py-3 text-center whitespace-nowrap">
-                          <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-[10px] font-bold border border-amber-200">
-                            Awaiting Approval
-                          </span>
+                          {group.items.every(i => i.item_status && i.item_status.trim().toUpperCase() === 'APPROVED') ? (
+                            <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-[10px] font-bold border border-emerald-200 uppercase">
+                              Approved
+                            </span>
+                          ) : group.items.some(i => i.item_status && i.item_status.trim().toUpperCase() === 'REJECTED') ? (
+                            <span className="px-2 py-0.5 bg-rose-100 text-rose-700 rounded text-[10px] font-bold border border-rose-200 uppercase">
+                              Has Rejections
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-[10px] font-bold border border-amber-200">
+                              Awaiting Approval
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-right whitespace-nowrap">
                           <div className="flex justify-end gap-2">
-                            <button
-                              onClick={(e) => { e.stopPropagation(); handleApproveGroup(group); }}
-                              disabled={bulkOperationLoading}
-                              className="px-3 py-1.5 bg-emerald-600 text-white rounded text-[10px] font-bold hover:bg-emerald-700 transition-all shadow-md shadow-emerald-50 active:scale-95 disabled:opacity-50 flex items-center gap-1.5"
-                            >
-                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
-                              </svg>
-                              Approve Group
-                            </button>
+                            {group.items.some(i => !i.item_status || (i.item_status.trim().toUpperCase() !== 'APPROVED' && i.item_status.trim().toUpperCase() !== 'REJECTED')) && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleApproveGroup(group); }}
+                                disabled={bulkOperationLoading}
+                                className="px-3 py-1.5 bg-emerald-600 text-white rounded text-[10px] font-bold hover:bg-emerald-700 transition-all shadow-md shadow-emerald-50 active:scale-95 disabled:opacity-50 flex items-center gap-1.5"
+                              >
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
+                                </svg>
+                                Approve Group
+                              </button>
+                            )}
                             <button
                               onClick={(e) => { e.stopPropagation(); toggleIncomingRequest(group.client_name); }}
                               className="px-3 py-1.5 bg-white text-slate-600 border border-slate-200 rounded text-[10px] font-bold hover:bg-slate-50 transition-all shadow-sm active:scale-95"
@@ -966,6 +962,7 @@ const BOMCreation = () => {
                                       <th className="px-4 py-2 text-left text-[10px] font-bold text-slate-400 uppercase tracking-wider w-10">#</th>
                                       <th className="px-4 py-2 text-left text-[10px] font-bold text-slate-400 uppercase tracking-wider">Drawing</th>
                                       <th className="px-4 py-2 text-left text-[10px] font-bold text-slate-400 uppercase tracking-wider">Description</th>
+                                      <th className="px-4 py-2 text-center text-[10px] font-bold text-slate-400 uppercase tracking-wider">Status</th>
                                       <th className="px-4 py-2 text-right text-[10px] font-bold text-slate-400 uppercase tracking-wider">Actions</th>
                                     </tr>
                                   </thead>
@@ -979,6 +976,28 @@ const BOMCreation = () => {
                                         <td className="px-4 py-2">
                                           <span className="text-xs text-slate-600 font-medium italic">{req.item_description || req.material_name || req.description || 'No Description'}</span>
                                         </td>
+                                        <td className="px-4 py-2 text-center">
+                                          {req.item_status && req.item_status.trim().toUpperCase() === 'APPROVED' ? (
+                                            <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded text-[9px] font-bold border border-emerald-100 uppercase">
+                                              Approved
+                                            </span>
+                                          ) : req.item_status && req.item_status.trim().toUpperCase() === 'REJECTED' ? (
+                                            <div className="flex flex-col items-center">
+                                              <span className="px-2 py-0.5 bg-rose-50 text-rose-600 rounded text-[9px] font-bold border border-rose-100 uppercase">
+                                                Rejected
+                                              </span>
+                                              {req.item_rejection_reason && (
+                                                <span className="text-[8px] text-rose-400 mt-0.5 max-w-[120px] truncate" title={req.item_rejection_reason}>
+                                                  {req.item_rejection_reason}
+                                                </span>
+                                              )}
+                                            </div>
+                                          ) : (
+                                            <span className="px-2 py-0.5 bg-slate-50 text-slate-500 rounded text-[9px] font-bold border border-slate-100 uppercase">
+                                              Pending
+                                            </span>
+                                          )}
+                                        </td>
                                         <td className="px-4 py-2 text-right">
                                           <div className="flex justify-end gap-1.5">
                                             <button
@@ -989,23 +1008,27 @@ const BOMCreation = () => {
                                               <Eye className="w-3 h-3" />
                                               <span className="text-[10px] font-bold">Preview</span>
                                             </button>
-                                            <button
-                                              onClick={() => handleRejectItem(req.item_id)}
-                                              disabled={bulkOperationLoading}
-                                              className="px-2 py-1 bg-white text-rose-600 border border-rose-100 rounded text-[10px] font-bold hover:bg-rose-50 transition-all active:scale-95 disabled:opacity-50"
-                                            >
-                                              Reject
-                                            </button>
-                                            <button
-                                              onClick={() => handleApproveItem(req.item_id)}
-                                              disabled={bulkOperationLoading}
-                                              className="px-2 py-1 bg-emerald-600 text-white rounded text-[10px] font-bold hover:bg-emerald-700 transition-all shadow-sm shadow-emerald-50 active:scale-95 disabled:opacity-50 flex items-center gap-1"
-                                            >
-                                              <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M5 13l4 4L19 7" />
-                                              </svg>
-                                              Approve
-                                            </button>
+                                            {(!req.item_status || (req.item_status.trim().toUpperCase() !== 'APPROVED' && req.item_status.trim().toUpperCase() !== 'REJECTED')) && (
+                                              <>
+                                                <button
+                                                  onClick={() => handleRejectItem(req.item_id)}
+                                                  disabled={bulkOperationLoading}
+                                                  className="px-2 py-1 bg-white text-rose-600 border border-rose-100 rounded text-[10px] font-bold hover:bg-rose-50 transition-all active:scale-95 disabled:opacity-50"
+                                                >
+                                                  Reject
+                                                </button>
+                                                <button
+                                                  onClick={() => handleApproveItem(req.item_id)}
+                                                  disabled={bulkOperationLoading}
+                                                  className="px-2 py-1 bg-emerald-600 text-white rounded text-[10px] font-bold hover:bg-emerald-700 transition-all shadow-sm shadow-emerald-50 active:scale-95 disabled:opacity-50 flex items-center gap-1"
+                                                >
+                                                  <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M5 13l4 4L19 7" />
+                                                  </svg>
+                                                  Approve
+                                                </button>
+                                              </>
+                                            )}
                                           </div>
                                         </td>
                                       </tr>

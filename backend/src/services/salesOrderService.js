@@ -65,12 +65,12 @@ const getSalesOrderById = async (id) => {
   return order;
 };
 
-const getIncomingOrders = async (departmentCode) => {
-  console.log(`[getIncomingOrders-service] Starting query for department: "${departmentCode}"`);
+const getIncomingOrders = async (departmentCode, includeAccepted = false) => {
+  console.log(`[getIncomingOrders-service] Starting query for department: "${departmentCode}", includeAccepted: ${includeAccepted}`);
   
   let whereClause = '';
   if (departmentCode === 'DESIGN_ENG') {
-    whereClause = `so.status IN ('CREATED', 'DESIGN_QUERY')`;
+    whereClause = `so.status IN ('CREATED', 'DESIGN_QUERY', 'DESIGN_IN_REVIEW')`;
   } else if (departmentCode === 'PROCUREMENT') {
     whereClause = `so.status IN ('CREATED', 'DESIGN_IN_REVIEW', 'DESIGN_Approved ', 'PROCUREMENT_IN_PROGRESS', 'MATERIAL_PURCHASE_IN_PROGRESS')`;
   } else if (departmentCode === 'INVENTORY') {
@@ -85,6 +85,8 @@ const getIncomingOrders = async (departmentCode) => {
     whereClause = `so.current_department = '${departmentCode}'`;
   }
   
+  const acceptedFilter = includeAccepted ? '' : 'AND so.request_accepted = 0';
+
   const query = `SELECT so.*, so.target_dispatch_date as delivery_date, c.company_name, c.company_code, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path, 
             d.name as current_dept_name,
             soi.item_id, soi.item_code, soi.drawing_no, soi.description AS item_description, soi.quantity AS item_qty, soi.unit AS item_unit, soi.item_status, soi.item_rejection_reason,
@@ -109,7 +111,7 @@ const getIncomingOrders = async (departmentCode) => {
        ) d2 ON d1.id = d2.max_id
      ) cd ON cd.drawing_no = soi.drawing_no
      LEFT JOIN stock_balance sb ON sb.item_code = soi.item_code
-     WHERE (${whereClause}) AND so.request_accepted = 0
+     WHERE (${whereClause}) ${acceptedFilter}
      ORDER BY so.created_at DESC`;
   
   const [rows] = await pool.query(query);
