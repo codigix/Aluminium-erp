@@ -73,17 +73,17 @@ const CustomerPO = ({
 
     const quote = quotationRequests.find(q => q.id === parseInt(quoteId));
     if (quote) {
-      // Find all items in the same batch (same company, sales order, and created at roughly the same time)
-      const quoteTime = new Date(quote.created_at).getTime();
+      // Find all items in the same version batch
       const relatedItems = quotationRequests.filter(q => {
-        const qTime = new Date(q.created_at).getTime();
+        // Group items that belong to the SAME version of the SAME quotation revision set
+        // Use sales_order_id and version as the primary grouping criteria
         return q.company_id === quote.company_id && 
                q.sales_order_id === quote.sales_order_id &&
-               Math.abs(qTime - quoteTime) < 60000; // 1 minute window for the same batch
+               q.version === quote.version;
       });
 
       const items = relatedItems
-        .filter(item => item.status !== 'REJECTED')
+        .filter(item => item.status?.toUpperCase() === 'APPROVED')
         .map(item => {
           const qty = parseFloat(item.item_qty) || 0;
           const totalAmount = parseFloat(item.total_amount) || 0;
@@ -107,7 +107,7 @@ const CustomerPO = ({
         items: items.length > 0 ? items : prev.items
       }));
       
-      showToast(`Loaded ${items.length} items from quotation QRT-${String(quote.id).padStart(4, '0')}`);
+      showToast(`Loaded ${items.length} approved items from quotation QRT-${String(quote.id).padStart(4, '0')} (Version ${quote.version || 1})`);
     }
   };
 
@@ -481,28 +481,38 @@ const CustomerPO = ({
                           const batches = [];
                           const processedIds = new Set();
                           
-                          quotationRequests.forEach(q => {
+                          // First, filter only approved items
+                          const approvedItems = quotationRequests.filter(q => q.status?.trim().toUpperCase() === 'APPROVED');
+                          
+                          approvedItems.forEach(q => {
                             if (processedIds.has(q.id)) return;
                             
-                            // ONLY show APPROVED quotations in the dropdown
-                            if (q.status?.toUpperCase() !== 'APPROVED') return;
-                            
-                            const qTime = new Date(q.created_at).getTime();
-                            const batchItems = quotationRequests.filter(t => 
+                            // Group items that belong to the SAME version of the SAME quotation revision set
+                            const batchItems = approvedItems.filter(t => 
                               t.company_id === q.company_id && 
                               t.sales_order_id === q.sales_order_id &&
-                              Math.abs(new Date(t.created_at).getTime() - qTime) < 60000
+                              t.version === q.version
                             );
                             
-                            // Use the smallest ID as representative
+                            // Use the smallest ID as representative for the dropdown value
                             const representative = batchItems.reduce((min, cur) => cur.id < min.id ? cur : min, batchItems[0]);
-                            batches.push(representative);
+                            
+                            // Double check: don't add duplicate batches (same SO + same version)
+                            const isAlreadyAdded = batches.some(b => 
+                              b.sales_order_id === representative.sales_order_id && 
+                              b.version === representative.version
+                            );
+                            
+                            if (!isAlreadyAdded) {
+                              batches.push(representative);
+                            }
+                            
                             batchItems.forEach(item => processedIds.add(item.id));
                           });
                           
                           return batches.map(q => (
                             <option key={q.id} value={q.id}>
-                              QRT-{String(q.id).padStart(4, '0')} - {q.company_name} ({q.project_name || 'No Project'})
+                              QRT-{String(q.id).padStart(4, '0')} - {q.company_name} ({q.project_name || 'No Project'}) {q.version > 1 ? `(V${q.version})` : ''}
                             </option>
                           ));
                         })()}
