@@ -474,7 +474,7 @@ export const Pagination = ({ currentPage, totalPages, onPageChange, totalItems, 
   );
 };
 
-export const DataTable = ({ columns, data, loading, loadingMessage = "Loading...", emptyMessage = "No data found", searchPlaceholder = "Search...", actions, onRowClick, renderExpanded, className = '', hideHeader = false, hideExpander = false, pageSize: initialPageSize = 10, disableRowClickExpansion = false }) => {
+export const DataTable = ({ columns, data, loading, loadingMessage = "Loading...", emptyMessage = "No data found", searchPlaceholder = "Search...", actions, onRowClick, renderExpanded, className = '', hideHeader = false, hideExpander = false, pageSize: initialPageSize = 10, disableRowClickExpansion = false, selectable = false, selectedRows = new Set(), onSelectionChange }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState(null);
   const [expandedRows, setExpandedRows] = useState(new Set());
@@ -552,6 +552,28 @@ export const DataTable = ({ columns, data, loading, loadingMessage = "Loading...
     currentPage * pageSize
   );
 
+  const handleSelectAll = (e) => {
+    if (onSelectionChange) {
+      if (e.target.checked) {
+        onSelectionChange(new Set(paginatedData.map((row, idx) => row.id || (currentPage - 1) * pageSize + idx)));
+      } else {
+        onSelectionChange(new Set());
+      }
+    }
+  };
+
+  const handleSelectRow = (id) => {
+    if (onSelectionChange) {
+      const newSelected = new Set(selectedRows);
+      if (newSelected.has(id)) {
+        newSelected.delete(id);
+      } else {
+        newSelected.add(id);
+      }
+      onSelectionChange(newSelected);
+    }
+  };
+
   return (
     <div className={`flex flex-col h-full rounded    overflow-hidden ${isDark ? 'border-slate-800' : 'border-slate-100 '} ${className}`}>
       {!hideHeader && (
@@ -574,6 +596,16 @@ export const DataTable = ({ columns, data, loading, loadingMessage = "Loading...
         <table className="w-full text-left bg-white  text-sm border-collapse">
           <thead className={`${isDark ? 'bg-white text-slate-400' : 'bg-slate-50/50 text-slate-500'} text-xs    `}>
             <tr>
+              {selectable && (
+                <th className={`p-2 border-b w-8 ${isDark ? 'border-slate-800' : 'border-slate-100'}`}>
+                  <input
+                    type="checkbox"
+                    className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                    onChange={handleSelectAll}
+                    checked={paginatedData.length > 0 && paginatedData.every((row, idx) => selectedRows.has(row.id || (currentPage - 1) * pageSize + idx))}
+                  />
+                </th>
+              )}
               {renderExpanded && !hideExpander && <th className={`p-2 border-b w-10 ${isDark ? 'border-slate-800' : 'border-slate-100'}`}></th>}
               {columns.map((col, idx) => (
                 <th 
@@ -596,7 +628,7 @@ export const DataTable = ({ columns, data, loading, loadingMessage = "Loading...
           <tbody className={`divide-y ${isDark ? 'divide-slate-800' : 'divide-slate-50'}`}>
             {loading ? (
               <tr>
-                <td colSpan={columns.length + (renderExpanded && !hideExpander ? 1 : 0)} className="p-2 text-center">
+                <td colSpan={columns.length + (renderExpanded && !hideExpander ? 1 : 0) + (selectable ? 1 : 0)} className="p-2 text-center">
                   <div className="flex flex-col items-center gap-2">
                     <Loader2 className="w-3 h-3 text-indigo-600 animate-spin" />
                     <span className="text-slate-400  animate-pulse">{loadingMessage}</span>
@@ -605,7 +637,7 @@ export const DataTable = ({ columns, data, loading, loadingMessage = "Loading...
               </tr>
             ) : paginatedData.length === 0 ? (
               <tr>
-                <td colSpan={columns.length + (renderExpanded && !hideExpander ? 1 : 0)} className="p-2 text-center">
+                <td colSpan={columns.length + (renderExpanded && !hideExpander ? 1 : 0) + (selectable ? 1 : 0)} className="p-2 text-center">
                   <div className="flex flex-col items-center gap-2">
                     <FileText className="w-3 h-3 text-slate-200" />
                     <span className="text-slate-400 ">{emptyMessage}</span>
@@ -615,15 +647,32 @@ export const DataTable = ({ columns, data, loading, loadingMessage = "Loading...
             ) : (
               paginatedData.map((row, rowIdx) => {
                 const isExpanded = expandedRows.has(row.id || rowIdx);
+                const rowId = row.id || (currentPage - 1) * pageSize + rowIdx;
+                const isSelected = selectedRows.has(rowId);
+                
                 return (
                   <React.Fragment key={row.id || rowIdx}>
                     <tr 
-                      className={`group transition-all duration-200 ${onRowClick ? 'cursor-pointer hover:bg-indigo-50/30' : (isDark ? 'hover:bg-white' : 'hover:bg-slate-50/50')} ${isExpanded ? (isDark ? 'bg-indigo-900/20' : 'bg-indigo-50/20') : ''}`}
+                      className={`group transition-all duration-200 ${onRowClick ? 'cursor-pointer hover:bg-indigo-50/30' : (isDark ? 'hover:bg-white' : 'hover:bg-slate-50/50')} ${isExpanded || isSelected ? (isDark ? 'bg-indigo-900/20' : 'bg-indigo-50/20') : ''}`}
                       onClick={() => {
                         if (renderExpanded && !disableRowClickExpansion) toggleRow(row.id || rowIdx);
                         if (onRowClick) onRowClick(row);
                       }}
                     >
+                      {selectable && (
+                        <td className="p-2 w-8">
+                          <input
+                            type="checkbox"
+                            className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                            checked={isSelected}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              handleSelectRow(rowId);
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </td>
+                      )}
                       {renderExpanded && !hideExpander && (
                         <td className="p-2 text-slate-400">
                           <ChevronRight className={`w-3 h-3 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} />
@@ -637,7 +686,7 @@ export const DataTable = ({ columns, data, loading, loadingMessage = "Loading...
                     </tr>
                     {isExpanded && renderExpanded && (
                       <tr>
-                        <td colSpan={columns.length + (hideExpander ? 0 : 1)} className={`p-2 border-b ${isDark ? 'border-slate-800' : 'border-slate-100'}`}>
+                        <td colSpan={columns.length + (hideExpander ? 0 : 1) + (selectable ? 1 : 0)} className={`p-2 border-b ${isDark ? 'border-slate-800' : 'border-slate-100'}`}>
                           <div className=" animate-in slide-in-from-top-2 duration-200">
                             {renderExpanded(row)}
                           </div>

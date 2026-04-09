@@ -45,6 +45,7 @@ const DrawingMaster = () => {
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [previewDrawing, setPreviewDrawing] = useState(null);
   const [companies, setCompanies] = useState([]);
+  const [selectedRows, setSelectedRows] = useState(new Set());
 
   const handlePreview = (drawing) => {
     setPreviewDrawing(drawing);
@@ -179,6 +180,48 @@ const DrawingMaster = () => {
       } finally {
         setBulkOperationLoading(false);
       }
+    }
+  };
+
+  const handleApproveGroup = async () => {
+    const selectedIds = Array.from(selectedRows);
+    if (selectedIds.length === 0) return;
+
+    // Filter drawings to get only those that are pending and get their sales_order_item_id
+    const itemsToApprove = drawings
+      .filter(d => selectedIds.includes(d.id))
+      .filter(d => {
+        const status = (d.item_status || '').trim().toUpperCase();
+        return d.sales_order_item_id && status !== 'APPROVED' && status !== 'REJECTED';
+      })
+      .map(d => d.sales_order_item_id);
+
+    if (itemsToApprove.length === 0) {
+      errorToast('No pending items selected for approval');
+      return;
+    }
+
+    try {
+      setBulkOperationLoading(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/sales-orders/bulk/items/status`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ itemIds: itemsToApprove, status: 'Approved' })
+      });
+
+      if (!response.ok) throw new Error('Failed to approve drawings');
+
+      successToast(`${itemsToApprove.length} drawings approved successfully`);
+      setSelectedRows(new Set());
+      fetchDrawings(searchTerm);
+    } catch (error) {
+      errorToast(error.message);
+    } finally {
+      setBulkOperationLoading(false);
     }
   };
 
@@ -488,7 +531,7 @@ const DrawingMaster = () => {
 
       {!showEditForm ? (
         <Card className="">
-          <div className="p-2 border-b border-slate-50">
+          <div className="p-2 border-b border-slate-50 flex items-center justify-between">
             <div className="relative flex-1 max-w-md group">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" size={15} />
               <input 
@@ -503,6 +546,17 @@ const DrawingMaster = () => {
                 onKeyDown={(e) => e.key === 'Enter' && fetchDrawings(searchTerm)}
               />
             </div>
+            
+            {selectedRows.size > 0 && (
+              <button
+                onClick={handleApproveGroup}
+                disabled={bulkOperationLoading}
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded text-xs font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 disabled:opacity-50"
+              >
+                {bulkOperationLoading ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} />}
+                Approve Group ({selectedRows.size})
+              </button>
+            )}
           </div>
           <div className="p-2">
             <DataTable 
@@ -513,6 +567,9 @@ const DrawingMaster = () => {
               hideHeader={true}
               hideExpander={true}
               disableRowClickExpansion={true}
+              selectable={true}
+              selectedRows={selectedRows}
+              onSelectionChange={setSelectedRows}
               renderExpanded={(row) => {
                 const revisions = expandedRevisions[row.drawing_no] || [];
                 const isRevLoading = revisionsLoading[row.drawing_no];
