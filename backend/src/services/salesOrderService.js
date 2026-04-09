@@ -1282,15 +1282,34 @@ const bulkUpdateItemStatus = async (itemIds, status, reason) => {
       [status, status === 'REJECTED' ? reason : null, ...itemIds]
     );
 
+    const [items] = await connection.query(`SELECT DISTINCT sales_order_id FROM sales_order_items WHERE id IN (${placeholders})`, itemIds);
+
     if (status === 'REJECTED' && reason) {
       // Log rejection for each item's order
-      const [items] = await connection.query(`SELECT DISTINCT sales_order_id FROM sales_order_items WHERE id IN (${placeholders})`, itemIds);
       for (const item of items) {
         await connection.execute(
           `INSERT INTO design_rejections (sales_order_id, reason, created_at)
            VALUES (?, ?, NOW())`,
           [item.sales_order_id, `Bulk Rejection: ${reason}`]
         );
+      }
+    } else if (status.trim().toUpperCase() === 'APPROVED') {
+      // Process approval logic for each unique order
+      for (const item of items) {
+        const salesOrderId = item.sales_order_id;
+        const [orderRows] = await connection.query('SELECT status, request_accepted FROM sales_orders WHERE id = ?', [salesOrderId]);
+        if (orderRows.length > 0) {
+          const order = orderRows[0];
+          if (order.request_accepted === 0) {
+            await connection.execute(
+              "UPDATE sales_orders SET request_accepted = 1, status = 'DESIGN_IN_REVIEW', current_department = 'DESIGN_ENG', updated_at = NOW() WHERE id = ?",
+              [salesOrderId]
+            );
+            
+            // Create design order entry if it doesn't exist
+            await designOrderService.createDesignOrder(salesOrderId, connection, 'IN_DESIGN');
+          }
+        }
       }
     }
 

@@ -201,6 +201,25 @@ const DrawingMaster = () => {
       return;
     }
 
+    const result = await Swal.fire({
+        title: '<span class="text-base font-bold text-slate-800">Approve Selected Drawings?</span>',
+        html: `<p class="text-xs text-slate-500">You are about to approve <b>${itemsToApprove.length}</b> drawings. They will be sent to BOM creation.</p>`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#10b981',
+        confirmButtonText: 'Yes, Approve All',
+        cancelButtonText: 'Cancel',
+        width: '350px',
+        padding: '1.25rem',
+        customClass: {
+          confirmButton: 'text-[10px] font-bold px-4 py-2 rounded shadow-lg shadow-emerald-100 uppercase tracking-wider',
+          cancelButton: 'text-[10px] font-bold px-4 py-2 rounded uppercase tracking-wider',
+          title: 'mt-2'
+        }
+    });
+
+    if (!result.isConfirmed) return;
+
     try {
       setBulkOperationLoading(true);
       const token = localStorage.getItem('authToken');
@@ -519,6 +538,16 @@ const DrawingMaster = () => {
         </div>
         
         <div className="flex items-center gap-2">
+           {selectedRows.size > 0 && drawings.some(d => selectedRows.has(d.id) && (d.item_status || '').trim().toUpperCase() !== 'APPROVED' && (d.item_status || '').trim().toUpperCase() !== 'REJECTED') && (
+              <button
+                onClick={handleApproveGroup}
+                disabled={bulkOperationLoading}
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded text-xs font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-50 disabled:opacity-50 border-none"
+              >
+                {bulkOperationLoading ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} />}
+                Approve Selective ({drawings.filter(d => selectedRows.has(d.id) && (d.item_status || '').trim().toUpperCase() !== 'APPROVED' && (d.item_status || '').trim().toUpperCase() !== 'REJECTED').length})
+              </button>
+           )}
            <button 
             onClick={() => fetchDrawings()}
             className="p-2.5 text-slate-500 hover:bg-slate-50 rounded  transition-all border border-slate-200"
@@ -546,17 +575,6 @@ const DrawingMaster = () => {
                 onKeyDown={(e) => e.key === 'Enter' && fetchDrawings(searchTerm)}
               />
             </div>
-            
-            {selectedRows.size > 0 && (
-              <button
-                onClick={handleApproveGroup}
-                disabled={bulkOperationLoading}
-                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded text-xs font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 disabled:opacity-50"
-              >
-                {bulkOperationLoading ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} />}
-                Approve Group ({selectedRows.size})
-              </button>
-            )}
           </div>
           <div className="p-2">
             <DataTable 
