@@ -2,7 +2,6 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Card, StatusBadge, DataTable } from '../components/ui.jsx';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
-import { getFileUrl } from '../utils/url';
 import { Eye, FileText, RotateCw, Clock, History, Check, X, ExternalLink } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
@@ -14,13 +13,8 @@ const cleanText = (text) => text ? text.replace(/\s*\(.*$/, '').trim() : '';
 const BOMCreation = () => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [incomingRequests, setIncomingRequests] = useState([]);
-  const [incomingLoading, setIncomingLoading] = useState(false);
-  const [bulkOperationLoading, setBulkOperationLoading] = useState(false);
   const [clientData, setClientData] = useState({}); // { [clientId]: { items: [], loading: false } }
   const [expandedDrawings, setExpandedDrawings] = useState({}); // { drawingKey: boolean }
-  const [expandedIncomingRequests, setExpandedIncomingRequests] = useState({}); // { clientName: boolean }
-  const [searchTerm, setSearchTerm] = useState('');
   const location = useLocation();
 
   // Preview State
@@ -127,99 +121,6 @@ const BOMCreation = () => {
     }
   }, []);
 
-  const fetchIncomingRequests = useCallback(async () => {
-    try {
-      setIncomingLoading(true);
-      const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/sales-orders/incoming?department=DESIGN_ENG&includeAccepted=true`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (!response.ok) throw new Error('Failed to fetch incoming design requests');
-      const data = await response.json();
-      setIncomingRequests(data);
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setIncomingLoading(false);
-    }
-  }, []);
-
-  const handleApproveItem = async (itemId) => {
-    try {
-      setBulkOperationLoading(true);
-      const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/sales-orders/items/${itemId}/status`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ status: 'Approved ' })
-      });
-
-      if (!response.ok) throw new Error('Failed to approve item');
-
-      successToast('Item approved and moved to Process list');
-
-      fetchOrders();
-      fetchIncomingRequests();
-    } catch (error) {
-      errorToast(error.message);
-    } finally {
-      setBulkOperationLoading(false);
-    }
-  };
-
-  const handleRejectItem = async (itemId) => {
-    const { value: reason } = await Swal.fire({
-      title: '<span class="text-base font-bold text-slate-800">Reject Design Request</span>',
-      input: 'textarea',
-      inputPlaceholder: 'Enter reason for rejection here...',
-      showCancelButton: true,
-      confirmButtonColor: '#ef4444',
-      confirmButtonText: 'Reject',
-      cancelButtonText: 'Cancel',
-      width: '400px',
-      padding: '1.25rem',
-      customClass: {
-        confirmButton: 'text-[11px] font-bold px-4 py-2 rounded shadow-lg shadow-rose-100 uppercase tracking-wider',
-        cancelButton: 'text-[11px] font-bold px-4 py-2 rounded uppercase tracking-wider',
-        input: 'text-xs'
-      }
-    });
-
-    if (reason) {
-      try {
-        setBulkOperationLoading(true);
-        const token = localStorage.getItem('authToken');
-        const response = await fetch(`${API_BASE}/sales-orders/items/${itemId}/status`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({ status: 'REJECTED', reason: reason })
-        });
-
-        if (!response.ok) throw new Error('Failed to reject item');
-
-        successToast('Item marked as rejected');
-        
-        fetchOrders();
-        fetchIncomingRequests();
-      } catch (error) {
-        errorToast(error.message);
-      } finally {
-        setBulkOperationLoading(false);
-      }
-    }
-  };
-
-  const handlePreview = (item) => {
-    setPreviewDrawing(item);
-    setShowPreviewModal(true);
-  };
-
   const handlePreviewByNo = async (drawingNo) => {
     try {
       setLoading(true);
@@ -265,53 +166,6 @@ const BOMCreation = () => {
     }
   };
 
-  const handleApproveGroup = async (group) => {
-    // Get unique sales order IDs from the items in this group
-    const orderIds = [...new Set(group.items.map(item => item.id))].filter(id => id);
-    if (orderIds.length === 0) return;
-
-    const result = await Swal.fire({
-      title: '<span class="text-base font-bold text-slate-800">Approve Group Drawings</span>',
-      html: `<span class="text-xs text-slate-600">Are you sure you want to approve all <span class="font-bold text-indigo-600">${orderIds.length}</span> sales order(s) for <span class="font-bold">${group.client_name}</span>?</span>`,
-      icon: 'question',
-      showCancelButton: true,
-      confirmButtonColor: '#10b981',
-      confirmButtonText: 'Yes, Approve All',
-      cancelButtonText: 'Cancel',
-      width: '380px',
-      padding: '1rem',
-      customClass: {
-        confirmButton: 'text-[11px] font-bold px-4 py-2 rounded shadow-lg shadow-emerald-100 uppercase tracking-wider',
-        cancelButton: 'text-[11px] font-bold px-4 py-2 rounded uppercase tracking-wider'
-      }
-    });
-
-    if (result.isConfirmed) {
-      try {
-        setBulkOperationLoading(true);
-        const token = localStorage.getItem('authToken');
-        const response = await fetch(`${API_BASE}/sales-orders/bulk/approve-designs`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({ orderIds })
-        });
-
-        if (!response.ok) throw new Error('Failed to approve group');
-
-        successToast(`Successfully approved all drawings for ${group.client_name}`);
-        fetchOrders();
-        fetchIncomingRequests();
-      } catch (error) {
-        errorToast(error.message);
-      } finally {
-        setBulkOperationLoading(false);
-      }
-    }
-  };
-
   const fetchOrders = useCallback(async () => {
     try {
       setLoading(true);
@@ -350,8 +204,7 @@ const BOMCreation = () => {
 
   useEffect(() => {
     fetchOrders();
-    fetchIncomingRequests();
-  }, [fetchOrders, fetchIncomingRequests]);
+  }, [fetchOrders]);
 
   useEffect(() => {
     if (filter === 'drafts' && orders.length > 0) {
@@ -378,14 +231,10 @@ const BOMCreation = () => {
 
       setExpandedDrawings(newExpandedDrawings);
     }
-  }, [filter, orders, clientData]);
+  }, [filter, orders, clientData, expandedDrawings]);
 
   const toggleDrawing = (dwgKey) => {
     setExpandedDrawings(prev => ({ ...prev, [dwgKey]: !prev[dwgKey] }));
-  };
-
-  const toggleIncomingRequest = (clientName) => {
-    setExpandedIncomingRequests(prev => ({ ...prev, [clientName]: !prev[clientName] }));
   };
 
   const handleDeleteBOM = async (itemId) => {
@@ -523,39 +372,8 @@ const BOMCreation = () => {
   }, [orders, clientData]);
 
   const filteredOrders = useMemo(() => {
-    if (!searchTerm) return orders;
-    const term = searchTerm.toLowerCase();
-    return orders.filter(o => {
-      const matchClient = o.client_name.toLowerCase().includes(term);
-      if (matchClient) return true;
-
-      const items = clientData[o.id]?.items || [];
-      return items.some(i => 
-        (i.drawing_no || '').toLowerCase().includes(term) ||
-        (i.item_code || '').toLowerCase().includes(term)
-      );
-    });
-  }, [orders, searchTerm, clientData]);
-
-  const groupedIncomingRequests = useMemo(() => {
-    const groups = incomingRequests.reduce((acc, req) => {
-      // Only include items that are not approved yet
-      const status = (req.item_status || '').trim().toUpperCase();
-      if (status === 'APPROVED') return acc;
-
-      const clientName = req.company_name || 'Unknown Client';
-      if (!acc[clientName]) {
-        acc[clientName] = {
-          client_name: clientName,
-          project_name: req.project_name,
-          items: []
-        };
-      }
-      acc[clientName].items.push(req);
-      return acc;
-    }, {});
-    return Object.values(groups);
-  }, [incomingRequests]);
+    return orders;
+  }, [orders]);
 
   const isClientBOMCompleted = (row) => {
     const items = clientData[row.id]?.items || [];
@@ -868,189 +686,6 @@ const BOMCreation = () => {
             </div>
           ))}
         </div>
-
-        {/* Pending Design Approvals Section */}
-        {incomingRequests.length > 0 && (
-          <Card className="border-amber-100 bg-amber-50/20 overflow-hidden shadow-sm">
-            <div className="p-3 border-b border-amber-100 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="p-2 bg-amber-100 text-amber-700 rounded-lg">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                  </svg>
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-amber-900">Pending Design Approvals</h3>
-                  <p className="text-xs text-amber-600 font-medium">Review incoming requests from sales department</p>
-                </div>
-              </div>
-              <span className="px-2.5 py-1 bg-amber-200 text-amber-800 text-[10px] font-bold rounded-full border border-amber-300">
-                {incomingRequests.length} REQUESTS
-              </span>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-amber-100">
-                <thead className="bg-amber-50/50">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-[10px] font-bold text-amber-700 uppercase tracking-wider">Client & Project</th>
-                    <th className="px-4 py-3 text-center text-[10px] font-bold text-amber-700 uppercase tracking-wider">Status</th>
-                    <th className="px-4 py-3 text-right text-[10px] font-bold text-amber-700 uppercase tracking-wider">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-amber-100 bg-white/50">
-                  {groupedIncomingRequests.map((group) => (
-                    <React.Fragment key={group.client_name}>
-                      <tr 
-                        onClick={() => toggleIncomingRequest(group.client_name)}
-                        className="hover:bg-amber-50/50 transition-colors cursor-pointer"
-                      >
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          <div className="flex items-center gap-3">
-                            <div className={`p-1 rounded transition-colors ${expandedIncomingRequests[group.client_name] ? 'bg-amber-200 text-amber-700' : 'bg-slate-100 text-slate-400'}`}>
-                              <svg className={`w-4 h-4 transition-transform duration-300 ${expandedIncomingRequests[group.client_name] ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5l7 7-7 7" />
-                              </svg>
-                            </div>
-                            <div className="flex flex-col">
-                              <span className="text-xs font-bold text-slate-900">{group.client_name}</span>
-                              <span className="text-[10px] text-slate-500 font-medium">Design Review - {group.items.length} Drawings for {group.client_name}</span>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-center whitespace-nowrap">
-                          {group.items.every(i => i.item_status && i.item_status.trim().toUpperCase() === 'APPROVED') ? (
-                            <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-[10px] font-bold border border-emerald-200 uppercase">
-                              Approved
-                            </span>
-                          ) : group.items.some(i => i.item_status && i.item_status.trim().toUpperCase() === 'REJECTED') ? (
-                            <span className="px-2 py-0.5 bg-rose-100 text-rose-700 rounded text-[10px] font-bold border border-rose-200 uppercase">
-                              Has Rejections
-                            </span>
-                          ) : (
-                            <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-[10px] font-bold border border-amber-200">
-                              Awaiting Approval
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-right whitespace-nowrap">
-                          <div className="flex justify-end gap-2">
-                            {group.items.some(i => !i.item_status || (i.item_status.trim().toUpperCase() !== 'APPROVED' && i.item_status.trim().toUpperCase() !== 'REJECTED')) && (
-                              <button
-                                onClick={(e) => { e.stopPropagation(); handleApproveGroup(group); }}
-                                disabled={bulkOperationLoading}
-                                className="px-3 py-1.5 bg-emerald-600 text-white rounded text-[10px] font-bold hover:bg-emerald-700 transition-all shadow-md shadow-emerald-50 active:scale-95 disabled:opacity-50 flex items-center gap-1.5"
-                              >
-                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
-                                </svg>
-                                Approve Group
-                              </button>
-                            )}
-                            <button
-                              onClick={(e) => { e.stopPropagation(); toggleIncomingRequest(group.client_name); }}
-                              className="px-3 py-1.5 bg-white text-slate-600 border border-slate-200 rounded text-[10px] font-bold hover:bg-slate-50 transition-all shadow-sm active:scale-95"
-                            >
-                              {expandedIncomingRequests[group.client_name] ? 'Hide' : 'View Details'}
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                      {expandedIncomingRequests[group.client_name] && (
-                        <tr className="bg-amber-50/20">
-                          <td colSpan="3" className="px-4 py-0">
-                            <div className="py-2 px-6 space-y-2">
-                              <div className="bg-white/80 border border-amber-100 rounded-lg overflow-hidden">
-                                <table className="min-w-full divide-y divide-slate-100">
-                                  <thead className="bg-slate-50">
-                                    <tr>
-                                      <th className="px-4 py-2 text-left text-[10px] font-bold text-slate-400 uppercase tracking-wider w-10">#</th>
-                                      <th className="px-4 py-2 text-left text-[10px] font-bold text-slate-400 uppercase tracking-wider">Drawing</th>
-                                      <th className="px-4 py-2 text-left text-[10px] font-bold text-slate-400 uppercase tracking-wider">Description</th>
-                                      <th className="px-4 py-2 text-center text-[10px] font-bold text-slate-400 uppercase tracking-wider">Status</th>
-                                      <th className="px-4 py-2 text-right text-[10px] font-bold text-slate-400 uppercase tracking-wider">Actions</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody className="divide-y divide-slate-50">
-                                    {group.items.map((req, idx) => (
-                                      <tr key={req.item_id} className="hover:bg-slate-50/50 transition-colors">
-                                        <td className="px-4 py-2 text-xs text-slate-400">{idx + 1}</td>
-                                        <td className="px-4 py-2">
-                                          <span className="text-xs font-bold text-indigo-600">{req.drawing_no}</span>
-                                        </td>
-                                        <td className="px-4 py-2">
-                                          <span className="text-xs text-slate-600 font-medium italic">{req.item_description || req.material_name || req.description || 'No Description'}</span>
-                                        </td>
-                                        <td className="px-4 py-2 text-center">
-                                          {req.item_status && req.item_status.trim().toUpperCase() === 'APPROVED' ? (
-                                            <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded text-[9px] font-bold border border-emerald-100 uppercase">
-                                              Approved
-                                            </span>
-                                          ) : req.item_status && req.item_status.trim().toUpperCase() === 'REJECTED' ? (
-                                            <div className="flex flex-col items-center">
-                                              <span className="px-2 py-0.5 bg-rose-50 text-rose-600 rounded text-[9px] font-bold border border-rose-100 uppercase">
-                                                Rejected
-                                              </span>
-                                              {req.item_rejection_reason && (
-                                                <span className="text-[8px] text-rose-400 mt-0.5 max-w-[120px] truncate" title={req.item_rejection_reason}>
-                                                  {req.item_rejection_reason}
-                                                </span>
-                                              )}
-                                            </div>
-                                          ) : (
-                                            <span className="px-2 py-0.5 bg-slate-50 text-slate-500 rounded text-[9px] font-bold border border-slate-100 uppercase">
-                                              Pending
-                                            </span>
-                                          )}
-                                        </td>
-                                        <td className="px-4 py-2 text-right">
-                                          <div className="flex justify-end gap-1.5">
-                                            <button
-                                              onClick={() => handlePreviewByNo(req.drawing_no)}
-                                              className="px-2 py-1 text-indigo-600 hover:bg-indigo-50 rounded transition-all border border-indigo-100 flex items-center gap-1 shadow-sm active:scale-95"
-                                              title="Preview Drawing"
-                                            >
-                                              <Eye className="w-3 h-3" />
-                                              <span className="text-[10px] font-bold">Preview</span>
-                                            </button>
-                                            {(!req.item_status || (req.item_status.trim().toUpperCase() !== 'APPROVED' && req.item_status.trim().toUpperCase() !== 'REJECTED')) && (
-                                              <>
-                                                <button
-                                                  onClick={() => handleRejectItem(req.item_id)}
-                                                  disabled={bulkOperationLoading}
-                                                  className="px-2 py-1 bg-white text-rose-600 border border-rose-100 rounded text-[10px] font-bold hover:bg-rose-50 transition-all active:scale-95 disabled:opacity-50"
-                                                >
-                                                  Reject
-                                                </button>
-                                                <button
-                                                  onClick={() => handleApproveItem(req.item_id)}
-                                                  disabled={bulkOperationLoading}
-                                                  className="px-2 py-1 bg-emerald-600 text-white rounded text-[10px] font-bold hover:bg-emerald-700 transition-all shadow-sm shadow-emerald-50 active:scale-95 disabled:opacity-50 flex items-center gap-1"
-                                                >
-                                                  <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M5 13l4 4L19 7" />
-                                                  </svg>
-                                                  Approve
-                                                </button>
-                                              </>
-                                            )}
-                                          </div>
-                                        </td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
-                              </div>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </React.Fragment>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-        )}
 
         <Card className=" border border-slate-100 rounded  shadow-sm overflow-hidden">
           <div className="p-2">

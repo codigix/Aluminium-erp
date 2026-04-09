@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, Modal, FormControl, DataTable, StatusBadge } from '../components/ui.jsx';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
-import { Eye, Edit2, Trash2, History, Search, RefreshCw, FileText, PencilLine, Plus, X, ChevronRight, ChevronDown } from 'lucide-react';
+import { Eye, Edit2, Trash2, History, Search, RefreshCw, FileText, PencilLine, Plus, X, ChevronRight, ChevronDown, Check } from 'lucide-react';
 import Swal from 'sweetalert2';
-import { successToast, errorToast, infoToast } from '../utils/toast';
+import { successToast, errorToast } from '../utils/toast';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -18,7 +18,6 @@ const DrawingMaster = () => {
   
   // Edit Modal State
   const [showEditForm, setShowEditForm] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState({
     id: '',
     drawing_no: '',
@@ -40,6 +39,7 @@ const DrawingMaster = () => {
     file_path: ''
   });
   const [saveLoading, setSaveLoading] = useState(false);
+  const [bulkOperationLoading, setBulkOperationLoading] = useState(false);
   
   // Preview State
   const [showPreviewModal, setShowPreviewModal] = useState(false);
@@ -115,6 +115,73 @@ const DrawingMaster = () => {
     }
   }, [expandedRevisions, revisionsLoading]);
 
+  const handleApproveItem = async (itemId) => {
+    try {
+      setBulkOperationLoading(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/sales-orders/items/${itemId}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ status: 'Approved' })
+      });
+
+      if (!response.ok) throw new Error('Failed to approve drawing');
+
+      successToast('Drawing approved');
+      fetchDrawings(searchTerm);
+    } catch (error) {
+      errorToast(error.message);
+    } finally {
+      setBulkOperationLoading(false);
+    }
+  };
+
+  const handleRejectItem = async (itemId) => {
+    const { value: reason } = await Swal.fire({
+      title: '<span class="text-base font-bold text-slate-800">Reject Drawing</span>',
+      input: 'textarea',
+      inputPlaceholder: 'Enter reason for rejection here...',
+      showCancelButton: true,
+      confirmButtonColor: '#ef4444',
+      confirmButtonText: 'Reject',
+      cancelButtonText: 'Cancel',
+      width: '400px',
+      padding: '1.25rem',
+      customClass: {
+        confirmButton: 'text-[11px] font-bold px-4 py-2 rounded shadow-lg shadow-rose-100 uppercase tracking-wider',
+        cancelButton: 'text-[11px] font-bold px-4 py-2 rounded uppercase tracking-wider',
+        input: 'text-xs'
+      }
+    });
+
+    if (reason) {
+      try {
+        setBulkOperationLoading(true);
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE}/sales-orders/items/${itemId}/status`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ status: 'REJECTED', reason: reason })
+        });
+
+        if (!response.ok) throw new Error('Failed to reject drawing');
+
+        successToast('Drawing marked as rejected');
+        fetchDrawings(searchTerm);
+      } catch (error) {
+        errorToast(error.message);
+      } finally {
+        setBulkOperationLoading(false);
+      }
+    }
+  };
+
   const columns = [
     { 
       label: 'Drawing No', 
@@ -148,6 +215,21 @@ const DrawingMaster = () => {
       )
     },
     {
+      label: 'Status',
+      key: 'status',
+      render: (val, row) => {
+        const status = (row.item_status || '').trim().toUpperCase();
+        if (status === 'APPROVED') {
+          return <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-[10px] font-bold border border-emerald-200 uppercase">Approved</span>;
+        } else if (status === 'REJECTED') {
+          return <span className="px-2 py-0.5 bg-rose-100 text-rose-700 rounded text-[10px] font-bold border border-rose-200 uppercase">Rejected</span>;
+        } else if (row.sales_order_item_id) {
+          return <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-[10px] font-bold border border-amber-200 uppercase whitespace-nowrap">⏳ Pending</span>;
+        }
+        return <span className="text-slate-300">—</span>;
+      }
+    },
+    {
       label: 'Preview',
       key: 'drawing_pdf',
       className: 'text-center',
@@ -165,10 +247,34 @@ const DrawingMaster = () => {
       label: 'Actions',
       key: 'actions',
       className: 'text-right',
-      render: (_, row) => (
-        <div className="flex justify-end gap-2">
-          <button 
-            onClick={() => {
+      render: (_, row) => {
+        const status = (row.item_status || '').trim().toUpperCase();
+        const isPending = row.sales_order_item_id && status !== 'APPROVED' && status !== 'REJECTED';
+        
+        return (
+          <div className="flex justify-end gap-2">
+            {isPending && (
+              <>
+                <button 
+                  onClick={() => handleApproveItem(row.sales_order_item_id)}
+                  disabled={bulkOperationLoading}
+                  className="p-2 text-emerald-600 hover:bg-emerald-50 rounded transition-all border border-transparent hover:border-emerald-100"
+                  title="Approve Drawing"
+                >
+                  <Check size={15} />
+                </button>
+                <button 
+                  onClick={() => handleRejectItem(row.sales_order_item_id)}
+                  disabled={bulkOperationLoading}
+                  className="p-2 text-rose-500 hover:bg-rose-50 rounded transition-all border border-transparent hover:border-rose-100"
+                  title="Reject Drawing"
+                >
+                  <X size={15} />
+                </button>
+              </>
+            )}
+            <button 
+              onClick={() => {
               const drawingNo = row.drawing_no;
               const isExpanded = !!expandedRevisions[drawingNo];
               if (isExpanded) {
@@ -201,7 +307,8 @@ const DrawingMaster = () => {
             <Trash2 size={15} />
           </button>
         </div>
-      )
+        );
+      }
     }
   ];
 
@@ -238,7 +345,6 @@ const DrawingMaster = () => {
       drawing_pdf: null,
       file_path: drawing.file_path || drawing.drawing_pdf || ''
     });
-    setIsEditing(true);
     setShowEditForm(true);
   };
 

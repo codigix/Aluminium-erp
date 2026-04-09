@@ -2,16 +2,33 @@ const pool = require('../config/db');
 
 const listDrawings = async (searchTerm = '') => {
   let query = `
-    SELECT * FROM customer_drawings WHERE 1=1
+    SELECT 
+      cd.*,
+      cd.status as drawing_status,
+      soi.id as sales_order_item_id,
+      soi.status as item_status,
+      soi.sales_order_id
+    FROM customer_drawings cd
+    LEFT JOIN (
+      /* Get the latest sales_order_item for each drawing */
+      SELECT soi1.*
+      FROM sales_order_items soi1
+      JOIN (
+        SELECT drawing_id, MAX(id) as max_id
+        FROM sales_order_items
+        GROUP BY drawing_id
+      ) soi2 ON soi1.id = soi2.max_id
+    ) soi ON cd.id = soi.drawing_id
+    WHERE 1=1
   `;
   const params = [];
 
   if (searchTerm) {
-    query += ' AND (drawing_no LIKE ? OR description LIKE ? OR remarks LIKE ? OR client_name LIKE ?)';
+    query += ' AND (cd.drawing_no LIKE ? OR cd.description LIKE ? OR cd.remarks LIKE ? OR cd.client_name LIKE ?)';
     params.push(`%${searchTerm}%`, `%${searchTerm}%`, `%${searchTerm}%`, `%${searchTerm}%`);
   }
 
-  query += ' ORDER BY created_at DESC';
+  query += ' ORDER BY cd.created_at DESC';
 
   const [rows] = await pool.query(query, params);
   return rows;
