@@ -539,6 +539,10 @@ const BOMCreation = () => {
 
   const groupedIncomingRequests = useMemo(() => {
     const groups = incomingRequests.reduce((acc, req) => {
+      // Only include items that are not approved yet
+      const status = (req.item_status || '').trim().toUpperCase();
+      if (status === 'APPROVED') return acc;
+
       const clientName = req.company_name || 'Unknown Client';
       if (!acc[clientName]) {
         acc[clientName] = {

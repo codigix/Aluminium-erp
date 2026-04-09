@@ -729,9 +729,9 @@ const bulkApproveDesigns = async (orderIds) => {
       ['DESIGN_IN_REVIEW', 'DESIGN_ENG', ...orderIds]
     );
     
-    // Mark non-rejected items as ACCEPTED for all orders
+    // Mark non-rejected items as APPROVED
     await connection.execute(
-      `UPDATE sales_order_items SET status = 'ACCEPTED' WHERE sales_order_id IN (${placeholders}) AND (status IS NULL OR status = 'PENDING')`,
+      `UPDATE sales_order_items SET status = 'Approved ' WHERE sales_order_id IN (${placeholders}) AND (status IS NULL OR status = 'PENDING')`,
       orderIds
     );
 
