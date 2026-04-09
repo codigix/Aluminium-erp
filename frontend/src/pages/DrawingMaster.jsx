@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, Modal, FormControl, DataTable, StatusBadge } from '../components/ui.jsx';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
-import { Eye, Edit2, Trash2, History, Search, RefreshCw, FileText, PencilLine, Plus, X, ChevronRight, ChevronDown, Check } from 'lucide-react';
+import { Eye, Edit2, Trash2, History, Search, RefreshCw, FileText, PencilLine, Plus, X, ChevronRight, ChevronDown, Check, ChevronUp } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
 
@@ -235,7 +235,10 @@ const DrawingMaster = () => {
       className: 'text-center',
       render: (val, row) => (val || row.file_path) ? (
         <button 
-          onClick={() => handlePreview(row)}
+          onClick={(e) => {
+            e.stopPropagation();
+            handlePreview(row);
+          }}
           className="p-2 text-indigo-600 hover:bg-indigo-50 rounded  transition-all"
           title="Preview Drawing"
         >
@@ -256,7 +259,10 @@ const DrawingMaster = () => {
             {isPending && (
               <>
                 <button 
-                  onClick={() => handleApproveItem(row.sales_order_item_id)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleApproveItem(row.sales_order_item_id);
+                  }}
                   disabled={bulkOperationLoading}
                   className="p-2 text-emerald-600 hover:bg-emerald-50 rounded transition-all border border-transparent hover:border-emerald-100"
                   title="Approve Drawing"
@@ -264,7 +270,10 @@ const DrawingMaster = () => {
                   <Check size={15} />
                 </button>
                 <button 
-                  onClick={() => handleRejectItem(row.sales_order_item_id)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleRejectItem(row.sales_order_item_id);
+                  }}
                   disabled={bulkOperationLoading}
                   className="p-2 text-rose-500 hover:bg-rose-50 rounded transition-all border border-transparent hover:border-rose-100"
                   title="Reject Drawing"
@@ -274,33 +283,48 @@ const DrawingMaster = () => {
               </>
             )}
             <button 
-              onClick={() => {
-              const drawingNo = row.drawing_no;
-              const isExpanded = !!expandedRevisions[drawingNo];
-              if (isExpanded) {
-                setExpandedRevisions(prev => {
-                  const next = { ...prev };
-                  delete next[drawingNo];
-                  return next;
-                });
-              } else {
-                fetchRevisionsIfNeeded(drawingNo);
-              }
-            }}
-            className={`p-2 rounded  transition-all ${expandedRevisions[row.drawing_no] ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'text-slate-500 hover:bg-slate-50 border border-transparent hover:border-slate-200'}`}
-            title="Revision History"
-          >
-            <History size={15} />
-          </button>
+              onClick={(e) => {
+                e.stopPropagation();
+                const drawingNo = row.drawing_no;
+                const isExpanded = !!expandedRevisions[drawingNo];
+                if (isExpanded) {
+                  setExpandedRevisions(prev => {
+                    const next = { ...prev };
+                    delete next[drawingNo];
+                    return next;
+                  });
+                } else {
+                  fetchRevisionsIfNeeded(drawingNo);
+                }
+                
+                // Toggle the DataTable row expansion
+                if (window.toggleDataTableRow) {
+                   // Find row index in drawings array
+                   const rowIdx = drawings.findIndex(d => d.id === row.id);
+                   window.toggleDataTableRow(row.id || rowIdx);
+                }
+              }}
+              className={`flex items-center gap-1 p-1.5 px-2 rounded transition-all ${expandedRevisions[row.drawing_no] ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'text-slate-500 hover:bg-slate-50 border border-transparent hover:border-slate-200'}`}
+              title="Revision History"
+            >
+              <History size={14} />
+              {expandedRevisions[row.drawing_no] ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+            </button>
           <button 
-            onClick={() => handleEdit(row)}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleEdit(row);
+            }}
             className="p-2 text-amber-500 hover:bg-amber-50 rounded  transition-all border border-transparent hover:border-amber-100"
             title="Edit Drawing"
           >
             <Edit2 size={15} />
           </button>
           <button 
-            onClick={() => handleDelete(row)}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDelete(row);
+            }}
             className="p-2 text-rose-500 hover:bg-rose-50 rounded  transition-all border border-transparent hover:border-rose-100"
             title="Delete Drawing"
           >
@@ -488,6 +512,7 @@ const DrawingMaster = () => {
               pageSize={5}
               hideHeader={true}
               hideExpander={true}
+              disableRowClickExpansion={true}
               renderExpanded={(row) => {
                 const revisions = expandedRevisions[row.drawing_no] || [];
                 const isRevLoading = revisionsLoading[row.drawing_no];

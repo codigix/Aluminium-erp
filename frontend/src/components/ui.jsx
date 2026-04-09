@@ -474,7 +474,7 @@ export const Pagination = ({ currentPage, totalPages, onPageChange, totalItems, 
   );
 };
 
-export const DataTable = ({ columns, data, loading, loadingMessage = "Loading...", emptyMessage = "No data found", searchPlaceholder = "Search...", actions, onRowClick, renderExpanded, className = '', hideHeader = false, hideExpander = false, pageSize: initialPageSize = 10 }) => {
+export const DataTable = ({ columns, data, loading, loadingMessage = "Loading...", emptyMessage = "No data found", searchPlaceholder = "Search...", actions, onRowClick, renderExpanded, className = '', hideHeader = false, hideExpander = false, pageSize: initialPageSize = 10, disableRowClickExpansion = false }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState(null);
   const [expandedRows, setExpandedRows] = useState(new Set());
@@ -498,9 +498,13 @@ export const DataTable = ({ columns, data, loading, loadingMessage = "Loading...
   };
 
   useEffect(() => {
-    window.toggleDataTableRow = toggleRowExternal;
+    if (window) {
+      window.toggleDataTableRow = toggleRowExternal;
+    }
     return () => {
-      delete window.toggleDataTableRow;
+      if (window) {
+        delete window.toggleDataTableRow;
+      }
     };
   }, [expandedRows]);
 
@@ -616,7 +620,7 @@ export const DataTable = ({ columns, data, loading, loadingMessage = "Loading...
                     <tr 
                       className={`group transition-all duration-200 ${onRowClick ? 'cursor-pointer hover:bg-indigo-50/30' : (isDark ? 'hover:bg-white' : 'hover:bg-slate-50/50')} ${isExpanded ? (isDark ? 'bg-indigo-900/20' : 'bg-indigo-50/20') : ''}`}
                       onClick={() => {
-                        if (renderExpanded) toggleRow(row.id || rowIdx);
+                        if (renderExpanded && !disableRowClickExpansion) toggleRow(row.id || rowIdx);
                         if (onRowClick) onRowClick(row);
                       }}
                     >
