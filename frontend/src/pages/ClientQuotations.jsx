@@ -2,7 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import { Card, StatusBadge } from '../components/ui.jsx';
-import { MessageSquare, Send, X, User, ShieldCheck, RotateCw, Save, Check, FileText, CheckCircle, Mail, ClipboardList, Eye, Trash2, Loader2, Upload, Package, ChevronDown, ChevronUp, History, Search, CheckCheck, Plus, GitBranch } from 'lucide-react';
+import { 
+  MessageSquare, Send, X, User, ShieldCheck, RotateCw, Save, Check, FileText, CheckCircle, Mail, ClipboardList, Eye, Trash2, Loader2, Upload, Package, ChevronDown, ChevronUp, History, Search, CheckCheck, Plus, GitBranch, Download
+} from 'lucide-react';
 import { successToast, errorToast } from '../utils/toast';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
@@ -262,7 +264,7 @@ const ClientQuotations = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/quotation-requests?status=SENT,DRAFT`, {
+      const response = await fetch(`${API_BASE}/quotation-requests?status=SENT,DRAFT,REVISED,Revised`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!response.ok) throw new Error('Failed to fetch sent quotations');
@@ -887,6 +889,34 @@ const ClientQuotations = () => {
     });
   };
 
+  const handleDownloadPDF = async (group) => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/quotation-requests/download-pdf/${group.id}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!response.ok) throw new Error('Failed to download PDF');
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Quotation_QRT-${String(group.id).padStart(4, '0')}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      successToast('PDF download started');
+    } catch (error) {
+      console.error(error);
+      errorToast(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleDeleteSentQuotation = async (group) => {
     const result = await Swal.fire({
       title: 'Delete Quotation',
@@ -1120,6 +1150,16 @@ const ClientQuotations = () => {
                               >
                                 {isPending ? (isExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />) : <Eye size={15} />}
                               </button>
+
+                              {!isPending && (
+                                <button
+                                  onClick={() => handleDownloadPDF(group)}
+                                  className="p-2 bg-white border border-slate-200 text-blue-600 hover:bg-blue-50 rounded transition-all active:scale-95"
+                                  title="Download PDF"
+                                >
+                                  <Download size={15} />
+                                </button>
+                              )}
 
                               {!isPending && (
                                 <>

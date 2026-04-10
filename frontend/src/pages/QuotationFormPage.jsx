@@ -351,6 +351,40 @@ const QuotationFormPage = () => {
     setItems(updatedItems);
   };
 
+  const handleDownloadPDF = async () => {
+    const idToDownload = selectedVersionId || initialData?.id;
+    if (!idToDownload) {
+      errorToast('Please save the quotation first to download PDF');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/quotation-requests/download-pdf/${idToDownload}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!response.ok) throw new Error('Failed to download PDF');
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Quotation_${quotationNo}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      successToast('PDF download started');
+    } catch (error) {
+      console.error(error);
+      errorToast(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const calculateSummary = () => {
     const baseAmount = items.reduce((sum, item) => sum + (parseFloat(item.total) || 0), 0);
     const gstAmount = items.reduce((sum, item) => {
@@ -516,7 +550,7 @@ const QuotationFormPage = () => {
                     className="px-3 py-1.5 text-xs font-medium text-amber-600 bg-amber-50 border border-amber-100 rounded-lg hover:bg-amber-100 transition-all flex items-center gap-2 disabled:opacity-50"
                   >
                     {saving ? <Loader2 size={14} className="animate-spin" /> : <GitBranch size={14} />}
-                    Save Revision
+                    Create Revision
                   </button>
                   <button
                     onClick={() => handleSave('Revised', true)}
@@ -526,6 +560,16 @@ const QuotationFormPage = () => {
                     {saving ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
                     Send to Client
                   </button>
+                  {(selectedVersionId || initialData?.id) && (
+                    <button
+                      onClick={handleDownloadPDF}
+                      disabled={loading}
+                      className="px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-100 rounded-lg hover:bg-blue-100 transition-all flex items-center gap-2 disabled:opacity-50"
+                    >
+                      {loading ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />}
+                      Download PDF
+                    </button>
+                  )}
                 </>
               ) : mode === 'revise' ? (
                 <>
@@ -543,7 +587,7 @@ const QuotationFormPage = () => {
                     className="px-3 py-1.5 text-xs font-medium text-amber-600 bg-amber-50 border border-amber-100 rounded-lg hover:bg-amber-100 transition-all flex items-center gap-2 disabled:opacity-50"
                   >
                     {saving ? <Loader2 size={14} className="animate-spin" /> : <GitBranch size={14} />}
-                    Save Revision
+                    Create Revision
                   </button>
                   <button
                     onClick={() => handleSave('Revised', true)}
@@ -553,6 +597,16 @@ const QuotationFormPage = () => {
                     {saving ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
                     Send to Client
                   </button>
+                  {(selectedVersionId || initialData?.id) && (
+                    <button
+                      onClick={handleDownloadPDF}
+                      disabled={loading}
+                      className="px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-100 rounded-lg hover:bg-blue-100 transition-all flex items-center gap-2 disabled:opacity-50"
+                    >
+                      {loading ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />}
+                      Download PDF
+                    </button>
+                  )}
                 </>
               ) : (
                 <>
@@ -565,13 +619,31 @@ const QuotationFormPage = () => {
                     Save as Draft
                   </button>
                   <button
-                    onClick={() => handleSave('Sent')}
+                    onClick={() => handleSave('Sent', false)}
+                    disabled={saving}
+                    className="px-3 py-1.5 text-xs font-medium text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-lg hover:bg-emerald-100 transition-all flex items-center gap-2 disabled:opacity-50"
+                  >
+                    {saving ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+                    Create Quotation
+                  </button>
+                  <button
+                    onClick={() => handleSave('Sent', true)}
                     disabled={saving}
                     className="px-4 py-1.5 text-xs font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100 flex items-center gap-2 disabled:opacity-50"
                   >
                     {saving ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-                    Send Quotation
+                    Send to Client
                   </button>
+                  {(selectedVersionId || initialData?.id) && (
+                    <button
+                      onClick={handleDownloadPDF}
+                      disabled={loading}
+                      className="px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-100 rounded-lg hover:bg-blue-100 transition-all flex items-center gap-2 disabled:opacity-50"
+                    >
+                      {loading ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />}
+                      Download PDF
+                    </button>
+                  )}
                 </>
               )}
             </>
@@ -1038,7 +1110,7 @@ const QuotationFormPage = () => {
                     <FileText size={14} />
                   </div>
                   <p className="text-[10px] text-amber-800 leading-relaxed font-medium">
-                    PDF will be generated upon sending.
+                    PDF can be downloaded at any time after saving.
                   </p>
                 </div>
               </div>
