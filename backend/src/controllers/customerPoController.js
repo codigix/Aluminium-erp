@@ -215,6 +215,7 @@ const updateCustomerPo = async (req, res, next) => {
     }));
 
     const payload = {
+      projectName: req.body.projectName,
       header: {
         poNumber: req.body.poNumber,
         poDate: req.body.poDate,

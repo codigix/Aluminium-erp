@@ -43,6 +43,7 @@ const SalesOrders = () => {
 
   const initialFormState = {
     series: 'Auto-generated',
+    projectName: '',
     orderDate: new Date().toISOString().split('T')[0],
     deliveryDate: '',
     orderType: 'Sales',
@@ -113,7 +114,11 @@ const SalesOrders = () => {
       });
       if (response.ok) {
         const data = await response.json();
-        setOrders(Array.isArray(data) ? data : []);
+        const mappedData = (Array.isArray(data) ? data : []).map(order => ({
+          ...order,
+          projectName: order.project_name // Map backend snake_case to camelCase used in initial implementation
+        }));
+        setOrders(mappedData);
       }
     } catch (err) {
       console.error('Error fetching orders:', err);
@@ -260,7 +265,7 @@ const SalesOrders = () => {
         if (response.ok) {
           const poData = await response.json();
           sourceType = 'DIRECT';
-          projectName = poData.remarks || `Order for ${poData.company_name}`;
+          projectName = poData.project_name || poData.remarks || `Order for ${poData.company_name}`;
           
           const poItems = poData.items || [];
           items = poItems.map(item => {
@@ -563,6 +568,7 @@ const SalesOrders = () => {
         body: JSON.stringify({
           client_id: formData.customerId,
           quotation_id: quotationId,
+          project_name: formData.projectName,
           order_date: formData.orderDate,
           delivery_date: formData.deliveryDate || null,
           status: formData.status,
@@ -678,7 +684,7 @@ const SalesOrders = () => {
           <div className="flex flex-col">
             <span className="font-semibold text-slate-900 leading-tight">{val}</span>
             <span className="text-xs  text-slate-500 italic">
-              {row.projectName || 'General Project'}
+              {row.project_name || 'General Project'}
             </span>
           </div>
         </div>
@@ -1009,6 +1015,15 @@ const SalesOrders = () => {
                     </button>
                   )}
                 </div>
+              </FormControl>
+              <FormControl label="Project Name">
+                <input 
+                  className="w-full p-2 border border-slate-200 rounded  text-xs" 
+                  value={formData.projectName}
+                  onChange={(e) => setFormData({...formData, projectName: e.target.value})}
+                  placeholder="Project name..."
+                  disabled={formMode === 'view'}
+                />
               </FormControl>
               <FormControl label="Warehouse">
                 <select 

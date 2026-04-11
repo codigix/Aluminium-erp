@@ -8,7 +8,9 @@ const listSalesOrders = async (includeWithoutPo = true) => {
   }
   
   const [rows] = await pool.query(
-    `SELECT so.*, so.target_dispatch_date as delivery_date, c.company_name, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path,
+    `SELECT so.*, 
+            COALESCE(so.project_name, cp.project_name) as project_name,
+            so.target_dispatch_date as delivery_date, c.company_name, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path,
             COALESCE(ct.email, "") as email_address, COALESCE(ct.phone, "") as contact_phone,
             (SELECT GROUP_CONCAT(DISTINCT drawing_no SEPARATOR ', ') FROM sales_order_items WHERE sales_order_id = so.id) as drawing_no,
             (SELECT reason FROM design_rejections WHERE sales_order_id = so.id ORDER BY created_at DESC LIMIT 1) as rejection_reason
@@ -38,7 +40,9 @@ const listSalesOrders = async (includeWithoutPo = true) => {
 
 const getSalesOrderById = async (id) => {
   const [rows] = await pool.query(
-    `SELECT so.*, so.target_dispatch_date as delivery_date, c.company_name, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path,
+    `SELECT so.*, 
+            COALESCE(so.project_name, cp.project_name) as project_name,
+            so.target_dispatch_date as delivery_date, c.company_name, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path,
             COALESCE(ct.email, "") as email_address, COALESCE(ct.phone, "") as contact_phone
      FROM sales_orders so
      LEFT JOIN companies c ON c.id = so.company_id

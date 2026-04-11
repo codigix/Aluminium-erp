@@ -28,6 +28,7 @@ const createCustomerPo = async payload => {
 
     const {
       companyId,
+      projectName,
       header = {},
       items = [],
       pdfFile,
@@ -42,14 +43,15 @@ const createCustomerPo = async payload => {
 
     const [poResult] = await connection.execute(
       `INSERT INTO customer_pos
-        (company_id, po_number, po_date, po_version, order_type, plant, currency, payment_terms,
+        (company_id, project_name, po_number, po_date, po_version, order_type, plant, currency, payment_terms,
          credit_days, freight_terms, packing_forwarding, insurance_terms, delivery_terms, status,
          pdf_path, subtotal, tax_total, net_total, remarks, terms_and_conditions, special_notes,
          inspection_clause, test_certificate)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ,
       [
         companyId,
+        projectName || null,
         header.poNumber || null,
         header.poDate || null,
         header.poVersion || '1.0',
@@ -124,6 +126,7 @@ const createCustomerPo = async payload => {
 const listCustomerPos = async (filters = {}) => {
   let query = `
     SELECT cp.*, c.company_name, 
+           COALESCE(cp.project_name, (SELECT project_name FROM sales_orders WHERE customer_po_id = cp.id LIMIT 1)) as project_name,
            (SELECT SUM(quantity) FROM customer_po_items WHERE customer_po_id = cp.id) as total_qty
     FROM customer_pos cp
     JOIN companies c ON c.id = cp.company_id
@@ -169,6 +172,7 @@ const updateCustomerPo = async (id, payload) => {
     await connection.beginTransaction();
 
     const {
+      projectName,
       header = {},
       items = [],
       remarks,
@@ -182,7 +186,7 @@ const updateCustomerPo = async (id, payload) => {
 
     await connection.execute(
       `UPDATE customer_pos
-       SET po_number = ?, po_date = ?, po_version = ?, order_type = ?, plant = ?, currency = ?, 
+       SET project_name = ?, po_number = ?, po_date = ?, po_version = ?, order_type = ?, plant = ?, currency = ?, 
            payment_terms = ?, credit_days = ?, freight_terms = ?, packing_forwarding = ?, 
            insurance_terms = ?, delivery_terms = ?, subtotal = ?, tax_total = ?, net_total = ?, 
            remarks = ?, terms_and_conditions = ?, special_notes = ?, inspection_clause = ?, 
@@ -190,6 +194,7 @@ const updateCustomerPo = async (id, payload) => {
        WHERE id = ?`
       ,
       [
+        projectName || null,
         header.poNumber || null,
         header.poDate || null,
         header.poVersion || '1.0',

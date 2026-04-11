@@ -1005,10 +1005,9 @@ const ClientQuotations = () => {
               <thead className="bg-slate-50/50">
                 <tr>
                   <th className=" p-2 text-left text-xs  text-slate-500  ">Quotation ID / Type</th>
-                  <th className=" p-2 text-left text-xs  text-slate-500  ">Client Details</th>
-                  <th className=" p-2 text-left text-xs  text-slate-500  ">Project / Items</th>
+                  <th className=" p-2 text-left text-xs  text-slate-500  ">Client & Project</th>
+                  <th className=" p-2 text-left text-xs  text-slate-500  ">Drawings / Items</th>
                   <th className=" p-2 text-left text-xs  text-slate-500  ">Amount</th>
-                  <th className=" p-2 text-left text-xs  text-slate-500  ">Status</th>
                   <th className=" p-2 text-right text-xs  text-slate-500  ">Action</th>
                 </tr>
               </thead>
@@ -1041,8 +1040,11 @@ const ClientQuotations = () => {
                           </td>
                           <td className=" p-2 whitespace-nowrap">
                             <div className="flex flex-col">
-                              <span className="text-xs  text-slate-900">{group.company_name}</span>
-                              <span className="text-xs text-slate-500 font-medium">
+                              <span className="text-xs font-bold text-slate-900">{group.company_name}</span>
+                              <span className="text-[11px] text-slate-500 italic">
+                                {group.project_name || 'General Project'}
+                              </span>
+                              <span className="text-[9px] text-slate-400 mt-0.5">
                                 {new Date(group.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                               </span>
                             </div>
@@ -1050,13 +1052,11 @@ const ClientQuotations = () => {
                           <td className=" p-2 whitespace-nowrap">
                             <div className="flex flex-col gap-0.5">
                               <span className="text-xs  text-slate-700 font-medium">
-                                {group.project_name || (group.quotes.length > 1 ? `${group.quotes.length} Drawings` : (group.quotes[0]?.drawing_no || '—'))}
+                                {group.quotes.length > 1 ? `${group.quotes.length} Drawings` : (group.quotes[0]?.drawing_no || '—')}
                               </span>
-                              {group.project_name && group.quotes.length > 0 && (
-                                <span className="text-[10px] text-slate-400">
-                                  {group.quotes.length} item(s)
-                                </span>
-                              )}
+                              <span className="text-[10px] text-slate-400">
+                                {group.quotes.length} item(s)
+                              </span>
                             </div>
                           </td>
                           <td className=" p-2 whitespace-nowrap">
@@ -1090,9 +1090,6 @@ const ClientQuotations = () => {
                                 <span className="text-xs text-slate-400    ml-1">Incl. GST (18%)</span>
                               </div>
                             )}
-                          </td>
-                          <td className=" p-2 whitespace-nowrap">
-                            <StatusBadge status={group.displayStatus} />
                           </td>
                           <td className=" p-2 whitespace-nowrap text-right">
                             <div className="flex items-center justify-end gap-2">
@@ -1182,17 +1179,40 @@ const ClientQuotations = () => {
 
                         {isExpanded && (
                           <tr>
-                            <td colSpan="6" className=" p-2 bg-slate-200">
+                            <td colSpan="5" className=" p-2 bg-slate-200">
                               <div className=" animate-in slide-in-from-top-2 duration-300">
-                                <div className="px-5 p-2 border-b border-slate-50 bg-slate-50 flex items-center gap-2">
-                                  <Package size={15} className="text-indigo-600" />
-                                  <h3 className="text-xs  text-slate-900">{isPending ? 'Approved Drawings & Pricing' : 'Quotation Details'}</h3>
+                                <div className="px-5 p-3 border-b border-slate-100 bg-white flex flex-col md:flex-row md:items-center justify-between gap-3">
+                                  <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
+                                      <Package size={16} />
+                                    </div>
+                                    <div>
+                                      <h3 className="text-sm font-bold text-slate-900">
+                                        {isPending ? 'Approved Drawings & Pricing' : 'Quotation Details'}
+                                      </h3>
+                                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1">
+                                        <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                                          <User size={12} className="text-slate-400" />
+                                          <span className="font-medium">{group.company_name}</span>
+                                        </div>
+                                        <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                                          <Package size={12} className="text-slate-400" />
+                                          <span className="font-medium italic">{group.project_name || 'General Project'}</span>
+                                        </div>
+                                        {group.quotes[0]?.email && (
+                                          <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                                            <Mail size={12} className="text-slate-400" />
+                                            <span>{group.quotes[0].email}</span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
                                 </div>
                                 <div className="overflow-x-auto">
                                   <table className="min-w-full divide-y divide-slate-100">
                                     <thead className="bg-slate-50/30">
                                       <tr>
-                                        <th className="px-4 p-2 text-left text-xs  text-slate-500  ">Project</th>
                                         <th className="px-4 p-2 text-left text-xs  text-slate-500  ">Drawing & Description</th>
                                         <th className="px-4 p-2 text-center text-xs  text-slate-500  ">Qty</th>
                                         {isPending ? (
@@ -1206,19 +1226,15 @@ const ClientQuotations = () => {
                                         ) : (
                                           <>
                                             <th className="px-4 p-2 text-right text-xs  text-slate-500  ">Rate</th>
-                                            <th className="px-4 p-2 text-right text-xs  text-slate-500  ">Total (Base)</th>
-                                            <th className="px-4 p-2 text-right text-xs  text-slate-500  pr-6">Status</th>
+                                            <th className="px-4 p-2 text-right text-xs  text-slate-500  pr-6">Total (Base)</th>
                                           </>
                                         )}
                                       </tr>
                                     </thead>
-                                    <tbody className="divide-y divide-slate-50">
+                                    <tbody className="divide-y divide-slate-50 bg-white">
                                       {isPending ? (
                                         group.quotes.map((item) => (
                                           <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
-                                            <td className="px-4 p-2">
-                                              <span className="text-xs text-slate-600">{item.project_name || '—'}</span>
-                                            </td>
                                             <td className="px-4 p-2">
                                               <div className="flex flex-col">
                                                 <span className="text-xs font-medium text-slate-900">{item.drawing_no || 'N/A'}</span>
@@ -1271,9 +1287,6 @@ const ClientQuotations = () => {
                                         group.quotes.map((quote) => (
                                           <tr key={quote.id} className="hover:bg-slate-50/50 transition-colors">
                                             <td className="px-4 p-2">
-                                              <span className="text-xs text-slate-600">{quote.project_name || '—'}</span>
-                                            </td>
-                                            <td className="px-4 p-2">
                                               <div className="flex flex-col">
                                                 <span className="text-xs font-medium text-slate-900">{quote.drawing_no || 'N/A'}</span>
                                                 <span className="text-xs text-slate-600">{quote.item_description || quote.description || '—'}</span>
@@ -1305,10 +1318,7 @@ const ClientQuotations = () => {
                                                 )}
                                               </div>
                                             </td>
-                                            <td className="px-4 p-2 text-right text-xs  text-slate-900 font-medium">{formatCurrency(quote.total_amount)}</td>
-                                            <td className="px-4 p-2 text-right pr-6">
-                                              <StatusBadge status={quote.status} />
-                                            </td>
+                                            <td className="px-4 p-2 text-right text-xs  text-slate-900 font-medium pr-6">{formatCurrency(quote.total_amount)}</td>
                                           </tr>
                                         ))
                                       )}

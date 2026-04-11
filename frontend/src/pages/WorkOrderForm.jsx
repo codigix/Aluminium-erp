@@ -187,6 +187,33 @@ const WorkOrderForm = ({ workOrderId, salesOrderId: propSalesOrderId, salesOrder
     }
   };
 
+  const fetchStockBalances = async (currentInventory) => {
+    if (!currentInventory || currentInventory.length === 0) return;
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/stock/balance`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const balances = await response.json();
+        const updatedInventory = currentInventory.map(item => {
+          const balance = balances.find(b => b.item_code === item.item_code);
+          const stock = parseFloat(balance?.current_balance || 0);
+          const consumed = parseFloat(item.consumed_qty || 0);
+          return {
+            ...item,
+            total_stock: stock.toFixed(3),
+            issued_qty: stock.toFixed(3),
+            remaining_qty: (stock - consumed).toFixed(3)
+          };
+        });
+        setInventory(updatedInventory);
+      }
+    } catch (error) {
+      console.error('Error fetching stock balances:', error);
+    }
+  };
+
   const fetchBOMDetails = async (bomId) => {
     try {
       const token = localStorage.getItem('authToken');
@@ -218,7 +245,7 @@ const WorkOrderForm = ({ workOrderId, salesOrderId: propSalesOrderId, salesOrder
         });
 
         setOperations(mappedOps);
-        setInventory(mappedMats);
+        fetchStockBalances(mappedMats);
       }
     } catch (error) {
       console.error('Error fetching BOM details:', error);
@@ -233,7 +260,7 @@ const WorkOrderForm = ({ workOrderId, salesOrderId: propSalesOrderId, salesOrder
       });
       if (response.ok) {
         const data = await response.json();
-        setInventory(data);
+        fetchStockBalances(data);
       }
     } catch (error) {
       console.error('Error fetching material requirements:', error);
@@ -359,13 +386,21 @@ const WorkOrderForm = ({ workOrderId, salesOrderId: propSalesOrderId, salesOrder
             String(m.source_assembly || m.sourceAssembly) === String(itemCode)
           );
           if (itemMats.length > 0) {
-            setInventory(itemMats.map(m => ({
-              item_code: m.item_code || m.itemCode,
-              material_name: m.material_name || m.materialName,
-              required_qty: m.required_qty || m.requiredQty,
-              uom: m.uom,
-              source_assembly: m.source_assembly || m.sourceAssembly
-            })));
+            const mappedMats = itemMats.map(m => {
+              const req = parseFloat(m.required_qty || m.requiredQty || 0);
+              return {
+                item_code: m.item_code || m.itemCode,
+                material_name: m.material_name || m.materialName,
+                required_qty: req.toFixed(3),
+                uom: m.uom,
+                source_assembly: m.source_assembly || m.sourceAssembly,
+                total_stock: (0).toFixed(3),
+                remaining_qty: (0).toFixed(3),
+                issued_qty: req.toFixed(3),
+                consumed_qty: (0).toFixed(3)
+              };
+            });
+            fetchStockBalances(mappedMats);
           }
         }
       }
@@ -384,12 +419,9 @@ const WorkOrderForm = ({ workOrderId, salesOrderId: propSalesOrderId, salesOrder
     const val = parseFloat(value || 0);
     newInventory[index].consumed_qty = value; // Keep as string to allow decimal input
     
-    // Custom Logic: Issued = Required - Consumed
-    const issued = (parseFloat(newInventory[index].required_qty || 0) - val);
-    newInventory[index].issued_qty = isWeightBased(newInventory[index].uom) ? issued.toFixed(3) : issued.toFixed(0);
-    
-    // Custom Logic: Remaining = Stock - Consumed
-    const remaining = (parseFloat(newInventory[index].total_stock || 0) - val);
+    // Custom Logic: Remaining = Issued - Consumed
+    const issued = parseFloat(newInventory[index].issued_qty || 0);
+    const remaining = issued - val;
     newInventory[index].remaining_qty = isWeightBased(newInventory[index].uom) ? remaining.toFixed(3) : remaining.toFixed(0);
     
     setInventory(newInventory);

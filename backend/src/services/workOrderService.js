@@ -493,5 +493,7 @@ module.exports = {
   getWorkOrderById,
   updateWorkOrderStatus,
   deleteWorkOrder,
-  generateWoNumber
+  generateWoNumber,
+  getWorkOrderMaterialRequirements,
+  updateMaterialConsumption
 };

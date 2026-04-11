@@ -26,9 +26,11 @@ const generateOrderNo = async () => {
 
 const listOrders = async () => {
   const [rows] = await pool.query(`
-    SELECT o.*, c.company_name AS client
+    SELECT o.*, c.company_name AS client,
+           COALESCE(NULLIF(o.project_name, ''), NULLIF(cp.project_name, ''), 'General Project') as project_name
     FROM orders o
     JOIN companies c ON c.id = o.client_id
+    LEFT JOIN customer_pos cp ON cp.id = o.quotation_id AND o.source_type = 'DIRECT'
     ORDER BY o.created_at DESC
   `);
   return rows;
@@ -38,6 +40,7 @@ const createOrder = async (orderData) => {
   const {
     quotation_id,
     client_id,
+    project_name,
     order_date,
     delivery_date,
     source_type,
@@ -59,14 +62,15 @@ const createOrder = async (orderData) => {
 
     const [result] = await connection.execute(`
       INSERT INTO orders
-      (order_no, quotation_id, client_id, order_date, delivery_date, 
+      (order_no, quotation_id, client_id, project_name, order_date, delivery_date, 
        status, source_type, warehouse, cgst_rate, sgst_rate, profit_margin,
        subtotal, gst, grand_total)
-      VALUES (?, ?, ?, ?, ?, 'Created', ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, 'Created', ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       orderNo,
       quotation_id || null,
       client_id,
+      project_name || null,
       order_date || new Date(),
       delivery_date || null,
       source_type || 'DIRECT',
@@ -113,9 +117,11 @@ const createOrder = async (orderData) => {
 const getOrderById = async (id) => {
   const [rows] = await pool.query(`
     SELECT o.*, c.company_name AS client, 
-           ct.email AS contact_email, ct.phone AS contact_mobile
+           ct.email AS contact_email, ct.phone AS contact_mobile,
+           COALESCE(NULLIF(o.project_name, ''), NULLIF(cp.project_name, ''), 'General Project') as project_name
     FROM orders o
     JOIN companies c ON c.id = o.client_id
+    LEFT JOIN customer_pos cp ON cp.id = o.quotation_id AND o.source_type = 'DIRECT'
     LEFT JOIN (
        SELECT company_id, email, phone, 
               ROW_NUMBER() OVER (PARTITION BY company_id ORDER BY contact_type = 'PRIMARY' DESC, id ASC) as rn
@@ -137,6 +143,7 @@ const updateOrder = async (id, orderData) => {
   const {
     quotation_id,
     client_id,
+    project_name,
     order_date,
     delivery_date,
     status,
@@ -159,6 +166,7 @@ const updateOrder = async (id, orderData) => {
       UPDATE orders SET
         quotation_id = ?,
         client_id = ?,
+        project_name = ?,
         order_date = ?,
         delivery_date = ?,
         status = ?,
@@ -175,6 +183,7 @@ const updateOrder = async (id, orderData) => {
     `, [
       quotation_id || null,
       client_id,
+      project_name || null,
       order_date,
       delivery_date || null,
       status,

@@ -35,6 +35,7 @@ const CustomerPO = ({
 
   const [poForm, setPoForm] = useState({
     companyId: '',
+    projectName: '',
     poNumber: '',
     poDate: new Date().toISOString().split('T')[0],
     poVersion: '1.0',
@@ -104,6 +105,7 @@ const CustomerPO = ({
       setPoForm(prev => ({
         ...prev,
         companyId: quote.company_id,
+        projectName: quote.project_name || '',
         items: items.length > 0 ? items : prev.items
       }));
       
@@ -161,6 +163,7 @@ const CustomerPO = ({
     setSelectedQuoteId('')
     setPoForm({
       companyId: '',
+      projectName: '',
       poNumber: '',
       poDate: new Date().toISOString().split('T')[0],
       poVersion: '1.0',
@@ -195,6 +198,7 @@ const CustomerPO = ({
     try {
       const payload = {
         companyId: poForm.companyId,
+        projectName: poForm.projectName,
         poNumber: poForm.poNumber,
         poDate: poForm.poDate,
         poVersion: poForm.poVersion,
@@ -261,27 +265,24 @@ const CustomerPO = ({
           <div className="p-2 bg-indigo-50 text-indigo-600 rounded ">
             <FileText className="w-4 h-4" />
           </div>
-          <div>
-            <p className="text-xs  text-slate-900  tracking-tight">{row.po_number}</p>
-            <div className="flex items-center gap-1.5 mt-0.5">
-              <Building2 className="w-3 h-3 text-slate-400" />
-              <p className="text-xs text-slate-500">{row.company_name}</p>
-            </div>
-          </div>
+          <p className="text-xs  text-slate-900 font-bold  tracking-tight">{row.po_number}</p>
         </div>
       )
     },
     {
-      label: 'Date',
+      label: 'Client & Project',
       render: (_, row) => (
         <div className="flex flex-col">
-          <div className="flex items-center gap-1.5 text-slate-600">
+          <span className="text-xs font-bold text-slate-900">{row.company_name}</span>
+          <span className="text-[11px] text-slate-500 italic">
+            {row.project_name || 'General Project'}
+          </span>
+          <div className="flex items-center gap-1.5 text-slate-400 mt-0.5">
             <Calendar className="w-3 h-3" />
-            <span className="text-xs  ">
+            <span className="text-[10px]">
               {new Date(row.po_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
             </span>
           </div>
-          <span className="text-xs text-slate-400 ml-4.5">Captured Date</span>
         </div>
       )
     },
@@ -297,20 +298,6 @@ const CustomerPO = ({
           </div>
         </div>
       )
-    },
-    {
-      label: 'Status',
-      render: (_, row) => {
-        const status = row.status || 'DRAFT';
-        const config = poStatusColors[status] || poStatusColors.DRAFT;
-        const Icon = config.icon;
-        return (
-          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs    ${config.bg} ${config.text} border ${config.border} shadow-sm`}>
-            <Icon className="w-3 h-3" />
-            {status}
-          </span>
-        );
-      }
     },
     {
       label: 'Action',
@@ -517,6 +504,16 @@ const CustomerPO = ({
                           ));
                         })()}
                       </select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs  text-slate-400   ml-1">Project Name</label>
+                      <input 
+                        type="text"
+                        value={poForm.projectName}
+                        onChange={(e) => setPoForm(prev => ({ ...prev, projectName: e.target.value }))}
+                        placeholder="Project name..."
+                        className="w-full bg-slate-50 border-2 border-slate-100 rounded p-2 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all  text-slate-700"
+                      />
                     </div>
                     <div className="space-y-2">
                       <label className="text-xs  text-slate-400   ml-1">Company / Client *</label>
@@ -811,13 +808,22 @@ const CustomerPO = ({
                       {viewingPo.status || 'DRAFT'}
                     </span>
                   </h2>
-                  <p className="text-xs text-slate-500    mt-1.5 flex items-center gap-3">
-                    <Building2 className="w-3.5 h-3.5 text-indigo-500" />
-                    {viewingPo.company_name || 'N/A'}
-                    <span className="w-1 h-1 bg-slate-300 rounded mx-1" />
-                    <Calendar className="w-3.5 h-3.5 text-indigo-500" />
-                    {viewingPo.po_date ? new Date(viewingPo.po_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'}
-                  </p>
+                  <div className="flex flex-col gap-1 mt-1.5">
+                    <p className="text-xs text-slate-500 flex items-center gap-2">
+                      <Building2 className="w-3.5 h-3.5 text-indigo-500" />
+                      <span className="font-semibold text-slate-700">{viewingPo.company_name || 'N/A'}</span>
+                      {viewingPo.project_name && (
+                        <>
+                          <span className="w-1 h-1 bg-slate-300 rounded" />
+                          <span className="italic text-indigo-600">{viewingPo.project_name}</span>
+                        </>
+                      )}
+                    </p>
+                    <p className="text-[10px] text-slate-400 flex items-center gap-2">
+                      <Calendar className="w-3 h-3 text-slate-400" />
+                      {viewingPo.po_date ? new Date(viewingPo.po_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'}
+                    </p>
+                  </div>
                 </div>
               </div>
               <div className="flex items-center gap-3">
@@ -837,7 +843,44 @@ const CustomerPO = ({
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
+              {/* Project & Client Info */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-slate-400">
+                    <FileText className="w-4 h-4" />
+                    <span className="text-[10px] uppercase font-bold tracking-wider">Project Information</span>
+                  </div>
+                  <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
+                    <p className="text-sm font-semibold text-slate-900">{viewingPo.project_name || 'General Project'}</p>
+                    <p className="text-xs text-slate-500 mt-1">Reference PO: {viewingPo.po_number}</p>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-slate-400">
+                    <Building2 className="w-4 h-4" />
+                    <span className="text-[10px] uppercase font-bold tracking-wider">Client Details</span>
+                  </div>
+                  <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
+                    <p className="text-sm font-semibold text-slate-900">{viewingPo.company_name}</p>
+                    <div className="grid grid-cols-2 gap-4 mt-2">
+                      {viewingPo.gstin && (
+                        <div>
+                          <p className="text-[10px] text-slate-400 uppercase">GSTIN</p>
+                          <p className="text-xs font-medium text-slate-700">{viewingPo.gstin}</p>
+                        </div>
+                      )}
+                      {viewingPo.pan && (
+                        <div>
+                          <p className="text-[10px] text-slate-400 uppercase">PAN</p>
+                          <p className="text-xs font-medium text-slate-700">{viewingPo.pan}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               {/* Summary Cards */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="bg-slate-50/50 rounded-xl p-4 border border-slate-100">

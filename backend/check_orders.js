@@ -1,40 +1,23 @@
 const mysql = require('mysql2/promise');
+require('dotenv').config({ path: './.env' });
 
-(async () => {
-  const pool = mysql.createPool({
-    host: 'localhost',
-    user: 'root',
-    password: 'root',
-    database: 'sales_erp'
-  });
-  
-  try {
-    const [counts] = await pool.query(
-      `SELECT status, current_department, COUNT(*) as cnt FROM sales_orders 
-       GROUP BY status, current_department`
-    );
-    
-    console.log('Sales Orders by Status and Department:');
-    console.log(JSON.stringify(counts, null, 2));
-    
-    const [designApproved] = await pool.query(
-      `SELECT COUNT(*) as cnt FROM sales_orders 
-       WHERE status = 'DESIGN_Approved ' AND current_department = 'SALES'`
-    );
-    
-    console.log('\nDesign Approved + Sales:', designApproved[0].cnt);
-    
-    const [companies] = await pool.query(
-      `SELECT DISTINCT company_id FROM sales_orders 
-       WHERE status = 'DESIGN_Approved ' AND current_department = 'SALES'`
-    );
-    
-    console.log('\nCompanies with approved orders:', companies.length);
-    console.log(JSON.stringify(companies, null, 2));
-    
-  } catch (error) {
-    console.error('Error:', error.message);
-  } finally {
-    process.exit(0);
-  }
-})();
+async function check() {
+    const config = {
+        host: process.env.DB_HOST || '127.0.0.1',
+        user: process.env.DB_USER || 'aluminium_user',
+        password: process.env.DB_PASSWORD || 'C0digix$309',
+        database: process.env.DB_NAME || 'sales_erp',
+        port: parseInt(process.env.DB_PORT) || 3307
+    };
+
+    try {
+        const connection = await mysql.createConnection(config);
+        const [columns] = await connection.query('SHOW COLUMNS FROM orders');
+        console.table(columns);
+        await connection.end();
+    } catch (error) {
+        console.error('Error:', error.message);
+    }
+}
+
+check();
