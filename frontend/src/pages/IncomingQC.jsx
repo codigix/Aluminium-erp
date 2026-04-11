@@ -130,10 +130,10 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       }
     });
 
-    let overallStatus = qc.status || 'PENDING';
+    let overallStatus = 'PASSED';
     if (hasShortageOverage) {
       overallStatus = 'IN_PROGRESS';
-    } else if (overallStatus !== 'PENDING') {
+    } else {
       overallStatus = 'PASSED';
     }
 
@@ -787,12 +787,12 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
               <div className="p-2 bg-white rounded  border border-slate-100 ">
                 <p className="text-xs  text-emerald-500   mb-1.5">Pass Quantity</p>
                 <p className="text-sm  text-emerald-600">
-                  {selectedQC.status === 'PENDING' ? 'Pending' : (selectedQC.pass_quantity || selectedQC.accepted_quantity || 0)}
+                  {selectedQC.status === 'PENDING' ? 'Pending' : parseFloat(selectedQC.pass_quantity || selectedQC.accepted_quantity || 0).toFixed(3)}
                 </p>
               </div>
               <div className="p-2 bg-white rounded  border border-slate-100 ">
                 <p className="text-xs  text-red-500   mb-1.5">Fail Quantity</p>
-                <p className="text-sm  text-red-600">{selectedQC.fail_quantity || 0}</p>
+                <p className="text-sm  text-red-600">{parseFloat(selectedQC.fail_quantity || 0).toFixed(3)}</p>
               </div>
             </div>
 
@@ -1028,7 +1028,8 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
                             <div className="flex flex-col items-center gap-1">
                               <input
                                 type="number"
-                                value={item.accepted_qty}
+                                step="0.001"
+                                value={parseFloat(item.accepted_qty || 0).toFixed(3)}
                                 onChange={(e) => handleItemQtyChange(idx, e.target.value)}
                                 className="w-24 p-2 .5 bg-white border border-blue-200 rounded  text-center text-xs  text-blue-600 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all "
                               />
@@ -1087,7 +1088,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
           <div className="flex items-center justify-between pt-6 border-t border-slate-100">
             <div>
               <p className="text-xs  text-slate-400  ">Total Received</p>
-              <p className="text-xl  text-blue-600">{editFormData.passQuantity} <span className="text-xs  text-slate-400">Units</span></p>
+              <p className="text-xl  text-blue-600">{parseFloat(editFormData.passQuantity || 0).toFixed(3)} <span className="text-xs  text-slate-400">Units</span></p>
             </div>
             <div className="flex gap-2">
               <button
