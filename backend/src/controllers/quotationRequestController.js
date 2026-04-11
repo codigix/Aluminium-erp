@@ -523,7 +523,9 @@ const downloadQuotationPDF = async (req, res, next) => {
     // 2. Fetch all quotations in this batch (same client, same approx timestamp)
     // We use a 10-second window to match the frontend grouping logic
     const [batchQuotes] = await pool.query(
-      `SELECT qr.*, soi.drawing_no, soi.description
+      `SELECT qr.*, 
+              COALESCE(soi.drawing_no, qr.drawing_no) as effective_drawing_no, 
+              COALESCE(soi.description, qr.description) as effective_description
        FROM quotation_requests qr
        LEFT JOIN sales_order_items soi ON qr.sales_order_item_id = soi.id
        WHERE qr.company_id = ? 
@@ -532,8 +534,8 @@ const downloadQuotationPDF = async (req, res, next) => {
     );
 
     const items = batchQuotes.map(q => ({
-      drawing_no: q.drawing_no || '—',
-      description: q.description || '',
+      drawing_no: q.effective_drawing_no || '—',
+      description: q.effective_description || '',
       quantity: q.item_qty || 1,
       quotedPrice: (parseFloat(q.total_amount) / (q.item_qty || 1)) || 0,
       profit_percentage: q.profit_percentage || 0,

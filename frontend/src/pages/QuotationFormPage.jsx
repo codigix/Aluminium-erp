@@ -385,6 +385,30 @@ const QuotationFormPage = () => {
     }
   };
 
+  const handleViewPDF = async (versionId) => {
+    if (!versionId) return;
+
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/quotation-requests/download-pdf/${versionId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch PDF');
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      // We don't revoke immediately as the new tab needs it
+    } catch (error) {
+      console.error(error);
+      errorToast(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const calculateSummary = () => {
     const baseAmount = items.reduce((sum, item) => sum + (parseFloat(item.total) || 0), 0);
     const gstAmount = items.reduce((sum, item) => {
@@ -1003,23 +1027,32 @@ const QuotationFormPage = () => {
               </div>
             </div>
 
-            {version > 1 && versionHistory.length > 0 && (
+            {versionHistory.length > 0 && (
               <div className="mt-6 pt-6 border-t border-slate-100 space-y-3">
                 <div className="flex items-center gap-2 mb-2">
                   <Clock size={14} className="text-slate-400" />
                   <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Version History</h3>
                 </div>
                 <div className="space-y-2">
-                  {versionHistory.map((v) => (
-                    <div 
-                      key={v.id} 
-                      onClick={() => loadVersionData(v)}
-                      className={`w-full p-2.5 rounded-xl border cursor-pointer transition-all hover:shadow-md group ${
-                        v.id === selectedVersionId || (selectedVersionId === null && v.version === version)
-                          ? 'bg-indigo-50 border-indigo-200 ring-1 ring-indigo-100 shadow-sm' 
-                          : 'bg-white border-slate-100 hover:border-indigo-200'
-                      }`}
-                    >
+                  {versionHistory.map((v) => {
+                    const isViewable = v.status?.toUpperCase() === 'APPROVED' || v.status?.toUpperCase() === 'REVISED';
+                    return (
+                      <div 
+                        key={v.id} 
+                        onClick={() => {
+                          if (isViewable) {
+                            loadVersionData(v);
+                            handleViewPDF(v.id);
+                          }
+                        }}
+                        className={`w-full p-2.5 rounded-xl border transition-all group ${
+                          isViewable ? 'cursor-pointer hover:shadow-md hover:border-indigo-300 active:scale-[0.98]' : 'cursor-default opacity-80'
+                        } ${
+                          v.id === selectedVersionId || (selectedVersionId === null && v.version === version)
+                            ? 'bg-indigo-50 border-indigo-200 ring-1 ring-indigo-100 shadow-sm' 
+                            : 'bg-white border-slate-100'
+                        }`}
+                      >
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-2.5">
                           <div className={`w-2 h-2 rounded-full shadow-sm ${
@@ -1060,8 +1093,9 @@ const QuotationFormPage = () => {
                         </div>
                       </div>
                     </div>
-                  ))}
-                </div>
+                  );
+                })}
+              </div>
 
                 {/* Actions for Selected Version */}
                 {(() => {
