@@ -85,7 +85,16 @@ const getQCWithDetails = async (qcId) => {
       po.id AS po_id,
       po.vendor_id,
       v.vendor_name AS vendor_name,
-      v.email AS vendor_email
+      v.email AS vendor_email,
+      COALESCE(
+        (SELECT project_name FROM sales_orders WHERE id = po.sales_order_id),
+        (SELECT so.project_name 
+         FROM material_requests mr_inner
+         JOIN production_plans pp ON mr_inner.notes LIKE CONCAT('%', pp.plan_code, '%')
+         JOIN sales_orders so ON pp.sales_order_id = so.id
+         WHERE mr_inner.id = po.mr_id LIMIT 1),
+        'Stock/Internal'
+      ) as project_name
     FROM qc_inspections qc
     LEFT JOIN grns g ON qc.grn_id = g.id
     LEFT JOIN purchase_orders po ON g.po_number = po.po_number
@@ -178,7 +187,16 @@ const getAllQCs = async () => {
       g.po_number,
       po.vendor_id,
       v.vendor_name AS vendor_name,
-      v.email AS vendor_email
+      v.email AS vendor_email,
+      COALESCE(
+        (SELECT project_name FROM sales_orders WHERE id = po.sales_order_id),
+        (SELECT so.project_name 
+         FROM material_requests mr_inner
+         JOIN production_plans pp ON mr_inner.notes LIKE CONCAT('%', pp.plan_code, '%')
+         JOIN sales_orders so ON pp.sales_order_id = so.id
+         WHERE mr_inner.id = po.mr_id LIMIT 1),
+        'Stock/Internal'
+      ) as project_name
     FROM qc_inspections qc
     LEFT JOIN grns g ON qc.grn_id = g.id
     LEFT JOIN purchase_orders po ON g.po_number = po.po_number

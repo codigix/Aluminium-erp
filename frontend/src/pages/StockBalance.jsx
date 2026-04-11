@@ -22,6 +22,8 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/
 const StockBalance = () => {
   const [balances, setBalances] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [shapes, setShapes] = useState([]);
+  const [shapesLoading, setShapesLoading] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
@@ -43,7 +45,26 @@ const StockBalance = () => {
 
   useEffect(() => {
     fetchStockBalance();
+    fetchShapes();
   }, []);
+
+  const fetchShapes = async () => {
+    try {
+      setShapesLoading(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/shapes`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setShapes(data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch shapes:', error);
+    } finally {
+      setShapesLoading(false);
+    }
+  };
 
   const handleCreateItem = async (e) => {
     e.preventDefault();
@@ -207,7 +228,40 @@ const StockBalance = () => {
       label: 'Material Name',
       key: 'material_name',
       sortable: true,
-      render: (val) => <span className="text-slate-600 ">{val || '—'}</span>
+      render: (val, row) => {
+        const shapeName = (shapes.find(s => String(s.id) === String(row.shape_id))?.name || '').toLowerCase().trim();
+        const dims = [];
+        
+        if (shapeName === 'plate' || shapeName === 'sheet') {
+          if (row.length) dims.push(`${parseFloat(row.length)}mm`);
+          if (row.width) dims.push(`${parseFloat(row.width)}mm`);
+          if (row.thickness) dims.push(`${parseFloat(row.thickness)}mm`);
+        } else if (shapeName === 'round' || shapeName === 'bar') {
+          if (row.diameter) dims.push(`D:${parseFloat(row.diameter)}mm`);
+          if (row.length) dims.push(`${parseFloat(row.length)}mm`);
+        } else if (shapeName === 'pipe' || shapeName === 'tube') {
+          if (row.outer_diameter) dims.push(`OD:${parseFloat(row.outer_diameter)}mm`);
+          if (row.thickness) dims.push(`${parseFloat(row.thickness)}mm`);
+          if (row.length) dims.push(`${parseFloat(row.length)}mm`);
+        } else {
+          // General fallback for other shapes
+          if (row.length) dims.push(`${parseFloat(row.length)}mm`);
+          if (row.width) dims.push(`${parseFloat(row.width)}mm`);
+          if (row.thickness) dims.push(`${parseFloat(row.thickness)}mm`);
+          if (row.diameter) dims.push(`D:${parseFloat(row.diameter)}mm`);
+        }
+
+        const dimensionStr = dims.length > 0 ? ` (${dims.join(' x ')})` : '';
+        
+        return (
+          <div className="flex flex-col">
+            <span className="text-slate-900 font-medium">{val || '—'}{dimensionStr}</span>
+            {row.material_grade && (
+              <span className="text-[10px] text-slate-400 leading-none mt-0.5">{row.material_grade}</span>
+            )}
+          </div>
+        );
+      }
     },
     {
       label: 'Material Type',

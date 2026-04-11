@@ -87,38 +87,58 @@ const deleteStockBalance = async (id) => {
 
 const getStockLedger = async (itemCode = null, startDate = null, endDate = null) => {
   let query = `SELECT 
-    id,
-    item_code,
-    material_name,
-    material_type,
-    transaction_date,
-    transaction_type,
-    quantity,
-    reference_doc_type,
-    reference_doc_id,
-    reference_doc_number,
-    qc_id,
-    grn_item_id,
-    balance_after,
-    remarks,
-    created_at
-  FROM stock_ledger`;
+    sl.id,
+    sl.item_code,
+    sl.material_name,
+    sl.material_type,
+    sl.transaction_date,
+    sl.transaction_type,
+    sl.quantity,
+    sl.reference_doc_type,
+    sl.reference_doc_id,
+    sl.reference_doc_number,
+    sl.qc_id,
+    sl.grn_item_id,
+    sl.balance_after,
+    sl.remarks,
+    sl.created_at,
+    sb.shape_id,
+    sb.length,
+    sb.width,
+    sb.thickness,
+    sb.diameter,
+    sb.outer_diameter,
+    sb.material_grade
+  FROM stock_ledger sl
+  LEFT JOIN (
+    SELECT 
+      item_code, 
+      MAX(shape_id) as shape_id, 
+      MAX(length) as length, 
+      MAX(width) as width, 
+      MAX(thickness) as thickness, 
+      MAX(diameter) as diameter, 
+      MAX(outer_diameter) as outer_diameter,
+      MAX(material_grade) as material_grade
+    FROM stock_balance
+    GROUP BY item_code
+  ) sb ON sl.item_code = sb.item_code`;
 
   const conditions = [];
   const params = [];
 
   if (itemCode) {
-    conditions.push('item_code = ?');
+    conditions.push('sl.item_code = ?');
     params.push(itemCode);
   }
 
   if (startDate) {
-    conditions.push('transaction_date >= ?');
+    conditions.push('sl.transaction_date >= ?');
     params.push(startDate);
   }
 
   if (endDate) {
-    conditions.push('transaction_date <= ?');
+    conditions.push('sl.transaction_date <= ?');
     params.push(endDate);
   }
 
@@ -128,12 +148,12 @@ const getStockLedger = async (itemCode = null, startDate = null, endDate = null)
 
   // Filter out FG and Sub Assembly
   if (conditions.length > 0) {
-    query += " AND UPPER(material_type) NOT IN ('FG', 'FINISHED GOOD', 'SUB_ASSEMBLY', 'SUB ASSEMBLY')";
+    query += " AND UPPER(sl.material_type) NOT IN ('FG', 'FINISHED GOOD', 'SUB_ASSEMBLY', 'SUB ASSEMBLY')";
   } else {
-    query += " WHERE UPPER(material_type) NOT IN ('FG', 'FINISHED GOOD', 'SUB_ASSEMBLY', 'SUB ASSEMBLY')";
+    query += " WHERE UPPER(sl.material_type) NOT IN ('FG', 'FINISHED GOOD', 'SUB_ASSEMBLY', 'SUB ASSEMBLY')";
   }
 
-  query += ' ORDER BY transaction_date DESC, id DESC';
+  query += ' ORDER BY sl.transaction_date DESC, sl.id DESC';
 
   const [ledger] = await pool.query(query, params);
   return ledger;

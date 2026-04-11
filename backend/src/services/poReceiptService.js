@@ -8,7 +8,16 @@ const getPOReceipts = async (filters = {}) => {
       pr.*,
       po.po_number,
       v.vendor_name,
-      po.total_amount
+      po.total_amount,
+      COALESCE(
+        (SELECT project_name FROM sales_orders WHERE id = po.sales_order_id),
+        (SELECT so.project_name 
+         FROM material_requests mr_inner
+         JOIN production_plans pp ON mr_inner.notes LIKE CONCAT('%', pp.plan_code, '%')
+         JOIN sales_orders so ON pp.sales_order_id = so.id
+         WHERE mr_inner.id = po.mr_id LIMIT 1),
+        'Stock/Internal'
+      ) as project_name
     FROM po_receipts pr
     LEFT JOIN purchase_orders po ON po.id = pr.po_id
     LEFT JOIN vendors v ON v.id = po.vendor_id
@@ -34,7 +43,16 @@ const getPOReceipts = async (filters = {}) => {
 
 const getPOReceiptById = async (receiptId) => {
   const [rows] = await pool.query(
-    `SELECT pr.*, po.po_number, v.vendor_name, po.total_amount
+    `SELECT pr.*, po.po_number, v.vendor_name, po.total_amount,
+     COALESCE(
+       (SELECT project_name FROM sales_orders WHERE id = po.sales_order_id),
+       (SELECT so.project_name 
+        FROM material_requests mr_inner
+        JOIN production_plans pp ON mr_inner.notes LIKE CONCAT('%', pp.plan_code, '%')
+        JOIN sales_orders so ON pp.sales_order_id = so.id
+        WHERE mr_inner.id = po.mr_id LIMIT 1),
+       'Stock/Internal'
+     ) as project_name
      FROM po_receipts pr
      LEFT JOIN purchase_orders po ON po.id = pr.po_id
      LEFT JOIN vendors v ON v.id = po.vendor_id

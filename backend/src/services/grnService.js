@@ -14,6 +14,15 @@ const getGRNWithDetails = async (grnId) => {
       g.updated_at AS updatedAt,
       po.vendor_id AS vendorId,
       v.vendor_name AS vendorName,
+      COALESCE(
+        (SELECT project_name FROM sales_orders WHERE id = po.sales_order_id),
+        (SELECT so.project_name 
+         FROM material_requests mr_inner
+         JOIN production_plans pp ON mr_inner.notes LIKE CONCAT('%', pp.plan_code, '%')
+         JOIN sales_orders so ON pp.sales_order_id = so.id
+         WHERE mr_inner.id = po.mr_id LIMIT 1),
+        'Stock/Internal'
+      ) as projectName,
       SUM(COALESCE(poi.design_qty, poi.quantity)) AS orderedQuantity
     FROM grns g
     LEFT JOIN purchase_orders po ON g.po_number = po.po_number
@@ -41,6 +50,15 @@ const getAllGRNs = async () => {
       g.updated_at AS updatedAt,
       po.vendor_id AS vendorId,
       v.vendor_name AS vendorName,
+      COALESCE(
+        (SELECT project_name FROM sales_orders WHERE id = po.sales_order_id),
+        (SELECT so.project_name 
+         FROM material_requests mr_inner
+         JOIN production_plans pp ON mr_inner.notes LIKE CONCAT('%', pp.plan_code, '%')
+         JOIN sales_orders so ON pp.sales_order_id = so.id
+         WHERE mr_inner.id = po.mr_id LIMIT 1),
+        'Stock/Internal'
+      ) as projectName,
       (SELECT COUNT(*) FROM grn_items WHERE grn_id = g.id) AS items_count
     FROM grns g
     LEFT JOIN purchase_orders po ON g.po_number = po.po_number

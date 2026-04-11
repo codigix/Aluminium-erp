@@ -52,6 +52,11 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
     items: []
   });
 
+  const isWeightBased = (uom) => {
+    const u = (uom || '').toLowerCase();
+    return u === 'kg' || u === 'kg.' || u === 'kilogram' || u === 'litre' || u === 'ltr' || u === 'meter' || u === 'mtr';
+  };
+
   useEffect(() => {
     fetchPlans();
     fetchWorkstations();
@@ -299,7 +304,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
       // Only send items that actually need requesting (shortage or manual force)
       // We filter out fulfilled items and those that already have requests
       const itemsToRequest = mrItems.filter(item => 
-        !item.request_exists && (item.inventory < item.quantity || item.is_manual)
+        !item.request_exists && (parseFloat(item.inventory || 0) < parseFloat(item.quantity) || item.is_manual)
       );
 
       if (itemsToRequest.length === 0) {
@@ -786,6 +791,8 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
             const plannedQty = baseQty * itemPlannedQty;
             existing.totalPlannedQty += plannedQty;
             existing.required_qty = (parseFloat(existing.required_qty) || 0) + plannedQty;
+            // Accumulate bomQty for consolidation if needed, but usually it should be the same
+            existing.bomQty = baseQty; 
             processedMaterialSOItems.add(soItemMaterialKey);
           }
           
@@ -800,6 +807,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
             totalDesignQty: newPlan.targetQuantity || 0,
             totalPlannedQty: plannedQty,
             required_qty: plannedQty,
+            bomQty: baseQty,
             bom_no: mat.bom_no || mat.bom_ref || item.bom_no || 'BOM-REF',
             source_fg: item.itemCode
           });
@@ -835,6 +843,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
             existing.plannedQty += totalQty;
             existing.requiredQty += totalQty;
             existing.required_qty += totalQty;
+            existing.bomQty = baseQty;
           } else {
             consolidatedComponentsMap.set(key, {
               ...comp,
@@ -847,6 +856,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
               parentPlannedQty: itemPlannedQty,
               requiredQty: totalQty,
               required_qty: totalQty,
+              bomQty: baseQty,
               source_fg: item.itemCode,
               is_kg_material: isKg,
               total_wt: weight
@@ -883,6 +893,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
         totalDesignQty: c.designQty || 0,
         totalPlannedQty: isViewing ? (c.required_qty || c.plannedQty) : c.plannedQty,
         bom_no: c.bomNo || '-',
+        bomQty: c.bomQty,
         source_fg: c.source_fg || '-',
         dimensions: c.dimensions || null,
         is_kg_material: isKg,
@@ -891,7 +902,10 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
     });
 
     // 4. Combine into final Material list
-    let materialsToDisplay = isViewing ? (newPlan.materials || []) : allMaterials;
+    let materialsToDisplay = isViewing ? (newPlan.materials || []).map(m => ({
+      ...m,
+      bomQty: m.bom_qty || (parseFloat(m.design_qty || newPlan.targetQuantity || 1) > 0 ? parseFloat(m.required_qty || 0) / parseFloat(m.design_qty || newPlan.targetQuantity || 1) : 0)
+    })) : allMaterials;
     
     // Merge consumables from components into materials if not already present
     componentsAsMaterials.forEach(cam => {
@@ -1371,9 +1385,9 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                           </div>
                           <div className="text-[10px] text-slate-400 uppercase">
                             {mat.uom || mat.unit || 'Nos'}
-                            {mat.is_kg_material && (
+                            {isWeightBased(mat.uom || mat.unit) && (
                               <span className="ml-1 text-slate-300">
-                                ({Number(isViewing ? (mat.design_qty || newPlan.targetQuantity) : mat.totalDesignQty).toFixed(0)} × {Number(mat.total_wt || 0).toFixed(3)})
+                                ({Number(isViewing ? (mat.design_qty || newPlan.targetQuantity) : mat.totalDesignQty).toFixed(0)} × {Number(mat.bomQty || mat.total_wt || 0).toFixed(3)})
                               </span>
                             )}
                           </div>
@@ -1450,9 +1464,9 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                           </div>
                           <div className="text-[10px] text-slate-400 uppercase">
                             {mat.uom || mat.unit || 'Nos'}
-                            {mat.is_kg_material && (
+                            {isWeightBased(mat.uom || mat.unit) && (
                               <span className="ml-1 text-slate-300">
-                                ({Number(isViewing ? (mat.design_qty || newPlan.targetQuantity) : mat.totalDesignQty).toFixed(0)} × {Number(mat.total_wt || 0).toFixed(3)})
+                                ({Number(isViewing ? (mat.design_qty || newPlan.targetQuantity) : mat.totalDesignQty).toFixed(0)} × {Number(mat.bomQty || mat.total_wt || 0).toFixed(3)})
                               </span>
                             )}
                           </div>
@@ -2087,13 +2101,13 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
               <button className="flex items-center gap-2 pb-2 border-b-2 border-rose-500 text-rose-600">
                 <span className="text-xs ">Pending Request</span>
                 <span className="px-1.5 py-0.5 bg-rose-50 rounded text-xs ">
-                  {mrItems.filter(item => !item.is_fulfilled && item.inventory < item.quantity).length}
+                  {mrItems.filter(item => !item.is_fulfilled && parseFloat(item.inventory || 0) < parseFloat(item.quantity)).length}
                 </span>
               </button>
               <button className="flex items-center gap-2 pb-2 text-slate-400 hover:text-slate-600">
                 <span className="text-xs ">Complete Request</span>
                 <span className="px-1.5 py-0.5 bg-slate-50 rounded text-xs ">
-                  {mrItems.filter(item => item.is_fulfilled || item.inventory >= item.quantity).length}
+                  {mrItems.filter(item => item.is_fulfilled || (parseFloat(item.inventory || 0) + 0.0001) >= parseFloat(item.quantity)).length}
                 </span>
               </button>
             </div>
@@ -2141,18 +2155,22 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                     </td>
                     <td className="py-4 text-center">
                       <div className="flex items-center justify-center gap-1">
-                        <span className="text-xs  text-slate-800">{Number(item.quantity).toFixed(2)}</span>
+                        <span className="text-xs  text-slate-800">
+                          {isWeightBased(item.uom) ? Number(item.quantity).toFixed(3) : Number(item.quantity).toFixed(0)}
+                        </span>
                         <span className="text-xs text-slate-400">{item.uom}</span>
                       </div>
                     </td>
                     <td className="py-4 text-center">
                       <div className="flex items-center justify-center gap-1">
-                        <span className="text-xs  text-slate-800">{Number(item.inventory || 0).toFixed(2)}</span>
+                        <span className="text-xs  text-slate-800">
+                          {isWeightBased(item.uom) ? Number(item.inventory || 0).toFixed(3) : Number(item.inventory || 0).toFixed(0)}
+                        </span>
                         <span className="text-xs text-slate-400">{item.uom}</span>
                       </div>
                     </td>
                     <td className="py-4 text-right">
-                      {item.is_fulfilled || item.inventory >= item.quantity ? (
+                      {item.is_fulfilled || (parseFloat(item.inventory || 0) + 0.0001) >= parseFloat(item.quantity) ? (
                         <div className="flex items-center justify-end gap-1.5 text-emerald-500">
                           <CheckCircle2 className="w-3.5 h-3.5" />
                           <span className="text-xs   tracking-tight">
@@ -2163,7 +2181,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                         <div className="flex items-center justify-end gap-1.5 text-rose-500">
                           <AlertCircle className="w-3.5 h-3.5" />
                           <span className="text-xs   tracking-tight">
-                            {item.inventory <= 0 ? 'Zero Stock' : 'Shortage'}
+                            {parseFloat(item.inventory || 0) <= 0.0001 ? 'Zero Stock' : 'Shortage'}
                           </span>
                         </div>
                       )}
@@ -2271,7 +2289,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
             >
               Abort Request
             </button>
-            {mrItems.length > 0 && mrItems.some(item => !item.request_exists && (item.inventory < item.quantity || item.is_manual)) && (
+            {mrItems.length > 0 && mrItems.some(item => !item.request_exists && (parseFloat(item.inventory || 0) < parseFloat(item.quantity) || item.is_manual)) && (
               <button
                 onClick={confirmTransmitMR}
                 disabled={transmittingMr}

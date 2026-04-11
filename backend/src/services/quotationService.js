@@ -82,6 +82,7 @@ const createQuotation = async (payload) => {
     salesOrderId,
     mrId,
     rfq_id,
+    rfq_group_id,
     validUntil,
     notes,
     items = [],
@@ -101,10 +102,10 @@ const createQuotation = async (payload) => {
     const quoteNumber = await generateQuoteNumber();
 
     const [result] = await connection.execute(
-      `INSERT INTO quotations (quote_number, vendor_id, sales_order_id, mr_id, rfq_id, status, valid_until, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO quotations (quote_number, vendor_id, sales_order_id, mr_id, rfq_id, rfq_group_id, status, valid_until, notes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ,
-      [quoteNumber, vendorId, salesOrderId || null, mrId || null, rfq_id || null, status, validUntil || null, notes || null]
+      [quoteNumber, vendorId, salesOrderId || null, mrId || null, rfq_id || null, rfq_group_id || null, status, validUntil || null, notes || null]
     );
 
     const quotationId = result.insertId;
@@ -190,7 +191,14 @@ const createQuotation = async (payload) => {
 
 const getQuotations = async (filters = {}) => {
   let query = `
-    SELECT q.*, so.project_name, mr.mr_number, r.rfq_number
+    SELECT q.*, 
+           COALESCE(
+             so.project_name, 
+             (SELECT project_name FROM sales_orders WHERE id = (SELECT sales_order_id FROM production_plans WHERE id = mr.plan_id)),
+             mr.purpose, 
+             'General Procurement'
+           ) as project_name,
+           mr.mr_number, r.rfq_number
     FROM quotations q
     LEFT JOIN sales_orders so ON so.id = q.sales_order_id
     LEFT JOIN material_requests mr ON mr.id = q.mr_id
@@ -223,7 +231,14 @@ const getQuotations = async (filters = {}) => {
 
 const getQuotationById = async (quotationId) => {
   const [rows] = await pool.query(
-    `SELECT q.*, mr.mr_number, so.project_name, r.rfq_number
+    `SELECT q.*, mr.mr_number, 
+            COALESCE(
+              so.project_name, 
+              (SELECT project_name FROM sales_orders WHERE id = (SELECT sales_order_id FROM production_plans WHERE id = mr.plan_id)),
+              mr.purpose, 
+              'General Procurement'
+            ) as project_name, 
+            r.rfq_number
      FROM quotations q 
      LEFT JOIN material_requests mr ON mr.id = q.mr_id
      LEFT JOIN sales_orders so ON so.id = q.sales_order_id
@@ -290,7 +305,7 @@ const updateQuotationStatus = async (quotationId, status) => {
 };
 
 const updateQuotation = async (quotationId, payload) => {
-  const { validUntil, notes, items, received_pdf_path } = payload;
+  const { validUntil, notes, items, received_pdf_path, status } = payload;
 
   const connection = await pool.getConnection();
   try {
@@ -312,6 +327,11 @@ const updateQuotation = async (quotationId, payload) => {
     if (received_pdf_path !== undefined) {
       updateFields.push('received_pdf_path = ?');
       updateParams.push(received_pdf_path);
+    }
+
+    if (status !== undefined) {
+      updateFields.push('status = ?');
+      updateParams.push(status);
     }
 
     if (updateFields.length > 0) {

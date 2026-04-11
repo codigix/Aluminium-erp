@@ -72,6 +72,25 @@ const deleteWorkOrder = async (req, res) => {
   }
 };
 
+const getMaterialRequirements = async (req, res) => {
+  try {
+    const requirements = await workOrderService.getWorkOrderMaterialRequirements(req.params.id);
+    res.json(requirements);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+const updateMaterialConsumption = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const result = await workOrderService.updateMaterialConsumption(req.params.id, req.body, userId);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 module.exports = {
   listWorkOrders,
   getWorkOrderById,
@@ -79,5 +98,7 @@ module.exports = {
   createWorkOrdersFromPlan,
   updateStatus,
   getNextWoNumber,
-  deleteWorkOrder
+  deleteWorkOrder,
+  getMaterialRequirements,
+  updateMaterialConsumption
 };

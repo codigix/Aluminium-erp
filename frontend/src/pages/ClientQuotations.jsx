@@ -272,12 +272,13 @@ const ClientQuotations = () => {
       
       const grouped = {};
       data.forEach(quote => {
+        // ONLY show Version 1 with status SENT in Sent Tab
+        if ((quote.version || 1) !== 1) return;
+        if ((quote.status || '').trim().toUpperCase() !== 'SENT') return;
+
         const date = new Date(quote.created_at);
         const roundedTime = Math.floor(date.getTime() / 60000) * 60000;
         
-        // Grouping logic: 
-        // 1. If parent_id exists, it's a revision. Group by parent_id.
-        // 2. If no parent_id, it's a new batch. Group by company + project + approximate time.
         const groupKey = quote.parent_id ? `parent_${quote.parent_id}` : `batch_${quote.company_id}_${(quote.project_name || 'manual').toLowerCase()}_${roundedTime}`;
         
         if (!grouped[groupKey]) {
@@ -298,45 +299,15 @@ const ClientQuotations = () => {
         }
         
         grouped[groupKey].quotes.push(quote);
-
-        // Update top-level group details if this quote is a newer version
-        if ((quote.version || 1) > (grouped[groupKey].version || 0)) {
-          grouped[groupKey].id = quote.id;
-          grouped[groupKey].version = quote.version;
-          grouped[groupKey].created_at = quote.created_at;
-          grouped[groupKey].project_name = quote.project_name;
-          grouped[groupKey].status = quote.status;
-          grouped[groupKey].reply_pdf = quote.reply_pdf;
-        }
       });
       
       Object.values(grouped).forEach(group => {
-        // Sort quotes DESC by version so group.quotes[0] is always the latest
-        group.quotes.sort((a, b) => (b.version || 0) - (a.version || 0));
-
-        // RECACULATE total based ONLY on the latest version found in this group
-        // If it's a batch without revisions, all quotes will have same version (e.g. 1)
-        const latestVersion = group.version || 1;
-        const latestQuotes = group.quotes.filter(q => (q.version || 1) === latestVersion);
-        
-        group.total_amount = latestQuotes.reduce((sum, q) => sum + (parseFloat(q.total_amount) || 0), 0);
-        group.received_amount = latestQuotes.reduce((sum, q) => sum + (parseFloat(q.received_amount) || 0), 0);
-
-        const hasRejected = group.quotes.some(q => (q.status || '').trim().toUpperCase() === 'REJECTED');
-        const hasAccepted = group.quotes.some(q => (q.status || '').trim().toUpperCase() !== 'REJECTED');
-        
-        if (hasAccepted && hasRejected) {
-          group.status = 'PARTIAL';
-        } else if (hasRejected && !hasAccepted) {
-          group.status = 'REJECTED';
-        } else if (group.quotes.every(q => (q.status || '').trim().toUpperCase() === 'APPROVED')) {
-          group.status = 'Approved';
-        } else {
-          group.status = 'Sent';
-        }
+        group.total_amount = group.quotes.reduce((sum, q) => sum + (parseFloat(q.total_amount) || 0), 0);
+        group.received_amount = group.quotes.reduce((sum, q) => sum + (parseFloat(q.received_amount) || 0), 0);
+        group.status = 'Sent';
       });
       
-      setSentQuotations(Object.values(grouped));
+      setSentQuotations(Object.values(grouped).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)));
     } catch (error) {
       console.error(error);
       errorToast(error.message || 'Failed to fetch sent quotations');
@@ -416,7 +387,13 @@ const ClientQuotations = () => {
         }
       });
       
-      Object.values(grouped).forEach(group => {
+      // Filter groups: ONLY keep those where the LATEST version is APPROVED
+      const filteredGroups = Object.values(grouped).filter(group => {
+        const s = (group.status || '').trim().toUpperCase();
+        return s === 'APPROVED';
+      });
+
+      filteredGroups.forEach(group => {
         // Sort quotes DESC by version so group.quotes[0] is always the latest
         group.quotes.sort((a, b) => (b.version || 0) - (a.version || 0));
 
@@ -428,7 +405,7 @@ const ClientQuotations = () => {
         group.received_amount = latestQuotes.reduce((sum, q) => sum + (parseFloat(q.received_amount) || 0), 0);
       });
       
-      setReceivedQuotations(Object.values(grouped));
+      setReceivedQuotations(filteredGroups.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)));
     } catch (error) {
       console.error(error);
       errorToast(error.message || 'Failed to fetch received quotations');

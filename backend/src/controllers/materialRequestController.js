@@ -6,6 +6,11 @@ const materialRequestController = {
     try {
       const [rows] = await pool.query(`
         SELECT mr.*, CONCAT(u.first_name, ' ', u.last_name) as requester_name,
+        COALESCE(
+          (SELECT project_name FROM sales_orders WHERE id = (SELECT sales_order_id FROM production_plans WHERE id = mr.plan_id)),
+          mr.purpose,
+          'General Procurement'
+        ) as project_name,
         (
           SELECT CASE 
             WHEN COUNT(*) = 0 THEN 'available'

@@ -27,6 +27,8 @@ const transactionTypeColors = {
 const StockLedger = () => {
   const [ledger, setLedger] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [shapes, setShapes] = useState([]);
+  const [shapesLoading, setShapesLoading] = useState(false);
   const [itemCode, setItemCode] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -42,7 +44,26 @@ const StockLedger = () => {
 
   useEffect(() => {
     fetchLedger();
+    fetchShapes();
   }, []);
+
+  const fetchShapes = async () => {
+    try {
+      setShapesLoading(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/shapes`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setShapes(data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch shapes:', error);
+    } finally {
+      setShapesLoading(false);
+    }
+  };
 
   const fetchLedger = async (filter = {}) => {
     try {
@@ -93,12 +114,45 @@ const StockLedger = () => {
       key: 'material_name',
       label: 'Material',
       sortable: true,
-      render: (val, row) => (
-        <div className="flex flex-col">
-          <span className="text-slate-600 ">{val || '—'}</span>
-          <span className="text-xs text-slate-400   ">{row.material_type || '—'}</span>
-        </div>
-      )
+      render: (val, row) => {
+        const shapeName = (shapes.find(s => String(s.id) === String(row.shape_id))?.name || '').toLowerCase().trim();
+        const dims = [];
+        
+        if (shapeName === 'plate' || shapeName === 'sheet') {
+          if (row.length) dims.push(`${parseFloat(row.length)}mm`);
+          if (row.width) dims.push(`${parseFloat(row.width)}mm`);
+          if (row.thickness) dims.push(`${parseFloat(row.thickness)}mm`);
+        } else if (shapeName === 'round' || shapeName === 'bar') {
+          if (row.diameter) dims.push(`D:${parseFloat(row.diameter)}mm`);
+          if (row.length) dims.push(`${parseFloat(row.length)}mm`);
+        } else if (shapeName === 'pipe' || shapeName === 'tube') {
+          if (row.outer_diameter) dims.push(`OD:${parseFloat(row.outer_diameter)}mm`);
+          if (row.thickness) dims.push(`${parseFloat(row.thickness)}mm`);
+          if (row.length) dims.push(`${parseFloat(row.length)}mm`);
+        } else {
+          if (row.length) dims.push(`${parseFloat(row.length)}mm`);
+          if (row.width) dims.push(`${parseFloat(row.width)}mm`);
+          if (row.thickness) dims.push(`${parseFloat(row.thickness)}mm`);
+          if (row.diameter) dims.push(`D:${parseFloat(row.diameter)}mm`);
+        }
+
+        const dimensionStr = dims.length > 0 ? ` (${dims.join(' x ')})` : '';
+
+        return (
+          <div className="flex flex-col">
+            <span className="text-slate-900 font-medium">{val || '—'}{dimensionStr}</span>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-slate-400 leading-none">{row.material_type || '—'}</span>
+              {row.material_grade && (
+                <>
+                  <span className="text-slate-200 text-[10px]">•</span>
+                  <span className="text-[10px] text-indigo-400 font-medium leading-none">{row.material_grade}</span>
+                </>
+              )}
+            </div>
+          </div>
+        );
+      }
     },
     {
       key: 'transaction_date',

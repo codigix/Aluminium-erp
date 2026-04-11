@@ -430,6 +430,15 @@ const getPurchaseOrders = async (filters = {}) => {
       v.vendor_name,
       v.email as vendor_email,
       mr.mr_number,
+      COALESCE(
+        (SELECT project_name FROM sales_orders WHERE id = po.sales_order_id),
+        (SELECT so.project_name 
+         FROM material_requests mr_inner
+         JOIN production_plans pp ON mr_inner.notes LIKE CONCAT('%', pp.plan_code, '%')
+         JOIN sales_orders so ON pp.sales_order_id = so.id
+         WHERE mr_inner.id = po.mr_id LIMIT 1),
+        'Stock/Internal'
+      ) as project_name,
       COUNT(poi.id) as items_count,
       IFNULL(SUM(poi.quantity), 0) as total_quantity,
       (SELECT IFNULL(SUM(gi.accepted_qty), 0) 
@@ -495,7 +504,16 @@ const getPurchaseOrders = async (filters = {}) => {
 
 const getPurchaseOrderById = async (poId) => {
   const [rows] = await pool.query(
-    `SELECT po.*, v.vendor_name, mr.mr_number
+    `SELECT po.*, v.vendor_name, v.email as vendor_email, mr.mr_number,
+     COALESCE(
+       (SELECT project_name FROM sales_orders WHERE id = po.sales_order_id),
+       (SELECT so.project_name 
+        FROM material_requests mr_inner
+        JOIN production_plans pp ON mr_inner.notes LIKE CONCAT('%', pp.plan_code, '%')
+        JOIN sales_orders so ON pp.sales_order_id = so.id
+        WHERE mr_inner.id = po.mr_id LIMIT 1),
+       'Stock/Internal'
+     ) as project_name
      FROM purchase_orders po
      LEFT JOIN vendors v ON v.id = po.vendor_id
      LEFT JOIN material_requests mr ON mr.id = po.mr_id

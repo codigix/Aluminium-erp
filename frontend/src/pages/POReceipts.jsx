@@ -516,6 +516,16 @@ const POReceipts = () => {
         <span className="text-xs  text-slate-600 bg-slate-50 px-2 py-1 rounded border border-slate-100  ">#{val || 'Direct'}</span>
       )
     },
+    {
+      key: 'project_name',
+      label: 'Project Name',
+      sortable: true,
+      render: (val) => (
+        <span className="text-xs font-medium text-slate-700 truncate max-w-[150px] block">
+          {val || '—'}
+        </span>
+      )
+    },
     { 
       key: 'vendor_name', 
       label: 'Supplier', 

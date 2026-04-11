@@ -1596,6 +1596,24 @@ const ensureWorkOrderTables = async () => {
     // Update status enum if necessary
     await connection.query("ALTER TABLE job_cards MODIFY COLUMN status ENUM('DRAFT', 'PENDING', 'IN_PROGRESS', 'COMPLETED', 'PAUSED') DEFAULT 'DRAFT'");
 
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS work_order_material_consumption (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        work_order_id INT NOT NULL,
+        item_code VARCHAR(100),
+        material_name VARCHAR(255),
+        material_type VARCHAR(100),
+        quantity DECIMAL(12, 3) NOT NULL,
+        uom VARCHAR(20),
+        consumed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        created_by INT,
+        remarks TEXT,
+        FOREIGN KEY (work_order_id) REFERENCES work_orders(id) ON DELETE CASCADE,
+        FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+      )
+    `);
+    console.log('Work Order Material Consumption table synchronized');
+
     const [timeLogCols] = await connection.query('SHOW COLUMNS FROM job_card_time_logs');
     const existingTimeLogCols = new Set(timeLogCols.map(c => c.Field));
     if (!existingTimeLogCols.has('day')) await connection.query('ALTER TABLE job_card_time_logs ADD COLUMN day INT DEFAULT 1 AFTER job_card_id');

@@ -536,6 +536,16 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       )
     },
     {
+      label: 'Project Name',
+      key: 'project_name',
+      sortable: true,
+      render: (val) => (
+        <span className="text-xs font-medium text-slate-700 truncate max-w-[150px] block">
+          {val || '—'}
+        </span>
+      )
+    },
+    {
       label: 'Pass/Fail',
       key: 'pass_quantity',
       className: 'text-right',

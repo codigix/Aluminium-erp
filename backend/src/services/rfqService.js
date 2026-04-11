@@ -67,7 +67,17 @@ const createRfq = async (payload) => {
 
 const getRfqsByMrId = async (mrId) => {
     const [rfqs] = await pool.query(
-        'SELECT r.*, u.username as requester_name FROM procurement_rfqs r LEFT JOIN users u ON r.requested_by = u.id WHERE r.mr_id = ? ORDER BY r.created_at DESC',
+        `SELECT r.*, u.username as requester_name, 
+                COALESCE(
+                  (SELECT project_name FROM sales_orders WHERE id = (SELECT sales_order_id FROM production_plans WHERE id = mr.plan_id)),
+                  mr.purpose, 
+                  'General Procurement'
+                ) as project_name 
+         FROM procurement_rfqs r 
+         LEFT JOIN users u ON r.requested_by = u.id 
+         LEFT JOIN material_requests mr ON r.mr_id = mr.id
+         WHERE r.mr_id = ? 
+         ORDER BY r.created_at DESC`,
         [mrId]
     );
 
@@ -99,7 +109,16 @@ const getRfqsByMrId = async (mrId) => {
 
 const getRfqs = async () => {
     const [rfqs] = await pool.query(
-        'SELECT r.*, u.username as requester_name, mr.mr_number FROM procurement_rfqs r LEFT JOIN users u ON r.requested_by = u.id LEFT JOIN material_requests mr ON r.mr_id = mr.id ORDER BY r.created_at DESC'
+        `SELECT r.*, u.username as requester_name, mr.mr_number, 
+                COALESCE(
+                  (SELECT project_name FROM sales_orders WHERE id = (SELECT sales_order_id FROM production_plans WHERE id = mr.plan_id)),
+                  mr.purpose, 
+                  'General Procurement'
+                ) as project_name
+         FROM procurement_rfqs r 
+         LEFT JOIN users u ON r.requested_by = u.id 
+         LEFT JOIN material_requests mr ON r.mr_id = mr.id 
+         ORDER BY r.created_at DESC`
     );
 
     const [items] = await pool.query(`

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Card, DataTable, Modal, SearchableSelect } from '../components/ui.jsx';
+import { Card, DataTable, Modal, SearchableSelect, MultiSelect } from '../components/ui.jsx';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
 import { 
   Eye, 
@@ -86,6 +86,7 @@ const Quotations = () => {
   const [selectedQuotation, setSelectedQuotation] = useState(null);
   const [formData, setFormData] = useState({
     vendorId: '',
+    vendorIds: [],
     salesOrderId: '',
     rfq_id: null,
     validUntil: '',
@@ -732,50 +733,62 @@ const Quotations = () => {
     });
   };
 
-  const handleCreateQuotation = async (e) => {
-    e.preventDefault();
+  const handleCreateQuotation = async (e, forcedStatus = null) => {
+    if (e) e.preventDefault();
 
-    if (!formData.vendorId) {
-      errorToast('Vendor is required');
+    if (!formData.vendorIds || formData.vendorIds.length === 0) {
+      errorToast('At least one vendor is required');
       return;
     }
 
     try {
       const token = localStorage.getItem('authToken');
-      
-      const payload = {
-        ...formData,
-        vendorId: parseInt(formData.vendorId),
-        validUntil: formData.validUntil || null
-      };
+      setLoading(true);
 
-      // Handle MR vs Sales Order
-      if (formData.salesOrderId && String(formData.salesOrderId).startsWith('MR-')) {
-        payload.mrId = parseInt(formData.salesOrderId.split('MR-')[1]);
-        payload.salesOrderId = null;
-      } else {
-        payload.salesOrderId = formData.salesOrderId ? parseInt(formData.salesOrderId) : null;
-        payload.mrId = null;
-      }
+      const rfqGroupId = `GRP-${Date.now()}`;
 
-      const response = await fetch(`${API_BASE}/quotations`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
+      const creationPromises = formData.vendorIds.map(async (vId) => {
+        const payload = {
+          ...formData,
+          vendorId: parseInt(vId),
+          validUntil: formData.validUntil || null,
+          status: forcedStatus || 'SENT',
+          rfq_group_id: rfqGroupId
+        };
+
+        // Handle MR vs Sales Order
+        if (formData.salesOrderId && String(formData.salesOrderId).startsWith('MR-')) {
+          payload.mrId = parseInt(formData.salesOrderId.split('MR-')[1]);
+          payload.salesOrderId = null;
+        } else {
+          payload.salesOrderId = formData.salesOrderId ? parseInt(formData.salesOrderId) : null;
+          payload.mrId = null;
+        }
+
+        const response = await fetch(`${API_BASE}/quotations`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+          const err = await response.json();
+          throw new Error(err.error || `Failed to create quotation for vendor ID ${vId}`);
+        }
+        
+        return await response.json();
       });
 
-      if (!response.ok) throw new Error('Failed to create quotation');
+      await Promise.all(creationPromises);
 
-      const result = await response.json();
-      const createdQuotation = result.data;
-      const vendor = vendors.find(v => String(v.id) === String(payload.vendorId));
-
+      successToast(`Successfully created RFQs for ${formData.vendorIds.length} vendor(s)`);
       setShowCreateModal(false);
       setFormData({
         vendorId: '',
+        vendorIds: [],
         salesOrderId: '',
         rfq_id: null,
         validUntil: '',
@@ -787,22 +800,11 @@ const Quotations = () => {
       fetchQuotations();
       fetchRawRfqs();
       fetchStats();
-
-      // Open email modal for the newly created quotation
-      if (vendor) {
-        setSelectedQuotation(createdQuotation);
-        setEmailData({
-          to: vendor.email || '',
-          subject: `Request for Quotation: ${createdQuotation.quote_number}`,
-          message: `Dear ${vendor.vendor_name},\n\nPlease find attached our Request for Quotation ${createdQuotation.quote_number}. We look forward to receiving your best quote.\n\nRegards,\nProcurement Team`,
-          attachPDF: true
-        });
-        setShowEmailModal(true);
-      } else {
-        successToast('Quotation created successfully');
-      }
     } catch (error) {
-      errorToast(error.message || 'Failed to create quotation');
+      console.error('RFQ Creation Error:', error);
+      errorToast(error.message || 'Failed to create quotations');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -1163,6 +1165,7 @@ const Quotations = () => {
 
     setFormData({
       vendorId: '',
+      vendorIds: [],
       salesOrderId: `MR-${mrId}`,
       rfq_id: rfq.id,
       validUntil: '',
@@ -1219,9 +1222,18 @@ const Quotations = () => {
             {(q.sales_order_id || q.mr_number) && (
               <div className="text-xs text-slate-500 mt-1 flex items-center gap-1">
                 <span className="px-1.5 py-0.5 bg-slate-100 rounded ">{q.mr_number || `SO-${q.sales_order_id}`}</span>
-                {q.project_name && <span className="truncate max-w-[120px]">{q.project_name}</span>}
               </div>
             )}
+          </div>
+        )
+      },
+      {
+        key: 'project_name',
+        label: 'Project Name',
+        sortable: true,
+        render: (val) => (
+          <div className="text-slate-900 truncate max-w-[200px]" title={val}>
+            {val || '—'}
           </div>
         )
       },
@@ -1597,7 +1609,7 @@ const Quotations = () => {
                     <div>
                       <label className="block text-xs  text-slate-700 mb-1">Select Project (Optional)</label>
                       <select
-                        value={formData.salesOrderId}
+                        value={formData.salesOrderId || ''}
                         onChange={handleSalesOrderChange}
                         className="w-full p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
                       >
@@ -1615,7 +1627,7 @@ const Quotations = () => {
                           <optgroup label="Material Requests">
                             {materialRequests.map(mr => (
                               <option key={`mr-${mr.id}`} value={`MR-${mr.id}`}>
-                                {mr.mr_number} ({mr.department || 'No Dept'})
+                                {mr.project_name || mr.mr_number} ({mr.mr_number})
                               </option>
                             ))}
                           </optgroup>
@@ -1625,17 +1637,15 @@ const Quotations = () => {
 
                     <div>
                       <label className="block text-xs  text-slate-700 mb-1">Vendor *</label>
-                      <select
-                        value={formData.vendorId}
-                        onChange={(e) => setFormData({...formData, vendorId: e.target.value})}
-                        className="w-full p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        required
-                      >
-                        <option value="">-- Select a Vendor --</option>
-                        {vendors.map(v => (
-                          <option key={v.id} value={v.id}>{v.vendor_name}</option>
-                        ))}
-                      </select>
+                      <MultiSelect
+                        options={vendors}
+                        value={formData.vendorIds}
+                        onChange={(e) => setFormData({...formData, vendorIds: e.target.value})}
+                        placeholder="Select Vendors..."
+                        labelField="vendor_name"
+                        valueField="id"
+                        subLabelField="email"
+                      />
                     </div>
                   </div>
 
@@ -1765,7 +1775,7 @@ const Quotations = () => {
                     <div>
                      <label className="block text-xs  text-slate-700 mb-1">Select Project/MR</label>
                       <select
-                        value={recordData.projectId}
+                        value={recordData.projectId || ''}
                         onChange={(e) => handleRecordProjectChange(e.target.value)}
                         className="w-full p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
                       >
@@ -1783,7 +1793,7 @@ const Quotations = () => {
                           <optgroup label="Material Requests">
                             {materialRequests.map(mr => (
                               <option key={`mr-rec-${mr.id}`} value={`MR-${mr.id}`}>
-                                {mr.mr_number} ({mr.department || 'No Dept'})
+                                {mr.project_name || mr.mr_number} ({mr.mr_number})
                               </option>
                             ))}
                           </optgroup>
@@ -1794,7 +1804,7 @@ const Quotations = () => {
                     <div>
                       <label className="block text-xs  text-slate-700 mb-1">Vendor *</label>
                       <select
-                        value={recordData.vendorId}
+                        value={recordData.vendorId || ''}
                         onChange={(e) => handleRecordVendorChange(e.target.value)}
                         className="w-full p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
                         required
@@ -2014,11 +2024,22 @@ const Quotations = () => {
                 >
                   Cancel
                 </button>
+                {activeTab === 'sent' && (
+                  <button
+                    type="button"
+                    onClick={(e) => handleCreateQuotation(e, 'DRAFT')}
+                    className="p-2 border border-blue-600 text-blue-600 rounded text-xs hover:bg-blue-50"
+                    disabled={loading}
+                  >
+                    Save as Draft
+                  </button>
+                )}
                 <button
                   type="submit"
                   className="p-2  bg-green-600 text-white rounded text-xs  hover:bg-green-700"
+                  disabled={loading}
                 >
-                  Create Quotation
+                  {activeTab === 'sent' ? 'Create & Send RFQ' : 'Record Quotation'}
                 </button>
               </div>
             </form>

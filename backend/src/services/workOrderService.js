@@ -1,5 +1,6 @@
 const pool = require('../config/db');
 const bomService = require('./bomService');
+const stockService = require('./stockService');
 
 const listWorkOrders = async () => {
   const [rows] = await pool.query(
@@ -208,6 +209,143 @@ const getWorkOrderById = async (id) => {
     [id]
   );
   return rows[0];
+};
+
+const getWorkOrderMaterialRequirements = async (id) => {
+  const [woRows] = await pool.query(
+    'SELECT id, item_code, quantity, sales_order_item_id, bom_no FROM work_orders WHERE id = ?',
+    [id]
+  );
+  if (woRows.length === 0) return [];
+  const wo = woRows[0];
+
+  // 1. Get BOM materials
+  const materials = await bomService.getItemMaterials(wo.sales_order_item_id, wo.item_code, wo.bom_no);
+  
+  // 2. Get Issued quantities for this WO
+  const [issuedRows] = await pool.query(
+    `SELECT mii.item_code, SUM(mii.quantity) as issued_qty 
+     FROM material_issue_items mii
+     JOIN material_issues mi ON mii.issue_id = mi.id
+     WHERE mi.work_order_id = ?
+     GROUP BY mii.item_code`,
+    [id]
+  );
+  const issuedMap = {};
+  issuedRows.forEach(row => {
+    issuedMap[row.item_code] = parseFloat(row.issued_qty || 0);
+  });
+
+  // 3. Get Consumed quantities for this WO
+  const [consumedRows] = await pool.query(
+    `SELECT item_code, SUM(quantity) as consumed_qty 
+     FROM work_order_material_consumption
+     WHERE work_order_id = ?
+     GROUP BY item_code`,
+    [id]
+  );
+  const consumedMap = {};
+  consumedRows.forEach(row => {
+    consumedMap[row.item_code] = parseFloat(row.consumed_qty || 0);
+  });
+
+  // 4. Get Current Stock for these items
+  const itemCodes = materials.map(m => m.item_code);
+  const stockMap = {};
+  if (itemCodes.length > 0) {
+    const [stockRows] = await pool.query(
+      `SELECT item_code, SUM(current_balance) as total_stock 
+       FROM stock_balance 
+       WHERE item_code IN (?)
+       GROUP BY item_code`,
+      [itemCodes]
+    );
+    stockRows.forEach(row => {
+      stockMap[row.item_code] = parseFloat(row.total_stock || 0);
+    });
+  }
+
+  // 5. Merge data
+  return materials.map(m => {
+    const required = parseFloat(m.qty_per_pc || 0) * parseFloat(wo.quantity || 0);
+    const issued = issuedMap[m.item_code] || 0;
+    const consumed = consumedMap[m.item_code] || 0;
+    const totalStock = stockMap[m.item_code] || 0;
+    
+    return {
+      item_code: m.item_code,
+      material_name: m.material_name,
+      material_type: m.material_type,
+      uom: m.uom,
+      source_assembly: m.drawing_no || m.item_code,
+      required_qty: required.toFixed(3),
+      issued_qty: (required - consumed).toFixed(3),
+      consumed_qty: consumed.toFixed(3),
+      total_stock: totalStock.toFixed(3),
+      remaining_qty: (totalStock - consumed).toFixed(3)
+    };
+  });
+};
+
+const updateMaterialConsumption = async (workOrderId, consumptionData, userId) => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // Get WO number for remarks
+    const [woRows] = await connection.query('SELECT wo_number FROM work_orders WHERE id = ?', [workOrderId]);
+    const woNumber = woRows[0]?.wo_number || workOrderId;
+
+    for (const item of consumptionData) {
+      // Only insert if quantity > 0
+      if (parseFloat(item.quantity || 0) <= 0) continue;
+
+      const [result] = await connection.execute(
+        `INSERT INTO work_order_material_consumption 
+         (work_order_id, item_code, material_name, material_type, quantity, uom, created_by, remarks)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          workOrderId, 
+          item.item_code, 
+          item.material_name, 
+          item.material_type, 
+          item.quantity, 
+          item.uom, 
+          userId, 
+          item.remarks || `Consumed for WO ${woNumber}`
+        ]
+      );
+
+      const consumptionId = result.insertId;
+
+      // Deduct from stock (transaction_type = 'OUT')
+      // Note: We use 'MATERIAL_CONSUMPTION' as ref_doc_type
+      await stockService.addStockLedgerEntry(
+        item.item_code,
+        'OUT',
+        item.quantity,
+        'MATERIAL_CONSUMPTION',
+        consumptionId,
+        `CON-${consumptionId}`,
+        {
+          remarks: `Consumed for WO ${woNumber}`,
+          userId: userId,
+          materialName: item.material_name,
+          materialType: item.material_type,
+          unit: item.uom,
+          connection: connection
+        }
+      );
+    }
+
+    await connection.commit();
+    return { success: true };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 };
 
 const generateJobCardNo = async (connection) => {

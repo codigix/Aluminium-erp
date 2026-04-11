@@ -261,6 +261,16 @@ const GRN = () => {
       )
     },
     {
+      key: 'projectName',
+      label: 'Project Name',
+      sortable: true,
+      render: (val) => (
+        <span className="text-xs font-medium text-slate-700 truncate max-w-[150px] block">
+          {val || '—'}
+        </span>
+      )
+    },
+    {
       key: 'grnDate',
       label: 'GRN Date',
       sortable: true,
