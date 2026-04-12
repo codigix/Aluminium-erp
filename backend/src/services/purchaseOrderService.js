@@ -174,6 +174,7 @@ const createPurchaseOrder = async (data, existingConnection = null) => {
           ...item,
           quantity: qty,
           design_qty: designQty,
+          planned_qty: parseFloat(item.planned_qty) || designQty || 0,
           unit_rate: parseFloat(item.unit_rate) || 0,
           amount: parseFloat(item.amount) || (qty * parseFloat(item.unit_rate || 0)),
           cgst_percent: parseFloat(item.cgst_percent) || 9,
@@ -237,6 +238,7 @@ const createPurchaseOrder = async (data, existingConnection = null) => {
         return {
           ...item,
           design_qty: designQty,
+          planned_qty: parseFloat(item.planned_qty) || designQty || 0,
           quantity: qty,
           description: item.item_name || item.description,
           material_name: item.item_name || item.material_name,
@@ -282,6 +284,7 @@ const createPurchaseOrder = async (data, existingConnection = null) => {
           ...item,
           quantity: qty,
           design_qty: designQty,
+          planned_qty: parseFloat(item.planned_qty) || designQty || 0,
           unit_rate: rate,
           amount: amount,
           cgst_percent: cgstPercent,
@@ -357,18 +360,19 @@ const createPurchaseOrder = async (data, existingConnection = null) => {
 
         await connection.execute(
           `INSERT INTO purchase_order_items (
-            purchase_order_id, item_code, description, design_qty, quantity, unit, unit_rate, amount,
+            purchase_order_id, item_code, description, design_qty, quantity, planned_qty, unit, unit_rate, amount,
             cgst_percent, cgst_amount, sgst_percent, sgst_amount, total_amount,
             material_name, material_type, drawing_no, drawing_id,
             length, width, thickness, diameter, outer_diameter, density, weight_per_unit
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             poId,
             correctedItemCode,
             item.description || null,
             (parseFloat(item.design_qty) || qty),
             qty,
+            parseFloat(item.planned_qty) || parseFloat(item.design_qty) || qty,
             item.unit || item.uom || 'NOS',
             rate,
             amount,
@@ -535,6 +539,7 @@ const getPurchaseOrderById = async (poId) => {
       poi.item_code,
       COALESCE(poi.description, sb.material_name, poi.item_code) as description,
       poi.design_qty,
+      poi.planned_qty,
       poi.quantity,
       poi.unit,
       poi.unit_rate,
@@ -671,11 +676,11 @@ const updatePurchaseOrder = async (poId, payload) => {
         if (item.id) {
           await connection.execute(
             `UPDATE purchase_order_items 
-             SET unit_rate = ?, amount = ?, cgst_percent = ?, cgst_amount = ?, sgst_percent = ?, sgst_amount = ?, total_amount = ?, quantity = ?, design_qty = ?, description = ?, item_code = ?, unit = ?,
+             SET unit_rate = ?, amount = ?, cgst_percent = ?, cgst_amount = ?, sgst_percent = ?, sgst_amount = ?, total_amount = ?, quantity = ?, design_qty = ?, planned_qty = ?, description = ?, item_code = ?, unit = ?,
                  length = ?, width = ?, thickness = ?, diameter = ?, outer_diameter = ?, density = ?, weight_per_unit = ?
              WHERE id = ? AND purchase_order_id = ?`,
             [
-              rate, amount, cgstPercent, cgstAmount, sgstPercent, sgstAmount, totalItemAmount, qty, designQty, item.description, item.item_code, item.unit,
+              rate, amount, cgstPercent, cgstAmount, sgstPercent, sgstAmount, totalItemAmount, qty, designQty, parseFloat(item.planned_qty) || designQty || 0, item.description, item.item_code, item.unit,
               item.length || 0, item.width || 0, item.thickness || 0, item.diameter || 0, item.outer_diameter || 0, item.density || 0, item.weight_per_unit || 0,
               item.id, poId
             ]
@@ -683,11 +688,11 @@ const updatePurchaseOrder = async (poId, payload) => {
         } else {
           await connection.execute(
             `INSERT INTO purchase_order_items 
-             (purchase_order_id, item_code, description, quantity, design_qty, unit, unit_rate, amount, cgst_percent, cgst_amount, sgst_percent, sgst_amount, total_amount,
+             (purchase_order_id, item_code, description, quantity, design_qty, planned_qty, unit, unit_rate, amount, cgst_percent, cgst_amount, sgst_percent, sgst_amount, total_amount,
               length, width, thickness, diameter, outer_diameter, density, weight_per_unit)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
-              poId, item.item_code, item.description, qty, designQty, item.unit || 'NOS', rate, amount, cgstPercent, cgstAmount, sgstPercent, sgstAmount, totalItemAmount,
+              poId, item.item_code, item.description, qty, designQty, parseFloat(item.planned_qty) || designQty || 0, item.unit || 'NOS', rate, amount, cgstPercent, cgstAmount, sgstPercent, sgstAmount, totalItemAmount,
               item.length || 0, item.width || 0, item.thickness || 0, item.diameter || 0, item.outer_diameter || 0, item.density || 0, item.weight_per_unit || 0
             ]
           );

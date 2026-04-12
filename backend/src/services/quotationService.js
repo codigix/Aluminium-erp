@@ -147,8 +147,8 @@ const createQuotation = async (payload) => {
         const correctedItemCode = await getCorrectItemCode(item, connection);
 
         await connection.execute(
-          `INSERT INTO quotation_items (quotation_id, item_code, description, material_name, material_type, drawing_no, quantity, design_qty, unit, unit_rate, amount, cgst_percent, cgst_amount, sgst_percent, sgst_amount, total_amount)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          `INSERT INTO quotation_items (quotation_id, item_code, description, material_name, material_type, drawing_no, quantity, design_qty, planned_qty, unit, unit_rate, amount, cgst_percent, cgst_amount, sgst_percent, sgst_amount, total_amount)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
           ,
           [
             quotationId,
@@ -159,6 +159,7 @@ const createQuotation = async (payload) => {
             item.drawing_no || correctedItemCode,
             qty,
             designQty,
+            parseFloat(item.planned_qty) || designQty || 0,
             item.uom || item.unit || 'NOS',
             rate,
             amount,
@@ -365,8 +366,8 @@ const updateQuotation = async (quotationId, payload) => {
         const correctedItemCode = await getCorrectItemCode(item, connection);
 
         await connection.execute(
-          `INSERT INTO quotation_items (quotation_id, item_code, description, material_name, material_type, drawing_no, quantity, design_qty, unit, unit_rate, amount, cgst_percent, cgst_amount, sgst_percent, sgst_amount, total_amount)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          `INSERT INTO quotation_items (quotation_id, item_code, description, material_name, material_type, drawing_no, quantity, design_qty, planned_qty, unit, unit_rate, amount, cgst_percent, cgst_amount, sgst_percent, sgst_amount, total_amount)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
           ,
           [
             quotationId,
@@ -377,6 +378,7 @@ const updateQuotation = async (quotationId, payload) => {
             item.drawing_no || correctedItemCode,
             qty,
             designQty,
+            parseFloat(item.planned_qty) || designQty || 0,
             item.uom || item.unit || 'NOS',
             rate,
             amount,

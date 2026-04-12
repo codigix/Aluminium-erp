@@ -126,19 +126,15 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
   });
 
   const subtotal = filteredItems.reduce((sum, item) => {
-    const dQty = parseFloat(item.design_qty);
-    const qty = parseFloat(item.quantity);
-    const effectiveQty = (dQty && dQty !== 0) ? dQty : (qty || 0);
+    const qty = parseFloat(item.quantity) || 0;
     const rate = parseFloat(item.unit_rate) || 0;
-    return sum + (effectiveQty * rate);
+    return sum + (qty * rate);
   }, 0) || 0;
 
   const totalTax = filteredItems.reduce((sum, item) => {
-    const dQty = parseFloat(item.design_qty);
-    const qty = parseFloat(item.quantity);
-    const effectiveQty = (dQty && dQty !== 0) ? dQty : (qty || 0);
+    const qty = parseFloat(item.quantity) || 0;
     const rate = parseFloat(item.unit_rate) || 0;
-    const itemAmount = effectiveQty * rate;
+    const itemAmount = qty * rate;
     const cgst = parseFloat(item.cgst_amount) || (itemAmount * 0.09);
     const sgst = parseFloat(item.sgst_amount) || (itemAmount * 0.09);
     return sum + cgst + sgst;
@@ -334,8 +330,7 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
                   <tr>
                     <th className="p-2  text-xs  text-slate-400  ">Item</th>
                     <th className="p-2  text-xs  text-slate-400   text-center">Design Qty</th>
-                    {/* Hiding Received column as requested */}
-                    {/* <th className="p-2  text-xs  text-slate-400   text-center">Received</th> */}
+                    <th className="p-2  text-xs  text-slate-400   text-center">Required</th>
                     <th className="p-2  text-xs  text-slate-400   text-center">Rate</th>
                     <th className="p-2  text-xs  text-slate-400   text-right">Amount</th>
                   </tr>
@@ -367,15 +362,15 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
                         </td>
                         <td className="p-2  text-center">
                           <span className="text-xs  text-slate-800">
-                            {(() => {
-                              const dQty = parseFloat(item.design_qty);
-                              const qty = parseFloat(item.quantity);
-                              // Prioritize design_qty if it's non-zero, otherwise use quantity
-                              const displayQty = (dQty && dQty !== 0) ? dQty : (qty || 0);
-                              return Number(displayQty).toFixed(3);
-                            })()}
+                            {Number(item.planned_qty || item.design_qty || 0).toFixed(3)}
                           </span>
-                          <span className="text-xs text-slate-400  ml-1 ">{item.unit || item.uom}</span>
+                          <span className="text-[10px] text-slate-400  ml-1 uppercase">{item.unit || item.uom}</span>
+                        </td>
+                        <td className="p-2  text-center">
+                          <span className="text-xs  text-slate-800">
+                            {Number(item.quantity || 0).toFixed(3)}
+                          </span>
+                          <span className="text-[10px] text-slate-400  ml-1 uppercase">{item.unit || item.uom}</span>
                         </td>
                         {/* Hiding Received column as requested */}
                         {/* <td className="p-2 ">
@@ -401,11 +396,9 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
                           <div className="flex flex-col items-end">
                             <span className="text-xs  text-slate-800">
                               {(() => {
-                                const dQty = parseFloat(item.design_qty);
-                                const qty = parseFloat(item.quantity);
-                                const effectiveQty = (dQty && dQty !== 0) ? dQty : (qty || 0);
+                                const qty = parseFloat(item.quantity) || 0;
                                 const rate = parseFloat(item.unit_rate) || 0;
-                                return formatCurrency(effectiveQty * rate, po.currency);
+                                return formatCurrency(qty * rate, po.currency);
                               })()}
                             </span>
                           </div>
@@ -428,11 +421,9 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
                 <span className="text-slate-400   ">CGST (9%)</span>
                 <span className="text-emerald-500  w-32 text-right">
                   + {formatCurrency(filteredItems.reduce((sum, i) => {
-                    const dQty = parseFloat(i.design_qty);
                     const qty = parseFloat(i.quantity);
-                    const effectiveQty = (dQty && dQty !== 0) ? dQty : (qty || 0);
                     const rate = parseFloat(i.unit_rate) || 0;
-                    const tax = parseFloat(i.cgst_amount) || (effectiveQty * rate * 0.09);
+                    const tax = parseFloat(i.cgst_amount) || (qty * rate * 0.09);
                     return sum + tax;
                   }, 0), po.currency)}
                 </span>
@@ -441,11 +432,9 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
                 <span className="text-slate-400   ">SGST (9%)</span>
                 <span className="text-emerald-500  w-32 text-right">
                   + {formatCurrency(filteredItems.reduce((sum, i) => {
-                    const dQty = parseFloat(i.design_qty);
                     const qty = parseFloat(i.quantity);
-                    const effectiveQty = (dQty && dQty !== 0) ? dQty : (qty || 0);
                     const rate = parseFloat(i.unit_rate) || 0;
-                    const tax = parseFloat(i.sgst_amount) || (effectiveQty * rate * 0.09);
+                    const tax = parseFloat(i.sgst_amount) || (qty * rate * 0.09);
                     return sum + tax;
                   }, 0), po.currency)}
                 </span>

@@ -815,6 +815,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
                         <th className="p-2 ">Item Details</th>
                         <th className="p-2 ">Warehouse</th>
                         <th className="p-2  text-center">Design Qty</th>
+                        <th className="p-2  text-center">Required</th>
                         <th className="p-2  text-center">Received</th>
                         <th className="p-2  text-center">Accepted</th>
                       </tr>
@@ -851,8 +852,12 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
                             </span>
                           </td>
                           <td className="p-2  text-center  text-slate-400 text-xs">
-                            {parseFloat(item.ordered_qty || 0).toFixed(3)}
+                            {parseFloat(item.planned_qty || item.design_qty || 0).toFixed(3)}
                             <span className="ml-1 text-[10px] text-slate-300 uppercase">{item.uom || 'Nos'}</span>
+                          </td>
+                          <td className="p-2  text-center  text-slate-600 text-xs">
+                            {parseFloat(item.ordered_qty || 0).toFixed(3)}
+                            <span className="ml-1 text-[10px] text-slate-400 uppercase">{item.uom || 'Nos'}</span>
                           </td>
                           <td className="p-2  text-center  text-slate-600 text-xs">
                             {parseFloat(item.received_qty || 0).toFixed(3)}
@@ -977,7 +982,8 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
                   <thead className="bg-slate-50/80">
                     <tr className="text-xs  text-slate-500   border-b border-slate-200">
                       <th className="p-2 ">Item Details</th>
-                      <th className="p-2  text-center">Ordered</th>
+                      <th className="p-2  text-center">Design Qty</th>
+                      <th className="p-2  text-center">Required</th>
                       <th className="p-2  text-center">Invoice</th>
                       <th className="p-2  text-center">Received Quantity</th>
                       <th className="p-2  text-center text-rose-500">Shortage</th>
@@ -1017,8 +1023,12 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
                             </div>
                           </td>
                           <td className="p-2  text-center  text-slate-400 text-xs">
-                            {parseFloat(item.ordered_qty || 0).toFixed(3)}
+                            {parseFloat(item.planned_qty || item.design_qty || 0).toFixed(3)}
                             <span className="ml-1 text-[10px] text-slate-300 uppercase">{item.uom || 'Nos'}</span>
+                          </td>
+                          <td className="p-2  text-center  text-slate-600 text-xs">
+                            {parseFloat(item.ordered_qty || 0).toFixed(3)}
+                            <span className="ml-1 text-[10px] text-slate-400 uppercase">{item.uom || 'Nos'}</span>
                           </td>
                           <td className="p-2  text-center  text-slate-900 text-xs">
                             {parseFloat(item.received_qty || 0).toFixed(3)}

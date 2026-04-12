@@ -205,9 +205,14 @@ const POMaterialRequest = () => {
         },
         body: JSON.stringify({
           mr_id: mr.id,
-          items: (mr.items || []).map(item => ({
+          items: (mr.items || []).filter(item => {
+            const type = (item.material_type || '').toUpperCase();
+            return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
+          }).map(item => ({
             ...item,
             material_name: item.name || item.material_name, // Ensure name is passed correctly
+            quantity: parseFloat(item.quantity) || 0,
+            planned_qty: parseFloat(item.design_qty) || 0,
             uom: item.uom || 'pcs',
             length: item.length || 0,
             width: item.width || 0,
@@ -1144,9 +1149,23 @@ const POMaterialRequest = () => {
                                       </p>
                                     )}
                                   </div>
-                                  <span className="shrink-0 font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">
-                                    {Number(it.quantity).toFixed(2)} {it.uom}
-                                  </span>
+                                  <div className="flex flex-col items-end shrink-0">
+                                    <div className="flex flex-col items-end">
+                                      <span className="font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">
+                                        {Number(it.quantity || 0).toFixed(3)} {it.uom}
+                                      </span>
+                                      <span className="text-[9px] text-slate-400 mt-0.5 uppercase tracking-tighter">Required</span>
+                                    </div>
+                                    
+                                    {Number(it.planned_qty || 0) > 0 && (
+                                      <div className="flex flex-col items-end mt-1.5 pt-1.5 border-t border-slate-50 w-full">
+                                        <span className="text-[10px] font-semibold text-slate-700">
+                                          {Number(it.planned_qty).toFixed(3)} {it.uom}
+                                        </span>
+                                        <span className="text-[8px] text-slate-400 uppercase tracking-tighter">Design Qty</span>
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
                               ))}
                             </div>

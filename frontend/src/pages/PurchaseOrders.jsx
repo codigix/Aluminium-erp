@@ -513,10 +513,10 @@ const PurchaseOrders = () => {
               id: item.id,
               item_code: item.item_code || '',
             description: item.description || '',
-            quantity: item.design_qty || item.quantity || 0,
+            quantity: item.quantity || 0,
             unit: item.unit || 'NOS',
             rate: item.unit_rate || item.rate || 0,
-            amount: item.amount || ((item.design_qty || item.quantity) * (item.unit_rate || item.rate || 0))
+            amount: item.amount || ((item.quantity || 0) * (item.unit_rate || item.rate || 0))
           }))
         });
         setShowManualCreateModal(true);
@@ -1468,6 +1468,7 @@ const PurchaseOrders = () => {
                           <th className="px-4 p-2 text-left">Description</th>
                           <th className="px-4 p-2 text-left">Material</th>
                           <th className="px-4 p-2 text-center">Design Qty</th>
+                          <th className="px-4 p-2 text-center">Required</th>
                           <th className="px-4 p-2 text-right">Rate</th>
                           <th className="px-4 p-2 text-right">Total</th>
                         </tr>
@@ -1480,7 +1481,8 @@ const PurchaseOrders = () => {
                               {item.item_code && <p className="text-xs text-slate-400">{item.item_code}</p>}
                             </td>
                             <td className="px-4 p-2 text-xs text-slate-500">{item.material_name || '—'}</td>
-                            <td className="px-4 p-2 text-center text-xs text-slate-600 ">{Number(item.design_qty || item.quantity || 0).toFixed(3)} {item.unit || 'NOS'}</td>
+                            <td className="px-4 p-2 text-center text-xs text-slate-400 ">{Number(item.planned_qty || item.design_qty || 0).toFixed(3)} {item.unit || 'NOS'}</td>
+                            <td className="px-4 p-2 text-center text-xs text-slate-600 ">{Number(item.quantity || 0).toFixed(3)} {item.unit || 'NOS'}</td>
                             <td className="px-4 p-2 text-right text-xs text-slate-500">{formatCurrency(item.unit_rate)}</td>
                             <td className="px-4 p-2 text-right text-xs  text-slate-800">{formatCurrency(item.total_amount || (item.quantity * item.unit_rate))}</td>
                           </tr>
@@ -1488,7 +1490,7 @@ const PurchaseOrders = () => {
                       </tbody>
                       <tfoot className="bg-slate-50/50">
                         <tr>
-                          <td colSpan="4" className="px-4 p-2 text-right text-xs  text-slate-400  ">Total Amount</td>
+                          <td colSpan="5" className="px-4 p-2 text-right text-xs  text-slate-400  ">Total Amount</td>
                           <td className="px-4 p-2 text-right text-sm  text-blue-600">
                             {formatCurrency(poItems.reduce((sum, item) => sum + (parseFloat(item.total_amount) || (item.quantity * item.unit_rate)), 0))}
                           </td>
@@ -1604,7 +1606,8 @@ const PurchaseOrders = () => {
                     <thead className="bg-slate-50/50">
                       <tr>
                         <th className="px-4 py-2 text-xs  text-slate-400  ">Item</th>
-                        <th className="px-4 py-2 text-xs  text-slate-400   text-center">Qty</th>
+                        <th className="px-4 py-2 text-xs  text-slate-400   text-center">Design Qty</th>
+                        <th className="px-4 py-2 text-xs  text-slate-400   text-center">Required Qty</th>
                         <th className="px-4 py-2 text-xs  text-slate-400   text-center">Rate</th>
                         <th className="px-4 py-2 text-xs  text-slate-400   text-right">Amount</th>
                       </tr>
@@ -1619,8 +1622,19 @@ const PurchaseOrders = () => {
                             </div>
                           </td>
                           <td className="px-4 p-2 text-center">
-                            <span className="text-xs  text-slate-600">{item.quantity}</span>
-                            <span className="text-xs text-slate-400 ml-1 ">{item.unit || 'NOS'}</span>
+                            <span className="text-xs  text-slate-400">{Number(item.planned_qty || item.design_qty || 0).toFixed(3)}</span>
+                            <span className="text-xs text-slate-400 ml-1 ">{item.unit || item.uom || 'NOS'}</span>
+                          </td>
+                          <td className="px-4 p-2 text-center">
+                            <div className="relative group max-w-[100px] mx-auto">
+                              <input
+                                type="number"
+                                step="0.001"
+                                value={item.quantity || 0}
+                                onChange={(e) => handleEditItemChange(idx, 'quantity', e.target.value)}
+                                className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all text-center"
+                              />
+                            </div>
                           </td>
                           <td className="px-4 p-2">
                             <div className="relative group max-w-[120px] mx-auto">

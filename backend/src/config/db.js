@@ -200,12 +200,18 @@ const ensurePurchaseOrderItemColumns = async () => {
     connection = await pool.getConnection();
     const [columns] = await connection.query('SHOW COLUMNS FROM purchase_order_items');
     const existing = new Set(columns.map(column => column.Field));
+    
+    // Update precision if needed
+    await connection.query("ALTER TABLE purchase_order_items MODIFY COLUMN quantity DECIMAL(14, 3)");
+    await connection.query("ALTER TABLE purchase_order_items MODIFY COLUMN planned_qty DECIMAL(14, 3) DEFAULT 0");
+
     const requiredColumns = [
       { name: 'cgst_percent', definition: 'DECIMAL(5, 2) DEFAULT 0' },
       { name: 'cgst_amount', definition: 'DECIMAL(12, 2) DEFAULT 0' },
       { name: 'sgst_percent', definition: 'DECIMAL(5, 2) DEFAULT 0' },
       { name: 'sgst_amount', definition: 'DECIMAL(12, 2) DEFAULT 0' },
       { name: 'total_amount', definition: 'DECIMAL(14, 2) DEFAULT 0' },
+      { name: 'planned_qty', definition: 'DECIMAL(14, 3) DEFAULT 0' },
       { name: 'material_name', definition: 'VARCHAR(255) NULL' },
       { name: 'material_type', definition: 'VARCHAR(100) NULL' },
       { name: 'drawing_no', definition: 'VARCHAR(120) NULL' },
@@ -266,12 +272,19 @@ const ensureQuotationItemColumns = async () => {
 
     const [columns] = await connection.query('SHOW COLUMNS FROM quotation_items');
     const existing = new Set(columns.map(column => column.Field));
+    
+    // Update precision if needed
+    await connection.query("ALTER TABLE quotation_items MODIFY COLUMN quantity DECIMAL(14, 3)");
+    await connection.query("ALTER TABLE quotation_items MODIFY COLUMN design_qty DECIMAL(14, 3) DEFAULT 0");
+    await connection.query("ALTER TABLE quotation_items MODIFY COLUMN planned_qty DECIMAL(14, 3) DEFAULT 0");
+
     const requiredColumns = [
       { name: 'material_name', definition: 'VARCHAR(255) NULL' },
       { name: 'material_type', definition: 'VARCHAR(100) NULL' },
       { name: 'drawing_no', definition: 'VARCHAR(120) NULL' },
       { name: 'drawing_id', definition: 'INT NULL' },
-      { name: 'design_qty', definition: 'DECIMAL(12, 3) DEFAULT 0' },
+      { name: 'design_qty', definition: 'DECIMAL(14, 3) DEFAULT 0' },
+      { name: 'planned_qty', definition: 'DECIMAL(14, 3) DEFAULT 0' },
       { name: 'cgst_percent', definition: 'DECIMAL(5, 2) DEFAULT 0' },
       { name: 'cgst_amount', definition: 'DECIMAL(12, 2) DEFAULT 0' },
       { name: 'sgst_percent', definition: 'DECIMAL(5, 2) DEFAULT 0' },
@@ -1682,11 +1695,13 @@ const ensureMaterialRequestTables = async () => {
         item_code VARCHAR(100) NOT NULL,
         item_name VARCHAR(255),
         item_type VARCHAR(50),
-        quantity DECIMAL(12, 3) NOT NULL,
-        unit_rate DECIMAL(12, 2) DEFAULT 0,
+        quantity DECIMAL(14, 3) NOT NULL,
+        design_qty DECIMAL(14, 3) DEFAULT 0,
+        planned_qty DECIMAL(14, 3) DEFAULT 0,
+        unit_rate DECIMAL(14, 2) DEFAULT 0,
         uom VARCHAR(20),
         warehouse VARCHAR(100),
-        allocated_quantity DECIMAL(12, 3) DEFAULT 0,
+        allocated_quantity DECIMAL(14, 3) DEFAULT 0,
         FOREIGN KEY (mr_id) REFERENCES material_requests(id) ON DELETE CASCADE
       )
     `);
@@ -1694,6 +1709,13 @@ const ensureMaterialRequestTables = async () => {
     // Ensure columns exist for existing tables
     const [itemCols] = await connection.query('SHOW COLUMNS FROM material_request_items');
     const existingItemCols = new Set(itemCols.map(c => c.Field));
+    
+    if (!existingItemCols.has('design_qty')) {
+      await connection.query('ALTER TABLE material_request_items ADD COLUMN design_qty DECIMAL(14, 3) DEFAULT 0 AFTER quantity');
+    }
+    if (!existingItemCols.has('planned_qty')) {
+      await connection.query('ALTER TABLE material_request_items ADD COLUMN planned_qty DECIMAL(14, 3) DEFAULT 0 AFTER design_qty');
+    }
     if (!existingItemCols.has('warehouse')) {
       await connection.query('ALTER TABLE material_request_items ADD COLUMN warehouse VARCHAR(100)');
     }
@@ -2353,7 +2375,8 @@ const ensureProcurementRfqTables = async () => {
         material_name VARCHAR(255),
         material_type VARCHAR(100),
         drawing_no VARCHAR(100),
-        quantity DECIMAL(14,2),
+        quantity DECIMAL(14,3),
+        planned_qty DECIMAL(14,3) DEFAULT 0,
         uom VARCHAR(20),
         length DECIMAL(12, 4) DEFAULT 0,
         width DECIMAL(12, 4) DEFAULT 0,
@@ -2370,6 +2393,15 @@ const ensureProcurementRfqTables = async () => {
     // Ensure dimension columns exist in procurement_rfq_items
     const [cols] = await connection.query("SHOW COLUMNS FROM procurement_rfq_items");
     const existing = new Set(cols.map(c => c.Field));
+    
+    // Update precision if needed
+    await connection.query("ALTER TABLE procurement_rfq_items MODIFY COLUMN quantity DECIMAL(14, 3)");
+    await connection.query("ALTER TABLE procurement_rfq_items MODIFY COLUMN planned_qty DECIMAL(14, 3)");
+
+    if (!existing.has('planned_qty')) {
+      await connection.query("ALTER TABLE procurement_rfq_items ADD COLUMN planned_qty DECIMAL(14, 3) DEFAULT 0 AFTER quantity");
+    }
+
     const dims = [
       'length', 'width', 'thickness', 'diameter', 'outer_diameter', 'density', 'weight_per_unit'
     ];

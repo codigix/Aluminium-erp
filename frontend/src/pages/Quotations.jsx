@@ -302,7 +302,7 @@ const Quotations = () => {
   const handleAddItem = () => {
     setFormData({
       ...formData,
-      items: [...formData.items, { drawing_no: '', description: '', material_name: '', material_type: '', quantity: 0, design_qty: 0, uom: 'NOS', unit_rate: 0 }]
+      items: [...formData.items, { drawing_no: '', description: '', material_name: '', material_type: '', quantity: 0, design_qty: 0, planned_qty: 0, uom: 'NOS', unit_rate: 0 }]
     });
   };
 
@@ -314,7 +314,7 @@ const Quotations = () => {
       setFormData(prev => ({ 
         ...prev, 
         salesOrderId: '',
-        items: [{ drawing_no: '', material_name: '', material_type: '', quantity: 0, design_qty: 0, uom: 'NOS', unit_rate: 0 }]
+        items: [{ drawing_no: '', material_name: '', material_type: '', quantity: 0, design_qty: 0, planned_qty: 0, uom: 'NOS', unit_rate: 0 }]
       }));
       return;
     }
@@ -361,7 +361,7 @@ const Quotations = () => {
 
           setFormData(prev => ({
             ...prev,
-            items: mrItems.length > 0 ? mrItems : [{ drawing_no: '', description: '', material_name: '', material_type: '', quantity: 0, design_qty: 0, uom: 'NOS', unit_rate: 0 }]
+            items: mrItems.length > 0 ? mrItems : [{ drawing_no: '', description: '', material_name: '', material_type: '', quantity: 0, design_qty: 0, planned_qty: 0, uom: 'NOS', unit_rate: 0 }]
           }));
         }
       } catch (error) {
@@ -409,7 +409,7 @@ const Quotations = () => {
               drawing_no: req.drawing_no || '—',
               material_name: req.material_name || '',
               material_type: getCorrectMaterialType(req.drawing_no || req.item_code, req.material_type),
-              design_qty: finalQty, // Show shortage/requested qty as "Design Qty" to match MR view
+              design_qty: totalRequired, // Use engineering spec as "Design Qty"
               planned_qty: totalRequired, // Keep total required as reference
               quantity: finalQty,
               uom: req.uom || 'NOS',
@@ -419,7 +419,7 @@ const Quotations = () => {
 
         setFormData(prev => ({
           ...prev,
-          items: materialItems.length > 0 ? materialItems : [{ drawing_no: '', description: '', material_name: '', material_type: '', quantity: 0, uom: 'NOS', unit_rate: 0 }]
+          items: materialItems.length > 0 ? materialItems : [{ drawing_no: '', description: '', material_name: '', material_type: '', quantity: 0, design_qty: 0, planned_qty: 0, uom: 'NOS', unit_rate: 0 }]
         }));
       }
     } catch (error) {
@@ -715,7 +715,7 @@ const Quotations = () => {
   const handleRecordAddEmptyItem = () => {
     setRecordData({
       ...recordData,
-      items: [...recordData.items, { drawing_no: '', description: '', material_name: '', material_type: '', quantity: 0, design_qty: 0, uom: 'NOS', unit_rate: 0 }]
+      items: [...recordData.items, { drawing_no: '', description: '', material_name: '', material_type: '', quantity: 0, design_qty: 0, planned_qty: 0, uom: 'NOS', unit_rate: 0 }]
     });
   };
 
@@ -1151,7 +1151,8 @@ const Quotations = () => {
       material_name: item.material_name || item.name || item.description || '',
       material_type: item.material_type || 'RAW_MATERIAL',
       quantity: parseFloat(item.quantity) || 0,
-      design_qty: parseFloat(item.quantity) || 0,
+      design_qty: parseFloat(item.planned_qty) || parseFloat(item.quantity) || 0,
+      planned_qty: parseFloat(item.planned_qty) || parseFloat(item.quantity) || 0,
       uom: item.uom || 'NOS',
       unit_rate: 0,
       length: item.length || 0,
@@ -1170,7 +1171,7 @@ const Quotations = () => {
       rfq_id: rfq.id,
       validUntil: '',
       notes: `RFQ Ref: ${rfq.rfq_number}`,
-      items: mrItems.length > 0 ? mrItems : [{ drawing_no: '', material_name: '', material_type: '', quantity: 0, uom: 'NOS', unit_rate: 0 }]
+      items: mrItems.length > 0 ? mrItems : [{ drawing_no: '', material_name: '', material_type: '', quantity: 0, design_qty: 0, planned_qty: 0, uom: 'NOS', unit_rate: 0 }]
     });
 
     // 2. Open create modal
@@ -1679,9 +1680,10 @@ const Quotations = () => {
                       <div className="space-y-2">
                           <div className="grid grid-cols-12 gap-2 pb-2 border-b border-slate-100 text-xs text-slate-500">
                             <div className="col-span-2">Drawing No</div>
-                            <div className="col-span-5">Material Name & Dimensions</div>
-                            <div className="col-span-2">Type</div>
-                            <div className="col-span-2 text-center">Qty / UOM</div>
+                            <div className="col-span-4">Material Name & Dimensions</div>
+                            <div className="col-span-1">Type</div>
+                            <div className="col-span-2 text-center">Design Qty</div>
+                            <div className="col-span-2 text-center">Required</div>
                             <div className="col-span-1"></div>
                           </div>
                           {formData.items.map((item, idx) => (
@@ -1705,7 +1707,7 @@ const Quotations = () => {
                                   </button>
                                 )}
                               </div>
-                              <div className="col-span-5 space-y-1">
+                              <div className="col-span-4 space-y-1">
                                 <input
                                   type="text"
                                   placeholder="Material Name"
@@ -1728,18 +1730,26 @@ const Quotations = () => {
                                 placeholder="Type"
                                 value={item.material_type}
                                 onChange={(e) => handleItemChange(idx, 'material_type', e.target.value)}
-                                className="col-span-2 p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                className="col-span-1 p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                               />
+                              <div className="col-span-2 flex flex-col items-center">
+                                <div className="text-[10px] text-slate-400 mb-0.5">
+                                  {Number(item.planned_qty || 0).toFixed(3)} {item.uom || 'Kg'}
+                                </div>
+                                <div className="text-[10px] font-medium text-slate-600">
+                                  Design Qty
+                                </div>
+                              </div>
                               <div className="col-span-2 flex gap-1">
                                 <input
                                   type="number"
-                                  placeholder="Qty"
-                                  value={item.quantity || item.design_qty || 0}
+                                  placeholder="Required"
+                                  value={item.design_qty || 0}
                                   onChange={(e) => handleItemChange(idx, 'design_qty', parseFloat(e.target.value) || 0)}
                                   className="w-full p-2 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
                                 />
                                 <div className="p-2 bg-slate-50 border border-slate-200 rounded text-[10px] text-slate-500 flex items-center justify-center min-w-[40px]">
-                                  {item.uom || 'NOS'}
+                                  {item.uom || 'Kg'}
                                 </div>
                               </div>
                               <div className="col-span-1 flex justify-center pt-1.5">
@@ -1885,17 +1895,18 @@ const Quotations = () => {
                           <tr>
                             <th className="p-2  text-slate-600" style={{ width: '150px' }}>ITEM CODE / DRAWING NO</th>
                             <th className="p-2  text-slate-600">MATERIAL NAME</th>
-                            <th className="p-2  text-slate-600" style={{ width: '120px' }}>TYPE</th>
-                            <th className="p-2 text-center  text-slate-600" style={{ width: '80px' }}>DESIGN QTY</th>
-                            <th className="p-2 text-center  text-slate-600" style={{ width: '120px' }}>RATE (₹)</th>
-                            <th className="p-2 text-right  text-slate-600" style={{ width: '120px' }}>AMOUNT</th>
+                            <th className="p-2  text-slate-600" style={{ width: '100px' }}>TYPE</th>
+                            <th className="p-2 text-center  text-slate-600" style={{ width: '80px' }}>Design Qty</th>
+                            <th className="p-2 text-center  text-slate-600" style={{ width: '100px' }}>Required</th>
+                            <th className="p-2 text-center  text-slate-600" style={{ width: '100px' }}>RATE (₹)</th>
+                            <th className="p-2 text-right  text-slate-600" style={{ width: '100px' }}>AMOUNT</th>
                             <th className="p-2 text-center" style={{ width: '40px' }}></th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                           {recordData.items.length === 0 ? (
                             <tr>
-                              <td colSpan="7" className="px-3 py-8 text-center text-slate-400">
+                              <td colSpan="8" className="px-3 py-8 text-center text-slate-400">
                                 Select a project and vendor to load items, or add manually.
                               </td>
                             </tr>
@@ -1946,14 +1957,27 @@ const Quotations = () => {
                                     placeholder="Type..."
                                   />
                                 </td>
+                                <td className="p-2 text-center">
+                                  <div className="text-[10px] text-slate-400">
+                                    {Number(item.planned_qty || 0).toFixed(3)}
+                                  </div>
+                                  <div className="text-[9px] text-slate-500 font-medium uppercase">
+                                    Design Qty
+                                  </div>
+                                </td>
                                 <td className="p-2">
-                                  <input
-                                    type="number"
-                                    value={item.quantity || item.design_qty || 0}
-                                    onChange={(e) => handleRecordItemChange(idx, 'design_qty', parseFloat(e.target.value) || 0)}
-                                    className="w-full px-2 py-1 border border-transparent hover:border-slate-200 focus:border-blue-500 rounded outline-none transition-all text-center"
-                                    placeholder="0.00"
-                                  />
+                                  <div className="flex flex-col items-center gap-1">
+                                    <input
+                                      type="number"
+                                      value={item.design_qty || item.quantity || 0}
+                                      onChange={(e) => handleRecordItemChange(idx, 'design_qty', parseFloat(e.target.value) || 0)}
+                                      className="w-full px-2 py-1 border border-transparent hover:border-slate-200 focus:border-blue-500 rounded outline-none transition-all text-center font-bold text-indigo-600"
+                                      placeholder="0.000"
+                                    />
+                                    <div className="text-[9px] text-slate-400 uppercase">
+                                      {item.uom || 'Kg'}
+                                    </div>
+                                  </div>
                                 </td>
                                 <td className="p-2">
                                   <input
@@ -2173,7 +2197,7 @@ const Quotations = () => {
                     onClick={() => {
                       setEditFormData({
                         ...editFormData,
-                        items: [...editFormData.items, { drawing_no: '', material_name: '', material_type: '', design_qty: 0, quantity: 0, uom: 'NOS', unit_rate: 0 }]
+                        items: [...editFormData.items, { drawing_no: '', material_name: '', material_type: '', design_qty: 0, quantity: 0, planned_qty: 0, uom: 'NOS', unit_rate: 0 }]
                       });
                     }}
                     className="p-2  bg-blue-600 text-white text-xs rounded  hover:bg-blue-700"
@@ -2190,19 +2214,21 @@ const Quotations = () => {
                     <div className="grid grid-cols-12 gap-2 pb-2 border-b border-slate-100 text-xs   text-slate-500  ">
                       {activeTab === 'sent' ? (
                         <>
-                          <div className="col-span-3">Drawing No</div>
+                          <div className="col-span-2">Drawing No</div>
                           <div className="col-span-4">Material Name</div>
-                          <div className="col-span-2">Type</div>
+                          <div className="col-span-1">Type</div>
                           <div className="col-span-2 text-center">Design Qty</div>
+                          <div className="col-span-2 text-center">Required</div>
                           <div className="col-span-1"></div>
                         </>
                       ) : (
                         <>
                           <div className="col-span-2">Drawing No</div>
                           <div className="col-span-3">Material Name</div>
-                          <div className="col-span-2">Type</div>
-                          <div className="col-span-2 text-center">Design Qty</div>
-                          <div className="col-span-1 text-center">Rate (₹)</div>
+                          <div className="col-span-1">Type</div>
+                          <div className="col-span-1 text-center">Design Qty</div>
+                          <div className="col-span-1 text-center">Quoted Qty</div>
+                          <div className="col-span-2 text-center">Rate (₹)</div>
                           <div className="col-span-1 text-right">Amount</div>
                           <div className="col-span-1"></div>
                         </>
@@ -2222,7 +2248,7 @@ const Quotations = () => {
                                 newItems[idx].material_type = getCorrectMaterialType(e.target.value, newItems[idx].material_type);
                                 setEditFormData({...editFormData, items: newItems});
                               }}
-                              className="col-span-3 p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              className="col-span-2 p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
                             <div className="col-span-4 flex flex-col">
                               <input
@@ -2255,13 +2281,21 @@ const Quotations = () => {
                                 newItems[idx].material_type = e.target.value;
                                 setEditFormData({...editFormData, items: newItems});
                               }}
-                              className="col-span-2 p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              className="col-span-1 p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
+                            <div className="col-span-2 flex flex-col items-center">
+                                <div className="text-[10px] text-slate-400 mb-0.5">
+                                  {Number(item.planned_qty || 0).toFixed(3)} {item.uom || 'Kg'}
+                                </div>
+                                <div className="text-[10px] font-medium text-slate-600">
+                                  Design Qty
+                                </div>
+                              </div>
                             <div className="col-span-2 flex flex-col items-center">
                               <input
                                 type="number"
                                 placeholder="Qty"
-                                value={item.quantity || item.design_qty || 0}
+                                value={item.design_qty || 0}
                                 onChange={(e) => {
                                   const newItems = [...editFormData.items];
                                   const val = parseFloat(e.target.value) || 0;
@@ -2271,7 +2305,7 @@ const Quotations = () => {
                                 }}
                                 className="w-full p-2 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
                               />
-                              <span className="text-[10px] text-slate-400 mt-0.5 uppercase">{item.uom || 'NOS'}</span>
+                              <span className="text-[10px] text-slate-400 mt-0.5 uppercase">{item.uom || 'Kg'}</span>
                             </div>
                           </>
                         ) : (
@@ -2319,9 +2353,17 @@ const Quotations = () => {
                                 newItems[idx].material_type = e.target.value;
                                 setEditFormData({...editFormData, items: newItems});
                               }}
-                              className="col-span-2 p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              className="col-span-1 p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
-                            <div className="col-span-2 flex flex-col items-center">
+                            <div className="col-span-1 flex flex-col items-center">
+                              <div className="text-[10px] text-slate-400">
+                                {Number(item.planned_qty || 0).toFixed(3)}
+                              </div>
+                              <div className="text-[9px] text-slate-400 uppercase">
+                                {item.uom || 'Kg'}
+                              </div>
+                            </div>
+                            <div className="col-span-1 flex flex-col items-center">
                               <input
                                 type="number"
                                 placeholder="Qty"
@@ -2335,7 +2377,6 @@ const Quotations = () => {
                                 }}
                                 className="w-full p-2 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
                               />
-                              <span className="text-[10px] text-slate-400 mt-0.5 uppercase">{item.uom || 'NOS'}</span>
                             </div>
                             <input
                               type="number"
@@ -2346,7 +2387,7 @@ const Quotations = () => {
                                 newItems[idx].unit_rate = parseFloat(e.target.value) || 0;
                                 setEditFormData({...editFormData, items: newItems});
                               }}
-                              className="col-span-1 p-2 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              className="col-span-2 p-2 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
                             <div className="col-span-1 text-right text-xs  text-slate-700 pt-2">
                               {formatCurrency((item.design_qty || item.quantity || 0) * (item.unit_rate || 0))}
@@ -2403,6 +2444,7 @@ const Quotations = () => {
                 <tr className="bg-slate-50">
                   <th className="p-2 border text-left text-xs  text-slate-600 sticky left-0 bg-slate-50 z-10">Item / Drawing No.</th>
                   <th className="p-2 border text-center text-xs  text-slate-600 bg-slate-50">Design Qty</th>
+                  <th className="p-2 border text-center text-xs  text-slate-600 bg-slate-50">Required</th>
                   {compareData.map((q, idx) => (
                     <th key={idx} className="p-2 border text-center text-xs  text-slate-800 bg-indigo-50/50" colSpan="2">
                       <div className="flex flex-col gap-1">
@@ -2435,8 +2477,11 @@ const Quotations = () => {
                           <span className="text-xs text-slate-400 font-normal">{firstItem?.material_name}</span>
                         </div>
                       </td>
-                      <td className="p-2 border text-center text-slate-600 font-medium">
-                        {Number(firstItem?.quantity || firstItem?.design_qty || 0).toFixed(3)}
+                      <td className="p-2 border text-center text-slate-400">
+                        {Number(firstItem?.planned_qty || firstItem?.design_qty || 0).toFixed(3)}
+                      </td>
+                      <td className="p-2 border text-center text-slate-800 font-medium">
+                        {Number(firstItem?.quantity || 0).toFixed(3)}
                       </td>
                       {compareData.map((q, qIdx) => {
                         const item = (q.items || []).find(it => (it.item_code || it.drawing_no) === itemCode);
@@ -2446,7 +2491,7 @@ const Quotations = () => {
                               {item ? formatCurrency(item.unit_rate) : '—'}
                             </td>
                             <td className={`p-2 border text-right   ${item ? 'text-indigo-600 ' : 'text-slate-300'}`}>
-                              {item ? formatCurrency(item.amount || (item.unit_rate * (item.design_qty || item.quantity))) : '—'}
+                              {item ? formatCurrency(item.amount || (item.unit_rate * (item.quantity || 0))) : '—'}
                             </td>
                           </React.Fragment>
                         );
@@ -2457,7 +2502,7 @@ const Quotations = () => {
               </tbody>
               <tfoot>
                 <tr className="bg-slate-50 ">
-                  <td className="p-2 border text-right sticky left-0 bg-slate-50 z-10" colSpan="2">GRAND TOTAL</td>
+                  <td className="p-2 border text-right sticky left-0 bg-slate-50 z-10" colSpan="3">GRAND TOTAL</td>
                   {compareData.map((q, idx) => (
                     <td key={idx} className="p-2 border text-right text-indigo-700 text-sm" colSpan="2">
                       {formatCurrency(q.total_amount)}
@@ -2465,7 +2510,7 @@ const Quotations = () => {
                   ))}
                 </tr>
                 <tr>
-                  <td className="p-2 border text-right sticky left-0 bg-white z-10" colSpan="2">Actions</td>
+                  <td className="p-2 border text-right sticky left-0 bg-white z-10" colSpan="3">Actions</td>
                   {compareData.map((q, idx) => (
                     <td key={idx} className="p-2 border text-center" colSpan="2">
                       <button
