@@ -53,7 +53,7 @@ const ItemsMaster = () => {
   const [activeForm, setActiveForm] = useState('group'); // 'group', 'shape', 'material'
   const [groupFormData, setGroupFormData] = useState({ name: '', group_type: '', status: 'ACTIVE' });
   const [shapeFormData, setShapeFormData] = useState({ name: '', status: 'ACTIVE' });
-  const [materialFormData, setMaterialFormData] = useState({ name: '', density: '', status: 'ACTIVE' });
+  const [materialFormData, setMaterialFormData] = useState({ name: '', density: '', density_unit: 'g/cm³', status: 'ACTIVE' });
   
   const [isEditingGroup, setIsEditingGroup] = useState(false);
   const [editingGroupId, setEditingGroupId] = useState(null);
@@ -489,7 +489,7 @@ const ItemsMaster = () => {
       
       successToast(isEditingMaterial ? 'Material updated' : 'Material added');
       fetchMaterials();
-      setMaterialFormData({ name: '', density: '', status: 'ACTIVE' });
+      setMaterialFormData({ name: '', density: '', density_unit: 'g/cm³', status: 'ACTIVE' });
       setIsEditingMaterial(false);
       setEditingMaterialId(null);
     } catch (error) {
@@ -721,7 +721,7 @@ const ItemsMaster = () => {
 
   const materialColumns = [
     { label: 'Material Name', key: 'name', sortable: true, className: 'font-medium' },
-    { label: 'Density', key: 'density', sortable: true, render: (val) => `${val} g/cm³` },
+    { label: 'Density', key: 'density', sortable: true, render: (val, row) => `${parseFloat(val).toFixed(4)} ${row.density_unit || 'g/cm³'}` },
     { label: 'Status', key: 'status', render: (val) => <StatusBadge status={val || 'ACTIVE'} /> },
     { 
       label: 'Actions', 
@@ -729,7 +729,7 @@ const ItemsMaster = () => {
       className: 'text-right',
       render: (_, row) => (
         <div className="flex justify-end gap-2">
-          <button onClick={() => { setActiveForm('material'); setMaterialFormData({ name: row.name, density: row.density, status: row.status || 'ACTIVE' }); setIsEditingMaterial(true); setEditingMaterialId(row.id); }} className="p-1 text-amber-500 hover:bg-amber-50 rounded"><Edit2 size={14} /></button>
+          <button onClick={() => { setActiveForm('material'); setMaterialFormData({ name: row.name, density: row.density, density_unit: row.density_unit || 'g/cm³', status: row.status || 'ACTIVE' }); setIsEditingMaterial(true); setEditingMaterialId(row.id); }} className="p-1 text-amber-500 hover:bg-amber-50 rounded"><Edit2 size={14} /></button>
           <button onClick={() => handleDeleteMaterial(row.id)} className="p-1 text-rose-500 hover:bg-rose-50 rounded"><Trash2 size={14} /></button>
         </div>
       )
@@ -987,7 +987,7 @@ const ItemsMaster = () => {
                       <option value="">Select Material</option>
                       {materials.map(m => (
                         <option key={m.id} value={m.id}>
-                          {m.name} {m.density ? `[Density = ${parseFloat(m.density).toFixed(4)} g/cm³]` : ''}
+                          {m.name} {m.density ? `[Density = ${parseFloat(m.density).toFixed(4)} ${m.density_unit || 'g/cm³'}]` : ''}
                         </option>
                       ))}
                     </select>
@@ -1265,15 +1265,26 @@ const ItemsMaster = () => {
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-medium text-slate-500">Density *</label>
-                    <input 
-                      type="number"
-                      step="0.0001"
-                      className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                      placeholder="e.g. 2.7"
-                      value={materialFormData.density}
-                      onChange={(e) => setMaterialFormData({...materialFormData, density: e.target.value})}
-                      required
-                    />
+                    <div className="flex gap-2">
+                      <input 
+                        type="number"
+                        step="0.0001"
+                        className="flex-1 p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                        placeholder="e.g. 2.7"
+                        value={materialFormData.density}
+                        onChange={(e) => setMaterialFormData({...materialFormData, density: e.target.value})}
+                        required
+                      />
+                      <select
+                        className="w-24 p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                        value={materialFormData.density_unit}
+                        onChange={(e) => setMaterialFormData({...materialFormData, density_unit: e.target.value})}
+                        required
+                      >
+                        <option value="g/cm³">g/cm³</option>
+                        <option value="g/mL">g/mL</option>
+                      </select>
+                    </div>
                   </div>
                   <div className="flex gap-2 pt-2">
                     <button 
@@ -1286,7 +1297,7 @@ const ItemsMaster = () => {
                     {isEditingMaterial && (
                       <button 
                         type="button"
-                        onClick={() => { setIsEditingMaterial(false); setMaterialFormData({ name: '', density: '', status: 'ACTIVE' }); }}
+                        onClick={() => { setIsEditingMaterial(false); setMaterialFormData({ name: '', density: '', density_unit: 'g/cm³', status: 'ACTIVE' }); }}
                         className="px-3 p-2 bg-white border border-slate-200 text-slate-500 rounded text-xs hover:bg-slate-50 transition-all"
                       >
                         Cancel

@@ -13,16 +13,16 @@ class MaterialService {
 
   async create(data) {
     const [result] = await pool.query(
-      'INSERT INTO materials (name, density, status) VALUES (?, ?, ?)',
-      [data.name, data.density, data.status || 'ACTIVE']
+      'INSERT INTO materials (name, density, density_unit, status) VALUES (?, ?, ?, ?)',
+      [data.name, data.density, data.density_unit || 'g/cm³', data.status || 'ACTIVE']
     );
     return { id: result.insertId, ...data };
   }
 
   async update(id, data) {
     await pool.query(
-      'UPDATE materials SET name = ?, density = ?, status = ? WHERE id = ?',
-      [data.name, data.density, data.status, id]
+      'UPDATE materials SET name = ?, density = ?, density_unit = ?, status = ? WHERE id = ?',
+      [data.name, data.density, data.density_unit || 'g/cm³', data.status, id]
     );
     return { id, ...data };
   }

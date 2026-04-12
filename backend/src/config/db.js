@@ -2387,8 +2387,28 @@ const ensureProcurementRfqTables = async () => {
   }
 };
 
+const ensureMaterialColumns = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    const [columns] = await connection.query('SHOW COLUMNS FROM materials');
+    const existing = new Set(columns.map(column => column.Field));
+    if (!existing.has('density_unit')) {
+      await connection.query("ALTER TABLE materials ADD COLUMN density_unit VARCHAR(20) DEFAULT 'g/cm³' AFTER density");
+      console.log('Material density_unit column synchronized');
+    }
+  } catch (error) {
+    if (error.code !== 'ER_NO_SUCH_TABLE') {
+      console.error('Material column sync failed', error.message);
+    }
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
 const bootstrapDatabase = async () => {
   await ensureDatabase();
+  await ensureMaterialColumns();
   await ensureSchema();
   await ensureSeed();
   await ensureItemGroupsTable();
