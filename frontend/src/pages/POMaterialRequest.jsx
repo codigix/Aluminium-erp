@@ -923,7 +923,7 @@ const POMaterialRequest = () => {
              };
 
              const allAvailable = filteredItems.length > 0 && filteredItems.every(item => {
-               const required = parseFloat(item.quantity || item.design_qty || 0);
+               const required = parseFloat(item.quantity || 0);
                const available = parseFloat(item.total_stock || 0);
                return (available + 0.0001) >= required;
              });
@@ -1008,10 +1008,11 @@ const POMaterialRequest = () => {
                 <table className="w-full">
                   <thead>
                     <tr className="bg-slate-50/50 border-b border-slate-100">
-                      <th className="p-2  text-lefttext-xs   text-slate-400  ">Item Details</th>
-                      <th className="p-2  text-centertext-xs   text-slate-400  ">Design Qty</th>
-                      <th className="p-2  text-centertext-xs   text-slate-400  ">Stock Level</th>
-                      <th className="p-2  text-righttext-xs   text-slate-400  ">Status</th>
+                      <th className="p-2  text-left text-xs   text-slate-400  ">Item Details</th>
+                      <th className="p-2  text-center text-xs   text-slate-400  ">Design Qty</th>
+                      <th className="p-2  text-center text-xs   text-slate-400  ">Required</th>
+                      <th className="p-2  text-center text-xs   text-slate-400  ">Stock Level</th>
+                      <th className="p-2  text-right text-xs   text-slate-400  ">Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
@@ -1039,13 +1040,24 @@ const POMaterialRequest = () => {
                             </div>
                           </td>
                           <td className="px-6 py-5 text-center">
-                            <span className="text-xs font-semibold text-slate-700">
-                              {Number(item.quantity || item.design_qty || 0).toFixed(3)} {item.uom}
-                            </span>
+                            <div className="flex flex-col items-center">
+                              <span className="text-xs font-medium text-slate-800">
+                                {Number(item.design_qty || 0).toFixed(3)}
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-medium">{item.uom}</span>
+                            </div>
                           </td>
                           <td className="px-6 py-5 text-center">
                             <div className="flex flex-col items-center">
-                              <p className={`text-sm ${(parseFloat(item.total_stock || 0) + 0.0001) >= parseFloat(item.quantity || item.design_qty || 0) ? 'text-slate-500' : 'text-slate-400 font-bold text-rose-500'}`}>
+                              <span className="text-xs font-medium text-slate-800">
+                                {Number(item.quantity || 0).toFixed(3)}
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-medium">{item.uom}</span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-5 text-center">
+                            <div className="flex flex-col items-center">
+                              <p className={`text-sm ${(parseFloat(item.total_stock || 0) + 0.0001) >= parseFloat(item.quantity || 0) ? 'text-slate-500' : 'text-slate-400 font-bold text-rose-500'}`}>
                                 {isWeightBased(item.uom) 
                                   ? Number(item.total_stock || 0).toFixed(3) 
                                   : Number(item.total_stock || 0).toFixed(0)} {item.uom}
@@ -1066,11 +1078,11 @@ const POMaterialRequest = () => {
                           <td className="px-6 py-5">
                             <div className="flex flex-col items-end gap-1.5">
                               <span className={`px-2.5 py-1 rounded  text-xs   border  ${
-                                (parseFloat(item.total_stock || 0) + 0.0001) >= parseFloat(item.quantity || item.design_qty || 0) 
+                                (parseFloat(item.total_stock || 0) + 0.0001) >= parseFloat(item.quantity || 0) 
                                   ? 'bg-emerald-50 text-emerald-600 border-emerald-100' 
                                   : 'bg-rose-50 text-rose-600 border-rose-100 font-bold'
                               }`}>
-                                {(parseFloat(item.total_stock || 0) + 0.0001) >= parseFloat(item.quantity || item.design_qty || 0) ? 'in stock' : 'out of stock'}
+                                {(parseFloat(item.total_stock || 0) + 0.0001) >= parseFloat(item.quantity || 0) ? 'in stock' : 'out of stock'}
                               </span>
                               <span className="px-2.5 py-1 rounded  bg-slate-50 text-slate-600 text-xs   border border-slate-100 ">
                                 {selectedRequest?.status || 'Draft'}
@@ -1294,8 +1306,8 @@ const POMaterialRequest = () => {
                 const type = (item.material_type || '').toUpperCase();
                 return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
               }) || [];
-              const allAvailable = filteredItems.length > 0 && filteredItems.every(item => parseFloat(item.total_stock || 0) >= parseFloat(item.quantity || item.design_qty || 0));
-              const hasInsufficientStock = filteredItems.some(item => parseFloat(item.total_stock || 0) < parseFloat(item.quantity || item.design_qty || 0));
+              const allAvailable = filteredItems.length > 0 && filteredItems.every(item => parseFloat(item.total_stock || 0) >= parseFloat(item.quantity || 0));
+              const hasInsufficientStock = filteredItems.some(item => parseFloat(item.total_stock || 0) < parseFloat(item.quantity || 0));
               
               return (
                 <>
