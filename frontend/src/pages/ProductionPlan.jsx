@@ -2132,6 +2132,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
               <thead>
                 <tr className="text-left border-b border-slate-50">
                   <th className="pb-3 text-xs  text-slate-400  ">Component Intelligence</th>
+                  <th className="pb-3 text-xs  text-slate-400   text-center">Design Qty</th>
                   <th className="pb-3 text-xs  text-slate-400   text-center">Required</th>
                   <th className="pb-3 text-xs  text-slate-400   text-center">Inventory</th>
                   <th className="pb-3 text-xs  text-slate-400   text-right">Status</th>
@@ -2151,6 +2152,14 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                         {item.is_manual && (
                           <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-500 text-[8px]   rounded">Manual</span>
                         )}
+                      </div>
+                    </td>
+                    <td className="py-4 text-center">
+                      <div className="flex flex-col items-center">
+                        <span className="text-xs font-medium text-slate-800">
+                          {isWeightBased(item.uom) ? Number(item.design_qty || 0).toFixed(3) : Number(item.design_qty || 0).toFixed(0)}
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-medium">{item.uom}</span>
                       </div>
                     </td>
                     <td className="py-4 text-center">
@@ -2231,6 +2240,9 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                           })}
                         </div>
                       )}
+                    </td>
+                    <td className="py-2 px-1 text-center">
+                      <div className="text-xs text-slate-400 italic">--</div>
                     </td>
                     <td className="py-2 px-1 text-center">
                       <input
