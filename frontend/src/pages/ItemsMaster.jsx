@@ -993,12 +993,11 @@ const ItemsMaster = () => {
                     </select>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs text-slate-500">Select Shape Type *</label>
+                    <label className="text-xs text-slate-500">Select Shape Type</label>
                     <select 
                       className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                       value={itemFormData.shapeId}
                       onChange={(e) => setItemFormData({...itemFormData, shapeId: e.target.value})}
-                      required
                     >
                       <option value="">Select Shape</option>
                       {shapes.map(s => (
