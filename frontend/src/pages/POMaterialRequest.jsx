@@ -1325,13 +1325,15 @@ const POMaterialRequest = () => {
                 const type = (item.material_type || '').toUpperCase();
                 return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
               }) || [];
-              const allAvailable = filteredItems.length > 0 && filteredItems.every(item => parseFloat(item.total_stock || 0) >= parseFloat(item.quantity || 0));
-              const hasInsufficientStock = filteredItems.some(item => parseFloat(item.total_stock || 0) < parseFloat(item.quantity || 0));
+              const allAvailable = filteredItems.length > 0 && filteredItems.every(item => (parseFloat(item.total_stock || 0) + 0.0001) >= parseFloat(item.quantity || 0));
+              const hasInsufficientStock = filteredItems.some(item => (parseFloat(item.total_stock || 0) + 0.0001) < parseFloat(item.quantity || 0));
+              const currentStatus = (selectedRequest?.status || '').toUpperCase().trim();
+              const isFinalStatus = ['COMPLETED', 'FULFILLED', 'CANCELLED', 'REJECTED'].includes(currentStatus);
               
               return (
                 <>
-                  {hasInsufficientStock && !selectedRequest?.linked_po_id && 
-                    !['PROCESSING', 'PO_CREATED', 'COMPLETED'].includes(selectedRequest?.status?.toUpperCase()) && (
+                  {hasInsufficientStock && !selectedRequest?.linked_po_id && !isFinalStatus && 
+                    !['PROCESSING', 'PO_CREATED'].includes(currentStatus) && (
                     <button 
                       onClick={() => handleRequestQuote(selectedRequest)}
                       className="p-2  bg-indigo-500 text-white rounded  text-xs  hover:bg-indigo-600 flex items-center gap-2 shadow-xl shadow-indigo-200/50 transition-all hover:-translate-y-0.5 active:translate-y-0"
@@ -1340,7 +1342,7 @@ const POMaterialRequest = () => {
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
                     </button>
                   )}
-                  {allAvailable && selectedRequest?.status?.toUpperCase() !== 'COMPLETED' && (
+                  {allAvailable && !isFinalStatus && (
                     <button 
                       onClick={() => handleReleaseMaterial(selectedRequest?.id)}
                       className="p-2  bg-emerald-500 text-white rounded  text-xs  hover:bg-emerald-600 flex items-center gap-2 shadow-xl shadow-emerald-200/50 transition-all hover:-translate-y-0.5 active:translate-y-0"
