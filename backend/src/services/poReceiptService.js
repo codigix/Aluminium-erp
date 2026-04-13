@@ -70,7 +70,7 @@ const getPOReceiptById = async (receiptId) => {
 
   const [items] = await pool.query(
     `SELECT pri.*, poi.item_code, poi.description, poi.material_name, poi.material_type, poi.unit, 
-            poi.design_qty, poi.quantity as expected_quantity,
+            poi.design_qty, poi.planned_qty, poi.quantity as expected_quantity,
             poi.unit_rate, poi.cgst_amount, poi.sgst_amount, poi.total_amount as po_item_total,
             COALESCE(NULLIF(pri.length, 0), poi.length, 0) as length,
             COALESCE(NULLIF(pri.width, 0), poi.width, 0) as width,
@@ -188,7 +188,7 @@ const createPOReceipt = async (poId, receiptDate, receivedQuantity, notes, items
           [
             grnId, 
             item.id, 
-            item.design_qty || item.quantity || 0, 
+            item.quantity || item.required_qty || item.design_qty || 0, 
             receivedQty, 
             receivedQty, 
             'PENDING',

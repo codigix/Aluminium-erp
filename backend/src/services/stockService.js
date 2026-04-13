@@ -444,6 +444,9 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
     // Update the ledger entry with the correct global balance_after
     await useConnection.execute('UPDATE stock_ledger SET balance_after = ? WHERE id = ?', [globalBalance, ledgerId]);
 
+    // Ensure we have a warehouse string for the query
+    const whName = warehouse || '';
+
     // Use Upsert (INSERT ... ON DUPLICATE KEY UPDATE) for reliability
     // This handles both new warehouse records and updates to existing ones
     await useConnection.execute(`
@@ -451,20 +454,25 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
       (item_code, material_name, material_type, warehouse, unit, current_balance, valuation_rate, item_description, last_updated)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
       ON DUPLICATE KEY UPDATE 
-        current_balance = VALUES(current_balance),
-        material_name = COALESCE(VALUES(material_name), material_name),
-        material_type = COALESCE(VALUES(material_type), material_type),
-        valuation_rate = CASE WHEN VALUES(valuation_rate) > 0 THEN VALUES(valuation_rate) ELSE valuation_rate END,
+        current_balance = ?,
+        material_name = COALESCE(?, material_name),
+        material_type = COALESCE(?, material_type),
+        valuation_rate = CASE WHEN ? > 0 THEN ? ELSE valuation_rate END,
         last_updated = CURRENT_TIMESTAMP
     `, [
       itemCode, 
       matName, 
       matType, 
-      warehouse, 
+      whName, 
       options.unit || existingBalance?.unit || 'NOS', 
-      warehouseBalance, // Use warehouse-specific balance
+      warehouseBalance,
       valuationRate,
-      options.remarks || options.description || existingBalance?.item_description || null
+      options.remarks || options.description || existingBalance?.item_description || null,
+      warehouseBalance, // for update
+      matName, // for update
+      matType, // for update
+      valuationRate, // for check
+      valuationRate // for update
     ]);
 
     if (shouldRelease) {

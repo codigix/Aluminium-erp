@@ -188,8 +188,8 @@ const materialRequestController = {
 
             const sourceWarehouse = stockRows.length > 0 ? stockRows[0].warehouse : (mr.source_warehouse || 'Main');
 
-            // Prioritize design_qty as requested by user
-            const releaseQty = item.design_qty || item.quantity;
+            // Use quantity (the required amount) for stock release
+            const releaseQty = item.quantity || item.design_qty;
 
             await stockService.addStockLedgerEntry(
               item.item_code,

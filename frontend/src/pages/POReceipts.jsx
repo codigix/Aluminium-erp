@@ -298,9 +298,8 @@ const POReceipts = () => {
               return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
             })
             .map(item => {
-              const dQty = parseFloat(item.design_qty || 0);
-              const qQty = parseFloat(item.quantity || 0);
-            const finalQty = dQty > 0 ? dQty : qQty;
+            const dQty = parseFloat(item.planned_qty || item.design_qty || 0);
+            const qQty = parseFloat(item.quantity || 0);
             
             return {
               ...item,
@@ -308,10 +307,11 @@ const POReceipts = () => {
               material_name: item.material_name || item.description,
               description: item.description || '',
               design_qty: dQty,
+              required_qty: qQty,
               quantity: qQty,
-              received_qty: finalQty,
+              received_qty: qQty,
               rate: parseFloat(item.unit_rate || item.rate || 0),
-              amount: finalQty * parseFloat(item.unit_rate || item.rate || 0),
+              amount: qQty * parseFloat(item.unit_rate || item.rate || 0),
               warehouse: warehouses[0]?.warehouse_code || 'main',
               unit: item.unit || 'NOS'
             };
@@ -907,6 +907,7 @@ const POReceipts = () => {
                     <tr className="text-xs  text-slate-400   border-b border-slate-200">
                       <th className="p-2 ">Item</th>
                       <th className="p-2  text-center">Design Qty</th>
+                      <th className="p-2  text-center">Required</th>
                       <th className="p-2  text-right">Received Qty</th>
                     </tr>
                   </thead>
@@ -928,7 +929,13 @@ const POReceipts = () => {
                         </td>
                         <td className="p-2  text-center  text-slate-500 text-xs">
                           <div className="flex flex-col items-center">
-                            <span>{parseFloat(item.design_qty || item.expected_quantity || 0).toFixed(3)}</span>
+                            <span>{parseFloat(item.planned_qty || item.design_qty || 0).toFixed(3)}</span>
+                            <span className="text-[10px] text-slate-400 uppercase tracking-wider">{item.unit || 'NOS'}</span>
+                          </div>
+                        </td>
+                        <td className="p-2  text-center  text-slate-500 text-xs">
+                          <div className="flex flex-col items-center">
+                            <span className="font-medium text-blue-600">{parseFloat(item.required_qty || item.expected_quantity || item.quantity || 0).toFixed(3)}</span>
                             <span className="text-[10px] text-slate-400 uppercase tracking-wider">{item.unit || 'NOS'}</span>
                           </div>
                         </td>
@@ -1084,6 +1091,7 @@ const POReceipts = () => {
                       <th className="p-2 ">Item Details</th>
                       <th className="p-2 ">Warehouse</th>
                       <th className="p-2  text-center">Design Qty</th>
+                      <th className="p-2  text-center">Required</th>
                       <th className="p-2  text-center">Receiving Qty</th>
                       <th className="p-2  text-center">Rate</th>
                       <th className="p-2  text-center">Amount</th>
@@ -1156,7 +1164,13 @@ const POReceipts = () => {
                         </td>
                         <td className="p-2  text-center  text-slate-500 text-xs">
                           <div className="flex flex-col items-center">
-                            <span>{Number(item.design_qty > 0 ? item.design_qty : item.quantity).toFixed(3)}</span>
+                            <span className="font-medium text-slate-700">{Number(item.design_qty || 0).toFixed(3)}</span>
+                            <span className="text-[10px] text-slate-400 uppercase tracking-wider">{item.unit || 'NOS'}</span>
+                          </div>
+                        </td>
+                        <td className="p-2  text-center  text-slate-500 text-xs">
+                          <div className="flex flex-col items-center">
+                            <span className="font-medium text-blue-600">{Number(item.required_qty || item.quantity || 0).toFixed(3)}</span>
                             <span className="text-[10px] text-slate-400 uppercase tracking-wider">{item.unit || 'NOS'}</span>
                           </div>
                         </td>
