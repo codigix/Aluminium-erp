@@ -32,6 +32,10 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
   const [searchQuery, setSearchQuery] = useState('');
   
   const [mrModalOpen, setMrModalOpen] = useState(false);
+  const [configModalOpen, setConfigModalOpen] = useState(false);
+  const [selectedPlanConfig, setSelectedPlanConfig] = useState(null);
+  const [activeConfigTab, setActiveConfigTab] = useState('ops');
+  const [initiatingProduction, setInitiatingProduction] = useState(false);
   const [mrItems, setMrItems] = useState([]);
   const [mrPlanDetails, setMrPlanDetails] = useState(null);
   const [transmittingMr, setTransmittingMr] = useState(false);
@@ -225,6 +229,29 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
     );
   };
 
+  const handleOpenConfig = async (plan) => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/production-plans/${plan.id}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setSelectedPlanConfig({ ...data, wo_count: plan.wo_count });
+        setConfigModalOpen(true);
+        setActiveConfigTab('ops');
+      } else {
+        errorToast('Failed to fetch plan configuration');
+      }
+    } catch (error) {
+      console.error('Error fetching config:', error);
+      errorToast('Failed to load configuration details');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleCreateWorkOrders = async (planId) => {
     try {
       const result = await Swal.fire({
@@ -239,6 +266,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
       });
 
       if (result.isConfirmed) {
+        setInitiatingProduction(true);
         const token = localStorage.getItem('authToken');
         const response = await fetch(`${API_BASE}/work-orders/create-from-plan/${planId}`, {
           method: 'POST',
@@ -248,7 +276,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
         if (response.ok) {
           const data = await response.json();
           successToast(data.message || 'Work orders created successfully');
-          
+          setConfigModalOpen(false);
           // Navigate to the work order list
           navigate('/work-order');
         } else {
@@ -259,6 +287,8 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
     } catch (error) {
       console.error('Error creating work orders:', error);
       errorToast('An unexpected error occurred');
+    } finally {
+      setInitiatingProduction(false);
     }
   };
 
@@ -2009,7 +2039,11 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                         <button className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all" title="Analytics">
                           <BarChart2 className="w-4 h-4" />
                         </button>
-                        <button className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all" title="Settings">
+                        <button 
+                          onClick={() => handleOpenConfig(plan)}
+                          className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all" 
+                          title="Settings"
+                        >
                           <Settings className="w-4 h-4" />
                         </button>
                         <button 
@@ -2321,6 +2355,182 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                 )}
               </button>
             )}
+          </div>
+        </div>
+      </Modal>
+
+      {/* Configure Work Order Modal */}
+      <Modal
+        isOpen={configModalOpen}
+        onClose={() => !initiatingProduction && setConfigModalOpen(false)}
+        title={
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-indigo-50 text-indigo-600 rounded flex items-center justify-center">
+              <Zap className="w-4 h-4" />
+            </div>
+            <div>
+              <h2 className="text-lg text-slate-800 tracking-tight font-bold">Configure Work Order</h2>
+              <div className="flex items-center gap-1 text-xs text-indigo-500 font-bold uppercase tracking-wider">
+                <Activity className="w-3 h-3" />
+                Strategy Implementation Phase
+              </div>
+            </div>
+          </div>
+        }
+        size="5xl"
+      >
+        <div className="space-y-6">
+          {/* Header Info Cards */}
+          <div className="grid grid-cols-4 gap-4">
+            <div className="p-3 bg-slate-50/50 rounded-xl border border-slate-100">
+              <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">Item Code</label>
+              <div className="text-sm font-bold text-slate-800 truncate">{selectedPlanConfig?.item_code || '---'}</div>
+            </div>
+            <div className="p-3 bg-slate-50/50 rounded-xl border border-slate-100">
+              <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">BOM Reference</label>
+              <div className="text-sm font-bold text-slate-800 truncate">{selectedPlanConfig?.bom_no || '---'}</div>
+            </div>
+            <div className="p-3 bg-slate-50/50 rounded-xl border border-slate-100">
+              <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">Target Qty</label>
+              <div className="text-sm font-bold text-slate-800">{selectedPlanConfig?.target_qty || 0} Units</div>
+            </div>
+            <div className="p-3 bg-slate-50/50 rounded-xl border border-slate-100">
+              <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">Priority</label>
+              <div className="flex items-center gap-1.5">
+                <div className="w-1.5 h-1.5 bg-amber-500 rounded-full" />
+                <span className="text-xs font-bold text-amber-600 uppercase">Medium</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Configuration Tabs */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-8 border-b border-slate-100">
+              <button 
+                onClick={() => setActiveConfigTab('ops')}
+                className={`pb-3 text-xs font-bold uppercase tracking-wider transition-all relative ${activeConfigTab === 'ops' ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
+              >
+                Operational Sequence ({selectedPlanConfig?.operations?.length || 0})
+                {activeConfigTab === 'ops' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 rounded-full" />}
+              </button>
+              <button 
+                onClick={() => setActiveConfigTab('mats')}
+                className={`pb-3 text-xs font-bold uppercase tracking-wider transition-all relative ${activeConfigTab === 'mats' ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
+              >
+                Resource Allocation ({selectedPlanConfig?.materials?.length || 0})
+                {activeConfigTab === 'mats' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 rounded-full" />}
+              </button>
+            </div>
+
+            <div className="min-h-[300px] max-h-[450px] overflow-y-auto custom-scrollbar">
+              {activeConfigTab === 'ops' ? (
+                <table className="w-full text-left text-xs">
+                  <thead className="sticky top-0 bg-white z-10 border-b border-slate-100">
+                    <tr>
+                      <th className="py-3 px-2 font-bold text-slate-400 uppercase tracking-wider">Item / Operation</th>
+                      <th className="py-3 px-2 font-bold text-slate-400 uppercase tracking-wider">Workstation</th>
+                      <th className="py-3 px-2 font-bold text-slate-400 uppercase tracking-wider text-right">Time (M/U)</th>
+                      <th className="py-3 px-2 font-bold text-slate-400 uppercase tracking-wider text-right text-indigo-600">Planned (Hrs)</th>
+                      <th className="py-3 px-2 font-bold text-slate-400 uppercase tracking-wider text-right">Rate/Hr</th>
+                      <th className="py-3 px-2 font-bold text-slate-400 uppercase tracking-wider text-right text-emerald-600">Total Cost</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50 font-medium">
+                    {selectedPlanConfig?.operations?.length > 0 ? (
+                      selectedPlanConfig.operations.map((op, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="py-4 px-2">
+                            <div className="flex items-center gap-2">
+                              <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full" />
+                              <span className="text-slate-700 font-bold">{op.operation_name}</span>
+                            </div>
+                          </td>
+                          <td className="py-4 px-2 text-slate-500">{op.workstation || 'Unassigned'}</td>
+                          <td className="py-4 px-2 text-right text-slate-400">{(op.base_time * 60).toFixed(2)}</td>
+                          <td className="py-4 px-2 text-right font-bold text-indigo-600">{(op.base_time * (selectedPlanConfig.target_qty || 1)).toFixed(2)}</td>
+                          <td className="py-4 px-2 text-right text-slate-400">₹0</td>
+                          <td className="py-4 px-2 text-right font-bold text-emerald-600">₹0</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan="6" className="py-12 text-center text-slate-400 italic">No manufacturing operations defined</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              ) : (
+                <table className="w-full text-left text-xs">
+                  <thead className="sticky top-0 bg-white z-10 border-b border-slate-100">
+                    <tr>
+                      <th className="py-3 px-2 font-bold text-slate-400 uppercase tracking-wider">Component</th>
+                      <th className="py-3 px-2 font-bold text-slate-400 uppercase tracking-wider text-right">Required</th>
+                      <th className="py-3 px-2 font-bold text-slate-400 uppercase tracking-wider text-right">Available</th>
+                      <th className="py-3 px-2 font-bold text-slate-400 uppercase tracking-wider text-center">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50 font-medium">
+                    {selectedPlanConfig?.materials?.length > 0 ? (
+                      selectedPlanConfig.materials.map((mat, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="py-4 px-2">
+                            <div className="font-bold text-slate-700">{mat.item_code}</div>
+                            <div className="text-[10px] text-slate-400 uppercase tracking-tight mt-0.5">{mat.material_name}</div>
+                          </td>
+                          <td className="py-4 px-2 text-right font-bold text-slate-900">{mat.required_qty} <span className="text-slate-400 font-normal">{mat.uom}</span></td>
+                          <td className="py-4 px-2 text-right font-bold text-slate-500">0.00 <span className="text-slate-400 font-normal">{mat.uom}</span></td>
+                          <td className="py-4 px-2 text-center">
+                            <div className="w-5 h-5 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mx-auto border border-rose-100">
+                              <AlertCircle className="w-3 h-3" />
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan="4" className="py-12 text-center text-slate-400 italic">No material allocations defined</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+
+          {/* Footer Actions */}
+          <div className="flex items-center justify-between pt-6 border-t border-slate-100">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-full border border-emerald-100 shadow-sm">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              <span className="text-[10px] font-bold uppercase tracking-wider">All Stocks Verified</span>
+            </div>
+            
+            <div className="flex items-center gap-3">
+              <button 
+                onClick={() => setConfigModalOpen(false)}
+                className="px-5 py-2.5 text-xs font-bold text-slate-400 hover:text-slate-600 transition-colors uppercase tracking-wider"
+              >
+                Discard
+              </button>
+              {selectedPlanConfig?.wo_count === 0 && (
+                <button 
+                  onClick={() => handleCreateWorkOrders(selectedPlanConfig.id)}
+                  disabled={initiatingProduction}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all text-xs font-bold shadow-sm shadow-indigo-100 disabled:opacity-50"
+                >
+                  {initiatingProduction ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded animate-spin" />
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <Settings className="w-4 h-4" />
+                      Work Order
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </Modal>
