@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { useFormik } from 'formik';
+import * as Yup from 'yup';
 import { Card, Modal, DataTable, StatusBadge, FormControl } from '../components/ui.jsx';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
 import { Plus, Search, RefreshCw, Filter, FileText, Send, Loader2, Check, X, Package, ChevronDown, ChevronUp, Trash2, Edit2, Eye, History } from 'lucide-react';
@@ -519,29 +521,104 @@ const CustomerDrawing = () => {
     }
   };
 
-  // New Form State
-  const [newDrawing, setNewDrawing] = useState({
-    client_name: '',
-    contact_person: '',
-    phone_number: '',
-    email_address: '',
-    customer_type: '',
-    gstin: '',
-    city: '',
-    state: '',
-    billing_address: '',
-    shipping_address: '',
-    drawing_no: '',
-    revision: '',
-    qty: 1,
-    description: '',
-    file: null,
-    zipFile: null,
-    remarks: ''
+  // Formik validation schema
+  const validationSchema = Yup.object().shape({
+    client_name: Yup.string().required('Client Name is required'),
+    contact_person: Yup.string().required('Contact Person is required'),
+    phone_number: Yup.string()
+      .matches(/^[0-9]{10}$/, 'Phone number must be exactly 10 digits')
+      .required('Phone number is required'),
+    email_address: Yup.string().email('Invalid email address').required('Email is required'),
+    customer_type: Yup.string().required('Type is required'),
+    gstin: Yup.string()
+      .matches(/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/, 'Invalid GSTIN format')
+      .nullable(),
+    city: Yup.string().required('City is required'),
+    state: Yup.string().required('State is required'),
+    billing_address: Yup.string().required('Billing address is required'),
+    file: Yup.mixed().when('uploadMode', {
+      is: 'bulk',
+      then: (schema) => schema.required('Excel file is required'),
+      otherwise: (schema) => schema.nullable(),
+    }),
+    manualDrawings: Yup.array().when('uploadMode', {
+      is: 'manual',
+      then: (schema) => schema.of(
+        Yup.object().shape({
+          drawing_no: Yup.string().required('Drawing # is required'),
+          file: Yup.mixed().required('File is required'),
+        })
+      ),
+      otherwise: (schema) => schema.nullable(),
+    }),
   });
-  const [manualDrawings, setManualDrawings] = useState([
-    { id: Date.now(), drawing_no: '', revision: '', qty: 1, description: '', file: null, zipFile: null, remarks: '' }
-  ]);
+
+  const formik = useFormik({
+    initialValues: {
+      client_name: '',
+      contact_person: '',
+      phone_number: '',
+      email_address: '',
+      customer_type: '',
+      gstin: '',
+      city: '',
+      state: '',
+      billing_address: '',
+      shipping_address: '',
+      drawing_no: '',
+      revision: '',
+      qty: 1,
+      description: '',
+      file: null,
+      zipFile: null,
+      remarks: '',
+      uploadMode: 'bulk',
+      manualDrawings: [
+        { id: Date.now(), drawing_no: '', revision: '', qty: 1, description: '', file: null, remarks: '' }
+      ],
+    },
+    validationSchema,
+    onSubmit: async (values) => {
+      try {
+        setLoading(true);
+        if (values.uploadMode === 'bulk') {
+          const result = await saveSingleDrawing(values, false);
+          if (result) {
+            successToast(result.isExcelUpload ? `${result.count} Excel drawings imported successfully` : 'Drawing added successfully');
+            formik.resetForm();
+            setLastUploadedDrawings({ clientName: values.client_name, count: result.count, timestamp: Date.now() });
+          }
+        } else {
+          let successCount = 0;
+          for (const drawing of values.manualDrawings) {
+            if (!drawing.drawing_no || !drawing.file) continue;
+            await saveSingleDrawing({ ...values, ...drawing }, false);
+            successCount++;
+          }
+          
+          if (successCount > 0) {
+            successToast(`${successCount} drawings added successfully`);
+            formik.setFieldValue('manualDrawings', [{ id: Date.now(), drawing_no: '', revision: '', qty: 1, description: '', file: null, remarks: '' }]);
+            setClientLocked(true);
+          } else {
+            warningToast('No drawings were added. Please fill in Drawing # and select a file for at least one row.');
+          }
+        }
+        fetchDrawings(searchTerm);
+        fetchRequirements();
+      } catch (error) {
+        errorToast(error.message);
+      } finally {
+        setLoading(false);
+      }
+    },
+  });
+
+  // Keep uploadMode state in sync with formik
+  useEffect(() => {
+    formik.setFieldValue('uploadMode', uploadMode);
+  }, [uploadMode]);
+
   const [clientSuggestions, setClientSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
@@ -552,37 +629,33 @@ const CustomerDrawing = () => {
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      setNewDrawing({
-        ...newDrawing,
-        file: file
-      });
+      formik.setFieldValue('file', file);
     }
   };
 
   const handleZipFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      setNewDrawing({
-        ...newDrawing,
-        zipFile: file
-      });
+      formik.setFieldValue('zipFile', file);
     }
   };
 
   const handleManualDrawingChange = (id, field, value) => {
-    setManualDrawings(prev => prev.map(d => d.id === id ? { ...d, [field]: value } : d));
+    const updatedManualDrawings = formik.values.manualDrawings.map(d => 
+      d.id === id ? { ...d, [field]: value } : d
+    );
+    formik.setFieldValue('manualDrawings', updatedManualDrawings);
   };
 
   const addManualDrawingRow = () => {
-    setManualDrawings(prev => [
-      ...prev,
-      { id: Date.now(), drawing_no: '', revision: '', qty: 1, description: '', file: null, remarks: '' }
-    ]);
+    const newRow = { id: Date.now(), drawing_no: '', revision: '', qty: 1, description: '', file: null, remarks: '' };
+    formik.setFieldValue('manualDrawings', [...formik.values.manualDrawings, newRow]);
   };
 
   const removeManualDrawingRow = (id) => {
-    if (manualDrawings.length > 1) {
-      setManualDrawings(prev => prev.filter(d => d.id !== id));
+    if (formik.values.manualDrawings.length > 1) {
+      const updatedManualDrawings = formik.values.manualDrawings.filter(d => d.id !== id);
+      formik.setFieldValue('manualDrawings', updatedManualDrawings);
     }
   };
 
@@ -594,7 +667,7 @@ const CustomerDrawing = () => {
   };
 
   const handleClientInput = (value) => {
-    setNewDrawing({...newDrawing, client_name: value});
+    formik.setFieldValue('client_name', value);
     
     if (value.trim()) {
       const filtered = companies.filter(company =>
@@ -614,19 +687,20 @@ const CustomerDrawing = () => {
     const billingAddressLine = billingAddress ? `${billingAddress.line1}${billingAddress.line2 ? ', ' + billingAddress.line2 : ''}, ${billingAddress.city}, ${billingAddress.state} ${billingAddress.pincode}` : '';
     const shippingAddressLine = shippingAddress ? `${shippingAddress.line1}${shippingAddress.line2 ? ', ' + shippingAddress.line2 : ''}, ${shippingAddress.city}, ${shippingAddress.state} ${shippingAddress.pincode}` : '';
     
-    setNewDrawing({
-      ...newDrawing,
+    formik.setValues({
+      ...formik.values,
       client_name: company.company_name,
       contact_person: company.contact_person || '',
-      phone_number: company.contact_mobile || '',
-      email_address: company.contact_email || '',
+      phone_number: company.contact_mobile || company.phone || '',
+      email_address: company.contact_email || company.email || '',
       customer_type: company.customer_type || '',
       gstin: company.gstin || '',
-      city: billingAddress?.city || '',
-      state: billingAddress?.state || '',
+      city: company.city || '',
+      state: company.state || '',
       billing_address: billingAddressLine,
       shipping_address: shippingAddressLine
     });
+    setClientLocked(true);
     setShowSuggestions(false);
   };
 
@@ -647,16 +721,16 @@ const CustomerDrawing = () => {
     try {
       const token = localStorage.getItem('authToken');
       const formData = new FormData();
-      formData.append('clientName', newDrawing.client_name);
-      formData.append('contactPerson', newDrawing.contact_person);
-      formData.append('phoneNumber', newDrawing.phone_number);
-      formData.append('emailAddress', newDrawing.email_address);
-      formData.append('customerType', newDrawing.customer_type);
-      formData.append('gstin', newDrawing.gstin);
-      formData.append('city', newDrawing.city);
-      formData.append('state', newDrawing.state);
-      formData.append('billingAddress', newDrawing.billing_address);
-      formData.append('shippingAddress', newDrawing.shipping_address);
+      formData.append('clientName', drawingData.client_name);
+      formData.append('contactPerson', drawingData.contact_person || '');
+      formData.append('phoneNumber', drawingData.phone_number || '');
+      formData.append('emailAddress', drawingData.email_address || '');
+      formData.append('customerType', drawingData.customer_type || '');
+      formData.append('gstin', drawingData.gstin || '');
+      formData.append('city', drawingData.city || '');
+      formData.append('state', drawingData.state || '');
+      formData.append('billingAddress', drawingData.billing_address || '');
+      formData.append('shippingAddress', drawingData.shipping_address || '');
       
       formData.append('drawingNo', drawingData.drawing_no || (drawingData.file ? drawingData.file.name : 'BATCH_IMPORT'));
       formData.append('revision', drawingData.revision || '');
@@ -665,8 +739,8 @@ const CustomerDrawing = () => {
       formData.append('remarks', drawingData.remarks || '');
       formData.append('fileType', fileExt);
       formData.append('file', drawingData.file);
-      if (newDrawing.zipFile) {
-        formData.append('zipFile', newDrawing.zipFile);
+      if (drawingData.zipFile) {
+        formData.append('zipFile', drawingData.zipFile);
       }
 
       const response = await fetch(`${API_BASE}/drawings`, {
@@ -696,49 +770,6 @@ const CustomerDrawing = () => {
     } catch (error) {
       console.error(error);
       throw error;
-    }
-  };
-
-  const handleAddDrawing = async (e) => {
-    e.preventDefault();
-    if (!newDrawing.client_name) {
-      return warningToast('Client Name is mandatory');
-    }
-
-    try {
-      setLoading(true);
-      if (uploadMode === 'bulk') {
-        if (!newDrawing.file) return warningToast('Excel File is mandatory');
-        const result = await saveSingleDrawing(newDrawing, false);
-        if (result) {
-          successToast(result.isExcelUpload ? `${result.count} Excel drawings imported successfully` : 'Drawing added successfully');
-          setNewDrawing({
-            client_name: '', contact_person: '', phone_number: '', email_address: '', customer_type: '', gstin: '', city: '', state: '', billing_address: '', shipping_address: '', drawing_no: '', revision: '', qty: 1, description: '', file: null, zipFile: null, remarks: ''
-          });
-          setLastUploadedDrawings({ clientName: newDrawing.client_name, count: result.count, timestamp: Date.now() });
-        }
-      } else {
-        let successCount = 0;
-        for (const drawing of manualDrawings) {
-          if (!drawing.drawing_no || !drawing.file) continue;
-          await saveSingleDrawing(drawing, false);
-          successCount++;
-        }
-        
-        if (successCount > 0) {
-          successToast(`${successCount} drawings added successfully`);
-          setManualDrawings([{ id: Date.now(), drawing_no: '', revision: '', qty: 1, description: '', file: null, remarks: '' }]);
-          setClientLocked(true);
-        } else {
-          warningToast('No drawings were added. Please fill in Drawing # and select a file for at least one row.');
-        }
-      }
-      fetchDrawings(searchTerm);
-      fetchRequirements();
-    } catch (error) {
-      errorToast(error.message);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -1707,12 +1738,13 @@ const CustomerDrawing = () => {
         onClose={() => setShowFormModal(false)}
         title="Add Client Requirement"
       >
-        <form onSubmit={handleAddDrawing} className="space-y-2">
+        <form onSubmit={formik.handleSubmit} className="space-y-2">
           <div className="flex justify-between items-center bg-slate-50 p-2 rounded  border border-slate-200">
             <div className="flex items-center gap-2">
               <label className="flex items-center gap-2  cursor-pointer group">
                 <input 
                   type="radio" 
+                  name="uploadMode"
                   className="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-slate-300"
                   checked={uploadMode === 'bulk'} 
                   onChange={() => setUploadMode('bulk')} 
@@ -1722,6 +1754,7 @@ const CustomerDrawing = () => {
               <label className="flex items-center gap-2  cursor-pointer group">
                 <input 
                   type="radio" 
+                  name="uploadMode"
                   className="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-slate-300"
                   checked={uploadMode === 'manual'} 
                   onChange={() => setUploadMode('manual')} 
@@ -1739,14 +1772,18 @@ const CustomerDrawing = () => {
                 <div className="relative flex-1 client-input-container">
                   <input 
                     type="text"
-                    required
+                    name="client_name"
                     disabled={clientLocked}
                     placeholder="Type client name..."
-                    className={`w-full p-2 .5 border rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 bg-white transition-all ${clientLocked ? 'bg-slate-100 cursor-not-allowed text-slate-600 border-slate-300' : 'border-slate-300 hover:border-slate-400'}`}
-                    value={newDrawing.client_name}
+                    className={`w-full p-2 .5 border rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 bg-white transition-all ${clientLocked ? 'bg-slate-100 cursor-not-allowed text-slate-600 border-slate-300' : 'border-slate-300 hover:border-slate-400'} ${formik.touched.client_name && formik.errors.client_name ? 'border-red-500' : ''}`}
+                    value={formik.values.client_name}
                     onChange={(e) => handleClientInput(e.target.value)}
-                    onFocus={() => newDrawing.client_name && setShowSuggestions(true)}
+                    onBlur={formik.handleBlur}
+                    onFocus={() => formik.values.client_name && setShowSuggestions(true)}
                   />
+                  {formik.touched.client_name && formik.errors.client_name && (
+                    <div className="text-red-500 text-[10px] mt-0.5">{formik.errors.client_name}</div>
+                  )}
                   {showSuggestions && clientSuggestions.length > 0 && (
                     <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-300 rounded shadow-lg z-10 max-h-48 overflow-y-auto">
                       {clientSuggestions.map((company) => (
@@ -1778,93 +1815,139 @@ const CustomerDrawing = () => {
             </div>
 
             <div>
-              <label className="block text-xs  text-slate-700 mb-1">Contact Person</label>
+              <label className="block text-xs  text-slate-700 mb-1">Contact Person *</label>
               <input 
                 type="text"
+                name="contact_person"
                 placeholder="Contact person name"
-                className="w-full p-2 .5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
-                value={newDrawing.contact_person}
-                onChange={(e) => setNewDrawing({...newDrawing, contact_person: e.target.value})}
+                className={`w-full p-2 .5 border rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${formik.touched.contact_person && formik.errors.contact_person ? 'border-red-500' : 'border-slate-300'}`}
+                value={formik.values.contact_person}
+                onChange={formik.handleChange}
+                onBlur={formik.handleBlur}
               />
+              {formik.touched.contact_person && formik.errors.contact_person && (
+                <div className="text-red-500 text-[10px] mt-0.5">{formik.errors.contact_person}</div>
+              )}
             </div>
             <div>
-              <label className="block text-xs  text-slate-700 mb-1">Phone</label>
+              <label className="block text-xs  text-slate-700 mb-1">Phone *</label>
               <input 
                 type="text"
-                placeholder="Phone number"
-                className="w-full p-2 .5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
-                value={newDrawing.phone_number}
-                onChange={(e) => setNewDrawing({...newDrawing, phone_number: e.target.value})}
+                name="phone_number"
+                maxLength={10}
+                placeholder="10 digit phone number"
+                className={`w-full p-2 .5 border rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${formik.touched.phone_number && formik.errors.phone_number ? 'border-red-500' : 'border-slate-300'}`}
+                value={formik.values.phone_number}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/[^0-9]/g, '');
+                  formik.setFieldValue('phone_number', val);
+                }}
+                onBlur={formik.handleBlur}
               />
+              {formik.touched.phone_number && formik.errors.phone_number && (
+                <div className="text-red-500 text-[10px] mt-0.5">{formik.errors.phone_number}</div>
+              )}
             </div>
             <div>
-              <label className="block text-xs  text-slate-700 mb-1">Email</label>
+              <label className="block text-xs  text-slate-700 mb-1">Email *</label>
               <input 
                 type="email"
+                name="email_address"
                 placeholder="Email address"
-                className="w-full p-2 .5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
-                value={newDrawing.email_address}
-                onChange={(e) => setNewDrawing({...newDrawing, email_address: e.target.value})}
+                className={`w-full p-2 .5 border rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${formik.touched.email_address && formik.errors.email_address ? 'border-red-500' : 'border-slate-300'}`}
+                value={formik.values.email_address}
+                onChange={formik.handleChange}
+                onBlur={formik.handleBlur}
               />
+              {formik.touched.email_address && formik.errors.email_address && (
+                <div className="text-red-500 text-[10px] mt-0.5">{formik.errors.email_address}</div>
+              )}
             </div>
             <div>
-              <label className="block text-xs  text-slate-700 mb-1">Type</label>
+              <label className="block text-xs  text-slate-700 mb-1">Type *</label>
               <input 
                 type="text"
+                name="customer_type"
                 placeholder="Customer type"
-                className="w-full p-2 .5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
-                value={newDrawing.customer_type}
-                onChange={(e) => setNewDrawing({...newDrawing, customer_type: e.target.value})}
+                className={`w-full p-2 .5 border rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${formik.touched.customer_type && formik.errors.customer_type ? 'border-red-500' : 'border-slate-300'}`}
+                value={formik.values.customer_type}
+                onChange={formik.handleChange}
+                onBlur={formik.handleBlur}
               />
+              {formik.touched.customer_type && formik.errors.customer_type && (
+                <div className="text-red-500 text-[10px] mt-0.5">{formik.errors.customer_type}</div>
+              )}
             </div>
             <div>
               <label className="block text-xs  text-slate-700 mb-1">GSTIN</label>
               <input 
                 type="text"
+                name="gstin"
                 placeholder="GST number"
-                className="w-full p-2 .5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
-                value={newDrawing.gstin}
-                onChange={(e) => setNewDrawing({...newDrawing, gstin: e.target.value})}
+                className={`w-full p-2 .5 border rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${formik.touched.gstin && formik.errors.gstin ? 'border-red-500' : 'border-slate-300'}`}
+                value={formik.values.gstin}
+                onChange={formik.handleChange}
+                onBlur={formik.handleBlur}
               />
+              {formik.touched.gstin && formik.errors.gstin && (
+                <div className="text-red-500 text-[10px] mt-0.5">{formik.errors.gstin}</div>
+              )}
             </div>
             <div>
-              <label className="block text-xs  text-slate-700 mb-1">City</label>
+              <label className="block text-xs  text-slate-700 mb-1">City *</label>
               <input 
                 type="text"
+                name="city"
                 placeholder="City"
-                className="w-full p-2 .5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
-                value={newDrawing.city}
-                onChange={(e) => setNewDrawing({...newDrawing, city: e.target.value})}
+                className={`w-full p-2 .5 border rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${formik.touched.city && formik.errors.city ? 'border-red-500' : 'border-slate-300'}`}
+                value={formik.values.city}
+                onChange={formik.handleChange}
+                onBlur={formik.handleBlur}
               />
+              {formik.touched.city && formik.errors.city && (
+                <div className="text-red-500 text-[10px] mt-0.5">{formik.errors.city}</div>
+              )}
             </div>
             <div>
-              <label className="block text-xs  text-slate-700 mb-1">State</label>
+              <label className="block text-xs  text-slate-700 mb-1">State *</label>
               <input 
                 type="text"
+                name="state"
                 placeholder="State"
-                className="w-full p-2 .5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
-                value={newDrawing.state}
-                onChange={(e) => setNewDrawing({...newDrawing, state: e.target.value})}
+                className={`w-full p-2 .5 border rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${formik.touched.state && formik.errors.state ? 'border-red-500' : 'border-slate-300'}`}
+                value={formik.values.state}
+                onChange={formik.handleChange}
+                onBlur={formik.handleBlur}
               />
+              {formik.touched.state && formik.errors.state && (
+                <div className="text-red-500 text-[10px] mt-0.5">{formik.errors.state}</div>
+              )}
             </div>
             <div className="lg:col-span-2">
-              <label className="block text-xs  text-slate-700 mb-1">Billing Address</label>
+              <label className="block text-xs  text-slate-700 mb-1">Billing Address *</label>
               <input 
                 type="text"
+                name="billing_address"
                 placeholder="Billing address"
-                className="w-full p-2 .5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
-                value={newDrawing.billing_address}
-                onChange={(e) => setNewDrawing({...newDrawing, billing_address: e.target.value})}
+                className={`w-full p-2 .5 border rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${formik.touched.billing_address && formik.errors.billing_address ? 'border-red-500' : 'border-slate-300'}`}
+                value={formik.values.billing_address}
+                onChange={formik.handleChange}
+                onBlur={formik.handleBlur}
               />
+              {formik.touched.billing_address && formik.errors.billing_address && (
+                <div className="text-red-500 text-[10px] mt-0.5">{formik.errors.billing_address}</div>
+              )}
             </div>
             <div className="lg:col-span-2">
               <label className="block text-xs  text-slate-700 mb-1">Shipping Address</label>
               <input 
                 type="text"
+                name="shipping_address"
                 placeholder="Shipping address"
                 className="w-full p-2 .5 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors"
-                value={newDrawing.shipping_address}
-                onChange={(e) => setNewDrawing({...newDrawing, shipping_address: e.target.value})}
+                value={formik.values.shipping_address}
+                onChange={formik.handleChange}
+                onBlur={formik.handleBlur}
               />
             </div>
           </div>
@@ -1897,58 +1980,66 @@ const CustomerDrawing = () => {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-slate-200">
-                    {manualDrawings.map((drawing) => (
+                    {formik.values.manualDrawings.map((drawing, index) => (
                       <tr key={drawing.id}>
                         <td className="px-2 py-2">
                           <input 
                             type="text" 
-                            required
+                            name={`manualDrawings[${index}].drawing_no`}
                             placeholder="DRW-1001"
-                            className="w-full px-2 py-1 border border-slate-300 rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500"
+                            className={`w-full px-2 py-1 border rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500 ${formik.touched.manualDrawings?.[index]?.drawing_no && formik.errors.manualDrawings?.[index]?.drawing_no ? 'border-red-500' : 'border-slate-300'}`}
                             value={drawing.drawing_no}
-                            onChange={(e) => handleManualDrawingChange(drawing.id, 'drawing_no', e.target.value)}
+                            onChange={formik.handleChange}
+                            onBlur={formik.handleBlur}
                           />
                         </td>
                         <td className="px-2 py-2">
                           <input 
                             type="text" 
+                            name={`manualDrawings[${index}].description`}
                             placeholder="Aluminum Frame"
                             className="w-full px-2 py-1 border border-slate-300 rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500"
                             value={drawing.description}
-                            onChange={(e) => handleManualDrawingChange(drawing.id, 'description', e.target.value)}
+                            onChange={formik.handleChange}
+                            onBlur={formik.handleBlur}
                           />
                         </td>
                         <td className="px-2 py-2">
                           <input 
                             type="text" 
+                            name={`manualDrawings[${index}].revision`}
                             placeholder="A"
                             className="w-full px-2 py-1 border border-slate-300 rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500 text-center"
                             value={drawing.revision}
-                            onChange={(e) => handleManualDrawingChange(drawing.id, 'revision', e.target.value)}
+                            onChange={formik.handleChange}
+                            onBlur={formik.handleBlur}
                           />
                         </td>
                         <td className="px-2 py-2">
                           <input 
                             type="number" 
+                            name={`manualDrawings[${index}].qty`}
                             min="1"
                             className="w-full px-2 py-1 border border-slate-300 rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500 text-center"
                             value={drawing.qty}
-                            onChange={(e) => handleManualDrawingChange(drawing.id, 'qty', e.target.value)}
+                            onChange={formik.handleChange}
+                            onBlur={formik.handleBlur}
                           />
                         </td>
                         <td className="px-2 py-2">
                           <div className="relative">
                             <input 
                               type="file" 
-                              required={!drawing.file}
+                              name={`manualDrawings[${index}].file`}
                               accept=".pdf,.dwg,.step,.stp"
                               className="hidden"
                               onChange={(e) => handleManualFileChange(e, drawing.id)}
+                              onBlur={formik.handleBlur}
                               id={`file-${drawing.id}`}
                             />
                             <label 
                               htmlFor={`file-${drawing.id}`}
-                              className={`flex items-center gap-1 px-2 py-1 border border-dashed rounded text-xs  cursor-pointer transition-colors ${drawing.file ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-slate-300 bg-slate-50 text-slate-600 hover:border-indigo-400'}`}
+                              className={`flex items-center gap-1 px-2 py-1 border border-dashed rounded text-xs  cursor-pointer transition-colors ${drawing.file ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : (formik.touched.manualDrawings?.[index]?.file && formik.errors.manualDrawings?.[index]?.file ? 'border-red-500 bg-red-50' : 'border-slate-300 bg-slate-50 text-slate-600 hover:border-indigo-400')}`}
                             >
                               <Plus className="w-3 h-3" />
                               <span className="truncate max-w-[60px]">{drawing.file ? drawing.file.name : 'Choose'}</span>
@@ -1958,14 +2049,16 @@ const CustomerDrawing = () => {
                         <td className="px-2 py-2">
                           <input 
                             type="text" 
+                            name={`manualDrawings[${index}].remarks`}
                             placeholder="Notes..."
                             className="w-full px-2 py-1 border border-slate-300 rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500"
                             value={drawing.remarks}
-                            onChange={(e) => handleManualDrawingChange(drawing.id, 'remarks', e.target.value)}
+                            onChange={formik.handleChange}
+                            onBlur={formik.handleBlur}
                           />
                         </td>
                         <td className="px-2 py-2 text-center">
-                          {manualDrawings.length > 1 && (
+                          {formik.values.manualDrawings.length > 1 && (
                             <button 
                               type="button"
                               onClick={() => removeManualDrawingRow(drawing.id)}
@@ -1986,27 +2079,24 @@ const CustomerDrawing = () => {
             <div className="mt-4 grid grid-cols-2 gap-2">
               <div>
                 <label className="block text-xs  text-slate-700 mb-2">Excel File <span className="text-red-500">*</span></label>
-                <div className="flex items-center justify-center border-2 border-dashed border-slate-300 rounded  p-2 hover:border-indigo-400 transition-colors bg-slate-50 cursor-pointer">
+                <div className={`flex items-center justify-center border-2 border-dashed rounded  p-2 hover:border-indigo-400 transition-colors bg-slate-50 cursor-pointer ${formik.touched.file && formik.errors.file ? 'border-red-500 bg-red-50' : 'border-slate-300'}`}>
                   <input 
                     type="file" 
-                    required
+                    name="file"
                     accept=".xlsx,.xls"
-                    className="hidden"
+                    className="absolute opacity-0 w-[48%] h-[60px] cursor-pointer"
                     onChange={handleFileChange}
-                    id="bulk-file"
+                    onBlur={formik.handleBlur}
                   />
-                  <label htmlFor="bulk-file" className="cursor-pointer text-center w-full">
-                    <svg className="mx-auto h-10 w-10 text-slate-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
-                    <p className="text-sm text-slate-900 ">{newDrawing.file ? newDrawing.file.name : 'Upload Excel File'}</p>
-                    <p className="text-xs text-slate-500 mt-1">Format: Drawing No, Revision, Description, Qty, Drawing_File</p>
-                    {newDrawing.file && (
-                      <p className="mt-2 text-xs text-emerald-600  flex items-center justify-center gap-1">
-                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
-                        File selected
-                      </p>
-                    )}
-                  </label>
+                  <div className="text-center">
+                    <FileText className={`mx-auto h-6 w-6 ${formik.values.file ? 'text-indigo-600' : 'text-slate-400'}`} />
+                    <p className="mt-1 text-[10px] text-slate-500">{formik.values.file ? formik.values.file.name : 'Upload Excel File'}</p>
+                    <p className="text-[8px] text-slate-400">Format: Drawing No, Revision, Description, Qty, Drawing_File</p>
+                  </div>
                 </div>
+                {formik.touched.file && formik.errors.file && (
+                  <div className="text-red-500 text-[10px] mt-1">{formik.errors.file}</div>
+                )}
               </div>
 
               <div>
@@ -2014,58 +2104,42 @@ const CustomerDrawing = () => {
                 <div className="flex items-center justify-center border-2 border-dashed border-slate-300 rounded  p-2 hover:border-indigo-400 transition-colors bg-slate-50 cursor-pointer">
                   <input 
                     type="file" 
-                    accept=".zip"
-                    className="hidden"
+                    name="zipFile"
+                    accept=".zip,.rar,.7z"
+                    className="absolute opacity-0 w-[48%] h-[60px] cursor-pointer"
                     onChange={handleZipFileChange}
-                    id="bulk-zip"
                   />
-                  <label htmlFor="bulk-zip" className="cursor-pointer text-center w-full">
-                    <svg className="mx-auto h-10 w-10 text-slate-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
-                    <p className="text-sm text-slate-900 ">{newDrawing.zipFile ? newDrawing.zipFile.name : 'Upload ZIP File'}</p>
-                    <p className="text-xs text-slate-500 mt-1">Contains images or PDFs of drawings</p>
-                    {newDrawing.zipFile && (
-                      <p className="mt-2 text-xs text-emerald-600  flex items-center justify-center gap-1">
-                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
-                        ZIP selected
-                      </p>
-                    )}
-                  </label>
+                  <div className="text-center">
+                    <Package className={`mx-auto h-6 w-6 ${formik.values.zipFile ? 'text-indigo-600' : 'text-slate-400'}`} />
+                    <p className="mt-1 text-[10px] text-slate-500">{formik.values.zipFile ? formik.values.zipFile.name : 'Upload ZIP File'}</p>
+                    <p className="text-[8px] text-slate-400">Contains images or PDFs of drawings</p>
+                  </div>
                 </div>
               </div>
             </div>
           )}
 
-          <div className="mt-6 flex gap-2 justify-end border-t border-slate-200 pt-4">
+          <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
             <button 
               type="button"
               onClick={() => {
-                setNewDrawing({ client_name: '', contact_person: '', phone_number: '', email_address: '', customer_type: '', gstin: '', city: '', state: '', billing_address: '', shipping_address: '', drawing_no: '', revision: '', qty: 1, description: '', file: null, zipFile: null, remarks: '' });
-                setManualDrawings([{ id: Date.now(), drawing_no: '', revision: '', qty: 1, description: '', file: null, zipFile: null, remarks: '' }]);
+                setShowFormModal(false);
+                formik.resetForm();
                 setClientLocked(false);
               }}
-              className="p-2  bg-white border border-slate-300 text-slate-700 rounded  text-xs  hover:bg-slate-50 transition-colors"
+              className="px-4 py-2 text-xs text-slate-600 hover:bg-slate-100 rounded transition-colors"
             >
               Clear Form
             </button>
             <button 
               type="submit"
               disabled={loading}
-              className={`p-2 bg-indigo-600 text-white rounded  text-xs  hover:bg-indigo-700 transition-all flex items-center gap-2  ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+              className="px-6 py-2 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700 disabled:opacity-50 transition-colors flex items-center gap-2"
             >
-              {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-              {loading ? 'Processing...' : uploadMode === 'bulk' ? 'Upload Excel' : 'Save Requirement'}
+              {loading && <Loader2 className="w-3 h-3 animate-spin" />}
+              <Send className="w-3 h-3" />
+              {uploadMode === 'bulk' ? 'Upload Excel' : 'Add Requirements'}
             </button>
-            {uploadMode === 'manual' && (
-              <button 
-                type="button"
-                onClick={handleAddAndSendToDesign}
-                disabled={loading}
-                className={`p-2 bg-emerald-600 text-white rounded  text-xs  hover:bg-emerald-700 transition-all flex items-center gap-2  ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                Send to Design
-              </button>
-            )}
           </div>
 
           {lastUploadedDrawings && lastUploadedDrawings.clientName && (

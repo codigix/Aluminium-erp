@@ -336,7 +336,8 @@ const createBOMRequest = async (bomData) => {
       // Quotation quantity is always the Design quantity. Sales never redefines quantity at quotation stage.
       await connection.execute(
         `UPDATE sales_order_items 
-         SET item_code = ?, item_type = ?, item_group = ?, unit = ?, revision_no = ?, description = ?, is_active = ?, is_default = ?, drawing_no = ?, drawing_id = ?, bom_cost = ?, status = ?
+         SET item_code = ?, item_type = ?, item_group = ?, unit = ?, revision_no = ?, description = ?, is_active = ?, is_default = ?, drawing_no = ?, drawing_id = ?, bom_cost = ?, 
+             status = CASE WHEN UPPER(TRIM(status)) = 'APPROVED' THEN status ELSE ? END
          WHERE id = ?`,
         [
           safeItemCode, 
@@ -372,7 +373,8 @@ const createBOMRequest = async (bomData) => {
         targetItemId = existingItems[0].id;
         await connection.execute(
           `UPDATE sales_order_items 
-           SET item_code = ?, item_type = ?, item_group = ?, unit = ?, revision_no = ?, description = ?, is_active = ?, is_default = ?, drawing_no = ?, drawing_id = ?, bom_cost = ?, status = ?
+           SET item_code = ?, item_type = ?, item_group = ?, unit = ?, revision_no = ?, description = ?, is_active = ?, is_default = ?, drawing_no = ?, drawing_id = ?, bom_cost = ?, 
+               status = CASE WHEN UPPER(TRIM(status)) = 'APPROVED' THEN status ELSE ? END
            WHERE id = ?`,
           [
             safeItemCode, 

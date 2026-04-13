@@ -9,16 +9,7 @@ const listDrawings = async (searchTerm = '') => {
       soi.status as item_status,
       soi.sales_order_id
     FROM customer_drawings cd
-    LEFT JOIN (
-      /* Get the latest sales_order_item for each drawing */
-      SELECT soi1.*
-      FROM sales_order_items soi1
-      JOIN (
-        SELECT drawing_id, MAX(id) as max_id
-        FROM sales_order_items
-        GROUP BY drawing_id
-      ) soi2 ON soi1.id = soi2.max_id
-    ) soi ON cd.id = soi.drawing_id
+    LEFT JOIN sales_order_items soi ON cd.id = soi.drawing_id
     WHERE 1=1
   `;
   const params = [];
