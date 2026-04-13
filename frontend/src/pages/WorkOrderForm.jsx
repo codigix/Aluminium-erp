@@ -525,10 +525,10 @@ const WorkOrderForm = ({ workOrderId, salesOrderId: propSalesOrderId, salesOrder
   }
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC]">
+    <div className="h-screen flex flex-col bg-[#F8FAFC] overflow-hidden">
       {/* Header Bar */}
-      <div className="bg-[#F8FAFC] border-b border-slate-200 sticky top-0 z-30 px-6 py-4">
-        <div className="max-w-[1600px] mx-auto flex items-center justify-between mb-4">
+      <div className="bg-[#F8FAFC] border-b border-slate-200 sticky top-0 z-30 px-6 py-2 shadow-sm shrink-0">
+        <div className="max-w-[1600px] mx-auto flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg flex items-center justify-center">
               <FileText className="w-5 h-5" />
@@ -603,8 +603,10 @@ const WorkOrderForm = ({ workOrderId, salesOrderId: propSalesOrderId, salesOrder
         </div>
       </div>
 
-      <div className="max-w-[1600px] mx-auto p-6">
-        <div className="flex gap-8">
+      {/* Scrollable Content Container */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-[1600px] mx-auto p-6 pb-20">
+          <div className="flex gap-8 items-start">
           {/* Main Content Area */}
           <div className="flex-1 space-y-6">
             {activeTab === 'foundation' && (
@@ -1002,7 +1004,7 @@ const WorkOrderForm = ({ workOrderId, salesOrderId: propSalesOrderId, salesOrder
           </div>
 
           {/* Right Sidebar */}
-          <div className=" space-y-2">
+          <div className="w-80 space-y-4 sticky top-0">
             {/* Efficiency Projection */}
             <Card className="border-slate-200/60  overflow-hidden relative">
               <div className="absolute -top-12 -right-12  bg-emerald-50 rounded " />
@@ -1105,12 +1107,12 @@ const WorkOrderForm = ({ workOrderId, salesOrderId: propSalesOrderId, salesOrder
             </div>
 
             {/* Yield Note */}
-            <div className="p-2 bg-white border border-slate-200 rounded ">
-              <div className="flex items-start gap-2">
-                <AlertCircle className="w-4 h-4 text-slate-400 mt-0.5" />
+            <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm mt-4">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 text-slate-400 mt-0.5" />
                 <div>
-                  <p className="text-xs  text-slate-600   mb-1">Yield Note</p>
-                  <p className="text-xs text-slate-400 leading-relaxed">
+                  <p className="text-xs font-bold text-slate-700 mb-1 uppercase tracking-wider">Yield Note</p>
+                  <p className="text-[11px] text-slate-500 leading-relaxed font-medium">
                     Yield loss is automatically calculated as the delta between transferred and consumed quantities.
                   </p>
                 </div>
@@ -1120,7 +1122,8 @@ const WorkOrderForm = ({ workOrderId, salesOrderId: propSalesOrderId, salesOrder
         </div>
       </div>
     </div>
-  );
+  </div>
+);
 };
 
 export default WorkOrderForm;
