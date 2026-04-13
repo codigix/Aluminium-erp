@@ -345,7 +345,7 @@ const PurchaseOrders = () => {
 
       if (response.ok) {
         const data = await response.json();
-        setQuotations(Array.isArray(data) ? data.filter(q => ['REVIEWED', 'RECEIVED'].includes(q.status)) : []);
+        setQuotations(Array.isArray(data) ? data.filter(q => q.status === 'REVIEWED') : []);
       }
     } catch (error) {
       console.error('Error fetching quotations:', error);

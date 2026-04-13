@@ -32,7 +32,7 @@ const rfqStatusColors = {
   SENT: { bg: 'bg-indigo-50', border: 'border-indigo-200', text: 'text-indigo-600', badge: 'bg-indigo-100 text-indigo-700', label: 'Sent' },
   EMAIL_RECEIVED: { bg: 'bg-sky-50', border: 'border-sky-200', text: 'text-sky-600', badge: 'bg-sky-100 text-sky-700', label: 'Email Received' },
   RECEIVED: { bg: 'bg-cyan-50', border: 'border-cyan-200', text: 'text-cyan-600', badge: 'bg-cyan-100 text-cyan-700', label: 'Received' },
-  REVIEWED: { bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-600', badge: 'bg-purple-100 text-purple-700', label: 'Reviewed' },
+  REVIEWED: { bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-600', badge: 'bg-purple-100 text-purple-700', label: 'Approved' },
   CLOSED: { bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-600', badge: 'bg-slate-100 text-slate-700', label: 'Closed' },
   PENDING: { bg: 'bg-yellow-50', border: 'border-yellow-200', text: 'text-yellow-600', badge: 'bg-yellow-100 text-yellow-700', label: 'Pending' },
 };
@@ -1149,7 +1149,7 @@ const Quotations = () => {
     const mrItems = (rfq.items || []).map(item => ({
       drawing_no: item.drawing_no || item.item_code || '—',
       material_name: item.material_name || item.name || item.description || '',
-      material_type: item.material_type || 'RAW_MATERIAL',
+      material_type: getCorrectMaterialType(item.drawing_no || item.item_code, item.material_type),
       quantity: parseFloat(item.quantity) || 0,
       design_qty: parseFloat(item.quantity) || 0,
       planned_qty: parseFloat(item.planned_qty) || 0,
@@ -1350,7 +1350,7 @@ const Quotations = () => {
             {activeTab === 'received' && q.status === 'RECEIVED' && (
               <button
                 onClick={(e) => { e.stopPropagation(); handleApproveQuote(q.id); }}
-                className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded  transition-all border border-transparent hover:border-emerald-100"
+                className="p-2 text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded  transition-all border border-emerald-100"
                 title="Approve Quote"
               >
                 <Check className="w-4 h-4" />
