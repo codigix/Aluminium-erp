@@ -966,7 +966,8 @@ const ItemsMaster = () => {
                 </select>
               </div>
 
-              {['Raw Materials', 'Raw Material', 'RAW_MATERIALS', 'RAW_MATERIAL', 'RM', 'Consumables', 'Consumable', 'CONSUMABLES', 'CONSUMABLE', 'CON'].includes(itemFormData.itemGroup) && itemFormData.defaultUom === 'Kg' && (
+              {((['Raw Materials', 'Raw Material', 'RAW_MATERIALS', 'RAW_MATERIAL', 'RM', 'Consumables', 'Consumable', 'CONSUMABLES', 'CONSUMABLE', 'CON'].includes(itemFormData.itemGroup) && itemFormData.defaultUom === 'Kg') || 
+                (['Consumables', 'Consumable', 'CONSUMABLES', 'CONSUMABLE', 'CON'].includes(itemFormData.itemGroup) && itemFormData.defaultUom === 'Litre (Ltr)')) && (
                 <>
                   <div className="space-y-2">
                     <label className="text-xs text-slate-500">Select Material Type *</label>
@@ -992,108 +993,113 @@ const ItemsMaster = () => {
                       ))}
                     </select>
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-xs text-slate-500">Select Shape Type</label>
-                    <select 
-                      className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                      value={itemFormData.shapeId}
-                      onChange={(e) => setItemFormData({...itemFormData, shapeId: e.target.value})}
-                    >
-                      <option value="">Select Shape</option>
-                      {shapes.map(s => (
-                        <option key={s.id} value={s.id}>{s.name}</option>
-                      ))}
-                    </select>
-                  </div>
 
-                  {selectedShape && (
-                    <div className="md:col-span-3 p-4 bg-indigo-50/50 rounded-lg border border-indigo-100 space-y-3">
-                      <div className="flex items-center gap-2 text-indigo-700 font-medium text-sm">
-                        <div className="w-1.5 h-1.5 rounded-full bg-indigo-500"></div>
-                        {selectedShape} Dimensions (All in mm)
+                  {itemFormData.defaultUom === 'Kg' && (
+                    <>
+                      <div className="space-y-2">
+                        <label className="text-xs text-slate-500">Select Shape Type</label>
+                        <select 
+                          className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                          value={itemFormData.shapeId}
+                          onChange={(e) => setItemFormData({...itemFormData, shapeId: e.target.value})}
+                        >
+                          <option value="">Select Shape</option>
+                          {shapes.map(s => (
+                            <option key={s.id} value={s.id}>{s.name}</option>
+                          ))}
+                        </select>
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                        {selectedShape.toLowerCase() === 'plate' && (
-                          <>
-                            <div className="space-y-1.5">
-                              <label className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">Length (mm) *</label>
-                              <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.length} onChange={(e) => setItemFormData({...itemFormData, length: e.target.value})} required />
-                            </div>
-                            <div className="space-y-1.5">
-                              <label className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">Width (mm) *</label>
-                              <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.width} onChange={(e) => setItemFormData({...itemFormData, width: e.target.value})} required />
-                            </div>
-                            <div className="space-y-1.5">
-                              <label className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">Thickness (mm) *</label>
-                              <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.thickness} onChange={(e) => setItemFormData({...itemFormData, thickness: e.target.value})} required />
-                            </div>
-                          </>
-                        )}
-                        {selectedShape.toLowerCase() === 'round' && (
-                          <>
-                            <div className="space-y-1.5">
-                              <label className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">Diameter (mm) *</label>
-                              <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.diameter} onChange={(e) => setItemFormData({...itemFormData, diameter: e.target.value})} required />
-                            </div>
-                            <div className="space-y-1.5">
-                              <label className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">Length (mm) *</label>
-                              <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.length} onChange={(e) => setItemFormData({...itemFormData, length: e.target.value})} required />
-                            </div>
-                          </>
-                        )}
-                        {selectedShape.toLowerCase() === 'pipe' && (
-                          <>
-                            <div className="space-y-1.5">
-                              <label className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">Outer Diameter (mm) *</label>
-                              <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.outerDiameter} onChange={(e) => setItemFormData({...itemFormData, outerDiameter: e.target.value})} required />
-                            </div>
-                            <div className="space-y-1.5">
-                              <label className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">Thickness (mm) *</label>
-                              <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.thickness} onChange={(e) => setItemFormData({...itemFormData, thickness: e.target.value})} required />
-                            </div>
-                            <div className="space-y-1.5">
-                              <label className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">Length (mm) *</label>
-                              <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.length} onChange={(e) => setItemFormData({...itemFormData, length: e.target.value})} required />
-                            </div>
-                          </>
-                        )}
+
+                      {selectedShape && (
+                        <div className="md:col-span-3 p-4 bg-indigo-50/50 rounded-lg border border-indigo-100 space-y-3">
+                          <div className="flex items-center gap-2 text-indigo-700 font-medium text-sm">
+                            <div className="w-1.5 h-1.5 rounded-full bg-indigo-500"></div>
+                            {selectedShape} Dimensions (All in mm)
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            {selectedShape.toLowerCase() === 'plate' && (
+                              <>
+                                <div className="space-y-1.5">
+                                  <label className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">Length (mm) *</label>
+                                  <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.length} onChange={(e) => setItemFormData({...itemFormData, length: e.target.value})} required />
+                                </div>
+                                <div className="space-y-1.5">
+                                  <label className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">Width (mm) *</label>
+                                  <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.width} onChange={(e) => setItemFormData({...itemFormData, width: e.target.value})} required />
+                                </div>
+                                <div className="space-y-1.5">
+                                  <label className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">Thickness (mm) *</label>
+                                  <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.thickness} onChange={(e) => setItemFormData({...itemFormData, thickness: e.target.value})} required />
+                                </div>
+                              </>
+                            )}
+                            {selectedShape.toLowerCase() === 'round' && (
+                              <>
+                                <div className="space-y-1.5">
+                                  <label className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">Diameter (mm) *</label>
+                                  <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.diameter} onChange={(e) => setItemFormData({...itemFormData, diameter: e.target.value})} required />
+                                </div>
+                                <div className="space-y-1.5">
+                                  <label className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">Length (mm) *</label>
+                                  <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.length} onChange={(e) => setItemFormData({...itemFormData, length: e.target.value})} required />
+                                </div>
+                              </>
+                            )}
+                            {selectedShape.toLowerCase() === 'pipe' && (
+                              <>
+                                <div className="space-y-1.5">
+                                  <label className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">Outer Diameter (mm) *</label>
+                                  <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.outerDiameter} onChange={(e) => setItemFormData({...itemFormData, outerDiameter: e.target.value})} required />
+                                </div>
+                                <div className="space-y-1.5">
+                                  <label className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">Thickness (mm) *</label>
+                                  <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.thickness} onChange={(e) => setItemFormData({...itemFormData, thickness: e.target.value})} required />
+                                </div>
+                                <div className="space-y-1.5">
+                                  <label className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">Length (mm) *</label>
+                                  <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.length} onChange={(e) => setItemFormData({...itemFormData, length: e.target.value})} required />
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="space-y-2">
+                        <label className="text-xs  text-slate-500  ">Weight per Unit</label>
+                        <div className="flex gap-2">
+                          <input 
+                            type="number"
+                            step="0.001"
+                            className="flex-1 p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                            value={itemFormData.weightPerUnit}
+                            onChange={(e) => setItemFormData({...itemFormData, weightPerUnit: parseFloat(e.target.value) || 0})}
+                          />
+                          <select 
+                            className="w-24 p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                            value={itemFormData.weightUom}
+                            onChange={(e) => setItemFormData({...itemFormData, weightUom: e.target.value})}
+                          >
+                            <option value="">UOM</option>
+                            <option value="Nos">Nos</option>
+                            <option value="Kg">Kg</option>
+                            <option value="Mtr">Mtr</option>
+                            <option value="Set">Set</option>
+                            <option value="Pkt">Pkt</option>
+                            <option value="Litre (Ltr)">Litre (Ltr)</option>
+                            <option value="Millilitre (ml)">Millilitre (ml)</option>
+                            <option value="Cubic Meter (m³)">Cubic Meter (m³)</option>
+                            <option value="Millimeter (mm)">Millimeter (mm)</option>
+                            <option value="Feet (ft)">Feet (ft)</option>
+                            <option value="Inch (in)">Inch (in)</option>
+                            <option value="Gram (g)">Gram (g)</option>
+                            <option value="Ton">Ton</option>
+                            <option value="Metric Ton (MT)">Metric Ton (MT)</option>
+                          </select>
+                        </div>
                       </div>
-                    </div>
+                    </>
                   )}
-
-                  <div className="space-y-2">
-                    <label className="text-xs  text-slate-500  ">Weight per Unit</label>
-                    <div className="flex gap-2">
-                      <input 
-                        type="number"
-                        step="0.001"
-                        className="flex-1 p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                        value={itemFormData.weightPerUnit}
-                        onChange={(e) => setItemFormData({...itemFormData, weightPerUnit: parseFloat(e.target.value) || 0})}
-                      />
-                      <select 
-                        className="w-24 p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
-                        value={itemFormData.weightUom}
-                        onChange={(e) => setItemFormData({...itemFormData, weightUom: e.target.value})}
-                      >
-                        <option value="">UOM</option>
-                        <option value="Nos">Nos</option>
-                        <option value="Kg">Kg</option>
-                        <option value="Mtr">Mtr</option>
-                        <option value="Set">Set</option>
-                        <option value="Pkt">Pkt</option>
-                        <option value="Litre (Ltr)">Litre (Ltr)</option>
-                        <option value="Millilitre (ml)">Millilitre (ml)</option>
-                        <option value="Cubic Meter (m³)">Cubic Meter (m³)</option>
-                        <option value="Millimeter (mm)">Millimeter (mm)</option>
-                        <option value="Feet (ft)">Feet (ft)</option>
-                        <option value="Inch (in)">Inch (in)</option>
-                        <option value="Gram (g)">Gram (g)</option>
-                        <option value="Ton">Ton</option>
-                        <option value="Metric Ton (MT)">Metric Ton (MT)</option>
-                      </select>
-                    </div>
-                  </div>
                 </>
               )}
 
