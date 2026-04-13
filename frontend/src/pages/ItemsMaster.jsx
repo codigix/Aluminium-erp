@@ -970,7 +970,7 @@ const ItemsMaster = () => {
                 (['Consumables', 'Consumable', 'CONSUMABLES', 'CONSUMABLE', 'CON'].includes(itemFormData.itemGroup) && itemFormData.defaultUom === 'Litre (Ltr)')) && (
                 <>
                   <div className="space-y-2">
-                    <label className="text-xs text-slate-500">Select Material Type *</label>
+                    <label className="text-xs text-slate-500">Select Material Type</label>
                     <select 
                       className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                       value={itemFormData.materialId}
@@ -983,7 +983,6 @@ const ItemsMaster = () => {
                           density: selectedMaterial ? selectedMaterial.density : ''
                         });
                       }}
-                      required
                     >
                       <option value="">Select Material</option>
                       {materials.map(m => (
