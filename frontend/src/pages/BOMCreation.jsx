@@ -443,7 +443,10 @@ const BOMCreation = () => {
             >
               <Eye className="w-4 h-4" />
             </button>
-            {!(row.items?.[0]?.sales_order_status === 'BOM_SUBMITTED' || row.items?.[0]?.sales_order_status === 'BOM_Approved') && (
+            {!(row.items?.some(i => {
+              const s = (i.sales_order_status || '').toUpperCase();
+              return s.includes('BOM_SUBMITTED') || s.includes('BOM_APPROVED') || s.includes('QUOTATION') || s.includes('PO_');
+            })) && (
               <button 
                 onClick={(e) => { e.stopPropagation(); handleSendForApproval(row); }}
                 disabled={!isCompleted}

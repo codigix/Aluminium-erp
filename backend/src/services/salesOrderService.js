@@ -457,11 +457,10 @@ const updateSalesOrder = async (id, orderData) => {
 const updateSalesOrderStatus = async (salesOrderId, status, userId = null, remarks = null) => {
   status = (status || '').trim().toUpperCase();
   let department = null;
-  if (status === 'BOM_APPROVED') {
+  if (status === 'BOM_APPROVED' || status === 'QUOTATION_SENT') {
     department = 'SALES';
-    // status = 'QUOTATION_SENT'; // REMOVE AUTO-TRANSITION TO QUOTATION_SENT
   } else if (status === 'BOM_SUBMITTED') {
-    department = 'DESIGN_ENG'; // Stay in design for approval
+    department = 'SALES'; // Transition to SALES for BOM approval
   }
 
   const connection = await pool.getConnection();
@@ -850,9 +849,11 @@ const getApprovedDrawings = async (companyId = null) => {
 const getOrderTimeline = async salesOrderId => {
   const [items] = await pool.query(
     `SELECT soi.*, sb.material_type as item_group, sb.product_type,
+            so.status as sales_order_status,
             COALESCE(soi.drawing_id, cd.latest_drawing_id) as drawing_id,
             cd.drawing_name
      FROM sales_order_items soi
+     JOIN sales_orders so ON soi.sales_order_id = so.id
      LEFT JOIN stock_balance sb ON sb.item_code = soi.item_code
      LEFT JOIN (
        SELECT d1.drawing_no, d1.id as latest_drawing_id, d1.description as drawing_name
