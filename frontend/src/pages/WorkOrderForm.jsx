@@ -197,11 +197,17 @@ const WorkOrderForm = ({ workOrderId, salesOrderId: propSalesOrderId, salesOrder
       if (response.ok) {
         const balances = await response.json();
         const updatedInventory = currentInventory.map(item => {
-          const balance = balances.find(b => b.item_code === item.item_code);
+          // Try to match by item_code first, then by material_name
+          const balance = balances.find(b => 
+            b.item_code === item.item_code || 
+            (b.material_name && item.material_name && b.material_name.toLowerCase().trim() === item.material_name.toLowerCase().trim())
+          );
+          
           const stock = parseFloat(balance?.current_balance || 0);
           const consumed = parseFloat(item.consumed_qty || 0);
           return {
             ...item,
+            item_code: balance?.item_code || item.item_code, // Update with actual item code if found
             total_stock: stock.toFixed(3),
             issued_qty: stock.toFixed(3),
             remaining_qty: (stock - consumed).toFixed(3)
@@ -419,8 +425,8 @@ const WorkOrderForm = ({ workOrderId, salesOrderId: propSalesOrderId, salesOrder
     const val = parseFloat(value || 0);
     newInventory[index].consumed_qty = value; // Keep as string to allow decimal input
     
-    // Custom Logic: Remaining = Issued - Consumed
-    const issued = parseFloat(newInventory[index].issued_qty || 0);
+    // Custom Logic: Remaining = Total Stock - Consumed
+    const issued = parseFloat(newInventory[index].total_stock || 0);
     const remaining = issued - val;
     newInventory[index].remaining_qty = isWeightBased(newInventory[index].uom) ? remaining.toFixed(3) : remaining.toFixed(0);
     
@@ -867,7 +873,7 @@ const WorkOrderForm = ({ workOrderId, salesOrderId: propSalesOrderId, salesOrder
                                 <span className="ml-1 text-slate-400 font-normal">{inv.uom}</span>
                               </td>
                               <td className="p-3 text-slate-900 text-right font-bold whitespace-nowrap">
-                                {isWeightBased(inv.uom) ? parseFloat(inv.issued_qty || 0).toFixed(3) : parseFloat(inv.issued_qty || 0).toFixed(0)}
+                                {isWeightBased(inv.uom) ? parseFloat(inv.total_stock || 0).toFixed(3) : parseFloat(inv.total_stock || 0).toFixed(0)}
                                 <span className="ml-1 text-slate-400 font-normal">{inv.uom}</span>
                               </td>
                               <td className="p-3 text-slate-900 text-right">
@@ -888,9 +894,9 @@ const WorkOrderForm = ({ workOrderId, salesOrderId: propSalesOrderId, salesOrder
                               </td>
                               <td className="p-3">
                                 <span className="flex items-center gap-1.5 font-bold uppercase text-[10px]">
-                                  <div className={`w-1.5 h-1.5 ${parseFloat(inv.issued_qty) >= parseFloat(inv.required_qty) ? 'bg-emerald-500' : 'bg-amber-500'} rounded-full`} />
-                                  <span className={parseFloat(inv.issued_qty) >= parseFloat(inv.required_qty) ? 'text-emerald-600' : 'text-amber-600'}>
-                                    {parseFloat(inv.issued_qty) >= parseFloat(inv.required_qty) ? 'Ready' : 'Incomplete'}
+                                  <div className={`w-1.5 h-1.5 ${parseFloat(inv.total_stock) >= parseFloat(inv.required_qty) ? 'bg-emerald-500' : 'bg-amber-500'} rounded-full`} />
+                                  <span className={parseFloat(inv.total_stock) >= parseFloat(inv.required_qty) ? 'text-emerald-600' : 'text-amber-600'}>
+                                    {parseFloat(inv.total_stock) >= parseFloat(inv.required_qty) ? 'Ready' : 'Incomplete'}
                                   </span>
                                 </span>
                               </td>

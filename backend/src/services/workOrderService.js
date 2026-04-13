@@ -250,30 +250,33 @@ const getWorkOrderMaterialRequirements = async (id) => {
   });
 
   // 4. Get Current Stock for these items
-  const itemCodes = materials.map(m => m.item_code);
+  // We use material_name to match stock if item_code doesn't match directly
   const stockMap = {};
-  if (itemCodes.length > 0) {
-    const [stockRows] = await pool.query(
-      `SELECT item_code, SUM(current_balance) as total_stock 
-       FROM stock_balance 
-       WHERE item_code IN (?)
-       GROUP BY item_code`,
-      [itemCodes]
-    );
-    stockRows.forEach(row => {
-      stockMap[row.item_code] = parseFloat(row.total_stock || 0);
-    });
-  }
+  const [stockRows] = await pool.query(
+    `SELECT LOWER(TRIM(material_name)) as match_name, MAX(item_code) as actual_item_code, SUM(current_balance) as total_stock 
+     FROM stock_balance 
+     GROUP BY LOWER(TRIM(material_name))`
+  );
+  stockRows.forEach(row => {
+    stockMap[row.match_name] = {
+      item_code: row.actual_item_code,
+      total_stock: parseFloat(row.total_stock || 0)
+    };
+  });
 
   // 5. Merge data
   return materials.map(m => {
     const required = parseFloat(m.qty_per_pc || 0) * parseFloat(wo.quantity || 0);
-    const issued = issuedMap[m.item_code] || 0;
-    const consumed = consumedMap[m.item_code] || 0;
-    const totalStock = stockMap[m.item_code] || 0;
+    const matchName = (m.material_name || "").toLowerCase().trim();
+    const stockData = stockMap[matchName] || { item_code: m.item_code, total_stock: 0 };
+    const actualItemCode = stockData.item_code;
+    
+    const issued = issuedMap[actualItemCode] || issuedMap[m.item_code] || 0;
+    const consumed = consumedMap[actualItemCode] || consumedMap[m.item_code] || 0;
+    const totalStock = stockData.total_stock;
     
     return {
-      item_code: m.item_code,
+      item_code: actualItemCode,
       material_name: m.material_name,
       material_type: m.material_type,
       uom: m.uom,

@@ -4,43 +4,32 @@ const getItemMaterials = async (itemId, itemCode = null, drawingNo = null) => {
   const parsedItemId = (itemId === 'null' || itemId === 'undefined' || !itemId) ? null : itemId;
   let rows = [];
   
+  // Use JOIN with items table to get the correct material item_code and name
+  // The item_code column in sales_order_item_materials might contain the parent item_code in some cases
   if (parsedItemId) {
-    if (itemCode) {
-      [rows] = await pool.query(
-        'SELECT * FROM sales_order_item_materials WHERE sales_order_item_id = ? AND item_code = ? ORDER BY created_at ASC',
-        [parsedItemId, itemCode]
-      );
-    } else {
-      [rows] = await pool.query(
-        'SELECT * FROM sales_order_item_materials WHERE sales_order_item_id = ? ORDER BY created_at ASC',
-        [parsedItemId]
-      );
-    }
+    [rows] = await pool.query(
+      `SELECT m.*, i.item_code as actual_item_code, i.item_name as actual_item_name
+       FROM sales_order_item_materials m
+       LEFT JOIN items i ON LOWER(TRIM(m.material_name)) = LOWER(TRIM(i.item_name))
+       WHERE m.sales_order_item_id = ? 
+       ORDER BY m.created_at ASC`,
+      [parsedItemId]
+    );
   }
   
-  if (rows.length === 0) {
-    if (itemCode) {
-      if (drawingNo) {
-        [rows] = await pool.query(
-          'SELECT * FROM sales_order_item_materials WHERE sales_order_item_id IS NULL AND item_code = ? AND drawing_no = ? ORDER BY created_at ASC',
-          [itemCode, drawingNo]
-        );
-      }
-      if (rows.length === 0) {
-        [rows] = await pool.query(
-          'SELECT * FROM sales_order_item_materials WHERE sales_order_item_id IS NULL AND item_code = ? ORDER BY created_at ASC',
-          [itemCode]
-        );
-      }
-    } else if (drawingNo) {
-      [rows] = await pool.query(
-        'SELECT * FROM sales_order_item_materials WHERE sales_order_item_id IS NULL AND drawing_no = ? ORDER BY created_at ASC',
-        [drawingNo]
-      );
-    }
+  if (rows.length === 0 && itemCode) {
+    const query = drawingNo 
+      ? 'SELECT m.*, i.item_code as actual_item_code, i.item_name as actual_item_name FROM sales_order_item_materials m LEFT JOIN items i ON LOWER(TRIM(m.material_name)) = LOWER(TRIM(i.item_name)) WHERE m.sales_order_item_id IS NULL AND m.item_code = ? AND m.drawing_no = ?'
+      : 'SELECT m.*, i.item_code as actual_item_code, i.item_name as actual_item_name FROM sales_order_item_materials m LEFT JOIN items i ON LOWER(TRIM(m.material_name)) = LOWER(TRIM(i.item_name)) WHERE m.sales_order_item_id IS NULL AND m.item_code = ?';
+    
+    const params = drawingNo ? [itemCode, drawingNo] : [itemCode];
+    [rows] = await pool.query(query + ' ORDER BY m.created_at ASC', params);
   }
+
   return rows.map(row => ({
     ...row,
+    item_code: row.actual_item_code || row.item_code,
+    material_name: row.actual_item_name || row.material_name,
     weightPerUnit: row.weight_per_unit,
     scrapPercent: row.scrap_percent
   }));
