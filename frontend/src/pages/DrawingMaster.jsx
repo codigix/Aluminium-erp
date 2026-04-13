@@ -538,16 +538,6 @@ const DrawingMaster = () => {
         </div>
         
         <div className="flex items-center gap-2">
-           {selectedRows.size > 0 && drawings.some(d => selectedRows.has(d.id) && (d.item_status || '').trim().toUpperCase() !== 'APPROVED' && (d.item_status || '').trim().toUpperCase() !== 'REJECTED') && (
-              <button
-                onClick={handleApproveGroup}
-                disabled={bulkOperationLoading}
-                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded text-xs font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-50 disabled:opacity-50 border-none"
-              >
-                {bulkOperationLoading ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} />}
-                Approve Selective ({drawings.filter(d => selectedRows.has(d.id) && (d.item_status || '').trim().toUpperCase() !== 'APPROVED' && (d.item_status || '').trim().toUpperCase() !== 'REJECTED').length})
-              </button>
-           )}
            <button 
             onClick={() => fetchDrawings()}
             className="p-2.5 text-slate-500 hover:bg-slate-50 rounded  transition-all border border-slate-200"
@@ -575,6 +565,16 @@ const DrawingMaster = () => {
                 onKeyDown={(e) => e.key === 'Enter' && fetchDrawings(searchTerm)}
               />
             </div>
+            {selectedRows.size > 0 && drawings.some(d => selectedRows.has(d.id) && (d.item_status || '').trim().toUpperCase() !== 'APPROVED' && (d.item_status || '').trim().toUpperCase() !== 'REJECTED') && (
+              <button
+                onClick={handleApproveGroup}
+                disabled={bulkOperationLoading}
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded text-xs font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-50 disabled:opacity-50 border-none ml-2"
+              >
+                {bulkOperationLoading ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} />}
+                Approve Selective ({drawings.filter(d => selectedRows.has(d.id) && (d.item_status || '').trim().toUpperCase() !== 'APPROVED' && (d.item_status || '').trim().toUpperCase() !== 'REJECTED').length})
+              </button>
+           )}
           </div>
           <div className="p-2">
             <DataTable 
