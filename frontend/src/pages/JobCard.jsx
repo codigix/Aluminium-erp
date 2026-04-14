@@ -4,7 +4,7 @@ import { Card, Modal, FormControl, StatusBadge, SearchableSelect } from '../comp
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
 import { 
   ClipboardList, Activity, CheckCircle, TrendingUp, 
-  Play, Check, Edit2, Trash2, Search, Filter, Plus, X,
+  Play, Check, Edit2, Trash2, Search, Filter, Plus, X, Pause, Square,
   Clock, Package, User, Monitor, AlertCircle, ChevronDown, ChevronRight, ChevronLeft,
   DollarSign, Zap, Eye, Truck, Box, Target, Layers, ArrowRight, FileText, History,
   AlertTriangle, Download, BarChart2, ShieldCheck, Info, Save, Upload
@@ -35,6 +35,15 @@ const JobCard = () => {
   const [isInwardModalOpen, setIsInwardModalOpen] = useState(false);
   const [selectedJCOutward, setSelectedJCOutward] = useState(null);
   const [logs, setLogs] = useState({ timeLogs: [], qualityLogs: [], downtimeLogs: [] });
+  const [machineStatus, setMachineStatus] = useState("AVAILABLE"); // AVAILABLE, RUNNING, STOPPED
+  const [, setTick] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTick(t => t + 1);
+    }, 60000); // Update every minute for live timer
+    return () => clearInterval(interval);
+  }, []);
 
   const [inwardFormData, setInwardFormData] = useState({
     receivedQty: 0,
@@ -69,7 +78,7 @@ const JobCard = () => {
 
   const formatLocalTime = (isoString) => {
     if (!isoString) return '';
-    const date = new Date(isoString);
+    const date = new Date(String(isoString).replace(' ', 'T'));
     if (isNaN(date.getTime())) return isoString;
     const hours = date.getHours().toString().padStart(2, '0');
     const minutes = date.getMinutes().toString().padStart(2, '0');
@@ -463,14 +472,18 @@ const JobCard = () => {
     const allowedSourceTypes = ['FG', 'SA', 'SFG', 'Sub Assembly', 'Finished Goods'];
     const filteredBySource = jobCards.filter(jc => allowedSourceTypes.includes(jc.source_type));
     
-    if (!searchQuery) return filteredBySource;
-    const query = searchQuery.toLowerCase();
-    return filteredBySource.filter(jc => 
-      jc.job_card_no?.toLowerCase().includes(query) ||
-      jc.wo_number?.toLowerCase().includes(query) ||
-      jc.operation_name?.toLowerCase().includes(query) ||
-      jc.operator_name?.toLowerCase().includes(query)
-    );
+    let result = filteredBySource;
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      result = filteredBySource.filter(jc => 
+        jc.job_card_no?.toLowerCase().includes(query) ||
+        jc.wo_number?.toLowerCase().includes(query) ||
+        jc.operation_name?.toLowerCase().includes(query) ||
+        jc.operator_name?.toLowerCase().includes(query)
+      );
+    }
+
+    return [...result].sort((a, b) => (a.operation_name || "").localeCompare(b.operation_name || ""));
   }, [jobCards, searchQuery]);
 
   const groupedJobCards = useMemo(() => {
@@ -594,6 +607,56 @@ const JobCard = () => {
     day: 1
   });
 
+  useEffect(() => {
+    if (showProductionEntry && selectedJC) {
+      const calculateAutoEndTime = () => {
+        const qty = parseFloat(timeLogForm.producedQty || 0);
+        if (!timeLogForm.startTime) return;
+
+        let stdTime = parseFloat(selectedJC.std_time || 0);
+        const uom = (selectedJC.time_uom || 'min').toLowerCase();
+        
+        if (uom === 'hr' || uom === 'hour' || uom === 'hours') stdTime *= 60;
+        else if (uom === 'sec' || uom === 'second' || uom === 'seconds') stdTime /= 60;
+
+        const totalMinsToAdd = Math.round(stdTime * qty);
+        
+        let [hours, minutes] = timeLogForm.startTime.split(':').map(Number);
+        let ampm = timeLogForm.startAMPM;
+
+        // Convert to 24hr for calculation
+        if (ampm === 'PM' && hours < 12) hours += 12;
+        if (ampm === 'AM' && hours === 12) hours = 0;
+
+        const startTotalMins = hours * 60 + minutes;
+        const endTotalMins = startTotalMins + totalMinsToAdd;
+
+        let endHours = Math.floor((endTotalMins / 60) % 24);
+        let endMins = endTotalMins % 60;
+        let endAMPM = 'AM';
+
+        if (endHours >= 12) {
+          endAMPM = 'PM';
+          if (endHours > 12) endHours -= 12;
+        } else if (endHours === 0) {
+          endHours = 12;
+        }
+
+        const formattedEndHours = String(endHours).padStart(2, '0');
+        const formattedEndMins = String(endMins).padStart(2, '0');
+        const formattedEndTime = `${formattedEndHours}:${formattedEndMins}`;
+
+        setTimeLogForm(prev => ({
+          ...prev,
+          endTime: formattedEndTime,
+          endAMPM: endAMPM
+        }));
+      };
+
+      calculateAutoEndTime();
+    }
+  }, [timeLogForm.producedQty, timeLogForm.startTime, timeLogForm.startAMPM, showProductionEntry, selectedJC?.std_time, selectedJC?.time_uom]);
+
   const [qualityLogForm, setQualityLogForm] = useState({
     checkDate: new Date().toISOString().slice(0, 10),
     shift: 'SHIFT_A',
@@ -696,18 +759,113 @@ const JobCard = () => {
     }
   };
 
-  const handleUpdateStatus = async (id, status) => {
+  const getEstimatedEndTime = (jc) => {
+    if (jc.latest_log_end_time) return formatLocalTime(jc.latest_log_end_time);
+    if (jc.end_time) return formatLocalTime(jc.end_time);
+    const startTime = jc.latest_log_start_time || jc.start_time;
+    if (!startTime) return '--:--';
+
+    try {
+      const start = new Date(startTime);
+      let stdTimeInMinutes = parseFloat(jc.std_time || 0);
+      if (jc.time_uom === 'Hr') stdTimeInMinutes *= 60;
+      else if (jc.time_uom === 'Sec') stdTimeInMinutes /= 60;
+      
+      const totalPlannedTime = stdTimeInMinutes * parseFloat(jc.planned_qty || 0);
+      const estimatedEnd = new Date(start.getTime() + totalPlannedTime * 60000);
+      
+      const hours = estimatedEnd.getHours().toString().padStart(2, '0');
+      const minutes = estimatedEnd.getMinutes().toString().padStart(2, '0');
+      return `${hours}:${minutes}`;
+    } catch (e) {
+      return '--:--';
+    }
+  };
+
+  const getMachineState = (jc, allJobs) => {
+    // ❌ No workstation assigned
+    if (!jc.workstation_id || jc.workstation_name === 'N/A') {
+      return { status: "NOT_ASSIGNED" };
+    }
+
+    // ✅ Completed → never BUSY
+    if (jc.status === "COMPLETED") {
+      return { status: "COMPLETED" };
+    }
+
+    // find all in-progress jobs on same machine, sorted by start time (log time first)
+    const inProgressJobs = allJobs
+      .filter(j => 
+        j.workstation_id === jc.workstation_id && 
+        j.status === "IN_PROGRESS" && 
+        (j.latest_log_start_time || j.start_time)
+      )
+      .sort((a, b) => {
+        const timeA = new Date(a.latest_log_start_time || a.start_time);
+        const timeB = new Date(b.latest_log_start_time || b.start_time);
+        return timeA - timeB;
+      });
+
+    const primaryJob = inProgressJobs[0];
+
+    // ✅ Current is the primary running job
+    if (primaryJob && primaryJob.id === jc.id) {
+      return { 
+        status: "RUNNING", 
+        startTime: jc.latest_log_start_time || jc.start_time 
+      };
+    }
+
+    // ✅ Machine is BUSY with another job (either running or this is secondary in-progress)
+    if (primaryJob) {
+      return {
+        status: "BUSY",
+        jobId: primaryJob.job_card_no,
+        endTime: getEstimatedEndTime(primaryJob)
+      };
+    }
+
+    // ✅ Current is In-Progress but no start_time (fallback, shouldn't happen)
+    if (jc.status === "IN_PROGRESS") {
+      return { status: "RUNNING", startTime: jc.start_time };
+    }
+
+    return { status: "FREE" };
+  };
+
+  const handleUpdateStatus = async (jc, status) => {
+    if (status === 'IN_PROGRESS' && jc.workstation_id) {
+      const busyJob = jobCards.find(other => 
+        other.id !== jc.id && 
+        other.workstation_id === jc.workstation_id && 
+        other.status === 'IN_PROGRESS'
+      );
+      
+      if (busyJob) {
+        Swal.fire({
+          title: 'Machine Busy',
+          text: `Workstation "${jc.workstation_name}" is currently occupied by Job Card ${busyJob.job_card_no}. Please wait until it's free.`,
+          icon: 'warning',
+          confirmButtonColor: '#4f46e5'
+        });
+        return;
+      }
+    }
+
     try {
       const token = localStorage.getItem('authToken');
       const payload = { status };
       
       if (status === 'IN_PROGRESS') {
         payload.startTime = new Date().toISOString().slice(0, 19).replace('T', ' ');
+        // If the job card already has an assignee or workstation, include them
+        if (jc.workstation_id) payload.workstationId = jc.workstation_id;
+        if (jc.assigned_to) payload.assignedTo = jc.assigned_to;
       } else if (status === 'COMPLETED') {
         payload.endTime = new Date().toISOString().slice(0, 19).replace('T', ' ');
       }
 
-      const response = await fetch(`${API_BASE}/job-cards/${id}/progress`, {
+      const response = await fetch(`${API_BASE}/job-cards/${jc.id}/progress`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -835,6 +993,18 @@ const JobCard = () => {
     
     const balanceWip = parseFloat(selectedJC.planned_qty || 0) - parseFloat(selectedJC.accepted_qty || 0);
 
+    const totalStdMins = (() => {
+      let stdTime = parseFloat(selectedJC.std_time || 0);
+      const uom = (selectedJC.time_uom || 'min').toLowerCase();
+      if (uom === 'hr' || uom === 'hour' || uom === 'hours') stdTime *= 60;
+      else if (uom === 'sec' || uom === 'second' || uom === 'seconds') stdTime /= 60;
+      return Math.round(stdTime * parseFloat(selectedJC.accepted_qty || 0));
+    })();
+
+    const totalActualMins = (logs.timeLogs || []).reduce((acc, log) => {
+      return acc + calculateISODuration(log.start_time, log.end_time);
+    }, 0);
+
     return (
       <div className="space-y-2 pb-12">
         {/* New Header UI */}
@@ -845,6 +1015,20 @@ const JobCard = () => {
               <span className="flex items-center gap-1.5 px-2 py-0.5 bg-amber-50 text-amber-700 rounded text-xs    border border-amber-100">
                 <span className="w-1.5 h-1.5 bg-amber-500 rounded animate-pulse"></span>
                 {selectedJC.status || 'In-Progress'}
+              </span>
+              <span className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-xs border ${
+                machineStatus === 'RUNNING' ? 'bg-rose-50 text-rose-700 border-rose-100' :
+                machineStatus === 'STOPPED' ? 'bg-amber-50 text-amber-700 border-amber-100' :
+                'bg-emerald-50 text-emerald-700 border-emerald-100'
+              }`}>
+                <span className={`w-1.5 h-1.5 rounded animate-pulse ${
+                  machineStatus === 'RUNNING' ? 'bg-rose-500' :
+                  machineStatus === 'STOPPED' ? 'bg-amber-500' :
+                  'bg-emerald-500'
+                }`}></span>
+                {machineStatus === 'RUNNING' && '🔴 RUNNING'}
+                {machineStatus === 'STOPPED' && '🟠 STOPPED'}
+                {machineStatus === 'AVAILABLE' && '🟢 AVAILABLE'}
               </span>
             </div>
             <div className="flex items-center gap-2 mt-1">
@@ -907,6 +1091,13 @@ const JobCard = () => {
                   {balanceWip.toFixed(2)} <span className="text-xs text-amber-400">Units</span>
                 </p>
               </div>
+              <div className="text-center border-l border-slate-100 pl-8">
+                <p className="text-xs text-indigo-500 mb-1.5 font-medium">Net Time (Per Unit)</p>
+                <p className="text-sm font-bold text-indigo-600">
+                  {parseFloat(selectedJC.std_time || 0).toFixed(1)} <span className="text-[10px] text-indigo-400 lowercase">{selectedJC.time_uom || 'min'}</span>
+                  <span className="text-[9px] text-indigo-300 ml-1">/ unit</span>
+                </p>
+              </div>
               <div className="text-right border-l border-slate-100 pl-8">
                 <p className="text-xs  text-slate-400   mb-1.5">Current Op</p>
                 <div className="flex items-center gap-2">
@@ -926,8 +1117,10 @@ const JobCard = () => {
             </div>
             <div>
               <div className="flex items-baseline gap-2">
-                <span className="text-xl  text-slate-900">{calculateEfficiency(selectedJC)}%</span>
-                <span className="text-xs text-slate-400  ">0 / 0 MIN</span>
+                <span className="text-xl  text-slate-900">
+                  {totalActualMins > 0 ? Math.round((totalStdMins / totalActualMins) * 100) : 0}%
+                </span>
+                <span className="text-xs text-slate-400  ">{totalStdMins} / {totalActualMins} MIN</span>
               </div>
               <p className="text-xs  text-slate-400   mt-0.5">Efficiency</p>
             </div>
@@ -954,7 +1147,9 @@ const JobCard = () => {
             </div>
             <div>
               <div className="flex items-baseline gap-2">
-                <span className="text-xl  text-slate-900">0</span>
+                <span className="text-xl  text-slate-900">
+                  {totalActualMins > 0 ? (parseFloat(selectedJC.produced_qty || 0) / (totalActualMins / 60)).toFixed(1) : 0}
+                </span>
                 <span className="text-xs text-slate-400  ">Units Per Hour</span>
               </div>
               <p className="text-xs  text-slate-400   mt-0.5">Productivity</p>
@@ -1002,7 +1197,21 @@ const JobCard = () => {
                   </FormControl>
                   <FormControl label="Workstation" required>
                     <SearchableSelect
-                      options={workstations.map(w => ({ value: w.id, label: w.workstation_name }))}
+                      options={workstations.map(w => {
+                        const busyJob = jobCards.find(jc => 
+                          jc.id !== selectedJC?.id && 
+                          jc.workstation_id === w.id && 
+                          jc.status === 'IN_PROGRESS'
+                        );
+                        
+                        return { 
+                          value: w.id, 
+                          label: busyJob 
+                            ? `${w.workstation_name} (Busy till ${getEstimatedEndTime(busyJob)})`
+                            : w.workstation_name,
+                          disabled: !!busyJob
+                        };
+                      })}
                       value={timeLogForm.workstationId}
                       onChange={(e) => setTimeLogForm({ ...timeLogForm, workstationId: e.target.value })}
                       placeholder="Select Machine..."
@@ -1076,13 +1285,45 @@ const JobCard = () => {
                       />
                     </FormControl>
                   </div>
-                  <button 
-                    onClick={() => addTimeLog(timeLogForm)}
-                    className="px-10 py-2.5 bg-indigo-600 text-white rounded  hover:bg-indigo-700 transition-all text-xs    shadow-lg shadow-indigo-100 flex items-center gap-2 h-[38px]"
-                  >
-                    <Monitor className="w-4 h-4" />
-                    Record Time
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={() => setMachineStatus("RUNNING")}
+                      className={`p-2.5 rounded transition-all text-xs flex items-center gap-2 h-[38px] ${
+                        machineStatus === 'RUNNING' ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-600 hover:bg-rose-50 hover:text-rose-600'
+                      }`}
+                      title="Start Machine"
+                    >
+                      <Play className="w-4 h-4 fill-current" />
+                      Start
+                    </button>
+                    <button 
+                      onClick={() => setMachineStatus("STOPPED")}
+                      className={`p-2.5 rounded transition-all text-xs flex items-center gap-2 h-[38px] ${
+                        machineStatus === 'STOPPED' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600 hover:bg-amber-50 hover:text-amber-600'
+                      }`}
+                      title="Stop Machine"
+                    >
+                      <Pause className="w-4 h-4 fill-current" />
+                      Stop
+                    </button>
+                    <button 
+                      onClick={() => setMachineStatus("AVAILABLE")}
+                      className={`p-2.5 rounded transition-all text-xs flex items-center gap-2 h-[38px] ${
+                        machineStatus === 'AVAILABLE' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600 hover:bg-emerald-50 hover:text-emerald-600'
+                      }`}
+                      title="Complete Production"
+                    >
+                      <Check className="w-4 h-4" />
+                      Complete
+                    </button>
+                    <button 
+                      onClick={() => addTimeLog(timeLogForm)}
+                      className="px-10 py-2.5 bg-indigo-600 text-white rounded  hover:bg-indigo-700 transition-all text-xs    shadow-lg shadow-indigo-100 flex items-center gap-2 h-[38px]"
+                    >
+                      <Monitor className="w-4 h-4" />
+                      Record Time
+                    </button>
+                  </div>
                 </div>
 
                 <div className="mt-12 overflow-x-auto">
@@ -2769,14 +3010,152 @@ const JobCard = () => {
                     </span>
                   </td>
                   <td className="p-2 ">
-                    <span className={`text-xs  ${jc.outward_challan_id ? 'text-purple-600 font-semibold' : 'text-slate-600'}`}>
-                      {jc.outward_challan_id ? 'Subcontract' : (jc.workstation_name || 'N/A')}
-                    </span>
+                    <div className="flex flex-col">
+                      <span className={`text-xs  ${jc.outward_challan_id ? 'text-purple-600 font-semibold' : 'text-slate-900'}`}>
+                        {jc.outward_challan_id ? 'Subcontract' : (jc.workstation_name || 'N/A')}
+                      </span>
+                      {!jc.outward_challan_id && (() => {
+                        const m = getMachineState(jc, jobCards);
+
+                        if (m.status === "NOT_ASSIGNED") {
+                          return (
+                            <span className="flex items-center gap-1 mt-0.5">
+                              <span className="w-1.5 h-1.5 bg-slate-300 rounded-full"></span>
+                              <span className="text-[10px] text-slate-400 font-medium tracking-tight">⚪ Not Assigned</span>
+                            </span>
+                          );
+                        }
+
+                        if (m.status === "RUNNING") {
+                          return (
+                            <span className="flex items-center gap-1 mt-0.5">
+                              <span className="w-1.5 h-1.5 bg-rose-500 rounded-full animate-pulse"></span>
+                              <span className="text-[10px] text-rose-600 font-medium tracking-tight">🔴 RUNNING</span>
+                            </span>
+                          );
+                        }
+
+                        if (m.status === "BUSY") {
+                          return (
+                            <div className="flex flex-col gap-0.5 mt-0.5">
+                              <span className="flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 bg-rose-600 rounded-full"></span>
+                                <span className="text-[10px] text-rose-700 font-bold">🔴 Busy ({m.jobId})</span>
+                              </span>
+                              <span className="text-[9px] text-slate-500 flex items-center gap-1">
+                                <Clock className="w-2 h-2" /> Free at {m.endTime}
+                              </span>
+                            </div>
+                          );
+                        }
+
+                        if (m.status === "COMPLETED") {
+                          return (
+                            <span className="flex items-center gap-1 mt-0.5">
+                              <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
+                              <span className="text-[10px] text-emerald-600 font-medium tracking-tight">✅ COMPLETED</span>
+                            </span>
+                          );
+                        }
+
+                        if (m.status === "FREE") {
+                          return (
+                            <span className="flex items-center gap-1 mt-0.5">
+                              <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
+                              <span className="text-[10px] text-emerald-600 font-medium tracking-tight">🟢 FREE</span>
+                            </span>
+                          );
+                        }
+
+                        if (jc.status === 'STOPPED') {
+                          return (
+                            <span className="flex items-center gap-1 mt-0.5">
+                              <span className="w-1.5 h-1.5 bg-amber-500 rounded-full"></span>
+                              <span className="text-[10px] text-amber-600 font-medium tracking-tight">🟠 STOPPED</span>
+                            </span>
+                          );
+                        }
+
+                        return null;
+                      })()}
+                    </div>
                   </td>
                   <td className="p-2 ">
-                    <span className={`text-xs  ${jc.outward_challan_id ? 'text-purple-600 font-semibold' : 'text-slate-600'}`}>
-                      {jc.outward_challan_id ? 'N/A' : (jc.operator_name || 'Unassigned')}
-                    </span>
+                    <div className="flex flex-col">
+                      <span className={`text-xs  ${jc.outward_challan_id ? 'text-purple-600 font-semibold' : 'text-slate-900'}`}>
+                        {jc.outward_challan_id ? 'N/A' : (jc.operator_name || 'Unassigned')}
+                      </span>
+                      {jc.status === 'IN_PROGRESS' ? (
+                        <div className="flex flex-col gap-0.5 mt-0.5">
+                          <span className="text-[10px] text-indigo-600 font-medium">
+                            {jc.latest_log_start_time ? (
+                              jc.latest_log_end_time ? (
+                                `${formatLocalTime(jc.latest_log_start_time)} - ${formatLocalTime(jc.latest_log_end_time)}`
+                              ) : (
+                                `${formatLocalTime(jc.latest_log_start_time)} - Running`
+                              )
+                            ) : (
+                              jc.start_time ? `${formatLocalTime(jc.start_time)} - Running` : 'In Progress'
+                            )}
+                          </span>
+                          {(() => {
+                            const startTime = jc.latest_log_start_time || jc.start_time;
+                            if (!startTime) return null;
+                            
+                            let diff;
+                            if (jc.latest_log_end_time) {
+                              diff = calculateISODuration(jc.latest_log_start_time, jc.latest_log_end_time);
+                            } else {
+                              const start = new Date(startTime);
+                              const now = new Date();
+                              diff = Math.floor((now - start) / 60000); // minutes
+                            }
+
+                            const hrs = Math.floor(diff / 60);
+                            const mins = diff % 60;
+                            return (
+                              <span className="text-[9px] text-slate-500 font-medium flex items-center gap-1">
+                                <Clock className="w-2 h-2" /> ⏱ {hrs}h {mins}m
+                              </span>
+                            );
+                          })()}
+                        </div>
+                      ) : (jc.latest_log_start_time && jc.latest_log_end_time) ? (
+                        <div className="flex flex-col gap-0.5 mt-0.5">
+                          <span className="text-[10px] text-slate-500 font-medium">
+                            {formatLocalTime(jc.latest_log_start_time)} - {formatLocalTime(jc.latest_log_end_time)}
+                          </span>
+                          {(() => {
+                            const diff = calculateISODuration(jc.latest_log_start_time, jc.latest_log_end_time);
+                            const hrs = Math.floor(diff / 60);
+                            const mins = diff % 60;
+                            return (
+                              <span className="text-[9px] text-slate-500 font-medium flex items-center gap-1">
+                                <Clock className="w-2 h-2" /> ⏱ {hrs}h {mins}m
+                              </span>
+                            );
+                          })()}
+                        </div>
+                      ) : jc.start_time && jc.end_time ? (
+                        <div className="flex flex-col gap-0.5 mt-0.5">
+                          <span className="text-[10px] text-slate-500 font-medium">
+                            {formatLocalTime(jc.start_time)} - {formatLocalTime(jc.end_time)}
+                          </span>
+                          {(() => {
+                            const diff = calculateISODuration(jc.start_time, jc.end_time);
+                            const hrs = Math.floor(diff / 60);
+                            const mins = diff % 60;
+                            return (
+                              <span className="text-[9px] text-slate-500 font-medium flex items-center gap-1">
+                                <Clock className="w-2 h-2" /> ⏱ {hrs}h {mins}m
+                              </span>
+                            );
+                          })()}
+                        </div>
+                      ) : (
+                        <span className="text-[10px] text-slate-400 mt-0.5 italic">No Time</span>
+                      )}
+                    </div>
                   </td>
                   <td className="p-2  text-right">
                     <div className="flex items-center justify-end gap-1">
@@ -2789,7 +3168,7 @@ const JobCard = () => {
                       </button>
                       {jc.status !== 'IN_PROGRESS' && jc.status !== 'COMPLETED' && (
                         <button 
-                          onClick={() => handleUpdateStatus(jc.id, 'IN_PROGRESS')}
+                          onClick={() => handleUpdateStatus(jc, 'IN_PROGRESS')}
                           className="p-1.5 text-emerald-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-all"
                           title="Start"
                         >

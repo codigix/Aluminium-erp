@@ -5,10 +5,12 @@ const listJobCards = async () => {
     `SELECT jc.*, wo.wo_number, wo.item_name, wo.priority, wo.quantity as wo_quantity, wo.status as wo_status, wo.end_date as wo_end_date, wo.source_type,
             COALESCE(o.operation_name, jc.operation_name) as operation_name, 
             COALESCE(NULLIF(jc.std_time, 0), o.std_time, 0) as std_time, 
-            COALESCE(o.time_uom, 'Min') as time_uom, 
+            COALESCE(jc.time_uom, o.time_uom, 'Min') as time_uom, 
             COALESCE(NULLIF(jc.hourly_rate, 0), o.hourly_rate, 0) as hourly_rate, 
             w.workstation_name, u.username as operator_name, soi.status as item_status,
-            oc.id as outward_challan_id, oc.challan_number as outward_challan_no, oc.dispatch_qty
+            oc.id as outward_challan_id, oc.challan_number as outward_challan_no, oc.dispatch_qty,
+            (SELECT start_time FROM job_card_time_logs WHERE job_card_id = jc.id ORDER BY log_date DESC, start_time DESC, id DESC LIMIT 1) as latest_log_start_time,
+            (SELECT end_time FROM job_card_time_logs WHERE job_card_id = jc.id ORDER BY log_date DESC, start_time DESC, id DESC LIMIT 1) as latest_log_end_time
      FROM job_cards jc
      JOIN work_orders wo ON jc.work_order_id = wo.id
      LEFT JOIN sales_order_items soi ON wo.sales_order_item_id = soi.id
@@ -50,7 +52,7 @@ const createJobCard = async (data) => {
 };
 
 const updateJobCardProgress = async (id, data) => {
-  const { producedQty, acceptedQty, rejectedQty, status, startTime, endTime } = data;
+  const { producedQty, acceptedQty, rejectedQty, status, startTime, endTime, workstationId, assignedTo } = data;
   
   const connection = await pool.getConnection();
   try {
@@ -82,6 +84,14 @@ const updateJobCardProgress = async (id, data) => {
     if (endTime) {
       updates.push('end_time = ?');
       params.push(endTime);
+    }
+    if (workstationId) {
+      updates.push('workstation_id = ?');
+      params.push(workstationId);
+    }
+    if (assignedTo) {
+      updates.push('assigned_to = ?');
+      params.push(assignedTo);
     }
 
     if (updates.length > 0) {
@@ -127,7 +137,7 @@ const getJobCardById = async (id) => {
     `SELECT jc.*, wo.wo_number, wo.item_name, wo.drawing_no,
             COALESCE(o.operation_name, jc.operation_name) as operation_name, 
             COALESCE(NULLIF(jc.std_time, 0), o.std_time, 0) as std_time, 
-            COALESCE(o.time_uom, 'Min') as time_uom, 
+            COALESCE(jc.time_uom, o.time_uom, 'Min') as time_uom, 
             COALESCE(NULLIF(jc.hourly_rate, 0), o.hourly_rate, 0) as hourly_rate, 
             w.workstation_name, u.username as operator_name
      FROM job_cards jc
@@ -188,11 +198,16 @@ const addTimeLog = async (data) => {
       // First Entry
       actualStartDate = logDate;
       await connection.execute(
-        "UPDATE job_cards SET actual_start_date = ?, status = 'IN_PROGRESS' WHERE id = ?",
-        [actualStartDate, jobCardId]
+        "UPDATE job_cards SET actual_start_date = ?, status = 'IN_PROGRESS', workstation_id = ?, assigned_to = ? WHERE id = ?",
+        [actualStartDate, workstationId, operatorId, jobCardId]
       );
       calculatedDay = 1;
     } else {
+      // Update workstation and operator even if not the first entry to reflect current activity
+      await connection.execute(
+        "UPDATE job_cards SET workstation_id = ?, assigned_to = ? WHERE id = ?",
+        [workstationId, operatorId, jobCardId]
+      );
       // Future Entries
       const start = new Date(actualStartDate + 'T00:00:00');
       const current = new Date(logDate + 'T00:00:00');
@@ -281,13 +296,15 @@ const updateTimeLog = async (id, data) => {
     );
   }
 
-  // Update total produced qty in job card
+  // Update total produced qty, workstation and operator in job card
   if (jobCardId) {
     await pool.execute(
       `UPDATE job_cards jc 
-       SET produced_qty = (SELECT SUM(produced_qty) FROM job_card_time_logs WHERE job_card_id = ?)
+       SET produced_qty = (SELECT SUM(produced_qty) FROM job_card_time_logs WHERE job_card_id = ?),
+           workstation_id = COALESCE(?, workstation_id),
+           assigned_to = COALESCE(?, assigned_to)
        WHERE id = ?`,
-      [jobCardId, jobCardId]
+      [jobCardId, workstationId, operatorId, jobCardId]
     );
   }
 };

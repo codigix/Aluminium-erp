@@ -372,7 +372,7 @@ const createJobCardsForWorkOrder = async (workOrderId, connection, initialStatus
   const [existingJc] = await connection.query('SELECT id FROM job_cards WHERE work_order_id = ?', [workOrderId]);
   if (existingJc.length > 0) return;
 
-  // 3. Get Operations
+    // 3. Get Operations
   let operationsToUse = [];
   if (providedOperations && Array.isArray(providedOperations)) {
     // If operations are provided, use them strictly
@@ -380,6 +380,7 @@ const createJobCardsForWorkOrder = async (workOrderId, connection, initialStatus
       operation_name: op.operation_name || op.operationName,
       workstation: op.workstation,
       base_time: op.base_time || op.cycle_time_min || op.baseTime,
+      time_uom: op.time_uom || op.timeUom || 'Min',
       hourly_rate: op.hourly_rate || op.hourlyRate
     }));
   } else {
@@ -394,7 +395,7 @@ const createJobCardsForWorkOrder = async (workOrderId, connection, initialStatus
   // 4. Create Job Cards for defined operations
   for (const op of operationsToUse) {
     const [masterOps] = await connection.query(
-      'SELECT id, std_time, hourly_rate FROM operations WHERE operation_name = ?',
+      'SELECT id, std_time, time_uom, hourly_rate FROM operations WHERE operation_name = ?',
       [op.operation_name]
     );
     const [masterWs] = await connection.query(
@@ -404,13 +405,15 @@ const createJobCardsForWorkOrder = async (workOrderId, connection, initialStatus
 
     const jcNo = await generateJobCardNo(connection);
     const stdTime = op.base_time || op.cycle_time_min || masterOps[0]?.std_time || 0;
+    // If it's from op.base_time or op.cycle_time_min, it's almost always intended as Min in this system
+    const timeUom = (op.base_time || op.cycle_time_min) ? 'Min' : (masterOps[0]?.time_uom || 'Min');
     const hourlyRate = op.hourly_rate || masterOps[0]?.hourly_rate || 0;
 
     await connection.execute(
       `INSERT INTO job_cards 
-       (job_card_no, work_order_id, operation_id, workstation_id, planned_qty, status, std_time, hourly_rate, operation_name)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [jcNo, workOrderId, masterOps[0]?.id || null, masterWs[0]?.id || null, wo.quantity, initialStatus, stdTime, hourlyRate, op.operation_name]
+       (job_card_no, work_order_id, operation_id, workstation_id, planned_qty, status, std_time, time_uom, hourly_rate, operation_name)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [jcNo, workOrderId, masterOps[0]?.id || null, masterWs[0]?.id || null, wo.quantity, initialStatus, stdTime, timeUom, hourlyRate, op.operation_name]
     );
   }
 };

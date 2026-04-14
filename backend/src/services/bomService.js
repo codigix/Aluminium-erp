@@ -8,9 +8,11 @@ const getItemMaterials = async (itemId, itemCode = null, drawingNo = null) => {
   // The item_code column in sales_order_item_materials might contain the parent item_code in some cases
   if (parsedItemId) {
     [rows] = await pool.query(
-      `SELECT m.*, i.item_code as actual_item_code, i.item_name as actual_item_name
+      `SELECT m.*, i.item_code as actual_item_code, i.material_name as actual_item_name
        FROM sales_order_item_materials m
-       LEFT JOIN items i ON LOWER(TRIM(m.material_name)) = LOWER(TRIM(i.item_name))
+       LEFT JOIN (
+         SELECT item_code, material_name FROM stock_balance GROUP BY item_code, material_name
+       ) i ON LOWER(TRIM(m.material_name)) = LOWER(TRIM(i.material_name))
        WHERE m.sales_order_item_id = ? 
        ORDER BY m.created_at ASC`,
       [parsedItemId]
@@ -19,8 +21,18 @@ const getItemMaterials = async (itemId, itemCode = null, drawingNo = null) => {
   
   if (rows.length === 0 && itemCode) {
     const query = drawingNo 
-      ? 'SELECT m.*, i.item_code as actual_item_code, i.item_name as actual_item_name FROM sales_order_item_materials m LEFT JOIN items i ON LOWER(TRIM(m.material_name)) = LOWER(TRIM(i.item_name)) WHERE m.sales_order_item_id IS NULL AND m.item_code = ? AND m.drawing_no = ?'
-      : 'SELECT m.*, i.item_code as actual_item_code, i.item_name as actual_item_name FROM sales_order_item_materials m LEFT JOIN items i ON LOWER(TRIM(m.material_name)) = LOWER(TRIM(i.item_name)) WHERE m.sales_order_item_id IS NULL AND m.item_code = ?';
+      ? `SELECT m.*, i.item_code as actual_item_code, i.material_name as actual_item_name 
+         FROM sales_order_item_materials m 
+         LEFT JOIN (
+           SELECT item_code, material_name FROM stock_balance GROUP BY item_code, material_name
+         ) i ON LOWER(TRIM(m.material_name)) = LOWER(TRIM(i.material_name)) 
+         WHERE m.sales_order_item_id IS NULL AND m.item_code = ? AND m.drawing_no = ?`
+      : `SELECT m.*, i.item_code as actual_item_code, i.material_name as actual_item_name 
+         FROM sales_order_item_materials m 
+         LEFT JOIN (
+           SELECT item_code, material_name FROM stock_balance GROUP BY item_code, material_name
+         ) i ON LOWER(TRIM(m.material_name)) = LOWER(TRIM(i.material_name)) 
+         WHERE m.sales_order_item_id IS NULL AND m.item_code = ?`;
     
     const params = drawingNo ? [itemCode, drawingNo] : [itemCode];
     [rows] = await pool.query(query + ' ORDER BY m.created_at ASC', params);

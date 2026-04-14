@@ -224,6 +224,13 @@ const BOMFormPage = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState(null);
+  const selectedItemRef = useRef(null);
+
+  // Sync ref with state
+  useEffect(() => {
+    selectedItemRef.current = selectedItem;
+  }, [selectedItem]);
+
   const [workstations, setWorkstations] = useState([]);
   const [operationsList, setOperationsList] = useState([]);
   const [stockItems, setStockItems] = useState([]);
@@ -659,12 +666,12 @@ const BOMFormPage = () => {
       const drawingIdFromUrl = params.get('drawing_id') === 'N/A' ? '' : params.get('drawing_id');
       const effectiveId = (itemId && itemId !== 'bom-form') 
         ? itemId 
-        : (selectedItem?.source === 'order' ? selectedItem?.id : null);
+        : (selectedItemRef.current?.source === 'order' ? selectedItemRef.current?.id : null);
 
-      if (effectiveId || itemCodeFromUrl || selectedItem?.item_code || drawingNoFromUrl) {
-        let currentItem = selectedItem;
+      if (effectiveId || itemCodeFromUrl || selectedItemRef.current?.item_code || drawingNoFromUrl) {
+        let currentItem = selectedItemRef.current;
         // If we have an ID but not selectedItem data (and it's not the one we just selected)
-        if (effectiveId && (!selectedItem || String(selectedItem.id) !== String(effectiveId))) {
+        if (effectiveId && (!selectedItemRef.current || String(selectedItemRef.current.id) !== String(effectiveId))) {
           const itemResponse = await fetch(`${API_BASE}/sales-orders/items/${effectiveId}`, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
@@ -812,13 +819,13 @@ const BOMFormPage = () => {
     } finally {
       if (showLoading) setLoading(false);
     }
-  }, [itemId, selectedItem, isReadOnly, location.search, productForm.drawingNo]);
+  }, [itemId, isReadOnly, location.search]);
 
   useEffect(() => {
     // Only show full page loading on the very first mount
     const isFirstRun = !stockItems.length && !approvedDrawings.length;
     fetchData(isFirstRun);
-  }, [itemId, fetchData, stockItems.length, approvedDrawings.length]);
+  }, [itemId, fetchData, location.search]); // Trigger on itemId or location.search changes
 
   // Sync productForm with selectedItem when it changes
   useEffect(() => {
