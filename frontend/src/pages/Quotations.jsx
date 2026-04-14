@@ -747,7 +747,8 @@ const Quotations = () => {
 
       const rfqGroupId = `GRP-${Date.now()}`;
 
-      const creationPromises = formData.vendorIds.map(async (vId) => {
+      // Creation sequentiallly to avoid DB deadlocks
+      for (const vId of formData.vendorIds) {
         const payload = {
           ...formData,
           vendorId: parseInt(vId),
@@ -778,11 +779,7 @@ const Quotations = () => {
           const err = await response.json();
           throw new Error(err.error || `Failed to create quotation for vendor ID ${vId}`);
         }
-        
-        return await response.json();
-      });
-
-      await Promise.all(creationPromises);
+      }
 
       successToast(`Successfully created RFQs for ${formData.vendorIds.length} vendor(s)`);
       setShowCreateModal(false);
@@ -912,16 +909,20 @@ const Quotations = () => {
   };
 
   const handleApproveQuote = async (quotationId) => {
-    const result = await Swal.fire({
-      title: 'Approve Quote?',
-      text: 'This will enable PO creation for this quotation',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonText: 'Approve',
-      cancelButtonText: 'Cancel'
-    });
+    const q = displayQuotations.find(item => item.id === quotationId);
+    
+    if (!q?.is_single_vendor) {
+      const result = await Swal.fire({
+        title: 'Approve Quote?',
+        text: 'This will enable PO creation for this quotation',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Approve',
+        cancelButtonText: 'Cancel'
+      });
 
-    if (!result.isConfirmed) return;
+      if (!result.isConfirmed) return;
+    }
 
     try {
       const token = localStorage.getItem('authToken');
@@ -1195,12 +1196,33 @@ const Quotations = () => {
       combined = [...combined, ...rfqPlaceholders];
     }
 
+    // Count how many vendors per RFQ group or source RFQ
+    const groupCounts = {};
+    const rfqCounts = {};
+    quotations.forEach(q => {
+      if (q.rfq_group_id) groupCounts[q.rfq_group_id] = (groupCounts[q.rfq_group_id] || 0) + 1;
+      if (q.rfq_id) rfqCounts[q.rfq_id] = (rfqCounts[q.rfq_id] || 0) + 1;
+    });
+
     return combined.filter(q => {
       const isTabMatch = activeTab === 'sent' 
         ? ['DRAFT', 'SENT', 'EMAIL_RECEIVED', 'PENDING', 'RFQ_REQUESTED'].includes(q.status)
         : ['RECEIVED', 'REVIEWED', 'CLOSED'].includes(q.status);
       const matchesStatus = filterStatus === 'All Quotations' || q.status === filterStatus;
       return isTabMatch && matchesStatus;
+    }).map(q => {
+      // Logic for single vendor label
+      let isSingle = false;
+      if (q.isRFQOnly) {
+        isSingle = false; // Don't show for unassigned ones yet
+      } else if (q.rfq_group_id) {
+        isSingle = groupCounts[q.rfq_group_id] === 1;
+      } else if (q.rfq_id) {
+        isSingle = rfqCounts[q.rfq_id] === 1;
+      } else {
+        isSingle = true; // Isolated quotation record
+      }
+      return { ...q, is_single_vendor: isSingle };
     });
   }, [quotations, rawRfqs, activeTab, filterStatus]);
 
@@ -1244,9 +1266,10 @@ const Quotations = () => {
         sortable: true,
         render: (val, q) => (
           <div className="flex flex-col">
-            <span className="text-slate-900 ">{val ? getVendorName(val) : (q.isRFQOnly ? 'Unassigned' : 'Unknown')}</span>
-            {val && <span className="text-xs text-slate-400   ">Vendor ID: #{val}</span>}
-            {q.isRFQOnly && <span className="text-xs text-amber-500 italic">Select vendor below</span>}
+            <span className="text-slate-900 font-medium ">{val ? getVendorName(val) : (q.isRFQOnly ? 'Unassigned' : 'Unknown')}</span>
+            {val && q.is_single_vendor && <span className="text-[10px] uppercase font-bold text-slate-400 mt-0.5 tracking-wider">[Single Vendor]</span>}
+            {val && <span className="text-xs text-slate-400 mt-1 flex items-center gap-1 opacity-70">Vendor ID: #{val}</span>}
+            {q.isRFQOnly && <span className="text-xs text-amber-500 italic mt-1 font-medium">Select vendor below</span>}
           </div>
         )
       },
@@ -1276,10 +1299,15 @@ const Quotations = () => {
         key: 'status',
         label: 'Status',
         sortable: true,
-        render: (val) => (
-          <span className={`inline-flex px-2.5 py-1 rounded text-xs    border ${rfqStatusColors[val]?.badge}`}>
-            {rfqStatusColors[val]?.label?.toUpperCase() || val}
-          </span>
+        render: (val, q) => (
+          <div className="flex flex-col gap-1 items-start">
+            <span className={`inline-flex px-2.5 py-1 rounded text-xs    border ${rfqStatusColors[val]?.badge}`}>
+              {rfqStatusColors[val]?.label?.toUpperCase() || val}
+            </span>
+            {val === 'REVIEWED' && q.is_single_vendor && (
+              <span className="text-[10px] text-indigo-500 font-medium ml-1">Auto Approved</span>
+            )}
+          </div>
         )
       },
       {
