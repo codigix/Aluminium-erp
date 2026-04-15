@@ -33,7 +33,8 @@ const ensureJobCardColumns = async () => {
       { name: 'std_time', definition: 'DECIMAL(12, 3) DEFAULT 0' },
       { name: 'time_uom', definition: "VARCHAR(20) DEFAULT 'Min'" },
       { name: 'hourly_rate', definition: 'DECIMAL(12, 2) DEFAULT 0' },
-      { name: 'operation_name', definition: 'VARCHAR(255) NULL' }
+      { name: 'operation_name', definition: 'VARCHAR(255) NULL' },
+      { name: 'execution_type', definition: "ENUM('In-House', 'Outsource') DEFAULT 'In-House'" }
     ];
 
     const missing = requiredColumns.filter(column => !existing.has(column.name));

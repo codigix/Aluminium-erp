@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Card, Modal, FormControl, StatusBadge, SearchableSelect } from '../components/ui.jsx';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
@@ -13,6 +13,107 @@ import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
+
+const TimePicker = ({ value, ampmValue, onTimeChange, onAMPMChange, label, small = false }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const triggerRef = useRef(null);
+  const [coords, setCoords] = useState({ top: 0, left: 0, width: 0 });
+  
+  const hour = value?.split(':')[0] || '08';
+  const minute = value?.split(':')[1] || '00';
+  
+  const hours = Array.from({ length: 12 }, (_, i) => (i + 1).toString().padStart(2, '0'));
+  const minutes = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0'));
+  const periods = ['AM', 'PM'];
+
+  useLayoutEffect(() => {
+    if (isOpen && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      setCoords({
+        top: rect.bottom + window.scrollY,
+        left: rect.left + window.scrollX,
+        width: Math.max(rect.width, small ? 150 : 180)
+      });
+    }
+  }, [isOpen, small]);
+
+  const toggleOpen = () => setIsOpen(!isOpen);
+
+  return (
+    <div className="relative w-full" ref={triggerRef}>
+      <div 
+        onClick={toggleOpen}
+        className={`flex items-center gap-1.5 bg-white border border-slate-200 rounded cursor-pointer hover:border-indigo-400 transition-all focus-within:ring-2 focus-within:ring-indigo-500/20 ${
+          small ? 'px-2 py-1' : 'px-3 py-2'
+        }`}
+      >
+        <Clock className={`${small ? 'w-3 h-3' : 'w-3.5 h-3.5'} text-slate-400`} />
+        <span className={`${small ? 'text-[10px]' : 'text-xs'} font-medium text-slate-700`}>
+          {hour}:{minute} {ampmValue}
+        </span>
+        <ChevronDown className={`${small ? 'w-2.5 h-2.5' : 'w-3 h-3'} text-slate-400 ml-auto transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+      </div>
+
+      {isOpen && (
+        <>
+          <div className="fixed inset-0 z-[9998]" onClick={() => setIsOpen(false)} />
+          <div 
+            style={{ 
+              position: 'fixed',
+              top: `${coords.top - window.scrollY + 4}px`, 
+              left: `${coords.left - window.scrollX}px`,
+              minWidth: `${coords.width}px`
+            }}
+            className="z-[9999] bg-white border border-slate-200 rounded-lg shadow-2xl flex overflow-hidden h-64 animate-in fade-in zoom-in-95 duration-200 origin-top"
+          >
+            {/* Hours */}
+            <div className="flex-1 overflow-y-auto scrollbar-hide border-r border-slate-50 py-1 bg-white">
+              {hours.map(h => (
+                <div
+                  key={h}
+                  onClick={() => onTimeChange(`${h}:${minute}`)}
+                  className={`px-3 py-2 text-xs text-center cursor-pointer transition-colors ${
+                    hour === h ? 'bg-indigo-600 text-white font-bold' : 'text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  {h}
+                </div>
+              ))}
+            </div>
+            {/* Minutes */}
+            <div className="flex-1 overflow-y-auto scrollbar-hide border-r border-slate-50 py-1 bg-white">
+              {minutes.map(m => (
+                <div
+                  key={m}
+                  onClick={() => onTimeChange(`${hour}:${m}`)}
+                  className={`px-3 py-2 text-xs text-center cursor-pointer transition-colors ${
+                    minute === m ? 'bg-indigo-600 text-white font-bold' : 'text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  {m}
+                </div>
+              ))}
+            </div>
+            {/* AM/PM */}
+            <div className="flex-1 py-1 bg-slate-50/50">
+              {periods.map(p => (
+                <div
+                  key={p}
+                  onClick={() => onAMPMChange(p)}
+                  className={`px-3 py-2 text-xs text-center cursor-pointer transition-colors ${
+                    ampmValue === p ? 'bg-indigo-600 text-white font-bold' : 'text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  {p}
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
 
 const JobCard = () => {
   const [searchParams] = useSearchParams();
@@ -80,9 +181,13 @@ const JobCard = () => {
     if (!isoString) return '';
     const date = new Date(String(isoString).replace(' ', 'T'));
     if (isNaN(date.getTime())) return isoString;
-    const hours = date.getHours().toString().padStart(2, '0');
+    
+    let hours = date.getHours();
     const minutes = date.getMinutes().toString().padStart(2, '0');
-    return `${hours}:${minutes}`;
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12 || 12;
+    
+    return `${hours.toString().padStart(2, '0')}:${minutes} ${ampm}`;
   };
 
   const calculateEfficiency = (jc) => {
@@ -109,9 +214,40 @@ const JobCard = () => {
     return diff;
   };
 
+  const to12h = (time24) => {
+    if (!time24) return { time: '08:00', ampm: 'AM' };
+    let [h, m] = time24.split(':').map(Number);
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12 || 12;
+    return { time: `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`, ampm };
+  };
+
+  const getHours = (timeStr) => timeStr?.split(':')[0] || '08';
+  const getMinutes = (timeStr) => timeStr?.split(':')[1] || '00';
+
+  const handleManualTimeChange = (field, part, val, setForm) => {
+    setForm(prev => {
+      let [h, m] = (prev[field] || '08:00').split(':');
+      if (part === 'h') h = val;
+      else if (part === 'm') m = val;
+      return { ...prev, [field]: `${h}:${m}` };
+    });
+  };
+
+  const handleTimeChange = (field, val, setForm) => {
+    if (!val) {
+      setForm(prev => ({ ...prev, [field]: val }));
+      return;
+    }
+    const { time, ampm } = to12h(val);
+    const ampmField = field.replace('Time', 'AMPM');
+    setForm(prev => ({ ...prev, [field]: time, [ampmField]: ampm }));
+  };
+
   const calculateTotalMins = (start, startAMPM, end, endAMPM) => {
     try {
       if (!start || !end) return 0;
+      if (start === end && startAMPM === endAMPM) return 0;
       
       const parseTime = (timeStr, ampm) => {
         let [hours, minutes] = timeStr.split(':').map(Number);
@@ -124,7 +260,7 @@ const JobCard = () => {
       const endMins = parseTime(end, endAMPM);
       
       let diff = endMins - startMins;
-      if (diff <= 0) diff += 24 * 60; // Handle overnight shift or same time
+      if (diff < 0) diff += 24 * 60; // Handle overnight shift
       return diff;
     } catch (e) {
       return 0;
@@ -594,6 +730,68 @@ const JobCard = () => {
     }
   };
 
+  const [viewingTimeLog, setViewingTimeLog] = useState(null);
+  const [editingTimeLogId, setEditingTimeLogId] = useState(null);
+  const [editTimeLogForm, setEditTimeLogForm] = useState({
+    day: 1,
+    logDate: '',
+    shift: '',
+    operatorId: '',
+    workstationId: '',
+    startTime: '',
+    startAMPM: 'AM',
+    endTime: '',
+    endAMPM: 'PM',
+    producedQty: 0
+  });
+
+  const [nextStageForm, setNextStageForm] = useState({
+    nextOperationId: '',
+    assignOperatorId: '',
+    targetWarehouseId: '',
+    executionMode: 'In-house'
+  });
+
+  const [qualityLogForm, setQualityLogForm] = useState({
+    checkDate: new Date().toISOString().slice(0, 10),
+    shift: 'SHIFT_A',
+    inspectedQty: 0,
+    acceptedQty: 0,
+    rejectedQty: 0,
+    scrapQty: 0,
+    rejectionReason: '',
+    notes: '',
+    status: 'PENDING',
+    day: 1
+  });
+
+  const [downtimeLogForm, setDowntimeLogForm] = useState({
+    downtimeDate: new Date().toISOString().slice(0, 10),
+    shift: 'SHIFT_A',
+    downtimeType: '',
+    startTime: '08:00',
+    startAMPM: 'AM',
+    endTime: '08:00',
+    endAMPM: 'PM',
+    remarks: '',
+    day: 1
+  });
+
+  const [viewingQualityLog, setViewingQualityLog] = useState(null);
+  const [editingQualityLogId, setEditingQualityLogId] = useState(null);
+  const [editQualityLogForm, setEditQualityLogForm] = useState({
+    day: 1,
+    checkDate: '',
+    shift: '',
+    inspectedQty: 0,
+    acceptedQty: 0,
+    rejectedQty: 0,
+    scrapQty: 0,
+    rejectionReason: '',
+    notes: '',
+    status: 'PENDING'
+  });
+
   const [timeLogForm, setTimeLogForm] = useState({
     logDate: new Date().toISOString().slice(0, 10),
     operatorId: '',
@@ -602,10 +800,11 @@ const JobCard = () => {
     startTime: '08:00',
     startAMPM: 'AM',
     endTime: '08:00',
-    endAMPM: 'PM',
+    endAMPM: 'AM',
     producedQty: 0,
     day: 1
   });
+
 
   useEffect(() => {
     if (showProductionEntry && selectedJC) {
@@ -633,15 +832,9 @@ const JobCard = () => {
 
         let endHours = Math.floor((endTotalMins / 60) % 24);
         let endMins = endTotalMins % 60;
-        let endAMPM = 'AM';
+        let endAMPM = endHours >= 12 ? 'PM' : 'AM';
 
-        if (endHours >= 12) {
-          endAMPM = 'PM';
-          if (endHours > 12) endHours -= 12;
-        } else if (endHours === 0) {
-          endHours = 12;
-        }
-
+        // Keep 24h format for the <input type="time" /> value compatibility
         const formattedEndHours = String(endHours).padStart(2, '0');
         const formattedEndMins = String(endMins).padStart(2, '0');
         const formattedEndTime = `${formattedEndHours}:${formattedEndMins}`;
@@ -657,65 +850,53 @@ const JobCard = () => {
     }
   }, [timeLogForm.producedQty, timeLogForm.startTime, timeLogForm.startAMPM, showProductionEntry, selectedJC?.std_time, selectedJC?.time_uom]);
 
-  const [qualityLogForm, setQualityLogForm] = useState({
-    checkDate: new Date().toISOString().slice(0, 10),
-    shift: 'SHIFT_A',
-    inspectedQty: 0,
-    acceptedQty: 0,
-    rejectedQty: 0,
-    scrapQty: 0,
-    rejectionReason: '',
-    notes: '',
-    status: 'PENDING',
-    day: 1
-  });
 
-  const [downtimeLogForm, setDowntimeLogForm] = useState({
-    downtimeDate: new Date().toISOString().slice(0, 10),
-    shift: 'SHIFT_A',
-    downtimeType: '',
-    startTime: '08:00',
-    startAMPM: 'AM',
-    endTime: '08:00',
-    endAMPM: 'PM',
-    remarks: '',
-    day: 1
-  });
+  useEffect(() => {
+    if (editingTimeLogId && selectedJC) {
+      const calculateAutoEndTime = () => {
+        const qty = parseFloat(editTimeLogForm.producedQty || 0);
+        if (!editTimeLogForm.startTime) return;
 
-  const [viewingTimeLog, setViewingTimeLog] = useState(null);
-  const [editingTimeLogId, setEditingTimeLogId] = useState(null);
-  const [editTimeLogForm, setEditTimeLogForm] = useState({
-    day: 1,
-    logDate: '',
-    shift: '',
-    operatorId: '',
-    startTime: '',
-    startAMPM: 'AM',
-    endTime: '',
-    endAMPM: 'PM',
-    producedQty: 0
-  });
+        let stdTime = parseFloat(selectedJC.std_time || 0);
+        const uom = (selectedJC.time_uom || 'min').toLowerCase();
+        
+        if (uom === 'hr' || uom === 'hour' || uom === 'hours') stdTime *= 60;
+        else if (uom === 'sec' || uom === 'second' || uom === 'seconds') stdTime /= 60;
 
-  const [nextStageForm, setNextStageForm] = useState({
-    nextOperationId: '',
-    assignOperatorId: '',
-    targetWarehouseId: '',
-    executionMode: 'In-house'
-  });
-  const [viewingQualityLog, setViewingQualityLog] = useState(null);
-  const [editingQualityLogId, setEditingQualityLogId] = useState(null);
-  const [editQualityLogForm, setEditQualityLogForm] = useState({
-    day: 1,
-    checkDate: '',
-    shift: '',
-    inspectedQty: 0,
-    acceptedQty: 0,
-    rejectedQty: 0,
-    scrapQty: 0,
-    rejectionReason: '',
-    notes: '',
-    status: 'PENDING'
-  });
+        const totalMinsToAdd = Math.round(stdTime * qty);
+        
+        let [hours, minutes] = editTimeLogForm.startTime.split(':').map(Number);
+        let ampm = editTimeLogForm.startAMPM;
+
+        if (ampm === 'PM' && hours < 12) hours += 12;
+        if (ampm === 'AM' && hours === 12) hours = 0;
+
+        const startTotalMins = hours * 60 + minutes;
+        const endTotalMins = startTotalMins + totalMinsToAdd;
+
+        let endHours = Math.floor((endTotalMins / 60) % 24);
+        let endMins = endTotalMins % 60;
+        let endAMPM = endHours >= 12 ? 'PM' : 'AM';
+
+        const formattedEndHours = String(endHours).padStart(2, '0');
+        const formattedEndMins = String(endMins).padStart(2, '0');
+        const formattedEndTime = `${formattedEndHours}:${formattedEndMins}`;
+
+        setEditTimeLogForm(prev => {
+          // Only update if it actually changed to avoid infinite loops or jitter
+          if (prev.endTime === formattedEndTime && prev.endAMPM === endAMPM) return prev;
+          return {
+            ...prev,
+            endTime: formattedEndTime,
+            endAMPM: endAMPM
+          };
+        });
+      };
+
+      calculateAutoEndTime();
+    }
+  }, [editTimeLogForm.producedQty, editTimeLogForm.startTime, editTimeLogForm.startAMPM, editingTimeLogId, selectedJC?.std_time, selectedJC?.time_uom]);
+
 
   const handleDayChange = (type, val) => {
     if (!selectedJC) return;
@@ -798,6 +979,7 @@ const JobCard = () => {
       .filter(j => 
         j.workstation_id === jc.workstation_id && 
         j.status === "IN_PROGRESS" && 
+        j.operator_name && 
         (j.latest_log_start_time || j.start_time)
       )
       .sort((a, b) => {
@@ -826,7 +1008,7 @@ const JobCard = () => {
     }
 
     // ✅ Current is In-Progress but no start_time (fallback, shouldn't happen)
-    if (jc.status === "IN_PROGRESS") {
+    if (jc.status === "IN_PROGRESS" && jc.operator_name) {
       return { status: "RUNNING", startTime: jc.start_time };
     }
 
@@ -933,14 +1115,6 @@ const JobCard = () => {
     const start24 = formatLocalTime(log.start_time);
     const end24 = formatLocalTime(log.end_time);
     
-    const to12h = (time24) => {
-      if (!time24) return { time: '08:00', ampm: 'AM' };
-      let [h, m] = time24.split(':').map(Number);
-      const ampm = h >= 12 ? 'PM' : 'AM';
-      h = h % 12 || 12;
-      return { time: `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`, ampm };
-    };
-
     const start = to12h(start24);
     const end = to12h(end24);
 
@@ -957,6 +1131,7 @@ const JobCard = () => {
       logDate: log.log_date.slice(0, 10),
       shift: log.shift,
       operatorId: log.operator_id,
+      workstationId: log.workstation_id,
       startTime: start.time,
       startAMPM: start.ampm,
       endTime: end.time,
@@ -1094,7 +1269,7 @@ const JobCard = () => {
               <div className="text-center border-l border-slate-100 pl-8">
                 <p className="text-xs text-indigo-500 mb-1.5 font-medium">Net Time (Per Unit)</p>
                 <p className="text-sm font-bold text-indigo-600">
-                  {parseFloat(selectedJC.std_time || 0).toFixed(1)} <span className="text-[10px] text-indigo-400 lowercase">{selectedJC.time_uom || 'min'}</span>
+                  {parseFloat(selectedJC.std_time || 0).toFixed(1)} <span className="text-[10px] text-indigo-400 lowercase">{(selectedJC.time_uom || 'Min').toLowerCase()}</span>
                   <span className="text-[9px] text-indigo-300 ml-1">/ unit</span>
                 </p>
               </div>
@@ -1168,7 +1343,7 @@ const JobCard = () => {
               <h2 className="text-sm  text-slate-800  ">Add Time Log</h2>
             </div>
 
-            <div className="bg-white rounded  border border-slate-100 shadow-sm overflow-hidden">
+            <div className="bg-white rounded  border border-slate-100 shadow-sm">
               <div className="p-6">
                 <div className="grid grid-cols-1 md:grid-cols-6 gap-2 mb-6">
                   <FormControl label="Day & Date" required>
@@ -1241,38 +1416,22 @@ const JobCard = () => {
                   <div className="flex-1 grid grid-cols-2 gap-2">
                     <FormControl label="Production Period" required>
                       <div className="flex items-center gap-2">
-                        <div className="flex-1 flex items-center bg-white border border-slate-200 rounded p-2 focus-within:border-indigo-500">
-                          <input 
-                            type="time" 
-                            value={timeLogForm.startTime} 
-                            onChange={e => setTimeLogForm({...timeLogForm, startTime: e.target.value})} 
-                            className="flex-1 text-xs outline-none" 
+                        <div className="flex-1">
+                          <TimePicker 
+                            value={timeLogForm.startTime}
+                            ampmValue={timeLogForm.startAMPM}
+                            onTimeChange={(newTime) => setTimeLogForm({ ...timeLogForm, startTime: newTime })}
+                            onAMPMChange={(newAMPM) => setTimeLogForm({ ...timeLogForm, startAMPM: newAMPM })}
                           />
-                          <select 
-                            value={timeLogForm.startAMPM} 
-                            onChange={e => setTimeLogForm({...timeLogForm, startAMPM: e.target.value})}
-                            className="text-xs  text-slate-400 outline-none ml-1 bg-transparent cursor-pointer"
-                          >
-                            <option value="AM">AM</option>
-                            <option value="PM">PM</option>
-                          </select>
                         </div>
                         <ChevronRight className="w-3 h-3 text-slate-300" />
-                        <div className="flex-1 flex items-center bg-white border border-slate-200 rounded p-2 focus-within:border-indigo-500">
-                          <input 
-                            type="time" 
-                            value={timeLogForm.endTime} 
-                            onChange={e => setTimeLogForm({...timeLogForm, endTime: e.target.value})} 
-                            className="flex-1 text-xs outline-none" 
+                        <div className="flex-1">
+                          <TimePicker 
+                            value={timeLogForm.endTime}
+                            ampmValue={timeLogForm.endAMPM}
+                            onTimeChange={(newTime) => setTimeLogForm({ ...timeLogForm, endTime: newTime })}
+                            onAMPMChange={(newAMPM) => setTimeLogForm({ ...timeLogForm, endAMPM: newAMPM })}
                           />
-                          <select 
-                            value={timeLogForm.endAMPM} 
-                            onChange={e => setTimeLogForm({...timeLogForm, endAMPM: e.target.value})}
-                            className="text-xs  text-slate-400 outline-none ml-1 bg-transparent cursor-pointer"
-                          >
-                            <option value="AM">AM</option>
-                            <option value="PM">PM</option>
-                          </select>
                         </div>
                       </div>
                     </FormControl>
@@ -1386,16 +1545,29 @@ const JobCard = () => {
                                   </select>
                                 </td>
                                 <td className="p-2">
-                                  <div className="flex items-center gap-1 justify-center">
-                                    <input type="time" value={editTimeLogForm.startTime} className="w-16 px-1 py-1 border rounded text-xs" onChange={e => setEditTimeLogForm({...editTimeLogForm, startTime: e.target.value})} />
-                                    <select value={editTimeLogForm.startAMPM} className="px-1 py-1 border rounded text-xs" onChange={e => setEditTimeLogForm({...editTimeLogForm, startAMPM: e.target.value})}>
-                                      <option value="AM">AM</option><option value="PM">PM</option>
-                                    </select>
-                                    <ChevronRight className="w-3 h-3 text-slate-300" />
-                                    <input type="time" value={editTimeLogForm.endTime} className="w-16 px-1 py-1 border rounded text-xs" onChange={e => setEditTimeLogForm({...editTimeLogForm, endTime: e.target.value})} />
-                                    <select value={editTimeLogForm.endAMPM} className="px-1 py-1 border rounded text-xs" onChange={e => setEditTimeLogForm({...editTimeLogForm, endAMPM: e.target.value})}>
-                                      <option value="AM">AM</option><option value="PM">PM</option>
-                                    </select>
+                                  <div className="flex items-center gap-1 justify-center min-w-[200px]">
+                                    <div className="flex-1">
+                                      <TimePicker 
+                                        small
+                                        value={editTimeLogForm.startTime}
+                                        ampmValue={editTimeLogForm.startAMPM}
+                                        onTimeChange={(newTime) => setEditTimeLogForm({ ...editTimeLogForm, startTime: newTime })}
+                                        onAMPMChange={(newAMPM) => setEditTimeLogForm({ ...editTimeLogForm, startAMPM: newAMPM })}
+                                      />
+                                    </div>
+                                    <ChevronRight className="w-3 h-3 text-slate-300 mx-0.5" />
+                                    <div className="flex-1">
+                                      <TimePicker 
+                                        small
+                                        value={editTimeLogForm.endTime}
+                                        ampmValue={editTimeLogForm.endAMPM}
+                                        onTimeChange={(newTime) => setEditTimeLogForm({ ...editTimeLogForm, endTime: newTime })}
+                                        onAMPMChange={(newAMPM) => setEditTimeLogForm({ ...editTimeLogForm, endAMPM: newAMPM })}
+                                      />
+                                    </div>
+                                  </div>
+                                  <div className="text-[10px] text-center text-indigo-500 mt-1 font-medium">
+                                    ⏱ {calculateTotalMins(editTimeLogForm.startTime, editTimeLogForm.startAMPM, editTimeLogForm.endTime, editTimeLogForm.endAMPM)} mins
                                   </div>
                                 </td>
                                 <td className="p-2">
@@ -1487,7 +1659,7 @@ const JobCard = () => {
               <h2 className="text-sm  text-slate-800  ">Quality & Rejection Entry</h2>
             </div>
 
-            <div className="bg-white rounded  border border-slate-100 shadow-sm overflow-hidden">
+            <div className="bg-white rounded  border border-slate-100 shadow-sm">
               <div className="p-6">
                 <div className="grid grid-cols-1 md:grid-cols-7 gap-2 mb-6 border-b border-slate-50 pb-6">
                   <FormControl label="Day & Date" required>
@@ -1763,7 +1935,7 @@ const JobCard = () => {
               <h2 className="text-sm  text-slate-800  ">Operational Downtime</h2>
             </div>
 
-            <div className="bg-white rounded  border border-slate-100 shadow-sm overflow-hidden">
+            <div className="bg-white rounded  border border-slate-100 shadow-sm">
               <div className="p-6">
                 <div className="grid grid-cols-1 md:grid-cols-6 gap-2 mb-6 border-b border-slate-50 pb-6">
                   <FormControl label="Day & Date" required>
@@ -1803,40 +1975,20 @@ const JobCard = () => {
                     </select>
                   </FormControl>
                   <FormControl label="Start Time" required>
-                    <div className="flex items-center bg-white border border-slate-200 rounded p-2 focus-within:border-amber-500">
-                      <input 
-                        type="time" 
-                        value={downtimeLogForm.startTime} 
-                        onChange={e => setDowntimeLogForm({...downtimeLogForm, startTime: e.target.value})} 
-                        className="flex-1 text-xs outline-none" 
-                      />
-                      <select 
-                        value={downtimeLogForm.startAMPM} 
-                        onChange={e => setDowntimeLogForm({...downtimeLogForm, startAMPM: e.target.value})}
-                        className="text-xs  text-amber-600 outline-none ml-1 bg-transparent cursor-pointer"
-                      >
-                        <option value="AM">AM</option>
-                        <option value="PM">PM</option>
-                      </select>
-                    </div>
+                    <TimePicker 
+                      value={downtimeLogForm.startTime}
+                      ampmValue={downtimeLogForm.startAMPM}
+                      onTimeChange={(newTime) => setDowntimeLogForm({ ...downtimeLogForm, startTime: newTime })}
+                      onAMPMChange={(newAMPM) => setDowntimeLogForm({ ...downtimeLogForm, startAMPM: newAMPM })}
+                    />
                   </FormControl>
                   <FormControl label="End Time" required>
-                    <div className="flex items-center bg-white border border-slate-200 rounded p-2 focus-within:border-amber-500">
-                      <input 
-                        type="time" 
-                        value={downtimeLogForm.endTime} 
-                        onChange={e => setDowntimeLogForm({...downtimeLogForm, endTime: e.target.value})} 
-                        className="flex-1 text-xs outline-none" 
-                      />
-                      <select 
-                        value={downtimeLogForm.endAMPM} 
-                        onChange={e => setDowntimeLogForm({...downtimeLogForm, endAMPM: e.target.value})}
-                        className="text-xs  text-amber-600 outline-none ml-1 bg-transparent cursor-pointer"
-                      >
-                        <option value="AM">AM</option>
-                        <option value="PM">PM</option>
-                      </select>
-                    </div>
+                    <TimePicker 
+                      value={downtimeLogForm.endTime}
+                      ampmValue={downtimeLogForm.endAMPM}
+                      onTimeChange={(newTime) => setDowntimeLogForm({ ...downtimeLogForm, endTime: newTime })}
+                      onAMPMChange={(newAMPM) => setDowntimeLogForm({ ...downtimeLogForm, endAMPM: newAMPM })}
+                    />
                   </FormControl>
                   <FormControl label="Total Mins">
                     <input 
@@ -2079,7 +2231,7 @@ const JobCard = () => {
             
             <p className="text-xs  text-slate-400 italic px-1">Consolidated daily and shift-wise production metrics</p>
 
-            <div className="bg-white rounded  border border-slate-100 shadow-sm overflow-hidden">
+            <div className="bg-white rounded  border border-slate-100 shadow-sm">
               <div className="p-0">
                 {consolidatedReport.length === 0 ? (
                   <div className="p-12 text-center">
@@ -2484,6 +2636,7 @@ const JobCard = () => {
         day: logData.day,
         logDate: logData.logDate,
         operatorId: logData.operatorId,
+        workstationId: logData.workstationId,
         shift: logData.shift,
         startTime: formatTime(logData.startTime, logData.startAMPM),
         endTime: formatTime(logData.endTime, logData.endAMPM),
@@ -2990,8 +3143,8 @@ const JobCard = () => {
                     </span>
                   </td>
                   <td className="p-2 ">
-                    <span className={`text-xs  ${jc.outward_challan_id ? 'text-amber-600' : 'text-blue-600'}`}>
-                      {jc.outward_challan_id ? 'Subcontract' : 'In-house'}
+                    <span className={`text-xs  ${(jc.execution_type === 'Outsource' || jc.outward_challan_id) ? 'text-amber-600' : 'text-blue-600'}`}>
+                      {(jc.execution_type === 'Outsource' || jc.outward_challan_id) ? 'Subcontract' : 'In-house'}
                     </span>
                   </td>
                   <td className="p-2 ">
@@ -3011,10 +3164,10 @@ const JobCard = () => {
                   </td>
                   <td className="p-2 ">
                     <div className="flex flex-col">
-                      <span className={`text-xs  ${jc.outward_challan_id ? 'text-purple-600 font-semibold' : 'text-slate-900'}`}>
-                        {jc.outward_challan_id ? 'Subcontract' : (jc.workstation_name || 'N/A')}
+                      <span className={`text-xs  ${(jc.execution_type === 'Outsource' || jc.outward_challan_id) ? 'text-purple-600 font-semibold' : 'text-slate-900'}`}>
+                        {(jc.execution_type === 'Outsource' || jc.outward_challan_id) ? 'Subcontract' : (jc.workstation_name || 'N/A')}
                       </span>
-                      {!jc.outward_challan_id && (() => {
+                      {!(jc.execution_type === 'Outsource' || jc.outward_challan_id) && (() => {
                         const m = getMachineState(jc, jobCards);
 
                         if (m.status === "NOT_ASSIGNED") {
@@ -3085,7 +3238,7 @@ const JobCard = () => {
                       <span className={`text-xs  ${jc.outward_challan_id ? 'text-purple-600 font-semibold' : 'text-slate-900'}`}>
                         {jc.outward_challan_id ? 'N/A' : (jc.operator_name || 'Unassigned')}
                       </span>
-                      {jc.status === 'IN_PROGRESS' ? (
+                      {jc.status === 'IN_PROGRESS' && (jc.outward_challan_id || jc.operator_name) ? (
                         <div className="flex flex-col gap-0.5 mt-0.5">
                           <span className="text-[10px] text-indigo-600 font-medium">
                             {jc.latest_log_start_time ? (
@@ -3120,7 +3273,7 @@ const JobCard = () => {
                             );
                           })()}
                         </div>
-                      ) : (jc.latest_log_start_time && jc.latest_log_end_time) ? (
+                      ) : (jc.latest_log_start_time && jc.latest_log_end_time && (jc.outward_challan_id || jc.operator_name)) ? (
                         <div className="flex flex-col gap-0.5 mt-0.5">
                           <span className="text-[10px] text-slate-500 font-medium">
                             {formatLocalTime(jc.latest_log_start_time)} - {formatLocalTime(jc.latest_log_end_time)}
@@ -3136,7 +3289,7 @@ const JobCard = () => {
                             );
                           })()}
                         </div>
-                      ) : jc.start_time && jc.end_time ? (
+                      ) : (jc.start_time && jc.end_time && (jc.outward_challan_id || jc.operator_name)) ? (
                         <div className="flex flex-col gap-0.5 mt-0.5">
                           <span className="text-[10px] text-slate-500 font-medium">
                             {formatLocalTime(jc.start_time)} - {formatLocalTime(jc.end_time)}
@@ -3203,7 +3356,7 @@ const JobCard = () => {
                         >
                           <Package className="w-3.5 h-3.5" />
                         </button>
-                      ) : (
+                      ) : (jc.status !== 'COMPLETED' || jc.execution_type === 'Outsource') ? (
                         <button 
                           onClick={() => handleOutwardChallan(jc)}
                           className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-all"
@@ -3211,7 +3364,7 @@ const JobCard = () => {
                         >
                           <Truck className="w-3.5 h-3.5" />
                         </button>
-                      )}
+                      ) : null}
                       <button 
                         onClick={() => handleEdit(jc)}
                         className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-all"
