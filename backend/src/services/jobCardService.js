@@ -8,7 +8,9 @@ const listJobCards = async () => {
             COALESCE(jc.time_uom, o.time_uom, 'Min') as time_uom, 
             COALESCE(NULLIF(jc.hourly_rate, 0), o.hourly_rate, 0) as hourly_rate, 
             w.workstation_name, u.username as operator_name, soi.status as item_status,
-            oc.id as outward_challan_id, oc.challan_number as outward_challan_no, oc.dispatch_qty,
+            (SELECT id FROM outward_challans WHERE job_card_id = jc.id ORDER BY created_at DESC LIMIT 1) as outward_challan_id,
+            (SELECT challan_number FROM outward_challans WHERE job_card_id = jc.id ORDER BY created_at DESC LIMIT 1) as outward_challan_no,
+            (SELECT SUM(dispatch_qty) FROM outward_challans WHERE job_card_id = jc.id) as dispatch_qty,
             COALESCE(jc.execution_mode, 'In-house') as execution_type,
             (SELECT start_time FROM job_card_time_logs WHERE job_card_id = jc.id ORDER BY log_date DESC, start_time DESC, id DESC LIMIT 1) as latest_log_start_time,
             (SELECT end_time FROM job_card_time_logs WHERE job_card_id = jc.id ORDER BY log_date DESC, start_time DESC, id DESC LIMIT 1) as latest_log_end_time
@@ -18,7 +20,6 @@ const listJobCards = async () => {
      LEFT JOIN operations o ON jc.operation_id = o.id
      LEFT JOIN workstations w ON jc.workstation_id = w.id
      LEFT JOIN users u ON jc.assigned_to = u.id
-     LEFT JOIN outward_challans oc ON jc.id = oc.job_card_id
      ORDER BY jc.created_at DESC`
   );
   return rows;

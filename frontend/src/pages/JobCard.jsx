@@ -3258,7 +3258,7 @@ const JobCard = () => {
 
       if (response.ok) {
         // Also update the job card status to completed if everything is received
-        await handleUpdateStatus(selectedJCOutward.id, 'COMPLETED');
+        await handleUpdateStatus(selectedJCOutward, 'COMPLETED');
         successToast('Vendor Receipt recorded successfully');
         setIsInwardModalOpen(false);
         fetchJobCards();
