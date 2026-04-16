@@ -120,7 +120,7 @@ const DEPARTMENT_ACCESS_RULES = {
     canViewDocuments: ['sales_orders', 'customer_pos', 'companies'],
     canEditDocuments: [],
     canChangeStatusTo: [],
-    allowedModules: ['dashboard', 'quality-dashboard', 'incoming-qc', 'in-process-qc', 'quality-rejections', 'quality-reports', 'qc-inspections'],
+    allowedModules: ['dashboard', 'quality-dashboard', 'incoming-qc', 'in-process-qc', 'quality-rejections', 'quality-reports', 'quality-rejection-entry', 'qc-inspections'],
     permissions: [
       'ORDER_VIEW',
       'PO_VIEW',
@@ -212,7 +212,7 @@ const DEPARTMENT_ACCESS_RULES = {
     canViewDocuments: ['customer_pos', 'sales_orders', 'companies'],
     canEditDocuments: ['customer_pos', 'sales_orders'],
     canChangeStatusTo: Object.values(DOCUMENT_STATUS_FLOW),
-    allowedModules: ['dashboard', 'item-master', 'customer-po', 'sales-order', 'customer-drawing', 'po-material-request', 'design-orders', 'drawing-master', 'bom-creation', 'bom-approval', 'client-quotations', 'bom-form', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'job-card', 'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'quality-dashboard', 'accounts-dashboard', 'incoming-qc', 'grn', 'stock-entries', 'stock-ledger', 'stock-balance', 'warehouses', 'vendor-inward-challans', 'invoice-received', 'payment-processing', 'payment-history', 'payment-received', 'customer-payment-history', 'shipment-dashboard', 'shipment-orders', 'shipment-planning', 'dispatch-management', 'delivery-challan', 'shipment-tracking', 'shipment-returns', 'shipment-reports'],
+    allowedModules: ['dashboard', 'item-master', 'customer-po', 'sales-order', 'customer-drawing', 'po-material-request', 'design-orders', 'drawing-master', 'bom-creation', 'bom-approval', 'client-quotations', 'bom-form', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'job-card', 'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'quality-dashboard', 'accounts-dashboard', 'incoming-qc', 'grn', 'stock-entries', 'stock-ledger', 'stock-balance', 'warehouses', 'vendor-inward-challans', 'invoice-received', 'payment-processing', 'payment-history', 'payment-received', 'customer-payment-history', 'shipment-dashboard', 'shipment-orders', 'shipment-planning', 'dispatch-management', 'delivery-challan', 'shipment-tracking', 'shipment-returns', 'shipment-reports', 'quality-rejection-entry'],
     permissions: [
       'PO_VIEW', 'PO_CREATE', 'PO_EDIT', 'PO_DELETE',
       'ORDER_VIEW', 'ORDER_CREATE', 'ORDER_EDIT',

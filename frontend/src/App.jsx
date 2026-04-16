@@ -4,7 +4,7 @@ import Swal from 'sweetalert2'
 import { 
   Building2, ClipboardList, FileText, Package, Palette, PencilLine, Factory, 
   Settings, BarChart3, CheckCircle, Handshake, MessageSquare, ShoppingCart, 
-  Inbox, Book, Scale, TrendingUp, Search, Check, XCircle, Files, RotateCw 
+  Inbox, Book, Scale, TrendingUp, Search, Check, XCircle, Files, RotateCw, LogOut 
 } from 'lucide-react'
 import CompanyMaster from './pages/CompanyMaster'
 import ClientContacts from './pages/ClientContacts'
@@ -76,7 +76,7 @@ import './index.css'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 const API_HOST = API_BASE
-const MODULE_IDS = ['dashboard', 'admin-dashboard', 'sales-dashboard', 'design-dashboard', 'production-dashboard', 'procurement-dashboard', 'item-master', 'company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'quotation-form', 'vendor-management', 'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'quality-dashboard', 'accounts-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance', 'incoming-qc', 'quality-rejections', 'quality-reports', 'warehouses', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval', 'bom-form', 'workstation-master', 'operation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card', 'stock-entries', 'incoming-orders', 'vendor-inward-challans', 'invoice-received', 'payment-processing', 'payment-received', 'payment-history', 'customer-payment-history', 'shipment-dashboard', 'shipment-orders', 'shipment-planning', 'dispatch-management', 'delivery-challan', 'shipment-tracking', 'shipment-returns', 'shipment-reports']
+const MODULE_IDS = ['dashboard', 'admin-dashboard', 'sales-dashboard', 'design-dashboard', 'production-dashboard', 'procurement-dashboard', 'item-master', 'company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'quotation-form', 'vendor-management', 'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'quality-dashboard', 'accounts-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance', 'incoming-qc', 'quality-rejections', 'quality-reports', 'quality-rejection-entry', 'warehouses', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval', 'bom-form', 'workstation-master', 'operation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card', 'stock-entries', 'incoming-orders', 'vendor-inward-challans', 'invoice-received', 'payment-processing', 'payment-received', 'payment-history', 'customer-payment-history', 'shipment-dashboard', 'shipment-orders', 'shipment-planning', 'dispatch-management', 'delivery-challan', 'shipment-tracking', 'shipment-returns', 'shipment-reports']
 const DEFAULT_MODULE = 'dashboard'
 const HOME_PLANT_STATE = (import.meta.env.VITE_PLANT_STATE || 'maharashtra').toLowerCase()
 const currencyFormatter = new Intl.NumberFormat('en-IN', {
@@ -171,7 +171,7 @@ const DEPARTMENT_MODULES = {
   SALES: ['dashboard', 'item-master', 'company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'quotation-form'],
   DESIGN_ENG: ['dashboard', 'item-master', 'design-orders', 'drawing-master', 'bom-creation', 'bom-approval', 'bom-form', 'routing-operations', 'process-sheet'],
   PRODUCTION: ['dashboard', 'item-master', 'project-requests', 'incoming-orders', 'operation-master', 'workstation-master', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card', 'routing-operations', 'process-sheet'],
-  QUALITY: ['dashboard', 'item-master', 'incoming-qc', 'quality-rejections', 'quality-reports', 'qc-inspections'],
+  QUALITY: ['dashboard', 'item-master', 'incoming-qc', 'quality-rejections', 'quality-reports', 'quality-rejection-entry', 'qc-inspections'],
   SHIPMENT: ['dashboard', 'item-master', 'shipment-orders', 'shipment-planning', 'dispatch-management', 'delivery-challan', 'shipment-tracking', 'shipment-returns', 'shipment-reports'],
   ACCOUNTS: ['dashboard', 'item-master', 'vendor-inward-challans', 'invoice-received', 'payment-processing', 'payment-history', 'payment-received', 'customer-payment-history'],
   INVENTORY: ['dashboard', 'item-master', 'po-material-request', 'grn', 'stock-entries', 'stock-ledger', 'stock-balance', 'warehouses', 'suppliers'],
@@ -180,7 +180,7 @@ const DEPARTMENT_MODULES = {
     'dashboard', 'item-master', 'company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'quotation-form',
     'design-orders', 'drawing-master', 'bom-creation', 'bom-approval', 'bom-form', 'routing-operations', 'process-sheet',
     'incoming-orders', 'operation-master', 'workstation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card',
-    'incoming-qc', 'quality-rejections', 'quality-reports', 'qc-inspections',
+    'incoming-qc', 'quality-rejections', 'quality-reports', 'quality-rejection-entry', 'qc-inspections',
     'po-material-request', 'grn', 'stock-entries', 'stock-ledger', 'stock-balance', 'warehouses',
     'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'vendor-inward-challans', 'invoice-received', 'payment-processing', 'payment-history', 'payment-received', 'customer-payment-history',
     'shipment-orders', 'shipment-planning', 'dispatch-management', 'delivery-challan', 'shipment-tracking', 'shipment-returns', 'shipment-reports'
@@ -245,6 +245,9 @@ function App() {
     }
     if (modules.includes('bom-creation') && !modules.includes('bom-form')) {
       modules.push('bom-form')
+    }
+    if (modules.includes('quality-reports') && !modules.includes('quality-rejection-entry')) {
+      modules.push('quality-rejection-entry')
     }
     
     return modules
@@ -1041,9 +1044,10 @@ function App() {
     { label: 'Suppliers', moduleId: 'suppliers', icon: 'handshake', indent: true, deptCode: 'INVENTORY' },
 
     { label: 'QUALITY', isGroup: true, groupId: 'quality-group' },
+    { label: 'Quality & Rejection Entry', moduleId: 'quality-rejection-entry', icon: 'clipboard', indent: true },
     { label: 'Incoming QC', moduleId: 'incoming-qc', icon: 'inbox', indent: true },
     { label: 'Rejections', moduleId: 'quality-rejections', icon: 'close', indent: true },
-    { label: 'Quality Reports', moduleId: 'quality-reports', icon: 'files', indent: true },
+    { label: 'Quality Reports TEST', moduleId: 'quality-reports', icon: 'files', indent: true },
 
     { label: 'ACCOUNTS', isGroup: true, groupId: 'accounts-main-group' },
     { label: 'Vendor Invoices', moduleId: 'invoice-received', icon: 'files', indent: true },
@@ -1445,14 +1449,23 @@ function App() {
           <div className="sticky top-0 z-10 bg-white border-b border-slate-200 ">
               <div className="p-2 flex flex-col gap-2 md:flex-row md:items-end md:justify-end">
                 
-                <div className="flex items-center gap-2">
-                  <div className="text-right">
-                    <p className="text-xs text-slate-900 text-xs">{user?.first_name && user?.last_name ? `${user.first_name} ${user.last_name}` : user?.first_name || user?.username || 'User'}</p>
-                    <p className="text-xs text-slate-500">{user?.role_name || user?.department_name || 'User'}</p>
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <div className="text-right">
+                      <p className="text-xs text-slate-900 font-medium leading-none">{user?.first_name && user?.last_name ? `${user.first_name} ${user.last_name}` : user?.first_name || user?.username || 'User'}</p>
+                      <p className="text-[10px] text-slate-500 mt-0.5">{user?.role_name || user?.department_name || 'User'}</p>
+                    </div>
+                    <div className="h-6 w-6 rounded bg-indigo-600 flex items-center justify-center text-white text-[10px] font-bold">
+                      {(user?.first_name?.[0] || user?.username?.[0] || 'U').toUpperCase()}
+                    </div>
                   </div>
-                  <div className="h-5 w-5 rounded  bg-gradient-to-br from-indigo-400 to-indigo-600 flex text-xs items-center justify-center text-white  text-lg">
-                    {(user?.first_name?.[0] || user?.username?.[0] || 'U').toUpperCase()}
-                  </div>
+                  <button
+                    onClick={handleLogout}
+                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all duration-200 group relative"
+                    title="Logout"
+                  >
+                    <LogOut className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
             </div>
@@ -1586,6 +1599,10 @@ function App() {
 
                 {activeModule === 'quality-reports' && (
                   <QualityReports />
+                )}
+
+                {activeModule === 'quality-rejection-entry' && (
+                  <QualityRejectionEntry />
                 )}
 
                 {activeModule === 'accounts-dashboard' && (

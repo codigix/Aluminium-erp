@@ -827,6 +827,62 @@ const JobCard = () => {
     status: 'PENDING'
   });
 
+  const [qcSuccessMessage, setQcSuccessMessage] = useState('');
+
+  const sendToQuality = async () => {
+    if (!selectedJC) return;
+    
+    // Use form produced quantity if set, otherwise use total produced quantity of the job card, 
+    // or calculate from time logs if total is 0
+    const formProducedQty = parseFloat(timeLogForm.producedQty || 0);
+    let totalProducedQty = parseFloat(selectedJC.produced_qty || 0);
+    
+    if (totalProducedQty === 0 && logs.timeLogs.length > 0) {
+      totalProducedQty = logs.timeLogs.reduce((sum, log) => sum + parseFloat(log.produced_qty || 0), 0);
+    }
+    
+    const producedQtyToSend = formProducedQty > 0 ? formProducedQty : totalProducedQty;
+
+    if (producedQtyToSend <= 0) {
+      errorToast('Please record produced quantity first');
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('authToken');
+      const payload = {
+        jcId: selectedJC.id,
+        jobId: selectedJC.job_card_no,
+        operation: selectedJC.operation_name,
+        inspectedQty: producedQtyToSend,
+        date: timeLogForm.logDate || new Date().toISOString().slice(0, 10),
+        shift: timeLogForm.shift === 'SHIFT_A' ? 'A' : timeLogForm.shift === 'SHIFT_B' ? 'B' : 'C',
+        status: "PENDING"
+      };
+
+      const response = await fetch(`${API_BASE}/quality-queue`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}` 
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (response.ok) {
+        setQcSuccessMessage('Sent to Quality Department');
+        setTimeout(() => setQcSuccessMessage(''), 5000);
+        successToast('Data sent to quality successfully');
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        errorToast(`Failed to send data: ${errorData.message || errorData.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error sending to quality:', error);
+      errorToast('Error sending to quality');
+    }
+  };
+
   const [timeLogForm, setTimeLogForm] = useState({
     logDate: new Date().toISOString().slice(0, 10),
     operatorId: '',
@@ -1784,112 +1840,48 @@ const JobCard = () => {
 
           {/* 2. Quality & Rejection Entry Section */}
           <section className="space-y-2">
-            <div className="flex items-center gap-2 px-1">
-              <div className="w-8 h-8 bg-emerald-50 rounded  flex items-center justify-center text-emerald-600">
-                <ShieldCheck className="w-4 h-4" />
+            <div className="flex items-center justify-between gap-6 p-4 bg-white rounded border border-slate-100 shadow-sm">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-emerald-50 rounded flex items-center justify-center text-emerald-600">
+                  <ShieldCheck className="w-4 h-4" />
+                </div>
+                <h2 className="text-sm text-slate-800">Quality & Rejection Entry</h2>
               </div>
-              <h2 className="text-sm  text-slate-800  ">Quality & Rejection Entry</h2>
+              
+              <div className="flex items-center gap-4">
+                {qcSuccessMessage && (
+                  <span className="text-emerald-600 text-xs font-medium animate-pulse">
+                    ✅ {qcSuccessMessage}
+                  </span>
+                )}
+                <button 
+                  onClick={sendToQuality}
+                  className="px-6 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 transition-all text-xs shadow-lg shadow-emerald-100 flex items-center gap-2"
+                >
+                  <Save className="w-4 h-4" />
+                  Send to Quality
+                </button>
+              </div>
             </div>
+          </section>
 
-            <div className="bg-white rounded  border border-slate-100 shadow-sm">
-              <div className="p-6">
-                <div className="grid grid-cols-1 md:grid-cols-7 gap-2 mb-6 border-b border-slate-50 pb-6">
-                  <FormControl label="Day & Date" required>
-                    <div className="flex items-center gap-1">
-                      <input 
-                        type="number" 
-                        value={qualityLogForm.day} 
-                        onChange={e => setQualityLogForm({...qualityLogForm, day: e.target.value})} 
-                        className="w-14 px-2 py-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-emerald-500 " 
-                      />
-                      <input 
-                        type="date" 
-                        value={qualityLogForm.checkDate} 
-                        onChange={e => handleDateChange('quality', e.target.value)} 
-                        className="flex-1 p-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-emerald-500" 
-                      />
-                    </div>
-                  </FormControl>
-                  <FormControl label="Shift" required>
-                    <div className="flex items-center gap-1">
-                      <select value={qualityLogForm.shift} onChange={e => setQualityLogForm({...qualityLogForm, shift: e.target.value})} className="flex-1 p-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-emerald-500 appearance-none">
-                        <option value="SHIFT_A">A</option>
-                        <option value="SHIFT_B">B</option>
-                        <option value="SHIFT_C">C</option>
-                      </select>
-                      <button className="p-2 bg-indigo-50 text-indigo-600 rounded border border-indigo-100">
-                        <ChevronRight className="w-3 h-3" />
-                      </button>
-                    </div>
-                  </FormControl>
-                  <FormControl label="Produce Qty" required>
-                    <input type="number" value={qualityLogForm.inspectedQty} onChange={e => setQualityLogForm({...qualityLogForm, inspectedQty: e.target.value})} className="w-full p-2 bg-indigo-50 border border-indigo-100 rounded text-xs outline-none  text-indigo-600" />
-                  </FormControl>
-                  <FormControl label="Rejection Reason">
-                    <select value={qualityLogForm.rejectionReason} onChange={e => setQualityLogForm({...qualityLogForm, rejectionReason: e.target.value})} className="w-full p-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-emerald-500">
-                      <option value="">Select Reason</option>
-                      <option value="Size/Dimension Error">Size/Dimension Error</option>
-                      <option value="Surface Finish Poor">Surface Finish Poor</option>
-                      <option value="Material Defect">Material Defect</option>
-                      <option value="Machining Error">Machining Error</option>
-                      <option value="Assembly Issue">Assembly Issue</option>
-                      <option value="Quality Check Failed">Quality Check Failed</option>
-                      <option value="Damage in Handling">Damage in Handling</option>
-                      <option value="Other">Other</option>
-                    </select>
-                  </FormControl>
-                  <FormControl label="Accepted" required>
-                    <input type="number" value={qualityLogForm.acceptedQty} onChange={e => setQualityLogForm({...qualityLogForm, acceptedQty: e.target.value})} className="w-full p-2 bg-emerald-50 border border-emerald-100 rounded text-xs text-emerald-600 outline-none " />
-                  </FormControl>
-                  <div className="space-y-1">
-                    <label className="text-xs  text-slate-400   flex items-center gap-1">
-                      Rejected <span className="text-slate-300 font-normal capitalize">(Scrap)</span> <span className="text-rose-400 ">*</span>
-                    </label>
-                    <div className="flex items-center gap-2">
-                      <input type="number" value={qualityLogForm.rejectedQty} onChange={e => setQualityLogForm({...qualityLogForm, rejectedQty: e.target.value})} className="flex-1 p-2 bg-rose-50 border border-rose-100 rounded text-xs text-rose-600 outline-none " />
-                      <input type="number" readOnly value={qualityLogForm.scrapQty} className="flex-1 p-2 bg-slate-50 border border-slate-100 rounded text-xs outline-none  text-slate-400" />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between gap-6 pt-2">
-                  <div className="flex-1">
-                    <div className="flex items-start gap-2 p-2 bg-amber-50 rounded  border border-amber-100">
-                      <div className="w-5 h-5 bg-amber-100 rounded flex items-center justify-center shrink-0 mt-0.5">
-                        <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
-                      </div>
-                      <div>
-                        <p className="text-xs   text-amber-800 tracking-tight">Quality Gate Active</p>
-                        <p className="text-xs text-amber-700 leading-relaxed mt-0.5">
-                          Only <span className="   text-xs px-1 bg-amber-100 rounded-sm">Approved</span> quality inspection records contribute to the <span className="">Accepted Quantity</span> of this job card. Pending records will block the progression to subsequent operations.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                  <button 
-                    onClick={() => addQualityLog({...qualityLogForm, status: 'PENDING'})}
-                    className="px-10 py-2.5 bg-emerald-600 text-white rounded  hover:bg-emerald-700 transition-all text-xs    shadow-lg shadow-emerald-100 flex items-center gap-2 h-[38px]"
-                  >
-                    <Save className="w-4 h-4" />
-                    Save Entry
-                  </button>
-                </div>
-
-                <div className="mt-12 overflow-visible">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead className="border-b border-slate-100">
-                      <tr>
-                        <th className="p-2  text-slate-400   text-xs">Day</th>
-                        <th className="p-2  text-slate-400   text-xs">Date / Shift</th>
-                        <th className="p-2  text-slate-400   text-xs">Status</th>
-                        <th className="p-2  text-slate-400   text-xs">Notes</th>
-                        <th className="p-2  text-slate-400   text-xs text-center">Accepted</th>
-                        <th className="p-2  text-slate-400   text-xs text-center">Rejected</th>
-                        <th className="p-2  text-slate-400   text-xs text-center">Scrap</th>
-                        <th className="p-2  text-slate-400   text-xs text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-50">
+          <section className="mt-8 overflow-visible bg-white p-6 rounded border border-slate-100 shadow-sm">
+            <div className="overflow-visible">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead className="border-b border-slate-100">
+                  <tr>
+                    <th className="p-2  text-slate-400   text-xs">Day</th>
+                    <th className="p-2  text-slate-400   text-xs">Date / Shift</th>
+                    <th className="p-2  text-slate-400   text-xs">Status</th>
+                    <th className="p-2  text-slate-400   text-xs">Notes</th>
+                    <th className="p-2  text-slate-400   text-xs text-center">Produced</th>
+                    <th className="p-2  text-slate-400   text-xs text-center font-bold text-emerald-600">Accepted</th>
+                    <th className="p-2  text-slate-400   text-xs text-center text-rose-600">Rejected</th>
+                    <th className="p-2  text-slate-400   text-xs text-center">Scrap</th>
+                    <th className="p-2  text-slate-400   text-xs text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
                       {logs.qualityLogs.length === 0 ? (
                         <tr>
                           <td colSpan="6" className="py-12 text-center text-slate-400 italic">No data available</td>
@@ -2003,19 +1995,22 @@ const JobCard = () => {
                                   {log.rejection_reason || log.notes || 'No notes'}
                                 </div>
                               </td>
-                              <td className="p-2 text-center  text-emerald-600">
-                                {parseFloat(log.accepted_qty).toLocaleString()}
+                              <td className="p-2 text-center font-medium text-slate-600">
+                                {parseFloat(log.inspected_qty || 0).toLocaleString()}
+                              </td>
+                              <td className="p-2 text-center font-bold text-emerald-600">
+                                {parseFloat(log.accepted_qty || 0).toLocaleString()}
                               </td>
                               <td className="p-2 text-center  text-rose-600">
-                                {parseFloat(log.rejected_qty).toLocaleString()}
+                                {parseFloat(log.rejected_qty || 0).toLocaleString()}
                               </td>
                               <td className="p-2 text-center  text-slate-600">
-                                {parseFloat(log.scrap_qty).toLocaleString()}
+                                {parseFloat(log.scrap_qty || 0).toLocaleString()}
                               </td>
                               <td className="p-2 text-right">
                                 <div className="flex items-center justify-end gap-1">
                                   <button onClick={() => setViewingQualityLog(log)} className="p-1.5 text-slate-400 hover:text-indigo-600 transition-colors" title="View"><Eye className="w-3.5 h-3.5" /></button>
-                                  <button onClick={() => handleEditQualityLog(log)} className="p-1.5 text-slate-400 hover:text-amber-600 transition-colors" title="Edit"><Edit2 className="w-3.5 h-3.5" /></button>
+                                  
                                   <button 
                                     onClick={() => updateQualityLog(log.id, { status: 'APPROVED' })} 
                                     disabled={log.status?.trim() === 'APPROVED'}
@@ -2026,7 +2021,6 @@ const JobCard = () => {
                                   >
                                     <ShieldCheck className="w-3.5 h-3.5" />
                                   </button>
-                                  <button onClick={() => deleteQualityLog(log.id)} className="p-1.5 text-slate-400 hover:text-rose-600 transition-colors" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
                                 </div>
                               </td>
                             </tr>
@@ -2054,8 +2048,6 @@ const JobCard = () => {
                     </div>
                   </div>
                 </div>
-              </div>
-            </div>
           </section>
 
           {/* 3. Operational Downtime Section */}
