@@ -9,6 +9,7 @@ const listJobCards = async () => {
             COALESCE(NULLIF(jc.hourly_rate, 0), o.hourly_rate, 0) as hourly_rate, 
             w.workstation_name, u.username as operator_name, soi.status as item_status,
             oc.id as outward_challan_id, oc.challan_number as outward_challan_no, oc.dispatch_qty,
+            COALESCE(jc.execution_mode, 'In-house') as execution_type,
             (SELECT start_time FROM job_card_time_logs WHERE job_card_id = jc.id ORDER BY log_date DESC, start_time DESC, id DESC LIMIT 1) as latest_log_start_time,
             (SELECT end_time FROM job_card_time_logs WHERE job_card_id = jc.id ORDER BY log_date DESC, start_time DESC, id DESC LIMIT 1) as latest_log_end_time
      FROM job_cards jc
@@ -25,7 +26,8 @@ const listJobCards = async () => {
 
 const createJobCard = async (data) => {
   const { 
-    jobCardNo, workOrderId, operationId, workstationId, assignedTo, plannedQty, remarks 
+    jobCardNo, workOrderId, operationId, workstationId, assignedTo, plannedQty, remarks,
+    executionMode, vendorId, vendorRate, status, producedQty, acceptedQty, startDateTime, endDateTime
   } = data;
 
   // Check if item is rejected
@@ -43,9 +45,15 @@ const createJobCard = async (data) => {
 
   const [result] = await pool.execute(
     `INSERT INTO job_cards 
-     (job_card_no, work_order_id, operation_id, workstation_id, assigned_to, planned_qty, remarks, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'PENDING')`,
-    [jobCardNo || null, workOrderId, operationId || null, workstationId || null, assignedTo || null, plannedQty, remarks]
+     (job_card_no, work_order_id, operation_id, workstation_id, assigned_to, planned_qty, remarks, 
+      status, execution_mode, vendor_id, vendor_rate, produced_qty, accepted_qty, start_time, end_time)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      jobCardNo || null, workOrderId, operationId || null, workstationId || null, assignedTo || null, plannedQty, remarks,
+      status || 'PENDING', executionMode || 'In-house', vendorId || null, vendorRate || 0, producedQty || 0, acceptedQty || 0, 
+      startDateTime ? startDateTime.replace('T', ' ') : null, 
+      endDateTime ? endDateTime.replace('T', ' ') : null
+    ]
   );
 
   return result.insertId;
@@ -539,14 +547,23 @@ const addDowntimeLog = async (data) => {
 
 const updateJobCard = async (id, data) => {
   const { 
-    workOrderId, operationId, workstationId, assignedTo, plannedQty, remarks 
+    workOrderId, operationId, workstationId, assignedTo, plannedQty, remarks,
+    executionMode, vendorId, vendorRate, status, producedQty, acceptedQty, startDateTime, endDateTime
   } = data;
 
   await pool.execute(
     `UPDATE job_cards 
-     SET work_order_id = ?, operation_id = ?, workstation_id = ?, assigned_to = ?, planned_qty = ?, remarks = ?
+     SET work_order_id = ?, operation_id = ?, workstation_id = ?, assigned_to = ?, planned_qty = ?, remarks = ?,
+         execution_mode = ?, vendor_id = ?, vendor_rate = ?, status = ?, produced_qty = ?, accepted_qty = ?, 
+         start_time = ?, end_time = ?
      WHERE id = ?`,
-    [workOrderId, operationId || null, workstationId || null, assignedTo || null, plannedQty, remarks, id]
+    [
+      workOrderId, operationId || null, workstationId || null, assignedTo || null, plannedQty, remarks,
+      executionMode || 'In-house', vendorId || null, vendorRate || 0, status || 'PENDING', producedQty || 0, acceptedQty || 0,
+      startDateTime ? startDateTime.replace('T', ' ') : null,
+      endDateTime ? endDateTime.replace('T', ' ') : null,
+      id
+    ]
   );
 };
 

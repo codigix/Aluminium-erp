@@ -23,14 +23,29 @@ import {
   Clock,
   CornerDownRight,
   Loader2,
-  RefreshCw
+  RefreshCw,
+  Edit2,
+  Check
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
-const RecursiveBOMRow = ({ item, level = 0, onRemove, isReadOnly, allItems, type: providedType, inheritedLoss = 0, isComponentSection = false }) => {
+const RecursiveBOMRow = ({ 
+  item, 
+  level = 0, 
+  onRemove, 
+  onEdit,
+  editingItem,
+  setEditingItem,
+  onUpdate,
+  isReadOnly, 
+  allItems, 
+  type: providedType, 
+  inheritedLoss = 0, 
+  isComponentSection = false 
+}) => {
   // Determine if this item is a material or component if type not provided or to be sure
   const actualType = providedType || (item.material_name ? 'material' : 'component');
   
@@ -65,10 +80,64 @@ const RecursiveBOMRow = ({ item, level = 0, onRemove, isReadOnly, allItems, type
   // This item's cost increased by its parent's loss (if any) AND its own loss
   const netCost = baseCost / cumulativeLossFactor;
 
+  const isEditing = editingItem?.id === item.id;
+
   if (isComponentSection) {
+    if (isEditing) {
+      return (
+        <tr className="bg-indigo-50/30">
+          <td className="p-2" style={{ paddingLeft: `${level * 20}px` }}>
+            <div className="flex items-center gap-2">
+              {level > 0 && <CornerDownRight className="w-3 h-3 text-slate-300" />}
+              <span className="text-xs font-medium text-slate-800">
+                {item.component_code || item.componentCode || item.material_name}
+              </span>
+            </div>
+          </td>
+          <td className="p-2 text-center text-[10px] text-slate-400">--</td>
+          <td className="p-2">
+            <input
+              type="number"
+              className="w-full p-1 text-xs border border-indigo-200 rounded"
+              value={editingItem.qty}
+              onChange={(e) => setEditingItem({ ...editingItem, qty: e.target.value })}
+            />
+          </td>
+          <td className="p-2 text-center text-[10px] text-slate-400">--</td>
+          <td className="p-2">
+            <input
+              type="number"
+              className="w-full p-1 text-xs border border-indigo-200 rounded"
+              value={editingItem.rate}
+              onChange={(e) => setEditingItem({ ...editingItem, rate: e.target.value })}
+            />
+          </td>
+          <td className="p-2 text-center text-[10px] text-slate-400">--</td>
+          <td className="p-2 text-right">
+            <div className="flex justify-end gap-1">
+              <button
+                onClick={onUpdate}
+                className="p-1.5 bg-emerald-500 text-white rounded hover:bg-emerald-600"
+                title="Save"
+              >
+                <Check className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => setEditingItem(null)}
+                className="p-1.5 bg-slate-200 text-slate-600 rounded hover:bg-slate-300"
+                title="Cancel"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </td>
+        </tr>
+      );
+    }
+
     return (
       <>
-        <tr className={`${level > 0 ? 'bg-slate-50/50' : 'bg-white'} border-b border-slate-100 hover:bg-blue-50/30 transition-colors`}>
+        <tr className={`${level > 0 ? 'bg-slate-50/50' : 'bg-white'} border-b border-slate-100 hover:bg-blue-50/30 transition-colors group`}>
           <td className="p-2 ">
             <div className="flex items-center gap-2 " style={{ paddingLeft: `${level * 20}px` }}>
               {level > 0 && <CornerDownRight className="w-3 h-3 text-slate-300" />}
@@ -109,12 +178,22 @@ const RecursiveBOMRow = ({ item, level = 0, onRemove, isReadOnly, allItems, type
           </td>
           {!isReadOnly && (
             <td className="p-2 text-right">
-              <button
-                onClick={() => onRemove('components', item.id, item.isLocal)}
-                className="p-1 text-slate-400 hover:text-rose-600 transition-colors"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
+              <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                <button
+                  onClick={() => onEdit(item)}
+                  className="p-1 text-slate-400 hover:text-indigo-600 transition-colors"
+                  title="Edit"
+                >
+                  <Edit2 className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => onRemove('components', item.id, item.isLocal)}
+                  className="p-1 text-slate-400 hover:text-rose-600 transition-colors"
+                  title="Remove"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
             </td>
           )}
         </tr>
@@ -124,6 +203,10 @@ const RecursiveBOMRow = ({ item, level = 0, onRemove, isReadOnly, allItems, type
             item={child}
             level={level + 1}
             onRemove={onRemove}
+            onEdit={onEdit}
+            editingItem={editingItem}
+            setEditingItem={setEditingItem}
+            onUpdate={onUpdate}
             isReadOnly={isReadOnly}
             allItems={allItems}
             isComponentSection={true}
@@ -134,9 +217,78 @@ const RecursiveBOMRow = ({ item, level = 0, onRemove, isReadOnly, allItems, type
     );
   }
 
+  if (isEditing) {
+    return (
+      <tr className="bg-indigo-50/30">
+        <td className="p-2" style={{ paddingLeft: `${level * 20}px` }}>
+          <div className="flex items-center gap-2">
+            {level > 0 && <CornerDownRight className="w-3 h-3 text-slate-300" />}
+            <span className="text-xs font-medium text-slate-800">
+              {item.item_code || item.itemCode || item.material_name}
+            </span>
+          </div>
+        </td>
+        <td className="p-2">
+          <input
+            type="number"
+            className="w-full p-1 text-xs border border-indigo-200 rounded"
+            value={editingItem.qty}
+            onChange={(e) => setEditingItem({ ...editingItem, qty: e.target.value })}
+          />
+        </td>
+        <td className="p-2 text-center text-[10px] text-slate-400">--</td>
+        <td className="p-2">
+          <input
+            type="number"
+            className="w-full p-1 text-xs border border-indigo-200 rounded"
+            value={editingItem.rate}
+            onChange={(e) => setEditingItem({ ...editingItem, rate: e.target.value })}
+          />
+        </td>
+        <td className="p-2">
+          <input
+            type="text"
+            className="w-full p-1 text-xs border border-indigo-200 rounded"
+            value={editingItem.warehouse}
+            onChange={(e) => setEditingItem({ ...editingItem, warehouse: e.target.value })}
+            placeholder="Warehouse"
+          />
+        </td>
+        <td className="p-2">
+          <input
+            type="text"
+            className="w-full p-1 text-xs border border-indigo-200 rounded"
+            value={editingItem.operation}
+            onChange={(e) => setEditingItem({ ...editingItem, operation: e.target.value })}
+            placeholder="Operation"
+          />
+        </td>
+        <td className="p-2 text-center text-[10px] text-slate-400">--</td>
+        <td className="p-2 text-right">
+          <div className="flex justify-end gap-1">
+            <button
+              onClick={onUpdate}
+              className="p-1.5 bg-emerald-500 text-white rounded hover:bg-emerald-600"
+              title="Save"
+            >
+              <Check className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => setEditingItem(null)}
+              className="p-1.5 bg-slate-200 text-slate-600 rounded hover:bg-slate-300"
+              title="Cancel"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </td>
+      </tr>
+    );
+  }
+
   return (
     <>
-      <tr className={`${level > 0 ? 'bg-slate-50/50' : 'bg-white'} border-b border-slate-100 hover:bg-blue-50/30 transition-colors`}>
+      <tr className={`${level > 0 ? 'bg-slate-50/50' : 'bg-white'} border-b border-slate-100 hover:bg-blue-50/30 transition-colors group`}>
         <td className="p-2 ">
           <div className="flex items-center gap-2 " style={{ paddingLeft: `${level * 20}px` }}>
             {level > 0 && <CornerDownRight className="w-3 h-3 text-slate-300" />}
@@ -179,12 +331,22 @@ const RecursiveBOMRow = ({ item, level = 0, onRemove, isReadOnly, allItems, type
         </td>
         {!isReadOnly && (
           <td className="p-2  text-right">
-            <button
-              onClick={() => onRemove(actualType === 'material' ? 'materials' : 'components', item.id, item.isLocal)}
-              className="p-1 text-slate-400 hover:text-rose-600 transition-colors"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
+            <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-all">
+              <button
+                onClick={() => onEdit(item)}
+                className="p-1 text-slate-400 hover:text-indigo-600 transition-colors"
+                title="Edit"
+              >
+                <Edit2 className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => onRemove(actualType === 'material' ? 'materials' : 'components', item.id, item.isLocal)}
+                className="p-1 text-slate-400 hover:text-rose-600 transition-colors"
+                title="Remove"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
           </td>
         )}
       </tr>
@@ -194,6 +356,10 @@ const RecursiveBOMRow = ({ item, level = 0, onRemove, isReadOnly, allItems, type
           item={child}
           level={level + 1}
           onRemove={onRemove}
+          onEdit={onEdit}
+          editingItem={editingItem}
+          setEditingItem={setEditingItem}
+          onUpdate={onUpdate}
           isReadOnly={isReadOnly}
           allItems={allItems}
           inheritedLoss={100 * (1 - cumulativeLossFactor)}
@@ -273,6 +439,8 @@ const BOMFormPage = () => {
   const [materialForm, setMaterialForm] = useState({ materialName: '', itemCode: '', qty: '1', uom: 'Kg', itemGroup: 'Raw Material', rate: '', warehouse: '', operation: '', parentId: '', description: '', weightPerUnit: '', scrapPercent: '0', length: '', width: '', thickness: '', diameter: '', outer_diameter: '' });
   const [componentForm, setComponentForm] = useState({ componentCode: '', quantity: '1', uom: 'Kg', rate: '', lossPercent: '', notes: '', parentId: '', description: '', weightPerUnit: '', scrapPercent: '0', itemGroup: '', length: '', width: '', thickness: '', diameter: '', outer_diameter: '' });
   const [operationForm, setOperationForm] = useState({ operationName: '', workstation: '', cycleTimeMin: '', setupTimeMin: '', hourlyRate: '', operationType: 'In-House', targetWarehouse: '' });
+  const [editingOperation, setEditingOperation] = useState(null);
+  const [editingMaterial, setEditingMaterial] = useState(null);
   const [scrapForm, setScrapForm] = useState({ itemCode: '', itemName: '', inputQty: '', lossPercent: '', rate: '', parentId: '' });
   const [approvedDrawings, setApprovedDrawings] = useState([]);
 
@@ -1079,6 +1247,124 @@ const BOMFormPage = () => {
     setComponentForm({ componentCode: '', quantity: '1', uom: 'Kg', rate: '', lossPercent: '', notes: '', parentId: '', description: '' });
     setOperationForm({ operationName: '', workstation: '', cycleTimeMin: '', setupTimeMin: '', hourlyRate: '', operationType: 'In-House', targetWarehouse: '' });
     setScrapForm({ itemCode: '', itemName: '', inputQty: '', lossPercent: '', rate: '' });
+  };
+
+  const handleEditOperation = (operation) => {
+    setEditingOperation({
+      ...operation,
+      operationName: operation.operation_name || operation.operationName,
+      workstation: operation.workstation,
+      cycleTimeMin: operation.cycle_time_min || operation.cycleTimeMin,
+      setupTimeMin: operation.setup_time_min || operation.setupTimeMin,
+      hourlyRate: operation.hourly_rate || operation.hourlyRate,
+      operationType: operation.operation_type || operation.operationType,
+      targetWarehouse: operation.target_warehouse || operation.targetWarehouse
+    });
+  };
+
+  const handleUpdateOperation = async () => {
+    try {
+      if (!editingOperation.operationName || editingOperation.hourlyRate === '') {
+        throw new Error('Operation Name and Hourly Rate are required');
+      }
+
+      const token = localStorage.getItem('authToken');
+      const payload = {
+        operation_name: editingOperation.operationName,
+        workstation: editingOperation.workstation,
+        cycle_time_min: parseFloat(editingOperation.cycleTimeMin) || 0,
+        setup_time_min: parseFloat(editingOperation.setupTimeMin) || 0,
+        hourly_rate: parseFloat(editingOperation.hourlyRate) || 0,
+        operation_type: editingOperation.operationType,
+        target_warehouse: editingOperation.targetWarehouse
+      };
+
+      if (editingOperation.isLocal || (!itemId || itemId === 'bom-form')) {
+        setBomData(prev => ({
+          ...prev,
+          operations: prev.operations.map(o => o.id === editingOperation.id ? { ...o, ...payload } : o)
+        }));
+      } else {
+        const response = await fetch(`${API_BASE}/bom/operations/${editingOperation.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) throw new Error('Failed to update operation');
+        
+        setBomData(prev => ({
+          ...prev,
+          operations: prev.operations.map(o => o.id === editingOperation.id ? { ...o, ...payload } : o)
+        }));
+      }
+
+      setEditingOperation(null);
+      successToast('Operation updated successfully');
+    } catch (error) {
+      errorToast(error.message);
+    }
+  };
+
+  const handleEditMaterial = (item) => {
+    setEditingMaterial({
+      ...item,
+      qty: item.qty_per_pc || item.qtyPerPc || item.qty || item.quantity || 0,
+      rate: item.rate || 0,
+      warehouse: item.warehouse || '',
+      operation: item.operation || '',
+      description: item.description || ''
+    });
+  };
+
+  const handleUpdateMaterial = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const payload = {
+        material_name: editingMaterial.material_name || editingMaterial.materialName,
+        material_type: editingMaterial.material_type || editingMaterial.materialType,
+        item_group: editingMaterial.item_group || editingMaterial.itemGroup,
+        qty_per_pc: parseFloat(editingMaterial.qty) || 0,
+        uom: editingMaterial.uom,
+        rate: parseFloat(editingMaterial.rate) || 0,
+        warehouse: editingMaterial.warehouse,
+        operation: editingMaterial.operation,
+        description: editingMaterial.description,
+        weight_per_unit: parseFloat(editingMaterial.weight_per_unit || editingMaterial.weightPerUnit) || 0,
+        scrap_percent: parseFloat(editingMaterial.scrap_percent || editingMaterial.scrapPercent) || 0
+      };
+
+      if (editingMaterial.isLocal || (!itemId || itemId === 'bom-form')) {
+        setBomData(prev => ({
+          ...prev,
+          materials: prev.materials.map(m => m.id === editingMaterial.id ? { ...m, ...payload } : m)
+        }));
+      } else {
+        const response = await fetch(`${API_BASE}/bom/materials/${editingMaterial.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) throw new Error('Failed to update material');
+        
+        setBomData(prev => ({
+          ...prev,
+          materials: prev.materials.map(m => m.id === editingMaterial.id ? { ...m, ...payload } : m)
+        }));
+      }
+
+      setEditingMaterial(null);
+      successToast('Material updated successfully');
+    } catch (error) {
+      errorToast(error.message);
+    }
   };
 
   const handleCreateBOM = async (status = 'Active') => {
@@ -2141,6 +2427,10 @@ const BOMFormPage = () => {
                           key={m.id}
                           item={m}
                           onRemove={handleDeleteSectionItem}
+                          onEdit={handleEditMaterial}
+                          editingItem={editingMaterial}
+                          setEditingItem={setEditingMaterial}
+                          onUpdate={handleUpdateMaterial}
                           isReadOnly={isReadOnly}
                           allItems={[...bomData.materials, ...bomData.components]}
                           type="material"
@@ -2338,6 +2628,7 @@ const BOMFormPage = () => {
                         <th className="p-2  text-lefttext-xs   text-slate-400 ">Sequence / Details</th>
                         <th className="p-2  text-centertext-xs   text-slate-400 ">Times (Min)</th>
                         <th className="p-2  text-centertext-xs   text-slate-400 ">Hourly Rate</th>
+                        <th className="p-2  text-centertext-xs   text-slate-400 ">Process Type</th>
                         <th className="p-2  text-centertext-xs   text-slate-400 ">Net Time</th>
                         <th className="p-2  text-centertext-xs   text-slate-400 ">Op. Cost</th>
                         {!isReadOnly && <th className="p-2  text-righttext-xs   text-slate-400 ">Actions</th>}
@@ -2350,13 +2641,101 @@ const BOMFormPage = () => {
                         const hourlyRate = parseFloat(o.hourly_rate || 0);
                         const totalTimeMin = cycleTime + setupTime;
                         const operationCost = (totalTimeMin / 60) * hourlyRate;
+                        
+                        const isEditing = editingOperation?.id === o.id;
+
+                        if (isEditing) {
+                          return (
+                            <tr key={o.id} className="bg-indigo-50/30">
+                              <td className="p-2">
+                                <input
+                                  type="text"
+                                  className="w-full p-1 text-xs border border-indigo-200 rounded"
+                                  value={editingOperation.operationName}
+                                  onChange={(e) => setEditingOperation({ ...editingOperation, operationName: e.target.value })}
+                                />
+                                <select
+                                  className="w-full mt-1 p-1 text-[10px] border border-indigo-200 rounded"
+                                  value={editingOperation.workstation}
+                                  onChange={(e) => setEditingOperation({ ...editingOperation, workstation: e.target.value })}
+                                >
+                                  <option value="">Select Resource</option>
+                                  {workstations.map(w => (
+                                    <option key={w.id} value={w.workstation_name}>{w.workstation_name}</option>
+                                  ))}
+                                </select>
+                              </td>
+                              <td className="p-2">
+                                <div className="flex gap-1">
+                                  <input
+                                    type="number"
+                                    placeholder="C"
+                                    className="w-12 p-1 text-xs border border-indigo-200 rounded"
+                                    value={editingOperation.cycleTimeMin}
+                                    onChange={(e) => setEditingOperation({ ...editingOperation, cycleTimeMin: e.target.value })}
+                                  />
+                                  <input
+                                    type="number"
+                                    placeholder="S"
+                                    className="w-12 p-1 text-xs border border-indigo-200 rounded"
+                                    value={editingOperation.setupTimeMin}
+                                    onChange={(e) => setEditingOperation({ ...editingOperation, setupTimeMin: e.target.value })}
+                                  />
+                                </div>
+                              </td>
+                              <td className="p-2">
+                                <input
+                                  type="number"
+                                  className="w-full p-1 text-xs border border-indigo-200 rounded text-center"
+                                  value={editingOperation.hourlyRate}
+                                  onChange={(e) => setEditingOperation({ ...editingOperation, hourlyRate: e.target.value })}
+                                />
+                              </td>
+                              <td className="p-2">
+                                <select
+                                  className="w-full p-1 text-xs border border-indigo-200 rounded"
+                                  value={editingOperation.operationType}
+                                  onChange={(e) => setEditingOperation({ ...editingOperation, operationType: e.target.value })}
+                                >
+                                  <option value="In-House">In-House</option>
+                                  <option value="Sub-Contract">Sub-Contract</option>
+                                </select>
+                              </td>
+                              <td className="p-2 text-center text-xs text-slate-400">
+                                --
+                              </td>
+                              <td className="p-2 text-center text-xs text-slate-400">
+                                --
+                              </td>
+                              <td className="p-2 text-right">
+                                <div className="flex justify-end gap-1">
+                                  <button
+                                    onClick={handleUpdateOperation}
+                                    className="p-1.5 bg-emerald-500 text-white rounded hover:bg-emerald-600 shadow-sm"
+                                    title="Save"
+                                  >
+                                    <Check className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={() => setEditingOperation(null)}
+                                    className="p-1.5 bg-slate-200 text-slate-600 rounded hover:bg-slate-300"
+                                    title="Cancel"
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        }
+
                         return (
                           <tr key={o.id} className="hover:bg-slate-50/80 transition-colors group">
                             <td className="p-2  whitespace-nowrap">
                               <div className="flex items-center gap-2">
                                 <span className="w-6 h-6 rounded  bg-slate-100 flex items-center justify-centertext-xs   text-slate-500 border border-slate-200">{idx + 1}</span>
                                 <div className="flex flex-col">
-                                  <span className="text-xs  text-slate-800">{o.operation_name}</span>
+                                  <span className="text-xs  text-slate-800">{o.operation_name || o.operationName}</span>
                                   <span className="text-xs text-slate-400   flex items-center gap-1">
                                     <Settings className="w-2.5 h-2.5" />
                                     {o.workstation || 'No Resource'}
@@ -2373,6 +2752,9 @@ const BOMFormPage = () => {
                             <td className="p-2  text-center whitespace-nowrap text-xs  text-slate-600">
                               ₹{hourlyRate.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                             </td>
+                            <td className="p-2  text-center whitespace-nowrap text-xs text-slate-600">
+                              {o.operation_type || o.operationType || 'In-House'}
+                            </td>
                             <td className="p-2  text-center whitespace-nowrap">
                               <span className="inline-flex items-center p-1  rounded text-xs   bg-indigo-50 text-indigo-600 border border-indigo-100">
                                 {totalTimeMin.toFixed(1)}m
@@ -2385,13 +2767,22 @@ const BOMFormPage = () => {
                             </td>
                             {!isReadOnly && (
                               <td className="p-2  text-right whitespace-nowrap">
-                                <button
-                                  onClick={() => handleDeleteSectionItem('operations', o.id, o.isLocal)}
-                                  className="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded  transition-all opacity-0 group-hover:opacity-100"
-                                  title="Remove Operation"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
+                                <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                                  <button
+                                    onClick={() => handleEditOperation(o)}
+                                    className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-all"
+                                    title="Edit Operation"
+                                  >
+                                    <Edit2 className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteSectionItem('operations', o.id, o.isLocal)}
+                                    className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded transition-all"
+                                    title="Remove Operation"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
                               </td>
                             )}
                           </tr>

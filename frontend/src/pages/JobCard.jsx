@@ -14,13 +14,17 @@ import { successToast, errorToast } from '../utils/toast';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
-const TimePicker = ({ value, ampmValue, onTimeChange, onAMPMChange, label, small = false }) => {
+const TimePicker = ({ value, ampmValue, onTimeChange, onAMPMChange, label, small = false, placeholder = '08:00', placeholderAMPM = 'AM' }) => {
   const [isOpen, setIsOpen] = useState(false);
   const triggerRef = useRef(null);
   const [coords, setCoords] = useState({ top: 0, left: 0, width: 0 });
   
-  const hour = value?.split(':')[0] || '08';
-  const minute = value?.split(':')[1] || '00';
+  const isPlaceholder = !value || !ampmValue;
+  const displayTime = value || placeholder;
+  const displayAMPM = ampmValue || placeholderAMPM;
+  
+  const hour = displayTime?.split(':')[0] || '08';
+  const minute = displayTime?.split(':')[1] || '00';
   
   const hours = Array.from({ length: 12 }, (_, i) => (i + 1).toString().padStart(2, '0'));
   const minutes = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0'));
@@ -29,9 +33,14 @@ const TimePicker = ({ value, ampmValue, onTimeChange, onAMPMChange, label, small
   useLayoutEffect(() => {
     if (isOpen && triggerRef.current) {
       const rect = triggerRef.current.getBoundingClientRect();
+      const pickerHeight = 256; // h-64
+      const viewportHeight = window.innerHeight;
+      
+      const spaceBelow = viewportHeight - rect.bottom;
+      const shouldOpenAbove = spaceBelow < pickerHeight && rect.top > pickerHeight;
+
       setCoords({
-        top: rect.bottom + window.scrollY,
-        left: rect.left + window.scrollX,
+        top: shouldOpenAbove ? -1 : 1, // Indicator for above/below
         width: Math.max(rect.width, small ? 150 : 180)
       });
     }
@@ -48,23 +57,24 @@ const TimePicker = ({ value, ampmValue, onTimeChange, onAMPMChange, label, small
         }`}
       >
         <Clock className={`${small ? 'w-3 h-3' : 'w-3.5 h-3.5'} text-slate-400`} />
-        <span className={`${small ? 'text-[10px]' : 'text-xs'} font-medium text-slate-700`}>
-          {hour}:{minute} {ampmValue}
+        <span className={`${small ? 'text-[10px]' : 'text-xs'} font-medium ${isPlaceholder ? 'text-slate-400' : 'text-slate-700'}`}>
+          {hour}:{minute} {displayAMPM}
         </span>
         <ChevronDown className={`${small ? 'w-2.5 h-2.5' : 'w-3 h-3'} text-slate-400 ml-auto transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </div>
 
       {isOpen && (
         <>
-          <div className="fixed inset-0 z-[9998]" onClick={() => setIsOpen(false)} />
+          <div className="fixed inset-0 z-[100]" onClick={() => setIsOpen(false)} />
           <div 
             style={{ 
-              position: 'fixed',
-              top: `${coords.top - window.scrollY + 4}px`, 
-              left: `${coords.left - window.scrollX}px`,
+              position: 'absolute',
+              top: coords.top === -1 ? 'auto' : 'calc(100% + 4px)',
+              bottom: coords.top === -1 ? 'calc(100% + 4px)' : 'auto',
+              left: '0',
               minWidth: `${coords.width}px`
             }}
-            className="z-[9999] bg-white border border-slate-200 rounded-lg shadow-2xl flex overflow-hidden h-64 animate-in fade-in zoom-in-95 duration-200 origin-top"
+            className="z-[101] bg-white border border-slate-200 rounded-lg shadow-2xl flex overflow-hidden h-64 animate-in fade-in zoom-in-95 duration-200 origin-top"
           >
             {/* Hours */}
             <div className="flex-1 overflow-y-auto scrollbar-hide border-r border-slate-50 py-1 bg-white">
@@ -101,7 +111,7 @@ const TimePicker = ({ value, ampmValue, onTimeChange, onAMPMChange, label, small
                   key={p}
                   onClick={() => onAMPMChange(p)}
                   className={`px-3 py-2 text-xs text-center cursor-pointer transition-colors ${
-                    ampmValue === p ? 'bg-indigo-600 text-white font-bold' : 'text-slate-600 hover:bg-slate-50'
+                    displayAMPM === p ? 'bg-indigo-600 text-white font-bold' : 'text-slate-600 hover:bg-slate-50'
                   }`}
                 >
                   {p}
@@ -174,7 +184,15 @@ const JobCard = () => {
     workstationId: '',
     assignedTo: '',
     plannedQty: 0,
-    remarks: ''
+    remarks: '',
+    executionMode: 'In-house', // 'In-house' or 'Outsource'
+    vendorId: '',
+    vendorRate: 0,
+    status: 'PENDING',
+    producedQty: 0,
+    acceptedQty: 0,
+    startDateTime: '',
+    endDateTime: ''
   });
 
   const formatLocalTime = (isoString) => {
@@ -244,20 +262,30 @@ const JobCard = () => {
     setForm(prev => ({ ...prev, [field]: time, [ampmField]: ampm }));
   };
 
+  const parseTimeToMinutes = (timeStr, ampm) => {
+    if (!timeStr) return 0;
+    let [hours, minutes] = timeStr.split(':').map(Number);
+    if (ampm === 'PM' && hours < 12) hours += 12;
+    if (ampm === 'AM' && hours === 12) hours = 0;
+    return hours * 60 + minutes;
+  };
+
+  const parse12hMinutes = (time12h) => {
+    if (!time12h || time12h === '--:--') return 0;
+    const parts = time12h.split(' ');
+    if (parts.length < 2) return 0;
+    return parseTimeToMinutes(parts[0], parts[1]);
+  };
+
   const calculateTotalMins = (start, startAMPM, end, endAMPM) => {
     try {
-      if (!start || !end) return 0;
+      if (!start || !end || start.includes('NaN') || end.includes('NaN')) return 0;
       if (start === end && startAMPM === endAMPM) return 0;
       
-      const parseTime = (timeStr, ampm) => {
-        let [hours, minutes] = timeStr.split(':').map(Number);
-        if (ampm === 'PM' && hours < 12) hours += 12;
-        if (ampm === 'AM' && hours === 12) hours = 0;
-        return hours * 60 + minutes;
-      };
-
-      const startMins = parseTime(start, startAMPM);
-      const endMins = parseTime(end, endAMPM);
+      const startMins = parseTimeToMinutes(start, startAMPM);
+      const endMins = parseTimeToMinutes(end, endAMPM);
+      
+      if (isNaN(startMins) || isNaN(endMins)) return 0;
       
       let diff = endMins - startMins;
       if (diff < 0) diff += 24 * 60; // Handle overnight shift
@@ -769,16 +797,23 @@ const JobCard = () => {
     downtimeDate: new Date().toISOString().slice(0, 10),
     shift: 'SHIFT_A',
     downtimeType: '',
-    startTime: '08:00',
-    startAMPM: 'AM',
-    endTime: '08:00',
-    endAMPM: 'PM',
+    startTime: '',
+    startAMPM: '',
+    endTime: '',
+    endAMPM: '',
     remarks: '',
     day: 1
   });
 
   const [viewingQualityLog, setViewingQualityLog] = useState(null);
   const [editingQualityLogId, setEditingQualityLogId] = useState(null);
+  const [editingReportKey, setEditingReportKey] = useState(null);
+  const [editReportForm, setEditReportForm] = useState({
+    produced: 0,
+    accepted: 0,
+    rejected: 0,
+    scrap: 0
+  });
   const [editQualityLogForm, setEditQualityLogForm] = useState({
     day: 1,
     checkDate: '',
@@ -797,10 +832,10 @@ const JobCard = () => {
     operatorId: '',
     workstationId: '',
     shift: 'SHIFT_A',
-    startTime: '08:00',
-    startAMPM: 'AM',
-    endTime: '08:00',
-    endAMPM: 'AM',
+    startTime: '',
+    startAMPM: '',
+    endTime: '',
+    endAMPM: '',
     producedQty: 0,
     day: 1
   });
@@ -1100,23 +1135,33 @@ const JobCard = () => {
       operatorId: jc.assigned_to || '', 
       workstationId: jc.workstation_id || '',
       producedQty: 0,
-      startTime: '08:00',
-      startAMPM: 'AM',
-      endTime: '08:00',
-      endAMPM: 'PM'
+      startTime: '',
+      startAMPM: '',
+      endTime: '',
+      endAMPM: ''
     }));
     setQualityLogForm(prev => ({ ...prev, checkDate: today, day: diffDays, shift: 'SHIFT_A', inspectedQty: 0, acceptedQty: 0, rejectedQty: 0, scrapQty: 0 }));
-    setDowntimeLogForm(prev => ({ ...prev, downtimeDate: today, day: diffDays, shift: 'SHIFT_A', startTime: '08:00', startAMPM: 'AM', endTime: '08:00', endAMPM: 'PM', downtimeType: '', remarks: '' }));
+    setDowntimeLogForm(prev => ({ ...prev, downtimeDate: today, day: diffDays, shift: 'SHIFT_A', startTime: '', startAMPM: '', endTime: '', endAMPM: '', downtimeType: '', remarks: '' }));
     
+    // Set machine status based on current job state
+    const mState = getMachineState(jc, jobCards);
+    if (mState.status === "RUNNING" || mState.status === "BUSY") {
+      setMachineStatus("RUNNING");
+    } else if (jc.status === "STOPPED") {
+      setMachineStatus("STOPPED");
+    } else {
+      setMachineStatus("AVAILABLE");
+    }
+
     setShowProductionEntry(true);
   };
 
   const handleEditTimeLog = (log) => {
-    const start24 = formatLocalTime(log.start_time);
-    const end24 = formatLocalTime(log.end_time);
+    const startStr = formatLocalTime(log.start_time);
+    const endStr = formatLocalTime(log.end_time);
     
-    const start = to12h(start24);
-    const end = to12h(end24);
+    const [startTime, startAMPM] = startStr.split(' ');
+    const [endTime, endAMPM] = endStr.split(' ');
 
     const startDateStr = selectedJC.actual_start_date || selectedJC.created_at || new Date();
     const startDate = new Date(startDateStr);
@@ -1132,10 +1177,10 @@ const JobCard = () => {
       shift: log.shift,
       operatorId: log.operator_id,
       workstationId: log.workstation_id,
-      startTime: start.time,
-      startAMPM: start.ampm,
-      endTime: end.time,
-      endAMPM: end.ampm,
+      startTime: startTime,
+      startAMPM: startAMPM || 'AM',
+      endTime: endTime,
+      endAMPM: endAMPM || 'AM',
       producedQty: log.produced_qty
     });
   };
@@ -1162,6 +1207,94 @@ const JobCard = () => {
       status: log.status
     });
   };
+  
+  const handleEditReport = (row) => {
+    const key = `${row.date}_${row.shift}`;
+    setEditingReportKey(key);
+    setEditReportForm({
+      produced: row.produced,
+      accepted: row.accepted,
+      rejected: row.rejected,
+      scrap: row.scrap
+    });
+  };
+
+  const handleUpdateReport = async (row) => {
+    const date = row.date;
+    const shift = row.shift;
+
+    try {
+      // 1. Find the time log for this date/shift
+      const timeLog = logs.timeLogs.find(l => l.log_date === date && l.shift === shift);
+      if (parseFloat(editReportForm.produced) !== parseFloat(row.produced)) {
+        if (timeLog) {
+          const startStr = formatLocalTime(timeLog.start_time);
+          const endStr = formatLocalTime(timeLog.end_time);
+          const [startTime, startAMPM] = startStr.split(' ');
+          const [endTime, endAMPM] = endStr.split(' ');
+
+          await updateTimeLog(timeLog.id, {
+            ...timeLog,
+            producedQty: parseFloat(editReportForm.produced),
+            startTime: startTime,
+            startAMPM: startAMPM || 'AM',
+            endTime: endTime,
+            endAMPM: endAMPM || 'AM',
+            logDate: timeLog.log_date.slice(0, 10),
+            operatorId: timeLog.operator_id,
+            workstationId: timeLog.workstation_id
+          });
+        } else {
+          errorToast("Cannot update Produced Qty: No Time Log found for this shift.");
+        }
+      }
+
+      // 2. Find the quality log for this date/shift
+      const qualityLog = logs.qualityLogs.find(l => l.check_date === date && l.shift === shift);
+      if (
+        parseFloat(editReportForm.accepted) !== parseFloat(row.accepted) ||
+        parseFloat(editReportForm.rejected) !== parseFloat(row.rejected) ||
+        parseFloat(editReportForm.scrap) !== parseFloat(row.scrap)
+      ) {
+        if (qualityLog) {
+          await updateQualityLog(qualityLog.id, {
+            ...qualityLog,
+            acceptedQty: parseFloat(editReportForm.accepted),
+            rejectedQty: parseFloat(editReportForm.rejected),
+            scrapQty: parseFloat(editReportForm.scrap),
+            checkDate: qualityLog.check_date.slice(0, 10)
+          });
+        } else {
+          errorToast("Cannot update Quality values: No Quality Entry found for this shift.");
+        }
+      }
+
+      setEditingReportKey(null);
+      fetchLogs(selectedJC.id);
+      successToast("Report updated successfully");
+    } catch (error) {
+      console.error("Error updating report:", error);
+      errorToast("Failed to update report");
+    }
+  };
+
+  const handleWorkstationChange = (wsId) => {
+    setTimeLogForm(prev => ({ ...prev, workstationId: wsId }));
+    
+    // Also update machine status for the new workstation
+    const mState = getMachineState({ ...selectedJC, workstation_id: wsId }, jobCards);
+    if (mState.status === "RUNNING" || mState.status === "BUSY") {
+      setMachineStatus("RUNNING");
+    } else if (selectedJC.status === "STOPPED") {
+      setMachineStatus("STOPPED");
+    } else {
+      setMachineStatus("AVAILABLE");
+    }
+  };
+
+  const handleModalWorkstationChange = (wsId) => {
+    setFormData(prev => ({ ...prev, workstationId: wsId }));
+  };
 
   const renderProductionEntry = () => {
     if (!selectedJC) return null;
@@ -1187,24 +1320,6 @@ const JobCard = () => {
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-xl  text-slate-900">Production Entry</h1>
-              <span className="flex items-center gap-1.5 px-2 py-0.5 bg-amber-50 text-amber-700 rounded text-xs    border border-amber-100">
-                <span className="w-1.5 h-1.5 bg-amber-500 rounded animate-pulse"></span>
-                {selectedJC.status || 'In-Progress'}
-              </span>
-              <span className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-xs border ${
-                machineStatus === 'RUNNING' ? 'bg-rose-50 text-rose-700 border-rose-100' :
-                machineStatus === 'STOPPED' ? 'bg-amber-50 text-amber-700 border-amber-100' :
-                'bg-emerald-50 text-emerald-700 border-emerald-100'
-              }`}>
-                <span className={`w-1.5 h-1.5 rounded animate-pulse ${
-                  machineStatus === 'RUNNING' ? 'bg-rose-500' :
-                  machineStatus === 'STOPPED' ? 'bg-amber-500' :
-                  'bg-emerald-500'
-                }`}></span>
-                {machineStatus === 'RUNNING' && '🔴 RUNNING'}
-                {machineStatus === 'STOPPED' && '🟠 STOPPED'}
-                {machineStatus === 'AVAILABLE' && '🟢 AVAILABLE'}
-              </span>
             </div>
             <div className="flex items-center gap-2 mt-1">
               <span className="text-xs text-slate-500">{selectedJC.job_card_no}</span>
@@ -1269,16 +1384,27 @@ const JobCard = () => {
               <div className="text-center border-l border-slate-100 pl-8">
                 <p className="text-xs text-indigo-500 mb-1.5 font-medium">Net Time (Per Unit)</p>
                 <p className="text-sm font-bold text-indigo-600">
-                  {parseFloat(selectedJC.std_time || 0).toFixed(1)} <span className="text-[10px] text-indigo-400 lowercase">{(selectedJC.time_uom || 'Min').toLowerCase()}</span>
+                  {parseFloat(selectedJC.std_time || 0).toFixed(0)} <span className="text-[10px] text-indigo-400 lowercase">{(selectedJC.time_uom || 'Min').toLowerCase()}</span>
                   <span className="text-[9px] text-indigo-300 ml-1">/ unit</span>
                 </p>
               </div>
-              <div className="text-right border-l border-slate-100 pl-8">
-                <p className="text-xs  text-slate-400   mb-1.5">Current Op</p>
-                <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 bg-indigo-500 rounded animate-pulse"></span>
-                  <p className="text-sm  text-indigo-600">{selectedJC.operation_name}</p>
+              <div className="text-right border-l border-slate-100 pl-8 min-w-[120px]">
+                <p className="text-xs  text-slate-400   mb-1">Current Status</p>
+                <div className="flex items-center justify-end gap-1.5">
+                  <span className={`w-2 h-2 rounded-full animate-pulse shrink-0 ${
+                    selectedJC.status === 'IN_PROGRESS' ? 'bg-amber-500' :
+                    selectedJC.status === 'COMPLETED' ? 'bg-emerald-500' :
+                    'bg-slate-400'
+                  }`}></span>
+                  <p className={`text-sm font-bold tracking-tight ${
+                    selectedJC.status === 'IN_PROGRESS' ? 'text-amber-600' :
+                    selectedJC.status === 'COMPLETED' ? 'text-emerald-600' :
+                    'text-slate-600'
+                  }`}>
+                    {selectedJC.status === 'IN_PROGRESS' ? 'Running' : selectedJC.status === 'COMPLETED' ? 'Completed' : selectedJC.status}
+                  </p>
                 </div>
+                <p className="text-[10px] font-medium text-slate-400 mt-1 uppercase tracking-wider">{selectedJC.operation_name}</p>
               </div>
             </div>
           </div>
@@ -1381,14 +1507,15 @@ const JobCard = () => {
                         
                         return { 
                           value: w.id, 
-                          label: busyJob 
-                            ? `${w.workstation_name} (Busy till ${getEstimatedEndTime(busyJob)})`
-                            : w.workstation_name,
-                          disabled: !!busyJob
+                          label: w.workstation_name,
+                          subLabel: busyJob 
+                            ? `Busy till ${getEstimatedEndTime(busyJob)} by ${busyJob.job_card_no}`
+                            : 'Available',
                         };
                       })}
+                      subLabelField="subLabel"
                       value={timeLogForm.workstationId}
-                      onChange={(e) => setTimeLogForm({ ...timeLogForm, workstationId: e.target.value })}
+                      onChange={(e) => handleWorkstationChange(e.target.value)}
                       placeholder="Select Machine..."
                     />
                   </FormControl>
@@ -1420,7 +1547,9 @@ const JobCard = () => {
                           <TimePicker 
                             value={timeLogForm.startTime}
                             ampmValue={timeLogForm.startAMPM}
-                            onTimeChange={(newTime) => setTimeLogForm({ ...timeLogForm, startTime: newTime })}
+                            placeholder="08:00"
+                            placeholderAMPM="AM"
+                            onTimeChange={(newTime) => setTimeLogForm({ ...timeLogForm, startTime: newTime, startAMPM: timeLogForm.startAMPM || 'AM' })}
                             onAMPMChange={(newAMPM) => setTimeLogForm({ ...timeLogForm, startAMPM: newAMPM })}
                           />
                         </div>
@@ -1429,7 +1558,9 @@ const JobCard = () => {
                           <TimePicker 
                             value={timeLogForm.endTime}
                             ampmValue={timeLogForm.endAMPM}
-                            onTimeChange={(newTime) => setTimeLogForm({ ...timeLogForm, endTime: newTime })}
+                            placeholder="04:00"
+                            placeholderAMPM="PM"
+                            onTimeChange={(newTime) => setTimeLogForm({ ...timeLogForm, endTime: newTime, endAMPM: timeLogForm.endAMPM || 'PM' })}
                             onAMPMChange={(newAMPM) => setTimeLogForm({ ...timeLogForm, endAMPM: newAMPM })}
                           />
                         </div>
@@ -1437,8 +1568,9 @@ const JobCard = () => {
                     </FormControl>
                     <FormControl label="Total Mins" required>
                       <input 
-                        type="number" 
-                        value={calculateTotalMins(timeLogForm.startTime, timeLogForm.startAMPM, timeLogForm.endTime, timeLogForm.endAMPM)} 
+                        type="text" 
+                        placeholder="480"
+                        value={calculateTotalMins(timeLogForm.startTime, timeLogForm.startAMPM, timeLogForm.endTime, timeLogForm.endAMPM) || ''} 
                         readOnly 
                         className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs outline-none  text-slate-600" 
                       />
@@ -1446,7 +1578,7 @@ const JobCard = () => {
                   </div>
                   <div className="flex items-center gap-2">
                     <button 
-                      onClick={() => setMachineStatus("RUNNING")}
+                      onClick={handleStartMachine}
                       className={`p-2.5 rounded transition-all text-xs flex items-center gap-2 h-[38px] ${
                         machineStatus === 'RUNNING' ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-600 hover:bg-rose-50 hover:text-rose-600'
                       }`}
@@ -1485,7 +1617,7 @@ const JobCard = () => {
                   </div>
                 </div>
 
-                <div className="mt-12 overflow-x-auto">
+                <div className="mt-12 overflow-visible">
                   <table className="w-full text-left text-xs border-collapse">
                     <thead className="border-b border-slate-100">
                       <tr>
@@ -1743,7 +1875,7 @@ const JobCard = () => {
                   </button>
                 </div>
 
-                <div className="mt-12 overflow-x-auto">
+                <div className="mt-12 overflow-visible">
                   <table className="w-full text-left text-xs border-collapse">
                     <thead className="border-b border-slate-100">
                       <tr>
@@ -1978,7 +2110,9 @@ const JobCard = () => {
                     <TimePicker 
                       value={downtimeLogForm.startTime}
                       ampmValue={downtimeLogForm.startAMPM}
-                      onTimeChange={(newTime) => setDowntimeLogForm({ ...downtimeLogForm, startTime: newTime })}
+                      placeholder="08:00"
+                      placeholderAMPM="AM"
+                      onTimeChange={(newTime) => setDowntimeLogForm({ ...downtimeLogForm, startTime: newTime, startAMPM: downtimeLogForm.startAMPM || 'AM' })}
                       onAMPMChange={(newAMPM) => setDowntimeLogForm({ ...downtimeLogForm, startAMPM: newAMPM })}
                     />
                   </FormControl>
@@ -1986,15 +2120,18 @@ const JobCard = () => {
                     <TimePicker 
                       value={downtimeLogForm.endTime}
                       ampmValue={downtimeLogForm.endAMPM}
-                      onTimeChange={(newTime) => setDowntimeLogForm({ ...downtimeLogForm, endTime: newTime })}
+                      placeholder="04:00"
+                      placeholderAMPM="PM"
+                      onTimeChange={(newTime) => setDowntimeLogForm({ ...downtimeLogForm, endTime: newTime, endAMPM: downtimeLogForm.endAMPM || 'PM' })}
                       onAMPMChange={(newAMPM) => setDowntimeLogForm({ ...downtimeLogForm, endAMPM: newAMPM })}
                     />
                   </FormControl>
                   <FormControl label="Total Mins">
                     <input 
-                      type="number" 
+                      type="text" 
+                      placeholder="480"
                       readOnly 
-                      value={calculateTotalMins(downtimeLogForm.startTime, downtimeLogForm.startAMPM, downtimeLogForm.endTime, downtimeLogForm.endAMPM)} 
+                      value={calculateTotalMins(downtimeLogForm.startTime, downtimeLogForm.startAMPM, downtimeLogForm.endTime, downtimeLogForm.endAMPM) || ''} 
                       className="w-full p-2 bg-slate-50 border border-slate-100 rounded text-xs outline-none  text-slate-400" 
                     />
                   </FormControl>
@@ -2030,7 +2167,7 @@ const JobCard = () => {
                   </button>
                 </div>
 
-                <div className="mt-12 overflow-x-auto">
+                <div className="mt-12 overflow-visible">
                   <table className="w-full text-left text-xs border-collapse">
                     <thead className="border-b border-slate-100">
                       <tr>
@@ -2238,7 +2375,7 @@ const JobCard = () => {
                     <p className="text-xs text-slate-400 italic">No data available</p>
                   </div>
                 ) : (
-                  <div className="w-full overflow-x-auto">
+                  <div className="w-full overflow-visible">
                     <table className="w-full text-left text-xs">
                       <thead className="bg-slate-50 border-b border-slate-100">
                         <tr>
@@ -2255,29 +2392,93 @@ const JobCard = () => {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50">
-                        {consolidatedReport.map((row, idx) => (
-                          <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                            <td className="p-2  text-slate-900">{new Date(row.date).toLocaleDateString('en-GB')}</td>
-                            <td className="p-2 ">
-                              <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-xs  ">{row.shift?.replace('SHIFT_', 'Shift ')}</span>
-                            </td>
-                            <td className="p-2  text-slate-600 font-medium">{row.operator || 'N/A'}</td>
-                            <td className="p-2  text-center  text-blue-600">{row.mins}</td>
-                            <td className="p-2  text-center  text-slate-900">{row.produced}</td>
-                            <td className="p-2  text-center  text-emerald-600">{row.accepted}</td>
-                            <td className="p-2  text-center  text-rose-500">{row.rejected}</td>
-                            <td className="p-2  text-center  text-slate-400">{row.scrap}</td>
-                            <td className="p-2  text-right">
-                              <span className=" text-amber-600">{row.downtime}</span>
-                              <span className="text-xs text-slate-400 ml-1">min</span>
-                            </td>
-                            <td className="p-2  text-right">
-                              <button className="p-1.5 text-slate-300 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-all">
-                                <Edit2 className="w-3.5 h-3.5" />
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
+                        {consolidatedReport.map((row, idx) => {
+                          const rowKey = `${row.date}_${row.shift}`;
+                          const isEditing = editingReportKey === rowKey;
+
+                          if (isEditing) {
+                            return (
+                              <tr key={idx} className="bg-indigo-50/30">
+                                <td className="p-2 text-slate-900">{new Date(row.date).toLocaleDateString('en-GB')}</td>
+                                <td className="p-2">
+                                  <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-xs">{row.shift?.replace('SHIFT_', 'Shift ')}</span>
+                                </td>
+                                <td className="p-2 text-slate-600 font-medium">{row.operator || 'N/A'}</td>
+                                <td className="p-2 text-center text-blue-600 font-bold">{row.mins}</td>
+                                <td className="p-2">
+                                  <input 
+                                    type="number" 
+                                    value={editReportForm.produced}
+                                    onChange={e => setEditReportForm({...editReportForm, produced: e.target.value})}
+                                    className="w-full px-1 py-1 border rounded text-xs text-center focus:ring-1 focus:ring-indigo-500 outline-none"
+                                  />
+                                </td>
+                                <td className="p-2">
+                                  <input 
+                                    type="number" 
+                                    value={editReportForm.accepted}
+                                    onChange={e => setEditReportForm({...editReportForm, accepted: e.target.value})}
+                                    className="w-full px-1 py-1 border rounded text-xs text-center border-emerald-200 focus:ring-1 focus:ring-emerald-500 outline-none"
+                                  />
+                                </td>
+                                <td className="p-2">
+                                  <input 
+                                    type="number" 
+                                    value={editReportForm.rejected}
+                                    onChange={e => setEditReportForm({...editReportForm, rejected: e.target.value})}
+                                    className="w-full px-1 py-1 border rounded text-xs text-center border-rose-200 focus:ring-1 focus:ring-rose-500 outline-none"
+                                  />
+                                </td>
+                                <td className="p-2">
+                                  <input 
+                                    type="number" 
+                                    value={editReportForm.scrap}
+                                    onChange={e => setEditReportForm({...editReportForm, scrap: e.target.value})}
+                                    className="w-full px-1 py-1 border rounded text-xs text-center focus:ring-1 focus:ring-indigo-500 outline-none"
+                                  />
+                                </td>
+                                <td className="p-2 text-right font-medium">
+                                  <span className=" text-amber-600">{row.downtime}</span>
+                                  <span className="text-xs text-slate-400 ml-1">min</span>
+                                </td>
+                                <td className="p-2 text-right">
+                                  <div className="flex items-center justify-end gap-2">
+                                    <button onClick={() => handleUpdateReport(row)} className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded transition-all shadow-sm">
+                                      <Save className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button onClick={() => setEditingReportKey(null)} className="p-1.5 text-rose-600 hover:bg-rose-50 rounded transition-all shadow-sm">
+                                      <X className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          }
+
+                          return (
+                            <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                              <td className="p-2  text-slate-900">{new Date(row.date).toLocaleDateString('en-GB')}</td>
+                              <td className="p-2 ">
+                                <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-xs  ">{row.shift?.replace('SHIFT_', 'Shift ')}</span>
+                              </td>
+                              <td className="p-2  text-slate-600 font-medium">{row.operator || 'N/A'}</td>
+                              <td className="p-2  text-center  text-blue-600 font-bold">{row.mins}</td>
+                              <td className="p-2  text-center  text-slate-900">{row.produced}</td>
+                              <td className="p-2  text-center  text-emerald-600">{row.accepted}</td>
+                              <td className="p-2  text-center  text-rose-500">{row.rejected}</td>
+                              <td className="p-2  text-center  text-slate-400">{row.scrap}</td>
+                              <td className="p-2  text-right font-medium">
+                                <span className=" text-amber-600">{row.downtime}</span>
+                                <span className="text-xs text-slate-400 ml-1">min</span>
+                              </td>
+                              <td className="p-2  text-right">
+                                <button onClick={() => handleEditReport(row)} className="p-1.5 text-slate-300 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-all">
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -2500,15 +2701,98 @@ const JobCard = () => {
     successToast('Report downloaded successfully');
   };
 
+  const validateWorkstationAvailability = (workstationId, startTime, startAMPM, endTime, endAMPM) => {
+    const ws = workstations.find(w => w.id === parseInt(workstationId));
+    const busyJob = jobCards.find(jc => 
+      jc.id !== selectedJC?.id && 
+      jc.workstation_id === parseInt(workstationId) && 
+      jc.status === 'IN_PROGRESS'
+    );
+
+    if (busyJob && ws) {
+      const busyEndStr = getEstimatedEndTime(busyJob);
+      const busyStartStr = formatLocalTime(busyJob.latest_log_start_time || busyJob.start_time);
+      
+      const busyStart = parse12hMinutes(busyStartStr);
+      const busyEnd = parse12hMinutes(busyEndStr);
+      
+      const newStart = parseTimeToMinutes(startTime, startAMPM);
+      const newEnd = parseTimeToMinutes(endTime, endAMPM);
+      
+      const isOverlap = newStart < busyEnd && newEnd > busyStart;
+
+      if (isOverlap) {
+        Swal.fire({
+          icon: 'error',
+          title: 'Machine Already in Use',
+          html: `
+            <div class="text-left space-y-1">
+              <p class="font-bold text-[10px] text-rose-600">🔴 ${ws.workstation_name} busy to ${busyJob.job_card_no}</p>
+              <p class="font-bold text-[10px] text-slate-600">⏱ ${busyStartStr} – ${busyEndStr} • <span class="text-emerald-600">Available after ${busyEndStr}</span></p>
+            </div>
+          `,
+          toast: true,
+          position: 'bottom-end',
+          showConfirmButton: false,
+          timer: 5000,
+          timerProgressBar: true
+        });
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const handleStartMachine = () => {
+    const now = new Date();
+    const startTimeStr = now.toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit' });
+    const [time, ampm] = startTimeStr.split(' ');
+    
+    // For "Start", we check if currently busy (overlap with current time)
+    // We can use a 1-min window for the check
+    const isAvailable = validateWorkstationAvailability(timeLogForm.workstationId, time, ampm, time, ampm);
+    if (isAvailable) {
+      setMachineStatus("RUNNING");
+    }
+  };
+
   const addTimeLog = async (logData) => {
     if (!logData.operatorId || !logData.workstationId) {
       errorToast('Please select Operator and Workstation');
+      return;
+    }
+    if (!logData.startTime || !logData.endTime || logData.startTime.includes('NaN') || logData.endTime.includes('NaN')) {
+      errorToast('Please select Production Period');
       return;
     }
     if (logData.producedQty <= 0) {
       errorToast('Please enter Produce Quantity');
       return;
     }
+
+    // Machine Busy Validation
+    if (!validateWorkstationAvailability(logData.workstationId, logData.startTime, logData.startAMPM, logData.endTime, logData.endAMPM)) {
+      return;
+    }
+
+    // Success toast if not overlapped
+    const ws = workstations.find(w => w.id === parseInt(logData.workstationId));
+    const ws_name = ws?.workstation_name || 'Machine';
+    Swal.fire({
+      icon: 'success',
+      title: 'Machine Allocated',
+      html: `
+        <div class="text-left space-y-1">
+          <p class="font-bold text-[10px] text-emerald-600">🟢 ${ws_name} allocated successfully</p>
+          <p class="font-bold text-[10px] text-slate-600">⏱ ${logData.startTime} ${logData.startAMPM} – ${logData.endTime} ${logData.endAMPM}</p>
+        </div>
+      `,
+      toast: true,
+      position: 'bottom-end',
+      showConfirmButton: false,
+      timer: 3000,
+      timerProgressBar: true
+    });
 
     try {
       const token = localStorage.getItem('authToken');
@@ -2543,7 +2827,6 @@ const JobCard = () => {
       });
 
       if (response.ok) {
-        successToast('Time log recorded');
         await fetchLogs(selectedJC.id);
         fetchJobCards();
         // Reset form but keep Day and Date
@@ -2621,6 +2904,10 @@ const JobCard = () => {
   };
 
   const updateTimeLog = async (logId, logData) => {
+    if (!logData.startTime || !logData.endTime || logData.startTime.includes('NaN') || logData.endTime.includes('NaN')) {
+      errorToast('Please select valid start and end times');
+      return;
+    }
     try {
       const token = localStorage.getItem('authToken');
       
@@ -2728,6 +3015,11 @@ const JobCard = () => {
     
     if (hasPendingQuality) {
       errorToast('Cannot record downtime. QC verification is pending for one or more records.');
+      return;
+    }
+
+    if (!logData.startTime || !logData.endTime) {
+      errorToast('Please select Downtime Period');
       return;
     }
 
@@ -2847,7 +3139,15 @@ const JobCard = () => {
       workstationId: '',
       assignedTo: '',
       plannedQty: 0,
-      remarks: ''
+      remarks: '',
+      executionMode: 'In-house',
+      vendorId: '',
+      vendorRate: 0,
+      status: 'PENDING',
+      producedQty: 0,
+      acceptedQty: 0,
+      startDateTime: '',
+      endDateTime: ''
     });
     setSelectedWO(null);
     setIsModalOpen(true);
@@ -2973,7 +3273,15 @@ const JobCard = () => {
       workstationId: jc.workstation_id,
       assignedTo: jc.assigned_to,
       plannedQty: jc.planned_qty,
-      remarks: jc.remarks || ''
+      remarks: jc.remarks || '',
+      executionMode: jc.execution_mode || 'In-house',
+      vendorId: jc.vendor_id || '',
+      vendorRate: jc.vendor_rate || 0,
+      status: jc.status || 'PENDING',
+      producedQty: jc.produced_qty || 0,
+      acceptedQty: jc.accepted_qty || 0,
+      startDateTime: jc.start_time || '',
+      endDateTime: jc.end_time || ''
     });
     const wo = workOrders.find(w => String(w.id) === String(jc.work_order_id));
     setSelectedWO(wo);
@@ -3098,8 +3406,8 @@ const JobCard = () => {
       </div>
 
       {/* Flat Table Layout */}
-      <Card className="border-none bg-white rounded  shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+      <Card className="border-none bg-white rounded  shadow-sm">
+        <div className="overflow-visible">
           <table className="w-full text-left">
             <thead className="bg-slate-50/50 border-b border-slate-100">
               <tr>
@@ -3143,8 +3451,8 @@ const JobCard = () => {
                     </span>
                   </td>
                   <td className="p-2 ">
-                    <span className={`text-xs  ${(jc.execution_type === 'Outsource' || jc.outward_challan_id) ? 'text-amber-600' : 'text-blue-600'}`}>
-                      {(jc.execution_type === 'Outsource' || jc.outward_challan_id) ? 'Subcontract' : 'In-house'}
+                    <span className={`text-xs  ${(jc.execution_type === 'Outsource' || jc.execution_type === 'Subcontract' || jc.execution_type === 'Sub-Contract' || jc.outward_challan_id) ? 'text-amber-600' : 'text-blue-600'}`}>
+                      {(jc.execution_type === 'Outsource' || jc.execution_type === 'Subcontract' || jc.execution_type === 'Sub-Contract' || jc.outward_challan_id) ? 'Subcontract' : 'In-house'}
                     </span>
                   </td>
                   <td className="p-2 ">
@@ -3164,17 +3472,17 @@ const JobCard = () => {
                   </td>
                   <td className="p-2 ">
                     <div className="flex flex-col">
-                      <span className={`text-xs  ${(jc.execution_type === 'Outsource' || jc.outward_challan_id) ? 'text-purple-600 font-semibold' : 'text-slate-900'}`}>
-                        {(jc.execution_type === 'Outsource' || jc.outward_challan_id) ? 'Subcontract' : (jc.workstation_name || 'N/A')}
+                      <span className={`text-xs  ${(jc.execution_type === 'Outsource' || jc.execution_type === 'Subcontract' || jc.execution_type === 'Sub-Contract' || jc.outward_challan_id) ? 'text-purple-600 font-semibold' : 'text-slate-900'}`}>
+                        {(jc.execution_type === 'Outsource' || jc.execution_type === 'Subcontract' || jc.execution_type === 'Sub-Contract' || jc.outward_challan_id) ? 'Subcontract' : (jc.workstation_name || 'N/A')}
                       </span>
-                      {!(jc.execution_type === 'Outsource' || jc.outward_challan_id) && (() => {
+                      {!(jc.execution_type === 'Outsource' || jc.execution_type === 'Subcontract' || jc.execution_type === 'Sub-Contract' || jc.outward_challan_id) && (() => {
                         const m = getMachineState(jc, jobCards);
 
                         if (m.status === "NOT_ASSIGNED") {
                           return (
                             <span className="flex items-center gap-1 mt-0.5">
                               <span className="w-1.5 h-1.5 bg-slate-300 rounded-full"></span>
-                              <span className="text-[10px] text-slate-400 font-medium tracking-tight">⚪ Not Assigned</span>
+                              <span className="text-[10px] text-slate-400 font-medium tracking-tight">Not Assigned</span>
                             </span>
                           );
                         }
@@ -3183,7 +3491,7 @@ const JobCard = () => {
                           return (
                             <span className="flex items-center gap-1 mt-0.5">
                               <span className="w-1.5 h-1.5 bg-rose-500 rounded-full animate-pulse"></span>
-                              <span className="text-[10px] text-rose-600 font-medium tracking-tight">🔴 RUNNING</span>
+                              <span className="text-[10px] text-rose-600 font-medium tracking-tight">RUNNING</span>
                             </span>
                           );
                         }
@@ -3193,7 +3501,7 @@ const JobCard = () => {
                             <div className="flex flex-col gap-0.5 mt-0.5">
                               <span className="flex items-center gap-1">
                                 <span className="w-1.5 h-1.5 bg-rose-600 rounded-full"></span>
-                                <span className="text-[10px] text-rose-700 font-bold">🔴 Busy ({m.jobId})</span>
+                                <span className="text-[10px] text-rose-700 font-bold">Busy ({m.jobId})</span>
                               </span>
                               <span className="text-[9px] text-slate-500 flex items-center gap-1">
                                 <Clock className="w-2 h-2" /> Free at {m.endTime}
@@ -3206,7 +3514,7 @@ const JobCard = () => {
                           return (
                             <span className="flex items-center gap-1 mt-0.5">
                               <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
-                              <span className="text-[10px] text-emerald-600 font-medium tracking-tight">✅ COMPLETED</span>
+                              <span className="text-[10px] text-emerald-600 font-medium tracking-tight">COMPLETED</span>
                             </span>
                           );
                         }
@@ -3215,7 +3523,7 @@ const JobCard = () => {
                           return (
                             <span className="flex items-center gap-1 mt-0.5">
                               <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
-                              <span className="text-[10px] text-emerald-600 font-medium tracking-tight">🟢 FREE</span>
+                              <span className="text-[10px] text-emerald-600 font-medium tracking-tight">FREE</span>
                             </span>
                           );
                         }
@@ -3224,7 +3532,7 @@ const JobCard = () => {
                           return (
                             <span className="flex items-center gap-1 mt-0.5">
                               <span className="w-1.5 h-1.5 bg-amber-500 rounded-full"></span>
-                              <span className="text-[10px] text-amber-600 font-medium tracking-tight">🟠 STOPPED</span>
+                              <span className="text-[10px] text-amber-600 font-medium tracking-tight">STOPPED</span>
                             </span>
                           );
                         }
@@ -3312,6 +3620,7 @@ const JobCard = () => {
                   </td>
                   <td className="p-2  text-right">
                     <div className="flex items-center justify-end gap-1">
+                      {/* View Details - Always Show */}
                       <button 
                         onClick={() => setViewingJobCard(jc)}
                         className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded transition-all"
@@ -3319,52 +3628,67 @@ const JobCard = () => {
                       >
                         <Eye className="w-3.5 h-3.5" />
                       </button>
-                      {jc.status !== 'IN_PROGRESS' && jc.status !== 'COMPLETED' && (
-                        <button 
-                          onClick={() => handleUpdateStatus(jc, 'IN_PROGRESS')}
-                          className="p-1.5 text-emerald-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-all"
-                          title="Start"
-                        >
-                          <Zap className="w-3.5 h-3.5" />
-                        </button>
+
+                      {/* Log / Record Time - ONLY for In-house */}
+                      {!(jc.execution_type === 'Outsource' || jc.execution_type === 'Subcontract' || jc.execution_type === 'Sub-Contract' || jc.outward_challan_id) && (
+                        <>
+                          {jc.status !== 'IN_PROGRESS' && jc.status !== 'COMPLETED' && (
+                            <button 
+                              onClick={() => handleUpdateStatus(jc, 'IN_PROGRESS')}
+                              className="p-1.5 text-emerald-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-all"
+                              title="Start"
+                            >
+                              <Zap className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          {jc.status === 'IN_PROGRESS' && (
+                            <button 
+                              onClick={() => handleLogProgress(jc)}
+                              className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded transition-all animate-pulse"
+                              title="Log Progress"
+                            >
+                              <Zap className="w-3.5 h-3.5 fill-indigo-600" />
+                            </button>
+                          )}
+                        </>
                       )}
-                      {jc.status === 'IN_PROGRESS' && (
-                        <button 
-                          onClick={() => handleLogProgress(jc)}
-                          className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded transition-all animate-pulse"
-                          title="Log Progress"
-                        >
-                          <Zap className="w-3.5 h-3.5 fill-indigo-600" />
-                        </button>
+
+                      {/* Outward / Inward Flow - ONLY for Subcontract */}
+                      {(jc.execution_type === 'Outsource' || jc.execution_type === 'Subcontract' || jc.execution_type === 'Sub-Contract' || jc.outward_challan_id) && (
+                        <>
+                          <button 
+                            onClick={() => handleOutwardChallan(jc)}
+                            className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-all"
+                            title="Outward Challan"
+                          >
+                            <Truck className="w-3.5 h-3.5" />
+                          </button>
+                          
+                          <button 
+                            onClick={() => {
+                              if (!jc.outward_challan_id) {
+                                return errorToast('Please create an outward challan first');
+                              }
+                              setSelectedJCOutward(jc);
+                              setInwardFormData(prev => ({
+                                ...prev,
+                                receivedQty: jc.dispatch_qty || jc.planned_qty,
+                                acceptedQty: jc.dispatch_qty || jc.planned_qty,
+                                inwardItems: [], // Reset while fetching
+                                vendorInvoice: null
+                              }));
+                              fetchInwardItems(jc.id);
+                              setIsInwardModalOpen(true);
+                            }}
+                            className={`p-1.5 rounded transition-all ${jc.outward_challan_id ? 'text-emerald-600 hover:bg-emerald-50' : 'text-slate-300 cursor-not-allowed'}`}
+                            title="Vendor Receipt (Inward)"
+                          >
+                            <Package className="w-3.5 h-3.5" />
+                          </button>
+                        </>
                       )}
-                      {jc.outward_challan_id ? (
-                        <button 
-                          onClick={() => {
-                            setSelectedJCOutward(jc);
-                            setInwardFormData(prev => ({
-                              ...prev,
-                              receivedQty: jc.dispatch_qty || jc.planned_qty,
-                              acceptedQty: jc.dispatch_qty || jc.planned_qty,
-                              inwardItems: [], // Reset while fetching
-                              vendorInvoice: null
-                            }));
-                            fetchInwardItems(jc.id);
-                            setIsInwardModalOpen(true);
-                          }}
-                          className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded transition-all"
-                          title="Vendor Receipt (Inward)"
-                        >
-                          <Package className="w-3.5 h-3.5" />
-                        </button>
-                      ) : (jc.status !== 'COMPLETED' || jc.execution_type === 'Outsource') ? (
-                        <button 
-                          onClick={() => handleOutwardChallan(jc)}
-                          className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-all"
-                          title="Outward Challan"
-                        >
-                          <Truck className="w-3.5 h-3.5" />
-                        </button>
-                      ) : null}
+
+                      {/* Edit & Delete - Always Show */}
                       <button 
                         onClick={() => handleEdit(jc)}
                         className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-all"
@@ -3587,116 +3911,288 @@ const JobCard = () => {
         )}
       </Modal>
 
-      {/* Existing Modals */}
+      {/* Edit Job Card Modal */}
       <Modal 
         isOpen={isModalOpen} 
         onClose={() => setIsModalOpen(false)} 
-        title={formData.id ? "Edit Job Card" : "Create Job Card"}
+        title={`${formData.id ? "Edit Job Card" : "Create Job Card"}${formData.jcNumber ? `: ${formData.jcNumber}` : ''}${selectedWO ? ` - ${selectedWO.wo_number}` : ''}`}
+        size="4xl"
       >
-        <form onSubmit={handleSubmit} className="space-y-2 p-2">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-            <FormControl label="Job Card Number">
-              <input 
-                type="text" 
-                value={formData.jcNumber} 
-                disabled 
-                className="w-full p-2 bg-slate-50 border border-slate-200 rounded  text-xs  text-slate-400   cursor-not-allowed"
-              />
-            </FormControl>
-            <FormControl label="Work Order" required>
-              <select 
-                value={formData.workOrderId} 
-                onChange={(e) => {
-                  const wo = workOrders.find(w => String(w.id) === e.target.value);
-                  setSelectedWO(wo);
-                  setFormData(prev => ({ ...prev, workOrderId: e.target.value, plannedQty: wo?.quantity || 0 }));
-                }}
-                className="w-full p-2 .5 bg-white border border-slate-200 rounded  text-xs  focus:ring-2 focus:ring-indigo-500 outline-none appearance-none"
-              >
-                <option value="">Select Work Order</option>
-                {workOrders.map(wo => (
-                  <option key={wo.id} value={wo.id}>{wo.wo_number} - {wo.project_name}</option>
-                ))}
-              </select>
-            </FormControl>
-            <FormControl label="Operation" required>
-              <select 
-                value={formData.operationId}
-                onChange={(e) => {
-                  const op = operations.find(o => String(o.id) === e.target.value);
-                  setFormData(prev => ({ ...prev, operationId: e.target.value, workstationId: op?.workstation_id || prev.workstationId }));
-                }}
-                className="w-full p-2 .5 bg-white border border-slate-200 rounded  text-xs  focus:ring-2 focus:ring-indigo-500 outline-none appearance-none"
-              >
-                <option value="">Select Operation</option>
-                {operations.map(op => (
-                  <option key={op.id} value={op.id}>{op.operation_name} ({op.operation_code})</option>
-                ))}
-              </select>
-            </FormControl>
-            <FormControl label="Workstation">
-              <select 
-                value={formData.workstationId}
-                onChange={(e) => setFormData(prev => ({ ...prev, workstationId: e.target.value }))}
-                className="w-full p-2 .5 bg-white border border-slate-200 rounded  text-xs  focus:ring-2 focus:ring-indigo-500 outline-none appearance-none"
-              >
-                <option value="">Select Workstation</option>
-                {workstations.map(ws => (
-                  <option key={ws.id} value={ws.id}>{ws.workstation_name}</option>
-                ))}
-              </select>
-            </FormControl>
-             <FormControl label="Operator Name">
-              <select 
-                value={formData.assignedTo}
-                onChange={(e) => setFormData(prev => ({ ...prev, assignedTo: e.target.value }))}
-                className="w-full p-2 .5 bg-white border border-slate-200 rounded  text-xs  focus:ring-2 focus:ring-indigo-500 outline-none appearance-none"
-              >
-                <option value="">Select Operator</option>
-                {users.map(user => (
-                  <option key={user.id} value={user.id}>
-                    {user.first_name} {user.last_name} ({user.username})
-                  </option>
-                ))}
-              </select>
-            </FormControl>
-            <FormControl label="Planned Quantity" required>
-              <div className="relative">
-                <input 
-                  type="number" 
-                  value={formData.plannedQty}
-                  onChange={(e) => setFormData(prev => ({ ...prev, plannedQty: e.target.value }))}
-                  className="w-full pl-4 pr-12 py-2.5 bg-white border border-slate-200 rounded  text-xs  focus:ring-2 focus:ring-indigo-500 outline-none"
-                />
-                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-slate-400 ">Unit</span>
-              </div>
-            </FormControl>
+        <form onSubmit={handleSubmit} className="space-y-4 p-1">
+          {/* Header Info */}
+          <div className="flex justify-between items-start border-b border-slate-100 pb-4">
+            <div>
+              <h2 className="text-xl font-bold text-slate-800">
+                {operations.find(op => String(op.id) === String(formData.operationId))?.operation_name || 'Select Operation'}
+              </h2>
+              <p className="text-sm text-slate-500">
+                {selectedWO?.project_name || selectedWO?.item_name || 'No Project Selected'}
+              </p>
+            </div>
+            <div className="flex flex-col items-end gap-1">
+              <StatusBadge status={formData.status} />
+              <span className="text-[10px] text-slate-400 font-medium">Job Card Status</span>
+            </div>
           </div>
 
-         
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Left Column: Resource Assignment & Metrics */}
+            <div className="space-y-6">
+              {/* Resource Assignment Section */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-indigo-600 font-semibold border-b border-indigo-50 pb-2">
+                  <User className="w-4 h-4" />
+                  <span className="text-sm">Resource Assignment</span>
+                </div>
 
-          <FormControl label="Job Remarks">
-            <textarea 
-              value={formData.remarks}
-              onChange={(e) => setFormData(prev => ({ ...prev, remarks: e.target.value }))}
-              className="w-full p-2  bg-white border border-slate-200 rounded  text-sm  focus:ring-2 focus:ring-indigo-500 outline-none h-24"
-              placeholder="Enter specific instructions for the operator..."
-            />
-          </FormControl>
+                <div className="flex items-center gap-4 py-2">
+                  <span className="text-xs text-slate-500 font-medium">Execution Mode:</span>
+                  <div className="flex bg-slate-100 p-1 rounded-lg">
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, executionMode: 'In-house' })}
+                      className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all ${
+                        formData.executionMode === 'In-house' 
+                        ? 'bg-indigo-600 text-white shadow-sm' 
+                        : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      In-house
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, executionMode: 'Outsource' })}
+                      className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all ${
+                        formData.executionMode === 'Outsource' 
+                        ? 'bg-orange-500 text-white shadow-sm' 
+                        : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      Outsource
+                    </button>
+                  </div>
+                </div>
 
-          <div className="flex justify-end gap-2 pt-6 border-t border-slate-100">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <FormControl label="Machine / Workstation">
+                    <SearchableSelect
+                      options={workstations.map(ws => {
+                        const busyJob = jobCards.find(jc => 
+                          jc.id !== formData.id && 
+                          jc.workstation_id === ws.id && 
+                          jc.status === 'IN_PROGRESS'
+                        );
+                        return {
+                          value: ws.id,
+                          label: ws.workstation_name,
+                          subLabel: busyJob 
+                            ? `Busy till ${getEstimatedEndTime(busyJob)} by ${busyJob.job_card_no}`
+                            : 'Available'
+                        };
+                      })}
+                      subLabelField="subLabel"
+                      value={formData.workstationId}
+                      onChange={(e) => handleModalWorkstationChange(e.target.value)}
+                      placeholder="Select Workstation"
+                    />
+                  </FormControl>
+
+                  {formData.executionMode === 'Outsource' && (
+                    <FormControl label="Subcontractor (Vendor)">
+                      <select 
+                        value={formData.vendorId}
+                        onChange={(e) => setFormData(prev => ({ ...prev, vendorId: e.target.value }))}
+                        className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none appearance-none"
+                      >
+                        <option value="">Select Vendor</option>
+                        {vendors.map(v => (
+                          <option key={v.id} value={v.id}>{v.vendor_name}</option>
+                        ))}
+                      </select>
+                    </FormControl>
+                  )}
+                </div>
+
+                {formData.executionMode === 'In-house' ? (
+                  <FormControl label="Primary Operator">
+                    <select 
+                      value={formData.assignedTo}
+                      onChange={(e) => setFormData(prev => ({ ...prev, assignedTo: e.target.value }))}
+                      className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none appearance-none"
+                    >
+                      <option value="">Select Operator</option>
+                      {users.map(user => (
+                        <option key={user.id} value={user.id}>
+                          {user.first_name} {user.last_name} ({user.username})
+                        </option>
+                      ))}
+                    </select>
+                  </FormControl>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div />
+                    <FormControl label="Vendor Rate per Unit">
+                      <input 
+                        type="number" 
+                        value={formData.vendorRate}
+                        onChange={(e) => setFormData(prev => ({ ...prev, vendorRate: e.target.value }))}
+                        className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                      />
+                    </FormControl>
+                  </div>
+                )}
+              </div>
+
+              {/* Execution & Metrics Section */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-indigo-600 font-semibold border-b border-indigo-50 pb-2">
+                  <Activity className="w-4 h-4" />
+                  <span className="text-sm">Execution & Metrics</span>
+                </div>
+
+                <FormControl label="Job Status">
+                  <select 
+                    value={formData.status}
+                    onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value }))}
+                    className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none appearance-none"
+                  >
+                    <option value="PENDING">PENDING</option>
+                    <option value="IN_PROGRESS">IN PROGRESS</option>
+                    <option value="COMPLETED">COMPLETED</option>
+                    <option value="ON_HOLD">ON HOLD</option>
+                  </select>
+                </FormControl>
+
+                <div className="grid grid-cols-3 gap-3">
+                  <FormControl label="Planned Qty">
+                    <input 
+                      type="number" 
+                      value={formData.plannedQty}
+                      onChange={(e) => setFormData(prev => ({ ...prev, plannedQty: e.target.value }))}
+                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded text-xs outline-none"
+                    />
+                  </FormControl>
+                  <FormControl label="Produced Qty">
+                    <input 
+                      type="number" 
+                      value={formData.producedQty}
+                      onChange={(e) => setFormData(prev => ({ ...prev, producedQty: e.target.value }))}
+                      className="w-full p-2.5 bg-white border border-indigo-200 ring-1 ring-indigo-50 rounded text-xs text-indigo-700 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </FormControl>
+                  <FormControl label="Accepted Qty">
+                    <input 
+                      type="number" 
+                      value={formData.acceptedQty}
+                      onChange={(e) => setFormData(prev => ({ ...prev, acceptedQty: e.target.value }))}
+                      className="w-full p-2.5 bg-white border border-emerald-200 ring-1 ring-emerald-50 rounded text-xs text-emerald-700 font-medium outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </FormControl>
+                </div>
+                <p className="text-[10px] text-slate-400 italic">Note: Accepted quantity represents final yield after QC.</p>
+              </div>
+            </div>
+
+            {/* Right Column: Time Planning & Remarks */}
+            <div className="space-y-6">
+              {formData.executionMode === 'In-house' && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-indigo-600 font-semibold border-b border-indigo-50 pb-2">
+                    <Clock className="w-4 h-4" />
+                    <span className="text-sm">Time Planning</span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <FormControl label="Start DateTime">
+                      <input 
+                        type="datetime-local" 
+                        value={formData.startDateTime ? formData.startDateTime.slice(0, 16) : ''}
+                        onChange={(e) => setFormData({ ...formData, startDateTime: e.target.value })}
+                        className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                      />
+                    </FormControl>
+                    <FormControl label="End DateTime">
+                      <div className="relative">
+                        <input 
+                          type="datetime-local" 
+                          value={formData.endDateTime ? formData.endDateTime.slice(0, 16) : ''}
+                          onChange={(e) => setFormData({ ...formData, endDateTime: e.target.value })}
+                          className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                        />
+                        <button 
+                          type="button"
+                          onClick={() => {
+                            // logic to suggest end time based on std_time
+                            const stdTime = operations.find(o => String(o.id) === String(formData.operationId))?.std_time || 0;
+                            if (formData.startDateTime && stdTime && formData.plannedQty) {
+                              const start = new Date(formData.startDateTime);
+                              const totalMins = stdTime * formData.plannedQty;
+                              const end = new Date(start.getTime() + totalMins * 60000);
+                              setFormData({ ...formData, endDateTime: end.toISOString().slice(0, 16) });
+                            }
+                          }}
+                          className="absolute right-0 -top-6 text-[10px] text-indigo-600 hover:underline font-medium"
+                        >
+                          Auto Suggest
+                        </button>
+                      </div>
+                    </FormControl>
+                  </div>
+
+                  {/* Machine Engagement Box */}
+                  <div className="bg-indigo-50/50 border border-indigo-100 rounded-lg p-4 flex items-center justify-between">
+                    <div>
+                      <span className="text-xs text-slate-500 block mb-1">Machine Engagement:</span>
+                      <p className="text-xs font-medium text-slate-700">
+                        {operations.find(o => String(o.id) === String(formData.operationId))?.std_time || 0} min/unit × {formData.plannedQty} units
+                      </p>
+                    </div>
+                    <div className="bg-white px-4 py-2 rounded-md border border-indigo-100 shadow-sm">
+                      <span className="text-sm font-bold text-indigo-600">
+                        {(() => {
+                          const stdTime = operations.find(o => String(o.id) === String(formData.operationId))?.std_time || 0;
+                          const totalMins = Math.round(stdTime * formData.plannedQty);
+                          const hrs = Math.floor(totalMins / 60);
+                          const mins = totalMins % 60;
+                          return `${hrs} Hrs ${mins} Min`;
+                        })()}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2 p-3 bg-blue-50/50 rounded-lg border border-blue-100 mt-4">
+                    <Info className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
+                    <p className="text-[10px] text-blue-700 leading-relaxed">
+                      Scheduled end time is calculated based on standard cycle time. Adjust manually if resource availability differs.
+                    </p>
+                  </div>
+                </div>
+              )}
+              
+              <FormControl label="Job Remarks">
+                <textarea 
+                  value={formData.remarks}
+                  onChange={(e) => setFormData(prev => ({ ...prev, remarks: e.target.value }))}
+                  className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none h-24"
+                  placeholder="Enter specific instructions for the operator..."
+                />
+              </FormControl>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-6 border-t border-slate-100 mt-4">
             <button 
               type="button"
               onClick={() => setIsModalOpen(false)}
-              className="p-2 text-xs  text-slate-500 hover:text-slate-700 transition-colors  "
+              className="px-6 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 border border-slate-200 rounded-md transition-all"
             >
-              Cancel
+              Discard Changes
             </button>
             <button 
               type="submit"
-              className="p-2 bg-indigo-600 text-white rounded  hover:bg-indigo-700 transition-all  text-xs shadow-lg shadow-indigo-100  "
+              className="px-6 py-2 bg-indigo-600 text-white font-semibold rounded-md hover:bg-indigo-700 transition-all text-xs shadow-lg shadow-indigo-100"
             >
-              {formData.id ? "Update Job Card" : "Initialize Job Card"}
+              Update Job Card
             </button>
           </div>
         </form>

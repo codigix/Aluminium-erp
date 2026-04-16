@@ -207,11 +207,33 @@ const addComponent = async (itemId, componentData) => {
 };
 
 const addOperation = async (itemId, operationData) => {
-  const { itemCode, drawingNo, operationName, workstation, cycleTimeMin, setupTimeMin, hourlyRate, operationType, targetWarehouse } = operationData;
+  const { 
+    itemCode, 
+    drawingNo, 
+    operationName, 
+    workstation, 
+    cycleTimeMin, 
+    setupTimeMin, 
+    hourlyRate, 
+    operationType,
+    operation_type, 
+    targetWarehouse 
+  } = operationData;
   const parsedItemId = (itemId === 'null' || itemId === 'undefined' || !itemId) ? null : itemId;
   const [result] = await pool.execute(
     'INSERT INTO sales_order_item_operations (sales_order_item_id, item_code, drawing_no, operation_name, workstation, cycle_time_min, setup_time_min, hourly_rate, operation_type, target_warehouse) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    [parsedItemId, itemCode || null, drawingNo || null, operationName || null, workstation || null, cycleTimeMin || null, setupTimeMin || null, hourlyRate || null, operationType || null, targetWarehouse || null]
+    [
+      parsedItemId, 
+      itemCode || null, 
+      drawingNo || null, 
+      operationName || null, 
+      workstation || null, 
+      cycleTimeMin || 0, 
+      setupTimeMin || 0, 
+      hourlyRate || 0, 
+      operationType || operation_type || 'In-House', 
+      targetWarehouse || null
+    ]
   );
   return result.insertId;
 };
@@ -241,6 +263,25 @@ const updateItemMaterial = async (materialId, materialData) => {
   await pool.execute(
     'UPDATE sales_order_item_materials SET material_name = ?, material_type = ?, item_group = ?, qty_per_pc = ?, uom = ?, rate = ?, warehouse = ?, operation = ?, description = ?, weight_per_unit = ?, scrap_percent = ? WHERE id = ?',
     [materialName || null, materialType || null, itemGroup || null, qtyPerPc || null, uom || null, rate || 0, warehouse || null, operation || null, description || null, weight_per_unit || 0, scrap_percent || 0, materialId]
+  );
+};
+
+const updateOperation = async (id, data) => {
+  const { operation_name, workstation, cycle_time_min, setup_time_min, hourly_rate, operation_type, target_warehouse } = data;
+  await pool.execute(
+    `UPDATE sales_order_item_operations 
+     SET operation_name = ?, workstation = ?, cycle_time_min = ?, setup_time_min = ?, hourly_rate = ?, operation_type = ?, target_warehouse = ? 
+     WHERE id = ?`,
+    [
+      operation_name || null,
+      workstation || null,
+      cycle_time_min || 0,
+      setup_time_min || 0,
+      hourly_rate || 0,
+      operation_type || 'In-House',
+      target_warehouse || null,
+      id
+    ]
   );
 };
 
@@ -677,6 +718,7 @@ module.exports = {
   addOperation,
   addScrap,
   updateItemMaterial,
+  updateOperation,
   deleteItemMaterial,
   deleteComponent,
   deleteOperation,

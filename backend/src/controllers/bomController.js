@@ -63,6 +63,15 @@ const updateItemMaterial = async (req, res, next) => {
   }
 };
 
+const updateOperation = async (req, res, next) => {
+  try {
+    await bomService.updateOperation(req.params.id, req.body);
+    res.json({ message: 'BOM operation updated' });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const deleteItemMaterial = async (req, res, next) => {
   try {
     await bomService.deleteItemMaterial(req.params.id);
@@ -142,6 +151,7 @@ module.exports = {
   addOperation,
   addScrap,
   updateItemMaterial,
+  updateOperation,
   deleteItemMaterial,
   deleteComponent,
   deleteOperation,

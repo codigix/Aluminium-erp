@@ -2429,8 +2429,8 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                     <tr>
                       <th className="py-3 px-2 font-bold text-slate-400 uppercase tracking-wider">Item / Operation</th>
                       <th className="py-3 px-2 font-bold text-slate-400 uppercase tracking-wider">Workstation</th>
-                      <th className="py-3 px-2 font-bold text-slate-400 uppercase tracking-wider text-right">Time (M/U)</th>
-                      <th className="py-3 px-2 font-bold text-slate-400 uppercase tracking-wider text-right text-indigo-600">Planned (Hrs)</th>
+                      <th className="py-3 px-2 font-bold text-slate-400 uppercase tracking-wider">Process Type</th>
+                      <th className="py-3 px-2 font-bold text-slate-400 uppercase tracking-wider text-right">Net Time (M/U)</th>
                       <th className="py-3 px-2 font-bold text-slate-400 uppercase tracking-wider text-right">Rate/Hr</th>
                       <th className="py-3 px-2 font-bold text-slate-400 uppercase tracking-wider text-right text-emerald-600">Total Cost</th>
                     </tr>
@@ -2446,10 +2446,18 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                             </div>
                           </td>
                           <td className="py-4 px-2 text-slate-500">{op.workstation || 'Unassigned'}</td>
-                          <td className="py-4 px-2 text-right text-slate-400">{(op.base_time * 60).toFixed(2)}</td>
-                          <td className="py-4 px-2 text-right font-bold text-indigo-600">{(op.base_time * (selectedPlanConfig.target_qty || 1)).toFixed(2)}</td>
-                          <td className="py-4 px-2 text-right text-slate-400">₹0</td>
-                          <td className="py-4 px-2 text-right font-bold text-emerald-600">₹0</td>
+                          <td className="py-4 px-2 text-slate-500">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                              (op.process_type || op.operation_type || 'In-House') === 'Sub-Contract' 
+                                ? 'bg-amber-50 text-amber-600 border border-amber-100' 
+                                : 'bg-indigo-50 text-indigo-600 border border-indigo-100'
+                            }`}>
+                              {op.process_type || op.operation_type || 'In-House'}
+                            </span>
+                          </td>
+                          <td className="py-4 px-2 text-right text-slate-400 font-bold">{Math.round(parseFloat(op.net_time || op.base_time || 0) * 60)} min</td>
+                          <td className="py-4 px-2 text-right text-slate-400">₹{op.hourly_rate || 0}</td>
+                          <td className="py-4 px-2 text-right font-bold text-emerald-600">₹{(parseFloat(op.base_time || 0) * (selectedPlanConfig.target_qty || 1) * parseFloat(op.hourly_rate || 0)).toFixed(2)}</td>
                         </tr>
                       ))
                     ) : (

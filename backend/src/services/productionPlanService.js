@@ -289,14 +289,16 @@ const createProductionPlan = async (planData, createdBy) => {
       for (const op of operations) {
         await connection.execute(
           `INSERT INTO production_plan_operations 
-           (plan_id, step_no, operation_name, workstation, base_time, source_item)
-           VALUES (?, ?, ?, ?, ?, ?)`,
+           (plan_id, step_no, operation_name, process_type, workstation, base_time, net_time, source_item)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             planId,
             op.step || op.stepNo || 0,
             op.operationName || null,
+            op.processType || op.operation_type || 'In-House',
             op.workstation || null,
             op.baseTime || op.base_time || op.baseTimeHrs || op.base_hour || 0,
+            op.netTime || op.net_time || 0,
             op.sourceItem || op.source_item || null
           ]
         );
@@ -455,14 +457,16 @@ const updateProductionPlan = async (planId, planData, updatedBy) => {
       for (const op of operations) {
         await connection.execute(
           `INSERT INTO production_plan_operations 
-           (plan_id, step_no, operation_name, workstation, base_time, source_item)
-           VALUES (?, ?, ?, ?, ?, ?)`,
+           (plan_id, step_no, operation_name, process_type, workstation, base_time, net_time, source_item)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             planId,
             op.step || op.stepNo || 0,
             op.operationName || op.operation_name || null,
+            op.processType || op.operation_type || 'In-House',
             op.workstation || null,
             op.baseTime || op.base_time || op.baseTimeHrs || op.base_hour || 0,
+            op.netTime || op.net_time || 0,
             op.sourceItem || op.itemCode || op.source_item || null
           ]
         );
@@ -873,12 +877,20 @@ const getItemBOMDetails = async (salesOrderItemId) => {
 
     // Process Operations
     if (operations.length > 0) {
-      const opsWithSource = operations.map(o => ({
-        ...o,
-        source_item: itemCode,
-        itemCode: itemCode,
-        base_time: o.cycle_time_min || o.base_time || (o.base_hour ? (parseFloat(o.base_hour) * 60).toFixed(2) : 1)
-      }));
+      const opsWithSource = operations.map(o => {
+        const cycle = parseFloat(o.cycle_time_min || o.base_time || 0);
+        const setup = parseFloat(o.setup_time_min || 0);
+        const totalMins = cycle + setup;
+        
+        return {
+          ...o,
+          source_item: itemCode,
+          itemCode: itemCode,
+          process_type: o.operation_type || 'In-House',
+          base_time: (totalMins / 60).toFixed(4), // Convert to hours
+          net_time: (totalMins / 60).toFixed(4)   // Convert to hours
+        };
+      });
       
       // Store in global flat map
       if (!operationMap.has(currentIdentity)) {

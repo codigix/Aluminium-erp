@@ -34,7 +34,14 @@ const ensureJobCardColumns = async () => {
       { name: 'time_uom', definition: "VARCHAR(20) DEFAULT 'Min'" },
       { name: 'hourly_rate', definition: 'DECIMAL(12, 2) DEFAULT 0' },
       { name: 'operation_name', definition: 'VARCHAR(255) NULL' },
-      { name: 'execution_type', definition: "ENUM('In-House', 'Outsource') DEFAULT 'In-House'" }
+      { name: 'execution_mode', definition: "VARCHAR(100) DEFAULT 'In-house'" },
+      { name: 'vendor_id', definition: 'INT NULL' },
+      { name: 'vendor_rate', definition: 'DECIMAL(12, 2) DEFAULT 0' },
+      { name: 'start_time', definition: 'DATETIME NULL' },
+      { name: 'end_time', definition: 'DATETIME NULL' },
+      { name: 'produced_qty', definition: 'DECIMAL(12, 3) DEFAULT 0' },
+      { name: 'accepted_qty', definition: 'DECIMAL(12, 3) DEFAULT 0' },
+      { name: 'rejected_qty', definition: 'DECIMAL(12, 3) DEFAULT 0' }
     ];
 
     const missing = requiredColumns.filter(column => !existing.has(column.name));
@@ -1135,7 +1142,7 @@ const ensureBOMAdditionalTables = async () => {
         cycle_time_min DECIMAL(10, 2) DEFAULT 0,
         setup_time_min DECIMAL(10, 2) DEFAULT 0,
         hourly_rate DECIMAL(12, 2) DEFAULT 0,
-        operation_type ENUM('In-House', 'Outsource') DEFAULT 'In-House',
+        operation_type VARCHAR(100) DEFAULT 'In-House',
         target_warehouse VARCHAR(100),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
