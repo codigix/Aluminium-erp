@@ -53,7 +53,7 @@ const addToQualityQueue = async (req, res) => {
     // 2. Prepare data for addQualityLog
     const data = {
       jobCardId,
-      checkDate: date || new Date().toISOString().slice(0, 10),
+      checkDate: date || new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }),
       shift: shift === 'A' ? 'SHIFT_A' : shift === 'B' ? 'SHIFT_B' : 'SHIFT_C',
       inspectedQty: inspectedQty || 0,
       status: status || 'PENDING',

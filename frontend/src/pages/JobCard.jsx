@@ -162,7 +162,7 @@ const JobCard = () => {
     rejectedQty: 0,
     scrapQty: 0,
     remarks: '',
-    receivedDate: new Date().toISOString().split('T')[0],
+    receivedDate: new Date().toLocaleDateString('en-CA'),
     inwardItems: [],
     vendorInvoice: null
   });
@@ -194,6 +194,13 @@ const JobCard = () => {
     startDateTime: '',
     endDateTime: ''
   });
+
+  const formatDisplayDate = value => {
+    if (!value) return '—'
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return value
+    return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+  }
 
   const formatLocalTime = (isoString) => {
     if (!isoString) return '';
@@ -884,7 +891,7 @@ const JobCard = () => {
   };
 
   const [timeLogForm, setTimeLogForm] = useState({
-    logDate: new Date().toISOString().slice(0, 10),
+    logDate: new Date().toLocaleDateString('en-CA'), // YYYY-MM-DD in local time
     operatorId: '',
     workstationId: '',
     shift: 'SHIFT_A',
@@ -1208,6 +1215,21 @@ const JobCard = () => {
     } else {
       setMachineStatus("AVAILABLE");
     }
+
+    // Auto-fetch next operation in sequence
+    const woJCs = jobCards
+      .filter(j => j.work_order_id === jc.work_order_id)
+      .sort((a, b) => a.id - b.id);
+    
+    const currentIndex = woJCs.findIndex(j => j.id === jc.id);
+    const nextJC = currentIndex !== -1 ? woJCs[currentIndex + 1] : null;
+
+    setNextStageForm({
+      nextOperationId: nextJC ? nextJC.operation_id : '',
+      assignOperatorId: nextJC ? (nextJC.assigned_to || '') : '',
+      targetWarehouseId: '',
+      executionMode: nextJC ? (nextJC.execution_type || 'In-house') : 'In-house'
+    });
 
     setShowProductionEntry(true);
   };
@@ -1970,7 +1992,7 @@ const JobCard = () => {
                                 </span>
                               </td>
                               <td className="p-2">
-                                <div className=" text-slate-700">{new Date(log.check_date).toLocaleDateString('en-GB')}</div>
+                                <div className=" text-slate-700">{formatDisplayDate(log.check_date)}</div>
                                 <div className="text-xs text-slate-400   ">{log.shift}</div>
                               </td>
                               <td className="p-2">
@@ -2270,7 +2292,7 @@ const JobCard = () => {
                   <SearchableSelect
                     options={operations.map(o => ({ value: o.id, label: o.operation_name }))}
                     value={nextStageForm.nextOperationId}
-                    onChange={(val) => setNextStageForm({ ...nextStageForm, nextOperationId: val })}
+                    onChange={(e) => setNextStageForm({ ...nextStageForm, nextOperationId: e.target.value })}
                     placeholder="Select Next Op"
                   />
                 </FormControl>
@@ -2278,7 +2300,7 @@ const JobCard = () => {
                   <SearchableSelect
                     options={users.map(u => ({ value: u.id, label: u.username }))}
                     value={nextStageForm.assignOperatorId}
-                    onChange={(val) => setNextStageForm({ ...nextStageForm, assignOperatorId: val })}
+                    onChange={(e) => setNextStageForm({ ...nextStageForm, assignOperatorId: e.target.value })}
                     placeholder="Search Operator..."
                   />
                 </FormControl>
@@ -2286,7 +2308,7 @@ const JobCard = () => {
                   <SearchableSelect
                     options={warehouses.map(w => ({ value: w.id, label: w.warehouse_name }))}
                     value={nextStageForm.targetWarehouseId}
-                    onChange={(val) => setNextStageForm({ ...nextStageForm, targetWarehouseId: val })}
+                    onChange={(e) => setNextStageForm({ ...nextStageForm, targetWarehouseId: e.target.value })}
                     placeholder="Select Destination"
                   />
                 </FormControl>
@@ -2653,6 +2675,30 @@ const JobCard = () => {
         });
 
         if (response.ok) {
+          // If there's a next operation selected, we can optionally update its operator/status
+          // Finding the next JC in sequence to auto-assign it
+          const woJCs = jobCards
+            .filter(j => j.work_order_id === selectedJC.work_order_id)
+            .sort((a, b) => a.id - b.id);
+          
+          const currentIndex = woJCs.findIndex(j => j.id === selectedJC.id);
+          const nextJC = currentIndex !== -1 ? woJCs[currentIndex + 1] : null;
+
+          if (nextJC && nextStageForm.nextOperationId) {
+            // Update next JC with selected operator and execution type
+            await fetch(`${API_BASE}/job-cards/${nextJC.id}/progress`, {
+              method: 'PATCH',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({
+                assignedTo: nextStageForm.assignOperatorId || null,
+                executionType: nextStageForm.executionMode
+              })
+            });
+          }
+
           successToast('Job Card marked as COMPLETED');
           setShowProductionEntry(false);
           fetchJobCards();
@@ -3658,9 +3704,6 @@ const JobCard = () => {
                           
                           <button 
                             onClick={() => {
-                              if (!jc.outward_challan_id) {
-                                return errorToast('Please create an outward challan first');
-                              }
                               setSelectedJCOutward(jc);
                               setInwardFormData(prev => ({
                                 ...prev,
@@ -3672,7 +3715,7 @@ const JobCard = () => {
                               fetchInwardItems(jc.id);
                               setIsInwardModalOpen(true);
                             }}
-                            className={`p-1.5 rounded transition-all ${jc.outward_challan_id ? 'text-emerald-600 hover:bg-emerald-50' : 'text-slate-300 cursor-not-allowed'}`}
+                            className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded transition-all"
                             title="Vendor Receipt (Inward)"
                           >
                             <Package className="w-3.5 h-3.5" />

@@ -58,14 +58,14 @@ const QualityControl = () => {
 
   const [grnFormData, setGrnFormData] = useState({
     poNumber: '',
-    grnDate: new Date().toISOString().split('T')[0],
+    grnDate: new Date().toLocaleDateString('en-CA'),
     receivedQuantity: '',
     notes: ''
   });
 
   const [qcFormData, setQcFormData] = useState({
     grnId: '',
-    inspectionDate: new Date().toISOString().split('T')[0],
+    inspectionDate: new Date().toLocaleDateString('en-CA'),
     passQuantity: '',
     failQuantity: '',
     defects: '',
@@ -200,7 +200,7 @@ const QualityControl = () => {
       setShowGRNModal(false);
       setGrnFormData({
         poNumber: '',
-        grnDate: new Date().toISOString().split('T')[0],
+        grnDate: new Date().toLocaleDateString('en-CA'),
         receivedQuantity: '',
         notes: ''
       });
@@ -243,7 +243,7 @@ const QualityControl = () => {
       setShowQCModal(false);
       setQcFormData({
         grnId: '',
-        inspectionDate: new Date().toISOString().split('T')[0],
+        inspectionDate: new Date().toLocaleDateString('en-CA'),
         passQuantity: '',
         failQuantity: '',
         defects: '',

@@ -22,7 +22,7 @@ const WorkOrderForm = ({ workOrderId, salesOrderId: propSalesOrderId, salesOrder
     salesOrderId: '',
     salesOrderItemId: '',
     quantity: 1,
-    startDate: new Date().toISOString().split('T')[0],
+    startDate: new Date().toLocaleDateString('en-CA'), // YYYY-MM-DD in local time
     endDate: '',
     deliveryCommitment: 'Pending Schedule',
     priority: 'NORMAL',

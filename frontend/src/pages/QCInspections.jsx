@@ -44,7 +44,7 @@ const QCInspections = () => {
 
   const [formData, setFormData] = useState({
     grnId: '',
-    inspectionDate: new Date().toISOString().split('T')[0],
+    inspectionDate: new Date().toLocaleDateString('en-CA'),
     passQuantity: '',
     failQuantity: '',
     defects: '',
@@ -168,7 +168,7 @@ const QCInspections = () => {
       setShowModal(false);
       setFormData({
         grnId: '',
-        inspectionDate: new Date().toISOString().split('T')[0],
+        inspectionDate: new Date().toLocaleDateString('en-CA'),
         passQuantity: '',
         failQuantity: '',
         defects: '',

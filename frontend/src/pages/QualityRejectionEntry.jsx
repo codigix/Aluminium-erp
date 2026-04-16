@@ -12,6 +12,13 @@ import { StatusBadge } from '../components/ui.jsx';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
+const formatDisplayDate = value => {
+  if (!value) return '—'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value // Fallback to raw value if string is not a date
+  return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+}
+
 const rejectionReasons = [
   'Dimensional Deviation',
   'Surface Scratch',
@@ -40,8 +47,8 @@ const QualityRejectionEntry = () => {
         const mappedData = data.map(item => ({
           id: item.id, // Log ID
           jobCardNo: item.jobId,
-          date: item.date,
-          dateShift: `${item.date} / SHIFT ${item.shift}`,
+          date: formatDisplayDate(item.date),
+          dateShift: `${formatDisplayDate(item.date)} / SHIFT ${item.shift}`,
           operation: item.operation,
           producedQty: item.producedQty,
           accepted: item.acceptedQty || '',

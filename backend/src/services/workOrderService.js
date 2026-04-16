@@ -383,7 +383,8 @@ const createJobCardsForWorkOrder = async (workOrderId, connection, initialStatus
       net_time: op.net_time || op.netTime || op.base_time || op.cycle_time_min || op.baseTime,
       time_uom: op.time_uom || op.timeUom || 'Min',
       hourly_rate: op.hourly_rate || op.hourlyRate,
-      operation_type: op.process_type || op.processType || op.operation_type || op.operationType || 'In-House'
+      operation_type: op.process_type || op.processType || op.operation_type || op.operationType || 'In-House',
+      execution_type: op.process_type || op.processType || op.operation_type || op.operationType || 'In-House'
     }));
   } else {
     // Fetch from BOM if not provided (fallback)
@@ -392,6 +393,12 @@ const createJobCardsForWorkOrder = async (workOrderId, connection, initialStatus
     } else {
       operationsToUse = await bomService.getItemOperations(wo.sales_order_item_id, wo.item_code);
     }
+    // Ensure execution_type is set for fallback operations too
+    operationsToUse = operationsToUse.map(op => ({
+      ...op,
+      operation_name: op.operation_name,
+      execution_type: op.operation_type || 'In-House'
+    }));
   }
   
   // 4. Create Job Cards for defined operations
@@ -421,9 +428,9 @@ const createJobCardsForWorkOrder = async (workOrderId, connection, initialStatus
 
     await connection.execute(
       `INSERT INTO job_cards 
-       (job_card_no, work_order_id, operation_id, workstation_id, planned_qty, status, std_time, time_uom, hourly_rate, operation_name, execution_type)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [jcNo, workOrderId, masterOps[0]?.id || null, masterWs[0]?.id || null, wo.quantity, initialStatus, stdTime, timeUom, hourlyRate, op.operation_name, executionType]
+       (job_card_no, work_order_id, operation_id, workstation_id, planned_qty, status, std_time, time_uom, hourly_rate, operation_name, execution_type, execution_mode)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [jcNo, workOrderId, masterOps[0]?.id || null, masterWs[0]?.id || null, wo.quantity, initialStatus, stdTime, timeUom, hourlyRate, op.operation_name, executionType, executionType]
     );
   }
 };
