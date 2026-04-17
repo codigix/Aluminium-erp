@@ -279,7 +279,7 @@ const ClientQuotations = () => {
         const date = new Date(quote.created_at);
         const roundedTime = Math.floor(date.getTime() / 60000) * 60000;
         
-        const groupKey = quote.parent_id ? `parent_${quote.parent_id}` : `batch_${quote.company_id}_${(quote.project_name || 'manual').toLowerCase()}_${roundedTime}`;
+        const groupKey = quote.batch_id || (quote.parent_id ? `parent_${quote.parent_id}` : `batch_${quote.company_id}_${(quote.project_name || 'manual').toLowerCase()}_${roundedTime}`);
         
         if (!grouped[groupKey]) {
           grouped[groupKey] = {
@@ -294,7 +294,8 @@ const ClientQuotations = () => {
             total_amount: 0,
             received_amount: 0,
             quotes: [],
-            version: quote.version || 1
+            version: quote.version || 1,
+            batch_id: quote.batch_id
           };
         }
         
@@ -351,11 +352,8 @@ const ClientQuotations = () => {
       
       const grouped = {};
       data.forEach(quote => {
-        const date = new Date(quote.created_at);
-        const roundedTime = Math.floor(date.getTime() / 60000) * 60000;
-        
-        // Use same grouping logic as sent quotations
-        const groupKey = quote.parent_id ? `parent_${quote.parent_id}` : `batch_${quote.company_id}_${(quote.project_name || 'manual').toLowerCase()}_${roundedTime}`;
+        // Group by project name and company to catch all versions of the same quotation project
+        const groupKey = `received_${quote.company_id}_${(quote.project_name || 'manual').toLowerCase()}`;
         
         if (!grouped[groupKey]) {
           grouped[groupKey] = {
@@ -370,7 +368,9 @@ const ClientQuotations = () => {
             total_amount: 0,
             received_amount: 0,
             quotes: [],
-            version: quote.version || 1
+            version: quote.version || 1,
+            batch_id: quote.batch_id,
+            parent_id: quote.parent_id
           };
         }
         
@@ -384,13 +384,15 @@ const ClientQuotations = () => {
           grouped[groupKey].created_at = quote.created_at;
           grouped[groupKey].project_name = quote.project_name;
           grouped[groupKey].reply_pdf = quote.reply_pdf;
+          grouped[groupKey].batch_id = quote.batch_id;
+          grouped[groupKey].parent_id = quote.parent_id;
         }
       });
       
-      // Filter groups: ONLY keep those where the LATEST version is APPROVED
+      // Filter groups: ONLY keep those where the LATEST version is APPROVED or REVISED
       const filteredGroups = Object.values(grouped).filter(group => {
         const s = (group.status || '').trim().toUpperCase();
-        return s === 'APPROVED';
+        return s === 'APPROVED' || s === 'REVISED';
       });
 
       filteredGroups.forEach(group => {
@@ -808,6 +810,7 @@ const ClientQuotations = () => {
           address: firstQuote?.client_address || '',
           version: group.version || 1,
           parentId: firstQuote?.parent_id || null,
+          batchId: group.batch_id || firstQuote?.batch_id || null,
           projectName: group.project_name || '',
           mode: 'received',
           items: latestQuotes.map(q => ({
@@ -844,7 +847,8 @@ const ClientQuotations = () => {
           phone: firstQuote?.client_phone || '',
           address: firstQuote?.client_address || '',
           version: (group.version || 1) + 1,
-          parentId: group.id,
+          parentId: firstQuote?.parent_id || group.id,
+          batchId: null, // New version = new batch
           projectName: group.project_name || '',
           mode: 'revise',
           items: latestQuotes.map(q => ({

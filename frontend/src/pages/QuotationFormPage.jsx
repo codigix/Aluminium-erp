@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   Plus, Trash2, Save, X, Send, 
@@ -39,10 +39,12 @@ const QuotationFormPage = () => {
   const [drawings, setDrawings] = useState([]);
   const [version, setVersion] = useState(1);
   const [parentId, setParentId] = useState(null);
+  const [batchId, setBatchId] = useState(null);
   const [versionHistory, setVersionHistory] = useState([]);
   const [mode, setMode] = useState('create'); // 'create', 'revise', or 'received'
   const [selectedVersionId, setSelectedVersionId] = useState(null);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const hasInitialized = useRef(false);
 
   // Locking logic: Only the latest version can be edited, and only if it's NOT approved.
   const maxVersion = versionHistory.length > 0 
@@ -63,11 +65,13 @@ const QuotationFormPage = () => {
   useEffect(() => {
     fetchClients();
     fetchDrawings();
-    generateQuotationNo();
     
-    if (initialData) {
+    if (initialData && !hasInitialized.current) {
+      hasInitialized.current = true;
+      generateQuotationNo();
       setVersion(initialData.version || 1);
       setParentId(initialData.parentId || null);
+      setBatchId(initialData.batchId || null);
       setMode(initialData.mode || 'create');
       if (initialData.parentId || initialData.id) {
         fetchVersionHistory(initialData.parentId || initialData.id);
@@ -92,6 +96,9 @@ const QuotationFormPage = () => {
       
       setItems(mappedItems);
       setNotes(initialData.notes || '');
+    } else if (!hasInitialized.current) {
+      generateQuotationNo();
+      hasInitialized.current = true;
     }
   }, [initialData]);
 
@@ -192,6 +199,7 @@ const QuotationFormPage = () => {
     // This allows switching between versions dynamically in the form
     setVersion(v.version);
     setSelectedVersionId(v.id);
+    setBatchId(v.batch_id || null);
     setQuotationNo(`QRT-${String(v.id).padStart(4, '0')}`);
     setQuotationDate(v.created_at.split('T')[0]);
     setProjectName(v.project_name || '');
@@ -481,7 +489,8 @@ const QuotationFormPage = () => {
         quotation_no: quotationNo,
         date: quotationDate,
         version: finalVersion,
-        parentId: parentId
+        parentId: parentId,
+        batch_id: batchId
       };
 
       const response = await fetch(`${API_BASE}/quotation-requests/send`, {

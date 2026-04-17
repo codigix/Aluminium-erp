@@ -829,7 +829,11 @@ const getApprovedDrawings = async (companyId = null) => {
        LEFT JOIN customer_po_items poi ON so.customer_po_id = poi.customer_po_id 
             AND (TRIM(soi.drawing_no) = TRIM(poi.drawing_no) AND soi.drawing_no IS NOT NULL)
        WHERE soi.sales_order_id = ? 
-       AND (soi.item_group IN ('FG', 'FINISHED_GOODS') OR soi.item_type IN ('FG', 'FINISHED_GOODS') OR soi.item_group IS NULL OR soi.item_group = '' OR soi.item_group LIKE '%FINISHED%')`,
+       AND (soi.item_group IN ('FG', 'FINISHED_GOODS', 'SA', 'SUB_ASSEMBLY', 'SFG', 'SEMI_FINISHED') 
+            OR soi.item_type IN ('FG', 'FINISHED_GOODS', 'SA', 'SUB_ASSEMBLY', 'SFG', 'SEMI_FINISHED') 
+            OR soi.item_group IS NULL OR soi.item_group = '' 
+            OR soi.item_group LIKE '%FINISHED%' 
+            OR soi.item_group LIKE '%ASSEMBLY%')`,
       [order.id]
     );
     order.items = items;

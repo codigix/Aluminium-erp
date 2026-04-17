@@ -886,7 +886,8 @@ const ensureQuotationRequestTables = async () => {
       { name: 'parent_id', definition: 'INT NULL' },
       { name: 'drawing_no', definition: 'VARCHAR(255) NULL' },
       { name: 'description', definition: 'TEXT NULL' },
-      { name: 'item_unit', definition: 'VARCHAR(50) DEFAULT "Nos"' }
+      { name: 'item_unit', definition: 'VARCHAR(50) DEFAULT "Nos"' },
+      { name: 'batch_id', definition: 'VARCHAR(100) NULL' }
     ];
     
     const missing = requiredColumns.filter(c => !existing.has(c.name));

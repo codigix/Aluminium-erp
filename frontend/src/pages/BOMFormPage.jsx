@@ -47,20 +47,24 @@ const RecursiveBOMRow = ({
   isComponentSection = false 
 }) => {
   // Determine if this item is a material or component if type not provided or to be sure
-  const actualType = providedType || (item.material_name ? 'material' : 'component');
+  const actualType = providedType || ((item.material_name || item.materialName) ? 'material' : 'component');
   
   const isConsumable = (item.item_group || item.itemGroup || '').toLowerCase().includes('consumable') || 
                        (item.material_type || item.materialType || '').toLowerCase().includes('consumable') || 
-                       (item.material_name || '').toLowerCase().includes('consumable') ||
+                       (item.material_name || item.materialName || '').toLowerCase().includes('consumable') ||
                        (item.component_code || item.componentCode || '').toLowerCase().startsWith('con-') ||
-                       (item.item_group || '').toLowerCase() === 'consumables';
+                       (item.item_group || item.itemGroup || '').toLowerCase() === 'consumables';
 
   const children = allItems.filter(child => String(child.parent_id || child.parentId) === String(item.id));
 
-  const qty = parseFloat(actualType === 'material' ? (item.qty_per_pc || item.qtyPerPc || item.qty || item.quantity || 0) : (item.quantity || item.qty || 0));
-  const rate = parseFloat(item.rate || 0);
-  const weightPerUnit = (actualType === 'material' || isConsumable) ? parseFloat(item.weight_per_unit || item.weightPerUnit || 0) : 0;
-  const scrapPercent = (actualType === 'material' || isConsumable) ? parseFloat(item.scrap_percent || item.scrapPercent || 0) : 0;
+  const qty = parseFloat(
+    actualType === 'material' 
+      ? (item.qty_per_pc ?? item.qtyPerPc ?? item.qty ?? item.quantity ?? 0) 
+      : (item.quantity ?? item.qty ?? 0)
+  );
+  const rate = parseFloat(item.rate ?? 0);
+  const weightPerUnit = (actualType === 'material' || isConsumable) ? parseFloat(item.weight_per_unit ?? item.weightPerUnit ?? 0) : 0;
+  const scrapPercent = (actualType === 'material' || isConsumable) ? parseFloat(item.scrap_percent ?? item.scrapPercent ?? 0) : 0;
 
   const unitWeight = weightPerUnit * (1 + (scrapPercent > 1 ? scrapPercent / 100 : scrapPercent));
   const totalWeight = qty * unitWeight;
@@ -90,7 +94,7 @@ const RecursiveBOMRow = ({
             <div className="flex items-center gap-2">
               {level > 0 && <CornerDownRight className="w-3 h-3 text-slate-300" />}
               <span className="text-xs font-medium text-slate-800">
-                {item.component_code || item.componentCode || item.material_name}
+                {item.component_code || item.componentCode || item.material_name || item.materialName}
               </span>
             </div>
           </td>
@@ -143,7 +147,7 @@ const RecursiveBOMRow = ({
               {level > 0 && <CornerDownRight className="w-3 h-3 text-slate-300" />}
               <div className="flex flex-col">
                 <span className="text-xs  text-slate-800 font-medium">
-                  {item.component_code || item.componentCode || item.material_name}
+                  {item.component_code || item.componentCode || item.material_name || item.materialName}
                 </span>
                 {getDimensionString(item) && (
                   <span className="text-[10px] text-emerald-600 font-medium">
@@ -199,7 +203,7 @@ const RecursiveBOMRow = ({
         </tr>
         {children.map(child => (
           <RecursiveBOMRow
-            key={`${child.material_name ? 'mat' : 'comp'}-${child.id}`}
+            key={`${(child.material_name || child.materialName) ? 'mat' : 'comp'}-${child.id}`}
             item={child}
             level={level + 1}
             onRemove={onRemove}
@@ -224,7 +228,7 @@ const RecursiveBOMRow = ({
           <div className="flex items-center gap-2">
             {level > 0 && <CornerDownRight className="w-3 h-3 text-slate-300" />}
             <span className="text-xs font-medium text-slate-800">
-              {item.item_code || item.itemCode || item.material_name}
+              {item.item_code || item.itemCode || item.material_name || item.materialName}
             </span>
           </div>
         </td>
@@ -294,7 +298,7 @@ const RecursiveBOMRow = ({
             {level > 0 && <CornerDownRight className="w-3 h-3 text-slate-300" />}
             <div className="flex flex-col">
               <span className="text-xs  text-slate-800">
-                {actualType === 'material' ? (item.item_code || item.itemCode || item.material_name) : (item.component_code || item.componentCode)}
+                {actualType === 'material' ? (item.item_code || item.itemCode || item.material_name || item.materialName) : (item.component_code || item.componentCode)}
               </span>
               {actualType === 'material' && getDimensionString(item) && (
                 <span className="text-[10px] text-emerald-600 font-medium">
@@ -321,7 +325,7 @@ const RecursiveBOMRow = ({
         <td className="p-2  text-center text-xs text-slate-600">₹{rate.toFixed(2)}</td>
         <td className="p-2  text-center text-xs text-slate-600">
           {item.warehouse || '—'}
-          {item.item_group && <div className="text-xs text-blue-500 ">{item.item_group}</div>}
+          {(item.item_group || item.itemGroup) && <div className="text-xs text-blue-500 ">{item.item_group || item.itemGroup}</div>}
         </td>
         <td className="p-2  text-center text-xs text-slate-600">
           {actualType === 'component' ? `${itemLossPercent.toFixed(2)}%` : (item.operation || '—')}
@@ -352,7 +356,7 @@ const RecursiveBOMRow = ({
       </tr>
       {children.map(child => (
         <RecursiveBOMRow
-          key={`${child.material_name ? 'mat' : 'comp'}-${child.id}`}
+          key={`${(child.material_name || child.materialName) ? 'mat' : 'comp'}-${child.id}`}
           item={child}
           level={level + 1}
           onRemove={onRemove}
@@ -441,6 +445,8 @@ const BOMFormPage = () => {
   const [operationForm, setOperationForm] = useState({ operationName: '', workstation: '', cycleTimeMin: '', setupTimeMin: '', hourlyRate: '', operationType: 'In-House', targetWarehouse: '' });
   const [editingOperation, setEditingOperation] = useState(null);
   const [editingMaterial, setEditingMaterial] = useState(null);
+  const [editingSectionItem, setEditingSectionItem] = useState(null); // { section: 'materials'|'components'|'operations'|'scrap', id: string|number }
+
   const [scrapForm, setScrapForm] = useState({ itemCode: '', itemName: '', inputQty: '', lossPercent: '', rate: '', parentId: '' });
   const [approvedDrawings, setApprovedDrawings] = useState([]);
 
@@ -828,16 +834,46 @@ const BOMFormPage = () => {
         setApprovedBOMs(approvedBomsData);
       }
 
+      // Fetch All Approved Drawings for Selection
+      const drawingsResponse = await fetch(`${API_BASE}/sales-orders/approved-drawings`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      let currentApprovedDrawings = [];
+      if (drawingsResponse.ok) {
+        const drawingsData = await drawingsResponse.json();
+        currentApprovedDrawings = drawingsData.flatMap(order => (order.items || []).map(item => ({
+          ...item,
+          company_name: order.company_name,
+          po_number: order.po_number
+        })));
+        setApprovedDrawings(currentApprovedDrawings);
+      }
+
       const params = new URLSearchParams(location.search);
       const itemCodeFromUrl = params.get('itemCode');
       const drawingNoFromUrl = params.get('drawing_no');
       const drawingIdFromUrl = params.get('drawing_id') === 'N/A' ? '' : params.get('drawing_id');
+      const salesOrderIdFromUrl = params.get('sales_order_id');
       const effectiveId = (itemId && itemId !== 'bom-form') 
         ? itemId 
         : (selectedItemRef.current?.source === 'order' ? selectedItemRef.current?.id : null);
 
       if (effectiveId || itemCodeFromUrl || selectedItemRef.current?.item_code || drawingNoFromUrl) {
         let currentItem = selectedItemRef.current;
+        
+        // If we have drawing_no and sales_order_id from URL but no effectiveId,
+        // try to find the matching item in currentApprovedDrawings to auto-link it.
+        if (!effectiveId && drawingNoFromUrl && salesOrderIdFromUrl && currentApprovedDrawings.length > 0) {
+          const matchedItem = currentApprovedDrawings.find(d => 
+            String(d.drawing_no) === String(drawingNoFromUrl) && 
+            String(d.sales_order_id) === String(salesOrderIdFromUrl)
+          );
+          if (matchedItem) {
+            currentItem = { ...matchedItem, source: 'order' };
+            setSelectedItem(currentItem);
+          }
+        }
+
         // If we have an ID but not selectedItem data (and it's not the one we just selected)
         if (effectiveId && (!selectedItemRef.current || String(selectedItemRef.current.id) !== String(effectiveId))) {
           const itemResponse = await fetch(`${API_BASE}/sales-orders/items/${effectiveId}`, {
@@ -950,20 +986,6 @@ const BOMFormPage = () => {
         }
       }
 
-      // Fetch All Approved Drawings for Selection
-      const drawingsResponse = await fetch(`${API_BASE}/sales-orders/approved-drawings`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (drawingsResponse.ok) {
-        const drawingsData = await drawingsResponse.json();
-        const allItems = drawingsData.flatMap(order => (order.items || []).map(item => ({
-          ...item,
-          company_name: order.company_name,
-          po_number: order.po_number
-        })));
-        setApprovedDrawings(allItems);
-      }
-
       // Fetch Workstations
       const wsResponse = await fetch(`${API_BASE}/workstations`, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -1050,13 +1072,13 @@ const BOMFormPage = () => {
           });
           if (!confirm.isConfirmed) return;
         }
-        payload.qty_per_pc = parseFloat(formData.qty) || 0;
-        payload.qtyPerPc = payload.qty_per_pc;
+        payload.qtyPerPc = parseFloat(formData.qty) || 0;
+        payload.qty_per_pc = payload.qtyPerPc;
         payload.weight_per_unit = parseFloat(formData.weightPerUnit) || 0;
         payload.scrap_percent = parseFloat(formData.scrapPercent) || 0;
         payload.materialType = 'Raw Material';
-        payload.material_name = payload.materialName;
-        payload.item_group = payload.itemGroup;
+        payload.materialName = payload.materialName;
+        payload.itemGroup = payload.itemGroup;
         payload.rate = parseFloat(payload.rate) || 0;
         delete payload.qty;
         delete payload.weightPerUnit;
@@ -1165,6 +1187,75 @@ const BOMFormPage = () => {
     }
   };
 
+  const handleUpdateSectionItem = async (section, formData, setFormState, initialForm) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const payload = { ...formData };
+      const editingId = editingSectionItem?.id;
+
+      if (!editingId) throw new Error('No item selected for update');
+
+      // Common transformations
+      if (section === 'materials') {
+        payload.qtyPerPc = parseFloat(formData.qty) || 0;
+        payload.qty_per_pc = payload.qtyPerPc;
+        payload.rate = parseFloat(payload.rate) || 0;
+        payload.weight_per_unit = parseFloat(formData.weightPerUnit) || 0;
+        payload.scrap_percent = parseFloat(formData.scrapPercent) || 0;
+        payload.materialName = payload.materialName;
+        payload.itemGroup = payload.itemGroup;
+      } else if (section === 'components') {
+        payload.component_code = payload.componentCode;
+        payload.quantity = parseFloat(payload.quantity) || 0;
+        payload.rate = parseFloat(payload.rate) || 0;
+        payload.loss_percent = parseFloat(payload.lossPercent) || 0;
+        payload.weight_per_unit = parseFloat(formData.weightPerUnit) || 0;
+        payload.scrap_percent = parseFloat(formData.scrapPercent) || 0;
+        payload.item_group = payload.itemGroup;
+      } else if (section === 'operations') {
+        payload.operation_name = payload.operationName;
+        payload.cycle_time_min = parseFloat(payload.cycleTimeMin) || 0;
+        payload.setup_time_min = parseFloat(payload.setupTimeMin) || 0;
+        payload.hourly_rate = parseFloat(payload.hourlyRate) || 0;
+        payload.operation_type = payload.operationType;
+        payload.target_warehouse = payload.targetWarehouse;
+      } else if (section === 'scrap') {
+        payload.scrap_item_code = payload.itemCode;
+        payload.item_name = payload.itemName;
+        payload.input_qty = parseFloat(payload.inputQty) || 0;
+        payload.loss_percent = parseFloat(payload.lossPercent) || 0;
+        payload.rate = parseFloat(payload.rate) || 0;
+      }
+
+      if (String(editingId).startsWith('local-') || (!itemId || itemId === 'bom-form')) {
+        // Local state update
+        setBomData(prev => ({
+          ...prev,
+          [section]: prev[section].map(item => item.id === editingId ? { ...item, ...payload } : item)
+        }));
+      } else {
+        // Direct API update
+        const response = await fetch(`${API_BASE}/bom/${section}/${editingId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify(payload)
+        });
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || `Failed to update ${section}`);
+        }
+        await fetchData(false);
+      }
+
+      setEditingSectionItem(null);
+      setFormState(initialForm);
+      successToast(`${section} updated successfully`);
+    } catch (error) {
+      errorToast(error.message);
+    }
+  };
+
+
   const handleDeleteSectionItem = async (section, id, isLocal = false) => {
     try {
       if (isLocal || (!itemId || itemId === 'bom-form')) {
@@ -1248,6 +1339,90 @@ const BOMFormPage = () => {
     setOperationForm({ operationName: '', workstation: '', cycleTimeMin: '', setupTimeMin: '', hourlyRate: '', operationType: 'In-House', targetWarehouse: '' });
     setScrapForm({ itemCode: '', itemName: '', inputQty: '', lossPercent: '', rate: '' });
   };
+
+  const handleStartEditSectionItem = (section, item) => {
+    setEditingSectionItem({ section, id: item.id });
+    
+    // Prefill form
+    if (section === 'materials') {
+      setMaterialForm({
+        materialName: item.material_name || item.materialName || '',
+        itemCode: item.item_code || item.itemCode || '',
+        qty: item.qty_per_pc || item.qtyPerPc || item.qty || item.quantity || '0',
+        uom: item.uom || 'Kg',
+        itemGroup: item.item_group || item.itemGroup || 'Raw Material',
+        rate: item.rate || '0',
+        warehouse: item.warehouse || '',
+        operation: item.operation || '',
+        parentId: item.parent_id || item.parentId || '',
+        description: item.description || '',
+        weightPerUnit: item.weight_per_unit || item.weightPerUnit || '',
+        scrapPercent: item.scrap_percent || item.scrapPercent || '0',
+        length: item.length || '',
+        width: item.width || '',
+        thickness: item.thickness || '',
+        diameter: item.diameter || '',
+        outer_diameter: item.outer_diameter || ''
+      });
+      // Ensure section is expanded
+      setCollapsedSections(prev => ({ ...prev, materials: false }));
+    } else if (section === 'components') {
+      setComponentForm({
+        componentCode: item.component_code || item.componentCode || '',
+        quantity: item.quantity || item.qty || '0',
+        uom: item.uom || 'Kg',
+        rate: item.rate || '0',
+        lossPercent: item.loss_percent || item.lossPercent || '0',
+        notes: item.notes || '',
+        parentId: item.parent_id || item.parentId || '',
+        description: item.description || '',
+        weightPerUnit: item.weight_per_unit || item.weightPerUnit || '',
+        scrapPercent: item.scrap_percent || item.scrapPercent || '0',
+        itemGroup: item.item_group || item.itemGroup || '',
+        length: item.length || '',
+        width: item.width || '',
+        thickness: item.thickness || '',
+        diameter: item.diameter || '',
+        outer_diameter: item.outer_diameter || ''
+      });
+      setCollapsedSections(prev => ({ ...prev, components: false }));
+    } else if (section === 'operations') {
+      setOperationForm({
+        operationName: item.operation_name || item.operationName || '',
+        workstation: item.workstation || '',
+        cycleTimeMin: item.cycle_time_min || item.cycleTimeMin || '0',
+        setupTimeMin: item.setup_time_min || item.setupTimeMin || '0',
+        hourlyRate: item.hourly_rate || item.hourlyRate || '0',
+        operationType: item.operation_type || item.operationType || 'In-House',
+        targetWarehouse: item.target_warehouse || item.targetWarehouse || ''
+      });
+      setCollapsedSections(prev => ({ ...prev, operations: false }));
+    } else if (section === 'scrap') {
+      setScrapForm({
+        itemCode: item.item_code || item.itemCode || '',
+        itemName: item.item_name || item.itemName || '',
+        inputQty: item.input_qty || item.inputQty || '0',
+        lossPercent: item.loss_percent || item.lossPercent || '0',
+        rate: item.rate || '0',
+        parentId: item.parent_id || item.parentId || ''
+      });
+      setCollapsedSections(prev => ({ ...prev, scrap: false }));
+    }
+  };
+
+  const handleCancelEditSectionItem = (section) => {
+    setEditingSectionItem(null);
+    if (section === 'materials') {
+      setMaterialForm({ materialName: '', itemCode: '', qty: '1', uom: 'Kg', itemGroup: 'Raw Material', rate: '', warehouse: '', operation: '', parentId: '', description: '', weightPerUnit: '', scrapPercent: '0', length: '', width: '', thickness: '', diameter: '', outer_diameter: '' });
+    } else if (section === 'components') {
+      setComponentForm({ componentCode: '', quantity: '1', uom: 'Kg', rate: '', lossPercent: '', notes: '', parentId: '', description: '', weightPerUnit: '', scrapPercent: '0', itemGroup: '', length: '', width: '', thickness: '', diameter: '', outer_diameter: '' });
+    } else if (section === 'operations') {
+      setOperationForm({ operationName: '', workstation: '', cycleTimeMin: '', setupTimeMin: '', hourlyRate: '', operationType: 'In-House', targetWarehouse: '' });
+    } else if (section === 'scrap') {
+      setScrapForm({ itemCode: '', itemName: '', inputQty: '', lossPercent: '', rate: '', parentId: '' });
+    }
+  };
+
 
   const handleEditOperation = (operation) => {
     setEditingOperation({
@@ -1463,15 +1638,19 @@ const BOMFormPage = () => {
 
   // Helper for recursive cost calculation
   const calculateRecursiveCost = useCallback((item, allItems) => {
-    const isMaterial = !!item.material_name;
-    const isConsumable = (item.item_group || '').toLowerCase().includes('consumable') || 
-                         (item.material_type || '').toLowerCase().includes('consumable') || 
-                         (item.material_name || '').toLowerCase().includes('consumable');
+    const isMaterial = !!(item.material_name || item.materialName);
+    const itemGroup = (item.item_group || item.itemGroup || '').toLowerCase();
+    const materialType = (item.material_type || item.materialType || '').toLowerCase();
+    const materialName = (item.material_name || item.materialName || '').toLowerCase();
+    
+    const isConsumable = itemGroup.includes('consumable') || 
+                         materialType.includes('consumable') || 
+                         materialName.includes('consumable');
 
-    const qty = parseFloat(isMaterial ? (item.qty_per_pc || item.qtyPerPc || 0) : (item.quantity || item.qty || 0));
-    const rate = parseFloat(item.rate || 0);
-    const weightPerUnit = (isMaterial || isConsumable) ? parseFloat(item.weight_per_unit || item.weightPerUnit || 0) : 0;
-    const scrapPercent = (isMaterial || isConsumable) ? parseFloat(item.scrap_percent || item.scrapPercent || 0) : 0;
+    const qty = parseFloat(isMaterial ? (item.qty_per_pc ?? item.qtyPerPc ?? item.qty ?? item.quantity ?? 0) : (item.quantity ?? item.qty ?? 0));
+    const rate = parseFloat(item.rate ?? 0);
+    const weightPerUnit = (isMaterial || isConsumable) ? parseFloat(item.weight_per_unit ?? item.weightPerUnit ?? 0) : 0;
+    const scrapPercent = (isMaterial || isConsumable) ? parseFloat(item.scrap_percent ?? item.scrapPercent ?? 0) : 0;
 
     let baseItemCost = qty * rate;
     if ((isMaterial || isConsumable) && weightPerUnit > 0) {
@@ -2025,13 +2204,31 @@ const BOMFormPage = () => {
                     </div>
                     
                     <div className="md:col-span-2 space-y-1 flex flex-col justify-end">
-                      <button
-                        onClick={() => handleAddSectionItem('components', componentForm, setComponentForm, { componentCode: '', quantity: '1', uom: 'Kg', rate: '', lossPercent: '', notes: '', parentId: '', description: '', weightPerUnit: '', scrapPercent: '0', itemGroup: '', length: '', width: '', thickness: '', diameter: '', outer_diameter: '' })}
-                        className="w-full py-2 bg-indigo-600 text-white rounded  text-xs  hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all active:scale-95 flex items-center justify-center gap-2"
-                      >
-                        <Plus className="w-4 h-4" />
-                        Add
-                      </button>
+                      {editingSectionItem?.section === 'components' ? (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleUpdateSectionItem('components', componentForm, setComponentForm, { componentCode: '', quantity: '1', uom: 'Kg', rate: '', lossPercent: '', notes: '', parentId: '', description: '', weightPerUnit: '', scrapPercent: '0', itemGroup: '', length: '', width: '', thickness: '', diameter: '', outer_diameter: '' })}
+                            className="flex-1 py-2 bg-blue-600 text-white rounded  text-xs  hover:bg-blue-700 shadow-lg shadow-blue-100 transition-all active:scale-95 flex items-center justify-center gap-2"
+                          >
+                            <Save className="w-4 h-4" />
+                            Update
+                          </button>
+                          <button
+                            onClick={() => handleCancelEditSectionItem('components')}
+                            className="px-3 py-2 bg-slate-100 text-slate-600 rounded  text-xs  hover:bg-slate-200 transition-all active:scale-95"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => handleAddSectionItem('components', componentForm, setComponentForm, { componentCode: '', quantity: '1', uom: 'Kg', rate: '', lossPercent: '', notes: '', parentId: '', description: '', weightPerUnit: '', scrapPercent: '0', itemGroup: '', length: '', width: '', thickness: '', diameter: '', outer_diameter: '' })}
+                          className="w-full py-2 bg-indigo-600 text-white rounded  text-xs  hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all active:scale-95 flex items-center justify-center gap-2"
+                        >
+                          <Plus className="w-4 h-4" />
+                          Add
+                        </button>
+                      )}
                     </div>
                   </div>
                   <div className={`grid grid-cols-1 ${(() => {
@@ -2109,6 +2306,7 @@ const BOMFormPage = () => {
                           key={c.id}
                           item={c}
                           onRemove={handleDeleteSectionItem}
+                          onEdit={(item) => handleStartEditSectionItem('components', item)}
                           isReadOnly={isReadOnly}
                           allItems={[...bomData.materials, ...bomData.components]}
                           type="component"
@@ -2354,13 +2552,31 @@ const BOMFormPage = () => {
                       const isKg = (materialForm.uom || '').toLowerCase() === 'kg';
                       return (isWeightBasedGroup && isKg) ? 'md:col-span-2' : 'md:col-span-4';
                     })()}`}>
-                      <button
-                        onClick={() => handleAddSectionItem('materials', materialForm, setMaterialForm, { materialName: '', itemCode: '', qty: '1', uom: 'Kg', itemGroup: 'Raw Material', rate: '', warehouse: '', operation: '', parentId: '', description: '', weightPerUnit: '', scrapPercent: '0', length: '', width: '', thickness: '', diameter: '', outer_diameter: '' })}
-                        className="w-full py-2 bg-emerald-600 text-white rounded  text-xs  hover:bg-emerald-700 shadow-lg shadow-emerald-100 transition-all active:scale-95 flex items-center justify-center gap-2"
-                      >
-                        <Plus className="w-4 h-4" />
-                        Add Material
-                      </button>
+                      {editingSectionItem?.section === 'materials' ? (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleUpdateSectionItem('materials', materialForm, setMaterialForm, { materialName: '', itemCode: '', qty: '1', uom: 'Kg', itemGroup: 'Raw Material', rate: '', warehouse: '', operation: '', parentId: '', description: '', weightPerUnit: '', scrapPercent: '0', length: '', width: '', thickness: '', diameter: '', outer_diameter: '' })}
+                            className="flex-1 py-2 bg-blue-600 text-white rounded  text-xs  hover:bg-blue-700 shadow-lg shadow-blue-100 transition-all active:scale-95 flex items-center justify-center gap-2"
+                          >
+                            <Save className="w-4 h-4" />
+                            Update
+                          </button>
+                          <button
+                            onClick={() => handleCancelEditSectionItem('materials')}
+                            className="px-3 py-2 bg-slate-100 text-slate-600 rounded  text-xs  hover:bg-slate-200 transition-all active:scale-95"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => handleAddSectionItem('materials', materialForm, setMaterialForm, { materialName: '', itemCode: '', qty: '1', uom: 'Kg', itemGroup: 'Raw Material', rate: '', warehouse: '', operation: '', parentId: '', description: '', weightPerUnit: '', scrapPercent: '0', length: '', width: '', thickness: '', diameter: '', outer_diameter: '' })}
+                          className="w-full py-2 bg-emerald-600 text-white rounded  text-xs  hover:bg-emerald-700 shadow-lg shadow-emerald-100 transition-all active:scale-95 flex items-center justify-center gap-2"
+                        >
+                          <Plus className="w-4 h-4" />
+                          Add Material
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -2427,10 +2643,7 @@ const BOMFormPage = () => {
                           key={m.id}
                           item={m}
                           onRemove={handleDeleteSectionItem}
-                          onEdit={handleEditMaterial}
-                          editingItem={editingMaterial}
-                          setEditingItem={setEditingMaterial}
-                          onUpdate={handleUpdateMaterial}
+                          onEdit={(item) => handleStartEditSectionItem('materials', item)}
                           isReadOnly={isReadOnly}
                           allItems={[...bomData.materials, ...bomData.components]}
                           type="material"
@@ -2612,13 +2825,31 @@ const BOMFormPage = () => {
                     </div>
 
                     <div className="md:col-span-3 flex items-end">
-                      <button
-                        onClick={() => handleAddSectionItem('operations', operationForm, setOperationForm, { operationName: '', workstation: '', cycleTimeMin: '', setupTimeMin: '', hourlyRate: '', operationType: 'In-House', targetWarehouse: '' })}
-                        className="w-full py-2 bg-purple-600 text-white rounded  text-xs  hover:bg-purple-700 shadow-lg shadow-purple-100 transition-all active:scale-95 flex items-center justify-center gap-2"
-                      >
-                        <Plus className="w-4 h-4" />
-                        Add Operation
-                      </button>
+                      {editingSectionItem?.section === 'operations' ? (
+                        <div className="flex gap-2 w-full">
+                          <button
+                            onClick={() => handleUpdateSectionItem('operations', operationForm, setOperationForm, { operationName: '', workstation: '', cycleTimeMin: '', setupTimeMin: '', hourlyRate: '', operationType: 'In-House', targetWarehouse: '' })}
+                            className="flex-1 py-2 bg-blue-600 text-white rounded  text-xs  hover:bg-blue-700 shadow-lg shadow-blue-100 transition-all active:scale-95 flex items-center justify-center gap-2"
+                          >
+                            <Save className="w-4 h-4" />
+                            Update
+                          </button>
+                          <button
+                            onClick={() => handleCancelEditSectionItem('operations')}
+                            className="px-3 py-2 bg-slate-100 text-slate-600 rounded  text-xs  hover:bg-slate-200 transition-all active:scale-95"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => handleAddSectionItem('operations', operationForm, setOperationForm, { operationName: '', workstation: '', cycleTimeMin: '', setupTimeMin: '', hourlyRate: '', operationType: 'In-House', targetWarehouse: '' })}
+                          className="w-full py-2 bg-purple-600 text-white rounded  text-xs  hover:bg-purple-700 shadow-lg shadow-purple-100 transition-all active:scale-95 flex items-center justify-center gap-2"
+                        >
+                          <Plus className="w-4 h-4" />
+                          Add Operation
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -2646,93 +2877,6 @@ const BOMFormPage = () => {
                         const totalTimeMin = cycleTime + setupTime;
                         const operationCost = (totalTimeMin / 60) * hourlyRate;
                         
-                        const isEditing = editingOperation?.id === o.id;
-
-                        if (isEditing) {
-                          return (
-                            <tr key={o.id} className="bg-indigo-50/30">
-                              <td className="p-2">
-                                <input
-                                  type="text"
-                                  className="w-full p-1 text-xs border border-indigo-200 rounded"
-                                  value={editingOperation.operationName}
-                                  onChange={(e) => setEditingOperation({ ...editingOperation, operationName: e.target.value })}
-                                />
-                                <select
-                                  className="w-full mt-1 p-1 text-[10px] border border-indigo-200 rounded"
-                                  value={editingOperation.workstation}
-                                  onChange={(e) => setEditingOperation({ ...editingOperation, workstation: e.target.value })}
-                                >
-                                  <option value="">Select Resource</option>
-                                  {workstations.map(w => (
-                                    <option key={w.id} value={w.workstation_name}>{w.workstation_name}</option>
-                                  ))}
-                                </select>
-                              </td>
-                              <td className="p-2">
-                                <div className="flex gap-1">
-                                  <input
-                                    type="number"
-                                    placeholder="C"
-                                    className="w-12 p-1 text-xs border border-indigo-200 rounded"
-                                    value={editingOperation.cycleTimeMin}
-                                    onChange={(e) => setEditingOperation({ ...editingOperation, cycleTimeMin: e.target.value })}
-                                  />
-                                  <input
-                                    type="number"
-                                    placeholder="S"
-                                    className="w-12 p-1 text-xs border border-indigo-200 rounded"
-                                    value={editingOperation.setupTimeMin}
-                                    onChange={(e) => setEditingOperation({ ...editingOperation, setupTimeMin: e.target.value })}
-                                  />
-                                </div>
-                              </td>
-                              <td className="p-2">
-                                <input
-                                  type="number"
-                                  className="w-full p-1 text-xs border border-indigo-200 rounded text-center"
-                                  value={editingOperation.hourlyRate}
-                                  onChange={(e) => setEditingOperation({ ...editingOperation, hourlyRate: e.target.value })}
-                                />
-                              </td>
-                              <td className="p-2">
-                                <select
-                                  className="w-full p-1 text-xs border border-indigo-200 rounded"
-                                  value={editingOperation.operationType}
-                                  onChange={(e) => setEditingOperation({ ...editingOperation, operationType: e.target.value })}
-                                >
-                                  <option value="In-House">In-House</option>
-                                  <option value="Sub-Contract">Sub-Contract</option>
-                                </select>
-                              </td>
-                              <td className="p-2 text-center text-xs text-slate-400">
-                                --
-                              </td>
-                              <td className="p-2 text-center text-xs text-slate-400">
-                                --
-                              </td>
-                              <td className="p-2 text-right">
-                                <div className="flex justify-end gap-1">
-                                  <button
-                                    onClick={handleUpdateOperation}
-                                    className="p-1.5 bg-emerald-500 text-white rounded hover:bg-emerald-600 shadow-sm"
-                                    title="Save"
-                                  >
-                                    <Check className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button
-                                    onClick={() => setEditingOperation(null)}
-                                    className="p-1.5 bg-slate-200 text-slate-600 rounded hover:bg-slate-300"
-                                    title="Cancel"
-                                  >
-                                    <X className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        }
-
                         return (
                           <tr key={o.id} className="hover:bg-slate-50/80 transition-colors group">
                             <td className="p-2  whitespace-nowrap">
@@ -2773,7 +2917,7 @@ const BOMFormPage = () => {
                               <td className="p-2  text-right whitespace-nowrap">
                                 <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-all">
                                   <button
-                                    onClick={() => handleEditOperation(o)}
+                                    onClick={() => handleStartEditSectionItem('operations', o)}
                                     className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-all"
                                     title="Edit Operation"
                                   >

@@ -11,7 +11,9 @@ router.post('/items/:itemId/operations', authenticate, authorize(['BOM_MANAGE'])
 router.post('/items/:itemId/scrap', authenticate, authorize(['BOM_MANAGE']), bomController.addScrap);
 
 router.put('/materials/:id', authenticate, authorize(['BOM_MANAGE']), bomController.updateItemMaterial);
+router.put('/components/:id', authenticate, authorize(['BOM_MANAGE']), bomController.updateComponent);
 router.put('/operations/:id', authenticate, authorize(['BOM_MANAGE']), bomController.updateOperation);
+router.put('/scrap/:id', authenticate, authorize(['BOM_MANAGE']), bomController.updateScrap);
 router.delete('/materials/:id', authenticate, authorize(['BOM_MANAGE']), bomController.deleteItemMaterial);
 router.delete('/components/:id', authenticate, authorize(['BOM_MANAGE']), bomController.deleteComponent);
 router.delete('/operations/:id', authenticate, authorize(['BOM_MANAGE']), bomController.deleteOperation);

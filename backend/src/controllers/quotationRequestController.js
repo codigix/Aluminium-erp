@@ -9,7 +9,7 @@ const getQuotationRequests = async (req, res, next) => {
       SELECT *, COALESCE(total_amount / NULLIF(item_qty, 0), 0) as unit_rate FROM (
         SELECT qr.id as qr_id, qr.sales_order_id, qr.company_id, qr.status, qr.total_amount, qr.received_amount, qr.notes, qr.created_at, qr.rejection_reason, qr.reply_pdf,
                qr.profit_percentage, qr.gst_percentage,
-               qr.version, qr.parent_id,
+               qr.version, qr.parent_id, qr.batch_id,
                COALESCE(qr.project_name, so.project_name, 'Manual Quotation') as project_name, 
                so.bom_id, c.company_name, 
                (SELECT email FROM contacts WHERE company_id = c.id AND (contact_type = 'PRIMARY' OR contact_type = 'PURCHASE') LIMIT 1) as client_email,
@@ -65,9 +65,9 @@ const getQuotationVersionHistory = async (req, res, next) => {
   try {
     const { id } = req.params;
     
-    // First, find the root parent ID
+    // First, find the root parent ID and other metadata for grouping siblings
     const [quotes] = await pool.query(
-      'SELECT id, parent_id FROM quotation_requests WHERE id = ?',
+      'SELECT id, parent_id, company_id, project_name, created_at, batch_id FROM quotation_requests WHERE id = ?',
       [id]
     );
 
@@ -75,9 +75,11 @@ const getQuotationVersionHistory = async (req, res, next) => {
       return res.status(404).json({ error: 'Quotation not found' });
     }
 
-    let rootId = quotes[0].parent_id || quotes[0].id;
+    const targetQuote = quotes[0];
+    let rootId = targetQuote.parent_id || targetQuote.id;
     
-    // Fetch all items in the chain with drawing/description details
+    // Fetch all items in the chain. 
+    // We search by parent_id link, OR same batch_id, OR same legacy grouping (company + project + created_at)
     const [rows] = await pool.query(
       `SELECT qr.*, c.company_name, 
               COALESCE(soi.drawing_no, qr.drawing_no) as drawing_no,
@@ -87,8 +89,11 @@ const getQuotationVersionHistory = async (req, res, next) => {
        JOIN companies c ON qr.company_id = c.id
        LEFT JOIN sales_order_items soi ON soi.id = qr.sales_order_item_id
        WHERE qr.id = ? OR qr.parent_id = ? 
+          OR qr.parent_id IN (SELECT id FROM quotation_requests WHERE id = ? OR parent_id = ?)
+          OR (qr.batch_id IS NOT NULL AND qr.batch_id = ?)
+          OR (qr.company_id = ? AND qr.project_name = ? AND ABS(TIMESTAMPDIFF(SECOND, qr.created_at, ?)) < 10)
        ORDER BY qr.version ASC, qr.id ASC`,
-      [rootId, rootId]
+      [rootId, rootId, rootId, rootId, targetQuote.batch_id, targetQuote.company_id, targetQuote.project_name, targetQuote.created_at]
     );
 
     // Group items by version
@@ -281,6 +286,8 @@ const sendQuotationViaEmail = async (req, res, next) => {
 
     await connection.beginTransaction();
 
+    const batchId = req.body.batch_id || `BATCH-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+
     const quotationPromises = items.map(item => {
       return new Promise(async (resolve, reject) => {
         try {
@@ -294,8 +301,8 @@ const sendQuotationViaEmail = async (req, res, next) => {
                status, total_amount, received_amount, rejection_reason, 
                notes, created_at, profit_percentage, gst_percentage,
                version, parent_id, drawing_no, description, item_unit,
-               project_name
-             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?)`,
+               project_name, batch_id
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
               item.orderId || null, 
               item.salesOrderItemId || null, 
@@ -313,7 +320,8 @@ const sendQuotationViaEmail = async (req, res, next) => {
               item.drawing_no || null,
               item.description || null,
               item.unit || 'Nos',
-              projectName || null
+              projectName || null,
+              batchId
             ]
           );
           resolve(result.insertId);
