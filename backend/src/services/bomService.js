@@ -197,11 +197,20 @@ const addItemMaterial = async (itemId, materialData) => {
 };
 
 const addComponent = async (itemId, componentData) => {
-  const { itemCode, drawingNo, componentCode, description, quantity, uom, rate, lossPercent, notes, parentId } = componentData;
+  const { 
+    itemCode, drawingNo, componentCode, description, quantity, uom, rate, 
+    lossPercent, notes, parentId,
+    itemGroup, weight_per_unit, scrap_percent
+  } = componentData;
   const parsedItemId = (itemId === 'null' || itemId === 'undefined' || !itemId) ? null : itemId;
   const [result] = await pool.execute(
-    'INSERT INTO sales_order_item_components (sales_order_item_id, item_code, drawing_no, parent_id, component_code, description, quantity, uom, rate, loss_percent, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    [parsedItemId, itemCode || null, drawingNo || null, parentId || null, componentCode || null, description || null, quantity || null, uom || null, rate || null, lossPercent || null, notes || null]
+    'INSERT INTO sales_order_item_components (sales_order_item_id, item_code, drawing_no, parent_id, component_code, description, quantity, uom, rate, loss_percent, notes, item_group, weight_per_unit, scrap_percent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    [
+      parsedItemId, itemCode || null, drawingNo || null, parentId || null, 
+      componentCode || null, description || null, quantity || null, uom || null, 
+      rate || null, lossPercent || null, notes || null,
+      itemGroup || null, weight_per_unit || 0, scrap_percent || 0
+    ]
   );
   return result.insertId;
 };
@@ -282,6 +291,38 @@ const updateOperation = async (id, data) => {
       target_warehouse || null,
       id
     ]
+  );
+};
+
+const updateComponent = async (id, data) => {
+  const { component_code, description, quantity, uom, rate, loss_percent, notes, item_group, weight_per_unit, scrap_percent } = data;
+  await pool.execute(
+    `UPDATE sales_order_item_components 
+     SET component_code = ?, description = ?, quantity = ?, uom = ?, rate = ?, loss_percent = ?, notes = ?, item_group = ?, weight_per_unit = ?, scrap_percent = ? 
+     WHERE id = ?`,
+    [
+      component_code || null, 
+      description || null, 
+      quantity || 0, 
+      uom || null, 
+      rate || 0, 
+      loss_percent || 0, 
+      notes || null,
+      item_group || null,
+      weight_per_unit || 0,
+      scrap_percent || 0,
+      id
+    ]
+  );
+};
+
+const updateScrap = async (id, data) => {
+  const { scrap_item_code, item_code, item_name, input_qty, loss_percent, rate } = data;
+  await pool.execute(
+    `UPDATE sales_order_item_scrap 
+     SET scrap_item_code = ?, item_name = ?, input_qty = ?, loss_percent = ?, rate = ? 
+     WHERE id = ?`,
+    [scrap_item_code || item_code || null, item_name || null, input_qty || 0, loss_percent || 0, rate || 0, id]
   );
 };
 
@@ -406,8 +447,9 @@ const createBOMRequest = async (bomData) => {
     } else if (salesOrderId) {
       // User created a NEW BOM for a specific Sales Order from Drawing Header
       // Check if an item with this drawing_no already exists in this Sales Order to avoid duplicates
+      // We prioritize items without a BOM (bom_cost is NULL or 0) but will use any existing one if needed
       const [existingItems] = await connection.query(
-        'SELECT id FROM sales_order_items WHERE sales_order_id = ? AND drawing_no = ? AND (bom_cost IS NULL OR bom_cost = 0) LIMIT 1',
+        'SELECT id, status FROM sales_order_items WHERE sales_order_id = ? AND drawing_no = ? ORDER BY (bom_cost IS NULL OR bom_cost = 0) DESC, id ASC LIMIT 1',
         [salesOrderId, drawingNo]
       );
 
@@ -440,6 +482,13 @@ const createBOMRequest = async (bomData) => {
         await connection.execute('DELETE FROM sales_order_item_operations WHERE sales_order_item_id = ?', [targetItemId]);
         await connection.execute('DELETE FROM sales_order_item_scrap WHERE sales_order_item_id = ?', [targetItemId]);
       } else {
+        // Inherit "Approved" status if the drawing is already approved elsewhere in this Sales Order
+        const [approvalCheck] = await connection.query(
+          "SELECT status FROM sales_order_items WHERE sales_order_id = ? AND drawing_no = ? AND UPPER(TRIM(status)) = 'APPROVED' LIMIT 1",
+          [salesOrderId, drawingNo]
+        );
+        const initialStatus = approvalCheck.length > 0 ? approvalCheck[0].status : (finalStatus === 'Draft' ? 'DRAFT' : 'PENDING');
+
         const [result] = await connection.execute(
           `INSERT INTO sales_order_items 
            (sales_order_id, item_code, item_type, item_group, unit, revision_no, description, is_active, is_default, quantity, drawing_no, drawing_id, bom_cost, status)
@@ -458,7 +507,7 @@ const createBOMRequest = async (bomData) => {
             drawingNo || null,
             drawing_id || null,
             bom_cost,
-            finalStatus === 'Draft' ? 'DRAFT' : 'PENDING'
+            initialStatus
           ]
         );
         targetItemId = result.insertId;
@@ -719,6 +768,8 @@ module.exports = {
   addScrap,
   updateItemMaterial,
   updateOperation,
+  updateComponent,
+  updateScrap,
   deleteItemMaterial,
   deleteComponent,
   deleteOperation,
