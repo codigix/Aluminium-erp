@@ -331,14 +331,12 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
       setTransmittingMr(true);
       const token = localStorage.getItem('authToken');
       
-      // Only send items that actually need requesting (shortage or manual force)
-      // We filter out fulfilled items and those that already have requests
-      const itemsToRequest = mrItems.filter(item => 
-        !item.request_exists && (parseFloat(item.inventory || 0) < parseFloat(item.quantity) || item.is_manual)
-      );
+      // Send all items that haven't been requested yet
+      // We now request ALL items (including in-stock) to ensure full visibility in Inventory
+      const itemsToRequest = mrItems.filter(item => !item.request_exists);
 
       if (itemsToRequest.length === 0) {
-        errorToast('No items with shortage found to request');
+        errorToast('No new items found to request');
         return;
       }
 
@@ -2149,7 +2147,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-2">
                 <div className="w-1.5 h-6 bg-indigo-500 rounded" />
-                <span className="text-xs   text-slate-700">Items to Request ({mrItems.length})</span>
+                <span className="text-xs   text-slate-700">Items to Request ({mrItems.filter(item => !item.request_exists && (parseFloat(item.inventory || 0) < parseFloat(item.quantity) || item.is_manual)).length})</span>
               </div>
               <button 
                 onClick={() => setShowAddItem(!showAddItem)}
@@ -2336,7 +2334,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
             >
               Abort Request
             </button>
-            {mrItems.length > 0 && mrItems.some(item => !item.request_exists && (parseFloat(item.inventory || 0) < parseFloat(item.quantity) || item.is_manual)) && (
+            {mrItems.length > 0 && mrItems.some(item => !item.request_exists) && (
               <button
                 onClick={confirmTransmitMR}
                 disabled={transmittingMr}

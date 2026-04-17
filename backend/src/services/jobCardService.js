@@ -20,7 +20,7 @@ const listJobCards = async () => {
      LEFT JOIN operations o ON jc.operation_id = o.id
      LEFT JOIN workstations w ON jc.workstation_id = w.id
      LEFT JOIN users u ON jc.assigned_to = u.id
-     ORDER BY jc.created_at DESC`
+     ORDER BY wo.wo_number DESC, jc.sequence_no ASC`
   );
   return rows;
 };
@@ -61,7 +61,7 @@ const createJobCard = async (data) => {
 };
 
 const updateJobCardProgress = async (id, data) => {
-  const { producedQty, acceptedQty, rejectedQty, status, startTime, endTime, workstationId, assignedTo } = data;
+  const { producedQty, acceptedQty, rejectedQty, status, startTime, endTime, workstationId, assignedTo, targetWarehouseId, executionType } = data;
   
   const connection = await pool.getConnection();
   try {
@@ -82,7 +82,37 @@ const updateJobCardProgress = async (id, data) => {
       updates.push('rejected_qty = ?');
       params.push(rejectedQty);
     }
-    if (status) {
+    if (status === 'COMPLETED') {
+      // 1. Check if all quality logs are approved
+      const [qualityLogs] = await connection.query(
+        'SELECT status, inspected_qty FROM job_card_quality_logs WHERE job_card_id = ?',
+        [id]
+      );
+      
+      if (qualityLogs.length === 0) {
+        throw new Error('Cannot complete Job Card: No quality inspection records found.');
+      }
+      
+      if (qualityLogs.some(log => log.status !== 'APPROVED')) {
+        throw new Error('Cannot complete Job Card: Some quality inspection records are still pending approval.');
+      }
+      
+      // 2. Check if total inspected matches total produced
+      const [producedSum] = await connection.query(
+        'SELECT SUM(produced_qty) as total FROM job_card_time_logs WHERE job_card_id = ?',
+        [id]
+      );
+      
+      const totalProduced = parseFloat(producedSum[0].total || 0);
+      const totalInspected = qualityLogs.reduce((sum, log) => sum + parseFloat(log.inspected_qty || 0), 0);
+      
+      if (totalInspected < totalProduced) {
+        throw new Error(`Cannot complete Job Card: Insufficient quality inspection. Produced: ${totalProduced}, Inspected: ${totalInspected}.`);
+      }
+
+      updates.push('status = ?');
+      params.push(status);
+    } else if (status) {
       updates.push('status = ?');
       params.push(status);
     }
@@ -101,6 +131,18 @@ const updateJobCardProgress = async (id, data) => {
     if (assignedTo) {
       updates.push('assigned_to = ?');
       params.push(assignedTo);
+    }
+    if (targetWarehouseId) {
+      updates.push('target_warehouse_id = ?');
+      params.push(targetWarehouseId);
+    }
+    if (executionType) {
+      updates.push('execution_mode = ?');
+      params.push(executionType);
+      
+      // Update execution_type if it exists in DB (sync both columns)
+      updates.push('execution_type = ?');
+      params.push(executionType);
     }
 
     if (updates.length > 0) {

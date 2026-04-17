@@ -42,7 +42,9 @@ const ensureJobCardColumns = async () => {
       { name: 'end_time', definition: 'DATETIME NULL' },
       { name: 'produced_qty', definition: 'DECIMAL(12, 3) DEFAULT 0' },
       { name: 'accepted_qty', definition: 'DECIMAL(12, 3) DEFAULT 0' },
-      { name: 'rejected_qty', definition: 'DECIMAL(12, 3) DEFAULT 0' }
+      { name: 'rejected_qty', definition: 'DECIMAL(12, 3) DEFAULT 0' },
+      { name: 'sequence_no', definition: 'INT DEFAULT 0' },
+      { name: 'target_warehouse_id', definition: 'INT NULL' }
     ];
 
     const missing = requiredColumns.filter(column => !existing.has(column.name));

@@ -1229,28 +1229,29 @@ const createMaterialRequestFromPlan = async (planId, userId, customItems = null)
 
     const plan = plans[0];
 
-    // 2. Aggregate only materials into a single map
-    const aggregatedMap = new Map();
+    // 2. Aggregate materials into separate maps based on purpose
+    const purchaseMap = new Map();
+    const issueMap = new Map();
 
-    const addToMap = (itemCode, qty, uom, name, warehouse, category, rate, designQty) => {
-      if (!itemCode && !name) return;
+    const addToPurposeMap = (map, itemCode, qty, uom, name, warehouse, category, rate, designQty) => {
+      if (!itemCode && !name || qty <= 0) return;
       
       const code = (itemCode || name).trim();
       const key = code.toUpperCase();
       
-      if (aggregatedMap.has(key)) {
-        const existing = aggregatedMap.get(key);
+      if (map.has(key)) {
+        const existing = map.get(key);
         existing.quantity += Number(qty);
         existing.design_qty = (existing.design_qty || 0) + Number(designQty || 0);
       } else {
-        aggregatedMap.set(key, {
+        map.set(key, {
           item_code: code,
           quantity: Number(qty),
           design_qty: Number(designQty || 0),
           uom: uom || 'Nos',
           material_name: name || code,
           warehouse: warehouse || 'Consumables Store',
-          item_type: 'RAW_MATERIAL', // Only materials are requested
+          item_type: 'RAW_MATERIAL',
           unit_rate: rate || 0
         });
       }
@@ -1259,23 +1260,19 @@ const createMaterialRequestFromPlan = async (planId, userId, customItems = null)
     if (customItems && Array.isArray(customItems)) {
       // Use items provided from frontend
       for (const item of customItems) {
-        // Only include items that are not fulfilled or explicitly requested by user
-        // In the preview modal, user sees everything, but only shortage items are typically sent back
-        // However, if they manually added/kept items, we should include them
-        // If the item has a shortage or was manually added, it should be in customItems
-        addToMap(
-          item.item_code, 
-          item.quantity, 
-          item.uom, 
-          item.material_name, 
-          item.warehouse, 
-          'RAW_MATERIAL', 
-          item.unit_rate || 0, 
-          item.design_qty || 0
-        );
+        // Simplified: Request full quantity for everything in a single map
+        const code = (item.item_code || item.material_name || '').trim();
+        const req = Number(item.quantity || 0);
+        const uom = item.uom;
+        const name = item.material_name || item.item_name;
+        const wh = item.warehouse || 'Consumables Store';
+        const rate = item.unit_rate || 0;
+        const design = item.design_qty || 0;
+
+        addToPurposeMap(purchaseMap, code, req, uom, name, wh, 'RAW_MATERIAL', rate, design);
       }
     } else {
-      // Step 1: Add Materials (Skip FG and SA as per requirement)
+      // Automatic logic for non-custom items
       const [materials] = await connection.query(`
         SELECT ppm.*, 
                COALESCE(actual_sb.item_code, ppm.item_code) as actual_item_code,
@@ -1307,83 +1304,95 @@ const createMaterialRequestFromPlan = async (planId, userId, customItems = null)
         if (code.startsWith('SA-') || code.startsWith('FG-')) continue;
 
         const effectiveRate = mat.rate || mat.stock_rate || 0;
+        const required = Number(mat.required_qty);
         
-        // Calculate deficit: required - (available + issued)
-        const availableTotal = Number(mat.current_balance) + Number(mat.issued_qty);
-        const shortage = Math.max(0, Number(mat.required_qty) - availableTotal);
-        
-        // Only add to MR if there's a shortage
-        if (shortage > 0) {
-          addToMap(mat.actual_item_code, shortage, mat.uom, mat.material_name, mat.warehouse, 'RAW_MATERIAL', effectiveRate, mat.design_qty);
-        }
+        // Simplified: Request full quantity for everything
+        addToPurposeMap(purchaseMap, mat.actual_item_code, required, mat.uom, mat.material_name, mat.warehouse, 'RAW_MATERIAL', effectiveRate, mat.design_qty);
       }
     }
 
-    if (aggregatedMap.size === 0) {
+    if (purchaseMap.size === 0 && issueMap.size === 0) {
       throw new Error('No materials found to request');
     }
 
-    const aggregatedItems = Array.from(aggregatedMap.values());
+    const createdMRs = [];
 
-    // 4. Generate MR Number
-    const today = new Date();
-    const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
-    const [lastMrResult] = await connection.query(
-      'SELECT mr_number FROM material_requests WHERE mr_number LIKE ? ORDER BY id DESC LIMIT 1',
-      [`MR-${dateStr}-%`]
-    );
+    // Helper to create MR header and items
+    const createMR = async (itemsMap, purpose) => {
+      if (itemsMap.size === 0) return null;
+      
+      const items = Array.from(itemsMap.values());
+      
+      // Generate MR Number
+      const today = new Date();
+      const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
+      const [lastMrResult] = await connection.query(
+        'SELECT mr_number FROM material_requests WHERE mr_number LIKE ? ORDER BY id DESC LIMIT 1',
+        [`MR-${dateStr}-%`]
+      );
 
-    let nextNum = 1;
-    if (lastMrResult.length > 0) {
-      const lastMrNum = lastMrResult[0].mr_number;
-      const parts = lastMrNum.split('-');
-      const lastSeq = parseInt(parts[parts.length - 1]);
-      if (!isNaN(lastSeq)) {
-        nextNum = lastSeq + 1;
+      let nextNum = 1;
+      if (lastMrResult.length > 0) {
+        const lastMrNum = lastMrResult[0].mr_number;
+        const parts = lastMrNum.split('-');
+        const lastSeq = parseInt(parts[parts.length - 1]);
+        if (!isNaN(lastSeq)) {
+          nextNum = lastSeq + 1;
+        }
       }
-    }
-    const mrNumber = `MR-${dateStr}-${nextNum.toString().padStart(3, '0')}`;
+      const mrNumber = `MR-${dateStr}-${nextNum.toString().padStart(3, '0')}`;
 
-    // 5. Create Material Request Header
-    const [mrResult] = await connection.execute(
-      `INSERT INTO material_requests (
-        mr_number, department, requested_by, required_by, 
-        purpose, status, notes, source_warehouse, plan_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        mrNumber,
-        'Production',
-        userId,
-        plan.start_date || new Date(),
-        'Purchase Request',
-        'DRAFT',
-        `Generated from Production Plan ${plan.plan_code}`,
-        'Consumables Store',
-        planId
-      ]
-    );
-
-    const mrId = mrResult.insertId;
-
-    // 6. Create Material Request Items
-    for (const item of aggregatedItems) {
-      await connection.execute(
-        `INSERT INTO material_request_items (
-          mr_id, item_code, item_name, item_type, design_qty, quantity, unit_rate, uom, warehouse
+      // Create Material Request Header
+      const [mrResult] = await connection.execute(
+        `INSERT INTO material_requests (
+          mr_number, department, requested_by, required_by, 
+          purpose, status, notes, source_warehouse, plan_id
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
-          mrId,
-          item.item_code,
-          item.material_name,
-          item.item_type,
-          item.design_qty || 0,
-          item.quantity,
-          item.unit_rate || 0,
-          item.uom,
-          item.warehouse
+          mrNumber,
+          'Production',
+          userId,
+          plan.start_date || new Date(),
+          purpose,
+          'DRAFT',
+          `Generated from Production Plan ${plan.plan_code} (All Materials)`,
+          'Consumables Store',
+          planId
         ]
       );
-    }
+
+      const mrId = mrResult.insertId;
+
+      // Create Material Request Items
+      for (const item of items) {
+        await connection.execute(
+          `INSERT INTO material_request_items (
+            mr_id, item_code, item_name, item_type, design_qty, quantity, unit_rate, uom, warehouse
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            mrId,
+            item.item_code,
+            item.material_name,
+            item.item_type,
+            item.design_qty || 0,
+            item.quantity,
+            item.unit_rate || 0,
+            item.uom,
+            item.warehouse
+          ]
+        );
+      }
+      
+      return { id: mrId, mr_number: mrNumber };
+    };
+
+    // Use 'Material Issue' as the default purpose so it shows up in Inventory
+    const unifiedMR = await createMR(purchaseMap, 'Material Issue');
+    if (unifiedMR) createdMRs.push(unifiedMR);
+    
+    // issueMap should be empty now based on previous change, but for safety:
+    const issueMR = await createMR(issueMap, 'Material Issue');
+    if (issueMR) createdMRs.push(issueMR);
 
     // 7. Update Plan Materials Status
     await connection.execute(
@@ -1392,7 +1401,11 @@ const createMaterialRequestFromPlan = async (planId, userId, customItems = null)
     );
 
     await connection.commit();
-    return { id: mrId, mr_number: mrNumber, message: 'Material Request created successfully' };
+    
+    return { 
+      mrs: createdMRs, 
+      message: `Created ${createdMRs.length} Material Request(s): ${createdMRs.map(m => m.mr_number).join(', ')}`
+    };
   } catch (error) {
     await connection.rollback();
     throw error;

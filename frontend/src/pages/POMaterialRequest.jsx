@@ -197,6 +197,19 @@ const POMaterialRequest = () => {
       setLoading(true);
       const token = localStorage.getItem('authToken');
       
+      const itemsToRequest = (mr.items || []).filter(item => {
+        const type = (item.material_type || '').toUpperCase();
+        const isNotFG = type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
+        // ONLY request items that are NOT in stock (fulfillment_source should be 'PURCHASE')
+        const isOutOfStock = item.fulfillment_source !== 'STOCK';
+        return isNotFG && isOutOfStock;
+      });
+
+      if (itemsToRequest.length === 0) {
+        errorToast('No out-of-stock items found to generate RFQ');
+        return;
+      }
+
       const response = await fetch(`${API_BASE}/rfqs`, {
         method: 'POST',
         headers: {
@@ -205,10 +218,7 @@ const POMaterialRequest = () => {
         },
         body: JSON.stringify({
           mr_id: mr.id,
-          items: (mr.items || []).filter(item => {
-            const type = (item.material_type || '').toUpperCase();
-            return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
-          }).map(item => ({
+          items: itemsToRequest.map(item => ({
             ...item,
             material_name: item.name || item.material_name, // Ensure name is passed correctly
             quantity: parseFloat(item.quantity) || 0,

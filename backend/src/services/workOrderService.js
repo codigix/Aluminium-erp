@@ -402,7 +402,9 @@ const createJobCardsForWorkOrder = async (workOrderId, connection, initialStatus
   }
   
   // 4. Create Job Cards for defined operations
-  for (const op of operationsToUse) {
+  for (let i = 0; i < operationsToUse.length; i++) {
+    const op = operationsToUse[i];
+    const sequenceNo = i + 1;
     const [masterOps] = await connection.query(
       'SELECT id, std_time, time_uom, hourly_rate FROM operations WHERE operation_name = ?',
       [op.operation_name]
@@ -411,6 +413,14 @@ const createJobCardsForWorkOrder = async (workOrderId, connection, initialStatus
       'SELECT id FROM workstations WHERE workstation_name = ?',
       [op.workstation]
     );
+
+    // Fetch warehouse ID if target_warehouse is provided
+    let targetWarehouseId = null;
+    const targetWhName = op.target_warehouse || op.targetWarehouse;
+    if (targetWhName) {
+      const [whRows] = await connection.query('SELECT id FROM warehouses WHERE warehouse_name = ?', [targetWhName]);
+      if (whRows.length > 0) targetWarehouseId = whRows[0].id;
+    }
 
     const jcNo = await generateJobCardNo(connection);
     let stdTime = op.net_time || op.base_time || op.cycle_time_min || masterOps[0]?.std_time || 0;
@@ -428,9 +438,9 @@ const createJobCardsForWorkOrder = async (workOrderId, connection, initialStatus
 
     await connection.execute(
       `INSERT INTO job_cards 
-       (job_card_no, work_order_id, operation_id, workstation_id, planned_qty, status, std_time, time_uom, hourly_rate, operation_name, execution_type, execution_mode)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [jcNo, workOrderId, masterOps[0]?.id || null, masterWs[0]?.id || null, wo.quantity, initialStatus, stdTime, timeUom, hourlyRate, op.operation_name, executionType, executionType]
+       (job_card_no, work_order_id, operation_id, workstation_id, planned_qty, status, std_time, time_uom, hourly_rate, operation_name, execution_type, execution_mode, sequence_no, target_warehouse_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [jcNo, workOrderId, masterOps[0]?.id || null, masterWs[0]?.id || null, wo.quantity, initialStatus, stdTime, timeUom, hourlyRate, op.operation_name, executionType, executionType, sequenceNo, targetWarehouseId]
     );
   }
 };

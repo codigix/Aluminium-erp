@@ -146,6 +146,26 @@ const JobCard = () => {
   const [isInwardModalOpen, setIsInwardModalOpen] = useState(false);
   const [selectedJCOutward, setSelectedJCOutward] = useState(null);
   const [logs, setLogs] = useState({ timeLogs: [], qualityLogs: [], downtimeLogs: [] });
+  const qcStats = useMemo(() => {
+    const totalProduced = (logs.timeLogs || []).reduce((sum, log) => sum + parseFloat(log.produced_qty || 0), 0);
+    const totalInspected = (logs.qualityLogs || []).reduce((sum, log) => sum + parseFloat(log.inspected_qty || 0), 0);
+    const totalAccepted = (logs.qualityLogs || []).reduce((sum, log) => sum + parseFloat(log.accepted_qty || 0), 0);
+    const totalRejected = (logs.qualityLogs || []).reduce((sum, log) => sum + parseFloat(log.rejected_qty || 0), 0);
+    const totalScrap = (logs.qualityLogs || []).reduce((sum, log) => sum + parseFloat(log.scrap_qty || 0), 0);
+    const hasPending = (logs.qualityLogs || []).some(log => log.status !== 'APPROVED');
+    const isComplete = totalInspected >= totalProduced && totalProduced > 0;
+    
+    return {
+      totalProduced,
+      totalInspected,
+      totalAccepted,
+      totalRejected,
+      totalScrap,
+      hasPending,
+      isComplete,
+      isApproved: (logs.qualityLogs || []).length > 0 && !hasPending
+    };
+  }, [logs]);
   const [machineStatus, setMachineStatus] = useState("AVAILABLE"); // AVAILABLE, RUNNING, STOPPED
   const [, setTick] = useState(0);
 
@@ -191,8 +211,16 @@ const JobCard = () => {
     status: 'PENDING',
     producedQty: 0,
     acceptedQty: 0,
+    stdTime: 0,
+    timeUom: 'Min',
     startDateTime: '',
-    endDateTime: ''
+    endDateTime: '',
+    startTime: '08:00',
+    startAMPM: 'AM',
+    endTime: '04:00',
+    endAMPM: 'PM',
+    startDate: new Date().toISOString().split('T')[0],
+    endDate: new Date().toISOString().split('T')[0]
   });
 
   const formatDisplayDate = value => {
@@ -245,6 +273,14 @@ const JobCard = () => {
     const ampm = h >= 12 ? 'PM' : 'AM';
     h = h % 12 || 12;
     return { time: `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`, ampm };
+  };
+
+  const to24h = (time12, ampm) => {
+    if (!time12 || !ampm) return '08:00';
+    let [h, m] = time12.split(':').map(Number);
+    if (ampm === 'PM' && h < 12) h += 12;
+    if (ampm === 'AM' && h === 12) h = 0;
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
   };
 
   const getHours = (timeStr) => timeStr?.split(':')[0] || '08';
@@ -457,6 +493,43 @@ const JobCard = () => {
     }
   };
 
+  useEffect(() => {
+    // Auto Suggest End Time logic
+    if (formData.executionMode === 'In-house' && formData.startTime && formData.operationId && formData.plannedQty) {
+      const operation = operations.find(o => String(o.id) === String(formData.operationId));
+      let netTime = parseFloat(formData.stdTime || operation?.net_time || operation?.std_time || 0);
+      let timeUom = formData.stdTime > 0 ? formData.timeUom : (operation?.time_uom || 'Min');
+      
+      // Convert to minutes if UOM is Hr or Sec
+      if (timeUom === 'Hr') netTime *= 60;
+      else if (timeUom === 'Sec') netTime /= 60;
+
+      if (netTime > 0) {
+        const start24 = to24h(formData.startTime, formData.startAMPM);
+        const start = new Date(`${formData.startDate}T${start24}:00`);
+        
+        if (!isNaN(start.getTime())) {
+          const qty = parseFloat(formData.producedQty || 0) > 0 ? parseFloat(formData.producedQty) : parseFloat(formData.plannedQty || 0);
+          const totalMins = Math.round(netTime * qty);
+          const end = new Date(start.getTime() + totalMins * 60000);
+          
+          const endDate = end.getFullYear() + '-' + (end.getMonth() + 1).toString().padStart(2, '0') + '-' + end.getDate().toString().padStart(2, '0');
+          const end24 = end.getHours().toString().padStart(2, '0') + ':' + end.getMinutes().toString().padStart(2, '0');
+          const { time: endTime, ampm: endAMPM } = to12h(end24);
+          
+          if (formData.endDate !== endDate || formData.endTime !== endTime || formData.endAMPM !== endAMPM) {
+            setFormData(prev => ({ 
+              ...prev, 
+              endDate,
+              endTime,
+              endAMPM
+            }));
+          }
+        }
+      }
+    }
+  }, [formData.startTime, formData.startAMPM, formData.startDate, formData.operationId, formData.plannedQty, formData.producedQty, formData.executionMode, operations]);
+
   const fetchJobCards = async () => {
     try {
       const token = localStorage.getItem('authToken');
@@ -654,7 +727,14 @@ const JobCard = () => {
       );
     }
 
-    return [...result].sort((a, b) => (a.operation_name || "").localeCompare(b.operation_name || ""));
+    return [...result].sort((a, b) => {
+      // Primary sort: Work Order (Descending)
+      if (a.wo_number !== b.wo_number) {
+        return (b.wo_number || "").localeCompare(a.wo_number || "");
+      }
+      // Secondary sort: Sequence Number (Ascending)
+      return (a.sequence_no || 0) - (b.sequence_no || 0);
+    });
   }, [jobCards, searchQuery]);
 
   const groupedJobCards = useMemo(() => {
@@ -705,6 +785,11 @@ const JobCard = () => {
           cards: [jc]
         };
       }
+    });
+
+    // 3. Sort cards within each group by sequence_no
+    Object.values(acc).forEach(group => {
+      group.cards.sort((a, b) => (a.sequence_no || 0) - (b.sequence_no || 0));
     });
 
     return acc;
@@ -1224,11 +1309,14 @@ const JobCard = () => {
     const currentIndex = woJCs.findIndex(j => j.id === jc.id);
     const nextJC = currentIndex !== -1 ? woJCs[currentIndex + 1] : null;
 
+    const mode = nextJC?.execution_type || 'In-house';
+    const normalizedMode = (mode.toLowerCase().includes('outsource') || mode.toLowerCase().includes('sub')) ? 'Outsource' : 'In-house';
+
     setNextStageForm({
       nextOperationId: nextJC ? nextJC.operation_id : '',
       assignOperatorId: nextJC ? (nextJC.assigned_to || '') : '',
-      targetWarehouseId: '',
-      executionMode: nextJC ? (nextJC.execution_type || 'In-house') : 'In-house'
+      targetWarehouseId: nextJC ? (nextJC.target_warehouse_id || '') : '',
+      executionMode: normalizedMode
     });
 
     setShowProductionEntry(true);
@@ -2336,15 +2424,15 @@ const JobCard = () => {
               <div className="flex items-center justify-start border-t border-slate-50 pt-6">
                 <button
                   onClick={handleReadyForDispatch}
-                  disabled={logs.qualityLogs.some(log => log.status !== 'APPROVED')}
+                  disabled={!qcStats.isApproved || !qcStats.isComplete}
                   className={`group relative flex items-center gap-2 p-2  rounded  transition-all ${
-                    logs.qualityLogs.some(log => log.status !== 'APPROVED')
+                    !qcStats.isApproved || !qcStats.isComplete
                       ? 'bg-slate-50 text-slate-300 cursor-not-allowed border border-slate-100'
                       : 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-200'
                   }`}
                 >
                   <div className={`w-8 h-8 rounded  flex items-center justify-center transition-colors ${
-                    logs.qualityLogs.some(log => log.status !== 'APPROVED')
+                    !qcStats.isApproved || !qcStats.isComplete
                       ? 'bg-slate-100 text-slate-200'
                       : 'bg-white/20 text-white'
                   }`}>
@@ -2355,7 +2443,7 @@ const JobCard = () => {
                     <p className="text-sm ">Complete Production</p>
                   </div>
                   <ChevronRight className={`w-4 h-4 ml-4 transition-transform group-hover:translate-x-1 ${
-                    logs.qualityLogs.some(log => log.status !== 'APPROVED') ? 'opacity-20' : 'opacity-100'
+                    !qcStats.isApproved || !qcStats.isComplete ? 'opacity-20' : 'opacity-100'
                   }`} />
                 </button>
               </div>
@@ -2642,10 +2730,13 @@ const JobCard = () => {
 
   const handleReadyForDispatch = async () => {
     try {
-      // Check if all quality logs are approved
-      const hasPendingQuality = logs.qualityLogs.some(log => log.status !== 'APPROVED');
-      if (hasPendingQuality) {
-        errorToast('All quality inspection records must be Approved before proceeding to the next stage.');
+      if (!qcStats.isApproved) {
+        errorToast('All quality inspection records must be Approved before proceeding.');
+        return;
+      }
+
+      if (!qcStats.isComplete) {
+        errorToast(`Insufficient QC inspection! Produced: ${qcStats.totalProduced}, Inspected: ${qcStats.totalInspected}. All produced items must be inspected.`);
         return;
       }
 
@@ -2694,7 +2785,8 @@ const JobCard = () => {
               },
               body: JSON.stringify({
                 assignedTo: nextStageForm.assignOperatorId || null,
-                executionType: nextStageForm.executionMode
+                executionType: nextStageForm.executionMode,
+                targetWarehouseId: nextStageForm.targetWarehouseId || null
               })
             });
           }
@@ -3184,8 +3276,16 @@ const JobCard = () => {
       status: 'PENDING',
       producedQty: 0,
       acceptedQty: 0,
+      stdTime: 0,
+      timeUom: 'Min',
       startDateTime: '',
-      endDateTime: ''
+      endDateTime: '',
+      startTime: '08:00',
+      startAMPM: 'AM',
+      endTime: '04:00',
+      endAMPM: 'PM',
+      startDate: new Date().toISOString().split('T')[0],
+      endDate: new Date().toISOString().split('T')[0]
     });
     setSelectedWO(null);
     setIsModalOpen(true);
@@ -3303,6 +3403,17 @@ const JobCard = () => {
   };
 
   const handleEdit = (jc) => {
+    const startInfo = jc.start_time ? to12h(jc.start_time.split('T')[1]?.slice(0, 5) || jc.start_time.split(' ')[1]?.slice(0, 5)) : { time: '08:00', ampm: 'AM' };
+    const endInfo = jc.end_time ? to12h(jc.end_time.split('T')[1]?.slice(0, 5) || jc.end_time.split(' ')[1]?.slice(0, 5)) : { time: '04:00', ampm: 'PM' };
+    
+    // Normalize execution mode
+    let mode = jc.execution_mode || 'In-house';
+    if (mode.toLowerCase().includes('outsource') || mode.toLowerCase().includes('sub')) {
+      mode = 'Outsource';
+    } else {
+      mode = 'In-house';
+    }
+
     setFormData({
       id: jc.id,
       jcNumber: jc.job_card_no,
@@ -3312,14 +3423,22 @@ const JobCard = () => {
       assignedTo: jc.assigned_to,
       plannedQty: jc.planned_qty,
       remarks: jc.remarks || '',
-      executionMode: jc.execution_mode || 'In-house',
+      executionMode: mode,
       vendorId: jc.vendor_id || '',
       vendorRate: jc.vendor_rate || 0,
       status: jc.status || 'PENDING',
       producedQty: jc.produced_qty || 0,
       acceptedQty: jc.accepted_qty || 0,
+      stdTime: jc.std_time || 0,
+      timeUom: jc.time_uom || 'Min',
       startDateTime: jc.start_time || '',
-      endDateTime: jc.end_time || ''
+      endDateTime: jc.end_time || '',
+      startTime: startInfo.time,
+      startAMPM: startInfo.ampm,
+      endTime: endInfo.time,
+      endAMPM: endInfo.ampm,
+      startDate: jc.start_time ? (jc.start_time.includes('T') ? jc.start_time.split('T')[0] : jc.start_time.split(' ')[0]) : new Date().toISOString().split('T')[0],
+      endDate: jc.end_time ? (jc.end_time.includes('T') ? jc.end_time.split('T')[0] : jc.end_time.split(' ')[0]) : new Date().toISOString().split('T')[0]
     });
     const wo = workOrders.find(w => String(w.id) === String(jc.work_order_id));
     setSelectedWO(wo);
@@ -3334,13 +3453,22 @@ const JobCard = () => {
       const url = isEdit ? `${API_BASE}/job-cards/${formData.id}` : `${API_BASE}/job-cards`;
       const method = isEdit ? 'PUT' : 'POST';
 
+      const start24 = to24h(formData.startTime, formData.startAMPM);
+      const end24 = to24h(formData.endTime, formData.endAMPM);
+      
+      const submissionData = {
+        ...formData,
+        startDateTime: `${formData.startDate} ${start24}:00`,
+        endDateTime: `${formData.endDate} ${end24}:00`
+      };
+
       const response = await fetch(url, {
         method: method,
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(submissionData)
       });
 
       if (response.ok) {
@@ -3466,10 +3594,17 @@ const JobCard = () => {
                 <tr key={jc.id} className="group hover:bg-slate-50/50 transition-colors">
                   <td className="p-2 whitespace-nowrap">
                     <div className="flex flex-col">
-                      <span className="text-xs  text-indigo-600">
-                        {jc.job_card_no}
-                      </span>
-                      <span className="text-xs text-slate-400 mt-0.5">
+                      <div className="flex items-center gap-1.5">
+                        {jc.sequence_no > 0 && (
+                          <span className="flex items-center justify-center w-4 h-4 bg-slate-100 text-slate-500 rounded text-[10px] font-bold border border-slate-200">
+                            {jc.sequence_no}
+                          </span>
+                        )}
+                        <span className="text-xs  text-indigo-600">
+                          {jc.job_card_no}
+                        </span>
+                      </div>
+                      <span className="text-xs text-slate-400 mt-0.5 ml-0">
                         WO: {jc.wo_number}
                       </span>
                     </div>
@@ -3591,10 +3726,10 @@ const JobCard = () => {
                               jc.latest_log_end_time ? (
                                 `${formatLocalTime(jc.latest_log_start_time)} - ${formatLocalTime(jc.latest_log_end_time)}`
                               ) : (
-                                `${formatLocalTime(jc.latest_log_start_time)} - Running`
+                                `${formatLocalTime(jc.latest_log_start_time)} - ${jc.end_time ? formatLocalTime(jc.end_time) : 'Running'}`
                               )
                             ) : (
-                              jc.start_time ? `${formatLocalTime(jc.start_time)} - Running` : 'In Progress'
+                              jc.start_time ? `${formatLocalTime(jc.start_time)} - ${jc.end_time ? formatLocalTime(jc.end_time) : 'Running'}` : 'In Progress'
                             )}
                           </span>
                           {(() => {
@@ -4138,39 +4273,57 @@ const JobCard = () => {
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
-                    <FormControl label="Start DateTime">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-medium text-slate-500 uppercase tracking-wider">Start DateTime</label>
+                      <div className="flex gap-1.5">
+                        <input 
+                          type="date"
+                          value={formData.startDate}
+                          onChange={(e) => setFormData(prev => ({ ...prev, startDate: e.target.value }))}
+                          className="flex-1 p-2 text-xs bg-white border border-slate-200 rounded hover:border-indigo-400 transition-colors focus:ring-2 focus:ring-indigo-500/20 outline-none"
+                        />
+                        <div className="w-32">
+                          <TimePicker 
+                            value={formData.startTime}
+                            ampmValue={formData.startAMPM}
+                            onTimeChange={(val) => setFormData(prev => ({ ...prev, startTime: val }))}
+                            onAMPMChange={(val) => setFormData(prev => ({ ...prev, startAMPM: val }))}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1 relative">
+                      <label className="text-[10px] font-medium text-slate-500 uppercase tracking-wider">End DateTime</label>
+                      <span className="absolute right-0 top-0 text-[10px] text-indigo-600 font-bold uppercase tracking-widest">Auto Suggest</span>
+                      <div className="flex gap-1.5">
+                        <input 
+                          type="date"
+                          value={formData.endDate}
+                          onChange={(e) => setFormData(prev => ({ ...prev, endDate: e.target.value }))}
+                          className="flex-1 p-2 text-xs bg-white border border-slate-200 rounded hover:border-indigo-400 transition-colors focus:ring-2 focus:ring-indigo-500/20 outline-none"
+                        />
+                        <div className="w-32">
+                          <TimePicker 
+                            value={formData.endTime}
+                            ampmValue={formData.endAMPM}
+                            onTimeChange={(val) => setFormData(prev => ({ ...prev, endTime: val }))}
+                            onAMPMChange={(val) => setFormData(prev => ({ ...prev, endAMPM: val }))}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <FormControl label="Standard Time (Min)">
                       <input 
-                        type="datetime-local" 
-                        value={formData.startDateTime ? formData.startDateTime.slice(0, 16) : ''}
-                        onChange={(e) => setFormData({ ...formData, startDateTime: e.target.value })}
+                        type="number" 
+                        step="0.01"
+                        value={formData.stdTime}
+                        onChange={(e) => setFormData(prev => ({ ...prev, stdTime: e.target.value, timeUom: 'Min' }))}
                         className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
                       />
-                    </FormControl>
-                    <FormControl label="End DateTime">
-                      <div className="relative">
-                        <input 
-                          type="datetime-local" 
-                          value={formData.endDateTime ? formData.endDateTime.slice(0, 16) : ''}
-                          onChange={(e) => setFormData({ ...formData, endDateTime: e.target.value })}
-                          className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
-                        />
-                        <button 
-                          type="button"
-                          onClick={() => {
-                            // logic to suggest end time based on std_time
-                            const stdTime = operations.find(o => String(o.id) === String(formData.operationId))?.std_time || 0;
-                            if (formData.startDateTime && stdTime && formData.plannedQty) {
-                              const start = new Date(formData.startDateTime);
-                              const totalMins = stdTime * formData.plannedQty;
-                              const end = new Date(start.getTime() + totalMins * 60000);
-                              setFormData({ ...formData, endDateTime: end.toISOString().slice(0, 16) });
-                            }
-                          }}
-                          className="absolute right-0 -top-6 text-[10px] text-indigo-600 hover:underline font-medium"
-                        >
-                          Auto Suggest
-                        </button>
-                      </div>
                     </FormControl>
                   </div>
 
@@ -4179,14 +4332,27 @@ const JobCard = () => {
                     <div>
                       <span className="text-xs text-slate-500 block mb-1">Machine Engagement:</span>
                       <p className="text-xs font-medium text-slate-700">
-                        {operations.find(o => String(o.id) === String(formData.operationId))?.std_time || 0} min/unit × {formData.plannedQty} units
+                        {(() => {
+                          const operation = operations.find(o => String(o.id) === String(formData.operationId));
+                          let netTime = parseFloat(formData.stdTime || operation?.net_time || operation?.std_time || 0);
+                          let timeUom = formData.stdTime > 0 ? formData.timeUom : (operation?.time_uom || 'Min');
+                          if (timeUom === 'Hr') netTime *= 60;
+                          else if (timeUom === 'Sec') netTime /= 60;
+                          const qty = parseFloat(formData.producedQty || 0) > 0 ? parseFloat(formData.producedQty) : parseFloat(formData.plannedQty || 0);
+                          return `${netTime.toFixed(2)} min/unit × ${qty.toFixed(3)} units`;
+                        })()}
                       </p>
                     </div>
                     <div className="bg-white px-4 py-2 rounded-md border border-indigo-100 shadow-sm">
                       <span className="text-sm font-bold text-indigo-600">
                         {(() => {
-                          const stdTime = operations.find(o => String(o.id) === String(formData.operationId))?.std_time || 0;
-                          const totalMins = Math.round(stdTime * formData.plannedQty);
+                          const operation = operations.find(o => String(o.id) === String(formData.operationId));
+                          let netTime = parseFloat(formData.stdTime || operation?.net_time || operation?.std_time || 0);
+                          let timeUom = formData.stdTime > 0 ? formData.timeUom : (operation?.time_uom || 'Min');
+                          if (timeUom === 'Hr') netTime *= 60;
+                          else if (timeUom === 'Sec') netTime /= 60;
+                          const qty = parseFloat(formData.producedQty || 0) > 0 ? parseFloat(formData.producedQty) : parseFloat(formData.plannedQty || 0);
+                          const totalMins = Math.round(netTime * qty);
                           const hrs = Math.floor(totalMins / 60);
                           const mins = totalMins % 60;
                           return `${hrs} Hrs ${mins} Min`;
