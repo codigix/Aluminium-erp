@@ -2,8 +2,8 @@ import React, { useState, useEffect, useMemo, useRef, useLayoutEffect } from 're
 import { useSearchParams } from 'react-router-dom';
 import { Card, Modal, FormControl, StatusBadge, SearchableSelect } from '../components/ui.jsx';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
-import { 
-  ClipboardList, Activity, CheckCircle, TrendingUp, 
+import {
+  ClipboardList, Activity, CheckCircle, TrendingUp,
   Play, Check, Edit2, Trash2, Search, Filter, Plus, X, Pause, Square,
   Clock, Package, User, Monitor, AlertCircle, ChevronDown, ChevronRight, ChevronLeft,
   DollarSign, Zap, Eye, Truck, Box, Target, Layers, ArrowRight, FileText, History,
@@ -18,14 +18,14 @@ const TimePicker = ({ value, ampmValue, onTimeChange, onAMPMChange, label, small
   const [isOpen, setIsOpen] = useState(false);
   const triggerRef = useRef(null);
   const [coords, setCoords] = useState({ top: 0, left: 0, width: 0 });
-  
+
   const isPlaceholder = !value || !ampmValue;
   const displayTime = value || placeholder;
   const displayAMPM = ampmValue || placeholderAMPM;
-  
+
   const hour = displayTime?.split(':')[0] || '08';
   const minute = displayTime?.split(':')[1] || '00';
-  
+
   const hours = Array.from({ length: 12 }, (_, i) => (i + 1).toString().padStart(2, '0'));
   const minutes = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0'));
   const periods = ['AM', 'PM'];
@@ -35,7 +35,7 @@ const TimePicker = ({ value, ampmValue, onTimeChange, onAMPMChange, label, small
       const rect = triggerRef.current.getBoundingClientRect();
       const pickerHeight = 256; // h-64
       const viewportHeight = window.innerHeight;
-      
+
       const spaceBelow = viewportHeight - rect.bottom;
       const shouldOpenAbove = spaceBelow < pickerHeight && rect.top > pickerHeight;
 
@@ -50,11 +50,10 @@ const TimePicker = ({ value, ampmValue, onTimeChange, onAMPMChange, label, small
 
   return (
     <div className="relative w-full" ref={triggerRef}>
-      <div 
+      <div
         onClick={toggleOpen}
-        className={`flex items-center gap-1.5 bg-white border border-slate-200 rounded cursor-pointer hover:border-indigo-400 transition-all focus-within:ring-2 focus-within:ring-indigo-500/20 ${
-          small ? 'px-2 py-1' : 'px-3 py-2'
-        }`}
+        className={`flex items-center gap-1.5 bg-white border border-slate-200 rounded cursor-pointer hover:border-indigo-400 transition-all focus-within:ring-2 focus-within:ring-indigo-500/20 ${small ? 'px-2 py-1' : 'px-3 py-2'
+          }`}
       >
         <Clock className={`${small ? 'w-3 h-3' : 'w-3.5 h-3.5'} text-slate-400`} />
         <span className={`${small ? 'text-[10px]' : 'text-xs'} font-medium ${isPlaceholder ? 'text-slate-400' : 'text-slate-700'}`}>
@@ -66,8 +65,8 @@ const TimePicker = ({ value, ampmValue, onTimeChange, onAMPMChange, label, small
       {isOpen && (
         <>
           <div className="fixed inset-0 z-[100]" onClick={() => setIsOpen(false)} />
-          <div 
-            style={{ 
+          <div
+            style={{
               position: 'absolute',
               top: coords.top === -1 ? 'auto' : 'calc(100% + 4px)',
               bottom: coords.top === -1 ? 'calc(100% + 4px)' : 'auto',
@@ -82,9 +81,8 @@ const TimePicker = ({ value, ampmValue, onTimeChange, onAMPMChange, label, small
                 <div
                   key={h}
                   onClick={() => onTimeChange(`${h}:${minute}`)}
-                  className={`px-3 py-2 text-xs text-center cursor-pointer transition-colors ${
-                    hour === h ? 'bg-indigo-600 text-white font-bold' : 'text-slate-600 hover:bg-slate-50'
-                  }`}
+                  className={`px-3 py-2 text-xs text-center cursor-pointer transition-colors ${hour === h ? 'bg-indigo-600 text-white font-bold' : 'text-slate-600 hover:bg-slate-50'
+                    }`}
                 >
                   {h}
                 </div>
@@ -96,9 +94,8 @@ const TimePicker = ({ value, ampmValue, onTimeChange, onAMPMChange, label, small
                 <div
                   key={m}
                   onClick={() => onTimeChange(`${hour}:${m}`)}
-                  className={`px-3 py-2 text-xs text-center cursor-pointer transition-colors ${
-                    minute === m ? 'bg-indigo-600 text-white font-bold' : 'text-slate-600 hover:bg-slate-50'
-                  }`}
+                  className={`px-3 py-2 text-xs text-center cursor-pointer transition-colors ${minute === m ? 'bg-indigo-600 text-white font-bold' : 'text-slate-600 hover:bg-slate-50'
+                    }`}
                 >
                   {m}
                 </div>
@@ -110,9 +107,8 @@ const TimePicker = ({ value, ampmValue, onTimeChange, onAMPMChange, label, small
                 <div
                   key={p}
                   onClick={() => onAMPMChange(p)}
-                  className={`px-3 py-2 text-xs text-center cursor-pointer transition-colors ${
-                    displayAMPM === p ? 'bg-indigo-600 text-white font-bold' : 'text-slate-600 hover:bg-slate-50'
-                  }`}
+                  className={`px-3 py-2 text-xs text-center cursor-pointer transition-colors ${displayAMPM === p ? 'bg-indigo-600 text-white font-bold' : 'text-slate-600 hover:bg-slate-50'
+                    }`}
                 >
                   {p}
                 </div>
@@ -154,7 +150,7 @@ const JobCard = () => {
     const totalScrap = (logs.qualityLogs || []).reduce((sum, log) => sum + parseFloat(log.scrap_qty || 0), 0);
     const hasPending = (logs.qualityLogs || []).some(log => log.status !== 'APPROVED');
     const isComplete = totalInspected >= totalProduced && totalProduced > 0;
-    
+
     return {
       totalProduced,
       totalInspected,
@@ -192,6 +188,7 @@ const JobCard = () => {
     operationName: '',
     plannedQty: 0,
     expectedReturnDate: '',
+    dispatchDate: new Date().toISOString().split('T')[0],
     dispatchQty: 0,
     dispatchNotes: '',
     materialItems: []
@@ -234,12 +231,12 @@ const JobCard = () => {
     if (!isoString) return '';
     const date = new Date(String(isoString).replace(' ', 'T'));
     if (isNaN(date.getTime())) return isoString;
-    
+
     let hours = date.getHours();
     const minutes = date.getMinutes().toString().padStart(2, '0');
     const ampm = hours >= 12 ? 'PM' : 'AM';
     hours = hours % 12 || 12;
-    
+
     return `${hours.toString().padStart(2, '0')}:${minutes} ${ampm}`;
   };
 
@@ -249,11 +246,11 @@ const JobCard = () => {
     const endTime = jc.end_time ? new Date(jc.end_time) : new Date();
     const actualTimeMinutes = (endTime - startTime) / (1000 * 60);
     if (actualTimeMinutes <= 0) return 0;
-    
+
     let stdTimeInMinutes = parseFloat(jc.std_time || 0);
     if (jc.time_uom === 'Hr') stdTimeInMinutes *= 60;
     else if (jc.time_uom === 'Sec') stdTimeInMinutes /= 60;
-    
+
     const totalStdTime = stdTimeInMinutes * parseFloat(jc.accepted_qty || 0);
     return Math.round((totalStdTime / actualTimeMinutes) * 100);
   };
@@ -263,7 +260,7 @@ const JobCard = () => {
     const start = new Date(startISO);
     const end = new Date(endISO);
     let diff = Math.round((end - start) / (1000 * 60));
-    if (diff <= 0) diff += 24 * 60; 
+    if (diff <= 0) diff += 24 * 60;
     return diff;
   };
 
@@ -324,12 +321,12 @@ const JobCard = () => {
     try {
       if (!start || !end || start.includes('NaN') || end.includes('NaN')) return 0;
       if (start === end && startAMPM === endAMPM) return 0;
-      
+
       const startMins = parseTimeToMinutes(start, startAMPM);
       const endMins = parseTimeToMinutes(end, endAMPM);
-      
+
       if (isNaN(startMins) || isNaN(endMins)) return 0;
-      
+
       let diff = endMins - startMins;
       if (diff < 0) diff += 24 * 60; // Handle overnight shift
       return diff;
@@ -340,7 +337,7 @@ const JobCard = () => {
 
   const consolidatedReport = useMemo(() => {
     if (!logs) return [];
-    
+
     const reportMap = {};
 
     // Process Time Logs
@@ -444,12 +441,12 @@ const JobCard = () => {
   const fetchInwardItems = async (jobCardId) => {
     try {
       const token = localStorage.getItem('authToken');
-      
+
       // 1. Fetch original outward items
       const response = await fetch(`${API_BASE}/outward-challans/job-card/${jobCardId}/items`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      
+
       // 2. Fetch existing quality logs to see if we already have a receipt
       const logsRes = await fetch(`${API_BASE}/job-cards/${jobCardId}/logs`, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -478,8 +475,8 @@ const JobCard = () => {
           };
         });
 
-        setInwardFormData(prev => ({ 
-          ...prev, 
+        setInwardFormData(prev => ({
+          ...prev,
           inwardItems: itemsWithRate,
           receivedDate: existingLog ? existingLog.check_date.split('T')[0] : prev.receivedDate,
           remarks: existingLog ? existingLog.rejection_reason : prev.remarks,
@@ -499,7 +496,7 @@ const JobCard = () => {
       const operation = operations.find(o => String(o.id) === String(formData.operationId));
       let netTime = parseFloat(formData.stdTime || operation?.net_time || operation?.std_time || 0);
       let timeUom = formData.stdTime > 0 ? formData.timeUom : (operation?.time_uom || 'Min');
-      
+
       // Convert to minutes if UOM is Hr or Sec
       if (timeUom === 'Hr') netTime *= 60;
       else if (timeUom === 'Sec') netTime /= 60;
@@ -507,19 +504,19 @@ const JobCard = () => {
       if (netTime > 0) {
         const start24 = to24h(formData.startTime, formData.startAMPM);
         const start = new Date(`${formData.startDate}T${start24}:00`);
-        
+
         if (!isNaN(start.getTime())) {
           const qty = parseFloat(formData.producedQty || 0) > 0 ? parseFloat(formData.producedQty) : parseFloat(formData.plannedQty || 0);
           const totalMins = Math.round(netTime * qty);
           const end = new Date(start.getTime() + totalMins * 60000);
-          
+
           const endDate = end.getFullYear() + '-' + (end.getMonth() + 1).toString().padStart(2, '0') + '-' + end.getDate().toString().padStart(2, '0');
           const end24 = end.getHours().toString().padStart(2, '0') + ':' + end.getMinutes().toString().padStart(2, '0');
           const { time: endTime, ampm: endAMPM } = to12h(end24);
-          
+
           if (formData.endDate !== endDate || formData.endTime !== endTime || formData.endAMPM !== endAMPM) {
-            setFormData(prev => ({ 
-              ...prev, 
+            setFormData(prev => ({
+              ...prev,
               endDate,
               endTime,
               endAMPM
@@ -539,7 +536,7 @@ const JobCard = () => {
       if (response.ok) {
         const data = await response.json();
         setJobCards(data);
-        
+
         const filterWO = searchParams.get('filter_work_order');
         if (filterWO) {
           const targetJC = data.find(jc => jc.wo_number === filterWO);
@@ -672,9 +669,9 @@ const JobCard = () => {
   };
 
   const combinedItems = useMemo(() => {
-    const itemOptions = items.map(i => ({ 
-      value: i.item_code, 
-      label: i.item_code, 
+    const itemOptions = items.map(i => ({
+      value: i.item_code,
+      label: i.item_code,
       itemName: i.material_name || i.item_description,
       type: 'Stock'
     }));
@@ -715,11 +712,11 @@ const JobCard = () => {
     // Show Job Cards for Finished Goods (FG) and Sub-Assemblies (SA)
     const allowedSourceTypes = ['FG', 'SA', 'SFG', 'Sub Assembly', 'Finished Goods'];
     const filteredBySource = jobCards.filter(jc => allowedSourceTypes.includes(jc.source_type));
-    
+
     let result = filteredBySource;
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
-      result = filteredBySource.filter(jc => 
+      result = filteredBySource.filter(jc =>
         jc.job_card_no?.toLowerCase().includes(query) ||
         jc.wo_number?.toLowerCase().includes(query) ||
         jc.operation_name?.toLowerCase().includes(query) ||
@@ -745,8 +742,8 @@ const JobCard = () => {
     // 1. Initialize from Work Orders to show headers even with 0 JCs
     workOrders.forEach(wo => {
       if (!allowedSourceTypes.includes(wo.source_type)) return;
-      
-      const matchesSearch = !searchQuery || 
+
+      const matchesSearch = !searchQuery ||
         wo.wo_number?.toLowerCase().includes(query) ||
         wo.item_name?.toLowerCase().includes(query);
 
@@ -802,8 +799,8 @@ const JobCard = () => {
     const inProduction = filteredBySource.filter(jc => jc.status === 'IN_PROGRESS').length;
     const completed = filteredBySource.filter(jc => jc.status === 'COMPLETED').length;
     const activeWOs = new Set(filteredBySource.filter(jc => jc.status !== 'COMPLETED').map(jc => jc.work_order_id)).size;
-    const totalEfficiency = filteredBySource.length > 0 
-      ? Math.round(filteredBySource.reduce((acc, jc) => acc + calculateEfficiency(jc), 0) / filteredBySource.length) 
+    const totalEfficiency = filteredBySource.length > 0
+      ? Math.round(filteredBySource.reduce((acc, jc) => acc + calculateEfficiency(jc), 0) / filteredBySource.length)
       : 0;
 
     return [
@@ -923,16 +920,16 @@ const JobCard = () => {
 
   const sendToQuality = async () => {
     if (!selectedJC) return;
-    
+
     // Use form produced quantity if set, otherwise use total produced quantity of the job card, 
     // or calculate from time logs if total is 0
     const formProducedQty = parseFloat(timeLogForm.producedQty || 0);
     let totalProducedQty = parseFloat(selectedJC.produced_qty || 0);
-    
+
     if (totalProducedQty === 0 && logs.timeLogs.length > 0) {
       totalProducedQty = logs.timeLogs.reduce((sum, log) => sum + parseFloat(log.produced_qty || 0), 0);
     }
-    
+
     const producedQtyToSend = formProducedQty > 0 ? formProducedQty : totalProducedQty;
 
     if (producedQtyToSend <= 0) {
@@ -954,9 +951,9 @@ const JobCard = () => {
 
       const response = await fetch(`${API_BASE}/quality-queue`, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}` 
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify(payload)
       });
@@ -997,12 +994,12 @@ const JobCard = () => {
 
         let stdTime = parseFloat(selectedJC.std_time || 0);
         const uom = (selectedJC.time_uom || 'min').toLowerCase();
-        
+
         if (uom === 'hr' || uom === 'hour' || uom === 'hours') stdTime *= 60;
         else if (uom === 'sec' || uom === 'second' || uom === 'seconds') stdTime /= 60;
 
         const totalMinsToAdd = Math.round(stdTime * qty);
-        
+
         let [hours, minutes] = timeLogForm.startTime.split(':').map(Number);
         let ampm = timeLogForm.startAMPM;
 
@@ -1042,12 +1039,12 @@ const JobCard = () => {
 
         let stdTime = parseFloat(selectedJC.std_time || 0);
         const uom = (selectedJC.time_uom || 'min').toLowerCase();
-        
+
         if (uom === 'hr' || uom === 'hour' || uom === 'hours') stdTime *= 60;
         else if (uom === 'sec' || uom === 'second' || uom === 'seconds') stdTime /= 60;
 
         const totalMinsToAdd = Math.round(stdTime * qty);
-        
+
         let [hours, minutes] = editTimeLogForm.startTime.split(':').map(Number);
         let ampm = editTimeLogForm.startAMPM;
 
@@ -1101,7 +1098,7 @@ const JobCard = () => {
 
   const handleDateChange = (type, val) => {
     if (!selectedJC) return;
-    
+
     let diffDays = 1;
     if (selectedJC.actual_start_date) {
       const startDate = new Date(selectedJC.actual_start_date);
@@ -1130,17 +1127,17 @@ const JobCard = () => {
     if (!startTime) return '--:--';
 
     try {
-      const start = new Date(startTime);
+      const start = new Date(String(startTime).replace(' ', 'T'));
+      if (isNaN(start.getTime())) return '--:--';
+
       let stdTimeInMinutes = parseFloat(jc.std_time || 0);
       if (jc.time_uom === 'Hr') stdTimeInMinutes *= 60;
       else if (jc.time_uom === 'Sec') stdTimeInMinutes /= 60;
-      
+
       const totalPlannedTime = stdTimeInMinutes * parseFloat(jc.planned_qty || 0);
       const estimatedEnd = new Date(start.getTime() + totalPlannedTime * 60000);
-      
-      const hours = estimatedEnd.getHours().toString().padStart(2, '0');
-      const minutes = estimatedEnd.getMinutes().toString().padStart(2, '0');
-      return `${hours}:${minutes}`;
+
+      return formatLocalTime(estimatedEnd.toISOString());
     } catch (e) {
       return '--:--';
     }
@@ -1159,10 +1156,10 @@ const JobCard = () => {
 
     // find all in-progress jobs on same machine, sorted by start time (log time first)
     const inProgressJobs = allJobs
-      .filter(j => 
-        j.workstation_id === jc.workstation_id && 
-        j.status === "IN_PROGRESS" && 
-        j.operator_name && 
+      .filter(j =>
+        j.workstation_id === jc.workstation_id &&
+        j.status === "IN_PROGRESS" &&
+        j.operator_name &&
         (j.latest_log_start_time || j.start_time)
       )
       .sort((a, b) => {
@@ -1175,9 +1172,9 @@ const JobCard = () => {
 
     // ✅ Current is the primary running job
     if (primaryJob && primaryJob.id === jc.id) {
-      return { 
-        status: "RUNNING", 
-        startTime: jc.latest_log_start_time || jc.start_time 
+      return {
+        status: "RUNNING",
+        startTime: jc.latest_log_start_time || jc.start_time
       };
     }
 
@@ -1200,12 +1197,12 @@ const JobCard = () => {
 
   const handleUpdateStatus = async (jc, status) => {
     if (status === 'IN_PROGRESS' && jc.workstation_id) {
-      const busyJob = jobCards.find(other => 
-        other.id !== jc.id && 
-        other.workstation_id === jc.workstation_id && 
+      const busyJob = jobCards.find(other =>
+        other.id !== jc.id &&
+        other.workstation_id === jc.workstation_id &&
         other.status === 'IN_PROGRESS'
       );
-      
+
       if (busyJob) {
         Swal.fire({
           title: 'Machine Busy',
@@ -1217,10 +1214,29 @@ const JobCard = () => {
       }
     }
 
+    if (status === 'IN_PROGRESS' && jc.assigned_to) {
+      const busyOpJob = jobCards.find(other =>
+        other.id !== jc.id &&
+        other.assigned_to === jc.assigned_to &&
+        other.status === 'IN_PROGRESS'
+      );
+
+      if (busyOpJob) {
+        const busyOp = users.find(u => u.id === jc.assigned_to);
+        Swal.fire({
+          title: 'Operator Not Available',
+          text: `Operator "${busyOp?.username || 'Assigned Operator'}" is already busy with Job Card ${busyOpJob.job_card_no}.`,
+          icon: 'warning',
+          confirmButtonColor: '#4f46e5'
+        });
+        return;
+      }
+    }
+
     try {
       const token = localStorage.getItem('authToken');
       const payload = { status };
-      
+
       if (status === 'IN_PROGRESS') {
         payload.startTime = new Date().toISOString().slice(0, 19).replace('T', ' ');
         // If the job card already has an assignee or workstation, include them
@@ -1262,7 +1278,7 @@ const JobCard = () => {
       rejectedQty: 0,
       remarks: jc.remarks || ''
     });
-    
+
     // Pre-fill forms
     const today = new Date().toISOString().split('T')[0];
     let diffDays = 1;
@@ -1276,11 +1292,11 @@ const JobCard = () => {
       diffDays = 1;
     }
 
-    setTimeLogForm(prev => ({ 
-      ...prev, 
+    setTimeLogForm(prev => ({
+      ...prev,
       logDate: today,
       day: diffDays,
-      operatorId: jc.assigned_to || '', 
+      operatorId: jc.assigned_to || '',
       workstationId: jc.workstation_id || '',
       producedQty: 0,
       startTime: '',
@@ -1290,7 +1306,7 @@ const JobCard = () => {
     }));
     setQualityLogForm(prev => ({ ...prev, checkDate: today, day: diffDays, shift: 'SHIFT_A', inspectedQty: 0, acceptedQty: 0, rejectedQty: 0, scrapQty: 0 }));
     setDowntimeLogForm(prev => ({ ...prev, downtimeDate: today, day: diffDays, shift: 'SHIFT_A', startTime: '', startAMPM: '', endTime: '', endAMPM: '', downtimeType: '', remarks: '' }));
-    
+
     // Set machine status based on current job state
     const mState = getMachineState(jc, jobCards);
     if (mState.status === "RUNNING" || mState.status === "BUSY") {
@@ -1305,7 +1321,7 @@ const JobCard = () => {
     const woJCs = jobCards
       .filter(j => j.work_order_id === jc.work_order_id)
       .sort((a, b) => a.id - b.id);
-    
+
     const currentIndex = woJCs.findIndex(j => j.id === jc.id);
     const nextJC = currentIndex !== -1 ? woJCs[currentIndex + 1] : null;
 
@@ -1325,7 +1341,7 @@ const JobCard = () => {
   const handleEditTimeLog = (log) => {
     const startStr = formatLocalTime(log.start_time);
     const endStr = formatLocalTime(log.end_time);
-    
+
     const [startTime, startAMPM] = startStr.split(' ');
     const [endTime, endAMPM] = endStr.split(' ');
 
@@ -1373,7 +1389,7 @@ const JobCard = () => {
       status: log.status
     });
   };
-  
+
   const handleEditReport = (row) => {
     const key = `${row.date}_${row.shift}`;
     setEditingReportKey(key);
@@ -1446,7 +1462,7 @@ const JobCard = () => {
 
   const handleWorkstationChange = (wsId) => {
     setTimeLogForm(prev => ({ ...prev, workstationId: wsId }));
-    
+
     // Also update machine status for the new workstation
     const mState = getMachineState({ ...selectedJC, workstation_id: wsId }, jobCards);
     if (mState.status === "RUNNING" || mState.status === "BUSY") {
@@ -1464,7 +1480,7 @@ const JobCard = () => {
 
   const renderProductionEntry = () => {
     if (!selectedJC) return null;
-    
+
     const balanceWip = parseFloat(selectedJC.planned_qty || 0) - parseFloat(selectedJC.accepted_qty || 0);
 
     const totalStdMins = (() => {
@@ -1557,16 +1573,14 @@ const JobCard = () => {
               <div className="text-right border-l border-slate-100 pl-8 min-w-[120px]">
                 <p className="text-xs  text-slate-400   mb-1">Current Status</p>
                 <div className="flex items-center justify-end gap-1.5">
-                  <span className={`w-2 h-2 rounded-full animate-pulse shrink-0 ${
-                    selectedJC.status === 'IN_PROGRESS' ? 'bg-amber-500' :
-                    selectedJC.status === 'COMPLETED' ? 'bg-emerald-500' :
-                    'bg-slate-400'
-                  }`}></span>
-                  <p className={`text-sm font-bold tracking-tight ${
-                    selectedJC.status === 'IN_PROGRESS' ? 'text-amber-600' :
-                    selectedJC.status === 'COMPLETED' ? 'text-emerald-600' :
-                    'text-slate-600'
-                  }`}>
+                  <span className={`w-2 h-2 rounded-full animate-pulse shrink-0 ${selectedJC.status === 'IN_PROGRESS' ? 'bg-amber-500' :
+                      selectedJC.status === 'COMPLETED' ? 'bg-emerald-500' :
+                        'bg-slate-400'
+                    }`}></span>
+                  <p className={`text-sm font-bold tracking-tight ${selectedJC.status === 'IN_PROGRESS' ? 'text-amber-600' :
+                      selectedJC.status === 'COMPLETED' ? 'text-emerald-600' :
+                        'text-slate-600'
+                    }`}>
                     {selectedJC.status === 'IN_PROGRESS' ? 'Running' : selectedJC.status === 'COMPLETED' ? 'Completed' : selectedJC.status}
                   </p>
                 </div>
@@ -1640,23 +1654,42 @@ const JobCard = () => {
                 <div className="grid grid-cols-1 md:grid-cols-6 gap-2 mb-6">
                   <FormControl label="Day & Date" required>
                     <div className="flex items-center gap-1">
-                      <input 
-                        type="number" 
-                        value={timeLogForm.day} 
-                        onChange={e => setTimeLogForm({...timeLogForm, day: e.target.value})} 
-                        className="w-14 px-2 py-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-indigo-500 " 
+                      <input
+                        type="number"
+                        value={timeLogForm.day}
+                        onChange={e => setTimeLogForm({ ...timeLogForm, day: e.target.value })}
+                        className="w-14 px-2 py-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-indigo-500 "
                       />
-                      <input 
-                        type="date" 
-                        value={timeLogForm.logDate} 
-                        onChange={e => handleDateChange('time', e.target.value)} 
-                        className="flex-1 p-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-indigo-500" 
+                      <input
+                        type="date"
+                        value={timeLogForm.logDate}
+                        onChange={e => handleDateChange('time', e.target.value)}
+                        className="flex-1 p-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-indigo-500"
                       />
                     </div>
                   </FormControl>
                   <FormControl label="Operator" required>
                     <SearchableSelect
-                      options={users.map(u => ({ value: u.id, label: u.username }))}
+                      options={users.map(u => {
+                        const busyJob = jobCards.find(jc =>
+                          jc.id !== selectedJC?.id &&
+                          jc.assigned_to === u.id &&
+                          jc.status === 'IN_PROGRESS'
+                        );
+
+                        const busyRange = busyJob
+                          ? `${formatLocalTime(busyJob.latest_log_start_time || busyJob.start_time)} – ${getEstimatedEndTime(busyJob)}`
+                          : '';
+
+                        return {
+                          value: u.id,
+                          label: u.username,
+                          subLabel: busyJob
+                            ? `🔴 Busy (${busyRange})`
+                            : '🟢 Available',
+                        };
+                      })}
+                      subLabelField="subLabel"
                       value={timeLogForm.operatorId}
                       onChange={(e) => setTimeLogForm({ ...timeLogForm, operatorId: e.target.value })}
                       placeholder="Select Operator..."
@@ -1665,16 +1698,16 @@ const JobCard = () => {
                   <FormControl label="Workstation" required>
                     <SearchableSelect
                       options={workstations.map(w => {
-                        const busyJob = jobCards.find(jc => 
-                          jc.id !== selectedJC?.id && 
-                          jc.workstation_id === w.id && 
+                        const busyJob = jobCards.find(jc =>
+                          jc.id !== selectedJC?.id &&
+                          jc.workstation_id === w.id &&
                           jc.status === 'IN_PROGRESS'
                         );
-                        
-                        return { 
-                          value: w.id, 
+
+                        return {
+                          value: w.id,
                           label: w.workstation_name,
-                          subLabel: busyJob 
+                          subLabel: busyJob
                             ? `Busy till ${getEstimatedEndTime(busyJob)} by ${busyJob.job_card_no}`
                             : 'Available',
                         };
@@ -1687,7 +1720,7 @@ const JobCard = () => {
                   </FormControl>
                   <FormControl label="Shift" required>
                     <div className="flex items-center gap-1">
-                      <select value={timeLogForm.shift} onChange={e => setTimeLogForm({...timeLogForm, shift: e.target.value})} className="flex-1 p-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-indigo-500 appearance-none">
+                      <select value={timeLogForm.shift} onChange={e => setTimeLogForm({ ...timeLogForm, shift: e.target.value })} className="flex-1 p-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-indigo-500 appearance-none">
                         <option value="SHIFT_A">A</option>
                         <option value="SHIFT_B">B</option>
                         <option value="SHIFT_C">C</option>
@@ -1699,7 +1732,7 @@ const JobCard = () => {
                   </FormControl>
                   <FormControl label="Produce Qty" required>
                     <div className="relative">
-                      <input type="number" value={timeLogForm.producedQty} onChange={e => setTimeLogForm({...timeLogForm, producedQty: e.target.value})} className="w-full p-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-indigo-500" />
+                      <input type="number" value={timeLogForm.producedQty} onChange={e => setTimeLogForm({ ...timeLogForm, producedQty: e.target.value })} className="w-full p-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-indigo-500" />
                       <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs  text-slate-400 ">Units</span>
                     </div>
                   </FormControl>
@@ -1710,7 +1743,7 @@ const JobCard = () => {
                     <FormControl label="Production Period" required>
                       <div className="flex items-center gap-2">
                         <div className="flex-1">
-                          <TimePicker 
+                          <TimePicker
                             value={timeLogForm.startTime}
                             ampmValue={timeLogForm.startAMPM}
                             placeholder="08:00"
@@ -1721,7 +1754,7 @@ const JobCard = () => {
                         </div>
                         <ChevronRight className="w-3 h-3 text-slate-300" />
                         <div className="flex-1">
-                          <TimePicker 
+                          <TimePicker
                             value={timeLogForm.endTime}
                             ampmValue={timeLogForm.endAMPM}
                             placeholder="04:00"
@@ -1733,47 +1766,44 @@ const JobCard = () => {
                       </div>
                     </FormControl>
                     <FormControl label="Total Mins" required>
-                      <input 
-                        type="text" 
+                      <input
+                        type="text"
                         placeholder="480"
-                        value={calculateTotalMins(timeLogForm.startTime, timeLogForm.startAMPM, timeLogForm.endTime, timeLogForm.endAMPM) || ''} 
-                        readOnly 
-                        className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs outline-none  text-slate-600" 
+                        value={calculateTotalMins(timeLogForm.startTime, timeLogForm.startAMPM, timeLogForm.endTime, timeLogForm.endAMPM) || ''}
+                        readOnly
+                        className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs outline-none  text-slate-600"
                       />
                     </FormControl>
                   </div>
                   <div className="flex items-center gap-2">
-                    <button 
+                    <button
                       onClick={handleStartMachine}
-                      className={`p-2.5 rounded transition-all text-xs flex items-center gap-2 h-[38px] ${
-                        machineStatus === 'RUNNING' ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-600 hover:bg-rose-50 hover:text-rose-600'
-                      }`}
+                      className={`p-2.5 rounded transition-all text-xs flex items-center gap-2 h-[38px] ${machineStatus === 'RUNNING' ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-600 hover:bg-rose-50 hover:text-rose-600'
+                        }`}
                       title="Start Machine"
                     >
                       <Play className="w-4 h-4 fill-current" />
                       Start
                     </button>
-                    <button 
+                    <button
                       onClick={() => setMachineStatus("STOPPED")}
-                      className={`p-2.5 rounded transition-all text-xs flex items-center gap-2 h-[38px] ${
-                        machineStatus === 'STOPPED' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600 hover:bg-amber-50 hover:text-amber-600'
-                      }`}
+                      className={`p-2.5 rounded transition-all text-xs flex items-center gap-2 h-[38px] ${machineStatus === 'STOPPED' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600 hover:bg-amber-50 hover:text-amber-600'
+                        }`}
                       title="Stop Machine"
                     >
                       <Pause className="w-4 h-4 fill-current" />
                       Stop
                     </button>
-                    <button 
+                    <button
                       onClick={() => setMachineStatus("AVAILABLE")}
-                      className={`p-2.5 rounded transition-all text-xs flex items-center gap-2 h-[38px] ${
-                        machineStatus === 'AVAILABLE' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600 hover:bg-emerald-50 hover:text-emerald-600'
-                      }`}
+                      className={`p-2.5 rounded transition-all text-xs flex items-center gap-2 h-[38px] ${machineStatus === 'AVAILABLE' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600 hover:bg-emerald-50 hover:text-emerald-600'
+                        }`}
                       title="Complete Production"
                     >
                       <Check className="w-4 h-4" />
                       Complete
                     </button>
-                    <button 
+                    <button
                       onClick={() => addTimeLog(timeLogForm)}
                       className="px-10 py-2.5 bg-indigo-600 text-white rounded  hover:bg-indigo-700 transition-all text-xs    shadow-lg shadow-indigo-100 flex items-center gap-2 h-[38px]"
                     >
@@ -1809,24 +1839,24 @@ const JobCard = () => {
                             return (
                               <tr key={log.id} className="bg-indigo-50/30">
                                 <td className="p-2">
-                                  <input 
-                                    type="number" 
-                                    value={editTimeLogForm.day} 
-                                    className="w-12 px-1 py-1 border rounded text-xs" 
-                                    onChange={e => setEditTimeLogForm({...editTimeLogForm, day: e.target.value})}
+                                  <input
+                                    type="number"
+                                    value={editTimeLogForm.day}
+                                    className="w-12 px-1 py-1 border rounded text-xs"
+                                    onChange={e => setEditTimeLogForm({ ...editTimeLogForm, day: e.target.value })}
                                   />
                                 </td>
                                 <td className="p-2">
-                                  <input 
-                                    type="date" 
-                                    value={editTimeLogForm.logDate} 
-                                    className="block w-full px-1 py-1 border rounded text-xs mb-1" 
-                                    onChange={e => setEditTimeLogForm({...editTimeLogForm, logDate: e.target.value})}
+                                  <input
+                                    type="date"
+                                    value={editTimeLogForm.logDate}
+                                    className="block w-full px-1 py-1 border rounded text-xs mb-1"
+                                    onChange={e => setEditTimeLogForm({ ...editTimeLogForm, logDate: e.target.value })}
                                   />
-                                  <select 
-                                    value={editTimeLogForm.shift} 
+                                  <select
+                                    value={editTimeLogForm.shift}
                                     className="w-full px-1 py-1 border rounded text-xs"
-                                    onChange={e => setEditTimeLogForm({...editTimeLogForm, shift: e.target.value})}
+                                    onChange={e => setEditTimeLogForm({ ...editTimeLogForm, shift: e.target.value })}
                                   >
                                     <option value="SHIFT_A">A</option>
                                     <option value="SHIFT_B">B</option>
@@ -1834,10 +1864,10 @@ const JobCard = () => {
                                   </select>
                                 </td>
                                 <td className="p-2">
-                                  <select 
-                                    value={editTimeLogForm.operatorId} 
+                                  <select
+                                    value={editTimeLogForm.operatorId}
                                     className="w-full px-1 py-1 border rounded text-xs"
-                                    onChange={e => setEditTimeLogForm({...editTimeLogForm, operatorId: e.target.value})}
+                                    onChange={e => setEditTimeLogForm({ ...editTimeLogForm, operatorId: e.target.value })}
                                   >
                                     {users.map(u => <option key={u.id} value={u.id}>{u.username}</option>)}
                                   </select>
@@ -1845,7 +1875,7 @@ const JobCard = () => {
                                 <td className="p-2">
                                   <div className="flex items-center gap-1 justify-center min-w-[200px]">
                                     <div className="flex-1">
-                                      <TimePicker 
+                                      <TimePicker
                                         small
                                         value={editTimeLogForm.startTime}
                                         ampmValue={editTimeLogForm.startAMPM}
@@ -1855,7 +1885,7 @@ const JobCard = () => {
                                     </div>
                                     <ChevronRight className="w-3 h-3 text-slate-300 mx-0.5" />
                                     <div className="flex-1">
-                                      <TimePicker 
+                                      <TimePicker
                                         small
                                         value={editTimeLogForm.endTime}
                                         ampmValue={editTimeLogForm.endAMPM}
@@ -1869,11 +1899,11 @@ const JobCard = () => {
                                   </div>
                                 </td>
                                 <td className="p-2">
-                                  <input 
-                                    type="number" 
-                                    value={editTimeLogForm.producedQty} 
-                                    className="w-full px-1 py-1 border rounded text-xs text-right " 
-                                    onChange={e => setEditTimeLogForm({...editTimeLogForm, producedQty: e.target.value})}
+                                  <input
+                                    type="number"
+                                    value={editTimeLogForm.producedQty}
+                                    className="w-full px-1 py-1 border rounded text-xs text-right "
+                                    onChange={e => setEditTimeLogForm({ ...editTimeLogForm, producedQty: e.target.value })}
                                   />
                                 </td>
                                 <td className="p-2 text-right">
@@ -1957,14 +1987,14 @@ const JobCard = () => {
                 </div>
                 <h2 className="text-sm text-slate-800">Quality & Rejection Entry</h2>
               </div>
-              
+
               <div className="flex items-center gap-4">
                 {qcSuccessMessage && (
                   <span className="text-emerald-600 text-xs font-medium animate-pulse">
                     ✅ {qcSuccessMessage}
                   </span>
                 )}
-                <button 
+                <button
                   onClick={sendToQuality}
                   className="px-6 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 transition-all text-xs shadow-lg shadow-emerald-100 flex items-center gap-2"
                 >
@@ -1992,172 +2022,169 @@ const JobCard = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
-                      {logs.qualityLogs.length === 0 ? (
-                        <tr>
-                          <td colSpan="6" className="py-12 text-center text-slate-400 italic">No data available</td>
+                  {logs.qualityLogs.length === 0 ? (
+                    <tr>
+                      <td colSpan="6" className="py-12 text-center text-slate-400 italic">No data available</td>
+                    </tr>
+                  ) : (
+                    logs.qualityLogs.map((log, index) => {
+                      const isEditing = editingQualityLogId === log.id;
+                      const day = log.day || '-';
+
+                      if (isEditing) {
+                        return (
+                          <tr key={log.id} className="bg-emerald-50/30">
+                            <td className="p-2">
+                              <input
+                                type="number"
+                                value={editQualityLogForm.day}
+                                className="w-12 px-1 py-1 border rounded text-xs"
+                                onChange={e => setEditQualityLogForm({ ...editQualityLogForm, day: e.target.value })}
+                              />
+                            </td>
+                            <td className="p-2">
+                              <input
+                                type="date"
+                                value={editQualityLogForm.checkDate}
+                                className="block w-full px-1 py-1 border rounded text-xs mb-1"
+                                onChange={e => setEditQualityLogForm({ ...editQualityLogForm, checkDate: e.target.value })}
+                              />
+                              <select
+                                value={editQualityLogForm.shift}
+                                className="w-full px-1 py-1 border rounded text-xs"
+                                onChange={e => setEditQualityLogForm({ ...editQualityLogForm, shift: e.target.value })}
+                              >
+                                <option value="SHIFT_A">A</option>
+                                <option value="SHIFT_B">B</option>
+                                <option value="SHIFT_C">C</option>
+                              </select>
+                            </td>
+                            <td className="p-2" colSpan="2">
+                              <input
+                                type="text"
+                                placeholder="Notes..."
+                                value={editQualityLogForm.notes || ''}
+                                className="w-full px-1 py-1 border rounded text-xs"
+                                onChange={e => setEditQualityLogForm({ ...editQualityLogForm, notes: e.target.value })}
+                              />
+                            </td>
+                            <td className="p-2">
+                              <input
+                                type="number"
+                                value={editQualityLogForm.acceptedQty}
+                                className="w-full px-1 py-1 border rounded text-xs text-emerald-600  text-center"
+                                onChange={e => setEditQualityLogForm({ ...editQualityLogForm, acceptedQty: e.target.value })}
+                              />
+                            </td>
+                            <td className="p-2">
+                              <input
+                                type="number"
+                                value={editQualityLogForm.rejectedQty}
+                                className="w-full px-1 py-1 border rounded text-xs text-rose-600  text-center"
+                                onChange={e => setEditQualityLogForm({ ...editQualityLogForm, rejectedQty: e.target.value })}
+                              />
+                            </td>
+                            <td className="p-2">
+                              <input
+                                type="number"
+                                value={editQualityLogForm.scrapQty}
+                                className="w-full px-1 py-1 border rounded text-xs text-slate-600  text-center"
+                                onChange={e => setEditQualityLogForm({ ...editQualityLogForm, scrapQty: e.target.value })}
+                              />
+                            </td>
+                            <td className="p-2 text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <button onClick={() => updateQualityLog(log.id, editQualityLogForm)} className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded transition-colors"><Save className="w-4 h-4" /></button>
+                                <button onClick={() => setEditingQualityLogId(null)} className="p-1.5 text-rose-600 hover:bg-rose-50 rounded transition-colors"><X className="w-4 h-4" /></button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      }
+
+                      return (
+                        <tr key={log.id} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="p-2">
+                            <span className="w-7 h-7 bg-slate-100 rounded flex items-center justify-center text-xs  text-slate-500">
+                              {day}
+                            </span>
+                          </td>
+                          <td className="p-2">
+                            <div className=" text-slate-700">{formatDisplayDate(log.check_date)}</div>
+                            <div className="text-xs text-slate-400   ">{log.shift}</div>
+                          </td>
+                          <td className="p-2">
+                            <div className={`inline-flex items-center px-2 py-0.5 rounded text-xs  border ${log.status?.trim() === 'APPROVED'
+                                ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                                : 'bg-amber-50 text-amber-600 border-amber-100'
+                              }`}>
+                              <Clock className="w-2.5 h-2.5 mr-1" />
+                              {log.status?.trim() === 'APPROVED' ? 'APPROVED' : 'Pending Approval'}
+                            </div>
+                          </td>
+                          <td className="p-2">
+                            <div className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs  border ${(log.rejected_qty > 0 || log.scrap_qty > 0)
+                                ? 'bg-rose-50 text-rose-600 border-rose-100'
+                                : 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                              }`}>
+                              <span className="mr-1 opacity-60">
+                                {(log.rejected_qty > 0 || log.scrap_qty > 0) ? 'Rejected' : 'Passed'}
+                              </span>
+                              {log.rejection_reason || log.notes || 'No notes'}
+                            </div>
+                          </td>
+                          <td className="p-2 text-center font-medium text-slate-600">
+                            {parseFloat(log.inspected_qty || 0).toLocaleString()}
+                          </td>
+                          <td className="p-2 text-center font-bold text-emerald-600">
+                            {parseFloat(log.accepted_qty || 0).toLocaleString()}
+                          </td>
+                          <td className="p-2 text-center  text-rose-600">
+                            {parseFloat(log.rejected_qty || 0).toLocaleString()}
+                          </td>
+                          <td className="p-2 text-center  text-slate-600">
+                            {parseFloat(log.scrap_qty || 0).toLocaleString()}
+                          </td>
+                          <td className="p-2 text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <button onClick={() => setViewingQualityLog(log)} className="p-1.5 text-slate-400 hover:text-indigo-600 transition-colors" title="View"><Eye className="w-3.5 h-3.5" /></button>
+
+                              <button
+                                onClick={() => updateQualityLog(log.id, { status: 'APPROVED' })}
+                                disabled={log.status?.trim() === 'APPROVED'}
+                                className={`p-1.5 rounded transition-colors ${log.status?.trim() === 'APPROVED' ? 'text-emerald-500 cursor-default' : 'text-slate-400 hover:text-emerald-600'
+                                  }`}
+                                title={log.status?.trim() === 'APPROVED' ? 'APPROVED' : 'Verify'}
+                              >
+                                <ShieldCheck className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
                         </tr>
-                      ) : (
-                        logs.qualityLogs.map((log, index) => {
-                          const isEditing = editingQualityLogId === log.id;
-                          const day = log.day || '-';
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
 
-                          if (isEditing) {
-                            return (
-                              <tr key={log.id} className="bg-emerald-50/30">
-                                <td className="p-2">
-                                  <input 
-                                    type="number" 
-                                    value={editQualityLogForm.day} 
-                                    className="w-12 px-1 py-1 border rounded text-xs" 
-                                    onChange={e => setEditQualityLogForm({...editQualityLogForm, day: e.target.value})}
-                                  />
-                                </td>
-                                <td className="p-2">
-                                  <input 
-                                    type="date" 
-                                    value={editQualityLogForm.checkDate} 
-                                    className="block w-full px-1 py-1 border rounded text-xs mb-1" 
-                                    onChange={e => setEditQualityLogForm({...editQualityLogForm, checkDate: e.target.value})}
-                                  />
-                                  <select 
-                                    value={editQualityLogForm.shift} 
-                                    className="w-full px-1 py-1 border rounded text-xs"
-                                    onChange={e => setEditQualityLogForm({...editQualityLogForm, shift: e.target.value})}
-                                  >
-                                    <option value="SHIFT_A">A</option>
-                                    <option value="SHIFT_B">B</option>
-                                    <option value="SHIFT_C">C</option>
-                                  </select>
-                                </td>
-                                <td className="p-2" colSpan="2">
-                                  <input 
-                                    type="text" 
-                                    placeholder="Notes..."
-                                    value={editQualityLogForm.notes || ''} 
-                                    className="w-full px-1 py-1 border rounded text-xs" 
-                                    onChange={e => setEditQualityLogForm({...editQualityLogForm, notes: e.target.value})}
-                                  />
-                                </td>
-                                <td className="p-2">
-                                  <input 
-                                    type="number" 
-                                    value={editQualityLogForm.acceptedQty} 
-                                    className="w-full px-1 py-1 border rounded text-xs text-emerald-600  text-center" 
-                                    onChange={e => setEditQualityLogForm({...editQualityLogForm, acceptedQty: e.target.value})}
-                                  />
-                                </td>
-                                <td className="p-2">
-                                  <input 
-                                    type="number" 
-                                    value={editQualityLogForm.rejectedQty} 
-                                    className="w-full px-1 py-1 border rounded text-xs text-rose-600  text-center" 
-                                    onChange={e => setEditQualityLogForm({...editQualityLogForm, rejectedQty: e.target.value})}
-                                  />
-                                </td>
-                                <td className="p-2">
-                                  <input 
-                                    type="number" 
-                                    value={editQualityLogForm.scrapQty} 
-                                    className="w-full px-1 py-1 border rounded text-xs text-slate-600  text-center" 
-                                    onChange={e => setEditQualityLogForm({...editQualityLogForm, scrapQty: e.target.value})}
-                                  />
-                                </td>
-                                <td className="p-2 text-right">
-                                  <div className="flex items-center justify-end gap-2">
-                                    <button onClick={() => updateQualityLog(log.id, editQualityLogForm)} className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded transition-colors"><Save className="w-4 h-4" /></button>
-                                    <button onClick={() => setEditingQualityLogId(null)} className="p-1.5 text-rose-600 hover:bg-rose-50 rounded transition-colors"><X className="w-4 h-4" /></button>
-                                  </div>
-                                </td>
-                              </tr>
-                            );
-                          }
-
-                          return (
-                            <tr key={log.id} className="hover:bg-slate-50/50 transition-colors">
-                              <td className="p-2">
-                                <span className="w-7 h-7 bg-slate-100 rounded flex items-center justify-center text-xs  text-slate-500">
-                                  {day}
-                                </span>
-                              </td>
-                              <td className="p-2">
-                                <div className=" text-slate-700">{formatDisplayDate(log.check_date)}</div>
-                                <div className="text-xs text-slate-400   ">{log.shift}</div>
-                              </td>
-                              <td className="p-2">
-                                <div className={`inline-flex items-center px-2 py-0.5 rounded text-xs  border ${
-                                  log.status?.trim() === 'APPROVED' 
-                                    ? 'bg-emerald-50 text-emerald-600 border-emerald-100' 
-                                    : 'bg-amber-50 text-amber-600 border-amber-100'
-                                }`}>
-                                  <Clock className="w-2.5 h-2.5 mr-1" />
-                                  {log.status?.trim() === 'APPROVED' ? 'APPROVED' : 'Pending Approval'}
-                                </div>
-                              </td>
-                              <td className="p-2">
-                                <div className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs  border ${
-                                  (log.rejected_qty > 0 || log.scrap_qty > 0)
-                                    ? 'bg-rose-50 text-rose-600 border-rose-100'
-                                    : 'bg-emerald-50 text-emerald-600 border-emerald-100'
-                                }`}>
-                                  <span className="mr-1 opacity-60">
-                                    {(log.rejected_qty > 0 || log.scrap_qty > 0) ? 'Rejected' : 'Passed'}
-                                  </span> 
-                                  {log.rejection_reason || log.notes || 'No notes'}
-                                </div>
-                              </td>
-                              <td className="p-2 text-center font-medium text-slate-600">
-                                {parseFloat(log.inspected_qty || 0).toLocaleString()}
-                              </td>
-                              <td className="p-2 text-center font-bold text-emerald-600">
-                                {parseFloat(log.accepted_qty || 0).toLocaleString()}
-                              </td>
-                              <td className="p-2 text-center  text-rose-600">
-                                {parseFloat(log.rejected_qty || 0).toLocaleString()}
-                              </td>
-                              <td className="p-2 text-center  text-slate-600">
-                                {parseFloat(log.scrap_qty || 0).toLocaleString()}
-                              </td>
-                              <td className="p-2 text-right">
-                                <div className="flex items-center justify-end gap-1">
-                                  <button onClick={() => setViewingQualityLog(log)} className="p-1.5 text-slate-400 hover:text-indigo-600 transition-colors" title="View"><Eye className="w-3.5 h-3.5" /></button>
-                                  
-                                  <button 
-                                    onClick={() => updateQualityLog(log.id, { status: 'APPROVED' })} 
-                                    disabled={log.status?.trim() === 'APPROVED'}
-                                    className={`p-1.5 rounded transition-colors ${
-                                      log.status?.trim() === 'APPROVED' ? 'text-emerald-500 cursor-default' : 'text-slate-400 hover:text-emerald-600'
-                                    }`}
-                                    title={log.status?.trim() === 'APPROVED' ? 'APPROVED' : 'Verify'}
-                                  >
-                                    <ShieldCheck className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })
-                      )}
-                    </tbody>
-                  </table>
+            <div className="mt-6 pt-6 border-t border-slate-50 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs  text-slate-400  ">
+                <span>Rows per page:</span>
+                <select className="bg-transparent outline-none cursor-pointer">
+                  <option>10</option>
+                </select>
+              </div>
+              <div className="flex items-center gap-6">
+                <span className="text-xs  text-slate-400  ">
+                  Page 1 of {Math.ceil(logs.qualityLogs.length / 10) || 0} <span className="text-slate-300 ml-1">({logs.qualityLogs.length} total)</span>
+                </span>
+                <div className="flex items-center gap-2">
+                  <button className="p-1 text-slate-300" disabled><ChevronLeft className="w-4 h-4" /></button>
+                  <button className="px-4 py-1 border border-slate-200 rounded text-xs  text-slate-600   hover:bg-slate-50 transition-colors">Next</button>
                 </div>
-
-                <div className="mt-6 pt-6 border-t border-slate-50 flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-xs  text-slate-400  ">
-                    <span>Rows per page:</span>
-                    <select className="bg-transparent outline-none cursor-pointer">
-                      <option>10</option>
-                    </select>
-                  </div>
-                  <div className="flex items-center gap-6">
-                    <span className="text-xs  text-slate-400  ">
-                      Page 1 of {Math.ceil(logs.qualityLogs.length / 10) || 0} <span className="text-slate-300 ml-1">({logs.qualityLogs.length} total)</span>
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <button className="p-1 text-slate-300" disabled><ChevronLeft className="w-4 h-4" /></button>
-                      <button className="px-4 py-1 border border-slate-200 rounded text-xs  text-slate-600   hover:bg-slate-50 transition-colors">Next</button>
-                    </div>
-                  </div>
-                </div>
+              </div>
+            </div>
           </section>
 
           {/* 3. Operational Downtime Section */}
@@ -2174,23 +2201,23 @@ const JobCard = () => {
                 <div className="grid grid-cols-1 md:grid-cols-6 gap-2 mb-6 border-b border-slate-50 pb-6">
                   <FormControl label="Day & Date" required>
                     <div className="flex items-center gap-1">
-                      <input 
-                        type="number" 
-                        value={downtimeLogForm.day} 
-                        onChange={e => setDowntimeLogForm({...downtimeLogForm, day: e.target.value})} 
-                        className="w-14 px-2 py-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-amber-500 " 
+                      <input
+                        type="number"
+                        value={downtimeLogForm.day}
+                        onChange={e => setDowntimeLogForm({ ...downtimeLogForm, day: e.target.value })}
+                        className="w-14 px-2 py-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-amber-500 "
                       />
-                      <input 
-                        type="date" 
-                        value={downtimeLogForm.downtimeDate} 
-                        onChange={e => handleDateChange('downtime', e.target.value)} 
-                        className="flex-1 p-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-amber-500" 
+                      <input
+                        type="date"
+                        value={downtimeLogForm.downtimeDate}
+                        onChange={e => handleDateChange('downtime', e.target.value)}
+                        className="flex-1 p-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-amber-500"
                       />
                     </div>
                   </FormControl>
                   <FormControl label="Shift" required>
                     <div className="flex items-center gap-1">
-                      <select value={downtimeLogForm.shift} onChange={e => setDowntimeLogForm({...downtimeLogForm, shift: e.target.value})} className="flex-1 p-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-amber-500 appearance-none">
+                      <select value={downtimeLogForm.shift} onChange={e => setDowntimeLogForm({ ...downtimeLogForm, shift: e.target.value })} className="flex-1 p-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-amber-500 appearance-none">
                         <option value="SHIFT_A">A</option>
                         <option value="SHIFT_B">B</option>
                         <option value="SHIFT_C">C</option>
@@ -2201,7 +2228,7 @@ const JobCard = () => {
                     </div>
                   </FormControl>
                   <FormControl label="Downtime Type" required>
-                    <select value={downtimeLogForm.downtimeType} onChange={e => setDowntimeLogForm({...downtimeLogForm, downtimeType: e.target.value})} className="w-full p-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-amber-500">
+                    <select value={downtimeLogForm.downtimeType} onChange={e => setDowntimeLogForm({ ...downtimeLogForm, downtimeType: e.target.value })} className="w-full p-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-amber-500">
                       <option value="">Select Type</option>
                       <option value="Planned Downtime">Planned Downtime</option>
                       <option value="Unplanned Downtime">Unplanned Downtime</option>
@@ -2209,7 +2236,7 @@ const JobCard = () => {
                     </select>
                   </FormControl>
                   <FormControl label="Start Time" required>
-                    <TimePicker 
+                    <TimePicker
                       value={downtimeLogForm.startTime}
                       ampmValue={downtimeLogForm.startAMPM}
                       placeholder="08:00"
@@ -2219,7 +2246,7 @@ const JobCard = () => {
                     />
                   </FormControl>
                   <FormControl label="End Time" required>
-                    <TimePicker 
+                    <TimePicker
                       value={downtimeLogForm.endTime}
                       ampmValue={downtimeLogForm.endAMPM}
                       placeholder="04:00"
@@ -2229,16 +2256,16 @@ const JobCard = () => {
                     />
                   </FormControl>
                   <FormControl label="Total Mins">
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       placeholder="480"
-                      readOnly 
-                      value={calculateTotalMins(downtimeLogForm.startTime, downtimeLogForm.startAMPM, downtimeLogForm.endTime, downtimeLogForm.endAMPM) || ''} 
-                      className="w-full p-2 bg-slate-50 border border-slate-100 rounded text-xs outline-none  text-slate-400" 
+                      readOnly
+                      value={calculateTotalMins(downtimeLogForm.startTime, downtimeLogForm.startAMPM, downtimeLogForm.endTime, downtimeLogForm.endAMPM) || ''}
+                      className="w-full p-2 bg-slate-50 border border-slate-100 rounded text-xs outline-none  text-slate-400"
                     />
                   </FormControl>
                 </div>
-                
+
                 <div className="flex items-center justify-between gap-6">
                   <div className="flex-1">
                     {logs.qualityLogs?.some(log => log.status?.trim() !== 'APPROVED') && (
@@ -2255,14 +2282,13 @@ const JobCard = () => {
                       </div>
                     )}
                   </div>
-                  <button 
+                  <button
                     onClick={() => addDowntimeLog(downtimeLogForm)}
                     disabled={logs.qualityLogs?.some(log => log.status?.trim() !== 'APPROVED')}
-                    className={`px-10 py-2.5 rounded  transition-all text-xs    shadow-lg flex items-center gap-2 h-[38px] ${
-                      logs.qualityLogs?.some(log => log.status?.trim() !== 'APPROVED')
+                    className={`px-10 py-2.5 rounded  transition-all text-xs    shadow-lg flex items-center gap-2 h-[38px] ${logs.qualityLogs?.some(log => log.status?.trim() !== 'APPROVED')
                         ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
                         : 'bg-orange-600 text-white hover:bg-orange-700 shadow-orange-100'
-                    }`}
+                      }`}
                   >
                     <Clock className="w-4 h-4" />
                     Record Downtime
@@ -2350,14 +2376,13 @@ const JobCard = () => {
                 <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded text-xs   border border-emerald-100">Active</span>
               </div>
               <div className="flex items-center gap-6">
-                <button 
+                <button
                   onClick={handleReadyForDispatch}
                   disabled={logs.qualityLogs.some(log => log.status !== 'APPROVED')}
-                  className={`flex items-center gap-2 p-1.5 border rounded  transition-all ${
-                    logs.qualityLogs.some(log => log.status !== 'APPROVED')
+                  className={`flex items-center gap-2 p-1.5 border rounded  transition-all ${logs.qualityLogs.some(log => log.status !== 'APPROVED')
                       ? 'bg-slate-50 border-slate-100 text-slate-300 cursor-not-allowed'
                       : 'bg-white border-emerald-100 text-emerald-600 shadow-sm hover:bg-emerald-50'
-                  }`}
+                    }`}
                   title={logs.qualityLogs.some(log => log.status !== 'APPROVED') ? 'Approve all quality records to proceed' : 'Mark Ready'}
                 >
                   <Zap className={`w-3.5 h-3.5 ${logs.qualityLogs.some(log => log.status !== 'APPROVED') ? 'text-slate-200' : 'text-emerald-500 animate-pulse'}`} />
@@ -2366,7 +2391,7 @@ const JobCard = () => {
                 <div className="text-right">
                   <p className="flex items-center gap-1.5 text-xs  text-slate-400  ">
                     <Box className="w-3 h-3" />
-                    Transferred so far: <span className="text-slate-700">{ (selectedJC.transferred_qty || 0).toFixed(2) }</span>
+                    Transferred so far: <span className="text-slate-700">{(selectedJC.transferred_qty || 0).toFixed(2)}</span>
                   </p>
                 </div>
               </div>
@@ -2403,14 +2428,14 @@ const JobCard = () => {
                 <div className="space-y-2">
                   <label className="text-xs  text-slate-400  ">Execution Mode:</label>
                   <div className="flex items-center gap-2 p-1 bg-slate-50 rounded  w-fit">
-                    <button 
+                    <button
                       onClick={() => setNextStageForm({ ...nextStageForm, executionMode: 'In-house' })}
                       className={`flex items-center gap-2 p-1.5 rounded-md text-xs    transition-all ${nextStageForm.executionMode === 'In-house' ? 'bg-white border border-indigo-100 text-indigo-600 shadow-sm' : 'text-slate-500'}`}
                     >
                       <span className={`w-2.5 h-2.5 rounded ${nextStageForm.executionMode === 'In-house' ? 'bg-indigo-500' : 'border-2 border-slate-300'}`}></span>
                       In-house
                     </button>
-                    <button 
+                    <button
                       onClick={() => setNextStageForm({ ...nextStageForm, executionMode: 'Outsource' })}
                       className={`flex items-center gap-2 p-1.5 rounded-md text-xs    transition-all ${nextStageForm.executionMode === 'Outsource' ? 'bg-white border border-indigo-100 text-indigo-600 shadow-sm' : 'text-slate-500'}`}
                     >
@@ -2425,26 +2450,23 @@ const JobCard = () => {
                 <button
                   onClick={handleReadyForDispatch}
                   disabled={!qcStats.isApproved || !qcStats.isComplete}
-                  className={`group relative flex items-center gap-2 p-2  rounded  transition-all ${
-                    !qcStats.isApproved || !qcStats.isComplete
+                  className={`group relative flex items-center gap-2 p-2  rounded  transition-all ${!qcStats.isApproved || !qcStats.isComplete
                       ? 'bg-slate-50 text-slate-300 cursor-not-allowed border border-slate-100'
                       : 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-200'
-                  }`}
+                    }`}
                 >
-                  <div className={`w-8 h-8 rounded  flex items-center justify-center transition-colors ${
-                    !qcStats.isApproved || !qcStats.isComplete
+                  <div className={`w-8 h-8 rounded  flex items-center justify-center transition-colors ${!qcStats.isApproved || !qcStats.isComplete
                       ? 'bg-slate-100 text-slate-200'
                       : 'bg-white/20 text-white'
-                  }`}>
+                    }`}>
                     <CheckCircle className="w-4 h-4" />
                   </div>
                   <div className="text-left">
                     <p className="text-xs    opacity-80">Finalize & Dispatch</p>
                     <p className="text-sm ">Complete Production</p>
                   </div>
-                  <ChevronRight className={`w-4 h-4 ml-4 transition-transform group-hover:translate-x-1 ${
-                    !qcStats.isApproved || !qcStats.isComplete ? 'opacity-20' : 'opacity-100'
-                  }`} />
+                  <ChevronRight className={`w-4 h-4 ml-4 transition-transform group-hover:translate-x-1 ${!qcStats.isApproved || !qcStats.isComplete ? 'opacity-20' : 'opacity-100'
+                    }`} />
                 </button>
               </div>
             </div>
@@ -2459,7 +2481,7 @@ const JobCard = () => {
                 </div>
                 <h2 className="text-sm  text-slate-800  ">Daily Production Report</h2>
               </div>
-              <button 
+              <button
                 onClick={handleDownloadReport}
                 className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 rounded  hover:bg-indigo-100 transition-colors border border-indigo-100"
               >
@@ -2467,7 +2489,7 @@ const JobCard = () => {
                 <span className="text-xs   ">Download CSV</span>
               </button>
             </div>
-            
+
             <p className="text-xs  text-slate-400 italic px-1">Consolidated daily and shift-wise production metrics</p>
 
             <div className="bg-white rounded  border border-slate-100 shadow-sm">
@@ -2508,34 +2530,34 @@ const JobCard = () => {
                                 <td className="p-2 text-slate-600 font-medium">{row.operator || 'N/A'}</td>
                                 <td className="p-2 text-center text-blue-600 font-bold">{row.mins}</td>
                                 <td className="p-2">
-                                  <input 
-                                    type="number" 
+                                  <input
+                                    type="number"
                                     value={editReportForm.produced}
-                                    onChange={e => setEditReportForm({...editReportForm, produced: e.target.value})}
+                                    onChange={e => setEditReportForm({ ...editReportForm, produced: e.target.value })}
                                     className="w-full px-1 py-1 border rounded text-xs text-center focus:ring-1 focus:ring-indigo-500 outline-none"
                                   />
                                 </td>
                                 <td className="p-2">
-                                  <input 
-                                    type="number" 
+                                  <input
+                                    type="number"
                                     value={editReportForm.accepted}
-                                    onChange={e => setEditReportForm({...editReportForm, accepted: e.target.value})}
+                                    onChange={e => setEditReportForm({ ...editReportForm, accepted: e.target.value })}
                                     className="w-full px-1 py-1 border rounded text-xs text-center border-emerald-200 focus:ring-1 focus:ring-emerald-500 outline-none"
                                   />
                                 </td>
                                 <td className="p-2">
-                                  <input 
-                                    type="number" 
+                                  <input
+                                    type="number"
                                     value={editReportForm.rejected}
-                                    onChange={e => setEditReportForm({...editReportForm, rejected: e.target.value})}
+                                    onChange={e => setEditReportForm({ ...editReportForm, rejected: e.target.value })}
                                     className="w-full px-1 py-1 border rounded text-xs text-center border-rose-200 focus:ring-1 focus:ring-rose-500 outline-none"
                                   />
                                 </td>
                                 <td className="p-2">
-                                  <input 
-                                    type="number" 
+                                  <input
+                                    type="number"
                                     value={editReportForm.scrap}
-                                    onChange={e => setEditReportForm({...editReportForm, scrap: e.target.value})}
+                                    onChange={e => setEditReportForm({ ...editReportForm, scrap: e.target.value })}
                                     className="w-full px-1 py-1 border rounded text-xs text-center focus:ring-1 focus:ring-indigo-500 outline-none"
                                   />
                                 </td>
@@ -2687,7 +2709,7 @@ const JobCard = () => {
                 {viewingQualityLog.vendor_invoice && (
                   <div className="col-span-2">
                     <p className="text-xs  text-slate-400   mb-1">Vendor Invoice</p>
-                    <a 
+                    <a
                       href={`${API_BASE.replace('/api', '')}/${viewingQualityLog.vendor_invoice}`}
                       target="_blank"
                       rel="noopener noreferrer"
@@ -2717,10 +2739,11 @@ const JobCard = () => {
   const handleOutwardChallan = (jc) => {
     setSelectedJCOutward(jc);
     setOutwardFormData({
-      vendorId: '',
+      vendorId: jc.vendor_id || '',
       operationName: jc.operation_name || '',
       plannedQty: jc.planned_qty || 0,
       expectedReturnDate: '',
+      dispatchDate: new Date().toISOString().split('T')[0],
       dispatchQty: jc.planned_qty || 0,
       dispatchNotes: '',
       materialItems: []
@@ -2759,7 +2782,7 @@ const JobCard = () => {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
           },
-          body: JSON.stringify({ 
+          body: JSON.stringify({
             status: 'COMPLETED',
             endTime: new Date().toISOString().slice(0, 19).replace('T', ' ')
           })
@@ -2771,7 +2794,7 @@ const JobCard = () => {
           const woJCs = jobCards
             .filter(j => j.work_order_id === selectedJC.work_order_id)
             .sort((a, b) => a.id - b.id);
-          
+
           const currentIndex = woJCs.findIndex(j => j.id === selectedJC.id);
           const nextJC = currentIndex !== -1 ? woJCs[currentIndex + 1] : null;
 
@@ -2833,22 +2856,22 @@ const JobCard = () => {
 
   const validateWorkstationAvailability = (workstationId, startTime, startAMPM, endTime, endAMPM) => {
     const ws = workstations.find(w => w.id === parseInt(workstationId));
-    const busyJob = jobCards.find(jc => 
-      jc.id !== selectedJC?.id && 
-      jc.workstation_id === parseInt(workstationId) && 
+    const busyJob = jobCards.find(jc =>
+      jc.id !== selectedJC?.id &&
+      jc.workstation_id === parseInt(workstationId) &&
       jc.status === 'IN_PROGRESS'
     );
 
     if (busyJob && ws) {
       const busyEndStr = getEstimatedEndTime(busyJob);
       const busyStartStr = formatLocalTime(busyJob.latest_log_start_time || busyJob.start_time);
-      
+
       const busyStart = parse12hMinutes(busyStartStr);
       const busyEnd = parse12hMinutes(busyEndStr);
-      
+
       const newStart = parseTimeToMinutes(startTime, startAMPM);
       const newEnd = parseTimeToMinutes(endTime, endAMPM);
-      
+
       const isOverlap = newStart < busyEnd && newEnd > busyStart;
 
       if (isOverlap) {
@@ -2873,11 +2896,57 @@ const JobCard = () => {
     return true;
   };
 
+  const validateOperatorAvailability = (operatorId, startTime, startAMPM, endTime, endAMPM) => {
+    const operator = users.find(u => u.id === parseInt(operatorId));
+    const busyJob = jobCards.find(jc =>
+      jc.id !== selectedJC?.id &&
+      jc.assigned_to === parseInt(operatorId) &&
+      jc.status === 'IN_PROGRESS'
+    );
+
+    if (busyJob && operator) {
+      const busyEndStr = getEstimatedEndTime(busyJob);
+      const busyStartStr = formatLocalTime(busyJob.latest_log_start_time || busyJob.start_time);
+
+      const busyStart = parse12hMinutes(busyStartStr);
+      const busyEnd = parse12hMinutes(busyEndStr);
+
+      const newStart = parseTimeToMinutes(startTime, startAMPM);
+      const newEnd = parseTimeToMinutes(endTime, endAMPM);
+
+      const isOverlap = newStart < busyEnd && newEnd > busyStart;
+
+      if (isOverlap) {
+        Swal.fire({
+          icon: 'error',
+          title: 'Operator Not Available',
+          html: `
+            <div class="text-left space-y-2">
+              <p class="text-sm text-slate-600">Operator is already assigned to another job during this time.</p>
+              <div class="p-2 bg-rose-50 border border-rose-100 rounded">
+                <p class="font-bold text-xs text-rose-600">🔴 Busy with ${busyJob.job_card_no}</p>
+                <p class="text-[10px] text-rose-500 mt-1">⏱ ${busyStartStr} – ${busyEndStr}</p>
+              </div>
+              <p class="text-xs font-medium text-emerald-600">✅ Available after ${busyEndStr}</p>
+            </div>
+          `,
+          toast: true,
+          position: 'bottom-end',
+          showConfirmButton: false,
+          timer: 6000,
+          timerProgressBar: true
+        });
+        return false;
+      }
+    }
+    return true;
+  };
+
   const handleStartMachine = () => {
     const now = new Date();
     const startTimeStr = now.toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit' });
     const [time, ampm] = startTimeStr.split(' ');
-    
+
     // For "Start", we check if currently busy (overlap with current time)
     // We can use a 1-min window for the check
     const isAvailable = validateWorkstationAvailability(timeLogForm.workstationId, time, ampm, time, ampm);
@@ -2905,6 +2974,11 @@ const JobCard = () => {
       return;
     }
 
+    // Operator Busy Validation
+    if (!validateOperatorAvailability(logData.operatorId, logData.startTime, logData.startAMPM, logData.endTime, logData.endAMPM)) {
+      return;
+    }
+
     // Success toast if not overlapped
     const ws = workstations.find(w => w.id === parseInt(logData.workstationId));
     const ws_name = ws?.workstation_name || 'Machine';
@@ -2926,7 +3000,7 @@ const JobCard = () => {
 
     try {
       const token = localStorage.getItem('authToken');
-      
+
       const formatTime = (time, ampm) => {
         if (!time) return '00:00:00';
         let [hours, minutes] = time.split(':').map(Number);
@@ -2966,7 +3040,7 @@ const JobCard = () => {
         }));
       } else {
         const error = await response.json();
-        errorToast(error.message || 'Failed to record time log');
+        errorToast(error.error || error.message || 'Failed to record time log');
       }
     } catch (error) {
       errorToast('Failed to record time log');
@@ -3040,7 +3114,7 @@ const JobCard = () => {
     }
     try {
       const token = localStorage.getItem('authToken');
-      
+
       const formatTime = (time, ampm) => {
         if (!time) return '00:00:00';
         let [hours, minutes] = time.split(':').map(Number);
@@ -3142,7 +3216,7 @@ const JobCard = () => {
   const addDowntimeLog = async (logData) => {
     // Check if there are any pending quality logs
     const hasPendingQuality = logs.qualityLogs?.some(log => log.status?.trim() !== 'APPROVED');
-    
+
     if (hasPendingQuality) {
       errorToast('Cannot record downtime. QC verification is pending for one or more records.');
       return;
@@ -3155,7 +3229,7 @@ const JobCard = () => {
 
     try {
       const token = localStorage.getItem('authToken');
-      
+
       const formatTime = (time, ampm) => {
         if (!time) return '00:00:00';
         let [hours, minutes] = time.split(':').map(Number);
@@ -3323,37 +3397,32 @@ const JobCard = () => {
   const handleVendorInward = async () => {
     try {
       const token = localStorage.getItem('authToken');
-      const formData = new FormData();
-      formData.append('checkDate', inwardFormData.receivedDate);
-      formData.append('shift', 'SHIFT_A');
-      formData.append('inspectedQty', inwardFormData.receivedQty);
-      formData.append('acceptedQty', inwardFormData.acceptedQty);
-      formData.append('rejectedQty', inwardFormData.rejectedQty);
-      formData.append('scrapQty', inwardFormData.scrapQty);
-      formData.append('rejectionReason', inwardFormData.remarks);
-      formData.append('notes', `Vendor Receipt from ${selectedJCOutward.outward_challan_no}`);
-      formData.append('status', 'APPROVED');
-      formData.append('inwardItems', JSON.stringify(inwardFormData.inwardItems));
       
-      const subTotal = inwardFormData.inwardItems.reduce((sum, item) => sum + (Number(item.release_qty || 0) * Number(item.rate || 0)), 0);
-      const gstAmount = subTotal * 0.18;
-      const grandTotal = subTotal + gstAmount;
+      const payload = {
+        outwardChallanId: selectedJCOutward.outward_challan_id,
+        jobCardId: selectedJCOutward.id,
+        vendorId: selectedJCOutward.vendor_id,
+        receivedDate: inwardFormData.receivedDate,
+        vendorInvoiceNo: inwardFormData.remarks, // Using remarks for invoice no or vice versa if needed
+        totalReceivedQty: inwardFormData.receivedQty,
+        notes: inwardFormData.remarks,
+        items: inwardFormData.inwardItems.map(item => ({
+          itemCode: item.item_code,
+          receivedQty: item.release_qty,
+          acceptedQty: item.release_qty,
+          rejectedQty: 0,
+          scrapQty: 0,
+          rate: item.rate
+        }))
+      };
 
-      formData.append('subTotal', subTotal);
-      formData.append('gstAmount', gstAmount);
-      formData.append('grandTotal', grandTotal);
-      
-      if (inwardFormData.vendorInvoice) {
-        formData.append('vendorInvoice', inwardFormData.vendorInvoice);
-      }
-
-      // We will reuse the quality-logs endpoint to record the receipt and inspection from vendor
-      const response = await fetch(`${API_BASE}/job-cards/${selectedJCOutward.id}/quality-logs`, {
+      const response = await fetch(`${API_BASE}/outward-challans/inward`, {
         method: 'POST',
         headers: {
+          'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: formData
+        body: JSON.stringify(payload)
       });
 
       if (response.ok) {
@@ -3405,7 +3474,7 @@ const JobCard = () => {
   const handleEdit = (jc) => {
     const startInfo = jc.start_time ? to12h(jc.start_time.split('T')[1]?.slice(0, 5) || jc.start_time.split(' ')[1]?.slice(0, 5)) : { time: '08:00', ampm: 'AM' };
     const endInfo = jc.end_time ? to12h(jc.end_time.split('T')[1]?.slice(0, 5) || jc.end_time.split(' ')[1]?.slice(0, 5)) : { time: '04:00', ampm: 'PM' };
-    
+
     // Normalize execution mode
     let mode = jc.execution_mode || 'In-house';
     if (mode.toLowerCase().includes('outsource') || mode.toLowerCase().includes('sub')) {
@@ -3455,7 +3524,7 @@ const JobCard = () => {
 
       const start24 = to24h(formData.startTime, formData.startAMPM);
       const end24 = to24h(formData.endTime, formData.endAMPM);
-      
+
       const submissionData = {
         ...formData,
         startDateTime: `${formData.startDate} ${start24}:00`,
@@ -3489,438 +3558,436 @@ const JobCard = () => {
       {!showProductionEntry ? (
         <>
           {/* Header Section */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-5 h-5 bg-indigo-600 text-white rounded  flex items-center justify-center shadow-lg shadow-indigo-100">
-            <ClipboardList className="w-6 h-6" />
-          </div>
-          <div>
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <h1 className="text-xl  text-slate-900  ">Job Cards</h1>
-              <span className="p-2  bg-indigo-50 text-indigo-600 text-xs  rounded  border border-indigo-100  ">
-                Live Operations
-              </span>
-            </div>
-            <p className="text-slate-500  text-xs mt-1">
-              Manufacturing Intelligence <ChevronRight className="w-3 h-3 inline mx-1" /> <span className="text-indigo-600">Operational Controls</span>
-            </p>
-          </div>
-        </div>
-        
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-2 p-2  bg-white rounded  border border-slate-200 ">
-            <div className="w-2 h-2 bg-emerald-500 rounded  animate-pulse"></div>
-            <span className="text-xs  text-slate-500  ">System Status</span>
-            <span className="text-xs  text-slate-900">{new Date().toLocaleTimeString()}</span>
-          </div>
-          <button className="flex items-center gap-2  p-2 text-rose-600 hover:bg-rose-50 rounded  transition-all  text-xs">
-            <Trash2 className="w-4 h-4" />
-            Reset Queue
-          </button>
-          <button 
-            onClick={handleCreateNew}
-            className="flex items-center gap-2  p-2 bg-slate-900 text-white rounded  hover:bg-slate-800 transition-all  text-xs shadow-lg shadow-slate-200"
-          >
-            <Play className="w-4 h-4" />
-            Create Job Card
-          </button>
-        </div>
-      </div>
-
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-2 my-5">
-        {stats.map((stat, i) => (
-          <div key={i} className="bg-white rounded  border border-slate-100 p-2 flex items-center justify-between  hover: transition-all group">
-            <div>
-              <p className="text-xs  text-slate-400   mb-2">{stat.label}</p>
-              <div className="flex items-baseline gap-2">
-                <p className="text-xl  text-slate-900">{stat.value}</p>
+              <div className="w-5 h-5 bg-indigo-600 text-white rounded  flex items-center justify-center shadow-lg shadow-indigo-100">
+                <ClipboardList className="w-6 h-6" />
               </div>
-              <p className="text-xs  text-slate-400   mt-2 flex items-center gap-1">
-                {stat.subValue}
-              </p>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-xl  text-slate-900  ">Job Cards</h1>
+                  <span className="p-2  bg-indigo-50 text-indigo-600 text-xs  rounded  border border-indigo-100  ">
+                    Live Operations
+                  </span>
+                </div>
+                <p className="text-slate-500  text-xs mt-1">
+                  Manufacturing Intelligence <ChevronRight className="w-3 h-3 inline mx-1" /> <span className="text-indigo-600">Operational Controls</span>
+                </p>
+              </div>
             </div>
-            <div className={`w-14 h-14 rounded  flex items-center justify-center transition-all group-hover:scale-110 ${
-              stat.color === 'indigo' ? 'bg-indigo-50 text-indigo-600' :
-              stat.color === 'amber' ? 'bg-amber-50 text-amber-600' :
-              stat.color === 'emerald' ? 'bg-emerald-50 text-emerald-600' :
-              'bg-purple-50 text-purple-600'
-            }`}>
-              <stat.icon className="w-7 h-7" />
+
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 p-2  bg-white rounded  border border-slate-200 ">
+                <div className="w-2 h-2 bg-emerald-500 rounded  animate-pulse"></div>
+                <span className="text-xs  text-slate-500  ">System Status</span>
+                <span className="text-xs  text-slate-900">{new Date().toLocaleTimeString()}</span>
+              </div>
+              <button className="flex items-center gap-2  p-2 text-rose-600 hover:bg-rose-50 rounded  transition-all  text-xs">
+                <Trash2 className="w-4 h-4" />
+                Reset Queue
+              </button>
+              <button
+                onClick={handleCreateNew}
+                className="flex items-center gap-2  p-2 bg-slate-900 text-white rounded  hover:bg-slate-800 transition-all  text-xs shadow-lg shadow-slate-200"
+              >
+                <Play className="w-4 h-4" />
+                Create Job Card
+              </button>
             </div>
           </div>
-        ))}
-      </div>
 
-      {/* Search & Filter Bar */}
-      <div className="flex items-center gap-2">
-        <div className="flex-1 relative">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <input 
-            type="text" 
-            placeholder="Search by Work Order ID or Item name..."
-            className="w-full pl-12 pr-4 p-2 bg-white border border-slate-200 rounded  text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all "
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
-        <button className="flex items-center gap-2  p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-600 hover:bg-slate-50 transition-all ">
-          <Filter className="w-4 h-4" />
-          All Operational States
-          <ChevronDown className="w-4 h-4 ml-2" />
-        </button>
-      </div>
+          {/* Stats Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-2 my-5">
+            {stats.map((stat, i) => (
+              <div key={i} className="bg-white rounded  border border-slate-100 p-2 flex items-center justify-between  hover: transition-all group">
+                <div>
+                  <p className="text-xs  text-slate-400   mb-2">{stat.label}</p>
+                  <div className="flex items-baseline gap-2">
+                    <p className="text-xl  text-slate-900">{stat.value}</p>
+                  </div>
+                  <p className="text-xs  text-slate-400   mt-2 flex items-center gap-1">
+                    {stat.subValue}
+                  </p>
+                </div>
+                <div className={`w-14 h-14 rounded  flex items-center justify-center transition-all group-hover:scale-110 ${stat.color === 'indigo' ? 'bg-indigo-50 text-indigo-600' :
+                    stat.color === 'amber' ? 'bg-amber-50 text-amber-600' :
+                      stat.color === 'emerald' ? 'bg-emerald-50 text-emerald-600' :
+                        'bg-purple-50 text-purple-600'
+                  }`}>
+                  <stat.icon className="w-7 h-7" />
+                </div>
+              </div>
+            ))}
+          </div>
 
-      {/* Flat Table Layout */}
-      <Card className="border-none bg-white rounded  shadow-sm">
-        <div className="overflow-visible">
-          <table className="w-full text-left">
-            <thead className="bg-slate-50/50 border-b border-slate-100">
-              <tr>
-                <th className="p-2 text-xs  text-slate-500   min-w-[140px]">ID</th>
-                <th className="p-2 text-xs  text-slate-500  ">Operation</th>
-                <th className="p-2 text-xs  text-slate-500  ">Status</th>
-                <th className="p-2 text-xs  text-slate-500  ">Execution Type</th>
-                <th className="p-2 text-xs  text-slate-500  ">Qty To Manufacture</th>
-                <th className="p-2 text-xs  text-slate-500  ">Produced Qty</th>
-                <th className="p-2 text-xs  text-slate-500  ">Accepted Qty</th>
-                <th className="p-2 text-xs  text-slate-500  ">Workstation</th>
-                <th className="p-2 text-xs  text-slate-500  ">Assignee</th>
-                <th className="p-2 text-xs  text-slate-500   text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filteredJobCards.map((jc) => (
-                <tr key={jc.id} className="group hover:bg-slate-50/50 transition-colors">
-                  <td className="p-2 whitespace-nowrap">
-                    <div className="flex flex-col">
-                      <div className="flex items-center gap-1.5">
-                        {jc.sequence_no > 0 && (
-                          <span className="flex items-center justify-center w-4 h-4 bg-slate-100 text-slate-500 rounded text-[10px] font-bold border border-slate-200">
-                            {jc.sequence_no}
-                          </span>
-                        )}
-                        <span className="text-xs  text-indigo-600">
-                          {jc.job_card_no}
-                        </span>
-                      </div>
-                      <span className="text-xs text-slate-400 mt-0.5 ml-0">
-                        WO: {jc.wo_number}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="p-2">
-                    <div className="flex flex-col">
-                      <span className="text-xs  text-slate-900">{jc.operation_name}</span>
-                      <span className="text-xs text-slate-400 mt-0.5 leading-tight">{jc.item_name}</span>
-                    </div>
-                  </td>
-                  <td className="p-2 ">
-                    <span className={`text-xs  font-semibold ${
-                      jc.status === 'IN_PROGRESS' ? 'text-amber-600' : 
-                      jc.status === 'COMPLETED' ? 'text-emerald-600' : 'text-slate-500'
-                    }`}>
-                      {jc.status === 'IN_PROGRESS' ? 'In-Progress' : jc.status?.charAt(0) + jc.status?.slice(1).toLowerCase()}
-                    </span>
-                  </td>
-                  <td className="p-2 ">
-                    <span className={`text-xs  ${(jc.execution_type === 'Outsource' || jc.execution_type === 'Subcontract' || jc.execution_type === 'Sub-Contract' || jc.outward_challan_id) ? 'text-amber-600' : 'text-blue-600'}`}>
-                      {(jc.execution_type === 'Outsource' || jc.execution_type === 'Subcontract' || jc.execution_type === 'Sub-Contract' || jc.outward_challan_id) ? 'Subcontract' : 'In-house'}
-                    </span>
-                  </td>
-                  <td className="p-2 ">
-                    <span className="text-xs   text-slate-900">
-                      {jc.planned_qty || 0} <span className="text-slate-400 font-normal">units</span>
-                    </span>
-                  </td>
-                  <td className="p-2 ">
-                    <span className="text-xs   text-indigo-600">
-                      {parseFloat(jc.produced_qty || 0).toFixed(2)} <span className="text-slate-400 font-normal">units</span>
-                    </span>
-                  </td>
-                  <td className="p-2 ">
-                    <span className="text-xs   text-emerald-600">
-                      {parseFloat(jc.accepted_qty || 0).toFixed(2)} <span className="text-slate-400 font-normal">units</span>
-                    </span>
-                  </td>
-                  <td className="p-2 ">
-                    <div className="flex flex-col">
-                      <span className={`text-xs  ${(jc.execution_type === 'Outsource' || jc.execution_type === 'Subcontract' || jc.execution_type === 'Sub-Contract' || jc.outward_challan_id) ? 'text-purple-600 font-semibold' : 'text-slate-900'}`}>
-                        {(jc.execution_type === 'Outsource' || jc.execution_type === 'Subcontract' || jc.execution_type === 'Sub-Contract' || jc.outward_challan_id) ? 'Subcontract' : (jc.workstation_name || 'N/A')}
-                      </span>
-                      {!(jc.execution_type === 'Outsource' || jc.execution_type === 'Subcontract' || jc.execution_type === 'Sub-Contract' || jc.outward_challan_id) && (() => {
-                        const m = getMachineState(jc, jobCards);
+          {/* Search & Filter Bar */}
+          <div className="flex items-center gap-2">
+            <div className="flex-1 relative">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search by Work Order ID or Item name..."
+                className="w-full pl-12 pr-4 p-2 bg-white border border-slate-200 rounded  text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all "
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+            <button className="flex items-center gap-2  p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-600 hover:bg-slate-50 transition-all ">
+              <Filter className="w-4 h-4" />
+              All Operational States
+              <ChevronDown className="w-4 h-4 ml-2" />
+            </button>
+          </div>
 
-                        if (m.status === "NOT_ASSIGNED") {
-                          return (
-                            <span className="flex items-center gap-1 mt-0.5">
-                              <span className="w-1.5 h-1.5 bg-slate-300 rounded-full"></span>
-                              <span className="text-[10px] text-slate-400 font-medium tracking-tight">Not Assigned</span>
-                            </span>
-                          );
-                        }
-
-                        if (m.status === "RUNNING") {
-                          return (
-                            <span className="flex items-center gap-1 mt-0.5">
-                              <span className="w-1.5 h-1.5 bg-rose-500 rounded-full animate-pulse"></span>
-                              <span className="text-[10px] text-rose-600 font-medium tracking-tight">RUNNING</span>
-                            </span>
-                          );
-                        }
-
-                        if (m.status === "BUSY") {
-                          return (
-                            <div className="flex flex-col gap-0.5 mt-0.5">
-                              <span className="flex items-center gap-1">
-                                <span className="w-1.5 h-1.5 bg-rose-600 rounded-full"></span>
-                                <span className="text-[10px] text-rose-700 font-bold">Busy ({m.jobId})</span>
+          {/* Flat Table Layout */}
+          <Card className="border-none bg-white rounded  shadow-sm">
+            <div className="overflow-visible">
+              <table className="w-full text-left">
+                <thead className="bg-slate-50/50 border-b border-slate-100">
+                  <tr>
+                    <th className="p-2 text-xs  text-slate-500   min-w-[140px]">ID</th>
+                    <th className="p-2 text-xs  text-slate-500  ">Operation</th>
+                    <th className="p-2 text-xs  text-slate-500  ">Status</th>
+                    <th className="p-2 text-xs  text-slate-500  ">Execution Type</th>
+                    <th className="p-2 text-xs  text-slate-500  ">Qty To Manufacture</th>
+                    <th className="p-2 text-xs  text-slate-500  ">Produced Qty</th>
+                    <th className="p-2 text-xs  text-slate-500  ">Accepted Qty</th>
+                    <th className="p-2 text-xs  text-slate-500  ">Workstation</th>
+                    <th className="p-2 text-xs  text-slate-500  ">Assignee</th>
+                    <th className="p-2 text-xs  text-slate-500   text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredJobCards.map((jc) => (
+                    <tr key={jc.id} className="group hover:bg-slate-50/50 transition-colors">
+                      <td className="p-2 whitespace-nowrap">
+                        <div className="flex flex-col">
+                          <div className="flex items-center gap-1.5">
+                            {jc.sequence_no > 0 && (
+                              <span className="flex items-center justify-center w-4 h-4 bg-slate-100 text-slate-500 rounded text-[10px] font-bold border border-slate-200">
+                                {jc.sequence_no}
                               </span>
-                              <span className="text-[9px] text-slate-500 flex items-center gap-1">
-                                <Clock className="w-2 h-2" /> Free at {m.endTime}
-                              </span>
-                            </div>
-                          );
-                        }
-
-                        if (m.status === "COMPLETED") {
-                          return (
-                            <span className="flex items-center gap-1 mt-0.5">
-                              <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
-                              <span className="text-[10px] text-emerald-600 font-medium tracking-tight">COMPLETED</span>
-                            </span>
-                          );
-                        }
-
-                        if (m.status === "FREE") {
-                          return (
-                            <span className="flex items-center gap-1 mt-0.5">
-                              <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
-                              <span className="text-[10px] text-emerald-600 font-medium tracking-tight">FREE</span>
-                            </span>
-                          );
-                        }
-
-                        if (jc.status === 'STOPPED') {
-                          return (
-                            <span className="flex items-center gap-1 mt-0.5">
-                              <span className="w-1.5 h-1.5 bg-amber-500 rounded-full"></span>
-                              <span className="text-[10px] text-amber-600 font-medium tracking-tight">STOPPED</span>
-                            </span>
-                          );
-                        }
-
-                        return null;
-                      })()}
-                    </div>
-                  </td>
-                  <td className="p-2 ">
-                    <div className="flex flex-col">
-                      <span className={`text-xs  ${jc.outward_challan_id ? 'text-purple-600 font-semibold' : 'text-slate-900'}`}>
-                        {jc.outward_challan_id ? 'N/A' : (jc.operator_name || 'Unassigned')}
-                      </span>
-                      {jc.status === 'IN_PROGRESS' && (jc.outward_challan_id || jc.operator_name) ? (
-                        <div className="flex flex-col gap-0.5 mt-0.5">
-                          <span className="text-[10px] text-indigo-600 font-medium">
-                            {jc.latest_log_start_time ? (
-                              jc.latest_log_end_time ? (
-                                `${formatLocalTime(jc.latest_log_start_time)} - ${formatLocalTime(jc.latest_log_end_time)}`
-                              ) : (
-                                `${formatLocalTime(jc.latest_log_start_time)} - ${jc.end_time ? formatLocalTime(jc.end_time) : 'Running'}`
-                              )
-                            ) : (
-                              jc.start_time ? `${formatLocalTime(jc.start_time)} - ${jc.end_time ? formatLocalTime(jc.end_time) : 'Running'}` : 'In Progress'
                             )}
+                            <span className="text-xs  text-indigo-600">
+                              {jc.job_card_no}
+                            </span>
+                          </div>
+                          <span className="text-xs text-slate-400 mt-0.5 ml-0">
+                            WO: {jc.wo_number}
                           </span>
-                          {(() => {
-                            const startTime = jc.latest_log_start_time || jc.start_time;
-                            if (!startTime) return null;
-                            
-                            let diff;
-                            if (jc.latest_log_end_time) {
-                              diff = calculateISODuration(jc.latest_log_start_time, jc.latest_log_end_time);
-                            } else {
-                              const start = new Date(startTime);
-                              const now = new Date();
-                              diff = Math.floor((now - start) / 60000); // minutes
+                        </div>
+                      </td>
+                      <td className="p-2">
+                        <div className="flex flex-col">
+                          <span className="text-xs  text-slate-900">{jc.operation_name}</span>
+                          <span className="text-xs text-slate-400 mt-0.5 leading-tight">{jc.item_name}</span>
+                        </div>
+                      </td>
+                      <td className="p-2 ">
+                        <span className={`text-xs  font-semibold ${jc.status === 'IN_PROGRESS' ? 'text-amber-600' :
+                            jc.status === 'COMPLETED' ? 'text-emerald-600' : 'text-slate-500'
+                          }`}>
+                          {jc.status === 'IN_PROGRESS' ? 'In-Progress' : jc.status?.charAt(0) + jc.status?.slice(1).toLowerCase()}
+                        </span>
+                      </td>
+                      <td className="p-2 ">
+                        <span className={`text-xs  ${(jc.execution_type === 'Outsource' || jc.execution_type === 'Subcontract' || jc.execution_type === 'Sub-Contract' || jc.outward_challan_id) ? 'text-amber-600' : 'text-blue-600'}`}>
+                          {(jc.execution_type === 'Outsource' || jc.execution_type === 'Subcontract' || jc.execution_type === 'Sub-Contract' || jc.outward_challan_id) ? 'Subcontract' : 'In-house'}
+                        </span>
+                      </td>
+                      <td className="p-2 ">
+                        <span className="text-xs   text-slate-900">
+                          {jc.planned_qty || 0} <span className="text-slate-400 font-normal">units</span>
+                        </span>
+                      </td>
+                      <td className="p-2 ">
+                        <span className="text-xs   text-indigo-600">
+                          {parseFloat(jc.produced_qty || 0).toFixed(2)} <span className="text-slate-400 font-normal">units</span>
+                        </span>
+                      </td>
+                      <td className="p-2 ">
+                        <span className="text-xs   text-emerald-600">
+                          {parseFloat(jc.accepted_qty || 0).toFixed(2)} <span className="text-slate-400 font-normal">units</span>
+                        </span>
+                      </td>
+                      <td className="p-2 ">
+                        <div className="flex flex-col">
+                          <span className={`text-xs  ${(jc.execution_type === 'Outsource' || jc.execution_type === 'Subcontract' || jc.execution_type === 'Sub-Contract' || jc.outward_challan_id) ? 'text-purple-600 font-semibold' : 'text-slate-900'}`}>
+                            {(jc.execution_type === 'Outsource' || jc.execution_type === 'Subcontract' || jc.execution_type === 'Sub-Contract' || jc.outward_challan_id) ? 'Subcontract' : (jc.workstation_name || 'N/A')}
+                          </span>
+                          {!(jc.execution_type === 'Outsource' || jc.execution_type === 'Subcontract' || jc.execution_type === 'Sub-Contract' || jc.outward_challan_id) && (() => {
+                            const m = getMachineState(jc, jobCards);
+
+                            if (m.status === "NOT_ASSIGNED") {
+                              return (
+                                <span className="flex items-center gap-1 mt-0.5">
+                                  <span className="w-1.5 h-1.5 bg-slate-300 rounded-full"></span>
+                                  <span className="text-[10px] text-slate-400 font-medium tracking-tight">Not Assigned</span>
+                                </span>
+                              );
                             }
 
-                            const hrs = Math.floor(diff / 60);
-                            const mins = diff % 60;
-                            return (
-                              <span className="text-[9px] text-slate-500 font-medium flex items-center gap-1">
-                                <Clock className="w-2 h-2" /> ⏱ {hrs}h {mins}m
-                              </span>
-                            );
+                            if (m.status === "RUNNING") {
+                              return (
+                                <span className="flex items-center gap-1 mt-0.5">
+                                  <span className="w-1.5 h-1.5 bg-rose-500 rounded-full animate-pulse"></span>
+                                  <span className="text-[10px] text-rose-600 font-medium tracking-tight">RUNNING</span>
+                                </span>
+                              );
+                            }
+
+                            if (m.status === "BUSY") {
+                              return (
+                                <div className="flex flex-col gap-0.5 mt-0.5">
+                                  <span className="flex items-center gap-1">
+                                    <span className="w-1.5 h-1.5 bg-rose-600 rounded-full"></span>
+                                    <span className="text-[10px] text-rose-700 font-bold">Busy ({m.jobId})</span>
+                                  </span>
+                                  <span className="text-[9px] text-slate-500 flex items-center gap-1">
+                                    <Clock className="w-2 h-2" /> Free at {m.endTime}
+                                  </span>
+                                </div>
+                              );
+                            }
+
+                            if (m.status === "COMPLETED") {
+                              return (
+                                <span className="flex items-center gap-1 mt-0.5">
+                                  <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
+                                  <span className="text-[10px] text-emerald-600 font-medium tracking-tight">COMPLETED</span>
+                                </span>
+                              );
+                            }
+
+                            if (m.status === "FREE") {
+                              return (
+                                <span className="flex items-center gap-1 mt-0.5">
+                                  <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
+                                  <span className="text-[10px] text-emerald-600 font-medium tracking-tight">FREE</span>
+                                </span>
+                              );
+                            }
+
+                            if (jc.status === 'STOPPED') {
+                              return (
+                                <span className="flex items-center gap-1 mt-0.5">
+                                  <span className="w-1.5 h-1.5 bg-amber-500 rounded-full"></span>
+                                  <span className="text-[10px] text-amber-600 font-medium tracking-tight">STOPPED</span>
+                                </span>
+                              );
+                            }
+
+                            return null;
                           })()}
                         </div>
-                      ) : (jc.latest_log_start_time && jc.latest_log_end_time && (jc.outward_challan_id || jc.operator_name)) ? (
-                        <div className="flex flex-col gap-0.5 mt-0.5">
-                          <span className="text-[10px] text-slate-500 font-medium">
-                            {formatLocalTime(jc.latest_log_start_time)} - {formatLocalTime(jc.latest_log_end_time)}
+                      </td>
+                      <td className="p-2 ">
+                        <div className="flex flex-col">
+                          <span className={`text-xs  ${jc.outward_challan_id ? 'text-purple-600 font-semibold' : 'text-slate-900'}`}>
+                            {jc.outward_challan_id ? 'N/A' : (jc.operator_name || 'Unassigned')}
                           </span>
-                          {(() => {
-                            const diff = calculateISODuration(jc.latest_log_start_time, jc.latest_log_end_time);
-                            const hrs = Math.floor(diff / 60);
-                            const mins = diff % 60;
-                            return (
-                              <span className="text-[9px] text-slate-500 font-medium flex items-center gap-1">
-                                <Clock className="w-2 h-2" /> ⏱ {hrs}h {mins}m
+                          {jc.status === 'IN_PROGRESS' && (jc.outward_challan_id || jc.operator_name) ? (
+                            <div className="flex flex-col gap-0.5 mt-0.5">
+                              <span className="text-[10px] text-indigo-600 font-medium">
+                                {jc.latest_log_start_time ? (
+                                  jc.latest_log_end_time ? (
+                                    `${formatLocalTime(jc.latest_log_start_time)} - ${formatLocalTime(jc.latest_log_end_time)}`
+                                  ) : (
+                                    `${formatLocalTime(jc.latest_log_start_time)} - ${jc.end_time ? formatLocalTime(jc.end_time) : 'Running'}`
+                                  )
+                                ) : (
+                                  jc.start_time ? `${formatLocalTime(jc.start_time)} - ${jc.end_time ? formatLocalTime(jc.end_time) : 'Running'}` : 'In Progress'
+                                )}
                               </span>
-                            );
-                          })()}
-                        </div>
-                      ) : (jc.start_time && jc.end_time && (jc.outward_challan_id || jc.operator_name)) ? (
-                        <div className="flex flex-col gap-0.5 mt-0.5">
-                          <span className="text-[10px] text-slate-500 font-medium">
-                            {formatLocalTime(jc.start_time)} - {formatLocalTime(jc.end_time)}
-                          </span>
-                          {(() => {
-                            const diff = calculateISODuration(jc.start_time, jc.end_time);
-                            const hrs = Math.floor(diff / 60);
-                            const mins = diff % 60;
-                            return (
-                              <span className="text-[9px] text-slate-500 font-medium flex items-center gap-1">
-                                <Clock className="w-2 h-2" /> ⏱ {hrs}h {mins}m
+                              {(() => {
+                                const startTime = jc.latest_log_start_time || jc.start_time;
+                                if (!startTime) return null;
+
+                                let diff;
+                                if (jc.latest_log_end_time) {
+                                  diff = calculateISODuration(jc.latest_log_start_time, jc.latest_log_end_time);
+                                } else {
+                                  const start = new Date(startTime);
+                                  const now = new Date();
+                                  diff = Math.floor((now - start) / 60000); // minutes
+                                }
+
+                                const hrs = Math.floor(diff / 60);
+                                const mins = diff % 60;
+                                return (
+                                  <span className="text-[9px] text-slate-500 font-medium flex items-center gap-1">
+                                    <Clock className="w-2 h-2" /> ⏱ {hrs}h {mins}m
+                                  </span>
+                                );
+                              })()}
+                            </div>
+                          ) : (jc.latest_log_start_time && jc.latest_log_end_time && (jc.outward_challan_id || jc.operator_name)) ? (
+                            <div className="flex flex-col gap-0.5 mt-0.5">
+                              <span className="text-[10px] text-slate-500 font-medium">
+                                {formatLocalTime(jc.latest_log_start_time)} - {formatLocalTime(jc.latest_log_end_time)}
                               </span>
-                            );
-                          })()}
+                              {(() => {
+                                const diff = calculateISODuration(jc.latest_log_start_time, jc.latest_log_end_time);
+                                const hrs = Math.floor(diff / 60);
+                                const mins = diff % 60;
+                                return (
+                                  <span className="text-[9px] text-slate-500 font-medium flex items-center gap-1">
+                                    <Clock className="w-2 h-2" /> ⏱ {hrs}h {mins}m
+                                  </span>
+                                );
+                              })()}
+                            </div>
+                          ) : (jc.start_time && jc.end_time && (jc.outward_challan_id || jc.operator_name)) ? (
+                            <div className="flex flex-col gap-0.5 mt-0.5">
+                              <span className="text-[10px] text-slate-500 font-medium">
+                                {formatLocalTime(jc.start_time)} - {formatLocalTime(jc.end_time)}
+                              </span>
+                              {(() => {
+                                const diff = calculateISODuration(jc.start_time, jc.end_time);
+                                const hrs = Math.floor(diff / 60);
+                                const mins = diff % 60;
+                                return (
+                                  <span className="text-[9px] text-slate-500 font-medium flex items-center gap-1">
+                                    <Clock className="w-2 h-2" /> ⏱ {hrs}h {mins}m
+                                  </span>
+                                );
+                              })()}
+                            </div>
+                          ) : (
+                            <span className="text-[10px] text-slate-400 mt-0.5 italic">No Time</span>
+                          )}
                         </div>
-                      ) : (
-                        <span className="text-[10px] text-slate-400 mt-0.5 italic">No Time</span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="p-2  text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      {/* View Details - Always Show */}
-                      <button 
-                        onClick={() => setViewingJobCard(jc)}
-                        className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded transition-all"
-                        title="View Details"
-                      >
-                        <Eye className="w-3.5 h-3.5" />
-                      </button>
-
-                      {/* Log / Record Time - ONLY for In-house */}
-                      {!(jc.execution_type === 'Outsource' || jc.execution_type === 'Subcontract' || jc.execution_type === 'Sub-Contract' || jc.outward_challan_id) && (
-                        <>
-                          {jc.status !== 'IN_PROGRESS' && jc.status !== 'COMPLETED' && (
-                            <button 
-                              onClick={() => handleUpdateStatus(jc, 'IN_PROGRESS')}
-                              className="p-1.5 text-emerald-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-all"
-                              title="Start"
-                            >
-                              <Zap className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                          {jc.status === 'IN_PROGRESS' && (
-                            <button 
-                              onClick={() => handleLogProgress(jc)}
-                              className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded transition-all animate-pulse"
-                              title="Log Progress"
-                            >
-                              <Zap className="w-3.5 h-3.5 fill-indigo-600" />
-                            </button>
-                          )}
-                        </>
-                      )}
-
-                      {/* Outward / Inward Flow - ONLY for Subcontract */}
-                      {(jc.execution_type === 'Outsource' || jc.execution_type === 'Subcontract' || jc.execution_type === 'Sub-Contract' || jc.outward_challan_id) && (
-                        <>
-                          <button 
-                            onClick={() => handleOutwardChallan(jc)}
-                            className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-all"
-                            title="Outward Challan"
+                      </td>
+                      <td className="p-2  text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          {/* View Details - Always Show */}
+                          <button
+                            onClick={() => setViewingJobCard(jc)}
+                            className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded transition-all"
+                            title="View Details"
                           >
-                            <Truck className="w-3.5 h-3.5" />
+                            <Eye className="w-3.5 h-3.5" />
                           </button>
-                          
-                          <button 
-                            onClick={() => {
-                              setSelectedJCOutward(jc);
-                              setInwardFormData(prev => ({
-                                ...prev,
-                                receivedQty: jc.dispatch_qty || jc.planned_qty,
-                                acceptedQty: jc.dispatch_qty || jc.planned_qty,
-                                inwardItems: [], // Reset while fetching
-                                vendorInvoice: null
-                              }));
-                              fetchInwardItems(jc.id);
-                              setIsInwardModalOpen(true);
-                            }}
-                            className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded transition-all"
-                            title="Vendor Receipt (Inward)"
+
+                          {/* Log / Record Time - ONLY for In-house */}
+                          {!(jc.execution_type === 'Outsource' || jc.execution_type === 'Subcontract' || jc.execution_type === 'Sub-Contract' || jc.outward_challan_id) && (
+                            <>
+                              {jc.status !== 'IN_PROGRESS' && jc.status !== 'COMPLETED' && (
+                                <button
+                                  onClick={() => handleUpdateStatus(jc, 'IN_PROGRESS')}
+                                  className="p-1.5 text-emerald-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-all"
+                                  title="Start"
+                                >
+                                  <Zap className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                              {jc.status === 'IN_PROGRESS' && (
+                                <button
+                                  onClick={() => handleLogProgress(jc)}
+                                  className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded transition-all animate-pulse"
+                                  title="Log Progress"
+                                >
+                                  <Zap className="w-3.5 h-3.5 fill-indigo-600" />
+                                </button>
+                              )}
+                            </>
+                          )}
+
+                          {/* Outward / Inward Flow - ONLY for Subcontract */}
+                          {(jc.execution_type === 'Outsource' || jc.execution_type === 'Subcontract' || jc.execution_type === 'Sub-Contract' || jc.outward_challan_id) && (
+                            <>
+                              <button
+                                onClick={() => handleOutwardChallan(jc)}
+                                className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-all"
+                                title="Outward Challan"
+                              >
+                                <Truck className="w-3.5 h-3.5" />
+                              </button>
+
+                              <button
+                                onClick={() => {
+                                  setSelectedJCOutward(jc);
+                                  setInwardFormData(prev => ({
+                                    ...prev,
+                                    receivedQty: jc.dispatch_qty || jc.planned_qty,
+                                    acceptedQty: jc.dispatch_qty || jc.planned_qty,
+                                    inwardItems: [], // Reset while fetching
+                                    vendorInvoice: null
+                                  }));
+                                  fetchInwardItems(jc.id);
+                                  setIsInwardModalOpen(true);
+                                }}
+                                className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded transition-all"
+                                title="Vendor Receipt (Inward)"
+                              >
+                                <Package className="w-3.5 h-3.5" />
+                              </button>
+                            </>
+                          )}
+
+                          {/* Edit & Delete - Always Show */}
+                          <button
+                            onClick={() => handleEdit(jc)}
+                            className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-all"
+                            title="Edit"
                           >
-                            <Package className="w-3.5 h-3.5" />
+                            <Edit2 className="w-3.5 h-3.5" />
                           </button>
-                        </>
-                      )}
-
-                      {/* Edit & Delete - Always Show */}
-                      <button 
-                        onClick={() => handleEdit(jc)}
-                        className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-all"
-                        title="Edit"
-                      >
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </button>
-                      <button 
-                        onClick={() => handleDelete(jc.id)}
-                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-all"
-                        title="Delete"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {filteredJobCards.length === 0 && !loading && (
-                <tr>
-                  <td colSpan="10" className="px-6 py-8 text-center">
-                    <div className="flex flex-col items-center gap-2">
-                      <div className="w-5 h-5 bg-slate-50 text-slate-300 rounded flex items-center justify-center">
-                        <AlertCircle className="w-6 h-6" />
-                      </div>
-                      <p className="text-slate-400 text-sm italic">No job cards found</p>
-                    </div>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Pagination Footer */}
-        <div className=" p-2 bg-slate-200 border-t border-slate-100 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-500">Rows per page:</span>
-              <select className="text-xs border-none bg-transparent text-slate-700 focus:ring-0 cursor-pointer">
-                <option>20</option>
-                <option>50</option>
-                <option>100</option>
-              </select>
+                          <button
+                            onClick={() => handleDelete(jc.id)}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-all"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {filteredJobCards.length === 0 && !loading && (
+                    <tr>
+                      <td colSpan="10" className="px-6 py-8 text-center">
+                        <div className="flex flex-col items-center gap-2">
+                          <div className="w-5 h-5 bg-slate-50 text-slate-300 rounded flex items-center justify-center">
+                            <AlertCircle className="w-6 h-6" />
+                          </div>
+                          <p className="text-slate-400 text-sm italic">No job cards found</p>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
-          </div>
-          
-          <div className="flex items-center gap-6">
-            <span className="text-xs text-slate-500 font-medium">
-              Page 1 of 1 <span className="text-slate-400 ml-1">({filteredJobCards.length} total)</span>
-            </span>
-            <div className="flex items-center gap-2">
-              <button className="flex items-center gap-1 p-1 text-xs font-semibold text-slate-400 hover:text-slate-600 transition-colors">
-                ← Prev
-              </button>
-              <button className="flex items-center gap-1 p-1 text-xs font-semibold text-slate-600 hover:text-slate-800 transition-colors border border-slate-200 rounded-md bg-white shadow-sm">
-                Next →
-              </button>
+
+            {/* Pagination Footer */}
+            <div className=" p-2 bg-slate-200 border-t border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-500">Rows per page:</span>
+                  <select className="text-xs border-none bg-transparent text-slate-700 focus:ring-0 cursor-pointer">
+                    <option>20</option>
+                    <option>50</option>
+                    <option>100</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-6">
+                <span className="text-xs text-slate-500 font-medium">
+                  Page 1 of 1 <span className="text-slate-400 ml-1">({filteredJobCards.length} total)</span>
+                </span>
+                <div className="flex items-center gap-2">
+                  <button className="flex items-center gap-1 p-1 text-xs font-semibold text-slate-400 hover:text-slate-600 transition-colors">
+                    ← Prev
+                  </button>
+                  <button className="flex items-center gap-1 p-1 text-xs font-semibold text-slate-600 hover:text-slate-800 transition-colors border border-slate-200 rounded-md bg-white shadow-sm">
+                    Next →
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-      </Card>
+          </Card>
         </>
       ) : (
         renderProductionEntry()
@@ -3983,11 +4050,10 @@ const JobCard = () => {
                 <button
                   key={tab.id}
                   onClick={() => setViewTab(tab.id)}
-                  className={`flex items-center gap-2 p-2 text-xs border-b-2 transition-colors ${
-                    viewTab === tab.id
+                  className={`flex items-center gap-2 p-2 text-xs border-b-2 transition-colors ${viewTab === tab.id
                       ? 'border-indigo-600 text-indigo-600'
                       : 'border-transparent text-slate-600 hover:text-slate-900'
-                  }`}
+                    }`}
                 >
                   <span>{tab.icon}</span>
                   {tab.label}
@@ -4082,9 +4148,9 @@ const JobCard = () => {
       </Modal>
 
       {/* Edit Job Card Modal */}
-      <Modal 
-        isOpen={isModalOpen} 
-        onClose={() => setIsModalOpen(false)} 
+      <Modal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
         title={`${formData.id ? "Edit Job Card" : "Create Job Card"}${formData.jcNumber ? `: ${formData.jcNumber}` : ''}${selectedWO ? ` - ${selectedWO.wo_number}` : ''}`}
         size="4xl"
       >
@@ -4121,22 +4187,20 @@ const JobCard = () => {
                     <button
                       type="button"
                       onClick={() => setFormData({ ...formData, executionMode: 'In-house' })}
-                      className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all ${
-                        formData.executionMode === 'In-house' 
-                        ? 'bg-indigo-600 text-white shadow-sm' 
-                        : 'text-slate-500 hover:text-slate-700'
-                      }`}
+                      className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all ${formData.executionMode === 'In-house'
+                          ? 'bg-indigo-600 text-white shadow-sm'
+                          : 'text-slate-500 hover:text-slate-700'
+                        }`}
                     >
                       In-house
                     </button>
                     <button
                       type="button"
                       onClick={() => setFormData({ ...formData, executionMode: 'Outsource' })}
-                      className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all ${
-                        formData.executionMode === 'Outsource' 
-                        ? 'bg-orange-500 text-white shadow-sm' 
-                        : 'text-slate-500 hover:text-slate-700'
-                      }`}
+                      className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all ${formData.executionMode === 'Outsource'
+                          ? 'bg-orange-500 text-white shadow-sm'
+                          : 'text-slate-500 hover:text-slate-700'
+                        }`}
                     >
                       Outsource
                     </button>
@@ -4147,15 +4211,15 @@ const JobCard = () => {
                   <FormControl label="Machine / Workstation">
                     <SearchableSelect
                       options={workstations.map(ws => {
-                        const busyJob = jobCards.find(jc => 
-                          jc.id !== formData.id && 
-                          jc.workstation_id === ws.id && 
+                        const busyJob = jobCards.find(jc =>
+                          jc.id !== formData.id &&
+                          jc.workstation_id === ws.id &&
                           jc.status === 'IN_PROGRESS'
                         );
                         return {
                           value: ws.id,
                           label: ws.workstation_name,
-                          subLabel: busyJob 
+                          subLabel: busyJob
                             ? `Busy till ${getEstimatedEndTime(busyJob)} by ${busyJob.job_card_no}`
                             : 'Available'
                         };
@@ -4169,7 +4233,7 @@ const JobCard = () => {
 
                   {formData.executionMode === 'Outsource' && (
                     <FormControl label="Subcontractor (Vendor)">
-                      <select 
+                      <select
                         value={formData.vendorId}
                         onChange={(e) => setFormData(prev => ({ ...prev, vendorId: e.target.value }))}
                         className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none appearance-none"
@@ -4185,7 +4249,7 @@ const JobCard = () => {
 
                 {formData.executionMode === 'In-house' ? (
                   <FormControl label="Primary Operator">
-                    <select 
+                    <select
                       value={formData.assignedTo}
                       onChange={(e) => setFormData(prev => ({ ...prev, assignedTo: e.target.value }))}
                       className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none appearance-none"
@@ -4202,8 +4266,8 @@ const JobCard = () => {
                   <div className="grid grid-cols-2 gap-3">
                     <div />
                     <FormControl label="Vendor Rate per Unit">
-                      <input 
-                        type="number" 
+                      <input
+                        type="number"
                         value={formData.vendorRate}
                         onChange={(e) => setFormData(prev => ({ ...prev, vendorRate: e.target.value }))}
                         className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
@@ -4221,7 +4285,7 @@ const JobCard = () => {
                 </div>
 
                 <FormControl label="Job Status">
-                  <select 
+                  <select
                     value={formData.status}
                     onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value }))}
                     className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none appearance-none"
@@ -4235,24 +4299,24 @@ const JobCard = () => {
 
                 <div className="grid grid-cols-3 gap-3">
                   <FormControl label="Planned Qty">
-                    <input 
-                      type="number" 
+                    <input
+                      type="number"
                       value={formData.plannedQty}
                       onChange={(e) => setFormData(prev => ({ ...prev, plannedQty: e.target.value }))}
                       className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded text-xs outline-none"
                     />
                   </FormControl>
                   <FormControl label="Produced Qty">
-                    <input 
-                      type="number" 
+                    <input
+                      type="number"
                       value={formData.producedQty}
                       onChange={(e) => setFormData(prev => ({ ...prev, producedQty: e.target.value }))}
                       className="w-full p-2.5 bg-white border border-indigo-200 ring-1 ring-indigo-50 rounded text-xs text-indigo-700 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
                     />
                   </FormControl>
                   <FormControl label="Accepted Qty">
-                    <input 
-                      type="number" 
+                    <input
+                      type="number"
                       value={formData.acceptedQty}
                       onChange={(e) => setFormData(prev => ({ ...prev, acceptedQty: e.target.value }))}
                       className="w-full p-2.5 bg-white border border-emerald-200 ring-1 ring-emerald-50 rounded text-xs text-emerald-700 font-medium outline-none focus:ring-2 focus:ring-emerald-500"
@@ -4276,14 +4340,14 @@ const JobCard = () => {
                     <div className="space-y-1">
                       <label className="text-[10px] font-medium text-slate-500 uppercase tracking-wider">Start DateTime</label>
                       <div className="flex gap-1.5">
-                        <input 
+                        <input
                           type="date"
                           value={formData.startDate}
                           onChange={(e) => setFormData(prev => ({ ...prev, startDate: e.target.value }))}
                           className="flex-1 p-2 text-xs bg-white border border-slate-200 rounded hover:border-indigo-400 transition-colors focus:ring-2 focus:ring-indigo-500/20 outline-none"
                         />
                         <div className="w-32">
-                          <TimePicker 
+                          <TimePicker
                             value={formData.startTime}
                             ampmValue={formData.startAMPM}
                             onTimeChange={(val) => setFormData(prev => ({ ...prev, startTime: val }))}
@@ -4297,14 +4361,14 @@ const JobCard = () => {
                       <label className="text-[10px] font-medium text-slate-500 uppercase tracking-wider">End DateTime</label>
                       <span className="absolute right-0 top-0 text-[10px] text-indigo-600 font-bold uppercase tracking-widest">Auto Suggest</span>
                       <div className="flex gap-1.5">
-                        <input 
+                        <input
                           type="date"
                           value={formData.endDate}
                           onChange={(e) => setFormData(prev => ({ ...prev, endDate: e.target.value }))}
                           className="flex-1 p-2 text-xs bg-white border border-slate-200 rounded hover:border-indigo-400 transition-colors focus:ring-2 focus:ring-indigo-500/20 outline-none"
                         />
                         <div className="w-32">
-                          <TimePicker 
+                          <TimePicker
                             value={formData.endTime}
                             ampmValue={formData.endAMPM}
                             onTimeChange={(val) => setFormData(prev => ({ ...prev, endTime: val }))}
@@ -4317,8 +4381,8 @@ const JobCard = () => {
 
                   <div className="grid grid-cols-2 gap-3">
                     <FormControl label="Standard Time (Min)">
-                      <input 
-                        type="number" 
+                      <input
+                        type="number"
                         step="0.01"
                         value={formData.stdTime}
                         onChange={(e) => setFormData(prev => ({ ...prev, stdTime: e.target.value, timeUom: 'Min' }))}
@@ -4369,9 +4433,9 @@ const JobCard = () => {
                   </div>
                 </div>
               )}
-              
+
               <FormControl label="Job Remarks">
-                <textarea 
+                <textarea
                   value={formData.remarks}
                   onChange={(e) => setFormData(prev => ({ ...prev, remarks: e.target.value }))}
                   className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none h-24"
@@ -4382,14 +4446,14 @@ const JobCard = () => {
           </div>
 
           <div className="flex justify-end gap-3 pt-6 border-t border-slate-100 mt-4">
-            <button 
+            <button
               type="button"
               onClick={() => setIsModalOpen(false)}
               className="px-6 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 border border-slate-200 rounded-md transition-all"
             >
               Discard Changes
             </button>
-            <button 
+            <button
               type="submit"
               className="px-6 py-2 bg-indigo-600 text-white font-semibold rounded-md hover:bg-indigo-700 transition-all text-xs shadow-lg shadow-indigo-100"
             >
@@ -4400,9 +4464,9 @@ const JobCard = () => {
       </Modal>
 
       {/* Existing Modals */}
-      <Modal 
-        isOpen={isOutwardModalOpen} 
-        onClose={() => setIsOutwardModalOpen(false)} 
+      <Modal
+        isOpen={isOutwardModalOpen}
+        onClose={() => setIsOutwardModalOpen(false)}
         title="Outward Challan"
         size="2xl"
       >
@@ -4451,7 +4515,7 @@ const JobCard = () => {
                 <ClipboardList className="w-4 h-4" />
                 <span className="text-xs   ">Required Material Release</span>
               </div>
-              <button 
+              <button
                 onClick={() => setOutwardFormData({
                   ...outwardFormData,
                   materialItems: [...outwardFormData.materialItems, { itemCode: '', requiredQty: 0, releaseQty: 0 }]
@@ -4461,7 +4525,7 @@ const JobCard = () => {
                 <Plus className="w-3 h-3" /> Add Item
               </button>
             </div>
-            
+
             <div className="border border-slate-100 rounded ">
               <table className="w-full text-left text-xs ">
                 <thead className="bg-slate-50 border-b border-slate-100">
@@ -4496,8 +4560,8 @@ const JobCard = () => {
                           />
                         </td>
                         <td className="px-2 py-1.5 text-center">
-                          <input 
-                            type="number" 
+                          <input
+                            type="number"
                             className="w-20 px-2 py-1 border border-slate-200 rounded text-center outline-none focus:border-indigo-500"
                             value={item.requiredQty}
                             onChange={(e) => {
@@ -4508,8 +4572,8 @@ const JobCard = () => {
                           />
                         </td>
                         <td className="px-2 py-1.5 text-center">
-                          <input 
-                            type="number" 
+                          <input
+                            type="number"
                             className="w-20 px-2 py-1 bg-indigo-50 border border-indigo-100 rounded text-center text-indigo-600 outline-none"
                             value={item.releaseQty}
                             onChange={(e) => {
@@ -4520,7 +4584,7 @@ const JobCard = () => {
                           />
                         </td>
                         <td className="px-2 py-1.5 text-right">
-                          <button 
+                          <button
                             onClick={() => {
                               const newItems = outwardFormData.materialItems.filter((_, i) => i !== idx);
                               setOutwardFormData({ ...outwardFormData, materialItems: newItems });
@@ -4538,11 +4602,19 @@ const JobCard = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+            <FormControl label="Dispatch Date">
+              <input
+                type="date"
+                value={outwardFormData.dispatchDate}
+                onChange={(e) => setOutwardFormData({ ...outwardFormData, dispatchDate: e.target.value })}
+                className="w-full p-2 border border-slate-200 rounded text-xs outline-none focus:border-indigo-500"
+              />
+            </FormControl>
             <FormControl label="Expected Return Date">
               <div className="relative">
-                <input 
-                  type="date" 
+                <input
+                  type="date"
                   value={outwardFormData.expectedReturnDate}
                   onChange={(e) => setOutwardFormData({ ...outwardFormData, expectedReturnDate: e.target.value })}
                   className="w-full p-2 border border-slate-200 rounded text-xs outline-none focus:border-indigo-500"
@@ -4551,8 +4623,8 @@ const JobCard = () => {
             </FormControl>
             <FormControl label="Dispatch Quantity">
               <div className="relative">
-                <input 
-                  type="number" 
+                <input
+                  type="number"
                   value={outwardFormData.dispatchQty}
                   onChange={(e) => setOutwardFormData({ ...outwardFormData, dispatchQty: e.target.value })}
                   className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs outline-none focus:border-indigo-500"
@@ -4563,7 +4635,7 @@ const JobCard = () => {
           </div>
 
           <FormControl label="Dispatch Notes">
-            <textarea 
+            <textarea
               rows="2"
               placeholder="Any specific instructions for the vendor..."
               value={outwardFormData.dispatchNotes}
@@ -4590,9 +4662,9 @@ const JobCard = () => {
         </div>
       </Modal>
 
-      <Modal 
-        isOpen={isInwardModalOpen} 
-        onClose={() => setIsInwardModalOpen(false)} 
+      <Modal
+        isOpen={isInwardModalOpen}
+        onClose={() => setIsInwardModalOpen(false)}
         title="Vendor Receipt (Inward)"
         size="xl"
       >
@@ -4609,16 +4681,16 @@ const JobCard = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             <FormControl label="Received Date">
-              <input 
-                type="date" 
+              <input
+                type="date"
                 value={inwardFormData.receivedDate}
                 onChange={(e) => setInwardFormData({ ...inwardFormData, receivedDate: e.target.value })}
                 className="w-full p-2 border border-slate-200 rounded text-xs outline-none focus:border-emerald-500"
               />
             </FormControl>
             <FormControl label="Received Quantity">
-              <input 
-                type="number" 
+              <input
+                type="number"
                 value={inwardFormData.receivedQty}
                 onChange={(e) => setInwardFormData({ ...inwardFormData, receivedQty: e.target.value })}
                 className="w-full p-2 border border-slate-200 rounded text-xs outline-none focus:border-emerald-500"
@@ -4628,24 +4700,24 @@ const JobCard = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
             <FormControl label="Accepted Qty">
-              <input 
-                type="number" 
+              <input
+                type="number"
                 value={inwardFormData.acceptedQty}
                 onChange={(e) => setInwardFormData({ ...inwardFormData, acceptedQty: e.target.value })}
                 className="w-full p-2 bg-emerald-50 border border-emerald-100 rounded text-xs text-emerald-700 outline-none"
               />
             </FormControl>
             <FormControl label="Rejected Qty">
-              <input 
-                type="number" 
+              <input
+                type="number"
                 value={inwardFormData.rejectedQty}
                 onChange={(e) => setInwardFormData({ ...inwardFormData, rejectedQty: e.target.value })}
                 className="w-full p-2 bg-rose-50 border border-rose-100 rounded text-xs text-rose-700 outline-none"
               />
             </FormControl>
             <FormControl label="Scrap Qty">
-              <input 
-                type="number" 
+              <input
+                type="number"
                 value={inwardFormData.scrapQty}
                 onChange={(e) => setInwardFormData({ ...inwardFormData, scrapQty: e.target.value })}
                 className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs text-slate-700 outline-none"
@@ -4676,8 +4748,8 @@ const JobCard = () => {
                         <td className="p-2 text-right">
                           <div className="flex items-center justify-end gap-1">
                             <span className="text-xs text-slate-400">₹</span>
-                            <input 
-                              type="number" 
+                            <input
+                              type="number"
                               className="w-24 px-2 py-1 border border-slate-200 rounded text-right outline-none focus:border-emerald-500"
                               value={item.rate}
                               onChange={(e) => {
@@ -4719,14 +4791,14 @@ const JobCard = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             <FormControl label="Vendor Invoice">
               <div className="relative group">
-                <input 
-                  type="file" 
+                <input
+                  type="file"
                   id="vendorInvoice"
                   className="hidden"
                   accept=".pdf,.jpg,.jpeg,.png,.xlsx,.xls"
                   onChange={(e) => setInwardFormData({ ...inwardFormData, vendorInvoice: e.target.files[0] })}
                 />
-                <label 
+                <label
                   htmlFor="vendorInvoice"
                   className="flex items-center gap-2 p-2 border border-dashed border-slate-300 rounded  cursor-pointer group-hover:border-emerald-500 group-hover:bg-emerald-50/30 transition-all"
                 >
@@ -4748,7 +4820,7 @@ const JobCard = () => {
               </div>
             </FormControl>
             <FormControl label="Remarks / Rejection Reason">
-              <textarea 
+              <textarea
                 rows="1"
                 placeholder="Notes..."
                 value={inwardFormData.remarks}
@@ -4776,7 +4848,7 @@ const JobCard = () => {
         </div>
       </Modal>
 
-      <DrawingPreviewModal 
+      <DrawingPreviewModal
         isOpen={!!previewDrawing}
         onClose={() => setPreviewDrawing(null)}
         drawing={previewDrawing}

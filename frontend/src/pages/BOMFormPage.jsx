@@ -2556,7 +2556,11 @@ const BOMFormPage = () => {
                             ? workstations.filter(ws => op.workstation_codes.split(', ').includes(ws.workstation_code))
                             : workstations;
                           
-                          return filteredWS.map(ws => (
+                          // If after filtering we have no workstations but we have global workstations, 
+                          // show all as a fallback so user can still select something
+                          const displayWS = (filteredWS.length === 0 && workstations.length > 0) ? workstations : filteredWS;
+
+                          return displayWS.map(ws => (
                             <option key={ws.id} value={ws.workstation_code}>
                               {ws.workstation_code} - {ws.workstation_name}
                             </option>

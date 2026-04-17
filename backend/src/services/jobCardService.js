@@ -116,6 +116,32 @@ const updateJobCardProgress = async (id, data) => {
       updates.push('status = ?');
       params.push(status);
     }
+
+    if (status === 'IN_PROGRESS') {
+      const checkWorkstationId = workstationId || (await connection.query('SELECT workstation_id FROM job_cards WHERE id = ?', [id]))[0][0].workstation_id;
+      const checkAssignedTo = assignedTo || (await connection.query('SELECT assigned_to FROM job_cards WHERE id = ?', [id]))[0][0].assigned_to;
+
+      if (checkWorkstationId) {
+        const [busyWS] = await connection.query(
+          'SELECT job_card_no FROM job_cards WHERE workstation_id = ? AND status = "IN_PROGRESS" AND id != ?',
+          [checkWorkstationId, id]
+        );
+        if (busyWS.length > 0) {
+          throw new Error(`Workstation is busy with Job Card ${busyWS[0].job_card_no}`);
+        }
+      }
+
+      if (checkAssignedTo) {
+        const [busyOp] = await connection.query(
+          'SELECT job_card_no FROM job_cards WHERE assigned_to = ? AND status = "IN_PROGRESS" AND id != ?',
+          [checkAssignedTo, id]
+        );
+        if (busyOp.length > 0) {
+          throw new Error(`Operator is busy with Job Card ${busyOp[0].job_card_no}`);
+        }
+      }
+    }
+
     if (startTime) {
       updates.push('start_time = ?');
       params.push(startTime);
@@ -228,6 +254,27 @@ const addTimeLog = async (data) => {
     );
     if (existingLogs.length > 0) {
       throw new Error(`A log for this shift (${shift}) on ${logDate} already exists for this Job Card.`);
+    }
+
+    // 1b. Check Operator and Workstation availability
+    if (workstationId) {
+      const [busyWS] = await connection.query(
+        'SELECT job_card_no FROM job_cards WHERE workstation_id = ? AND status = "IN_PROGRESS" AND id != ?',
+        [workstationId, jobCardId]
+      );
+      if (busyWS.length > 0) {
+        throw new Error(`Workstation is busy with Job Card ${busyWS[0].job_card_no}`);
+      }
+    }
+
+    if (operatorId) {
+      const [busyOp] = await connection.query(
+        'SELECT job_card_no FROM job_cards WHERE assigned_to = ? AND status = "IN_PROGRESS" AND id != ?',
+        [operatorId, jobCardId]
+      );
+      if (busyOp.length > 0) {
+        throw new Error(`Operator is busy with Job Card ${busyOp[0].job_card_no}`);
+      }
     }
 
     // 2. Get Job Card details

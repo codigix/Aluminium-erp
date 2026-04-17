@@ -44,7 +44,10 @@ const ensureJobCardColumns = async () => {
       { name: 'accepted_qty', definition: 'DECIMAL(12, 3) DEFAULT 0' },
       { name: 'rejected_qty', definition: 'DECIMAL(12, 3) DEFAULT 0' },
       { name: 'sequence_no', definition: 'INT DEFAULT 0' },
-      { name: 'target_warehouse_id', definition: 'INT NULL' }
+      { name: 'target_warehouse_id', definition: 'INT NULL' },
+      { name: 'outward_challan_id', definition: 'INT NULL' },
+      { name: 'outward_challan_no', definition: 'VARCHAR(100) NULL' },
+      { name: 'dispatch_qty', definition: 'DECIMAL(12, 3) DEFAULT 0' }
     ];
 
     const missing = requiredColumns.filter(column => !existing.has(column.name));
@@ -1876,14 +1879,28 @@ const ensureOutwardChallanTables = async () => {
         operation_name VARCHAR(255),
         planned_qty DECIMAL(12, 3),
         dispatch_qty DECIMAL(12, 3),
+        dispatch_date DATE,
         expected_return_date DATE,
         notes TEXT,
-        status ENUM('PENDING', 'RECEIVED', 'CANCELLED') DEFAULT 'PENDING',
+        status ENUM('PENDING', 'RECEIVED', 'CANCELLED', 'DISPATCHED') DEFAULT 'PENDING',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (job_card_id) REFERENCES job_cards(id) ON DELETE CASCADE,
         FOREIGN KEY (vendor_id) REFERENCES vendors(id) ON DELETE CASCADE
       )
     `);
+
+    // Ensure dispatch_date column exists if table was already created
+    const [ocCols] = await connection.query("SHOW COLUMNS FROM outward_challans");
+    const ocFields = new Set(ocCols.map(c => c.Field));
+    if (!ocFields.has('dispatch_date')) {
+      await connection.query("ALTER TABLE outward_challans ADD COLUMN dispatch_date DATE AFTER dispatch_qty");
+    }
+    
+    // Update status enum if needed
+    const statusCol = ocCols.find(c => c.Field === 'status');
+    if (statusCol && !statusCol.Type.includes('DISPATCHED')) {
+      await connection.query("ALTER TABLE outward_challans MODIFY COLUMN status ENUM('PENDING', 'RECEIVED', 'CANCELLED', 'DISPATCHED') DEFAULT 'PENDING'");
+    }
 
     await connection.query(`
       CREATE TABLE IF NOT EXISTS outward_challan_items (
@@ -1895,7 +1912,40 @@ const ensureOutwardChallanTables = async () => {
         FOREIGN KEY (challan_id) REFERENCES outward_challans(id) ON DELETE CASCADE
       )
     `);
-    console.log('Outward Challan tables synchronized');
+
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS inward_challans (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        inward_number VARCHAR(50) UNIQUE NOT NULL,
+        outward_challan_id INT NOT NULL,
+        job_card_id INT NOT NULL,
+        vendor_id INT NOT NULL,
+        received_date DATE,
+        vendor_invoice_no VARCHAR(100),
+        total_received_qty DECIMAL(12, 3),
+        notes TEXT,
+        status ENUM('RECEIVED', 'INSPECTED', 'APPROVED') DEFAULT 'RECEIVED',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (outward_challan_id) REFERENCES outward_challans(id) ON DELETE CASCADE,
+        FOREIGN KEY (job_card_id) REFERENCES job_cards(id) ON DELETE CASCADE,
+        FOREIGN KEY (vendor_id) REFERENCES vendors(id) ON DELETE CASCADE
+      )
+    `);
+
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS inward_challan_items (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        inward_challan_id INT NOT NULL,
+        item_code VARCHAR(120),
+        received_qty DECIMAL(12, 3),
+        accepted_qty DECIMAL(12, 3),
+        rejected_qty DECIMAL(12, 3),
+        scrap_qty DECIMAL(12, 3),
+        rate DECIMAL(12, 2) DEFAULT 0,
+        FOREIGN KEY (inward_challan_id) REFERENCES inward_challans(id) ON DELETE CASCADE
+      )
+    `);
+    console.log('Challan tables synchronized');
   } catch (error) {
     console.error('Outward Challan table sync failed', error.message);
   } finally {
