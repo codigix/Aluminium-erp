@@ -70,14 +70,14 @@ exports.login = async (req, res) => {
     const [results] = await db.query(query, [email]);
 
     if (results.length === 0) {
-      return res.status(401).json({ error: 'ZENCODER_TEST_INVALID_CREDENTIALS' });
+      return res.status(401).json({ error: 'Invalid email or password' });
     }
 
     const user = results[0];
     const passwordMatch = await bcrypt.compare(password, user.password);
 
     if (!passwordMatch) {
-      return res.status(401).json({ error: 'ZENCODER_TEST_INVALID_CREDENTIALS' });
+      return res.status(401).json({ error: 'Invalid email or password' });
     }
 
     const token = generateToken(user);

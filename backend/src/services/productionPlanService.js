@@ -699,11 +699,34 @@ const generatePlanCode = async () => {
 const getItemBOMDetails = async (salesOrderItemId) => {
   // Try to fetch the item details from order_items first (new system)
   let [items] = await pool.query(
-    'SELECT id, item_code, drawing_no FROM order_items WHERE id = ?',
+    'SELECT id, item_code, drawing_no, order_id FROM order_items WHERE id = ?',
     [salesOrderItemId]
   );
 
   let soItemIdForLookup = null;
+  let isNewSystem = false;
+
+  if (items.length > 0) {
+    isNewSystem = true;
+    const item = items[0];
+    
+    // In the new system, we still need to find a sales_order_item that has the BOM
+    // OR look at the master BOM.
+    // Try to find a sales_order_item with the same drawing_no in the same "sales order" 
+    // (if the order was converted from a sales order/quotation)
+    const [soMatch] = await pool.query(
+      `SELECT soi.id 
+       FROM sales_order_items soi
+       JOIN orders o ON soi.sales_order_id = o.quotation_id
+       WHERE o.id = ? AND soi.drawing_no = ? AND soi.drawing_no IS NOT NULL
+       LIMIT 1`,
+      [item.order_id, item.drawing_no]
+    );
+    
+    if (soMatch.length > 0) {
+      soItemIdForLookup = soMatch[0].id;
+    }
+  }
 
   // If not found in order_items, try sales_order_items (the old system)
   if (items.length === 0) {
@@ -744,8 +767,8 @@ const getItemBOMDetails = async (salesOrderItemId) => {
         [soItemId]
       );
       if (check.length > 0) {
-        const matches = (check[0].item_code === itemCode) || 
-                        (check[0].drawing_no === drawingNo && check[0].drawing_no !== null);
+        // More lenient matching: prioritize drawing_no if available
+        const matches = (drawingNo && check[0].drawing_no === drawingNo) || (check[0].item_code === itemCode);
         if (!matches) {
           console.warn(`[explodeBOM] Identity mismatch for soItemId ${soItemId}. Expected ${itemCode}/${drawingNo}, found ${check[0].item_code}/${check[0].drawing_no}. Disregarding soItemId.`);
           soItemId = null;

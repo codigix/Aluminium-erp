@@ -77,14 +77,19 @@ const CustomerPO = ({
       // Find all items in the same version batch
       const relatedItems = quotationRequests.filter(q => {
         // Group items that belong to the SAME version of the SAME quotation revision set
-        // Use sales_order_id and version as the primary grouping criteria
+        if (quote.batch_id && q.batch_id) {
+          return q.batch_id === quote.batch_id;
+        }
+        
+        // Fallback to legacy grouping
         return q.company_id === quote.company_id && 
                q.sales_order_id === quote.sales_order_id &&
                q.version === quote.version;
       });
 
+      // Map items from the batch. We include them if they are part of the latest batch,
+      // as usually only the "Approved" one was clicked but we want the whole set.
       const items = relatedItems
-        .filter(item => item.status?.toUpperCase() === 'APPROVED')
         .map(item => {
           const qty = parseFloat(item.item_qty) || 0;
           const totalAmount = parseFloat(item.total_amount) || 0;
@@ -109,7 +114,7 @@ const CustomerPO = ({
         items: items.length > 0 ? items : prev.items
       }));
       
-      showToast(`Loaded ${items.length} approved items from quotation QRT-${String(quote.id).padStart(4, '0')} (Version ${quote.version || 1})`);
+      showToast(`Loaded ${items.length} items from quotation QRT-${String(quote.id).padStart(4, '0')} (Version ${quote.version || 1})`);
     }
   };
 
