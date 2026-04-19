@@ -352,7 +352,7 @@ const ClientQuotations = () => {
       
       const grouped = {};
       data.forEach(quote => {
-        // Group by project name and company to catch all versions of the same quotation project
+        // Group by project name and company to consolidate all versions into ONE row
         const groupKey = `received_${quote.company_id}_${(quote.project_name || 'manual').toLowerCase()}`;
         
         if (!grouped[groupKey]) {
@@ -377,7 +377,13 @@ const ClientQuotations = () => {
         grouped[groupKey].quotes.push(quote);
 
         // Update top-level group details if this quote is a newer version
-        if ((quote.version || 1) > (grouped[groupKey].version || 0)) {
+        // OR if it's the same version but we prefer "Approved" status over others
+        const currentVersion = grouped[groupKey].version || 0;
+        const quoteVersion = quote.version || 1;
+        const currentStatus = (grouped[groupKey].status || '').trim().toUpperCase();
+        const quoteStatus = (quote.status || '').trim().toUpperCase();
+
+        if (quoteVersion > currentVersion || (quoteVersion === currentVersion && quoteStatus === 'APPROVED' && currentStatus !== 'APPROVED')) {
           grouped[groupKey].id = quote.id;
           grouped[groupKey].status = quote.status;
           grouped[groupKey].version = quote.version;
@@ -389,22 +395,45 @@ const ClientQuotations = () => {
         }
       });
       
-      // Filter groups: ONLY keep those where the LATEST version is APPROVED or REVISED
+      // Filter groups: keep those where the LATEST version has a "Received" type status
       const filteredGroups = Object.values(grouped).filter(group => {
         const s = (group.status || '').trim().toUpperCase();
-        return s === 'APPROVED' || s === 'REVISED';
+        return s === 'APPROVED' || s === 'ACCEPTED' || s === 'REVISED' || s === 'COMPLETED';
       });
 
       filteredGroups.forEach(group => {
         // Sort quotes DESC by version so group.quotes[0] is always the latest
         group.quotes.sort((a, b) => (b.version || 0) - (a.version || 0));
 
-        // RECALCULATE total based ONLY on the latest version found in this group
+        // RECALCULATE total and items based ONLY on the latest version found in this group
         const latestVersion = group.version || 1;
-        const latestQuotes = group.quotes.filter(q => (q.version || 1) === latestVersion);
+        const targetBatchId = group.batch_id;
+        const targetParentId = group.parent_id;
+        const targetCreatedAt = group.created_at;
+
+        const latestQuotes = group.quotes.filter(q => {
+          if ((q.version || 1) !== latestVersion) return false;
+          
+          // 1. Match by batch_id if available
+          if (targetBatchId && q.batch_id) {
+            return q.batch_id === targetBatchId;
+          }
+          
+          // 2. Match by parent_id if batch_id is missing
+          if (targetParentId && q.parent_id) {
+            return q.parent_id === targetParentId;
+          }
+
+          // 3. Fallback: Check if this item is the "latest" one itself or shares the same creation window
+          if (q.id === group.id) return true;
+          
+          const diff = Math.abs(new Date(q.created_at) - new Date(targetCreatedAt));
+          return diff < 10000; // 10 seconds window for legacy items without batch_id
+        });
         
         group.total_amount = latestQuotes.reduce((sum, q) => sum + (parseFloat(q.total_amount) || 0), 0);
         group.received_amount = latestQuotes.reduce((sum, q) => sum + (parseFloat(q.received_amount) || 0), 0);
+        group.quotes = latestQuotes; // Fix: Only keep latest version items to avoid incorrect drawing/item counts
       });
       
       setReceivedQuotations(filteredGroups.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)));
@@ -1037,9 +1066,16 @@ const ClientQuotations = () => {
                                 NEW PENDING
                               </span>
                             ) : (
-                              <span className="p-1 bg-indigo-50 text-indigo-600 rounded  text-xs  border border-indigo-100">
-                                QRT-{String(group.id).padStart(4, '0')}
-                              </span>
+                              <div className="flex flex-col gap-1">
+                                <span className="p-1 bg-indigo-50 text-indigo-600 rounded  text-xs  border border-indigo-100 w-fit">
+                                  QRT-{String(group.id).padStart(4, '0')}
+                                </span>
+                                {group.version && (
+                                  <span className="text-[10px] text-slate-500 font-medium ml-1">
+                                    Version {group.version}
+                                  </span>
+                                )}
+                              </div>
                             )}
                           </td>
                           <td className=" p-2 whitespace-nowrap">
