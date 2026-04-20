@@ -60,10 +60,8 @@ const app = express();
 // 1. ABSOLUTE PRIORITY: Public Uploads (No Auth)
 // This catches requests before ANY other middleware can interfere
 app.use((req, res, next) => {
-  const originalUrl = req.originalUrl || req.url;
-  const urlCheck = originalUrl.toLowerCase();
-  
-  if (urlCheck.includes('/uploads/')) {
+  const url = (req.originalUrl || req.url).toLowerCase();
+  if (url.includes('/uploads/')) {
     // Add CORS headers for direct file access
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -73,9 +71,8 @@ app.use((req, res, next) => {
       return res.sendStatus(200);
     }
 
-    // Split based on case-insensitive '/uploads/' but use original casing for extraction
-    const uploadsIndex = urlCheck.indexOf('/uploads/');
-    const fileName = decodeURIComponent(originalUrl.substring(uploadsIndex + 9).split('?')[0]);
+    const parts = url.split('/uploads/');
+    const fileName = decodeURIComponent(parts[parts.length - 1].split('?')[0]);
     
     // Set proper Content-Type for PDFs to help browser rendering
     if (fileName.toLowerCase().endsWith('.pdf')) {
