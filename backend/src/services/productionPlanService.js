@@ -705,7 +705,47 @@ const getItemBOMDetails = async (salesOrderItemId) => {
   let soItemIdForLookup = null;
   
   if (items.length > 0) {
-    soItemIdForLookup = items[0].id;
+    const item = items[0];
+    soItemIdForLookup = item.id;
+    
+    // Check if THIS specific ID has any materials. If not, try to find another ID in the same order
+    // with the same item identity that HAS materials.
+    const [hasData] = await pool.query(
+      'SELECT id FROM sales_order_item_materials WHERE sales_order_item_id = ? LIMIT 1',
+      [soItemIdForLookup]
+    );
+
+    if (hasData.length === 0) {
+      console.log(`[getItemBOMDetails] ID ${soItemIdForLookup} has no materials, searching for alternatives in SO ${item.sales_order_id}`);
+      const [altMatch] = await pool.query(
+        `SELECT soi.id 
+         FROM sales_order_items soi
+         JOIN sales_order_item_materials som ON soi.id = som.sales_order_item_id
+         WHERE soi.sales_order_id = ? 
+         AND (soi.item_code = ? OR (soi.drawing_no = ? AND soi.drawing_no IS NOT NULL))
+         ORDER BY soi.id DESC LIMIT 1`,
+        [item.sales_order_id, item.item_code, item.drawing_no]
+      );
+      
+      if (altMatch.length > 0) {
+        console.log(`[getItemBOMDetails] Found alternative SO Item ID with data: ${altMatch[0].id}`);
+        soItemIdForLookup = altMatch[0].id;
+      } else {
+        // Fallback: Try to find any MASTER BOM for this drawing/item code
+        const [masterMatch] = await pool.query(
+          `SELECT soi.id 
+           FROM sales_order_items soi
+           JOIN sales_order_item_materials som ON soi.id = som.sales_order_item_id
+           WHERE (soi.item_code = ? OR (soi.drawing_no = ? AND soi.drawing_no IS NOT NULL)) AND soi.sales_order_id IS NULL 
+           ORDER BY soi.id DESC LIMIT 1`,
+          [item.item_code, item.drawing_no]
+        );
+        if (masterMatch.length > 0) {
+          console.log(`[getItemBOMDetails] Found MASTER Item ID with data: ${masterMatch[0].id}`);
+          soItemIdForLookup = masterMatch[0].id;
+        }
+      }
+    }
   } else {
     // 2. Fallback to order_items (new system)
     [items] = await pool.query(
