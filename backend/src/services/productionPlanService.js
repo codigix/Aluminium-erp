@@ -514,7 +514,8 @@ const getReadySalesOrderItems = async () => {
         WHERE status != 'CANCELLED'
         GROUP BY sales_order_item_id
       ) planned ON soi.id = planned.sales_order_item_id
-      WHERE soi.status != 'Rejected' AND (soi.item_type IN ('FG', 'SFG'))
+      WHERE (soi.status IS NULL OR TRIM(UPPER(soi.status)) NOT IN ('REJECTED', 'CANCELLED')) 
+      AND (TRIM(UPPER(soi.item_type)) IN ('FG', 'FINISHED GOODS', 'FINISHED_GOODS'))
       AND (COALESCE(planned.already_planned_qty, 0) < soi.quantity)
 
       UNION ALL
@@ -543,7 +544,9 @@ const getReadySalesOrderItems = async () => {
         WHERE status != 'CANCELLED'
         GROUP BY sales_order_item_id
       ) planned ON oi.id = planned.sales_order_item_id
-      WHERE o.quotation_id IS NULL AND (COALESCE(planned.already_planned_qty, 0) < oi.quantity)
+      WHERE o.quotation_id IS NULL 
+      AND (TRIM(UPPER(oi.type)) IN ('FG', 'FINISHED GOODS', 'FINISHED_GOODS'))
+      AND (COALESCE(planned.already_planned_qty, 0) < oi.quantity)
     ) combined
     ORDER BY production_priority DESC, created_at ASC`
   );
@@ -591,30 +594,36 @@ const getSalesOrderFullDetails = async (id) => {
     
     // Fetch items from order_items
     const [items] = await pool.query(
-      `SELECT COALESCE(soi.id, oi.id) as id,
-              COALESCE(soi.id, oi.id) as sales_order_item_id,
-              oi.id as order_item_id,
-              oi.order_id as sales_order_id,
-              oi.item_code as item_code,
-              oi.type as item_type,
-              oi.drawing_no as drawing_no,
-              COALESCE(soi.revision_no, oi.drawing_no) as bom_no,
-              oi.description,
-              oi.quantity as quantity,
-              oi.quantity as design_qty,
-              'Nos' as unit,
-              soi.status,
-              soi.created_at,
-              COALESCE(planned.already_planned_qty, 0) as already_planned_qty
-       FROM order_items oi
-       LEFT JOIN sales_order_items soi ON (oi.drawing_no = soi.drawing_no AND soi.sales_order_id = (SELECT quotation_id FROM orders WHERE id = oi.order_id))
-       LEFT JOIN (
-         SELECT sales_order_id, sales_order_item_id, SUM(planned_qty) as already_planned_qty
-         FROM production_plan_items 
-         WHERE status != 'CANCELLED'
-         GROUP BY sales_order_id, sales_order_item_id
-       ) planned ON oi.order_id = planned.sales_order_id AND oi.id = planned.sales_order_item_id
-       WHERE oi.order_id = ? AND (soi.status IS NULL OR UPPER(TRIM(soi.status)) != 'REJECTED')`,
+      `SELECT * FROM (
+        SELECT COALESCE(soi.id, oi.id) as id,
+                COALESCE(soi.id, oi.id) as sales_order_item_id,
+                oi.id as order_item_id,
+                oi.order_id as sales_order_id,
+                oi.item_code as item_code,
+                oi.type as item_type,
+                oi.drawing_no as drawing_no,
+                COALESCE(soi.revision_no, oi.drawing_no) as bom_no,
+                oi.description,
+                oi.quantity as quantity,
+                oi.quantity as design_qty,
+                'Nos' as unit,
+                soi.status,
+                soi.created_at,
+                COALESCE(planned.already_planned_qty, 0) as already_planned_qty,
+                ROW_NUMBER() OVER (PARTITION BY TRIM(oi.drawing_no), TRIM(oi.item_code) ORDER BY soi.bom_cost DESC, soi.id DESC) as rn
+         FROM order_items oi
+         LEFT JOIN sales_order_items soi ON (TRIM(oi.drawing_no) = TRIM(soi.drawing_no) AND soi.sales_order_id = (SELECT quotation_id FROM orders WHERE id = oi.order_id))
+         LEFT JOIN (
+           SELECT sales_order_id, sales_order_item_id, SUM(planned_qty) as already_planned_qty
+           FROM production_plan_items 
+           WHERE status != 'CANCELLED'
+           GROUP BY sales_order_id, sales_order_item_id
+         ) planned ON oi.order_id = planned.sales_order_id AND oi.id = planned.sales_order_item_id
+         WHERE oi.order_id = ? 
+         AND (TRIM(UPPER(oi.type)) IN ('FG', 'FINISHED GOODS', 'FINISHED_GOODS') 
+              OR TRIM(UPPER(soi.item_type)) IN ('FG', 'FINISHED GOODS', 'FINISHED_GOODS'))
+         AND (soi.status IS NULL OR TRIM(UPPER(soi.status)) NOT IN ('REJECTED', 'CANCELLED'))
+      ) t WHERE rn = 1`,
       [id]
     );
     
@@ -640,29 +649,34 @@ const getSalesOrderFullDetails = async (id) => {
   const soOrder = soOrders[0];
 
   const [soItems] = await pool.query(
-    `SELECT soi.id,
-            soi.id as sales_order_item_id,
-            soi.sales_order_id,
-            soi.item_code as item_code,
-            soi.item_type as item_type,
-            soi.drawing_no as drawing_no,
-            COALESCE(soi.revision_no, soi.drawing_no) as bom_no,
-            soi.description,
-            soi.quantity as quantity,
-            soi.quantity as design_qty,
-            soi.unit,
-            soi.status,
-            soi.rejection_reason,
-            COALESCE(planned.already_planned_qty, 0) as already_planned_qty
-     FROM sales_order_items soi
-     LEFT JOIN (
-       SELECT sales_order_id, sales_order_item_id, SUM(planned_qty) as already_planned_qty
-       FROM production_plan_items 
-       WHERE status != 'CANCELLED'
-       GROUP BY sales_order_id, sales_order_item_id
-     ) planned ON soi.sales_order_id = planned.sales_order_id AND soi.id = planned.sales_order_item_id
-     WHERE soi.sales_order_id = ? AND (soi.item_type IN ('FG', 'SFG', 'SA', 'SUB_ASSEMBLY', 'SUB-ASSEMBLY', 'Assembly'))
-     ORDER BY soi.id DESC`,
+    `SELECT * FROM (
+      SELECT soi.id,
+              soi.id as sales_order_item_id,
+              soi.sales_order_id,
+              soi.item_code as item_code,
+              soi.item_type as item_type,
+              soi.drawing_no as drawing_no,
+              COALESCE(soi.revision_no, soi.drawing_no) as bom_no,
+              soi.description,
+              soi.quantity as quantity,
+              soi.quantity as design_qty,
+              soi.unit,
+              soi.status,
+              soi.rejection_reason,
+              COALESCE(planned.already_planned_qty, 0) as already_planned_qty,
+              ROW_NUMBER() OVER (PARTITION BY TRIM(soi.drawing_no), TRIM(soi.item_code) ORDER BY soi.bom_cost DESC, soi.id DESC) as rn
+       FROM sales_order_items soi
+       LEFT JOIN (
+         SELECT sales_order_id, sales_order_item_id, SUM(planned_qty) as already_planned_qty
+         FROM production_plan_items 
+         WHERE status != 'CANCELLED'
+         GROUP BY sales_order_id, sales_order_item_id
+       ) planned ON soi.sales_order_id = planned.sales_order_id AND soi.id = planned.sales_order_item_id
+       WHERE soi.sales_order_id = ? 
+       AND (TRIM(UPPER(soi.item_type)) IN ('FG', 'FINISHED GOODS', 'FINISHED_GOODS'))
+       AND (soi.status IS NULL OR TRIM(UPPER(soi.status)) NOT IN ('REJECTED', 'CANCELLED'))
+    ) t WHERE rn = 1
+    ORDER BY id DESC`,
     [id]
   );
 
@@ -772,14 +786,14 @@ const getItemBOMDetails = async (salesOrderItemId) => {
          LEFT JOIN orders o ON soi.sales_order_id = o.quotation_id
          LEFT JOIN sales_order_item_materials som ON soi.id = som.sales_order_item_id
          LEFT JOIN sales_order_item_operations soo ON soi.id = soo.sales_order_item_id
-         WHERE (o.id = ? OR soi.sales_order_id = ?) 
-         AND soi.drawing_no = ? AND soi.drawing_no IS NOT NULL
+         WHERE (o.id = ? OR soi.sales_order_id = ? OR soi.sales_order_id = (SELECT quotation_id FROM orders WHERE id = ?)) 
+         AND (soi.drawing_no = ? OR soi.item_code = ?) AND soi.drawing_no IS NOT NULL
          GROUP BY soi.id
          ORDER BY 
            (COUNT(som.id) + COUNT(soo.id)) DESC,
-           (soi.sales_order_id = (SELECT quotation_id FROM orders WHERE id = ?)) DESC, 
+           (soi.item_code = ?) DESC,
            soi.id DESC LIMIT 1`,
-        [item.order_id, item.order_id, item.drawing_no, item.order_id]
+        [item.order_id, item.order_id, item.order_id, item.drawing_no, item.item_code, item.item_code]
       );
       
       if (soMatch.length > 0) {
@@ -859,16 +873,26 @@ const getItemBOMDetails = async (salesOrderItemId) => {
       
       // Join with sales_order_items to get item_type for components
       const [soC] = await pool.query(`
-        SELECT c.*, soi.item_type 
+        SELECT c.*, soi.item_type, soi.item_group
         FROM sales_order_item_components c
         LEFT JOIN sales_order_items soi ON (c.component_code = soi.item_code OR (c.drawing_no = soi.drawing_no AND c.drawing_no IS NOT NULL))
         AND soi.sales_order_id <=> (SELECT sales_order_id FROM sales_order_items WHERE id = ?)
         WHERE c.sales_order_item_id <=> ? AND c.parent_id <=> ?`, [targetSoId || soItemId, targetSoId, parentId]);
       
+      // Deduplicate components to avoid join duplicates if multiple SO items match identity
+      const uniqueSoC = [];
+      const seenCompIds = new Set();
+      for (const row of soC) {
+        if (!seenCompIds.has(row.id)) {
+          uniqueSoC.push(row);
+          seenCompIds.add(row.id);
+        }
+      }
+
       // Normalize item_type
-      const soCWithTypes = soC.map(c => ({
+      const soCWithTypes = uniqueSoC.map(c => ({
         ...c,
-        item_type: (c.item_type === 'SA' || (c.component_code && c.component_code.startsWith('SA-'))) ? 'Sub Assembly' : (c.item_type || 'FG')
+        item_type: (c.item_type === 'SA' || c.item_group === 'Sub Assembly' || c.item_group === 'SUB_ASSEMBLY' || (c.component_code && c.component_code.startsWith('SA-'))) ? 'Sub Assembly' : (c.item_type || 'FG')
       }));
       
       materials = soM;
@@ -879,38 +903,37 @@ const getItemBOMDetails = async (salesOrderItemId) => {
       operations = soO;
     }
 
-    // 2. Granular Fallback to Master BOM or Any BOM (only if still empty and we are looking at a potential standalone item)
-    if ((materials.length === 0 && components.length === 0 && operations.length === 0) && !parentId) {
-      // If we have a soItemId but no data, it might be a Master BOM with unique ID (the new system)
-      // Try to fetch data using that ID even if it didn't come from a Sales Order
+    // 2. Granular Fallback to Master BOM or Any BOM (only if still empty)
+    if (materials.length === 0 && components.length === 0 && operations.length === 0) {
+      console.log(`[explodeBOM] No SO data for ${itemCode}, falling back to Master BOM (ParentId: ${parentId})`);
+      
+      // Try with the provided soItemId first (it might be a Master BOM ID)
       if (soItemId) {
         const masterM = await bomService.getItemMaterials(soItemId, itemCode, drawingNo);
         const masterC = await bomService.getItemComponents(soItemId, itemCode, drawingNo);
         const masterO = await bomService.getItemOperations(soItemId, itemCode, drawingNo);
         
-        if (masterM.length > 0 || masterC.length > 0 || masterO.length > 0) {
-          materials = masterM;
-          components = masterC.map(c => ({
-            ...c,
-            item_type: (c.item_group === 'Sub Assembly' || (c.component_code && c.component_code.startsWith('SA-'))) ? 'Sub Assembly' : 'FG'
-          }));
-          operations = masterO;
-        }
+        materials = parentId ? masterM.filter(m => m.parent_id == parentId) : masterM.filter(m => !m.parent_id);
+        components = parentId ? masterC.filter(c => c.parent_id == parentId) : masterC.filter(c => !c.parent_id);
+        operations = masterO;
       }
       
-      // If still empty, use legacy Master BOM lookup (NULL ID)
+      // If still empty, use generic Master BOM lookup (NULL ID)
       if (materials.length === 0 && components.length === 0 && operations.length === 0) {
         const masterM = await bomService.getItemMaterials(null, itemCode, drawingNo);
         const masterC = await bomService.getItemComponents(null, itemCode, drawingNo);
         const masterO = await bomService.getItemOperations(null, itemCode, drawingNo);
         
-        materials = masterM.filter(m => !m.parent_id);
-        components = masterC.filter(c => !c.parent_id).map(c => ({
-          ...c,
-          item_type: (c.item_group === 'Sub Assembly' || (c.component_code && c.component_code.startsWith('SA-'))) ? 'Sub Assembly' : 'FG'
-        }));
+        materials = parentId ? masterM.filter(m => m.parent_id == parentId) : masterM.filter(m => !m.parent_id);
+        components = parentId ? masterC.filter(c => c.parent_id == parentId) : masterC.filter(c => !c.parent_id);
         operations = masterO;
       }
+
+      // Map item types for master components
+      components = components.map(c => ({
+        ...c,
+        item_type: (c.item_group === 'Sub Assembly' || (c.component_code && c.component_code.startsWith('SA-'))) ? 'Sub Assembly' : (c.item_type || 'FG')
+      }));
     }
 
     console.log(`[explodeBOM] Result for ${itemCode}: ${materials.length} materials, ${components.length} components, ${operations.length} operations`);
@@ -931,7 +954,10 @@ const getItemBOMDetails = async (salesOrderItemId) => {
       
       const baseQtyPerFG = isKgMaterial ? ((parseFloat(m.qty_per_pc) || 1) * total_wt) : (parseFloat(m.qty_per_pc) || 1);
       
-      const mKey = `${m.material_name}-${m.material_code || ''}`;
+      const matName = m.material_name || m.name || m.item || 'Unknown Material';
+      const matCode = m.material_code || m.item_code || m.itemCode || '';
+      const mKey = `${matName}-${matCode}`;
+      
       const existing = materialMap.get(mKey);
       const reqQty = baseQtyPerFG * qtyMultiplier;
 
@@ -945,12 +971,15 @@ const getItemBOMDetails = async (salesOrderItemId) => {
       } else {
         materialMap.set(mKey, {
           ...m,
+          material_name: matName,
+          material_code: matCode,
+          item_code: matCode,
           material_category,
           required_qty: reqQty,
           totalRequiredQty: reqQty,
           source_assembly,
           rate: m.rate || 0,
-          bom_ref: m.bom_no || drawingNo || 'BOM-REF',
+          bom_ref: m.bom_no || m.bom_ref || drawingNo || 'BOM-REF',
           total_wt: total_wt,
           is_kg_material: isKgMaterial
         });

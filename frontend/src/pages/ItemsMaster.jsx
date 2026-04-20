@@ -93,7 +93,7 @@ const ItemsMaster = () => {
     try {
       setItemsLoading(true);
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/stock/balance`, {
+      const response = await fetch(`${API_BASE}/stock/balance?includeAll=true`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {

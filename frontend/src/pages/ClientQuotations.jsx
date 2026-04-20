@@ -228,7 +228,9 @@ const ClientQuotations = () => {
           initialGst[clientName] = {};
         }
         const fgItems = (order.items || []).filter(item => 
-          (item.item_group === 'FG' || item.item_type === 'FG' || (item.item_group || '').toLowerCase().includes('finished') || !item.item_group) && (item.status === 'REJECTED' || Number(item.bom_cost) >= 0)
+          (item.item_group === 'FG' || item.item_type === 'FG' || item.item_group === 'FINISHED_GOODS') && 
+          (item.status !== 'REJECTED') && 
+          Number(item.bom_cost) > 0
         );
         order.items = fgItems;
         grouped[clientName].orders.push(order);
@@ -1090,10 +1092,18 @@ const ClientQuotations = () => {
                           <td className=" p-2 whitespace-nowrap">
                             <div className="flex flex-col gap-0.5">
                               <span className="text-xs  text-slate-700 font-medium">
-                                {group.quotes.length > 1 ? `${group.quotes.length} Drawings` : (group.quotes[0]?.drawing_no || '—')}
+                                {(() => {
+                                  const uniqueDrawings = [...new Set(group.quotes.map(q => q.drawing_no).filter(Boolean))];
+                                  return uniqueDrawings.length > 1 
+                                    ? `${uniqueDrawings.length} Drawings` 
+                                    : (uniqueDrawings[0] || '—');
+                                })()}
                               </span>
                               <span className="text-[10px] text-slate-400">
-                                {group.quotes.length} item(s)
+                                {(() => {
+                                  const uniqueDrawingsCount = [...new Set(group.quotes.map(q => q.drawing_no).filter(Boolean))].length;
+                                  return `${uniqueDrawingsCount} item(s)`;
+                                })()}
                               </span>
                             </div>
                           </td>

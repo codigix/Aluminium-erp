@@ -524,7 +524,7 @@ const QuotationFormPage = () => {
   return (
     <div className="max-w-7xl mx-auto p-2 space-y-4 bg-slate-50 min-h-screen pb-10">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white p-4 rounded-xl shadow-sm border border-slate-100">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 ">
         <div>
           <div className="flex items-center gap-2 text-slate-500 mb-0.5">
             <button 
@@ -533,12 +533,12 @@ const QuotationFormPage = () => {
             >
               <ChevronLeft size={16} />
             </button>
-            <span className="text-[10px] font-bold uppercase tracking-wider">Sales / Quotations</span>
+            <span className="text-xs   ">Sales / Quotations</span>
           </div>
-          <h1 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+          <h1 className="text-lg  text-slate-900 flex items-center gap-2">
             {mode === 'received' ? 'Received Quotation' : (version > 1 ? 'Revise Quotation' : 'Create Quotation')}
             {version > 1 && (
-              <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full text-[10px] font-bold border border-indigo-200">
+              <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full text-xs  border border-indigo-200">
                 V{version}
               </span>
             )}
@@ -684,20 +684,20 @@ const QuotationFormPage = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-2">
         {/* Section 1: Quotation Details */}
-        <div className="lg:col-span-2 space-y-4">
-          <Card className="p-4">
+        <div className="lg:col-span-2 space-y-4 bg-white ">
+          <Card className="p-2">
             <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
               <div className="p-1.5 bg-blue-50 text-blue-600 rounded-lg">
                 <FileText size={16} />
               </div>
-              <h2 className="text-sm font-bold text-slate-900">Quotation Details</h2>
+              <h2 className="text-sm  text-slate-900">Quotation Details</h2>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                <label className="text-xs  text-slate-400   flex items-center gap-1.5">
                   <Hash size={12} /> Quotation No
                 </label>
                 <input 
@@ -709,7 +709,7 @@ const QuotationFormPage = () => {
               </div>
               
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                <label className="text-xs  text-slate-400   flex items-center gap-1.5">
                   <Calendar size={12} /> Quotation Date
                 </label>
                 <input 
@@ -722,7 +722,7 @@ const QuotationFormPage = () => {
               </div>
 
               <div className="space-y-1 md:col-span-2">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                <label className="text-xs  text-slate-400   flex items-center gap-1.5">
                   <User size={12} /> Client Name
                 </label>
                 <SearchableSelect
@@ -749,7 +749,7 @@ const QuotationFormPage = () => {
               </div>
 
               <div className="space-y-1 md:col-span-2">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                <label className="text-xs  text-slate-400   flex items-center gap-1.5">
                   <FileText size={12} /> Project Name
                 </label>
                 <input 
@@ -763,7 +763,7 @@ const QuotationFormPage = () => {
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                <label className="text-xs  text-slate-400  ">
                   Status
                 </label>
                 <div className="flex items-center">
@@ -779,7 +779,7 @@ const QuotationFormPage = () => {
                     <Mail size={14} />
                   </div>
                   <div>
-                    <p className="text-[9px] font-bold text-slate-400 uppercase">Email</p>
+                    <p className="text-[9px]  text-slate-400 ">Email</p>
                     <p className="text-xs text-slate-600">{selectedClient.email || 'N/A'}</p>
                   </div>
                 </div>
@@ -788,7 +788,7 @@ const QuotationFormPage = () => {
                     <Phone size={14} />
                   </div>
                   <div>
-                    <p className="text-[9px] font-bold text-slate-400 uppercase">Phone</p>
+                    <p className="text-[9px]  text-slate-400 ">Phone</p>
                     <p className="text-xs text-slate-600">{selectedClient.phone || 'N/A'}</p>
                   </div>
                 </div>
@@ -797,7 +797,7 @@ const QuotationFormPage = () => {
                     <MapPin size={14} />
                   </div>
                   <div>
-                    <p className="text-[9px] font-bold text-slate-400 uppercase">Address</p>
+                    <p className="text-[9px]  text-slate-400 ">Address</p>
                     <p className="text-xs text-slate-600 line-clamp-1">{selectedClient.address || 'N/A'}</p>
                   </div>
                 </div>
@@ -812,7 +812,7 @@ const QuotationFormPage = () => {
                 <div className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg">
                   <Calculator size={16} />
                 </div>
-                <h2 className="text-sm font-bold text-slate-900">Quotation Items</h2>
+                <h2 className="text-sm  text-slate-900">Quotation Items</h2>
               </div>
               {!isLocked && (
                 <button
@@ -829,12 +829,12 @@ const QuotationFormPage = () => {
               <table className="w-full text-left border-collapse table-fixed">
                 <thead>
                   <tr className="bg-slate-50/50">
-                    <th className="w-12 px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100">No.</th>
-                    <th className="w-72 px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100">Drawing & Description</th>
-                    <th className="w-32 px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100">Qty</th>
-                    <th className="w-32 px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100">Rate (₹)</th>
-                    <th className="w-40 px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100">Total (₹)</th>
-                    {!isLocked && <th className="w-20 px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100 text-center">Actions</th>}
+                    <th className="w-12 px-4 py-3 text-xs  text-slate-400  tracking-widest border-b border-slate-100">No.</th>
+                    <th className="w-72 px-4 py-3 text-xs  text-slate-400  tracking-widest border-b border-slate-100">Drawing & Description</th>
+                    <th className="w-32 px-4 py-3 text-xs  text-slate-400  tracking-widest border-b border-slate-100">Qty</th>
+                    <th className="w-32 px-4 py-3 text-xs  text-slate-400  tracking-widest border-b border-slate-100">Rate (₹)</th>
+                    <th className="w-40 px-4 py-3 text-xs  text-slate-400  tracking-widest border-b border-slate-100">Total (₹)</th>
+                    {!isLocked && <th className="w-20 px-4 py-3 text-xs  text-slate-400  tracking-widest border-b border-slate-100 text-center">Actions</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
@@ -854,7 +854,7 @@ const QuotationFormPage = () => {
                               <div className="flex-1">
                                 {(mode === 'received' || isLocked) ? (
                                   <div className="flex flex-col">
-                                    <span className="text-sm font-bold text-slate-900">{item.drawing_no || 'Manual Item'}</span>
+                                    <span className="text-sm  text-slate-900">{item.drawing_no || 'Manual Item'}</span>
                                     {!isLocked && <span className="text-[11px] text-slate-500 whitespace-pre-line">{item.description}</span>}
                                   </div>
                                 ) : (item.isManual || mode === 'revise') ? (
@@ -863,7 +863,7 @@ const QuotationFormPage = () => {
                                     placeholder="Drawing No..."
                                     value={item.drawing_no}
                                     onChange={(e) => handleItemChange(item.id, 'drawing_no', e.target.value)}
-                                    className="w-full px-0 py-0 text-sm font-bold text-slate-900 border-none focus:ring-0 placeholder:text-slate-300 bg-transparent"
+                                    className="w-full px-0 py-0 text-sm  text-slate-900 border-none focus:ring-0 placeholder:text-slate-300 bg-transparent"
                                   />
                                 ) : (
                                   <SearchableSelect
@@ -892,7 +892,7 @@ const QuotationFormPage = () => {
                                     labelField="drawing_no"
                                     valueField="id"
                                     subLabelField="description"
-                                    className="border-none p-0 focus-within:ring-0 shadow-none bg-transparent font-bold text-sm"
+                                    className="border-none p-0 focus-within:ring-0 shadow-none bg-transparent  text-sm"
                                   />
                                 )}
                               </div>
@@ -945,7 +945,7 @@ const QuotationFormPage = () => {
                               onChange={(e) => handleItemChange(item.id, 'quantity', e.target.value)}
                               className={`w-full px-2 py-1 text-xs border rounded outline-none transition-all ${isLocked ? 'bg-transparent border-transparent text-slate-700 font-medium' : 'bg-white border-slate-200 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500'}`}
                             />
-                            <span className="text-[10px] text-slate-400 font-medium">{item.unit || 'Nos'}</span>
+                            <span className="text-xs text-slate-400 font-medium">{item.unit || 'Nos'}</span>
                           </div>
                         </td>
                         <td className="px-4 py-3">
@@ -957,7 +957,7 @@ const QuotationFormPage = () => {
                             className={`w-full px-2 py-1 text-xs font-semibold border rounded outline-none transition-all ${isLocked ? 'bg-transparent border-transparent text-slate-700' : 'bg-white border-slate-200 text-indigo-600 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500'}`}
                           />
                         </td>
-                        <td className="px-4 py-3 text-xs font-bold text-slate-700">
+                        <td className="px-4 py-3 text-xs  text-slate-700">
                           {formatCurrency(item.total)}
                         </td>
                         {!isLocked && (
@@ -980,19 +980,19 @@ const QuotationFormPage = () => {
         </div>
 
         {/* Section 3: Summary / Calculation */}
-        <div className="space-y-4">
-          <Card className="p-5 sticky top-4">
+        <div className="space-y-4 bg-white">
+          <Card className="p-2 sticky top-4">
             <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
               <div className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg">
                 <Calculator size={16} />
               </div>
-              <h2 className="text-sm font-bold text-slate-900">Summary</h2>
+              <h2 className="text-sm  text-slate-900">Summary</h2>
             </div>
 
             <div className="space-y-3">
               {version > 1 && versionHistory.length > 0 && (
                 <div className="mb-4 p-3 bg-indigo-50/50 rounded-xl border border-indigo-100/50 space-y-2">
-                  <div className="flex items-center gap-1.5 text-[10px] font-bold text-indigo-600 uppercase tracking-wider">
+                  <div className="flex items-center gap-1.5 text-xs  text-indigo-600  ">
                     <AlertCircle size={12} /> Revision Comparison
                   </div>
                   {(() => {
@@ -1001,13 +1001,13 @@ const QuotationFormPage = () => {
                     const diff = summary.totalAmount - (parseFloat(prevVersion.received_amount) || parseFloat(prevVersion.total_amount) * 1.18);
                     return (
                       <div className="space-y-1">
-                        <div className="flex justify-between text-[10px]">
+                        <div className="flex justify-between text-xs">
                           <span className="text-slate-500">Previous (V{version-1})</span>
                           <span className="text-slate-700 font-medium">{formatCurrency(parseFloat(prevVersion.received_amount) || parseFloat(prevVersion.total_amount) * 1.18)}</span>
                         </div>
-                        <div className="flex justify-between text-[10px]">
+                        <div className="flex justify-between text-xs">
                           <span className="text-slate-500">Net Change</span>
-                          <span className={`font-bold ${diff >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                          <span className={` ${diff >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                             {diff >= 0 ? '+' : ''}{formatCurrency(diff)}
                           </span>
                         </div>
@@ -1019,17 +1019,17 @@ const QuotationFormPage = () => {
 
               <div className="flex justify-between items-center text-xs">
                 <span className="text-slate-500 font-medium">Base Amount</span>
-                <span className="text-slate-900 font-bold">{formatCurrency(summary.baseAmount)}</span>
+                <span className="text-slate-900 ">{formatCurrency(summary.baseAmount)}</span>
               </div>
               <div className="flex justify-between items-center text-xs">
                 <span className="text-slate-500 font-medium">GST (18%)</span>
-                <span className="text-slate-900 font-bold">{formatCurrency(summary.gstAmount)}</span>
+                <span className="text-slate-900 ">{formatCurrency(summary.gstAmount)}</span>
               </div>
               
               <div className="pt-3 mt-3 border-t border-slate-100">
                 <div className="flex justify-between items-end">
                   <div>
-                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Total Amount</p>
+                    <p className="text-[9px]  text-slate-400  tracking-widest mb-0.5">Total Amount</p>
                     <p className="text-xl font-black text-indigo-600 tracking-tight">{formatCurrency(summary.totalAmount)}</p>
                   </div>
                 </div>
@@ -1040,7 +1040,7 @@ const QuotationFormPage = () => {
               <div className="mt-6 pt-6 border-t border-slate-100 space-y-3">
                 <div className="flex items-center gap-2 mb-2">
                   <Clock size={14} className="text-slate-400" />
-                  <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Version History</h3>
+                  <h3 className="text-xs  text-slate-400  ">Version History</h3>
                 </div>
                 <div className="space-y-2">
                   {versionHistory.map((v) => {
@@ -1071,10 +1071,10 @@ const QuotationFormPage = () => {
                           }`} />
                           <div>
                             <div className="flex items-center gap-2">
-                              <p className={`text-[11px] font-bold ${(v.id === selectedVersionId || (selectedVersionId === null && v.version === version)) ? 'text-indigo-700' : 'text-slate-700'}`}>
+                              <p className={`text-[11px]  ${(v.id === selectedVersionId || (selectedVersionId === null && v.version === version)) ? 'text-indigo-700' : 'text-slate-700'}`}>
                                 Version {v.version}
                               </p>
-                              <span className={`text-[8px] px-1.5 py-0.5 rounded-full font-bold border tracking-tighter ${
+                              <span className={`text-[8px] px-1.5 py-0.5 rounded-full  border tracking-tighter ${
                                 v.status?.toUpperCase() === 'APPROVED' ? 'bg-emerald-50 border-emerald-100 text-emerald-600' :
                                 v.status?.toUpperCase() === 'REJECTED' ? 'bg-rose-50 border-rose-100 text-rose-600' :
                                 'bg-slate-50 border-slate-100 text-slate-500'
@@ -1117,14 +1117,14 @@ const QuotationFormPage = () => {
                     <div className="grid grid-cols-2 gap-2 mt-4 pt-4 border-t border-slate-100">
                       <button
                         onClick={() => handleRejectVersion(selectedV)}
-                        className="flex items-center justify-center gap-2 px-3 py-2 bg-rose-50 text-rose-600 rounded-lg text-[10px] font-bold border border-rose-100 hover:bg-rose-100 transition-all shadow-sm shadow-rose-50"
+                        className="flex items-center justify-center gap-2 px-3 py-2 bg-rose-50 text-rose-600 rounded-lg text-xs  border border-rose-100 hover:bg-rose-100 transition-all shadow-sm shadow-rose-50"
                       >
                         <XCircle size={14} />
                         Reject V{selectedV.version}
                       </button>
                       <button
                         onClick={() => handleApproveVersion(selectedV)}
-                        className="flex items-center justify-center gap-2 px-3 py-2 bg-emerald-50 text-emerald-600 rounded-lg text-[10px] font-bold border border-emerald-100 hover:bg-emerald-100 transition-all shadow-sm shadow-emerald-50"
+                        className="flex items-center justify-center gap-2 px-3 py-2 bg-emerald-50 text-emerald-600 rounded-lg text-xs  border border-emerald-100 hover:bg-emerald-100 transition-all shadow-sm shadow-emerald-50"
                       >
                         <Check size={14} />
                         Approve V{selectedV.version}
@@ -1137,7 +1137,7 @@ const QuotationFormPage = () => {
 
             <div className="mt-6 space-y-4">
               <div className="space-y-1.5">
-                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block">Notes</label>
+                <label className="text-[9px]  text-slate-400  tracking-widest block">Notes</label>
                 <textarea 
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
@@ -1152,7 +1152,7 @@ const QuotationFormPage = () => {
                   <div className="text-amber-600 mt-0.5">
                     <FileText size={14} />
                   </div>
-                  <p className="text-[10px] text-amber-800 leading-relaxed font-medium">
+                  <p className="text-xs text-amber-800 leading-relaxed font-medium">
                     PDF can be downloaded at any time after saving.
                   </p>
                 </div>

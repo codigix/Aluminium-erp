@@ -817,23 +817,25 @@ const getApprovedDrawings = async (companyId = null) => {
   
   for (const order of rows) {
     const [items] = await pool.query(
-      `SELECT soi.*, 
-              COALESCE(NULLIF(soi.item_group, ''), NULLIF(soi.item_type, ''), 'FG') as item_group,
-              COALESCE(
-                poi.quantity, 
-                (SELECT MAX(quantity) FROM sales_order_items WHERE sales_order_id = soi.sales_order_id AND TRIM(drawing_no) = TRIM(soi.drawing_no)),
-                soi.quantity
-              ) as design_qty 
-       FROM sales_order_items soi
-       LEFT JOIN sales_orders so ON soi.sales_order_id = so.id
-       LEFT JOIN customer_po_items poi ON so.customer_po_id = poi.customer_po_id 
-            AND (TRIM(soi.drawing_no) = TRIM(poi.drawing_no) AND soi.drawing_no IS NOT NULL)
-       WHERE soi.sales_order_id = ? 
-       AND (soi.item_group IN ('FG', 'FINISHED_GOODS', 'SA', 'SUB_ASSEMBLY', 'SFG', 'SEMI_FINISHED') 
-            OR soi.item_type IN ('FG', 'FINISHED_GOODS', 'SA', 'SUB_ASSEMBLY', 'SFG', 'SEMI_FINISHED') 
-            OR soi.item_group IS NULL OR soi.item_group = '' 
-            OR soi.item_group LIKE '%FINISHED%' 
-            OR soi.item_group LIKE '%ASSEMBLY%')`,
+      `SELECT * FROM (
+        SELECT soi.*, 
+                COALESCE(NULLIF(soi.item_group, ''), NULLIF(soi.item_type, '')) as item_group_calc,
+                COALESCE(
+                  poi.quantity, 
+                  (SELECT MAX(quantity) FROM sales_order_items WHERE sales_order_id = soi.sales_order_id AND TRIM(drawing_no) = TRIM(soi.drawing_no)),
+                  soi.quantity
+                ) as design_qty,
+                ROW_NUMBER() OVER (PARTITION BY TRIM(soi.drawing_no) ORDER BY soi.bom_cost DESC, soi.id DESC) as rn
+         FROM sales_order_items soi
+         LEFT JOIN sales_orders so ON soi.sales_order_id = so.id
+         LEFT JOIN customer_po_items poi ON so.customer_po_id = poi.customer_po_id 
+              AND (TRIM(soi.drawing_no) = TRIM(poi.drawing_no) AND soi.drawing_no IS NOT NULL)
+         WHERE soi.sales_order_id = ? 
+         AND (TRIM(UPPER(soi.item_group)) IN ('FG', 'FINISHED GOODS', 'FINISHED_GOODS') 
+              OR TRIM(UPPER(soi.item_type)) IN ('FG', 'FINISHED GOODS', 'FINISHED_GOODS'))
+         AND (soi.status IS NULL OR TRIM(UPPER(soi.status)) NOT IN ('REJECTED', 'CANCELLED'))
+         AND soi.bom_cost > 0
+      ) t WHERE rn = 1`,
       [order.id]
     );
     order.items = items;

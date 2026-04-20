@@ -1,4 +1,4 @@
-const mysql = require('mysql2');
+const mysql = require('mysql2/promise');
 require('dotenv').config();
 
 async function query() {
@@ -10,20 +10,20 @@ async function query() {
         port: parseInt(process.env.DB_PORT || '3307')
     };
 
-    const connection = mysql.createConnection(config).promise();
+    const connection = await mysql.createConnection(config);
 
     try {
-        console.log('--- Quotation Request ID 5 ---');
-        const [q] = await connection.query('SELECT * FROM quotation_requests WHERE id = 5');
-        console.log(JSON.stringify(q, null, 2));
+        console.log('\n--- Materials for FG (ID 29) ---');
+        const [materials] = await connection.query(`
+            SELECT * FROM sales_order_item_materials WHERE sales_order_item_id = 29
+        `);
+        console.table(materials);
 
-        console.log('\n--- Communications for ID 5 ---');
-        const [comm] = await connection.query('SELECT * FROM quotation_communications WHERE quotation_id = 5');
-        console.log(JSON.stringify(comm, null, 2));
-
-        console.log('\n--- Recent 5 Communications ---');
-        const [recent] = await connection.query('SELECT * FROM quotation_communications ORDER BY id DESC LIMIT 5');
-        console.log(JSON.stringify(recent, null, 2));
+        console.log('\n--- Components for FG (ID 29) ---');
+        const [components] = await connection.query(`
+            SELECT * FROM sales_order_item_components WHERE sales_order_item_id = 29
+        `);
+        console.table(components);
 
     } catch (error) {
         console.error('Error:', error);
