@@ -989,13 +989,11 @@ const CustomerDrawing = () => {
   };
 
   return (
-    <div className="p-2 space-y-2 p-4 animate-in fade-in duration-500">
+    <div className=" space-y-2  animate-in fade-in duration-500">
       {/* Header Section */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 bg-white p-2 rounded shadow-sm border border-slate-100">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <div className="p-2 bg-indigo-600 text-white rounded ">
-            <FileText size={15} />
-          </div>
+          
           <div>
             <h1 className="text-xl  text-slate-900 ">Customer Drawing Master</h1>
             <p className="text-xs text-slate-500 ">Manage customer reference drawings and technical documentation</p>
@@ -1514,7 +1512,7 @@ const CustomerDrawing = () => {
               {revisionsLoading ? (
                 <div className="py-8 text-center">
                   <div className="flex justify-center mb-2">
-                    <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded  animate-spin"></div>
+                    <div className="w-3 h-3 border-2 border-indigo-600 border-t-transparent rounded  animate-spin"></div>
                   </div>
                   <p className="text-slate-600  text-xs">Loading...</p>
                 </div>
@@ -1598,7 +1596,7 @@ const CustomerDrawing = () => {
               {approvedLoading ? (
                 <div className="py-8 text-center">
                   <div className="flex justify-center mb-2">
-                    <div className="w-6 h-6 border-2 border-emerald-600 border-t-transparent rounded  animate-spin"></div>
+                    <div className="w-3 h-3 border-2 border-emerald-600 border-t-transparent rounded  animate-spin"></div>
                   </div>
                   <p className="text-slate-600  text-xs">Loading approved drawings...</p>
                 </div>

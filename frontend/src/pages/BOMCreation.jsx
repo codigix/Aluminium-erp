@@ -484,7 +484,7 @@ const BOMCreation = () => {
     if (clientLoading) {
       return (
         <div className="flex justify-center py-10">
-          <div className="w-6 h-6 border-2 border-slate-200 border-t-indigo-500 rounded animate-spin" />
+          <div className="w-3 h-3 border-2 border-slate-200 border-t-indigo-500 rounded animate-spin" />
         </div>
       );
     }

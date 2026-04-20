@@ -2884,7 +2884,7 @@ const BOMFormPage = () => {
                           <tr key={o.id} className="hover:bg-slate-50/80 transition-colors group">
                             <td className="p-2  whitespace-nowrap">
                               <div className="flex items-center gap-2">
-                                <span className="w-6 h-6 rounded  bg-slate-100 flex items-center justify-centertext-xs   text-slate-500 border border-slate-200">{idx + 1}</span>
+                                <span className="w-3 h-3 rounded  bg-slate-100 flex items-center justify-centertext-xs   text-slate-500 border border-slate-200">{idx + 1}</span>
                                 <div className="flex flex-col">
                                   <span className="text-xs  text-slate-800">{o.operation_name || o.operationName}</span>
                                   <span className="text-xs text-slate-400   flex items-center gap-1">

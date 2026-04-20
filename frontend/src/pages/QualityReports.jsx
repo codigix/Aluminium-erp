@@ -82,7 +82,7 @@ const QualityReports = () => {
     <div className="bg-white rounded p-5 border border-slate-100 shadow-sm hover: transition-all">
       <div className="flex items-center gap-2">
         <div className={`p-2 rounded  ${colorClass}`}>
-          <Icon className="w-6 h-6" />
+          <Icon className="w-3 h-3" />
         </div>
         <div className="flex-1">
           <p className="text-xs   text-slate-400   mb-1">{title}</p>

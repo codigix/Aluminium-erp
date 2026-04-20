@@ -1523,7 +1523,7 @@ const JobCard = () => {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="w-5 h-5 bg-slate-50 rounded  flex items-center justify-center border border-slate-100">
-                <Box className="w-6 h-6 text-slate-400" />
+                <Box className="w-3 h-3 text-slate-400" />
               </div>
               <div>
                 <p className="text-xs  text-slate-400   mb-0.5">Target Item</p>
@@ -1929,7 +1929,7 @@ const JobCard = () => {
                               </td>
                               <td className="p-2">
                                 <div className="flex items-center gap-2">
-                                  <div className="w-6 h-6 bg-slate-100 rounded flex items-center justify-center text-xs  text-slate-600">
+                                  <div className="w-3 h-3 bg-slate-100 rounded flex items-center justify-center text-xs  text-slate-600">
                                     {log.operator_name?.[0]}
                                   </div>
                                   <span className="text-slate-600">{log.operator_name}</span>
@@ -3561,7 +3561,7 @@ const JobCard = () => {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="w-5 h-5 bg-indigo-600 text-white rounded  flex items-center justify-center shadow-lg shadow-indigo-100">
-                <ClipboardList className="w-6 h-6" />
+                <ClipboardList className="w-3 h-3" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
@@ -3949,7 +3949,7 @@ const JobCard = () => {
                       <td colSpan="10" className="px-6 py-8 text-center">
                         <div className="flex flex-col items-center gap-2">
                           <div className="w-5 h-5 bg-slate-50 text-slate-300 rounded flex items-center justify-center">
-                            <AlertCircle className="w-6 h-6" />
+                            <AlertCircle className="w-3 h-3" />
                           </div>
                           <p className="text-slate-400 text-sm italic">No job cards found</p>
                         </div>

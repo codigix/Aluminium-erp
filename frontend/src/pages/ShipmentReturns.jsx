@@ -314,17 +314,17 @@ const ShipmentReturns = ({ apiRequest }) => {
                 </div>
                 <div className="space-y-2 relative before:content-[''] before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-[2px] before:bg-slate-100">
                   <div className="relative pl-8">
-                    <div className={`absolute left-0 top-1 w-6 h-6 rounded border-4 border-white shadow-sm flex items-center justify-center ${selectedReturn.created_at ? 'bg-green-500' : 'bg-slate-200'}`} />
+                    <div className={`absolute left-0 top-1 w-3 h-3 rounded border-4 border-white shadow-sm flex items-center justify-center ${selectedReturn.created_at ? 'bg-green-500' : 'bg-slate-200'}`} />
                     <p className="text-xs  text-slate-700">Return Initiated</p>
                     <p className="text-xs text-slate-400 ">{selectedReturn.created_at ? new Date(selectedReturn.created_at).toLocaleString('en-IN') : '—'}</p>
                   </div>
                   <div className="relative pl-8">
-                    <div className={`absolute left-0 top-1 w-6 h-6 rounded border-4 border-white shadow-sm flex items-center justify-center ${selectedReturn.pickup_date ? 'bg-indigo-500' : 'bg-slate-200'}`} />
+                    <div className={`absolute left-0 top-1 w-3 h-3 rounded border-4 border-white shadow-sm flex items-center justify-center ${selectedReturn.pickup_date ? 'bg-indigo-500' : 'bg-slate-200'}`} />
                     <p className="text-xs  text-slate-700">Pickup Scheduled</p>
                     <p className="text-xs text-slate-400 ">{selectedReturn.pickup_date ? new Date(selectedReturn.pickup_date).toLocaleDateString('en-IN') : 'Awaiting Schedule'}</p>
                   </div>
                   <div className="relative pl-8">
-                    <div className={`absolute left-0 top-1 w-6 h-6 rounded border-4 border-white shadow-sm flex items-center justify-center ${selectedReturn.received_date ? 'bg-purple-500' : 'bg-slate-200'}`} />
+                    <div className={`absolute left-0 top-1 w-3 h-3 rounded border-4 border-white shadow-sm flex items-center justify-center ${selectedReturn.received_date ? 'bg-purple-500' : 'bg-slate-200'}`} />
                     <p className="text-xs  text-slate-700">Received & Inspected</p>
                     <p className="text-xs text-slate-400 ">{selectedReturn.received_date ? new Date(selectedReturn.received_date).toLocaleDateString('en-IN') : 'Pending Receipt'}</p>
                   </div>

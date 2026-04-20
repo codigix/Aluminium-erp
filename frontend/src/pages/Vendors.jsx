@@ -336,7 +336,7 @@ const Vendors = () => {
         <div>
           <div className="flex items-center gap-2 mb-1">
             <div className="p-2 bg-indigo-600 text-white rounded shadow-lg shadow-indigo-100">
-              <Briefcase className="w-6 h-6" />
+              <Briefcase className="w-3 h-3" />
             </div>
             <h2 className="text-xl  text-slate-900 ">Suppliers</h2>
           </div>

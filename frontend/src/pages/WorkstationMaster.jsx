@@ -331,7 +331,7 @@ const WorkstationMaster = ({ showForm, setShowForm }) => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 bg-white p-2 rounded  border border-slate-100 ">
         <div className="flex items-center gap-2">
           <div className="p-2 bg-indigo-600 rounded  shadow-lg shadow-indigo-100">
-            <RefreshCw className={`w-6 h-6 text-white ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3 h-3 text-white ${loading ? 'animate-spin' : ''}`} />
           </div>
           <div>
             <h1 className="text-xl  text-slate-900">Workstation Master</h1>

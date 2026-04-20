@@ -142,7 +142,7 @@ const DrawingPreviewModal = ({ isOpen, onClose, drawing }) => {
             <div className="w-full h-full flex items-center justify-center p-2">
               <div className="text-center p-2 bg-white rounded border border-slate-100 shadow-sm max-w-xs">
                 <div className="w-5 h-5 bg-indigo-50 rounded  flex items-center justify-center mx-auto mb-4">
-                  <FileText className="w-6 h-6 text-indigo-500 opacity-60" />
+                  <FileText className="w-3 h-3 text-indigo-500 opacity-60" />
                 </div>
                 <h3 className="text-slate-900  text-sm mb-1">Preview Not Available</h3>
                 <p className="text-slate-500 text-xs mb-4 leading-relaxed">Format (.{previewFile.extension}) cannot be rendered directly.</p>

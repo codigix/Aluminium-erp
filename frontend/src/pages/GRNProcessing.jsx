@@ -584,7 +584,7 @@ const GRNProcessing = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded  border border-indigo-100 ">
-            <ShieldCheck className="w-6 h-6" />
+            <ShieldCheck className="w-3 h-3" />
           </div>
           <div>
             <h1 className="text-xl  text-slate-900 leading-tight">Quality Control</h1>
@@ -919,7 +919,7 @@ const GRNProcessing = () => {
                 onClick={() => setShowViewModal(false)}
                 className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded  transition-colors"
               >
-                <XCircle className="w-6 h-6" />
+                <XCircle className="w-3 h-3" />
               </button>
             </div>
 

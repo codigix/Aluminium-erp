@@ -186,7 +186,7 @@ const WorkOrder = () => {
             <Card key={i} className="border-none  bg-white overflow-hidden group hover: transition-all">
               <div className="p-2 flex items-center gap-2">
                 <div className={`p-2 bg-${stat.color}-50 text-${stat.color}-600 rounded  flex items-center justify-center group-hover:scale-110 transition-transform`}>
-                  <stat.icon className="w-6 h-6" />
+                  <stat.icon className="w-3 h-3" />
                 </div>
                 <div>
                   <p className="text-xs  text-slate-400  ">{stat.label}</p>
@@ -300,7 +300,7 @@ const WorkOrder = () => {
                     <td colSpan="5" className="p-2 text-center">
                       <div className="flex flex-col items-center gap-2">
                         <div className="p-2 bg-slate-50 text-slate-300 rounded  flex items-center justify-center">
-                          <FileText className="w-6 h-6" />
+                          <FileText className="w-3 h-3" />
                         </div>
                         <p className="text-slate-400 text-sm italic ">No manufacturing sequences found</p>
                       </div>

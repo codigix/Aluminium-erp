@@ -606,7 +606,7 @@ const DesignOrders = () => {
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 mb-4">
             <div className="flex items-center gap-2">
               <div className="p-2 bg-indigo-100 rounded  text-indigo-600 shadow-sm border border-indigo-50">
-                <FileText className="w-6 h-6" />
+                <FileText className="w-3 h-3" />
               </div>
               <div>
                 <h1 className="text-xl  text-slate-900 tracking-tight leading-none">Design Engineering Hub</h1>
@@ -663,7 +663,7 @@ const DesignOrders = () => {
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
                   <div className="flex items-center gap-2">
                     <div className="p-2 bg-white/10 rounded  backdrop-blur-md border border-white/20">
-                      <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z"/>
                       </svg>
                     </div>
@@ -1092,7 +1092,7 @@ const DesignOrders = () => {
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
                   <div className="flex items-center gap-2">
                     <div className="p-2 bg-white/10 rounded  backdrop-blur-md border border-white/20">
-                      <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                       </svg>
                     </div>
@@ -1439,7 +1439,7 @@ const DesignOrders = () => {
                 {detailsLoading ? (
                   <div className="p-2 text-center">
                     <div className="flex justify-center mb-3">
-                      <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded  animate-spin"></div>
+                      <div className="w-3 h-3 border-2 border-indigo-600 border-t-transparent rounded  animate-spin"></div>
                     </div>
                     <p className="text-slate-600  text-xs">Loading technical details...</p>
                   </div>
@@ -1685,7 +1685,7 @@ const DesignOrders = () => {
                             ) : item.drawing_pdf.toLowerCase().endsWith('.pdf') ? (
                               <div className="p-6 flex flex-col items-center justify-center bg-slate-50/50">
                                 <div className="w-5 h-5 bg-red-100 text-red-600 rounded  flex items-center justify-center mb-3">
-                                  <FileText className="w-6 h-6" />
+                                  <FileText className="w-3 h-3" />
                                 </div>
                                 <h4 className="text-xs  text-slate-900 mb-1">PDF Drawing Available</h4>
                                 <p className="text-xs text-slate-500 mb-4">This drawing is in PDF format and cannot be previewed directly here.</p>

@@ -813,7 +813,7 @@ const WorkOrderForm = ({ workOrderId, salesOrderId: propSalesOrderId, salesOrder
                   ) : (
                     <Card className="p-8 border-slate-200/60 border-dashed bg-slate-50/30 flex flex-col items-center justify-center text-center">
                       <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center mb-4 shadow-sm border border-slate-100">
-                        <Activity className="w-6 h-6 text-slate-300 animate-pulse" />
+                        <Activity className="w-3 h-3 text-slate-300 animate-pulse" />
                       </div>
                       <h3 className="text-sm font-bold text-slate-600">Production Logic Not Found</h3>
                       <p className="text-xs text-slate-400 mt-1 max-w-[300px]">
@@ -908,7 +908,7 @@ const WorkOrderForm = ({ workOrderId, salesOrderId: propSalesOrderId, salesOrder
                   ) : (
                     <Card className="p-5 border-slate-200/60  border-dashed bg-slate-50/30 flex flex-col items-center justify-center text-center">
                       <div className="w-5 h-5 bg-white rounded  flex items-center justify-center mb-4  border border-slate-100">
-                        <Search className="w-6 h-6 text-slate-300" />
+                        <Search className="w-3 h-3 text-slate-300" />
                       </div>
                       <h3 className="text-sm  text-slate-600">Stock Requirements Empty</h3>
                       <p className="text-xs text-slate-400 mt-1 max-w-[300px]">
@@ -921,7 +921,7 @@ const WorkOrderForm = ({ workOrderId, salesOrderId: propSalesOrderId, salesOrder
                     <div className="absolute top-0 right-0 w-64 h-full bg-white/5 skew-x-12 -mr-12" />
                     <div className="p-2 relative flex items-center gap-6">
                       <div className="w-5 h-5 bg-white/10 rounded  flex items-center justify-center">
-                        <ShieldCheck className="w-6 h-6 text-white" />
+                        <ShieldCheck className="w-3 h-3 text-white" />
                       </div>
                       <div className="flex-1">
                         <div className="flex items-center gap-2 ">

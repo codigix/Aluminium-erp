@@ -1800,7 +1800,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-2">
           <div className="w-5 h-5 bg-slate-900 text-white rounded  flex items-center justify-center shadow-lg shadow-slate-200">
-            <Layers className="w-6 h-6" />
+            <Layers className="w-3 h-3" />
           </div>
           <div>
             <h1 className="text-xl  text-slate-900  flex items-center gap-2 ">
@@ -1845,7 +1845,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
             <div className="p-2">
               <div className="flex items-center justify-between mb-4">
                 <div className={`w-5 h-5 rounded  bg-${stat.color}-50 text-${stat.color}-600 flex items-center justify-center transition-transform group-hover:scale-110 duration-300`}>
-                  <stat.icon className="w-6 h-6" />
+                  <stat.icon className="w-3 h-3" />
                 </div>
                 <div className="text-right">
                   <div className="text-xl  text-slate-900">{stat.value}</div>

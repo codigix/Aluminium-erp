@@ -966,12 +966,10 @@ const ClientQuotations = () => {
   };
 
   return (
-    <div className="p-2 space-y-2 p-4 animate-in fade-in duration-500">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 bg-white p-2 rounded shadow-sm border border-slate-100">
+    <div className="  animate-in fade-in duration-500">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <div className="p-2 bg-indigo-600 text-white rounded ">
-            <ClipboardList size={15} />
-          </div>
+          
           <div>
             <h1 className="text-xl  text-slate-900 ">Client Quotations</h1>
             <p className="text-xs text-slate-500 ">Track all quotations from BOM-approved orders</p>
@@ -981,7 +979,7 @@ const ClientQuotations = () => {
         <div className="flex items-center gap-2">
           <button
             onClick={() => navigate('/quotation-form')}
-            className="p-2.5 bg-indigo-600 text-white hover:bg-indigo-700 rounded transition-all shadow-md flex items-center gap-2 text-xs"
+            className="p-2 bg-indigo-600 text-white hover:bg-indigo-700 rounded transition-all shadow-md flex items-center gap-2 text-xs"
           >
             <Plus size={15} />
             Create Quotation
@@ -990,7 +988,7 @@ const ClientQuotations = () => {
           <button
             onClick={fetchAllData}
             disabled={loading}
-            className="p-2.5 text-slate-500 hover:bg-slate-50 rounded  transition-all border border-slate-200 flex items-center gap-2 text-xs "
+            className="p-2 text-slate-500 hover:bg-slate-50 rounded  transition-all border border-slate-200 flex items-center gap-2 text-xs "
           >
             <RotateCw size={15} className={loading ? 'animate-spin' : ''} />
             Refresh All
@@ -998,7 +996,7 @@ const ClientQuotations = () => {
         </div>
       </div>
 
-      <div className="flex gap-2 p-1 bg-slate-100/50 rounded-lg w-fit border border-slate-200">
+      <div className="flex gap-2 p-1 my-4 bg-slate-100/50 rounded-lg w-fit border border-slate-200">
         <button
           onClick={() => setActiveTab('pending')}
           className={`px-4 py-1.5 rounded-md text-xs font-medium transition-all ${
@@ -1034,8 +1032,8 @@ const ClientQuotations = () => {
       <div className="space-y-2">
         <Card>
           <div className="overflow-x-auto custom-scrollbar">
-            <table className="min-w-full divide-y divide-slate-100">
-              <thead className="bg-slate-50/50">
+            <table className="min-w-full divide-y divide-slate-100 border border-slate-200">
+              <thead className="bg-white">
                 <tr>
                   <th className=" p-2 text-left text-xs  text-slate-500  ">Quotation ID / Type</th>
                   <th className=" p-2 text-left text-xs  text-slate-500  ">Client & Project</th>

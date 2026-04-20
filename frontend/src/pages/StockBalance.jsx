@@ -333,7 +333,7 @@ const StockBalance = () => {
               <p className="text-2xl  text-white">{stats.totalItems}</p>
             </div>
             <div className="p-2 bg-indigo-500/50 backdrop-blur-sm rounded  text-white ">
-              <Box className="w-6 h-6" />
+              <Box className="w-3 h-3" />
             </div>
           </div>
           
@@ -343,7 +343,7 @@ const StockBalance = () => {
               <p className="text-xl  text-slate-900">{parseFloat(stats.totalBalance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
             </div>
             <div className="p-2 bg-emerald-50 rounded  text-emerald-600 border border-emerald-100">
-              <Database className="w-6 h-6" />
+              <Database className="w-3 h-3" />
             </div>
           </div>
 
@@ -353,7 +353,7 @@ const StockBalance = () => {
               <p className="text-2xl  text-rose-600">{stats.lowStock}</p>
             </div>
             <div className="p-2 bg-rose-50 rounded  text-rose-600 border border-rose-100">
-              <AlertTriangle className="w-6 h-6" />
+              <AlertTriangle className="w-3 h-3" />
             </div>
           </div>
         </div>

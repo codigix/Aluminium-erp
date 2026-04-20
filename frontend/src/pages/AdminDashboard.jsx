@@ -89,7 +89,7 @@ const AdminDashboard = () => {
           <p className="text-xs text-slate-500 mt-1 font-medium">{subtitle}</p>
         </div>
         <div className={`p-2 rounded ${color.replace('bg-', 'bg-').replace('500', '100')} ${color.replace('bg-', 'text-').replace('500', '600')} transition-transform group-hover:rotate-12 shadow-sm`}>
-          <Icon className="w-6 h-6" />
+          <Icon className="w-3 h-3" />
         </div>
       </div>
     </div>
@@ -100,7 +100,7 @@ const AdminDashboard = () => {
       <div className="flex flex-col items-center justify-center p-22 space-y-2">
         <div className="relative">
           <div className="w-16 h-16 border-4 border-slate-100 border-t-indigo-600 rounded animate-spin" />
-          <LayoutDashboard className="w-6 h-6 text-indigo-600 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
+          <LayoutDashboard className="w-3 h-3 text-indigo-600 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
         </div>
         <div className="text-center">
           <h3 className="text-slate-900  tracking-tight">Aggregating Enterprise Data</h3>
@@ -113,12 +113,10 @@ const AdminDashboard = () => {
   return (
     <div className="space-y-2 pb-12">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 bg-white p-2 rounded border border-slate-100  relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50/50 rounded -mr-32 -mt-32 blur-3xl" />
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
+        
         <div className="relative z-10 flex items-center gap-6">
-          <div className="p-2 bg-indigo-600 rounded shadow-indigo-200">
-            <LayoutDashboard className="w-5 h-5 text-white" />
-          </div>
+          
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-xl  text-slate-900 ">{getGreeting()}, {user?.first_name || 'Admin'}</h1>
@@ -159,7 +157,7 @@ const AdminDashboard = () => {
           <div className="flex items-center justify-between mb-10">
             <div>
               <h3 className="text-md  text-slate-900 tracking-tight flex items-center gap-2">
-                <TrendingUp className="w-6 h-6 text-indigo-600" />
+                <TrendingUp className="w-3 h-3 text-indigo-600" />
                 Enterprise velocity
               </h3>
               <p className="text-xs text-slate-500   mt-1 ">REAL-TIME PRODUCTION & SALES THROUGHPUT</p>

@@ -792,12 +792,10 @@ const SalesOrders = () => {
     const completedOrders = orders.filter(o => ['COMPLETED', 'FULFILLED', 'DELIVERED'].includes(o.status?.toUpperCase())).length;
 
     return (
-      <div className="space-y-2 pb-10">
-        <div className="bg-white p-2 rounded border border-slate-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-2">
+      <div className=" pb-10">
+        <div className=" flex flex-col md:flex-row md:items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <div className="p-2 bg-indigo-50 rounded text-indigo-600 ">
-               <Package className="w-8 h-8" />
-            </div>
+            
             <div>
               <h1 className="text-xl  text-slate-900 ">Sales Orders</h1>
               <div className="flex items-center gap-2 mt-1">
@@ -819,7 +817,7 @@ const SalesOrders = () => {
           <div className="flex items-center gap-2">
              <button 
               onClick={fetchOrders}
-              className="p-2.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all border border-slate-100"
+              className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all border border-slate-100"
               title="Refresh Data"
             >
               <Loader2 className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
@@ -834,7 +832,7 @@ const SalesOrders = () => {
           </div>
         </div>
 
-        <div className="bg-white rounded border border-slate-100 shadow-sm overflow-hidden p-2">
+        <div className=" overflow-hidden my-4">
           <DataTable 
             columns={columns}
             data={orders}
@@ -866,7 +864,7 @@ const SalesOrders = () => {
           onClick={() => setViewMode('list')}
           className="p-2 hover:bg-slate-100 rounded  transition-colors text-slate-500"
         >
-          <ArrowLeft className="w-6 h-6" />
+          <ArrowLeft className="w-3 h-3" />
         </button>
         <div className="flex-1">
           <div className="flex items-center gap-2">
@@ -1046,7 +1044,7 @@ const SalesOrders = () => {
             <Card title="Items included in selected PO" className='bg-white' subtitle="Order Items">
               <div className="p-2 bg-blue-50/50 rounded  mb-4 border border-blue-100 flex items-center gap-2">
                 <div className="p-2 bg-white rounded   border border-blue-100">
-                    <Package className="w-6 h-6 text-blue-600" />
+                    <Package className="w-3 h-3 text-blue-600" />
                 </div>
                 <div>
                   <p className="text-xs  text-slate-900">Items <span className="text-slate-400 font-normal ml-1">({formData.items.length})</span></p>

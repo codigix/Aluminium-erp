@@ -275,7 +275,7 @@ const Tracking = ({ apiRequest }) => {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded  bg-slate-100 flex items-center justify-center text-[8px]  text-slate-400 ">
+                  <div className="w-3 h-3 rounded  bg-slate-100 flex items-center justify-center text-[8px]  text-slate-400 ">
                     {s.customer.charAt(0)}
                   </div>
                   <p className="text-xs  text-slate-700 truncate  tracking-tighter">{s.customer}</p>

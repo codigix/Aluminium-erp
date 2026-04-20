@@ -297,7 +297,7 @@ const Suppliers = () => {
         <Card className="p-2 border border-slate-100 rounded  bg-white">
           <div className="flex items-center gap-2">
             <div className="p-2 bg-indigo-50 rounded ">
-              <Users className="w-6 h-6 text-indigo-600" />
+              <Users className="w-3 h-3 text-indigo-600" />
             </div>
             <div>
               <p className="text-xs text-slate-500 font-medium">Total Suppliers</p>
@@ -308,7 +308,7 @@ const Suppliers = () => {
         <Card className="p-2 border border-slate-100 rounded  bg-white">
           <div className="flex items-center gap-2">
             <div className="p-2 bg-emerald-50 rounded ">
-              <CheckCircle className="w-6 h-6 text-emerald-600" />
+              <CheckCircle className="w-3 h-3 text-emerald-600" />
             </div>
             <div>
               <p className="text-xs text-slate-500 font-medium">Active</p>
@@ -319,7 +319,7 @@ const Suppliers = () => {
         <Card className="p-2 border border-slate-100 rounded  bg-white">
           <div className="flex items-center gap-2">
             <div className="p-2 bg-yellow-50 rounded ">
-              <Star className="w-6 h-6 text-yellow-600 fill-current" />
+              <Star className="w-3 h-3 text-yellow-600 fill-current" />
             </div>
             <div>
               <p className="text-xs text-slate-500 font-medium">Avg Rating</p>
@@ -332,7 +332,7 @@ const Suppliers = () => {
         <Card className="p-2 border border-slate-100 rounded  bg-white">
           <div className="flex items-center gap-2">
             <div className="p-2 bg-indigo-50 rounded ">
-              <ShoppingBag className="w-6 h-6 text-indigo-600" />
+              <ShoppingBag className="w-3 h-3 text-indigo-600" />
             </div>
             <div>
               <p className="text-xs text-slate-500 font-medium">Total Orders</p>

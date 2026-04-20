@@ -91,7 +91,7 @@ const InventoryDashboard = () => {
           <p className="text-xs text-slate-500 mt-1 font-medium">{subtitle}</p>
         </div>
         <div className={`p-2 rounded  ${color.replace('bg-', 'bg-').replace('500', '100')} ${color.replace('bg-', 'text-').replace('500', '600')} transition-transform group-hover:rotate-12`}>
-          <Icon className="w-6 h-6" />
+          <Icon className="w-3 h-3" />
         </div>
       </div>
       
@@ -144,7 +144,7 @@ const InventoryDashboard = () => {
       <div className="flex flex-col items-center justify-center p-22 space-y-2">
         <div className="relative">
           <div className="w-16 h-16 border-4 border-slate-100 border-t-indigo-600 rounded animate-spin" />
-          <Package className="w-6 h-6 text-indigo-600 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
+          <Package className="w-3 h-3 text-indigo-600 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
         </div>
         <div className="text-center">
           <h3 className="text-slate-900  tracking-tight">Syncing Inventory</h3>

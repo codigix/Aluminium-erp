@@ -1067,7 +1067,7 @@ const POReceipts = () => {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="w-5 h-5 bg-indigo-50 text-indigo-600 rounded  flex items-center justify-center ">
-                    <ClipboardCheck className="w-6 h-6" />
+                    <ClipboardCheck className="w-3 h-3" />
                   </div>
                   <div>
                     <h3 className="text-sm  text-slate-800  ">Receipt Items</h3>

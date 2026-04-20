@@ -1138,7 +1138,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
                 onClick={() => setShowEmailModal(false)}
                 className="p-2 hover:bg-slate-100 rounded  transition-colors text-slate-400"
               >
-                <X className="w-6 h-6" />
+                <X className="w-3 h-3" />
               </button>
             </div>
 

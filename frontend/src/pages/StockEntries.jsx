@@ -421,7 +421,7 @@ const StockEntries = () => {
               {loading ? (
                 <tr>
                   <td colSpan="7" className="px-4 p-2 text-center text-slate-400">
-                    <RotateCw className="w-6 h-6 animate-spin mx-auto mb-2" />
+                    <RotateCw className="w-3 h-3 animate-spin mx-auto mb-2" />
                     Loading stock entries...
                   </td>
                 </tr>
@@ -530,7 +530,7 @@ const StockEntries = () => {
               {/* Basic Details */}
               <div className="space-y-2">
                 <div className="flex items-center gap-2  text-indigo-600 font-semibold text-sm">
-                  <div className="w-6 h-6 rounded  bg-indigo-50 flex items-center justify-center">1</div>
+                  <div className="w-3 h-3 rounded  bg-indigo-50 flex items-center justify-center">1</div>
                   Basic Information
                 </div>
                 
@@ -616,7 +616,7 @@ const StockEntries = () => {
               {/* Items Section */}
               <div className="space-y-2 pt-6 border-t border-slate-100">
                 <div className="flex items-center gap-2  text-indigo-600 font-semibold text-sm">
-                  <div className="w-6 h-6 rounded  bg-indigo-50 flex items-center justify-center">2</div>
+                  <div className="w-3 h-3 rounded  bg-indigo-50 flex items-center justify-center">2</div>
                   Add Items
                 </div>
 
