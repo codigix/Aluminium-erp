@@ -227,11 +227,13 @@ const ClientQuotations = () => {
           initialProfits[clientName] = {};
           initialGst[clientName] = {};
         }
-        const fgItems = (order.items || []).filter(item => 
-          (item.item_group === 'FG' || item.item_type === 'FG' || item.item_group === 'FINISHED_GOODS') && 
-          (item.status !== 'REJECTED') && 
-          Number(item.bom_cost) > 0
-        );
+        const fgItems = (order.items || []).filter(item => {
+          const group = (item.item_group || '').trim().toUpperCase();
+          const type = (item.item_type || '').trim().toUpperCase();
+          const isFG = (group === 'FG' || type === 'FG' || group === 'FINISHED GOODS' || group === 'FINISHED_GOODS');
+          const isSA = (group === 'SUB ASSEMBLY' || group === 'SUB_ASSEMBLY' || group === 'SA');
+          return isFG && !isSA && (item.status !== 'REJECTED') && Number(item.bom_cost) > 0;
+        });
         order.items = fgItems;
         grouped[clientName].orders.push(order);
         

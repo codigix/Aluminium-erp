@@ -4,13 +4,14 @@ const stockService = require('./stockService');
 
 const listWorkOrders = async () => {
   const [rows] = await pool.query(
-    `SELECT wo.*, so.project_name, w.workstation_name,
+    `SELECT wo.*, so.project_name, w.workstation_name, c.company_name as client_name,
             (SELECT COUNT(*) FROM job_cards WHERE work_order_id = wo.id) as total_job_cards,
             (SELECT COUNT(*) FROM job_cards WHERE work_order_id = wo.id AND status = 'COMPLETED') as completed_job_cards
      FROM work_orders wo
      LEFT JOIN sales_orders so ON wo.sales_order_id = so.id
+     LEFT JOIN companies c ON so.company_id = c.id
      LEFT JOIN workstations w ON wo.workstation_id = w.id
-     ORDER BY IFNULL(wo.plan_id, 0) DESC, IFNULL(wo.source_fg, wo.item_code) ASC, CASE WHEN wo.source_type = 'SA' THEN 0 ELSE 1 END ASC, wo.created_at DESC`
+     ORDER BY wo.sales_order_id DESC, CASE WHEN wo.source_type = 'SA' THEN 0 ELSE 1 END ASC, IFNULL(wo.source_fg, wo.item_code) ASC, IFNULL(wo.plan_id, 0) DESC, wo.created_at DESC`
   );
   return rows;
 };
@@ -30,7 +31,7 @@ const createWorkOrdersFromPlan = async (planId) => {
     
     // 3. Fetch Sub Assemblies
     const [subAssemblies] = await connection.query('SELECT * FROM production_plan_sub_assemblies WHERE plan_id = ?', [planId]);
-    const [planOps] = await connection.query('SELECT * FROM production_plan_operations WHERE plan_id = ?', [planId]);
+    const [planOps] = await connection.query('SELECT * FROM production_plan_operations WHERE plan_id = ? ORDER BY step_no ASC', [planId]);
 
     const createdWorkOrders = [];
     const saWorkOrderIds = [];
@@ -91,7 +92,7 @@ const createWorkOrdersFromPlan = async (planId) => {
       const workOrderId = result.insertId;
       
       // Create Job Cards for both Finished Goods (FG) and Sub-Assemblies (SA)
-      await createJobCardsForWorkOrder(workOrderId, connection, 'PENDING', planOps.filter(op => op.source_item === itemCode));
+      await createJobCardsForWorkOrder(workOrderId, connection, 'PENDING', planOps);
       
       return workOrderId;
     };
@@ -372,11 +373,32 @@ const createJobCardsForWorkOrder = async (workOrderId, connection, initialStatus
   const [existingJc] = await connection.query('SELECT id FROM job_cards WHERE work_order_id = ?', [workOrderId]);
   if (existingJc.length > 0) return;
 
-    // 3. Get Operations
+  // 3. Get Operations
   let operationsToUse = [];
   if (providedOperations && Array.isArray(providedOperations)) {
     // If operations are provided, use them strictly
-    operationsToUse = providedOperations.map(op => ({
+    // IMPROVED: If we are creating job cards for a Finished Good WO, 
+    // we should include all operations where source_item matches item_code OR drawing_no
+    // OR if the operation item_type is 'FG' and this is an 'FG' work order.
+    
+    const [woDetails] = await connection.query('SELECT drawing_no FROM sales_order_items WHERE id = ?', [wo.sales_order_item_id]);
+    const woDrawing = woDetails[0]?.drawing_no;
+
+    operationsToUse = providedOperations.filter(op => {
+      const opSource = (op.source_item || op.sourceItem || '').toUpperCase();
+      const opType = (op.item_type || op.itemType || '').toUpperCase();
+      const targetCode = (wo.item_code || '').toUpperCase();
+      const targetDrawing = (woDrawing || '').toUpperCase();
+
+      // Match by code
+      if (opSource === targetCode) return true;
+      // Match by drawing
+      if (targetDrawing && opSource === targetDrawing) return true;
+      // Match by type if it's the main FG
+      if (wo.source_type === 'FG' && (opType === 'FG' || opType === 'FINISHED GOOD')) return true;
+
+      return false;
+    }).map(op => ({
       operation_name: op.operation_name || op.operationName,
       workstation: op.workstation,
       base_time: op.base_time || op.cycle_time_min || op.baseTime,

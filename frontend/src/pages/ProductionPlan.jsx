@@ -43,6 +43,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
   const [showAddItem, setShowAddItem] = useState(false);
   const [selectedNewItem, setSelectedNewItem] = useState(null);
   const [newItemQty, setNewItemQty] = useState(1);
+  const [expandedRows, setExpandedRows] = useState({});
 
   const [newPlan, setNewPlan] = useState({
     planCode: '',
@@ -637,16 +638,23 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
         setSelectedOrderDetails(data);
         
         // Populate available BOMs from SO items
-        const boms = (data.items && data.items.length > 0) ? data.items : (designData || []);
-        setAvailableBoms(boms);
+        // Filter to ensure we only show BOMs for this specific order and avoid duplicates by identity
+        const rawItems = (data.items && data.items.length > 0) ? data.items : (designData || []);
+        const filteredBoms = rawItems.filter(item => {
+          if (!item) return false;
+          // Ensure item belongs to the selected order (some fallback items might not)
+          const itemOrderId = item.order_id || item.sales_order_id;
+          return !itemOrderId || String(itemOrderId) === String(orderId);
+        });
+        setAvailableBoms(filteredBoms);
         
         // If only one BOM, auto-select it
-        if (boms.length === 1 && boms[0]) {
-          const firstBom = boms[0];
+        if (filteredBoms.length === 1 && filteredBoms[0]) {
+          const firstBom = filteredBoms[0];
           const singleBomId = (firstBom.id || firstBom.sales_order_item_id || firstBom.order_item_id)?.toString();
           if (singleBomId) {
             setSelectedBomId(singleBomId);
-            handleBomSelect(singleBomId, boms, designData);
+            handleBomSelect(singleBomId, filteredBoms, designData);
           }
         }
       }
@@ -811,31 +819,24 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
         const weightMultiplier = mat.is_kg_material ? (parseFloat(mat.total_wt) || 1) : 1;
         const baseQty = parseFloat(mat.qty_per_pc || mat.required_qty || 0) * weightMultiplier;
         const itemPlannedQty = parseFloat(item.plannedQty || newPlan.targetQuantity || 1);
+        const plannedQty = baseQty * itemPlannedQty;
         
-        // Use a key that represents the material identity
-        const mKey = `${itemCode}-${matName}`;
+        // Use a key that represents the material identity - de-duplicate by name and unit
+        const mKey = `${matName.toLowerCase().trim()}-${(mat.uom || mat.unit || '').toLowerCase().trim()}`;
         
-        // If this is a CORE material and we've already processed this Sales Order Item's core materials,
-        // we might be double-counting the same FG-level materials from different sub-assemblies.
+        // If this is a material and we've already processed this identity from this SO Item,
+        // we might be double-counting if the recursion hits it multiple times.
         const soItemMaterialKey = `${soItemId}-${mKey}`;
 
         if (consolidatedMaterialsMap.has(mKey)) {
           const existing = consolidatedMaterialsMap.get(mKey);
           
-          // Logic: If same material comes from same SO Item multiple times (via different plan items),
-          // it's likely a shared material that shouldn't be summed again.
-          if (!processedMaterialSOItems.has(soItemMaterialKey)) {
-            const plannedQty = baseQty * itemPlannedQty;
-            existing.totalPlannedQty += plannedQty;
-            existing.required_qty = (parseFloat(existing.required_qty) || 0) + plannedQty;
-            // Accumulate bomQty for consolidation if needed, but usually it should be the same
-            existing.bomQty = baseQty; 
-            processedMaterialSOItems.add(soItemMaterialKey);
-          }
+          // Sum up quantities for the same material
+          existing.totalPlannedQty += plannedQty;
+          existing.required_qty = (parseFloat(existing.required_qty) || 0) + plannedQty;
           
           if (matCat === 'CORE') existing.material_category = 'CORE';
         } else {
-          const plannedQty = baseQty * itemPlannedQty;
           consolidatedMaterialsMap.set(mKey, {
             ...mat,
             item_code: itemCode,
@@ -848,8 +849,8 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
             bom_no: mat.bom_no || mat.bom_ref || item.bom_no || 'BOM-REF',
             source_fg: item.itemCode
           });
-          processedMaterialSOItems.add(soItemMaterialKey);
         }
+        processedMaterialSOItems.add(soItemMaterialKey);
       });
     });
     const allMaterials = Array.from(consolidatedMaterialsMap.values());
@@ -955,22 +956,30 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
     const coreMaterials = materialsToDisplay.filter(m => m.material_category === 'CORE');
     const explodedMaterials = materialsToDisplay.filter(m => m.material_category === 'EXPLODED');
 
-    const operationsToDisplay = isViewing 
+    const operationsToDisplay = (isViewing 
       ? (newPlan.operations || []).map(op => ({
           ...op,
           operation_name: op.operation_name || op.name,
           workstation: op.workstation || op.workstation_name,
           base_hour: op.base_hour ?? op.base_time ?? op.cycle_time_min ?? 0,
-          itemCode: op.itemCode || op.source_item
+          itemCode: (op.itemCode || op.source_item || '').toString().trim()
         }))
       : newPlan.items.flatMap(item => (item.operations || []).map(op => ({ 
           ...op, 
-          itemCode: op.source_item || op.itemCode || item.itemCode || item.item_code,
+          itemCode: (op.source_item || op.itemCode || item.itemCode || item.item_code || '').toString().trim(),
           operation_name: op.operation_name || op.name,
           workstation: op.workstation || op.workstation_name,
           base_hour: op.base_hour ?? op.base_time ?? op.cycle_time_min ?? 0,
           source_fg: item.itemCode
-        })));
+        })))).sort((a, b) => {
+          const typeA = (a.item_type || a.itemType || 'FG').toUpperCase();
+          const typeB = (b.item_type || b.itemType || 'FG').toUpperCase();
+          const isA_SA = typeA === 'SUB ASSEMBLY' || typeA === 'SA';
+          const isB_SA = typeB === 'SUB ASSEMBLY' || typeB === 'SA';
+          if (isA_SA && !isB_SA) return -1;
+          if (!isA_SA && isB_SA) return 1;
+          return (a.step_no || a.step || 0) - (b.step_no || b.step || 0);
+        });
 
     return { 
       materialsToDisplay, 
@@ -981,6 +990,83 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
       totalMaterialCount: materialsToDisplay.length
     };
   }, [newPlan.items, newPlan.targetQuantity, isViewing, newPlan.materials, newPlan.subAssemblies, newPlan.operations]);
+
+  const toggleRow = (id) => {
+    setExpandedRows(prev => ({
+      ...prev,
+      [id]: !prev[id]
+    }));
+  };
+
+  const renderOperationsAccordion = (itemCode, allOperations) => {
+    const targetCode = String(itemCode || '').trim().toUpperCase();
+    
+    const filteredOps = allOperations.filter(op => {
+      const opCode = String(op.itemCode || op.item_code || op.source_item || op.sourceItem || '').trim().toUpperCase();
+      return opCode === targetCode;
+    });
+
+    if (filteredOps.length === 0) {
+      return (
+        <div className="p-4 text-center text-slate-400 italic bg-slate-50/30">
+          No operations defined for this item.
+        </div>
+      );
+    }
+
+    return (
+      <div className="bg-slate-50/50 p-4 border-t border-slate-100 shadow-inner">
+        <div className="flex items-center gap-2 mb-3">
+          <Activity className="w-4 h-4 text-indigo-500" />
+          <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Manufacturing Operations</h4>
+        </div>
+        <div className="grid grid-cols-1 gap-2">
+          {filteredOps.map((op, i) => {
+            const cycleTime = parseFloat(op.cycle_time_min || op.base_time || 0);
+            const setupTime = parseFloat(op.setup_time_min || 0);
+            const hourlyRate = parseFloat(op.hourly_rate || op.rate || 0);
+            const totalHours = (cycleTime + setupTime) / 60;
+            const totalCost = totalHours * hourlyRate;
+
+            return (
+              <div key={i} className="flex items-center justify-between bg-white p-3 rounded border border-slate-200 shadow-sm hover:border-indigo-200 transition-colors">
+                <div className="flex items-center gap-3">
+                  <div className="w-6 h-6 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center text-[10px] font-bold">
+                    {i + 1}
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-slate-800">{op.operation_name}</div>
+                    <div className="flex items-center gap-3 mt-1 text-[10px] text-slate-500 font-medium">
+                      <span className="flex items-center gap-1">
+                        <Settings className="w-3 h-3" /> {op.workstation || 'N/A'}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Layers className="w-3 h-3" /> {op.process_type || op.operation_type || 'In-House'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-6">
+                  <div className="text-right">
+                    <div className="text-[10px] text-slate-400 uppercase tracking-tighter">Cycle / Setup</div>
+                    <div className="text-xs font-medium text-slate-700">{cycleTime}m / {setupTime}m</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-[10px] text-slate-400 uppercase tracking-tighter">Rate / Hr</div>
+                    <div className="text-xs font-medium text-slate-700">₹{hourlyRate.toFixed(2)}</div>
+                  </div>
+                  <div className="text-right min-w-[80px]">
+                    <div className="text-[10px] text-slate-400 uppercase tracking-tighter">Total Cost</div>
+                    <div className="text-xs font-bold text-emerald-600">₹{totalCost.toFixed(2)}</div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
 
   const renderCreateForm = () => {
     const { 
@@ -1086,7 +1172,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                 <div className="relative">
                   <SearchableSelect 
                     options={productionReadyOrders.map(so => ({
-                      label: `${so.order_no} - ${so.company_name} ${so.project_name ? `(${so.project_name})` : ''}`,
+                      label: `Order: ${so.order_no} - ${so.company_name || 'No Client'}`,
                       value: so.id.toString(),
                       order_no: so.order_no
                     }))}
@@ -1178,48 +1264,71 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                     <th className="p-2   text-center">UOM</th>
                     <th className="p-2  ">Finished Goods Warehouse</th>
                     <th className="p-2  ">Planned Start Date</th>
+                    <th className="p-2   text-center">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {newPlan.items.map((item, idx) => (
-                    <tr key={idx} className="group hover:bg-slate-50/50 transition-colors">
-                      <td className="p-2  text-slate-400 ">{idx + 1}</td>
-                      <td className="p-2 ">
-                        <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 bg-blue-50 rounded flex items-center justify-center text-blue-600">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
-                          </div>
-                          <div>
-                            <div className=" text-slate-800 text-xs">{item.itemCode}</div>
-                            <div className="text-xs text-slate-400">{item.description}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="p-2  text-center">
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 text-indigo-600 text-xs   rounded-md border border-slate-100">
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                          {item.bom_no || 'BOM-' + (item.salesOrderItemId || 'REF')}
-                        </span>
-                      </td>
-                      <td className="p-2  text-center  text-slate-700">
-                        {Number(item.designQty || item.totalQty || item.quantity || 0).toFixed(3)}
-                      </td>
-                      <td className="p-2  text-center  text-indigo-600">{item.plannedQty}</td>
-                      <td className="p-2  text-center text-slate-400 text-xs">Nos</td>
-                      <td className="p-2 ">
-                        <div className="flex items-center gap-2  text-slate-600">
-                          <svg className="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
-                          <span className="text-xs ">Finished Goods - NC</span>
-                        </div>
-                      </td>
-                      <td className="p-2 ">
-                        <div className="flex items-center gap-2  text-slate-600">
-                          <svg className="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                          <span className="text-xs ">{item.plannedStartDate || '2026-02-04'}</span>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                  {newPlan.items.map((item, idx) => {
+                    const rowId = `fg-${item.id || item.itemCode}-${idx}`;
+                    const isExpanded = expandedRows[rowId];
+                    return (
+                      <React.Fragment key={idx}>
+                        <tr className="group hover:bg-slate-50/50 transition-colors">
+                          <td className="p-2  text-slate-400 ">{idx + 1}</td>
+                          <td className="p-2 ">
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 bg-blue-50 rounded flex items-center justify-center text-blue-600">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
+                              </div>
+                              <div>
+                                <div className=" text-slate-800 text-xs">{item.itemCode || item.item_code}</div>
+                                <div className="text-xs text-slate-400">{item.description}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="p-2  text-center">
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 text-indigo-600 text-xs   rounded-md border border-slate-100">
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                              {item.bom_no || 'BOM-' + (item.salesOrderItemId || 'REF')}
+                            </span>
+                          </td>
+                          <td className="p-2  text-center  text-slate-700">
+                            {Number(item.designQty || item.totalQty || item.quantity || 0).toFixed(3)}
+                          </td>
+                          <td className="p-2  text-center  text-indigo-600">{item.plannedQty}</td>
+                          <td className="p-2  text-center text-slate-400 text-xs">Nos</td>
+                          <td className="p-2 ">
+                            <div className="flex items-center gap-2  text-slate-600">
+                              <svg className="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                              <span className="text-xs ">Finished Goods - NC</span>
+                            </div>
+                          </td>
+                          <td className="p-2 ">
+                            <div className="flex items-center gap-2  text-slate-600">
+                              <svg className="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                              <span className="text-xs ">{item.plannedStartDate || '2026-02-04'}</span>
+                            </div>
+                          </td>
+                          <td className="p-2  text-center">
+                            <button 
+                              onClick={() => toggleRow(rowId)}
+                              className={`flex items-center gap-1 mx-auto px-2 py-1 rounded transition-all text-[10px] font-bold uppercase tracking-wider ${isExpanded ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100 border border-indigo-100'}`}
+                            >
+                              <Activity className="w-3 h-3" />
+                              {isExpanded ? 'Hide Ops' : 'Operations'}
+                            </button>
+                          </td>
+                        </tr>
+                        {isExpanded && (
+                          <tr>
+                            <td colSpan="9" className="p-0 border-none overflow-hidden">
+                              {renderOperationsAccordion(item.itemCode || item.item_code, operationsToDisplay)}
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
                   {newPlan.items.length === 0 && (
                     <tr>
                       <td colSpan="8" className="px-4 p-2 text-center text-slate-400 italic text-xs">
@@ -1267,58 +1376,81 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                     <th className="p-2  ">Bom No</th>
                     <th className="p-2  ">Source FG</th>
                     <th className="p-2   text-center">Manufacturing Type</th>
+                    <th className="p-2   text-center">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {subAssembliesToDisplay.map((sa, idx) => (
-                    <tr key={idx} className="group hover:bg-slate-50/50 transition-colors">
-                      <td className="p-2  text-slate-400 ">{idx + 1}</td>
-                      <td className="p-2 ">
-                        <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 bg-rose-50 rounded flex items-center justify-center text-rose-600">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
-                          </div>
-                          <div>
-                            <div className=" text-slate-800 text-xs">{sa.itemCode || sa.item_code}</div>
-                            <div className="text-xs text-slate-400">{sa.description || 'Sub-Assembly'}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="p-2 ">
-                        <div className="flex items-center gap-2  text-slate-600">
-                          <svg className="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
-                          <span className="text-xs ">{sa.targetWarehouse || sa.target_warehouse || 'Work In Progress - NC'}</span>
-                        </div>
-                      </td>
-                      <td className="p-2 ">
-                        <div className="flex items-center gap-2  text-slate-600">
-                          <svg className="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2-2v12a2 2 0 002 2z" /></svg>
-                          <span className="text-xs ">{isViewing ? (sa.scheduled_date ? sa.scheduled_date.split('T')[0] : '-') : '2026-02-04'}</span>
-                        </div>
-                      </td>
-                      <td className="p-2  text-center  text-slate-700">
-                        {Number(isViewing ? (sa.design_qty || sa.required_qty) : (sa.designQty || 0)).toFixed(3)}
-                      </td>
-                      <td className="p-2  text-center">
-                        <div className=" text-rose-600">{Number(isViewing ? sa.required_qty : (sa.plannedQty || 0)).toFixed(3)}</div>
-                        <div className="text-[8px] text-slate-400   ">NOS</div>
-                      </td>
-                      <td className="p-2 ">
-                        <span className="inline-flex items-center gap-1.5 p-1  bg-slate-50 text-rose-600text-xs   rounded border border-slate-100">
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                          {sa.bomNo || sa.bom_no}
-                        </span>
-                      </td>
-                      <td className="p-2 ">
-                        <span className="text-xs text-slate-500 ">
-                          {sa.sourceFg || sa.source_fg || '-'}
-                        </span>
-                      </td>
-                      <td className="p-2  text-center">
-                        <span className="p-1  bg-rose-50 text-rose-600text-xs   rounded  border border-rose-100">{sa.manufacturingType || sa.manufacturing_type || 'In House'}</span>
-                      </td>
-                    </tr>
-                  ))}
+                  {subAssembliesToDisplay.map((sa, idx) => {
+                    const rowId = `sa-${sa.id || (sa.itemCode || sa.item_code)}-${idx}`;
+                    const isExpanded = expandedRows[rowId];
+                    return (
+                      <React.Fragment key={idx}>
+                        <tr className="group hover:bg-slate-50/50 transition-colors">
+                          <td className="p-2  text-slate-400 ">{idx + 1}</td>
+                          <td className="p-2 ">
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 bg-rose-50 rounded flex items-center justify-center text-rose-600">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+                              </div>
+                              <div>
+                                <div className=" text-slate-800 text-xs">{sa.itemCode || sa.item_code}</div>
+                                <div className="text-xs text-slate-400">{sa.description || 'Sub-Assembly'}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="p-2 ">
+                            <div className="flex items-center gap-2  text-slate-600">
+                              <svg className="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                              <span className="text-xs ">{sa.targetWarehouse || sa.target_warehouse || 'Work In Progress - NC'}</span>
+                            </div>
+                          </td>
+                          <td className="p-2 ">
+                            <div className="flex items-center gap-2  text-slate-600">
+                              <svg className="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2-2v12a2 2 0 002 2z" /></svg>
+                              <span className="text-xs ">{isViewing ? (sa.scheduled_date ? sa.scheduled_date.split('T')[0] : '-') : '2026-02-04'}</span>
+                            </div>
+                          </td>
+                          <td className="p-2  text-center  text-slate-700">
+                            {Number(isViewing ? (sa.design_qty || sa.required_qty) : (sa.designQty || 0)).toFixed(3)}
+                          </td>
+                          <td className="p-2  text-center">
+                            <div className=" text-rose-600">{Number(isViewing ? sa.required_qty : (sa.plannedQty || 0)).toFixed(3)}</div>
+                            <div className="text-[8px] text-slate-400   ">NOS</div>
+                          </td>
+                          <td className="p-2 ">
+                            <span className="inline-flex items-center gap-1.5 p-1  bg-slate-50 text-rose-600text-xs   rounded border border-slate-100">
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                              {sa.bomNo || sa.bom_no}
+                            </span>
+                          </td>
+                          <td className="p-2 ">
+                            <span className="text-xs text-slate-500 ">
+                              {sa.sourceFg || sa.source_fg || '-'}
+                            </span>
+                          </td>
+                          <td className="p-2  text-center">
+                            <span className="p-1  bg-rose-50 text-rose-600text-xs   rounded  border border-rose-100">{sa.manufacturingType || sa.manufacturing_type || 'In House'}</span>
+                          </td>
+                          <td className="p-2  text-center">
+                            <button 
+                              onClick={() => toggleRow(rowId)}
+                              className={`flex items-center gap-1 mx-auto px-2 py-1 rounded transition-all text-[10px] font-bold uppercase tracking-wider ${isExpanded ? 'bg-rose-600 text-white shadow-md shadow-rose-200' : 'bg-rose-50 text-rose-600 hover:bg-rose-100 border border-rose-100'}`}
+                            >
+                              <Activity className="w-3 h-3" />
+                              {isExpanded ? 'Hide Ops' : 'Operations'}
+                            </button>
+                          </td>
+                        </tr>
+                        {isExpanded && (
+                          <tr>
+                            <td colSpan="10" className="p-0 border-none overflow-hidden">
+                              {renderOperationsAccordion(sa.itemCode || sa.item_code, operationsToDisplay)}
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
                   {subAssembliesToDisplay.length === 0 && (
                     <tr>
                       <td colSpan="8" className="px-4 p-2 text-center text-slate-400 italic text-xs">
@@ -1391,11 +1523,11 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                           </div>
                           <div className="text-xs text-slate-400 ">
                             {mat.uom || mat.unit || 'Nos'}
-                            {isWeightBased(mat.uom || mat.unit) && (
-                              <span className="ml-1 text-slate-300">
-                                ({Number(isViewing ? (mat.design_qty || newPlan.targetQuantity) : mat.totalDesignQty).toFixed(0)} × {Number(mat.bomQty || mat.total_wt || 0).toFixed(3)})
-                              </span>
-                            )}
+                          {isWeightBased(mat.uom || mat.unit) && (
+                            <span className="ml-1 text-slate-300">
+                              ({Number(isViewing ? (mat.design_qty || newPlan.targetQuantity) : mat.totalDesignQty).toFixed(0)} × {Number((parseFloat(mat.required_qty || mat.totalPlannedQty) || 0) / (parseFloat(isViewing ? (mat.design_qty || newPlan.targetQuantity) : mat.totalDesignQty) || 1)).toFixed(3)})
+                            </span>
+                          )}
                           </div>
                         </td>
                         <td className="p-2 ">
@@ -1470,11 +1602,11 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                           </div>
                           <div className="text-xs text-slate-400 ">
                             {mat.uom || mat.unit || 'Nos'}
-                            {isWeightBased(mat.uom || mat.unit) && (
-                              <span className="ml-1 text-slate-300">
-                                ({Number(isViewing ? (mat.design_qty || newPlan.targetQuantity) : mat.totalDesignQty).toFixed(0)} × {Number(mat.bomQty || mat.total_wt || 0).toFixed(3)})
-                              </span>
-                            )}
+                          {isWeightBased(mat.uom || mat.unit) && (
+                            <span className="ml-1 text-slate-300">
+                              ({Number(isViewing ? (mat.design_qty || newPlan.targetQuantity) : mat.totalDesignQty).toFixed(0)} × {Number((parseFloat(mat.required_qty || mat.totalPlannedQty) || 0) / (parseFloat(isViewing ? (mat.design_qty || newPlan.targetQuantity) : mat.totalDesignQty) || 1)).toFixed(3)})
+                            </span>
+                          )}
                           </div>
                         </td>
                         <td className="p-2 ">
@@ -1900,7 +2032,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                         <div>
                           <div className="text-xs   text-slate-800 tracking-tight">{plan.plan_code}</div>
                           <div className="text-xs text-slate-400 ">
-                            {plan.item_code ? `${plan.item_code} - ${plan.item_description}` : (plan.project_name || 'Global Manufacturing')}
+                            {plan.company_name || (plan.item_code ? `${plan.item_code} - ${plan.item_description}` : (plan.project_name || 'Global Manufacturing'))}
                           </div>
                         </div>
                       </div>
@@ -2418,7 +2550,15 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                           <td className="py-4 px-2">
                             <div className="flex items-center gap-2">
                               <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full" />
-                              <span className="text-slate-700 ">{op.operation_name}</span>
+                              <div>
+                                <span className="text-slate-700 ">{op.operation_name}</span>
+                                <div className="text-[10px] text-slate-400 font-normal tracking-tight flex items-center gap-1">
+                                  <span className={op.item_type === 'FG' ? 'text-indigo-500' : 'text-rose-500'}>
+                                    {op.item_type === 'FG' ? 'Finished Goods' : 'Sub Assembly'}:
+                                  </span>
+                                  <span className="text-slate-500">{op.source_item || op.itemCode || 'Main Item'}</span>
+                                </div>
+                              </div>
                             </div>
                           </td>
                           <td className="py-4 px-2 text-slate-500">{op.workstation || 'Unassigned'}</td>

@@ -176,6 +176,7 @@ const SalesOrders = () => {
               dbId: quote.id || quote.qr_id,
               uniqueKey: key,
               company_id: quote.company_id,
+              company_name: quote.company_name,
               created_at: quote.created_at,
               status: quote.status,
               po_number: quote.po_number,
@@ -200,6 +201,7 @@ const SalesOrders = () => {
             created_at: po.created_at,
             status: po.status,
             po_number: po.po_number,
+            company_name: po.company_name,
             isCustomerPo: true,
             items: [] // Items will be fetched when selected if needed, or we can fetch them here
           });
@@ -219,6 +221,7 @@ const SalesOrders = () => {
               dbId: order.id,
               uniqueKey: key,
               company_id: order.company_id,
+              company_name: order.company_name,
               created_at: order.created_at,
               status: 'Approved _DRAWING',
               po_number: order.po_number,
@@ -686,6 +689,11 @@ const SalesOrders = () => {
             <span className="text-xs  text-slate-500 italic">
               {row.project_name || 'General Project'}
             </span>
+            {row.total_items_count > 0 && (
+              <span className="text-[10px] mt-1 px-1.5 py-0.5 bg-emerald-50 text-emerald-600 rounded-full border border-emerald-100 w-fit font-medium">
+                {row.approved_items_count} / {row.total_items_count} Approved Designs
+              </span>
+            )}
           </div>
         </div>
       )
@@ -994,7 +1002,7 @@ const SalesOrders = () => {
                         .filter(q => q.isCustomerPo)
                         .map(q => ({
                           value: q.uniqueKey, 
-                          label: `PO: ${q.po_number} - ${q.status}`
+                          label: `PO: ${q.po_number} - ${q.company_name} - ${q.status}`
                         }))}
                       value={formData.customerPoId}
                       onChange={(e) => handleCustomerPoChange(e.target.value)}

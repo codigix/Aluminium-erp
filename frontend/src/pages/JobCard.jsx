@@ -3646,12 +3646,14 @@ const JobCard = () => {
                 <thead className="bg-slate-50/50 border-b border-slate-100">
                   <tr>
                     <th className="p-2 text-xs  text-slate-500   min-w-[140px]">ID</th>
+                    <th className="p-2 text-xs  text-slate-500  ">Project / Client</th>
                     <th className="p-2 text-xs  text-slate-500  ">Operation</th>
+                    <th className="p-2 text-xs  text-slate-500  ">Specification</th>
                     <th className="p-2 text-xs  text-slate-500  ">Status</th>
                     <th className="p-2 text-xs  text-slate-500  ">Execution Type</th>
-                    <th className="p-2 text-xs  text-slate-500  ">Qty To Manufacture</th>
-                    <th className="p-2 text-xs  text-slate-500  ">Produced Qty</th>
-                    <th className="p-2 text-xs  text-slate-500  ">Accepted Qty</th>
+                    <th className="p-2 text-xs  text-slate-500  ">Qty</th>
+                    <th className="p-2 text-xs  text-slate-500  ">Produced</th>
+                    <th className="p-2 text-xs  text-slate-500  ">Accepted</th>
                     <th className="p-2 text-xs  text-slate-500  ">Workstation</th>
                     <th className="p-2 text-xs  text-slate-500  ">Assignee</th>
                     <th className="p-2 text-xs  text-slate-500   text-right">Actions</th>
@@ -3679,8 +3681,23 @@ const JobCard = () => {
                       </td>
                       <td className="p-2">
                         <div className="flex flex-col">
-                          <span className="text-xs  text-slate-900">{jc.operation_name}</span>
-                          <span className="text-xs text-slate-400 mt-0.5 leading-tight">{jc.item_name}</span>
+                          <span className="text-xs  text-slate-900 font-medium">{jc.project_name || "N/A"}</span>
+                          <span className="text-[10px] text-slate-500 mt-0.5 uppercase tracking-wider">{jc.client_name || "Internal"}</span>
+                        </div>
+                      </td>
+                      <td className="p-2">
+                        <div className="flex flex-col">
+                          <span className="text-xs  text-slate-900 font-medium">{jc.operation_name}</span>
+                        </div>
+                      </td>
+                      <td className="p-2">
+                        <div className="flex flex-col gap-1">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest w-fit ${jc.source_type === 'SA' ? 'bg-amber-50 text-amber-700 border border-amber-100' : 'bg-indigo-50 text-indigo-700 border border-indigo-100'}`}>
+                            {jc.source_type === 'SA' ? 'Sub Assembly' : 'Finished Good'}
+                          </span>
+                          <span className="text-[10px] text-slate-500 font-medium truncate max-w-[150px]" title={jc.item_name}>
+                            {jc.item_name}
+                          </span>
                         </div>
                       </td>
                       <td className="p-2 ">
@@ -3697,17 +3714,17 @@ const JobCard = () => {
                       </td>
                       <td className="p-2 ">
                         <span className="text-xs   text-slate-900">
-                          {jc.planned_qty || 0} <span className="text-slate-400 font-normal">units</span>
+                          {jc.planned_qty || 0}
                         </span>
                       </td>
                       <td className="p-2 ">
                         <span className="text-xs   text-indigo-600">
-                          {parseFloat(jc.produced_qty || 0).toFixed(2)} <span className="text-slate-400 font-normal">units</span>
+                          {parseFloat(jc.produced_qty || 0).toFixed(2)}
                         </span>
                       </td>
                       <td className="p-2 ">
                         <span className="text-xs   text-emerald-600">
-                          {parseFloat(jc.accepted_qty || 0).toFixed(2)} <span className="text-slate-400 font-normal">units</span>
+                          {parseFloat(jc.accepted_qty || 0).toFixed(2)}
                         </span>
                       </td>
                       <td className="p-2 ">

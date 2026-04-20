@@ -262,6 +262,23 @@ const CustomerPO = ({
     }
   };
 
+  const handleDeletePo = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this Customer PO? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      await apiRequest(`/customer-pos/${id}`, {
+        method: 'DELETE'
+      });
+      showToast('Customer PO deleted successfully');
+      if (onRefresh) onRefresh();
+    } catch (error) {
+      console.error('Delete PO error:', error);
+      showToast(error.message || 'Failed to delete Customer PO');
+    }
+  };
+
   const columns = [
     {
       label: 'PO Details',
@@ -322,6 +339,13 @@ const CustomerPO = ({
             title="View Details"
           >
             <Eye className="w-4 h-4" />
+          </button>
+          <button 
+            onClick={() => handleDeletePo(row.id)}
+            className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-all border border-transparent hover:border-rose-100"
+            title="Delete PO"
+          >
+            <Trash2 className="w-4 h-4" />
           </button>
         </div>
       )
