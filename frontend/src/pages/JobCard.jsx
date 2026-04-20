@@ -3641,8 +3641,8 @@ const JobCard = () => {
 
           {/* Flat Table Layout */}
           <Card className="border-none bg-white rounded  shadow-sm">
-            <div className="overflow-visible">
-              <table className="w-full text-left">
+            <div className="overflow-auto">
+              <table className=" text-left ">
                 <thead className="bg-slate-50/50 border-b border-slate-100">
                   <tr>
                     <th className="p-2 text-xs  text-slate-500   min-w-[140px]">ID</th>
@@ -3681,7 +3681,6 @@ const JobCard = () => {
                       </td>
                       <td className="p-2">
                         <div className="flex flex-col">
-                          <span className="text-xs  text-slate-900 font-medium">{jc.project_name || "N/A"}</span>
                           <span className="text-[10px] text-slate-500 mt-0.5 uppercase tracking-wider">{jc.client_name || "Internal"}</span>
                         </div>
                       </td>
