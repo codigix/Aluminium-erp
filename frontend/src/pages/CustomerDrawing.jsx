@@ -2234,7 +2234,7 @@ const CustomerDrawing = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-slate-50">
-                  {selectedRequirement.items?.map((item, idx) => (
+                  {selectedRequirement.items?.filter(item => !item.item_code).map((item, idx) => (
                     <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
                       <td className="p-2 text-xs text-slate-400">{idx + 1}</td>
                       <td className="p-2 text-xs text-slate-900 font-medium">{item.drawing_no || '—'}</td>

@@ -18,9 +18,8 @@ const getItemMaterials = async (itemId, itemCode = null, drawingNo = null) => {
     );
   }
   
-  // Only fallback to Master/Template if NO specific ID was provided
-  // This prevents one version's data from "leaking" into another empty version
-  if (!parsedItemId && rows.length === 0 && (itemCode || drawingNo)) {
+  // Fallback to Master/Template if no specific ID data found or NO ID provided
+  if (rows.length === 0 && (itemCode || drawingNo)) {
     let query = `SELECT m.*, i.item_code as actual_item_code, i.material_name as actual_item_name 
                  FROM sales_order_item_materials m 
                  LEFT JOIN (
@@ -67,8 +66,8 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null) => {
     );
   }
   
-  // Only fallback to Master/Template if NO specific ID was provided
-  if (!parsedItemId && rows.length === 0 && (itemCode || drawingNo)) {
+  // Fallback to Master/Template if no specific ID data found or NO ID provided
+  if (rows.length === 0 && (itemCode || drawingNo)) {
     let query = 'SELECT * FROM sales_order_item_components WHERE ';
     let params = [];
 
@@ -103,8 +102,8 @@ const getItemOperations = async (itemId, itemCode = null, drawingNo = null) => {
     );
   }
   
-  // Only fallback to Master/Template if NO specific ID was provided
-  if (!parsedItemId && rows.length === 0 && (itemCode || drawingNo)) {
+  // Fallback to Master/Template if no specific ID data found or NO ID provided
+  if (rows.length === 0 && (itemCode || drawingNo)) {
     let query = 'SELECT * FROM sales_order_item_operations WHERE ';
     let params = [];
 
@@ -150,8 +149,8 @@ const getItemScrap = async (itemId, itemCode = null, drawingNo = null) => {
     );
   }
   
-  // Only fallback to Master/Template if NO specific ID was provided
-  if (!parsedItemId && rows.length === 0 && (itemCode || drawingNo)) {
+  // Fallback to Master/Template if no specific ID data found or NO ID provided
+  if (rows.length === 0 && (itemCode || drawingNo)) {
     let query = 'SELECT * FROM sales_order_item_scrap WHERE ';
     let params = [];
 
