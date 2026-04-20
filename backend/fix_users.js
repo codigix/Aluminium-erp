@@ -27,24 +27,38 @@ async function fixUsers() {
         const connection = await mysql.createConnection(config);
         console.log('Connected to database');
 
+        // First, clear any users that might conflict with our demo usernames but have different emails
+        // or just update them if they match the role/dept purpose.
+        // Actually, let's just update by username if it exists, or insert.
+        
         for (const user of users) {
             const hashedPassword = await bcrypt.hash(user.password, 10);
             
-            // Check if user exists by email
-            const [existing] = await connection.query('SELECT id FROM users WHERE email = ?', [user.email]);
+            // Try to find by username first
+            const [byUsername] = await connection.query('SELECT id, email FROM users WHERE username = ?', [user.username]);
             
-            if (existing.length > 0) {
-                console.log(`Updating user: ${user.email}`);
+            if (byUsername.length > 0) {
+                console.log(`Updating user by username: ${user.username} (${user.email})`);
                 await connection.query(
-                    'UPDATE users SET username = ?, password = ?, department_id = ?, role_id = ?, status = "ACTIVE" WHERE email = ?',
-                    [user.username, hashedPassword, user.dept, user.role, user.email]
+                    'UPDATE users SET email = ?, password = ?, department_id = ?, role_id = ?, status = "ACTIVE" WHERE id = ?',
+                    [user.email, hashedPassword, user.dept, user.role, byUsername[0].id]
                 );
             } else {
-                console.log(`Creating user: ${user.email}`);
-                await connection.query(
-                    'INSERT INTO users (username, email, password, department_id, role_id, status, first_name, last_name) VALUES (?, ?, ?, ?, ?, "ACTIVE", ?, "")',
-                    [user.username, user.email, hashedPassword, user.dept, user.role, user.username.charAt(0).toUpperCase() + user.username.slice(1)]
-                );
+                // Try to find by email
+                const [byEmail] = await connection.query('SELECT id FROM users WHERE email = ?', [user.email]);
+                if (byEmail.length > 0) {
+                    console.log(`Updating user by email: ${user.email}`);
+                    await connection.query(
+                        'UPDATE users SET username = ?, password = ?, department_id = ?, role_id = ?, status = "ACTIVE" WHERE id = ?',
+                        [user.username, hashedPassword, user.dept, user.role, byEmail[0].id]
+                    );
+                } else {
+                    console.log(`Creating user: ${user.email}`);
+                    await connection.query(
+                        'INSERT INTO users (username, email, password, department_id, role_id, status, first_name, last_name) VALUES (?, ?, ?, ?, ?, "ACTIVE", ?, "")',
+                        [user.username, user.email, hashedPassword, user.dept, user.role, user.username.charAt(0).toUpperCase() + user.username.slice(1)]
+                    );
+                }
             }
         }
         

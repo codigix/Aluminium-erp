@@ -1142,7 +1142,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                     <option value="">{availableBoms.length === 0 ? (selectedOrderId ? 'No BOMs Available' : 'Select Order First') : 'Select BOM...'}</option>
                     {availableBoms.map(bom => (
                       <option key={bom.id} value={bom.id}>
-                        {bom.item_code} - {bom.description}
+                        {bom.item_code} - {bom.description} {bom.bom_no ? `(BOM: ${bom.bom_no})` : ''}
                       </option>
                     ))}
                   </select>

@@ -5,7 +5,6 @@ const getItemMaterials = async (itemId, itemCode = null, drawingNo = null) => {
   let rows = [];
   
   // Use JOIN with items table to get the correct material item_code and name
-  // The item_code column in sales_order_item_materials might contain the parent item_code in some cases
   if (parsedItemId) {
     [rows] = await pool.query(
       `SELECT m.*, i.item_code as actual_item_code, i.material_name as actual_item_name
@@ -19,22 +18,28 @@ const getItemMaterials = async (itemId, itemCode = null, drawingNo = null) => {
     );
   }
   
-  if (rows.length === 0 && itemCode) {
-    const query = drawingNo 
-      ? `SELECT m.*, i.item_code as actual_item_code, i.material_name as actual_item_name 
-         FROM sales_order_item_materials m 
-         LEFT JOIN (
-           SELECT item_code, material_name FROM stock_balance GROUP BY item_code, material_name
-         ) i ON LOWER(TRIM(m.material_name)) = LOWER(TRIM(i.material_name)) 
-         WHERE m.sales_order_item_id IS NULL AND m.item_code = ? AND m.drawing_no = ?`
-      : `SELECT m.*, i.item_code as actual_item_code, i.material_name as actual_item_name 
-         FROM sales_order_item_materials m 
-         LEFT JOIN (
-           SELECT item_code, material_name FROM stock_balance GROUP BY item_code, material_name
-         ) i ON LOWER(TRIM(m.material_name)) = LOWER(TRIM(i.material_name)) 
-         WHERE m.sales_order_item_id IS NULL AND m.item_code = ?`;
-    
-    const params = drawingNo ? [itemCode, drawingNo] : [itemCode];
+  // Only fallback to Master/Template if NO specific ID was provided
+  // This prevents one version's data from "leaking" into another empty version
+  if (!parsedItemId && rows.length === 0 && (itemCode || drawingNo)) {
+    let query = `SELECT m.*, i.item_code as actual_item_code, i.material_name as actual_item_name 
+                 FROM sales_order_item_materials m 
+                 LEFT JOIN (
+                   SELECT item_code, material_name FROM stock_balance GROUP BY item_code, material_name
+                 ) i ON LOWER(TRIM(m.material_name)) = LOWER(TRIM(i.material_name)) 
+                 WHERE `;
+    let params = [];
+
+    if (itemCode && drawingNo) {
+      query += `m.item_code = ? AND m.drawing_no = ? AND (m.sales_order_item_id IS NULL OR EXISTS (SELECT 1 FROM sales_order_items WHERE id = m.sales_order_item_id AND sales_order_id IS NULL))`;
+      params = [itemCode, drawingNo];
+    } else if (itemCode) {
+      query += `m.item_code = ? AND (m.sales_order_item_id IS NULL OR EXISTS (SELECT 1 FROM sales_order_items WHERE id = m.sales_order_item_id AND sales_order_id IS NULL))`;
+      params = [itemCode];
+    } else {
+      query += `m.drawing_no = ? AND (m.sales_order_item_id IS NULL OR EXISTS (SELECT 1 FROM sales_order_items WHERE id = m.sales_order_item_id AND sales_order_id IS NULL))`;
+      params = [drawingNo];
+    }
+
     [rows] = await pool.query(query + ' ORDER BY m.created_at ASC', params);
   }
 
@@ -42,8 +47,12 @@ const getItemMaterials = async (itemId, itemCode = null, drawingNo = null) => {
     ...row,
     item_code: row.actual_item_code || row.item_code,
     material_name: row.actual_item_name || row.material_name,
+    qty: row.qty_per_pc || row.qty,
     weightPerUnit: row.weight_per_unit,
-    scrapPercent: row.scrap_percent
+    scrapPercent: row.scrap_percent,
+    // Add snake_case aliases
+    weight_per_unit: row.weight_per_unit,
+    scrap_percent: row.scrap_percent
   }));
 };
 
@@ -52,41 +61,35 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null) => {
   let rows = [];
   
   if (parsedItemId) {
-    if (itemCode) {
-      [rows] = await pool.query(
-        'SELECT * FROM sales_order_item_components WHERE sales_order_item_id = ? AND item_code = ? ORDER BY created_at ASC',
-        [parsedItemId, itemCode]
-      );
-    } else {
-      [rows] = await pool.query(
-        'SELECT * FROM sales_order_item_components WHERE sales_order_item_id = ? ORDER BY created_at ASC',
-        [parsedItemId]
-      );
-    }
+    [rows] = await pool.query(
+      'SELECT * FROM sales_order_item_components WHERE sales_order_item_id = ? ORDER BY created_at ASC',
+      [parsedItemId]
+    );
   }
   
-  if (rows.length === 0) {
-    if (itemCode) {
-      if (drawingNo) {
-        [rows] = await pool.query(
-          'SELECT * FROM sales_order_item_components WHERE sales_order_item_id IS NULL AND item_code = ? AND drawing_no = ? ORDER BY created_at ASC',
-          [itemCode, drawingNo]
-        );
-      }
-      if (rows.length === 0) {
-        [rows] = await pool.query(
-          'SELECT * FROM sales_order_item_components WHERE sales_order_item_id IS NULL AND item_code = ? ORDER BY created_at ASC',
-          [itemCode]
-        );
-      }
-    } else if (drawingNo) {
-      [rows] = await pool.query(
-        'SELECT * FROM sales_order_item_components WHERE sales_order_item_id IS NULL AND drawing_no = ? ORDER BY created_at ASC',
-        [drawingNo]
-      );
+  // Only fallback to Master/Template if NO specific ID was provided
+  if (!parsedItemId && rows.length === 0 && (itemCode || drawingNo)) {
+    let query = 'SELECT * FROM sales_order_item_components WHERE ';
+    let params = [];
+
+    if (itemCode && drawingNo) {
+      query += `item_code = ? AND drawing_no = ? AND (sales_order_item_id IS NULL OR EXISTS (SELECT 1 FROM sales_order_items WHERE id = sales_order_item_id AND sales_order_id IS NULL))`;
+      params = [itemCode, drawingNo];
+    } else if (itemCode) {
+      query += `item_code = ? AND (sales_order_item_id IS NULL OR EXISTS (SELECT 1 FROM sales_order_items WHERE id = sales_order_item_id AND sales_order_id IS NULL))`;
+      params = [itemCode];
+    } else {
+      query += `drawing_no = ? AND (sales_order_item_id IS NULL OR EXISTS (SELECT 1 FROM sales_order_items WHERE id = sales_order_item_id AND sales_order_id IS NULL))`;
+      params = [drawingNo];
     }
+
+    [rows] = await pool.query(query + ' ORDER BY created_at ASC', params);
   }
-  return rows;
+  return rows.map(row => ({
+    ...row,
+    qty: row.quantity || row.qty,
+    quantity: row.quantity || row.qty
+  }));
 };
 
 const getItemOperations = async (itemId, itemCode = null, drawingNo = null) => {
@@ -94,45 +97,46 @@ const getItemOperations = async (itemId, itemCode = null, drawingNo = null) => {
   let rows = [];
   
   if (parsedItemId) {
-    // If itemCode is provided, use it to strictly filter and avoid ID clashes/drawing leakage
-    if (itemCode) {
-      [rows] = await pool.query(
-        'SELECT * FROM sales_order_item_operations WHERE sales_order_item_id = ? AND item_code = ? ORDER BY created_at ASC',
-        [parsedItemId, itemCode]
-      );
-    } else {
-      [rows] = await pool.query(
-        'SELECT * FROM sales_order_item_operations WHERE sales_order_item_id = ? ORDER BY created_at ASC',
-        [parsedItemId]
-      );
-    }
+    [rows] = await pool.query(
+      'SELECT * FROM sales_order_item_operations WHERE sales_order_item_id = ? ORDER BY created_at ASC',
+      [parsedItemId]
+    );
   }
   
-  if (rows.length === 0) {
-    if (itemCode) {
-      // Prioritize itemCode strictly. Don't fallback to just drawingNo if itemCode is known
-      if (drawingNo) {
-        [rows] = await pool.query(
-          'SELECT * FROM sales_order_item_operations WHERE sales_order_item_id IS NULL AND item_code = ? AND drawing_no = ? ORDER BY created_at ASC',
-          [itemCode, drawingNo]
-        );
-      }
-      
-      if (rows.length === 0) {
-        [rows] = await pool.query(
-          'SELECT * FROM sales_order_item_operations WHERE sales_order_item_id IS NULL AND item_code = ? ORDER BY created_at ASC',
-          [itemCode]
-        );
-      }
-    } else if (drawingNo) {
-      // Only fallback to broad drawingNo if no itemCode was provided at all
-      [rows] = await pool.query(
-        'SELECT * FROM sales_order_item_operations WHERE sales_order_item_id IS NULL AND drawing_no = ? ORDER BY created_at ASC',
-        [drawingNo]
-      );
+  // Only fallback to Master/Template if NO specific ID was provided
+  if (!parsedItemId && rows.length === 0 && (itemCode || drawingNo)) {
+    let query = 'SELECT * FROM sales_order_item_operations WHERE ';
+    let params = [];
+
+    if (itemCode && drawingNo) {
+      query += `item_code = ? AND drawing_no = ? AND (sales_order_item_id IS NULL OR EXISTS (SELECT 1 FROM sales_order_items WHERE id = sales_order_item_id AND sales_order_id IS NULL))`;
+      params = [itemCode, drawingNo];
+    } else if (itemCode) {
+      query += `item_code = ? AND (sales_order_item_id IS NULL OR EXISTS (SELECT 1 FROM sales_order_items WHERE id = sales_order_item_id AND sales_order_id IS NULL))`;
+      params = [itemCode];
+    } else {
+      query += `drawing_no = ? AND (sales_order_item_id IS NULL OR EXISTS (SELECT 1 FROM sales_order_items WHERE id = sales_order_item_id AND sales_order_id IS NULL))`;
+      params = [drawingNo];
     }
+
+    [rows] = await pool.query(query + ' ORDER BY created_at ASC', params);
   }
-  return rows;
+  return rows.map(row => ({
+    ...row,
+    operationName: row.operation_name,
+    cycleTimeMin: row.cycle_time_min,
+    setupTimeMin: row.setup_time_min,
+    hourlyRate: row.hourly_rate,
+    operationType: row.operation_type,
+    targetWarehouse: row.target_warehouse,
+    // Add snake_case aliases for frontend calculation logic consistency
+    operation_name: row.operation_name,
+    cycle_time_min: row.cycle_time_min,
+    setup_time_min: row.setup_time_min,
+    hourly_rate: row.hourly_rate,
+    operation_type: row.operation_type,
+    target_warehouse: row.target_warehouse
+  }));
 };
 
 const getItemScrap = async (itemId, itemCode = null, drawingNo = null) => {
@@ -140,41 +144,38 @@ const getItemScrap = async (itemId, itemCode = null, drawingNo = null) => {
   let rows = [];
   
   if (parsedItemId) {
-    if (itemCode) {
-      [rows] = await pool.query(
-        'SELECT * FROM sales_order_item_scrap WHERE sales_order_item_id = ? AND item_code = ? ORDER BY created_at ASC',
-        [parsedItemId, itemCode]
-      );
-    } else {
-      [rows] = await pool.query(
-        'SELECT * FROM sales_order_item_scrap WHERE sales_order_item_id = ? ORDER BY created_at ASC',
-        [parsedItemId]
-      );
-    }
+    [rows] = await pool.query(
+      'SELECT * FROM sales_order_item_scrap WHERE sales_order_item_id = ? ORDER BY created_at ASC',
+      [parsedItemId]
+    );
   }
   
-  if (rows.length === 0) {
-    if (itemCode) {
-      if (drawingNo) {
-        [rows] = await pool.query(
-          'SELECT * FROM sales_order_item_scrap WHERE sales_order_item_id IS NULL AND item_code = ? AND drawing_no = ? ORDER BY created_at ASC',
-          [itemCode, drawingNo]
-        );
-      }
-      if (rows.length === 0) {
-        [rows] = await pool.query(
-          'SELECT * FROM sales_order_item_scrap WHERE sales_order_item_id IS NULL AND item_code = ? ORDER BY created_at ASC',
-          [itemCode]
-        );
-      }
-    } else if (drawingNo) {
-      [rows] = await pool.query(
-        'SELECT * FROM sales_order_item_scrap WHERE sales_order_item_id IS NULL AND drawing_no = ? ORDER BY created_at ASC',
-        [drawingNo]
-      );
+  // Only fallback to Master/Template if NO specific ID was provided
+  if (!parsedItemId && rows.length === 0 && (itemCode || drawingNo)) {
+    let query = 'SELECT * FROM sales_order_item_scrap WHERE ';
+    let params = [];
+
+    if (itemCode && drawingNo) {
+      query += `item_code = ? AND drawing_no = ? AND (sales_order_item_id IS NULL OR EXISTS (SELECT 1 FROM sales_order_items WHERE id = sales_order_item_id AND sales_order_id IS NULL))`;
+      params = [itemCode, drawingNo];
+    } else if (itemCode) {
+      query += `item_code = ? AND (sales_order_item_id IS NULL OR EXISTS (SELECT 1 FROM sales_order_items WHERE id = sales_order_item_id AND sales_order_id IS NULL))`;
+      params = [itemCode];
+    } else {
+      query += `drawing_no = ? AND (sales_order_item_id IS NULL OR EXISTS (SELECT 1 FROM sales_order_items WHERE id = sales_order_item_id AND sales_order_id IS NULL))`;
+      params = [drawingNo];
     }
+
+    [rows] = await pool.query(query + ' ORDER BY created_at ASC', params);
   }
-  return rows;
+  return rows.map(row => ({
+    ...row,
+    inputQty: row.input_qty,
+    lossPercent: row.loss_percent,
+    // Add snake_case aliases
+    input_qty: row.input_qty,
+    loss_percent: row.loss_percent
+  }));
 };
 
 const addItemMaterial = async (itemId, materialData) => {
@@ -268,61 +269,116 @@ const addScrap = async (itemId, scrapData) => {
 };
 
 const updateItemMaterial = async (materialId, materialData) => {
-  const { materialName, materialType, itemGroup, qtyPerPc, uom, rate, warehouse, operation, description, weight_per_unit, scrap_percent } = materialData;
+  const { 
+    materialName, material_name, 
+    materialType, material_type, 
+    itemGroup, item_group, 
+    qtyPerPc, qty_per_pc, 
+    uom, rate, warehouse, operation, description, 
+    weight_per_unit, weightPerUnit, 
+    scrap_percent, scrapPercent 
+  } = materialData;
+
   await pool.execute(
     'UPDATE sales_order_item_materials SET material_name = ?, material_type = ?, item_group = ?, qty_per_pc = ?, uom = ?, rate = ?, warehouse = ?, operation = ?, description = ?, weight_per_unit = ?, scrap_percent = ? WHERE id = ?',
-    [materialName || null, materialType || null, itemGroup || null, qtyPerPc || null, uom || null, rate || 0, warehouse || null, operation || null, description || null, weight_per_unit || 0, scrap_percent || 0, materialId]
+    [
+      material_name || materialName || null, 
+      material_type || materialType || null, 
+      item_group || itemGroup || null, 
+      qty_per_pc || qtyPerPc || 0, 
+      uom || null, 
+      rate || 0, 
+      warehouse || null, 
+      operation || null, 
+      description || null, 
+      weight_per_unit || weightPerUnit || 0, 
+      scrap_percent || scrapPercent || 0, 
+      materialId
+    ]
   );
 };
 
 const updateOperation = async (id, data) => {
-  const { operation_name, workstation, cycle_time_min, setup_time_min, hourly_rate, operation_type, target_warehouse } = data;
+  const { 
+    operation_name, operationName, 
+    workstation, 
+    cycle_time_min, cycleTimeMin, 
+    setup_time_min, setupTimeMin, 
+    hourly_rate, hourlyRate, 
+    operation_type, operationType, 
+    target_warehouse, targetWarehouse 
+  } = data;
+
   await pool.execute(
     `UPDATE sales_order_item_operations 
      SET operation_name = ?, workstation = ?, cycle_time_min = ?, setup_time_min = ?, hourly_rate = ?, operation_type = ?, target_warehouse = ? 
      WHERE id = ?`,
     [
-      operation_name || null,
+      operation_name || operationName || null,
       workstation || null,
-      cycle_time_min || 0,
-      setup_time_min || 0,
-      hourly_rate || 0,
-      operation_type || 'In-House',
-      target_warehouse || null,
+      cycle_time_min || cycleTimeMin || 0,
+      setup_time_min || setupTimeMin || 0,
+      hourly_rate || hourlyRate || 0,
+      operation_type || operationType || 'In-House',
+      target_warehouse || targetWarehouse || null,
       id
     ]
   );
 };
 
 const updateComponent = async (id, data) => {
-  const { component_code, description, quantity, uom, rate, loss_percent, notes, item_group, weight_per_unit, scrap_percent } = data;
+  const { 
+    component_code, componentCode, 
+    description, quantity, uom, rate, 
+    loss_percent, lossPercent, 
+    notes, 
+    item_group, itemGroup, 
+    weight_per_unit, weightPerUnit, 
+    scrap_percent, scrapPercent 
+  } = data;
+
   await pool.execute(
     `UPDATE sales_order_item_components 
      SET component_code = ?, description = ?, quantity = ?, uom = ?, rate = ?, loss_percent = ?, notes = ?, item_group = ?, weight_per_unit = ?, scrap_percent = ? 
      WHERE id = ?`,
     [
-      component_code || null, 
+      component_code || componentCode || null, 
       description || null, 
       quantity || 0, 
       uom || null, 
       rate || 0, 
-      loss_percent || 0, 
+      loss_percent || lossPercent || 0, 
       notes || null,
-      item_group || null,
-      weight_per_unit || 0,
-      scrap_percent || 0,
+      item_group || itemGroup || null,
+      weight_per_unit || weightPerUnit || 0,
+      scrap_percent || scrapPercent || 0,
       id
     ]
   );
 };
 
 const updateScrap = async (id, data) => {
-  const { scrap_item_code, item_code, item_name, input_qty, loss_percent, rate } = data;
+  const { 
+    scrap_item_code, scrapItemCode, 
+    item_code, itemCode, 
+    item_name, itemName, 
+    input_qty, inputQty, 
+    loss_percent, lossPercent, 
+    rate 
+  } = data;
+
   await pool.execute(
     `UPDATE sales_order_item_scrap 
      SET scrap_item_code = ?, item_name = ?, input_qty = ?, loss_percent = ?, rate = ? 
      WHERE id = ?`,
-    [scrap_item_code || item_code || null, item_name || null, input_qty || 0, loss_percent || 0, rate || 0, id]
+    [
+      scrap_item_code || scrapItemCode || item_code || itemCode || null, 
+      item_name || itemName || null, 
+      input_qty || inputQty || 0, 
+      loss_percent || lossPercent || 0, 
+      rate || 0, 
+      id
+    ]
   );
 };
 
@@ -444,101 +500,45 @@ const createBOMRequest = async (bomData) => {
       await connection.execute('DELETE FROM sales_order_item_components WHERE sales_order_item_id = ?', [itemId]);
       await connection.execute('DELETE FROM sales_order_item_operations WHERE sales_order_item_id = ?', [itemId]);
       await connection.execute('DELETE FROM sales_order_item_scrap WHERE sales_order_item_id = ?', [itemId]);
-    } else if (salesOrderId) {
-      // User created a NEW BOM for a specific Sales Order from Drawing Header
-      // Check if an item with this drawing_no already exists in this Sales Order to avoid duplicates
-      // We prioritize items without a BOM (bom_cost is NULL or 0) but will use any existing one if needed
-      const [existingItems] = await connection.query(
-        'SELECT id, status FROM sales_order_items WHERE sales_order_id = ? AND drawing_no = ? ORDER BY (bom_cost IS NULL OR bom_cost = 0) DESC, id ASC LIMIT 1',
-        [salesOrderId, drawingNo]
-      );
-
-      if (existingItems.length > 0) {
-        targetItemId = existingItems[0].id;
-        await connection.execute(
-          `UPDATE sales_order_items 
-           SET item_code = ?, item_type = ?, item_group = ?, unit = ?, revision_no = ?, description = ?, is_active = ?, is_default = ?, drawing_no = ?, drawing_id = ?, bom_cost = ?, 
-               status = CASE WHEN UPPER(TRIM(status)) = 'APPROVED' THEN status ELSE ? END
-           WHERE id = ?`,
-          [
-            safeItemCode, 
-            itemType,
-            itemGroup || null, 
-            uom || null, 
-            revision || null, 
-            effectiveDescription || null, 
-            isActive ? 1 : 0, 
-            isDefault ? 1 : 0, 
-            drawingNo || null, 
-            drawing_id || null, 
-            bom_cost,
-            finalStatus === 'Draft' ? 'DRAFT' : 'PENDING',
-            targetItemId
-          ]
-        );
-        // Clear existing BOM items
-        await connection.execute('DELETE FROM sales_order_item_materials WHERE sales_order_item_id = ?', [targetItemId]);
-        await connection.execute('DELETE FROM sales_order_item_components WHERE sales_order_item_id = ?', [targetItemId]);
-        await connection.execute('DELETE FROM sales_order_item_operations WHERE sales_order_item_id = ?', [targetItemId]);
-        await connection.execute('DELETE FROM sales_order_item_scrap WHERE sales_order_item_id = ?', [targetItemId]);
-      } else {
-        // Inherit "Approved" status if the drawing is already approved elsewhere in this Sales Order
+    } else {
+      // 2. CREATE Mode (ALWAYS insert a new record for independent BOMs)
+      
+      // Inherit "Approved" status if the drawing is already approved elsewhere in this Sales Order
+      let initialStatus = finalStatus === 'Draft' ? 'DRAFT' : 'PENDING';
+      if (salesOrderId && drawingNo) {
         const [approvalCheck] = await connection.query(
           "SELECT status FROM sales_order_items WHERE sales_order_id = ? AND drawing_no = ? AND UPPER(TRIM(status)) = 'APPROVED' LIMIT 1",
           [salesOrderId, drawingNo]
         );
-        const initialStatus = approvalCheck.length > 0 ? approvalCheck[0].status : (finalStatus === 'Draft' ? 'DRAFT' : 'PENDING');
-
-        const [result] = await connection.execute(
-          `INSERT INTO sales_order_items 
-           (sales_order_id, item_code, item_type, item_group, unit, revision_no, description, is_active, is_default, quantity, drawing_no, drawing_id, bom_cost, status)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            salesOrderId,
-            safeItemCode,
-            itemType,
-            itemGroup || null,
-            uom || null,
-            revision || null,
-            effectiveDescription || null,
-            isActive ? 1 : 0,
-            isDefault ? 1 : 0,
-            quantity || 0,
-            drawingNo || null,
-            drawing_id || null,
-            bom_cost,
-            initialStatus
-          ]
-        );
-        targetItemId = result.insertId;
+        if (approvalCheck.length > 0) initialStatus = approvalCheck[0].status;
       }
-    } else if (drawingNo) {
-      // Handle Master BOM by Drawing (no itemId, no salesOrderId)
-      // Link this BOM to ALL sales_order_items that have this drawing_no ONLY if they are PENDING (optional logic?)
-      // BUT as per user request "don't update previous one", let's ONLY update the Master BOM (template)
-      // and NOT overwrite existing items if they click it from a contextless "Create BOM"
-      
-      // Clear Master BOM entries for this drawing
-      await connection.execute('DELETE FROM sales_order_item_materials WHERE drawing_no = ? AND sales_order_item_id IS NULL AND item_code IS NULL', [drawingNo]);
-      await connection.execute('DELETE FROM sales_order_item_components WHERE drawing_no = ? AND sales_order_item_id IS NULL AND item_code IS NULL', [drawingNo]);
-      await connection.execute('DELETE FROM sales_order_item_operations WHERE drawing_no = ? AND sales_order_item_id IS NULL AND item_code IS NULL', [drawingNo]);
-      await connection.execute('DELETE FROM sales_order_item_scrap WHERE drawing_no = ? AND sales_order_item_id IS NULL AND item_code IS NULL', [drawingNo]);
-    } else if (safeItemCode) {
-      // Handle Master BOM by Item Code
-      await connection.execute('DELETE FROM sales_order_item_materials WHERE item_code = ? AND sales_order_item_id IS NULL', [safeItemCode]);
-      await connection.execute('DELETE FROM sales_order_item_components WHERE item_code = ? AND sales_order_item_id IS NULL', [safeItemCode]);
-      await connection.execute('DELETE FROM sales_order_item_operations WHERE item_code = ? AND sales_order_item_id IS NULL', [safeItemCode]);
-      await connection.execute('DELETE FROM sales_order_item_scrap WHERE item_code = ? AND sales_order_item_id IS NULL', [safeItemCode]);
+
+      const [result] = await connection.execute(
+        `INSERT INTO sales_order_items 
+         (sales_order_id, item_code, item_type, item_group, unit, revision_no, description, is_active, is_default, quantity, drawing_no, drawing_id, bom_cost, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          salesOrderId || null,
+          safeItemCode,
+          itemType,
+          itemGroup || null,
+          uom || null,
+          revision || null,
+          effectiveDescription || null,
+          isActive ? 1 : 0,
+          isDefault ? 1 : 0,
+          quantity || 0,
+          drawingNo || null,
+          drawing_id || null,
+          bom_cost,
+          initialStatus
+        ]
+      );
+      targetItemId = result.insertId;
     }
 
     // 3. Insert new BOM items
-    let targetIds = [];
-    if (targetItemId) {
-      targetIds = [{ id: targetItemId }];
-    } else {
-      // For Master BOM
-      targetIds = [{ id: null }];
-    }
+    let targetIds = [{ id: targetItemId }];
     
     for (const target of targetIds) {
       const linkId = target.id;
@@ -561,7 +561,7 @@ const createBOMRequest = async (bomData) => {
               null, // Temporarily set parent_id to null
               compCode, 
               c.description || null, 
-              c.quantity || 0, 
+              c.quantity || c.qty || 0, 
               c.uom || null, 
               c.rate || 0, 
               c.loss_percent || c.lossPercent || 0, 
@@ -603,10 +603,10 @@ const createBOMRequest = async (bomData) => {
               safeItemCode, 
               drawingNo || null,
               newParentId,
-              m.material_name || null, 
-              m.material_type || null, 
-              m.item_group || null, 
-              m.qty_per_pc || m.qtyPerPc || 0, 
+              m.material_name || m.materialName || null, 
+              m.material_type || m.materialType || null, 
+              m.item_group || m.itemGroup || null, 
+              m.qty_per_pc || m.qtyPerPc || m.qty || 0, 
               m.uom || null, 
               m.rate || 0, 
               m.warehouse || null, 
@@ -627,13 +627,13 @@ const createBOMRequest = async (bomData) => {
               linkId, 
               safeItemCode, 
               drawingNo || null,
-              o.operation_name || null, 
+              o.operation_name || o.operationName || null, 
               o.workstation || null, 
-              o.cycle_time_min || 0, 
-              o.setup_time_min || 0, 
-              o.hourly_rate || 0, 
-              o.operation_type || 'In-House', 
-              o.target_warehouse || null
+              o.cycle_time_min || o.cycleTimeMin || 0, 
+              o.setup_time_min || o.setupTimeMin || 0, 
+              o.hourly_rate || o.hourlyRate || 0, 
+              o.operation_type || o.operationType || 'In-House', 
+              o.target_warehouse || o.targetWarehouse || null
             ]
           );
         }
@@ -651,10 +651,10 @@ const createBOMRequest = async (bomData) => {
               safeItemCode, 
               drawingNo || null,
               newParentId,
-              s.scrap_item_code || s.item_code || null, 
-              s.item_name || null, 
-              s.input_qty || 0, 
-              s.loss_percent || 0, 
+              s.scrap_item_code || s.scrapItemCode || s.item_code || s.itemCode || null, 
+              s.item_name || s.itemName || null, 
+              s.input_qty || s.inputQty || 0, 
+              s.loss_percent || s.lossPercent || 0, 
               s.rate || 0
             ]
           );
@@ -667,7 +667,7 @@ const createBOMRequest = async (bomData) => {
     // This allows manual submission via "BOM Approval" button in frontend
     
     await connection.commit();
-    return { success: true };
+    return { success: true, id: targetItemId };
   } catch (error) {
     await connection.rollback();
     throw error;

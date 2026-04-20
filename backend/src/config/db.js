@@ -1485,6 +1485,9 @@ const ensureProductionPlanTables = async () => {
     // Ensure rate column exists for existing table
     const [ppmCols] = await connection.query('SHOW COLUMNS FROM production_plan_materials');
     const existingPpmCols = new Set(ppmCols.map(c => c.Field));
+    if (!existingPpmCols.has('material_name')) {
+      await connection.query('ALTER TABLE production_plan_materials ADD COLUMN material_name VARCHAR(255) NOT NULL AFTER item_code');
+    }
     if (!existingPpmCols.has('design_qty')) {
       await connection.query('ALTER TABLE production_plan_materials ADD COLUMN design_qty DECIMAL(12, 3) AFTER material_name');
     }
@@ -1496,6 +1499,21 @@ const ensureProductionPlanTables = async () => {
     }
     if (!existingPpmCols.has('is_kg_material')) {
       await connection.query('ALTER TABLE production_plan_materials ADD COLUMN is_kg_material BOOLEAN DEFAULT 0 AFTER total_wt');
+    }
+    if (!existingPpmCols.has('length')) {
+      await connection.query('ALTER TABLE production_plan_materials ADD COLUMN length DECIMAL(12, 4) DEFAULT 0');
+    }
+    if (!existingPpmCols.has('width')) {
+      await connection.query('ALTER TABLE production_plan_materials ADD COLUMN width DECIMAL(12, 4) DEFAULT 0');
+    }
+    if (!existingPpmCols.has('thickness')) {
+      await connection.query('ALTER TABLE production_plan_materials ADD COLUMN thickness DECIMAL(12, 4) DEFAULT 0');
+    }
+    if (!existingPpmCols.has('diameter')) {
+      await connection.query('ALTER TABLE production_plan_materials ADD COLUMN diameter DECIMAL(12, 4) DEFAULT 0');
+    }
+    if (!existingPpmCols.has('outer_diameter')) {
+      await connection.query('ALTER TABLE production_plan_materials ADD COLUMN outer_diameter DECIMAL(12, 4) DEFAULT 0');
     }
 
     // Create production_plan_operations table
@@ -1512,6 +1530,16 @@ const ensureProductionPlanTables = async () => {
         FOREIGN KEY (plan_id) REFERENCES production_plans(id) ON DELETE CASCADE
       )
     `);
+
+    // Ensure rate column exists for existing table
+    const [ppoCols] = await connection.query('SHOW COLUMNS FROM production_plan_operations');
+    const existingPpoCols = new Set(ppoCols.map(c => c.Field));
+    if (!existingPpoCols.has('process_type')) {
+      await connection.query('ALTER TABLE production_plan_operations ADD COLUMN process_type VARCHAR(100) DEFAULT "In-House" AFTER operation_name');
+    }
+    if (!existingPpoCols.has('net_time')) {
+      await connection.query('ALTER TABLE production_plan_operations ADD COLUMN net_time DECIMAL(12, 2) DEFAULT 0 AFTER base_time');
+    }
 
     console.log('Production Plan tables synchronized');
   } catch (error) {

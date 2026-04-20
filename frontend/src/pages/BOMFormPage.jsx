@@ -1610,12 +1610,15 @@ const BOMFormPage = () => {
         throw new Error(errorData.message || 'Failed to create BOM');
       }
 
-      await response.json();
+      const responseData = await response.json();
+      const newId = responseData.id;
       successToast(isDraft ? 'BOM saved as draft' : 'BOM created successfully');
 
       // Instead of resetting and navigating to list, stay on the page in view mode
       // This solves the "did not show saved bom" problem
-      if (itemId && itemId !== 'bom-form') {
+      if (newId) {
+        navigate(`/bom-form/${newId}?view=true`);
+      } else if (itemId && itemId !== 'bom-form') {
         navigate(`/bom-form/${itemId}?view=true`);
       } else if (selectedItem) {
         const targetId = selectedItem.source === 'order' ? selectedItem.id : 'bom-form';

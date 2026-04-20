@@ -262,7 +262,7 @@ const createProductionPlan = async (planData, createdBy) => {
           [
             planId,
             mat.itemCode || mat.item_code || mat.material_code || mat.item || null,
-            mat.materialName || mat.material_name || mat.item || null,
+            mat.materialName || mat.material_name || mat.item || mat.itemCode || mat.item_code || 'Unknown Material',
             mat.designQty || mat.design_qty || finalTargetQty || 0,
             mat.requiredQty || mat.required_qty || 0,
             mat.rate || 0,
@@ -430,7 +430,7 @@ const updateProductionPlan = async (planId, planData, updatedBy) => {
           [
             planId,
             mat.itemCode || mat.item_code || mat.material_code || mat.item || null,
-            mat.materialName || mat.material_name || mat.item || null,
+            mat.materialName || mat.material_name || mat.item || mat.itemCode || mat.item_code || 'Unknown Material',
             mat.designQty || mat.design_qty || finalTargetQty || 0,
             mat.requiredQty || mat.required_qty || 0,
             mat.rate || 0,
@@ -502,11 +502,7 @@ const getReadySalesOrderItems = async () => {
              soi.quantity as design_qty,
              soi.unit as unit,
              COALESCE(planned.already_planned_qty, 0) as already_planned_qty
-      FROM (
-        SELECT *, ROW_NUMBER() OVER (PARTITION BY sales_order_id, item_code, drawing_no ORDER BY id DESC) as rn
-        FROM sales_order_items
-        WHERE status != 'Rejected' AND (item_type IN ('FG', 'SFG'))
-      ) soi
+      FROM sales_order_items soi
       JOIN sales_orders so ON soi.sales_order_id = so.id
       JOIN (
         SELECT quotation_id, order_no FROM orders 
@@ -518,7 +514,8 @@ const getReadySalesOrderItems = async () => {
         WHERE status != 'CANCELLED'
         GROUP BY sales_order_item_id
       ) planned ON soi.id = planned.sales_order_item_id
-      WHERE soi.rn = 1 AND (COALESCE(planned.already_planned_qty, 0) < soi.quantity)
+      WHERE soi.status != 'Rejected' AND (soi.item_type IN ('FG', 'SFG'))
+      AND (COALESCE(planned.already_planned_qty, 0) < soi.quantity)
 
       UNION ALL
 
@@ -594,26 +591,30 @@ const getSalesOrderFullDetails = async (id) => {
     
     // Fetch items from order_items
     const [items] = await pool.query(
-      `SELECT oi.id,
-              oi.id as sales_order_item_id,
+      `SELECT soi.id as id,
+              soi.id as sales_order_item_id,
+              oi.id as order_item_id,
               oi.order_id as sales_order_id,
               oi.item_code as item_code,
               oi.type as item_type,
               oi.drawing_no as drawing_no,
+              COALESCE(soi.revision_no, oi.drawing_no) as bom_no,
               oi.description,
               oi.quantity as quantity,
               oi.quantity as design_qty,
               'Nos' as unit,
-              'Approved' as status,
+              soi.status,
+              soi.created_at,
               COALESCE(planned.already_planned_qty, 0) as already_planned_qty
        FROM order_items oi
+       LEFT JOIN sales_order_items soi ON (oi.drawing_no = soi.drawing_no AND soi.sales_order_id = (SELECT quotation_id FROM orders WHERE id = oi.order_id))
        LEFT JOIN (
          SELECT sales_order_id, sales_order_item_id, SUM(planned_qty) as already_planned_qty
          FROM production_plan_items 
          WHERE status != 'CANCELLED'
          GROUP BY sales_order_id, sales_order_item_id
        ) planned ON oi.order_id = planned.sales_order_id AND oi.id = planned.sales_order_item_id
-       WHERE oi.order_id = ?`,
+       WHERE oi.order_id = ? AND (soi.status IS NULL OR UPPER(TRIM(soi.status)) != 'REJECTED')`,
       [id]
     );
     
@@ -645,6 +646,7 @@ const getSalesOrderFullDetails = async (id) => {
             soi.item_code as item_code,
             soi.item_type as item_type,
             soi.drawing_no as drawing_no,
+            COALESCE(soi.revision_no, soi.drawing_no) as bom_no,
             soi.description,
             soi.quantity as quantity,
             soi.quantity as design_qty,
@@ -652,18 +654,15 @@ const getSalesOrderFullDetails = async (id) => {
             soi.status,
             soi.rejection_reason,
             COALESCE(planned.already_planned_qty, 0) as already_planned_qty
-     FROM (
-       SELECT *, ROW_NUMBER() OVER (PARTITION BY sales_order_id, drawing_no ORDER BY id DESC) as rn
-       FROM sales_order_items
-       WHERE sales_order_id = ? AND (item_type IN ('FG', 'SFG', 'SA', 'SUB_ASSEMBLY', 'SUB-ASSEMBLY', 'Assembly'))
-     ) soi
+     FROM sales_order_items soi
      LEFT JOIN (
        SELECT sales_order_id, sales_order_item_id, SUM(planned_qty) as already_planned_qty
        FROM production_plan_items 
        WHERE status != 'CANCELLED'
        GROUP BY sales_order_id, sales_order_item_id
      ) planned ON soi.sales_order_id = planned.sales_order_id AND soi.id = planned.sales_order_item_id
-     WHERE soi.rn = 1`,
+     WHERE soi.sales_order_id = ? AND (soi.item_type IN ('FG', 'SFG', 'SA', 'SUB_ASSEMBLY', 'SUB-ASSEMBLY', 'Assembly'))
+     ORDER BY soi.id DESC`,
     [id]
   );
 
@@ -697,49 +696,57 @@ const generatePlanCode = async () => {
 };
 
 const getItemBOMDetails = async (salesOrderItemId) => {
-  // Try to fetch the item details from order_items first (new system)
+  // 1. Try to fetch from sales_order_items directly - this is now our primary BOM header
   let [items] = await pool.query(
-    'SELECT id, item_code, drawing_no, order_id FROM order_items WHERE id = ?',
+    'SELECT id, item_code, drawing_no, sales_order_id FROM sales_order_items WHERE id = ?',
     [salesOrderItemId]
   );
 
   let soItemIdForLookup = null;
-  let isNewSystem = false;
-
+  
   if (items.length > 0) {
-    isNewSystem = true;
-    const item = items[0];
-    
-    // In the new system, we still need to find a sales_order_item that has the BOM
-    // OR look at the master BOM.
-    // Try to find a sales_order_item with the same drawing_no in the same "sales order" 
-    // (if the order was converted from a sales order/quotation)
-    const [soMatch] = await pool.query(
-      `SELECT soi.id 
-       FROM sales_order_items soi
-       JOIN orders o ON soi.sales_order_id = o.quotation_id
-       WHERE o.id = ? AND soi.drawing_no = ? AND soi.drawing_no IS NOT NULL
-       LIMIT 1`,
-      [item.order_id, item.drawing_no]
-    );
-    
-    if (soMatch.length > 0) {
-      soItemIdForLookup = soMatch[0].id;
-    }
-  }
-
-  // If not found in order_items, try sales_order_items (the old system)
-  if (items.length === 0) {
+    soItemIdForLookup = items[0].id;
+  } else {
+    // 2. Fallback to order_items (new system)
     [items] = await pool.query(
-      'SELECT id, item_code, drawing_no FROM sales_order_items WHERE id = ?',
+      'SELECT id, item_code, drawing_no, order_id FROM order_items WHERE id = ?',
       [salesOrderItemId]
     );
-    soItemIdForLookup = items.length > 0 ? salesOrderItemId : null;
+
+    if (items.length > 0) {
+      const item = items[0];
+      
+      // For order_items, we need to find the linked BOM header in sales_order_items
+      // Try to find a sales_order_item with the same drawing_no in the same "sales order" 
+      const [soMatch] = await pool.query(
+        `SELECT soi.id 
+         FROM sales_order_items soi
+         JOIN orders o ON soi.sales_order_id = o.quotation_id
+         WHERE o.id = ? AND soi.drawing_no = ? AND soi.drawing_no IS NOT NULL
+         ORDER BY soi.id DESC LIMIT 1`,
+        [item.order_id, item.drawing_no]
+      );
+      
+      if (soMatch.length > 0) {
+        soItemIdForLookup = soMatch[0].id;
+      } else {
+        // Fallback: Try to find a MASTER BOM for this drawing
+        const [masterMatch] = await pool.query(
+          `SELECT id FROM sales_order_items 
+           WHERE drawing_no = ? AND sales_order_id IS NULL 
+           ORDER BY id DESC LIMIT 1`,
+          [item.drawing_no]
+        );
+        if (masterMatch.length > 0) {
+          soItemIdForLookup = masterMatch[0].id;
+        }
+      }
+    }
   }
 
   if (items.length === 0) return null;
   const item = items[0];
-  console.log(`[getItemBOMDetails] Exploding BOM for ${item.item_code} / ${item.drawing_no}`);
+  console.log(`[getItemBOMDetails] Exploding BOM for ${item.item_code} / ${item.drawing_no} using lookup ID: ${soItemIdForLookup}`);
 
   const materialMap = new Map();
   const componentMap = new Map();
@@ -800,7 +807,7 @@ const getItemBOMDetails = async (salesOrderItemId) => {
         SELECT c.*, soi.item_type 
         FROM sales_order_item_components c
         LEFT JOIN sales_order_items soi ON (c.component_code = soi.item_code OR (c.drawing_no = soi.drawing_no AND c.drawing_no IS NOT NULL))
-        AND soi.sales_order_id = (SELECT sales_order_id FROM sales_order_items WHERE id = ?)
+        AND soi.sales_order_id <=> (SELECT sales_order_id FROM sales_order_items WHERE id = ?)
         WHERE c.sales_order_item_id <=> ? AND c.parent_id <=> ?`, [targetSoId || soItemId, targetSoId, parentId]);
       
       // Normalize item_type
@@ -818,39 +825,36 @@ const getItemBOMDetails = async (salesOrderItemId) => {
     }
 
     // 2. Granular Fallback to Master BOM or Any BOM (only if still empty and we are looking at a potential standalone item)
-    if (materials.length === 0 || components.length === 0 || operations.length === 0) {
-      // Fetch Master BOM data
-      const masterM = await bomService.getItemMaterials(null, itemCode, drawingNo);
+    if ((materials.length === 0 && components.length === 0 && operations.length === 0) && !parentId) {
+      // If we have a soItemId but no data, it might be a Master BOM with unique ID (the new system)
+      // Try to fetch data using that ID even if it didn't come from a Sales Order
+      if (soItemId) {
+        const masterM = await bomService.getItemMaterials(soItemId, itemCode, drawingNo);
+        const masterC = await bomService.getItemComponents(soItemId, itemCode, drawingNo);
+        const masterO = await bomService.getItemOperations(soItemId, itemCode, drawingNo);
+        
+        if (masterM.length > 0 || masterC.length > 0 || masterO.length > 0) {
+          materials = masterM;
+          components = masterC.map(c => ({
+            ...c,
+            item_type: (c.item_group === 'Sub Assembly' || (c.component_code && c.component_code.startsWith('SA-'))) ? 'Sub Assembly' : 'FG'
+          }));
+          operations = masterO;
+        }
+      }
       
-      // For master components, we need to try to find their item_type as well
-      const masterC = await bomService.getItemComponents(null, itemCode, drawingNo);
-      const masterCWithTypes = await Promise.all(masterC.map(async c => {
-        const cCode = c.component_code || c.item_code;
-        const [typeRow] = await pool.query('SELECT item_type FROM sales_order_items WHERE item_code = ? AND sales_order_id IS NULL LIMIT 1', [cCode]);
-        const baseType = typeRow.length > 0 ? typeRow[0].item_type : 'FG';
-        return { ...c, item_type: (baseType === 'SA' || cCode.startsWith('SA-')) ? 'Sub Assembly' : baseType };
-      }));
-
-      const masterO = await bomService.getItemOperations(null, itemCode, drawingNo);
-
-      // Fetch Any BOM data as secondary fallback
-      const anyBOM = (materials.length === 0 && components.length === 0 && operations.length === 0) 
-        ? await bomService.findAnyBOM(itemCode, drawingNo) 
-        : null;
-
-      if (materials.length === 0) {
+      // If still empty, use legacy Master BOM lookup (NULL ID)
+      if (materials.length === 0 && components.length === 0 && operations.length === 0) {
+        const masterM = await bomService.getItemMaterials(null, itemCode, drawingNo);
+        const masterC = await bomService.getItemComponents(null, itemCode, drawingNo);
+        const masterO = await bomService.getItemOperations(null, itemCode, drawingNo);
+        
         materials = masterM.filter(m => !m.parent_id);
-        if (materials.length === 0 && anyBOM) materials = (anyBOM.materials || []).filter(m => !m.parent_id);
-      }
-
-      if (components.length === 0) {
-        components = masterCWithTypes.filter(c => !c.parent_id);
-        if (components.length === 0 && anyBOM) components = (anyBOM.components || []).filter(c => !c.parent_id);
-      }
-
-      if (operations.length === 0) {
+        components = masterC.filter(c => !c.parent_id).map(c => ({
+          ...c,
+          item_type: (c.item_group === 'Sub Assembly' || (c.component_code && c.component_code.startsWith('SA-'))) ? 'Sub Assembly' : 'FG'
+        }));
         operations = masterO;
-        if (operations.length === 0 && anyBOM) operations = anyBOM.operations || [];
       }
     }
 
