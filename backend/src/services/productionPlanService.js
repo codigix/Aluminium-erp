@@ -591,8 +591,8 @@ const getSalesOrderFullDetails = async (id) => {
     
     // Fetch items from order_items
     const [items] = await pool.query(
-      `SELECT soi.id as id,
-              soi.id as sales_order_item_id,
+      `SELECT COALESCE(soi.id, oi.id) as id,
+              COALESCE(soi.id, oi.id) as sales_order_item_id,
               oi.id as order_item_id,
               oi.order_id as sales_order_id,
               oi.item_code as item_code,
@@ -708,21 +708,27 @@ const getItemBOMDetails = async (salesOrderItemId) => {
     const item = items[0];
     soItemIdForLookup = item.id;
     
-    // Check if THIS specific ID has any materials. If not, try to find another ID in the same order
-    // with the same item identity that HAS materials.
+    // Check if THIS specific ID has any materials or operations. 
+    // If not, try to find another ID in the same order with the same item identity that HAS materials.
     const [hasData] = await pool.query(
-      'SELECT id FROM sales_order_item_materials WHERE sales_order_item_id = ? LIMIT 1',
-      [soItemIdForLookup]
+      `SELECT id FROM sales_order_item_materials WHERE sales_order_item_id = ? 
+       UNION 
+       SELECT id FROM sales_order_item_operations WHERE sales_order_item_id = ? 
+       LIMIT 1`,
+      [soItemIdForLookup, soItemIdForLookup]
     );
 
     if (hasData.length === 0) {
-      console.log(`[getItemBOMDetails] ID ${soItemIdForLookup} has no materials, searching for alternatives in SO ${item.sales_order_id}`);
+      console.log(`[getItemBOMDetails] ID ${soItemIdForLookup} has no materials/operations, searching for alternatives in SO ${item.sales_order_id}`);
       const [altMatch] = await pool.query(
         `SELECT soi.id 
          FROM sales_order_items soi
-         JOIN sales_order_item_materials som ON soi.id = som.sales_order_item_id
+         LEFT JOIN sales_order_item_materials som ON soi.id = som.sales_order_item_id
+         LEFT JOIN sales_order_item_operations soo ON soi.id = soo.sales_order_item_id
          WHERE soi.sales_order_id = ? 
          AND (soi.item_code = ? OR (soi.drawing_no = ? AND soi.drawing_no IS NOT NULL))
+         GROUP BY soi.id
+         HAVING COUNT(som.id) > 0 OR COUNT(soo.id) > 0
          ORDER BY soi.id DESC LIMIT 1`,
         [item.sales_order_id, item.item_code, item.drawing_no]
       );
@@ -758,13 +764,22 @@ const getItemBOMDetails = async (salesOrderItemId) => {
       
       // For order_items, we need to find the linked BOM header in sales_order_items
       // Try to find a sales_order_item with the same drawing_no in the same "sales order" 
+      // OR directly linked to this order_id (sometimes they are stored that way)
+      // IMPROVED: Join with materials to ensure we pick an ID that actually HAS data
       const [soMatch] = await pool.query(
         `SELECT soi.id 
          FROM sales_order_items soi
-         JOIN orders o ON soi.sales_order_id = o.quotation_id
-         WHERE o.id = ? AND soi.drawing_no = ? AND soi.drawing_no IS NOT NULL
-         ORDER BY soi.id DESC LIMIT 1`,
-        [item.order_id, item.drawing_no]
+         LEFT JOIN orders o ON soi.sales_order_id = o.quotation_id
+         LEFT JOIN sales_order_item_materials som ON soi.id = som.sales_order_item_id
+         LEFT JOIN sales_order_item_operations soo ON soi.id = soo.sales_order_item_id
+         WHERE (o.id = ? OR soi.sales_order_id = ?) 
+         AND soi.drawing_no = ? AND soi.drawing_no IS NOT NULL
+         GROUP BY soi.id
+         ORDER BY 
+           (COUNT(som.id) + COUNT(soo.id)) DESC,
+           (soi.sales_order_id = (SELECT quotation_id FROM orders WHERE id = ?)) DESC, 
+           soi.id DESC LIMIT 1`,
+        [item.order_id, item.order_id, item.drawing_no, item.order_id]
       );
       
       if (soMatch.length > 0) {
@@ -983,9 +998,13 @@ const getItemBOMDetails = async (salesOrderItemId) => {
         const [found] = await pool.query(
           `SELECT id FROM sales_order_items 
            WHERE item_code = ? 
-           AND sales_order_id = (SELECT sales_order_id FROM sales_order_items WHERE id = ?) 
+           AND (
+             sales_order_id = (SELECT sales_order_id FROM sales_order_items WHERE id = ?)
+             OR sales_order_id = (SELECT quotation_id FROM orders WHERE id = (SELECT sales_order_id FROM sales_order_items WHERE id = ?))
+             OR sales_order_id = (SELECT id FROM orders WHERE quotation_id = (SELECT sales_order_id FROM sales_order_items WHERE id = ?))
+           )
            LIMIT 1`,
-          [compCode, soItemId]
+          [compCode, soItemId, soItemId, soItemId]
         );
         
         if (found.length > 0) {

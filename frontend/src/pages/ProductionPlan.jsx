@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Card, Modal, FormControl, StatusBadge, SearchableSelect } from '../components/ui.jsx';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
@@ -637,14 +637,17 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
         setSelectedOrderDetails(data);
         
         // Populate available BOMs from SO items
-        const boms = data.items || [];
+        const boms = (data.items && data.items.length > 0) ? data.items : (designData || []);
         setAvailableBoms(boms);
         
         // If only one BOM, auto-select it
-        if (boms.length === 1) {
-          const singleBomId = boms[0].id.toString();
-          setSelectedBomId(singleBomId);
-          handleBomSelect(singleBomId, boms, designData);
+        if (boms.length === 1 && boms[0]) {
+          const firstBom = boms[0];
+          const singleBomId = (firstBom.id || firstBom.sales_order_item_id || firstBom.order_item_id)?.toString();
+          if (singleBomId) {
+            setSelectedBomId(singleBomId);
+            handleBomSelect(singleBomId, boms, designData);
+          }
         }
       }
     } catch (error) {
@@ -654,17 +657,23 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
   };
 
   const handleBomSelect = (bomId, itemsOverride = null, designItemsOverride = null) => {
-    setSelectedBomId(bomId);
+    const finalBomId = bomId?.toString();
+    setSelectedBomId(finalBomId);
     setIsViewing(false);
-    if (!bomId) {
+    if (!finalBomId) {
       setNewPlan(prev => ({ ...prev, items: [] }));
       return;
     }
 
     // When a BOM is selected, find the item in designOrderItems or selectedOrderDetails and select it
     // The user wants STRICT behavior: only this item should be in the plan
-    const itemsToSearch = itemsOverride || selectedOrderDetails?.items || readyItems;
-    const itemInReady = itemsToSearch.find(item => (item.id || item.sales_order_item_id).toString() === bomId.toString());
+    const itemsToSearch = itemsOverride || selectedOrderDetails?.items || readyItems || [];
+    const itemInReady = itemsToSearch.find(item => {
+      if (!item) return false;
+      const itemId = (item.id || item.sales_order_item_id || item.order_item_id);
+      if (itemId === null || itemId === undefined) return false;
+      return String(itemId) === finalBomId;
+    });
     
     if (itemInReady) {
       const designItemsToSearch = designItemsOverride || designOrderItems;
@@ -677,7 +686,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
       const designQty = designItem ? parseFloat(designItem.qty || 0) : parseFloat(itemInReady.total_qty || itemInReady.quantity || 1);
 
       // Clear existing items and only add this one
-      const salesOrderItemId = itemInReady.id || itemInReady.sales_order_item_id;
+      const salesOrderItemId = itemInReady.id || itemInReady.sales_order_item_id || itemInReady.order_item_id;
       const orderNo = itemInReady.order_no || selectedOrderDetails?.order_no;
       const projectName = itemInReady.project_name || selectedOrderDetails?.project_name;
       
@@ -729,7 +738,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
 
   const toggleItemSelection = async (item, designItemsOverride = null) => {
     const itemsToUse = designItemsOverride || designOrderItems;
-    const salesOrderItemId = item.id || item.sales_order_item_id;
+    const salesOrderItemId = item.id || item.sales_order_item_id || item.order_item_id;
     const exists = newPlan.items.find(i => i.salesOrderItemId === salesOrderItemId);
     
     if (exists) {
@@ -786,7 +795,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
     }
   };
 
-  const calculatePlanDetails = () => {
+  const planDetails = useMemo(() => {
     // 1. Collect all materials
     const consolidatedMaterialsMap = new Map();
     const processedMaterialSOItems = new Set();
@@ -971,7 +980,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
       explodedMaterials,
       totalMaterialCount: materialsToDisplay.length
     };
-  };
+  }, [newPlan.items, newPlan.targetQuantity, isViewing, newPlan.materials, newPlan.subAssemblies, newPlan.operations]);
 
   const renderCreateForm = () => {
     const { 
@@ -980,7 +989,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
       operationsToDisplay,
       coreMaterials,
       explodedMaterials
-    } = calculatePlanDetails();
+    } = planDetails;
 
     const totalMaterialCount = materialsToDisplay.length;
     
@@ -1140,11 +1149,14 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                     disabled={isViewing}
                   >
                     <option value="">{availableBoms.length === 0 ? (selectedOrderId ? 'No BOMs Available' : 'Select Order First') : 'Select BOM...'}</option>
-                    {availableBoms.map(bom => (
-                      <option key={bom.id} value={bom.id}>
-                        {bom.item_code} - {bom.description} {bom.bom_no ? `(BOM: ${bom.bom_no})` : ''}
-                      </option>
-                    ))}
+                    {availableBoms && availableBoms.length > 0 && availableBoms.map((bom, idx) => {
+                      const id = (bom.id || bom.sales_order_item_id || bom.order_item_id || idx)?.toString();
+                      return (
+                        <option key={id} value={id}>
+                          {bom.item_code || 'No Code'} - {bom.description || 'No Description'} {bom.bom_no ? `(BOM: ${bom.bom_no})` : ''}
+                        </option>
+                      );
+                    })}
                   </select>
                   <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
@@ -1659,7 +1671,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
         materialsToDisplay, 
         subAssembliesToDisplay, 
         operationsToDisplay 
-      } = calculatePlanDetails();
+      } = planDetails;
 
       const payload = {
         ...newPlan,
