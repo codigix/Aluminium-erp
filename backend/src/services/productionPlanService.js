@@ -157,10 +157,10 @@ const createProductionPlan = async (planData, createdBy) => {
   try {
     await connection.beginTransaction();
 
-    const { 
-      planCode, planDate, startDate, endDate, remarks, 
+    const {
+      planCode, planDate, startDate, endDate, remarks,
       salesOrderId, salesOrder, bomNo, bom, targetQty, targetQuantity, namingSeries,
-      finishedGoods, subAssemblies, materials, operations 
+      finishedGoods, subAssemblies, materials, operations
     } = planData;
 
     const finalSalesOrderId = salesOrderId || (salesOrder && salesOrder.id) || null;
@@ -179,14 +179,14 @@ const createProductionPlan = async (planData, createdBy) => {
         created_by, status
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT')`,
       [
-        planCode || null, 
-        planDate || null, 
-        safeStartDate || null, 
-        safeEndDate || null, 
-        remarks || null, 
-        finalSalesOrderId, 
-        finalBomNo, 
-        finalTargetQty, 
+        planCode || null,
+        planDate || null,
+        safeStartDate || null,
+        safeEndDate || null,
+        remarks || null,
+        finalSalesOrderId,
+        finalBomNo,
+        finalTargetQty,
         namingSeries || 'PP',
         createdBy || null
       ]
@@ -225,7 +225,7 @@ const createProductionPlan = async (planData, createdBy) => {
             `UPDATE sales_orders SET status = 'IN_PRODUCTION', current_department = 'PRODUCTION' WHERE id = ?`,
             [currentSOId]
           );
-          
+
           // If no rows affected, it might be a DIRECT order in orders table
           if (soResult.affectedRows === 0) {
             await connection.execute(
@@ -263,8 +263,8 @@ const createProductionPlan = async (planData, createdBy) => {
 
     // 4. Save Materials
     if (materials) {
-      const materialList = Array.isArray(materials) 
-        ? materials 
+      const materialList = Array.isArray(materials)
+        ? materials
         : [...(materials.coreMaterials || []), ...(materials.explodedComponents || [])];
 
       for (const mat of materialList) {
@@ -334,11 +334,11 @@ const updateProductionPlan = async (planId, planData, updatedBy) => {
   try {
     await connection.beginTransaction();
 
-    const { 
-      planDate, startDate, endDate, remarks, 
+    const {
+      planDate, startDate, endDate, remarks,
       salesOrderId, salesOrder, bomNo, bom,
       targetQty, targetQuantity, namingSeries, status,
-      items, subAssemblies, materials, operations 
+      items, subAssemblies, materials, operations
     } = planData;
 
     const finalSalesOrderId = salesOrderId || (salesOrder && salesOrder.id) || null;
@@ -367,7 +367,7 @@ const updateProductionPlan = async (planId, planData, updatedBy) => {
         sales_order_id = ?, bom_no = ?
       WHERE id = ?`,
       [
-        planDate, safeStartDate, safeEndDate, remarks, 
+        planDate, safeStartDate, safeEndDate, remarks,
         finalTargetQty, namingSeries || 'PP', status || 'DRAFT',
         finalSalesOrderId, finalBomNo,
         planId
@@ -432,8 +432,8 @@ const updateProductionPlan = async (planId, planData, updatedBy) => {
 
     // 5. Re-save Materials
     if (materials) {
-      const materialList = Array.isArray(materials) 
-        ? materials 
+      const materialList = Array.isArray(materials)
+        ? materials
         : [...(materials.coreMaterials || []), ...(materials.explodedComponents || [])];
 
       for (const mat of materialList) {
@@ -631,7 +631,7 @@ const getSalesOrderFullDetails = async (id) => {
 
   if (orders.length > 0) {
     const order = orders[0];
-    
+
     // Fetch items from order_items
     const [items] = await pool.query(
       `SELECT * FROM (
@@ -666,7 +666,7 @@ const getSalesOrderFullDetails = async (id) => {
       ) t WHERE rn = 1`,
       [id]
     );
-    
+
     order.items = items;
     return order;
   }
@@ -731,11 +731,11 @@ const generatePlanCode = async () => {
   const date = new Date();
   const year = date.getFullYear().toString().slice(-2);
   const month = (date.getMonth() + 1).toString().padStart(2, '0');
-  
+
   // Try to find a code that doesn't exist yet, just in case
   let suffix = nextId;
   let planCode = `PP-${year}${month}-${suffix.toString().padStart(4, '0')}`;
-  
+
   let exists = true;
   while (exists) {
     const [check] = await pool.query('SELECT id FROM production_plans WHERE plan_code = ?', [planCode]);
@@ -746,7 +746,7 @@ const generatePlanCode = async () => {
       planCode = `PP-${year}${month}-${suffix.toString().padStart(4, '0')}`;
     }
   }
-  
+
   return planCode;
 };
 
@@ -758,11 +758,11 @@ const getItemBOMDetails = async (salesOrderItemId) => {
   );
 
   let soItemIdForLookup = null;
-  
+
   if (items.length > 0) {
     const item = items[0];
     soItemIdForLookup = item.id;
-    
+
     // Check if THIS specific ID has any materials or operations. 
     // If not, try to find another ID in the same order with the same item identity that HAS materials.
     const [hasData] = await pool.query(
@@ -787,7 +787,7 @@ const getItemBOMDetails = async (salesOrderItemId) => {
          ORDER BY (COUNT(som.id) + COUNT(soo.id)) DESC, soi.id DESC`,
         [item.sales_order_id, item.item_code, item.drawing_no]
       );
-      
+
       if (altMatch.length > 0) {
         console.log(`[getItemBOMDetails] Found ${altMatch.length} alternative SO Item IDs with data`);
         soItemIdForLookup = altMatch.map(m => m.id);
@@ -836,7 +836,7 @@ const getItemBOMDetails = async (salesOrderItemId) => {
 
     if (items.length > 0) {
       const item = items[0];
-      
+
       // For order_items, we need to find the linked BOM header in sales_order_items
       // Try to find a sales_order_item with the same drawing_no in the same "sales order" 
       // OR directly linked to this order_id (sometimes they are stored that way)
@@ -856,7 +856,7 @@ const getItemBOMDetails = async (salesOrderItemId) => {
            soi.id DESC`,
         [item.order_id, item.order_id, item.order_id, item.drawing_no, item.item_code, item.item_code]
       );
-      
+
       if (soMatch.length > 0) {
         soItemIdForLookup = soMatch.map(m => m.id);
       } else {
@@ -934,7 +934,7 @@ const getItemBOMDetails = async (salesOrderItemId) => {
 
     if (processedBOMs.has(bomContextKey)) return { materials: [], components: [], operations: [] };
     processedBOMs.add(bomContextKey);
-    
+
     // Fetch data from specific context
     let materials = [];
     let components = [];
@@ -949,7 +949,7 @@ const getItemBOMDetails = async (salesOrderItemId) => {
       const refId = isArray ? soItemId[0] : (soItemId || null);
 
       const [soM] = await pool.query('SELECT * FROM sales_order_item_materials WHERE sales_order_item_id IN (?) AND parent_id <=> ?', [targetSoIds, parentId]);
-      
+
       // Join with sales_order_items to get item_type for components
       const [soC] = await pool.query(`
         SELECT c.*, 
@@ -960,7 +960,7 @@ const getItemBOMDetails = async (salesOrderItemId) => {
         AND soi.sales_order_id <=> (SELECT sales_order_id FROM sales_order_items WHERE id = ? LIMIT 1)
         WHERE c.sales_order_item_id IN (?) AND c.parent_id <=> ?
         GROUP BY c.id`, [refId, targetSoIds, parentId]);
-      
+
       // De-duplicate components by component_code + drawing_no
       const uniqueComps = new Map();
       soC.forEach(c => {
@@ -973,10 +973,10 @@ const getItemBOMDetails = async (salesOrderItemId) => {
         ...c,
         item_type: (c.item_type === 'SA' || c.item_group === 'Sub Assembly' || c.item_group === 'SUB_ASSEMBLY' || (c.component_code && c.component_code.startsWith('SA-'))) ? 'Sub Assembly' : (c.item_type || 'FG')
       }));
-      
+
       materials = soM;
       components = soCWithTypes;
-      
+
       // Operations are usually flat for the item, fetch if matches item identity
       const [soO] = await pool.query(`
         SELECT * FROM sales_order_item_operations 
@@ -991,7 +991,7 @@ const getItemBOMDetails = async (salesOrderItemId) => {
     // 2. Granular Fallback to Master BOM or Any BOM (for missing parts)
     if (materials.length === 0 || components.length === 0 || operations.length === 0) {
       console.log(`[explodeBOM] Partial or missing SO data for ${itemCode}, checking fallback (ParentId: ${parentId})`);
-      
+
       const fetchMissing = async (refId) => {
         if (materials.length === 0) {
           const m = await bomService.getItemMaterials(refId, itemCode, drawingNo);
@@ -1008,7 +1008,7 @@ const getItemBOMDetails = async (salesOrderItemId) => {
 
       // Try with the provided context first
       if (soItemId) await fetchMissing(soItemId);
-      
+
       // If still missing any part, use generic Master BOM lookup (NULL ID)
       if (materials.length === 0 || components.length === 0 || operations.length === 0) {
         await fetchMissing(null);
@@ -1039,7 +1039,7 @@ const getItemBOMDetails = async (salesOrderItemId) => {
             WHERE c.sales_order_item_id = ? AND c.parent_id IS NULL
             GROUP BY c.id`, [gId]);
           const [gO] = await pool.query('SELECT * FROM sales_order_item_operations WHERE sales_order_item_id = ?', [gId]);
-          
+
           materials = gM;
           components = gC.map(c => ({
             ...c,
@@ -1063,7 +1063,7 @@ const getItemBOMDetails = async (salesOrderItemId) => {
       // level 0 (FG) and level 1 (direct sub-assemblies) are considered CORE for primary list
       const material_category = (depth <= 1) ? 'CORE' : 'EXPLODED';
       const source_assembly = depth === 0 ? null : itemCode;
-      
+
       const weight = (m.weight_per_unit && parseFloat(m.weight_per_unit) > 0) ? parseFloat(m.weight_per_unit) : 0;
       const scrapFactor = (m.scrap_percent && parseFloat(m.scrap_percent) > 0) ? (1 + parseFloat(m.scrap_percent) / 100) : 1;
       const total_wt = weight * scrapFactor;
@@ -1071,13 +1071,13 @@ const getItemBOMDetails = async (salesOrderItemId) => {
       const itemGroup = (m.item_group || '').toUpperCase().replace(/_/g, ' ');
       const uom = (m.uom || '').toUpperCase();
       const isKgMaterial = (itemGroup.includes('RAW MATERIAL') || itemGroup.includes('CONSUMABLE')) && uom === 'KG';
-      
+
       const baseQtyPerFG = isKgMaterial ? ((parseFloat(m.qty_per_pc) || 1) * total_wt) : (parseFloat(m.qty_per_pc) || 1);
-      
+
       const matName = m.material_name || m.name || m.item || 'Unknown Material';
       const matCode = m.material_code || m.item_code || m.itemCode || '';
       const mKey = `${matName}-${matCode}`;
-      
+
       const existing = materialMap.get(mKey);
       const reqQty = baseQtyPerFG * qtyMultiplier;
 
@@ -1112,7 +1112,7 @@ const getItemBOMDetails = async (salesOrderItemId) => {
         const cycle = parseFloat(o.cycle_time_min || o.base_time || 0);
         const setup = parseFloat(o.setup_time_min || 0);
         const totalMins = cycle + setup;
-        
+
         return {
           ...o,
           source_item: itemCode,
@@ -1127,7 +1127,7 @@ const getItemBOMDetails = async (salesOrderItemId) => {
           net_time: (totalMins / 60).toFixed(4)   // Convert to hours
         };
       });
-      
+
       // Store in global flat map
       if (!operationMap.has(currentIdentity)) {
         operationMap.set(currentIdentity, opsWithSource);
@@ -1136,7 +1136,7 @@ const getItemBOMDetails = async (salesOrderItemId) => {
 
     // Process Components
     const componentResults = [];
-    
+
     for (const comp of components) {
       const compCode = comp.component_code || comp.item_code;
       const compDrawing = comp.drawing_no;
@@ -1144,7 +1144,7 @@ const getItemBOMDetails = async (salesOrderItemId) => {
       const totalCompQty = compQty * qtyMultiplier;
 
       const cKey = `${compCode}-${compDrawing || ''}`;
-      
+
       let nextSoItemId = null;
       let nextParentId = null;
 
@@ -1161,7 +1161,7 @@ const getItemBOMDetails = async (salesOrderItemId) => {
            LIMIT 1`,
           [compCode, targetIds, targetIds, targetIds]
         );
-        
+
         if (found.length > 0) {
           nextSoItemId = found[0].id;
           nextParentId = null;
@@ -1180,7 +1180,7 @@ const getItemBOMDetails = async (salesOrderItemId) => {
         depth + 1,
         'Sub Assembly'
       );
-      
+
       const componentData = {
         ...comp,
         itemCode: compCode,
@@ -1208,7 +1208,7 @@ const getItemBOMDetails = async (salesOrderItemId) => {
         const itemGroup = (m.item_group || '').toUpperCase().replace(/_/g, ' ');
         const uom = (m.uom || '').toUpperCase();
         const isKgMaterial = (itemGroup.includes('RAW MATERIAL') || itemGroup.includes('CONSUMABLE')) && uom === 'KG';
-        
+
         const baseQtyPerFG = isKgMaterial ? ((parseFloat(m.qty_per_pc) || 1) * total_wt) : (parseFloat(m.qty_per_pc) || 1);
 
         return {
@@ -1236,10 +1236,10 @@ const getItemBOMDetails = async (salesOrderItemId) => {
     for (const item of list) {
       const itemCode = item[codeField];
       const matName = item.material_name || item.materialName;
-      
+
       let query = 'SELECT length, width, thickness, diameter, outer_diameter, density, weight_per_unit, unit FROM stock_balance WHERE ';
       const params = [];
-      
+
       if (itemCode) {
         query += 'item_code = ? ';
         params.push(itemCode);
@@ -1249,7 +1249,7 @@ const getItemBOMDetails = async (salesOrderItemId) => {
       } else {
         continue;
       }
-      
+
       const [stockData] = await pool.query(query + ' LIMIT 1', params);
       if (stockData.length > 0) {
         const s = stockData[0];
@@ -1280,13 +1280,13 @@ const getItemBOMDetails = async (salesOrderItemId) => {
       // 1. Put Sub-Assemblies (SA) BEFORE Finished Goods (FG)
       const typeA = (a.item_type || a.itemType || 'FG').toUpperCase();
       const typeB = (b.item_type || b.itemType || 'FG').toUpperCase();
-      
+
       const isA_SA = typeA === 'SUB ASSEMBLY' || typeA === 'SA';
       const isB_SA = typeB === 'SUB ASSEMBLY' || typeB === 'SA';
-      
+
       if (isA_SA && !isB_SA) return -1;
       if (!isA_SA && isB_SA) return 1;
-      
+
       // 2. Same type? Sort by step number
       return (a.step_no || a.step || 0) - (b.step_no || b.step || 0);
     })
@@ -1309,10 +1309,10 @@ const getMaterialRequestItemsForPlan = async (planId) => {
 
   const addToMap = (itemCode, qty, uom, name, warehouse, category, rate, designQty, currentBalance, isFulfilled, requestExists, dimensions = {}) => {
     if (!itemCode && !name) return;
-    
+
     const code = (itemCode || name).trim();
     const key = code.toUpperCase();
-    
+
     const mapItemType = (code, cat) => {
       const materialCategories = ['CORE', 'EXPLODED', 'RAW_MATERIAL', 'COMPONENT'];
       if (materialCategories.includes(String(cat).toUpperCase())) return 'RAW_MATERIAL';
@@ -1321,7 +1321,7 @@ const getMaterialRequestItemsForPlan = async (planId) => {
       if (c.startsWith('RM-')) return 'RAW_MATERIAL';
       if (c.startsWith('SA-')) return 'SUB_ASSEMBLY';
       if (c.startsWith('FG-')) return 'FG';
-      
+
       if (cat === 'FG') return 'FG';
       if (cat === 'SUB_ASSEMBLY') return 'SUB_ASSEMBLY';
       return 'RAW_MATERIAL';
@@ -1393,16 +1393,17 @@ const getMaterialRequestItemsForPlan = async (planId) => {
         GROUP BY material_name
     ) actual_sb ON ppm.material_name = actual_sb.material_name OR ppm.item_code = actual_sb.item_code
     LEFT JOIN (
-        SELECT 
-            mii.item_code, 
-            mii.material_name,
-            SUM(mii.quantity) as issued_qty
-        FROM material_issue_items mii
-        JOIN material_issues mi ON mii.issue_id = mi.id
-        JOIN work_orders wo ON mi.work_order_id = wo.id
-        WHERE wo.plan_id = ?
-        GROUP BY mii.item_code, mii.material_name
-    ) issued ON (ppm.item_code = issued.item_code OR ppm.material_name = issued.material_name)
+    SELECT 
+        mii.item_code, 
+        mii.material_name,
+        SUM(mii.quantity) as issued_qty
+    FROM material_issue_items mii
+    JOIN material_issues mi ON mii.issue_id = mi.id
+    JOIN work_orders wo ON mi.work_order_id = wo.id
+    WHERE wo.plan_id = ?
+    GROUP BY mii.item_code, mii.material_name
+) issued 
+ON (ppm.item_code = issued.item_code OR ppm.material_name = issued.material_name)
     LEFT JOIN (
         SELECT 
             LOWER(TRIM(mri.item_code)) as join_item_code,
@@ -1429,23 +1430,23 @@ const getMaterialRequestItemsForPlan = async (planId) => {
   for (const mat of materials) {
     const code = (mat.actual_item_code || mat.item_code || '').toUpperCase();
     if (code.startsWith('SA-') || code.startsWith('FG-')) continue;
-    
+
     // If material request is fulfilled or completed, show full quantity as available
     const isFulfilled = (mat.status_rank || 0) >= 4;
     const requestExists = (mat.status_rank || 0) > 0;
-    const effectiveInventory = isFulfilled 
+    const effectiveInventory = isFulfilled
       ? Math.max(Number(mat.required_qty), Number(mat.current_balance) + Number(mat.issued_qty))
       : Number(mat.current_balance) + Number(mat.issued_qty);
-    
+
     addToMap(
-      mat.actual_item_code, 
-      mat.required_qty, 
-      mat.uom, 
-      mat.material_name, 
-      mat.warehouse, 
-      'RAW_MATERIAL', 
-      mat.rate || mat.stock_rate || 0, 
-      mat.design_qty, 
+      mat.actual_item_code,
+      mat.required_qty,
+      mat.uom,
+      mat.material_name,
+      mat.warehouse,
+      'RAW_MATERIAL',
+      mat.rate || mat.stock_rate || 0,
+      mat.design_qty,
       effectiveInventory,
       isFulfilled,
       requestExists,
@@ -1489,10 +1490,10 @@ const createMaterialRequestFromPlan = async (planId, userId, customItems = null)
 
     const addToPurposeMap = (map, itemCode, qty, uom, name, warehouse, category, rate, designQty) => {
       if (!itemCode && !name || qty <= 0) return;
-      
+
       const code = (itemCode || name).trim();
       const key = code.toUpperCase();
-      
+
       if (map.has(key)) {
         const existing = map.get(key);
         existing.quantity += Number(qty);
@@ -1559,7 +1560,7 @@ const createMaterialRequestFromPlan = async (planId, userId, customItems = null)
 
         const effectiveRate = mat.rate || mat.stock_rate || 0;
         const required = Number(mat.required_qty);
-        
+
         // Simplified: Request full quantity for everything
         addToPurposeMap(purchaseMap, mat.actual_item_code, required, mat.uom, mat.material_name, mat.warehouse, 'RAW_MATERIAL', effectiveRate, mat.design_qty);
       }
@@ -1574,9 +1575,9 @@ const createMaterialRequestFromPlan = async (planId, userId, customItems = null)
     // Helper to create MR header and items
     const createMR = async (itemsMap, purpose) => {
       if (itemsMap.size === 0) return null;
-      
+
       const items = Array.from(itemsMap.values());
-      
+
       // Generate MR Number
       const today = new Date();
       const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
@@ -1636,14 +1637,14 @@ const createMaterialRequestFromPlan = async (planId, userId, customItems = null)
           ]
         );
       }
-      
+
       return { id: mrId, mr_number: mrNumber };
     };
 
     // Use 'Material Issue' as the default purpose so it shows up in Inventory
     const unifiedMR = await createMR(purchaseMap, 'Material Issue');
     if (unifiedMR) createdMRs.push(unifiedMR);
-    
+
     // issueMap should be empty now based on previous change, but for safety:
     const issueMR = await createMR(issueMap, 'Material Issue');
     if (issueMR) createdMRs.push(issueMR);
@@ -1655,9 +1656,9 @@ const createMaterialRequestFromPlan = async (planId, userId, customItems = null)
     );
 
     await connection.commit();
-    
-    return { 
-      mrs: createdMRs, 
+
+    return {
+      mrs: createdMRs,
       message: `Created ${createdMRs.length} Material Request(s): ${createdMRs.map(m => m.mr_number).join(', ')}`
     };
   } catch (error) {
