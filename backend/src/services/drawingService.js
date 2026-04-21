@@ -9,15 +9,26 @@ const getAllDrawings = async () => {
   return rows;
 };
 
-const listDrawings = async (search = '') => {
+const listDrawings = async (search = '', onlyShared = false) => {
   let query = `
-    SELECT d.*, d.uploaded_by as uploader_name 
+    SELECT 
+      d.*, 
+      d.uploaded_by as uploader_name,
+      soi.id as sales_order_item_id,
+      soi.status as item_status,
+      soi.sales_order_id
     FROM customer_drawings d
+    LEFT JOIN sales_order_items soi ON d.id = soi.drawing_id
+    WHERE 1=1
   `;
   const params = [];
 
+  if (onlyShared) {
+    query += ` AND d.status = 'SHARED'`;
+  }
+
   if (search) {
-    query += ` WHERE d.client_name LIKE ? OR d.drawing_no LIKE ? OR d.description LIKE ?`;
+    query += ` AND (d.client_name LIKE ? OR d.drawing_no LIKE ? OR d.description LIKE ?)`;
     const searchPattern = `%${search}%`;
     params.push(searchPattern, searchPattern, searchPattern);
   }
@@ -248,16 +259,16 @@ const deleteCustomerDrawing = async (id) => {
 
 const shareWithDesign = async (id) => {
   await pool.execute(
-    'UPDATE customer_drawings SET shared_with_design = 1, shared_at = CURRENT_TIMESTAMP WHERE id = ?',
+    "UPDATE customer_drawings SET status = 'SHARED', shared_with_design = 1, shared_at = CURRENT_TIMESTAMP WHERE id = ?",
     [id]
   );
 };
 
 const shareDrawingsBulk = async (ids) => {
   if (!ids || ids.length === 0) return;
-  const placeholders = ids.map(() => '?').join(',');
+  const placeholders = ids.map(() => "?").join(",");
   await pool.execute(
-    `UPDATE customer_drawings SET shared_with_design = 1, shared_at = CURRENT_TIMESTAMP WHERE id IN (${placeholders})`,
+    `UPDATE customer_drawings SET status = 'SHARED', shared_with_design = 1, shared_at = CURRENT_TIMESTAMP WHERE id IN (${placeholders})`,
     ids
   );
 };

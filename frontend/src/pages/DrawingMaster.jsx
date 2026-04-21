@@ -56,9 +56,11 @@ const DrawingMaster = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
-      const url = search 
-        ? `${API_BASE}/drawings?search=${encodeURIComponent(search)}`
-        : `${API_BASE}/drawings`;
+      const params = new URLSearchParams();
+      params.append('onlyShared', 'true');
+      if (search) params.append('search', search);
+      
+      const url = `${API_BASE}/drawings?${params.toString()}`;
         
       const response = await fetch(url, {
         headers: { 'Authorization': `Bearer ${token}` }

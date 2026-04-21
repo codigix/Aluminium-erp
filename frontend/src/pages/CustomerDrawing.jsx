@@ -793,7 +793,7 @@ const CustomerDrawing = () => {
   };
 
   const handleShareClientGroupWithDesign = async (clientName) => {
-    const unsharedDrawings = groupedDrawings[clientName].filter(d => !d.drawing_status || d.drawing_status !== 'SHARED');
+    const unsharedDrawings = groupedDrawings[clientName].filter(d => !d.status || d.status !== 'SHARED');
     
     if (unsharedDrawings.length === 0) {
       infoToast('All drawings for this client are already shared.');
@@ -1154,7 +1154,7 @@ const CustomerDrawing = () => {
                         <span className="p-1 bg-indigo-100 text-indigo-700 rounded text-xs ">
                           {clientDrawings.length} Drawings
                         </span>
-                        {clientDrawings.some(d => !d.drawing_status || d.drawing_status !== 'SHARED') && (
+                        {clientDrawings.some(d => !d.status || d.status !== 'SHARED') && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
