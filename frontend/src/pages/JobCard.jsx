@@ -725,11 +725,17 @@ const JobCard = () => {
     }
 
     return [...result].sort((a, b) => {
-      // Primary sort: Work Order (Descending)
+      // Primary sort: Source Type (SA before FG)
+      const saTypes = ['SA', 'SFG', 'Sub Assembly'];
+      const aType = saTypes.includes(a.source_type) ? 0 : 1;
+      const bType = saTypes.includes(b.source_type) ? 0 : 1;
+      if (aType !== bType) return aType - bType;
+
+      // Secondary sort: Work Order (Descending - newest WOs first)
       if (a.wo_number !== b.wo_number) {
         return (b.wo_number || "").localeCompare(a.wo_number || "");
       }
-      // Secondary sort: Sequence Number (Ascending)
+      // Tertiary sort: Sequence Number (Ascending)
       return (a.sequence_no || 0) - (b.sequence_no || 0);
     });
   }, [jobCards, searchQuery]);
