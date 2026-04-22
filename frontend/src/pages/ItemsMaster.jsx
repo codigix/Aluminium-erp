@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Card, StatusBadge, DataTable, SearchableSelect } from '../components/ui.jsx';
 import { Plus, Search, RefreshCw, Package, Layers, Trash2, Edit2, Copy, AlertTriangle } from 'lucide-react';
 import Swal from 'sweetalert2';
@@ -9,6 +9,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/
 
 const ItemsMaster = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('items'); // 'items' or 'groups'
   const [itemsList, setItemsList] = useState([]);
   const [itemsLoading, setItemsLoading] = useState(false);
@@ -67,6 +68,111 @@ const ItemsMaster = () => {
   const [editingMaterialId, setEditingMaterialId] = useState(null);
   const [isSubmittingMaterial, setIsSubmittingMaterial] = useState(false);
 
+  const fillFormFromItem = (item, isCopy = false) => {
+    // Find the original group name if it was normalized
+    let displayGroup = item.material_type || '';
+    const matchingGroup = itemGroups.find(g => 
+      g.name === displayGroup || 
+      g.name.toUpperCase().replace(/ /g, '_') === displayGroup
+    );
+    if (matchingGroup) displayGroup = matchingGroup.name;
+
+    setItemFormData({
+      itemCode: isCopy ? '' : (item.item_code || ''),
+      itemName: item.material_name || '',
+      itemGroup: displayGroup,
+      defaultUom: item.unit || 'Nos',
+      valuationRate: item.valuation_rate || 0,
+      sellingRate: item.selling_rate || 0,
+      noOfCavity: item.no_of_cavity || 1,
+      weightPerUnit: item.weight_per_unit || 0,
+      weightUom: item.weight_uom || '',
+      drawingNo: item.drawing_no || '',
+      revision: item.revision || '',
+      materialGrade: item.material_grade || '',
+      materialId: item.material_id || '',
+      density: item.density || '',
+      shapeId: item.shape_id || '',
+      length: item.length || '',
+      width: item.width || '',
+      thickness: item.thickness || '',
+      diameter: item.diameter || '',
+      outerDiameter: item.outer_diameter || ''
+    });
+  };
+
+  useEffect(() => {
+    const path = location.pathname;
+    
+    // For Edit and Copy, we need itemsList and itemGroups to be loaded
+    const isEditPath = path.startsWith('/item-master/edit-item/');
+    const isCopyPath = path.startsWith('/item-master/copy-item/');
+    
+    if (path === '/item-master/add-items') {
+      setActiveTab('items');
+      if (!showItemForm || isEditingItem) {
+        handleClearItemForm();
+        
+        // Handle initial data from state if present
+        if (location.state?.item) {
+          const { item } = location.state;
+          setItemFormData(prev => ({
+            ...prev,
+            drawingNo: item.drawing_no || '',
+            revision: item.revision_no || '',
+            defaultUom: item.unit || 'Nos'
+          }));
+        }
+        
+        setShowItemForm(true);
+        fetchNextItemCode();
+      }
+      return;
+    }
+
+    if (isEditPath || isCopyPath) {
+      setActiveTab('items');
+      if (itemsList.length === 0 || itemGroups.length === 0) return;
+      
+      const id = path.split('/').pop();
+      const item = itemsList.find(i => i.id.toString() === id);
+      
+      if (item) {
+        const isCopy = isCopyPath;
+        if (!showItemForm || isEditingItem !== (!isCopy) || editingItemId !== item.id) {
+          fillFormFromItem(item, isCopy);
+          setIsEditingItem(!isCopy);
+          setEditingItemId(item.id);
+          setShowItemForm(true);
+          if (isCopy) {
+            infoToast('Details copied. Please provide a new Item Code.');
+          }
+        }
+      }
+      return;
+    }
+
+    if (path === '/item-master/groups') {
+      setActiveTab('groups');
+      if (showItemForm) {
+        setShowItemForm(false);
+        handleClearItemForm();
+      }
+      return;
+    }
+
+    // Default: Close form and reset tab if on base path
+    if (path === '/item-master') {
+      if (showItemForm) {
+        setShowItemForm(false);
+        handleClearItemForm();
+      }
+      if (activeTab !== 'items') {
+        setActiveTab('items');
+      }
+    }
+  }, [location.pathname, location.state, itemsList, itemGroups, activeTab, isEditingItem, editingItemId, showItemForm]);
+
   useEffect(() => {
     fetchItemsList();
     fetchItemGroups();
@@ -75,17 +181,8 @@ const ItemsMaster = () => {
     fetchApprovedDrawings();
     
     // Check if we have initial data from navigation
-    if (location.state?.addItem) {
-      const { item } = location.state;
-      if (item) {
-        setItemFormData(prev => ({
-          ...prev,
-          drawingNo: item.drawing_no || '',
-          revision: item.revision_no || '',
-          defaultUom: item.unit || 'Nos'
-        }));
-      }
-      setShowItemForm(true);
+    if (location.state?.addItem && location.pathname !== '/item-master/add-items') {
+      navigate('/item-master/add-items', { state: location.state, replace: true });
     }
   }, [location.state]);
 
@@ -267,8 +364,7 @@ const ItemsMaster = () => {
       
       successToast(`Item ${isEditingItem ? 'updated' : 'created'} successfully`);
       fetchItemsList();
-      setShowItemForm(false);
-      handleClearItemForm();
+      navigate('/item-master');
     } catch (error) {
       errorToast(error.message);
     } finally {
@@ -304,77 +400,11 @@ const ItemsMaster = () => {
   };
 
   const handleEditItem = (item) => {
-    setIsEditingItem(true);
-    setEditingItemId(item.id);
-    
-    // Find the original group name if it was normalized
-    let displayGroup = item.material_type || '';
-    const matchingGroup = itemGroups.find(g => 
-      g.name === displayGroup || 
-      g.name.toUpperCase().replace(/ /g, '_') === displayGroup
-    );
-    if (matchingGroup) displayGroup = matchingGroup.name;
-
-    setItemFormData({
-      itemCode: item.item_code || '',
-      itemName: item.material_name || '',
-      itemGroup: displayGroup,
-      defaultUom: item.unit || 'Nos',
-      valuationRate: item.valuation_rate || 0,
-      sellingRate: item.selling_rate || 0,
-      noOfCavity: item.no_of_cavity || 1,
-      weightPerUnit: item.weight_per_unit || 0,
-      weightUom: item.weight_uom || '',
-      drawingNo: item.drawing_no || '',
-      revision: item.revision || '',
-      materialGrade: item.material_grade || '',
-      materialId: item.material_id || '',
-      density: item.density || '',
-      shapeId: item.shape_id || '',
-      length: item.length || '',
-      width: item.width || '',
-      thickness: item.thickness || '',
-      diameter: item.diameter || '',
-      outerDiameter: item.outer_diameter || ''
-    });
-    setShowItemForm(true);
+    navigate(`/item-master/edit-item/${item.id}`);
   };
 
   const handleCopyItem = (item) => {
-    // Find the original group name if it was normalized
-    let displayGroup = item.material_type || '';
-    const matchingGroup = itemGroups.find(g => 
-      g.name === displayGroup || 
-      g.name.toUpperCase().replace(/ /g, '_') === displayGroup
-    );
-    if (matchingGroup) displayGroup = matchingGroup.name;
-
-    setItemFormData({
-      itemCode: '',
-      itemName: item.material_name || '',
-      itemGroup: displayGroup,
-      defaultUom: item.unit || 'Nos',
-      valuationRate: item.valuation_rate || 0,
-      sellingRate: item.selling_rate || 0,
-      noOfCavity: item.no_of_cavity || 1,
-      weightPerUnit: item.weight_per_unit || 0,
-      weightUom: item.weight_uom || '',
-      drawingNo: item.drawing_no || '',
-      revision: item.revision || '',
-      materialGrade: item.material_grade || '',
-      materialId: item.material_id || '',
-      density: item.density || '',
-      shapeId: item.shape_id || '',
-      length: item.length || '',
-      width: item.width || '',
-      thickness: item.thickness || '',
-      diameter: item.diameter || '',
-      outerDiameter: item.outer_diameter || ''
-    });
-    setIsEditingItem(false);
-    setEditingItemId(null);
-    setShowItemForm(true);
-    infoToast('Details copied. Please provide a new Item Code.');
+    navigate(`/item-master/copy-item/${item.id}`);
   };
 
   const handleDeleteItem = async (id) => {
@@ -799,13 +829,13 @@ const ItemsMaster = () => {
         
         <div className="flex items-center gap-2 bg-slate-100 p-1 rounded ">
           <button 
-            onClick={() => setActiveTab('items')}
+            onClick={() => navigate('/item-master')}
             className={`flex items-center gap-2 p-2 rounded  text-xs  transition-all ${activeTab === 'items' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
           >
             <Package size={15} /> Items List
           </button>
           <button 
-            onClick={() => setActiveTab('groups')}
+            onClick={() => navigate('/item-master/groups')}
             className={`flex items-center gap-2 p-2 rounded  text-xs  transition-all ${activeTab === 'groups' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
           >
             <Layers size={15} /> Item Groups
@@ -835,7 +865,7 @@ const ItemsMaster = () => {
                 <RefreshCw size={15} className={itemsLoading ? 'animate-spin' : ''} />
               </button>
               <button 
-                onClick={() => { handleClearItemForm(); setShowItemForm(true); fetchNextItemCode(); }}
+                onClick={() => navigate('/item-master/add-items')}
                 className="flex items-center gap-2 p-2  bg-indigo-600 text-white rounded text-xs  hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95"
               >
                 <Plus size={15} /> Add New Item
@@ -868,7 +898,7 @@ const ItemsMaster = () => {
               <h2 className="text-md  text-slate-900">{isEditingItem ? 'Edit Item' : 'Add New Item'}</h2>
             </div>
             <button 
-              onClick={() => setShowItemForm(false)}
+              onClick={() => navigate('/item-master')}
               className="p-2 text-slate-500 hover:bg-slate-100 rounded text-xs  transition-all"
             >
               Cancel
@@ -1113,6 +1143,13 @@ const ItemsMaster = () => {
             </div>
             
             <div className="pt-6 border-t border-slate-50 flex justify-end gap-2">
+              <button 
+                type="button" 
+                onClick={() => navigate('/item-master')}
+                className="p-2 bg-slate-50 border border-slate-200 text-slate-600 rounded text-xs  hover:bg-slate-100 transition-all"
+              >
+                Cancel
+              </button>
               <button 
                 type="button" 
                 onClick={handleClearItemForm}

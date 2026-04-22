@@ -1013,9 +1013,9 @@ function App() {
     { label: 'Sales Order', moduleId: 'sales-order', icon: 'package', indent: true },
 
     { label: 'DESIGN & ENG', isGroup: true, groupId: 'design-group' },
-    { label: 'Items Master', moduleId: 'item-master', icon: 'package', indent: true },
-    // { label: 'Design Orders', moduleId: 'design-orders', icon: 'palette', indent: true },
     { label: 'Drawing Master', moduleId: 'drawing-master', icon: 'pencil', indent: true },
+    // { label: 'Design Orders', moduleId: 'design-orders', icon: 'palette', indent: true },
+    { label: 'Items Master', moduleId: 'item-master', icon: 'package', indent: true },
     { label: 'BOM Creation', moduleId: 'bom-creation', icon: 'clipboard', indent: true },
     { label: 'Routing / Operations', moduleId: 'routing-operations', icon: 'settings', indent: true },
     { label: 'Process Sheet', moduleId: 'process-sheet', icon: 'chart', indent: true },
