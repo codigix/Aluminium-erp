@@ -19,13 +19,13 @@ const CustomerDrawing = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [uploadMode, setUploadMode] = useState('bulk'); // 'bulk' or 'manual'
   const [clientLocked, setClientLocked] = useState(false);
-  
+
   // Revisions Modal State
   const [showRevisions, setShowRevisions] = useState(false);
   const [selectedDrawing, setSelectedDrawing] = useState(null);
   const [revisions, setRevisions] = useState([]);
   const [revisionsLoading, setRevisionsLoading] = useState(false);
-  
+
   // Edit Modal State
   const [showEditModal, setShowEditModal] = useState(false);
   const [showClientDrawingsModal, setShowClientDrawingsModal] = useState(false);
@@ -54,9 +54,9 @@ const CustomerDrawing = () => {
   const [saveLoading, setSaveLoading] = useState(false);
 
   const requirementColumns = [
-    { 
-      label: 'Client Name', 
-      key: 'client_name', 
+    {
+      label: 'Client Name',
+      key: 'client_name',
       sortable: true,
       render: (val, row) => (
         <div className="flex flex-col">
@@ -67,8 +67,8 @@ const CustomerDrawing = () => {
         </div>
       )
     },
-    { 
-      label: 'Contact', 
+    {
+      label: 'Contact',
       key: 'contact_person',
       render: (val, row) => (
         <div className="flex flex-col">
@@ -79,29 +79,29 @@ const CustomerDrawing = () => {
         </div>
       )
     },
-    { 
-      label: 'Delivery Date', 
-      key: 'delivery_date', 
-      render: (val) => val ? new Date(val).toLocaleDateString() : '—' 
+    {
+      label: 'Delivery Date',
+      key: 'delivery_date',
+      render: (val) => val ? new Date(val).toLocaleDateString() : '—'
     },
-    { 
-      label: 'Status', 
-      key: 'status', 
-      render: (val) => <StatusBadge status={val || 'PENDING'} /> 
+    {
+      label: 'Status',
+      key: 'status',
+      render: (val) => <StatusBadge status={val || 'PENDING'} />
     },
     {
       label: 'Actions',
       key: 'actions',
       render: (_, row) => (
         <div className="flex items-center gap-2">
-          <button 
+          <button
             onClick={() => handleViewClientDrawings(row.client_name || row.company_name)}
             className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded transition-all"
             title="View Details"
           >
             <Eye size={15} />
           </button>
-          <button 
+          <button
             onClick={() => {
               // Map requirement item to drawing structure for editing
               const firstItem = row.original_items?.[0];
@@ -126,7 +126,7 @@ const CustomerDrawing = () => {
             <Edit2 size={15} />
           </button>
           {drawings.some(d => (d.client_name === (row.client_name || row.company_name)) && (!d.status || d.status !== 'SHARED')) && (
-            <button 
+            <button
               onClick={() => handleShareClientGroupWithDesign(row.client_name || row.company_name)}
               className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded transition-all"
               title="Send to Design"
@@ -134,7 +134,7 @@ const CustomerDrawing = () => {
               <Send size={15} />
             </button>
           )}
-          <button 
+          <button
             onClick={() => handleDeleteRequirement(row.id)}
             className="p-1.5 text-rose-600 hover:bg-rose-50 rounded transition-all"
             title="Delete Requirement"
@@ -160,10 +160,10 @@ const CustomerDrawing = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
-      const url = search 
+      const url = search
         ? `${API_BASE}/drawings?search=${encodeURIComponent(search)}`
         : `${API_BASE}/drawings`;
-        
+
       const response = await fetch(url, {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -302,7 +302,7 @@ const CustomerDrawing = () => {
       try {
         setCreatingQuotation(true);
         const token = localStorage.getItem('authToken');
-        
+
         const quotationData = {
           company_id: clientData.company_id,
           company_name: clientData.company_name,
@@ -333,7 +333,7 @@ const CustomerDrawing = () => {
         });
 
         if (!response.ok) throw new Error('Failed to create quotation');
-        
+
         successToast('Quotation created and sent to client');
         setShowApprovedDrawings(false);
         setSelectedApprovedClient(null);
@@ -366,9 +366,9 @@ const CustomerDrawing = () => {
       });
       if (!response.ok) throw new Error('Failed to fetch requirements');
       const data = await response.json();
-      const filtered = data.filter(so => 
-        so.project_name?.includes('Design Review') || 
-        so.current_department === 'DESIGN_ENG' || 
+      const filtered = data.filter(so =>
+        so.project_name?.includes('Design Review') ||
+        so.current_department === 'DESIGN_ENG' ||
         so.current_department === 'SALES'
       );
 
@@ -383,12 +383,12 @@ const CustomerDrawing = () => {
             original_items: []
           };
         }
-        
+
         // Count items that are actual drawings (not existing items)
         const items = so.items?.filter(item => !item.item_code) || [];
         acc[clientName].drawing_count += items.length;
         acc[clientName].original_items = [...acc[clientName].original_items, ...items];
-        
+
         // Keep the most recent delivery date if multiple exist
         if (so.delivery_date && (!acc[clientName].delivery_date || new Date(so.delivery_date) > new Date(acc[clientName].delivery_date))) {
           acc[clientName].delivery_date = so.delivery_date;
@@ -409,7 +409,32 @@ const CustomerDrawing = () => {
     fetchDrawings(searchTerm);
     fetchCompanies();
     fetchRequirements();
-  }, []);
+
+    // Initial check on mount or path change
+    const path = window.location.pathname;
+    if (path === '/customer-drawing') {
+      setShowFormModal(false);
+      setShowEditModal(false);
+      setShowClientDrawingsModal(false);
+    } else if (path.includes('/customer-drawing/addclient')) {
+      setShowFormModal(true);
+    }
+
+    // Handle browser Back/Forward buttons
+    const handlePopState = () => {
+      const currentPath = window.location.pathname;
+      if (currentPath === '/customer-drawing') {
+        setShowFormModal(false);
+        setShowEditModal(false);
+        setShowClientDrawingsModal(false);
+      } else if (currentPath.includes('/customer-drawing/addclient')) {
+        setShowFormModal(true);
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [location.pathname]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -452,10 +477,10 @@ const CustomerDrawing = () => {
 
   const handleEdit = (drawing, mode = 'edit') => {
     const company = companies.find(c => c.company_name === drawing.client_name);
-    
+
     let billingAddressLine = '';
     let shippingAddressLine = '';
-    
+
     if (company) {
       const billingAddress = company.addresses?.find(a => a.address_type === 'BILLING');
       const shippingAddress = company.addresses?.find(a => a.address_type === 'SHIPPING');
@@ -485,6 +510,10 @@ const CustomerDrawing = () => {
     });
     setModalMode(mode);
     setShowEditModal(true);
+
+    // Update URL behavior
+    const targetUrl = mode === 'view' ? '/customer-drawing/view-draw' : '/customer-drawing/edit-client';
+    window.history.pushState({}, '', targetUrl);
   };
 
   const handlePreview = (drawing) => {
@@ -528,9 +557,12 @@ const CustomerDrawing = () => {
       });
 
       if (!response.ok) throw new Error('Failed to update drawing');
-      
+
       successToast('Customer drawing updated successfully');
       setShowEditModal(false);
+      if (window.location.pathname !== '/customer-drawing') {
+        window.history.pushState({}, '', '/customer-drawing');
+      }
       fetchDrawings(searchTerm);
     } catch (error) {
       console.error(error);
@@ -614,7 +646,7 @@ const CustomerDrawing = () => {
             await saveSingleDrawing({ ...values, ...drawing }, false);
             successCount++;
           }
-          
+
           if (successCount > 0) {
             successToast(`${successCount} drawings added successfully`);
             formik.setFieldValue('manualDrawings', [{ id: Date.now(), drawing_no: '', revision: '', qty: 1, description: '', file: null, remarks: '' }]);
@@ -660,7 +692,7 @@ const CustomerDrawing = () => {
   };
 
   const handleManualDrawingChange = (id, field, value) => {
-    const updatedManualDrawings = formik.values.manualDrawings.map(d => 
+    const updatedManualDrawings = formik.values.manualDrawings.map(d =>
       d.id === id ? { ...d, [field]: value } : d
     );
     formik.setFieldValue('manualDrawings', updatedManualDrawings);
@@ -687,7 +719,7 @@ const CustomerDrawing = () => {
 
   const handleClientInput = (value) => {
     formik.setFieldValue('client_name', value);
-    
+
     if (value.trim()) {
       const filtered = companies.filter(company =>
         company.company_name.toLowerCase().includes(value.toLowerCase())
@@ -705,7 +737,7 @@ const CustomerDrawing = () => {
     const shippingAddress = company.addresses?.find(a => a.address_type === 'SHIPPING');
     const billingAddressLine = billingAddress ? `${billingAddress.line1}${billingAddress.line2 ? ', ' + billingAddress.line2 : ''}, ${billingAddress.city}, ${billingAddress.state} ${billingAddress.pincode}` : '';
     const shippingAddressLine = shippingAddress ? `${shippingAddress.line1}${shippingAddress.line2 ? ', ' + shippingAddress.line2 : ''}, ${shippingAddress.city}, ${shippingAddress.state} ${shippingAddress.pincode}` : '';
-    
+
     formik.setValues({
       ...formik.values,
       client_name: company.company_name,
@@ -726,12 +758,12 @@ const CustomerDrawing = () => {
   const saveSingleDrawing = async (drawingData, sendToDesign = false) => {
     const fileExt = drawingData.file ? drawingData.file.name.split('.').pop().toUpperCase() : '';
     const isExcel = fileExt === 'XLSX' || fileExt === 'XLS';
-    
+
     if (!drawingData.file) {
       warningToast('Drawing File is mandatory');
       return null;
     }
-    
+
     if (!isExcel && !drawingData.drawing_no) {
       warningToast('Drawing Number is mandatory');
       return null;
@@ -750,7 +782,7 @@ const CustomerDrawing = () => {
       formData.append('state', drawingData.state || '');
       formData.append('billingAddress', drawingData.billing_address || '');
       formData.append('shippingAddress', drawingData.shipping_address || '');
-      
+
       formData.append('drawingNo', drawingData.drawing_no || (drawingData.file ? drawingData.file.name : 'BATCH_IMPORT'));
       formData.append('revision', drawingData.revision || '');
       formData.append('qty', drawingData.qty || 1);
@@ -774,7 +806,7 @@ const CustomerDrawing = () => {
         const err = await response.json();
         throw new Error(err.message || 'Upload failed');
       }
-      
+
       const savedDrawing = await response.json();
       const drawingId = savedDrawing.id || savedDrawing.drawing_id;
       const isExcelUpload = isExcel && savedDrawing.count;
@@ -784,7 +816,7 @@ const CustomerDrawing = () => {
       } else if (isExcelUpload && sendToDesign) {
         await sendBulkUploadedToDesign(drawingData.client_name, savedDrawing.count);
       }
-      
+
       return { drawingId, isExcelUpload, count: savedDrawing.count };
     } catch (error) {
       console.error(error);
@@ -796,7 +828,7 @@ const CustomerDrawing = () => {
     const token = localStorage.getItem('authToken');
     const response = await fetch(`${API_BASE}/drawings/share/bulk`, {
       method: 'POST',
-      headers: { 
+      headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
       },
@@ -823,6 +855,9 @@ const CustomerDrawing = () => {
         await shareDrawingsBulkAPI(recentDrawings.map(d => d.id));
         successToast(`All ${recentDrawings.length} imported drawings sent to Design Engineer for review as a single request`);
         setShowFormModal(false);
+        if (window.location.pathname !== '/customer-drawing') {
+          window.history.pushState({}, '', '/customer-drawing');
+        }
         fetchDrawings(searchTerm);
         fetchRequirements();
       }
@@ -834,7 +869,7 @@ const CustomerDrawing = () => {
 
   const handleShareClientGroupWithDesign = async (clientName) => {
     const unsharedDrawings = groupedDrawings[clientName].filter(d => !d.status || d.status !== 'SHARED');
-    
+
     if (unsharedDrawings.length === 0) {
       infoToast('All drawings for this client are already shared.');
       return;
@@ -882,7 +917,7 @@ const CustomerDrawing = () => {
       });
 
       if (!response.ok) throw new Error('Share failed');
-      
+
       successToast('Drawing shared with Engineering Department');
       fetchDrawings(searchTerm);
       fetchRequirements();
@@ -927,6 +962,9 @@ const CustomerDrawing = () => {
       drawings: groupedDrawings[clientName] || []
     });
     setShowClientDrawingsModal(true);
+
+    // Update URL behavior
+    window.history.pushState({}, '', '/customer-drawing/view-draw');
   };
 
   const handleDeleteRequirement = async (id) => {
@@ -980,7 +1018,7 @@ const CustomerDrawing = () => {
         });
 
         if (!response.ok) throw new Error('Failed to send to design');
-        
+
         successToast('Requirement sent to Design Engineer successfully');
         fetchRequirements();
       } catch (error) {
@@ -994,21 +1032,24 @@ const CustomerDrawing = () => {
       {/* Header Section */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          
+
           <div>
             <h1 className="text-xl  text-slate-900 ">Customer Drawing Master</h1>
             <p className="text-xs text-slate-500 ">Manage customer reference drawings and technical documentation</p>
           </div>
         </div>
-        
+
         <div className="flex items-center gap-2">
-          <button 
-            onClick={() => setShowFormModal(true)}
+          <button
+            onClick={() => {
+              window.history.pushState({}, '', '/customer-drawing/addclient');
+              setShowFormModal(true);
+            }}
             className="flex items-center gap-2 p-2  bg-indigo-600 text-white rounded text-xs  hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95"
           >
             <Plus size={15} /> Client Requirement
           </button>
-          <button 
+          <button
             onClick={() => { setShowApprovedDrawings(true); fetchApprovedDrawings(); }}
             className="flex items-center gap-2 p-2  bg-emerald-600 text-white rounded text-xs  hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 active:scale-95"
           >
@@ -1022,7 +1063,7 @@ const CustomerDrawing = () => {
         <div className=" border-b border-slate-50 flex flex-col md:flex-row md:items-center justify-between gap-2">
           <form onSubmit={handleSearch} className="relative flex-1 max-w-md group">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" size={15} />
-            <input 
+            <input
               type="text"
               placeholder="Search drawings, clients..."
               className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
@@ -1031,13 +1072,13 @@ const CustomerDrawing = () => {
             />
           </form>
           <div className="flex items-center gap-2">
-            <button 
+            <button
               onClick={() => { setSearchTerm(''); fetchDrawings(''); }}
               className="p-2  bg-white border border-slate-200 text-slate-600 rounded text-xs  hover:bg-slate-50 transition-all active:scale-95"
             >
               Reset
             </button>
-            <button 
+            <button
               onClick={handleSearch}
               className="px-6 py-2.5 bg-indigo-600 text-white rounded text-xs  hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95"
             >
@@ -1047,28 +1088,33 @@ const CustomerDrawing = () => {
         </div>
       </Card>
 
-        {/* SECTION 2: CLIENT REQUIREMENTS TABLE */}
-        <Card className="">
-          <div className="border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
-            <h2 className="text-md  text-slate-900 flex items-center gap-2 ">
-              <FileText className="w-5 h-5 text-indigo-600" />
-              Client Requirements
-            </h2>
-          </div>
-          <div className="p-2">
-            <DataTable 
-              columns={requirementColumns}
-              data={requirements}
-              loading={reqLoading}
-              pageSize={5}
-            />
-          </div>
-        </Card>
+      {/* SECTION 2: CLIENT REQUIREMENTS TABLE */}
+      <Card className="">
+        <div className="border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
+          <h2 className="text-md  text-slate-900 flex items-center gap-2 ">
+            <FileText className="w-5 h-5 text-indigo-600" />
+            Client Requirements
+          </h2>
+        </div>
+        <div className="p-2">
+          <DataTable
+            columns={requirementColumns}
+            data={requirements}
+            loading={reqLoading}
+            pageSize={5}
+          />
+        </div>
+      </Card>
 
       {/* Edit/View Modal */}
-      <Modal 
-        isOpen={showEditModal} 
-        onClose={() => setShowEditModal(false)}
+      <Modal
+        isOpen={showEditModal}
+        onClose={() => {
+          setShowEditModal(false);
+          if (window.location.pathname !== '/customer-drawing') {
+            window.history.pushState({}, '', '/customer-drawing');
+          }
+        }}
         title={modalMode === 'view' ? 'View Drawing Details' : 'Edit Drawing'}
         size="4xl"
       >
@@ -1077,7 +1123,7 @@ const CustomerDrawing = () => {
             {/* Client Info Section */}
             <div className="lg:col-span-1">
               <label className="block text-xs  text-slate-700 mb-1">Client Name *</label>
-              <input 
+              <input
                 type="text"
                 readOnly
                 className="w-full p-2 border border-slate-300 rounded text-xs bg-slate-50 cursor-not-allowed text-slate-600"
@@ -1087,101 +1133,101 @@ const CustomerDrawing = () => {
 
             <div>
               <label className="block text-xs  text-slate-700 mb-1">Contact Person</label>
-              <input 
+              <input
                 type="text"
                 disabled={modalMode === 'view'}
                 placeholder="Contact person name"
                 className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
                 value={editData.contact_person}
-                onChange={(e) => setEditData({...editData, contact_person: e.target.value})}
+                onChange={(e) => setEditData({ ...editData, contact_person: e.target.value })}
               />
             </div>
             <div>
               <label className="block text-xs  text-slate-700 mb-1">Phone</label>
-              <input 
+              <input
                 type="text"
                 disabled={modalMode === 'view'}
                 placeholder="Phone number"
                 className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
                 value={editData.phone}
-                onChange={(e) => setEditData({...editData, phone: e.target.value})}
+                onChange={(e) => setEditData({ ...editData, phone: e.target.value })}
               />
             </div>
             <div>
               <label className="block text-xs  text-slate-700 mb-1">Email</label>
-              <input 
+              <input
                 type="email"
                 disabled={modalMode === 'view'}
                 placeholder="Email address"
                 className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
                 value={editData.email}
-                onChange={(e) => setEditData({...editData, email: e.target.value})}
+                onChange={(e) => setEditData({ ...editData, email: e.target.value })}
               />
             </div>
             <div>
               <label className="block text-xs  text-slate-700 mb-1">Type</label>
-              <input 
+              <input
                 type="text"
                 disabled={modalMode === 'view'}
                 placeholder="Customer type"
                 className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
                 value={editData.customer_type}
-                onChange={(e) => setEditData({...editData, customer_type: e.target.value})}
+                onChange={(e) => setEditData({ ...editData, customer_type: e.target.value })}
               />
             </div>
             <div>
               <label className="block text-xs  text-slate-700 mb-1">GSTIN</label>
-              <input 
+              <input
                 type="text"
                 disabled={modalMode === 'view'}
                 placeholder="GST number"
                 className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
                 value={editData.gstin}
-                onChange={(e) => setEditData({...editData, gstin: e.target.value})}
+                onChange={(e) => setEditData({ ...editData, gstin: e.target.value })}
               />
             </div>
             <div>
               <label className="block text-xs  text-slate-700 mb-1">City</label>
-              <input 
+              <input
                 type="text"
                 disabled={modalMode === 'view'}
                 placeholder="City"
                 className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
                 value={editData.city}
-                onChange={(e) => setEditData({...editData, city: e.target.value})}
+                onChange={(e) => setEditData({ ...editData, city: e.target.value })}
               />
             </div>
             <div>
               <label className="block text-xs  text-slate-700 mb-1">State</label>
-              <input 
+              <input
                 type="text"
                 disabled={modalMode === 'view'}
                 placeholder="State"
                 className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
                 value={editData.state}
-                onChange={(e) => setEditData({...editData, state: e.target.value})}
+                onChange={(e) => setEditData({ ...editData, state: e.target.value })}
               />
             </div>
             <div className="lg:col-span-2">
               <label className="block text-xs  text-slate-700 mb-1">Billing Address</label>
-              <input 
+              <input
                 type="text"
                 disabled={modalMode === 'view'}
                 placeholder="Billing address"
                 className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
                 value={editData.billing_address}
-                onChange={(e) => setEditData({...editData, billing_address: e.target.value})}
+                onChange={(e) => setEditData({ ...editData, billing_address: e.target.value })}
               />
             </div>
             <div className="lg:col-span-2">
               <label className="block text-xs  text-slate-700 mb-1">Shipping Address</label>
-              <input 
+              <input
                 type="text"
                 disabled={modalMode === 'view'}
                 placeholder="Shipping address"
                 className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
                 value={editData.shipping_address}
-                onChange={(e) => setEditData({...editData, shipping_address: e.target.value})}
+                onChange={(e) => setEditData({ ...editData, shipping_address: e.target.value })}
               />
             </div>
           </div>
@@ -1193,7 +1239,7 @@ const CustomerDrawing = () => {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                 <div>
                   <label className="block text-xs text-slate-700 mb-1">Drawing # *</label>
-                  <input 
+                  <input
                     type="text"
                     readOnly
                     className="w-full p-2 border border-slate-300 rounded text-xs bg-slate-50 cursor-not-allowed text-slate-600"
@@ -1202,41 +1248,41 @@ const CustomerDrawing = () => {
                 </div>
                 <div>
                   <label className="block text-xs text-slate-700 mb-1">Revision</label>
-                  <input 
+                  <input
                     type="text"
                     disabled={modalMode === 'view'}
                     className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
                     value={editData.revision_no}
-                    onChange={(e) => setEditData({...editData, revision_no: e.target.value})}
+                    onChange={(e) => setEditData({ ...editData, revision_no: e.target.value })}
                   />
                 </div>
                 <div>
                   <label className="block text-xs text-slate-700 mb-1">Qty</label>
-                  <input 
+                  <input
                     type="number"
                     disabled={modalMode === 'view'}
                     className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
                     value={editData.qty}
-                    onChange={(e) => setEditData({...editData, qty: parseInt(e.target.value) || 0})}
+                    onChange={(e) => setEditData({ ...editData, qty: parseInt(e.target.value) || 0 })}
                   />
                 </div>
               </div>
               <div>
                 <label className="block text-xs text-slate-700 mb-1">Description</label>
-                <textarea 
+                <textarea
                   disabled={modalMode === 'view'}
                   className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors min-h-[60px] resize-none ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
                   value={editData.description}
-                  onChange={(e) => setEditData({...editData, description: e.target.value})}
+                  onChange={(e) => setEditData({ ...editData, description: e.target.value })}
                 />
               </div>
               <div>
                 <label className="block text-xs text-slate-700 mb-1">Remarks</label>
-                <textarea 
+                <textarea
                   disabled={modalMode === 'view'}
                   className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors min-h-[60px] resize-none ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
                   value={editData.remarks}
-                  onChange={(e) => setEditData({...editData, remarks: e.target.value})}
+                  onChange={(e) => setEditData({ ...editData, remarks: e.target.value })}
                 />
               </div>
 
@@ -1244,24 +1290,24 @@ const CustomerDrawing = () => {
                 <div>
                   <label className="block text-xs text-slate-700 mb-1">Update PDF File</label>
                   <div className="flex items-center justify-center border-2 border-dashed border-slate-300 rounded p-2 hover:border-indigo-400 transition-colors bg-white cursor-pointer relative">
-                    <input 
-                      type="file" 
+                    <input
+                      type="file"
                       accept=".pdf"
                       className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                      onChange={(e) => setEditData({...editData, drawing_pdf: e.target.files[0]})}
+                      onChange={(e) => setEditData({ ...editData, drawing_pdf: e.target.files[0] })}
                     />
                     <div className="text-center">
-                      <svg className="mx-auto h-8 w-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+                      <svg className="mx-auto h-8 w-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
                       <p className="mt-1 text-xs text-slate-500">{editData.drawing_pdf ? editData.drawing_pdf.name : 'Click to update PDF'}</p>
                     </div>
                   </div>
                 </div>
               )}
-              
+
               {editData.file_path && (
                 <div className="flex items-center gap-2 mt-2">
                   <span className="text-xs text-slate-500">Current File:</span>
-                  <button 
+                  <button
                     type="button"
                     onClick={() => {
                       setPreviewDrawing({ ...editData, drawing_pdf: editData.file_path });
@@ -1269,7 +1315,7 @@ const CustomerDrawing = () => {
                     }}
                     className="text-xs text-indigo-600 hover:underline flex items-center gap-1"
                   >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                     View Current PDF
                   </button>
                 </div>
@@ -1278,16 +1324,21 @@ const CustomerDrawing = () => {
           </div>
 
           <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
-            <button 
+            <button
               type="button"
-              onClick={() => setShowEditModal(false)}
+              onClick={() => {
+                setShowEditModal(false);
+                if (window.location.pathname !== '/customer-drawing') {
+                  window.history.pushState({}, '', '/customer-drawing');
+                }
+              }}
               className="px-4 py-2 text-xs text-slate-600 hover:bg-slate-100 rounded transition-colors"
             >
               Close
             </button>
             {modalMode === 'edit' && (
               <>
-                <button 
+                <button
                   type="submit"
                   disabled={saveLoading}
                   className="px-6 py-2 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700 disabled:opacity-50 transition-colors flex items-center gap-2"
@@ -1355,7 +1406,7 @@ const CustomerDrawing = () => {
                             <td className="p-2 text-slate-600">{rev.description || '—'}</td>
                             <td className="p-2 text-center">
                               {rev.drawing_pdf ? (
-                                <button 
+                                <button
                                   onClick={() => handlePreview({ ...rev, file_path: rev.drawing_pdf })}
                                   className="inline-flex items-center justify-center p-1 text-indigo-600 hover:text-indigo-900 hover:bg-indigo-100 rounded transition-colors"
                                   title="View Drawing"
@@ -1410,7 +1461,7 @@ const CustomerDrawing = () => {
                 </div>
               ) : Object.keys(approvedGroupedByClient).length === 0 ? (
                 <div className="py-8 text-center">
-                  <svg className="mx-auto w-8 h-8 text-slate-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                  <svg className="mx-auto w-8 h-8 text-slate-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                   <p className="text-slate-500  text-xs">No approved drawings found</p>
                   <p className="text-slate-400 text-xs">Drawings must be approved by Design Engineer first</p>
                 </div>
@@ -1474,12 +1525,12 @@ const CustomerDrawing = () => {
                                 <td className="p-2 whitespace-nowrap text-slate-900">
                                   <div className="flex items-center gap-2 ">
                                     {item.drawing_pdf && (
-                                      <button 
+                                      <button
                                         onClick={() => handlePreview({ ...item, file_path: item.drawing_pdf })}
                                         className="p-1 text-emerald-600 hover:bg-emerald-100 rounded transition-colors"
                                         title="View Drawing"
                                       >
-                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                                       </button>
                                     )}
                                     {item.drawing_no}
@@ -1526,7 +1577,7 @@ const CustomerDrawing = () => {
                           disabled={creatingQuotation || calculateQuotationTotal() === 0}
                           className="p-2  bg-emerald-600 text-white rounded  hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2  text-xs"
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"/></svg>
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
                           {creatingQuotation ? 'Creating...' : 'Create Quotation'}
                         </button>
                       </div>
@@ -1539,31 +1590,36 @@ const CustomerDrawing = () => {
         </div>
       )}
       {/* Add Client Requirement Modal */}
-      <Modal 
-        isOpen={showFormModal} 
-        onClose={() => setShowFormModal(false)}
+      <Modal
+        isOpen={showFormModal}
+        onClose={() => {
+          setShowFormModal(false);
+          if (location.pathname !== '/customer-drawing') {
+            window.history.pushState({}, '', '/customer-drawing');
+          }
+        }}
         title="Add Client Requirement"
       >
         <form onSubmit={formik.handleSubmit} className="space-y-2">
           <div className="flex justify-between items-center bg-slate-50 p-2 rounded  border border-slate-200">
             <div className="flex items-center gap-2">
               <label className="flex items-center gap-2  cursor-pointer group">
-                <input 
-                  type="radio" 
+                <input
+                  type="radio"
                   name="uploadMode"
                   className="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-slate-300"
-                  checked={uploadMode === 'bulk'} 
-                  onChange={() => setUploadMode('bulk')} 
+                  checked={uploadMode === 'bulk'}
+                  onChange={() => setUploadMode('bulk')}
                 />
                 <span className={`text-xs  transition-colors ${uploadMode === 'bulk' ? 'text-indigo-600' : 'text-slate-600 group-hover:text-slate-900'}`}>Bulk Import (Excel)</span>
               </label>
               <label className="flex items-center gap-2  cursor-pointer group">
-                <input 
-                  type="radio" 
+                <input
+                  type="radio"
                   name="uploadMode"
                   className="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-slate-300"
-                  checked={uploadMode === 'manual'} 
-                  onChange={() => setUploadMode('manual')} 
+                  checked={uploadMode === 'manual'}
+                  onChange={() => setUploadMode('manual')}
                 />
                 <span className={`text-xs  transition-colors ${uploadMode === 'manual' ? 'text-indigo-600' : 'text-slate-600 group-hover:text-slate-900'}`}>Manual Entry</span>
               </label>
@@ -1576,7 +1632,7 @@ const CustomerDrawing = () => {
               <label className="block text-xs  text-slate-700 mb-1">Client Name *</label>
               <div className="flex gap-1">
                 <div className="relative flex-1 client-input-container">
-                  <input 
+                  <input
                     type="text"
                     name="client_name"
                     disabled={clientLocked}
@@ -1608,7 +1664,7 @@ const CustomerDrawing = () => {
                   )}
                 </div>
                 {clientLocked && (
-                  <button 
+                  <button
                     type="button"
                     onClick={() => setClientLocked(false)}
                     className="p-1 text-indigo-600 hover:bg-indigo-50 rounded border border-indigo-100 transition-colors"
@@ -1622,7 +1678,7 @@ const CustomerDrawing = () => {
 
             <div>
               <label className="block text-xs  text-slate-700 mb-1">Contact Person *</label>
-              <input 
+              <input
                 type="text"
                 name="contact_person"
                 placeholder="Contact person name"
@@ -1637,7 +1693,7 @@ const CustomerDrawing = () => {
             </div>
             <div>
               <label className="block text-xs  text-slate-700 mb-1">Phone *</label>
-              <input 
+              <input
                 type="text"
                 name="phone_number"
                 maxLength={10}
@@ -1656,7 +1712,7 @@ const CustomerDrawing = () => {
             </div>
             <div>
               <label className="block text-xs  text-slate-700 mb-1">Email *</label>
-              <input 
+              <input
                 type="email"
                 name="email_address"
                 placeholder="Email address"
@@ -1671,7 +1727,7 @@ const CustomerDrawing = () => {
             </div>
             <div>
               <label className="block text-xs  text-slate-700 mb-1">Type *</label>
-              <input 
+              <input
                 type="text"
                 name="customer_type"
                 placeholder="Customer type"
@@ -1686,7 +1742,7 @@ const CustomerDrawing = () => {
             </div>
             <div>
               <label className="block text-xs  text-slate-700 mb-1">GSTIN</label>
-              <input 
+              <input
                 type="text"
                 name="gstin"
                 placeholder="GST number"
@@ -1701,7 +1757,7 @@ const CustomerDrawing = () => {
             </div>
             <div>
               <label className="block text-xs  text-slate-700 mb-1">City *</label>
-              <input 
+              <input
                 type="text"
                 name="city"
                 placeholder="City"
@@ -1716,7 +1772,7 @@ const CustomerDrawing = () => {
             </div>
             <div>
               <label className="block text-xs  text-slate-700 mb-1">State *</label>
-              <input 
+              <input
                 type="text"
                 name="state"
                 placeholder="State"
@@ -1731,7 +1787,7 @@ const CustomerDrawing = () => {
             </div>
             <div className="lg:col-span-2">
               <label className="block text-xs  text-slate-700 mb-1">Billing Address *</label>
-              <input 
+              <input
                 type="text"
                 name="billing_address"
                 placeholder="Billing address"
@@ -1746,7 +1802,7 @@ const CustomerDrawing = () => {
             </div>
             <div className="lg:col-span-2">
               <label className="block text-xs  text-slate-700 mb-1">Shipping Address</label>
-              <input 
+              <input
                 type="text"
                 name="shipping_address"
                 placeholder="Shipping address"
@@ -1763,7 +1819,7 @@ const CustomerDrawing = () => {
             <div className="mt-4">
               <div className="flex justify-between items-center mb-2">
                 <h3 className="text-xs  text-slate-700">Drawing Details</h3>
-                <button 
+                <button
                   type="button"
                   onClick={addManualDrawingRow}
                   className="p-2  bg-indigo-50 text-indigo-600 border border-indigo-200 rounded-md text-xs  hover:bg-indigo-100 transition-colors flex items-center gap-1"
@@ -1789,8 +1845,8 @@ const CustomerDrawing = () => {
                     {formik.values.manualDrawings.map((drawing, index) => (
                       <tr key={drawing.id}>
                         <td className="px-2 py-2">
-                          <input 
-                            type="text" 
+                          <input
+                            type="text"
                             name={`manualDrawings[${index}].drawing_no`}
                             placeholder="DRW-1001"
                             className={`w-full px-2 py-1 border rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500 ${formik.touched.manualDrawings?.[index]?.drawing_no && formik.errors.manualDrawings?.[index]?.drawing_no ? 'border-red-500' : 'border-slate-300'}`}
@@ -1800,8 +1856,8 @@ const CustomerDrawing = () => {
                           />
                         </td>
                         <td className="px-2 py-2">
-                          <input 
-                            type="text" 
+                          <input
+                            type="text"
                             name={`manualDrawings[${index}].description`}
                             placeholder="Aluminum Frame"
                             className="w-full px-2 py-1 border border-slate-300 rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500"
@@ -1811,8 +1867,8 @@ const CustomerDrawing = () => {
                           />
                         </td>
                         <td className="px-2 py-2">
-                          <input 
-                            type="text" 
+                          <input
+                            type="text"
                             name={`manualDrawings[${index}].revision`}
                             placeholder="A"
                             className="w-full px-2 py-1 border border-slate-300 rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500 text-center"
@@ -1822,8 +1878,8 @@ const CustomerDrawing = () => {
                           />
                         </td>
                         <td className="px-2 py-2">
-                          <input 
-                            type="number" 
+                          <input
+                            type="number"
                             name={`manualDrawings[${index}].qty`}
                             min="1"
                             className="w-full px-2 py-1 border border-slate-300 rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500 text-center"
@@ -1834,8 +1890,8 @@ const CustomerDrawing = () => {
                         </td>
                         <td className="px-2 py-2">
                           <div className="relative">
-                            <input 
-                              type="file" 
+                            <input
+                              type="file"
                               name={`manualDrawings[${index}].file`}
                               accept=".pdf,.dwg,.step,.stp"
                               className="hidden"
@@ -1843,7 +1899,7 @@ const CustomerDrawing = () => {
                               onBlur={formik.handleBlur}
                               id={`file-${drawing.id}`}
                             />
-                            <label 
+                            <label
                               htmlFor={`file-${drawing.id}`}
                               className={`flex items-center gap-1 px-2 py-1 border border-dashed rounded text-xs  cursor-pointer transition-colors ${drawing.file ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : (formik.touched.manualDrawings?.[index]?.file && formik.errors.manualDrawings?.[index]?.file ? 'border-red-500 bg-red-50' : 'border-slate-300 bg-slate-50 text-slate-600 hover:border-indigo-400')}`}
                             >
@@ -1853,8 +1909,8 @@ const CustomerDrawing = () => {
                           </div>
                         </td>
                         <td className="px-2 py-2">
-                          <input 
-                            type="text" 
+                          <input
+                            type="text"
                             name={`manualDrawings[${index}].remarks`}
                             placeholder="Notes..."
                             className="w-full px-2 py-1 border border-slate-300 rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500"
@@ -1865,12 +1921,12 @@ const CustomerDrawing = () => {
                         </td>
                         <td className="px-2 py-2 text-center">
                           {formik.values.manualDrawings.length > 1 && (
-                            <button 
+                            <button
                               type="button"
                               onClick={() => removeManualDrawingRow(drawing.id)}
                               className="text-slate-400 hover:text-red-500 transition-colors"
                             >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                             </button>
                           )}
                         </td>
@@ -1886,8 +1942,8 @@ const CustomerDrawing = () => {
               <div>
                 <label className="block text-xs  text-slate-700 mb-2">Excel File <span className="text-red-500">*</span></label>
                 <div className={`flex items-center justify-center border-2 border-dashed rounded  p-2 hover:border-indigo-400 transition-colors bg-slate-50 cursor-pointer ${formik.touched.file && formik.errors.file ? 'border-red-500 bg-red-50' : 'border-slate-300'}`}>
-                  <input 
-                    type="file" 
+                  <input
+                    type="file"
                     name="file"
                     accept=".xlsx,.xls"
                     className="absolute opacity-0 w-[48%] h-[60px] cursor-pointer"
@@ -1908,8 +1964,8 @@ const CustomerDrawing = () => {
               <div>
                 <label className="block text-xs  text-slate-700 mb-2">ZIP File (Drawings)</label>
                 <div className="flex items-center justify-center border-2 border-dashed border-slate-300 rounded  p-2 hover:border-indigo-400 transition-colors bg-slate-50 cursor-pointer">
-                  <input 
-                    type="file" 
+                  <input
+                    type="file"
                     name="zipFile"
                     accept=".zip,.rar,.7z"
                     className="absolute opacity-0 w-[48%] h-[60px] cursor-pointer"
@@ -1926,7 +1982,7 @@ const CustomerDrawing = () => {
           )}
 
           <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
-            <button 
+            <button
               type="button"
               onClick={() => {
                 setShowFormModal(false);
@@ -1937,7 +1993,7 @@ const CustomerDrawing = () => {
             >
               Clear Form
             </button>
-            <button 
+            <button
               type="submit"
               disabled={loading}
               className="px-6 py-2 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700 disabled:opacity-50 transition-colors flex items-center gap-2"
@@ -1953,7 +2009,12 @@ const CustomerDrawing = () => {
       {/* Client Drawings Modal */}
       <Modal
         isOpen={showClientDrawingsModal}
-        onClose={() => setShowClientDrawingsModal(false)}
+        onClose={() => {
+          setShowClientDrawingsModal(false);
+          if (window.location.pathname !== '/customer-drawing') {
+            window.history.pushState({}, '', '/customer-drawing');
+          }
+        }}
         title={viewingClient ? `Drawings for ${viewingClient.name}` : 'Client Drawings'}
         width="max-w-5xl"
       >
@@ -1986,7 +2047,7 @@ const CustomerDrawing = () => {
                       <td className="px-4 py-3 text-sm text-center text-indigo-600 font-medium">{drawing.qty || 1}</td>
                       <td className="px-4 py-3 text-center">
                         {(drawing.file_path || drawing.drawing_pdf) ? (
-                          <button 
+                          <button
                             onClick={() => handlePreview(drawing)}
                             className="inline-flex items-center justify-center p-2 bg-indigo-50 text-indigo-600 rounded hover:bg-indigo-600 hover:text-white transition-all active:scale-95 shadow-sm"
                             title="View Drawing"
@@ -1999,14 +2060,14 @@ const CustomerDrawing = () => {
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-2">
-                          <button 
+                          <button
                             onClick={() => handleEdit(drawing)}
                             className="p-1.5 text-amber-600 hover:bg-amber-50 rounded transition-all"
                             title="Edit"
                           >
                             <Edit2 size={14} />
                           </button>
-                          <button 
+                          <button
                             onClick={() => handleDelete(drawing.id)}
                             className="p-1.5 text-rose-600 hover:bg-rose-50 rounded transition-all"
                             title="Delete"
@@ -2025,10 +2086,15 @@ const CustomerDrawing = () => {
                 </tbody>
               </table>
             </div>
-            
+
             <div className="flex justify-end pt-4">
               <button
-                onClick={() => setShowClientDrawingsModal(false)}
+                onClick={() => {
+                  setShowClientDrawingsModal(false);
+                  if (window.location.pathname !== '/customer-drawing') {
+                    window.history.pushState({}, '', '/customer-drawing');
+                  }
+                }}
                 className="px-6 py-2 bg-slate-100 text-slate-700 rounded-md text-xs font-semibold hover:bg-slate-200 transition-colors"
               >
                 Close
@@ -2039,7 +2105,7 @@ const CustomerDrawing = () => {
       </Modal>
 
       {/* Drawing Preview Modal */}
-      <DrawingPreviewModal 
+      <DrawingPreviewModal
         isOpen={showPreviewModal}
         onClose={() => setShowPreviewModal(false)}
         drawing={previewDrawing}

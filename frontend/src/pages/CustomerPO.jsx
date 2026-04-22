@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react'
-import { 
-  Loader2, ChevronRight, Eye, Plus, Trash2, X, Download, 
+import {
+  Loader2, ChevronRight, Eye, Plus, Trash2, X, Download,
   Search, RefreshCw, Filter, FileText, Calendar, Building2,
   DollarSign, Package, CheckCircle2, Clock, AlertCircle
 } from 'lucide-react'
@@ -68,6 +68,27 @@ const CustomerPO = ({
     }
   }, [showPoForm, customerPos]);
 
+  // URL-based Modal Navigation
+  React.useEffect(() => {
+    // Initial check on mount
+    if (window.location.pathname.includes('/customer-po/new-po')) {
+      setShowPoForm(true);
+    }
+
+    // Handle browser Back/Forward buttons
+    const handlePopState = () => {
+      const path = window.location.pathname;
+      if (path === '/customer-po') {
+        setShowPoForm(false);
+      } else if (path.includes('/customer-po/new-po')) {
+        setShowPoForm(true);
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
   const handleQuotationSelect = (quoteId) => {
     setSelectedQuoteId(quoteId);
     if (!quoteId) return;
@@ -80,11 +101,11 @@ const CustomerPO = ({
         if (quote.batch_id && q.batch_id) {
           return q.batch_id === quote.batch_id;
         }
-        
+
         // Fallback to legacy grouping
-        return q.company_id === quote.company_id && 
-               q.sales_order_id === quote.sales_order_id &&
-               q.version === quote.version;
+        return q.company_id === quote.company_id &&
+          q.sales_order_id === quote.sales_order_id &&
+          q.version === quote.version;
       });
 
       // Map items from the batch. We include them if they are part of the latest batch,
@@ -94,7 +115,7 @@ const CustomerPO = ({
           const qty = parseFloat(item.item_qty) || 0;
           const totalAmount = parseFloat(item.total_amount) || 0;
           const unitRate = qty > 0 ? (totalAmount / qty) : totalAmount;
-          
+
           return {
             drawingNo: item.drawing_no !== '—' ? item.drawing_no : '',
             description: item.item_description,
@@ -113,19 +134,19 @@ const CustomerPO = ({
         projectName: quote.project_name || '',
         items: items.length > 0 ? items : prev.items
       }));
-      
+
       showToast(`Loaded ${items.length} items from quotation QRT-${String(quote.id).padStart(4, '0')} (Version ${quote.version || 1})`);
     }
   };
 
   const filteredPOs = useMemo(() => {
     return customerPos.filter(po => {
-      const matchesSearch = 
+      const matchesSearch =
         po.po_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         po.company_name?.toLowerCase().includes(searchTerm.toLowerCase());
-      
+
       const matchesStatus = statusFilter === 'ALL' || po.status === statusFilter;
-      
+
       return matchesSearch && matchesStatus;
     });
   }, [customerPos, searchTerm, statusFilter]);
@@ -165,6 +186,9 @@ const CustomerPO = ({
 
   const closePoForm = () => {
     setShowPoForm(false)
+    if (window.location.pathname !== '/customer-po') {
+      window.history.pushState({}, '', '/customer-po');
+    }
     setSelectedQuoteId('')
     setPoForm({
       companyId: '',
@@ -198,7 +222,7 @@ const CustomerPO = ({
       showToast('Please select a company')
       return
     }
-    
+
     setPoFormLoading(true)
     try {
       const payload = {
@@ -214,7 +238,7 @@ const CustomerPO = ({
         items: poForm.items,
         remarks: poForm.remarks
       }
-      
+
       await apiRequest('/customer-pos', {
         method: 'POST',
         body: payload
@@ -245,15 +269,15 @@ const CustomerPO = ({
     try {
       const baseUrl = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
       const token = localStorage.getItem('authToken');
-      
+
       const response = await fetch(`${baseUrl}/customer-pos/${poId}/pdf`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
-      
+
       if (!response.ok) throw new Error('Failed to generate PDF');
-      
+
       const blob = await response.blob();
       const url = window.URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
       window.open(url, '_blank');
@@ -326,21 +350,21 @@ const CustomerPO = ({
       className: 'text-right',
       render: (_, row) => (
         <div className="flex items-center justify-end gap-2">
-          <button 
+          <button
             onClick={() => handleDownloadPdf(row.id, row.po_number)}
             className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all border border-transparent hover:border-indigo-100  hover:"
             title="View PDF"
           >
             <FileText className="w-4 h-4" />
           </button>
-          <button 
+          <button
             onClick={() => fetchPoDetails(row.id)}
             className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all border border-transparent hover:border-indigo-100  hover:"
             title="View Details"
           >
             <Eye className="w-4 h-4" />
           </button>
-          <button 
+          <button
             onClick={() => handleDeletePo(row.id)}
             className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-all border border-transparent hover:border-rose-100"
             title="Delete PO"
@@ -364,14 +388,17 @@ const CustomerPO = ({
           <p className="text-slate-500 text-xs ">Manage and track external purchase orders from your clients</p>
         </div>
         <div className="flex items-center gap-2">
-          <button 
+          <button
             onClick={() => onRefresh && onRefresh()}
             className="p-2.5 text-slate-500 hover:bg-white hover:text-indigo-600 rounded  transition-all border border-slate-200 bg-slate-50/50  active:scale-95"
           >
             <RefreshCw className="w-5 h-5" />
           </button>
-          <button 
-            onClick={() => setShowPoForm(true)}
+          <button
+            onClick={() => {
+              setShowPoForm(true);
+              window.history.pushState({}, '', '/customer-po/new-po');
+            }}
             className="flex items-center gap-2 bg-indigo-600 text-white p-2  rounded text-xs  hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 active:scale-95"
           >
             <Plus className="w-4 h-4 stroke-[3]" />
@@ -409,8 +436,8 @@ const CustomerPO = ({
       <div className="flex flex-col md:flex-row mb-3 items-center gap-2">
         <div className="relative flex-1 w-full">
           <Search className="w-5 h-5 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input 
-            type="text" 
+          <input
+            type="text"
             placeholder="Search by PO number or client name..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -420,7 +447,7 @@ const CustomerPO = ({
         <div className="flex items-center gap-2 p-2  bg-white border border-slate-200 rounded  w-full md:w-auto">
           <Filter className="w-4 h-4 text-slate-400" />
           <span className="text-xs text-slate-400   ">Status:</span>
-          <select 
+          <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
             className="text-xs  text-indigo-600 outline-none bg-transparent cursor-pointer min-w-[100px]"
@@ -465,7 +492,7 @@ const CustomerPO = ({
                 <h2 className="text-xl  text-slate-900 ">New Customer Purchase Order</h2>
                 <p className="text-xs text-slate-500    mt-1">Manual Data Entry Workflow</p>
               </div>
-              <button 
+              <button
                 onClick={closePoForm}
                 className="p-2 rounded hover:bg-slate-100 transition-all text-slate-400 hover:text-slate-900 active:scale-90 bg-slate-50"
               >
@@ -483,11 +510,11 @@ const CustomerPO = ({
                     </div>
                     <h3 className="text-sm  text-slate-800  ">General Information</h3>
                   </div>
-                  
+
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div className="space-y-2">
                       <label className="text-xs  text-slate-400   ml-1">Quotation No (Fetch Details)</label>
-                      <select 
+                      <select
                         value={selectedQuoteId}
                         onChange={(e) => handleQuotationSelect(e.target.value)}
                         className="w-full bg-slate-50 border-2 border-slate-100 rounded p-2 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all  text-slate-700 appearance-none"
@@ -496,36 +523,36 @@ const CustomerPO = ({
                         {(() => {
                           const batches = [];
                           const processedIds = new Set();
-                          
+
                           // First, filter only approved items
                           const approvedItems = quotationRequests.filter(q => q.status?.trim().toUpperCase() === 'APPROVED');
-                          
+
                           approvedItems.forEach(q => {
                             if (processedIds.has(q.id)) return;
-                            
+
                             // Group items that belong to the SAME version of the SAME quotation revision set
-                            const batchItems = approvedItems.filter(t => 
-                              t.company_id === q.company_id && 
+                            const batchItems = approvedItems.filter(t =>
+                              t.company_id === q.company_id &&
                               t.sales_order_id === q.sales_order_id &&
                               t.version === q.version
                             );
-                            
+
                             // Use the smallest ID as representative for the dropdown value
                             const representative = batchItems.reduce((min, cur) => cur.id < min.id ? cur : min, batchItems[0]);
-                            
+
                             // Double check: don't add duplicate batches (same SO + same version)
-                            const isAlreadyAdded = batches.some(b => 
-                              b.sales_order_id === representative.sales_order_id && 
+                            const isAlreadyAdded = batches.some(b =>
+                              b.sales_order_id === representative.sales_order_id &&
                               b.version === representative.version
                             );
-                            
+
                             if (!isAlreadyAdded) {
                               batches.push(representative);
                             }
-                            
+
                             batchItems.forEach(item => processedIds.add(item.id));
                           });
-                          
+
                           return batches.map(q => (
                             <option key={q.id} value={q.id}>
                               QRT-{String(q.id).padStart(4, '0')} - {q.company_name} ({q.project_name || 'No Project'}) {q.version > 1 ? `(V${q.version})` : ''}
@@ -536,7 +563,7 @@ const CustomerPO = ({
                     </div>
                     <div className="space-y-2">
                       <label className="text-xs  text-slate-400   ml-1">Project Name</label>
-                      <input 
+                      <input
                         type="text"
                         value={poForm.projectName}
                         onChange={(e) => setPoForm(prev => ({ ...prev, projectName: e.target.value }))}
@@ -546,7 +573,7 @@ const CustomerPO = ({
                     </div>
                     <div className="space-y-2">
                       <label className="text-xs  text-slate-400   ml-1">Company / Client *</label>
-                      <select 
+                      <select
                         required
                         value={poForm.companyId}
                         onChange={(e) => setPoForm(prev => ({ ...prev, companyId: e.target.value }))}
@@ -560,7 +587,7 @@ const CustomerPO = ({
                     </div>
                     <div className="space-y-2">
                       <label className="text-xs  text-slate-400   ml-1">PO Number *</label>
-                      <input 
+                      <input
                         required
                         type="text"
                         value={poForm.poNumber}
@@ -571,7 +598,7 @@ const CustomerPO = ({
                     </div>
                     <div className="space-y-2">
                       <label className="text-xs  text-slate-400   ml-1">PO Date *</label>
-                      <input 
+                      <input
                         required
                         type="date"
                         value={poForm.poDate}
@@ -581,7 +608,7 @@ const CustomerPO = ({
                     </div>
                     <div className="space-y-2">
                       <label className="text-xs  text-slate-400   ml-1">Payment Terms</label>
-                      <input 
+                      <input
                         type="text"
                         value={poForm.paymentTerms}
                         onChange={(e) => setPoForm(prev => ({ ...prev, paymentTerms: e.target.value }))}
@@ -591,7 +618,7 @@ const CustomerPO = ({
                     </div>
                     <div className="space-y-2">
                       <label className="text-xs  text-slate-400   ml-1">Credit Days</label>
-                      <input 
+                      <input
                         type="number"
                         value={poForm.creditDays}
                         onChange={(e) => setPoForm(prev => ({ ...prev, creditDays: e.target.value }))}
@@ -601,7 +628,7 @@ const CustomerPO = ({
                     </div>
                     <div className="space-y-2">
                       <label className="text-xs  text-slate-400   ml-1">Currency</label>
-                      <select 
+                      <select
                         value={poForm.currency}
                         onChange={(e) => setPoForm(prev => ({ ...prev, currency: e.target.value }))}
                         className="w-full bg-slate-50 border-2 border-slate-100 rounded p-2 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all  text-slate-700 appearance-none"
@@ -623,7 +650,7 @@ const CustomerPO = ({
                       </div>
                       <h3 className="text-sm  text-slate-800  ">Purchase Items</h3>
                     </div>
-                    <button 
+                    <button
                       type="button"
                       onClick={handleAddItem}
                       className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded  text-xs    hover:bg-indigo-100 transition-all active:scale-95 "
@@ -654,11 +681,11 @@ const CustomerPO = ({
                           const subtotal = (parseFloat(item.quantity) || 0) * (parseFloat(item.rate) || 0);
                           const tax = subtotal * ((parseFloat(item.cgstPercent) || 0) + (parseFloat(item.sgstPercent) || 0) + (parseFloat(item.igstPercent) || 0)) / 100;
                           const total = subtotal + tax;
-                          
+
                           return (
                             <tr key={index} className="group hover:bg-indigo-50/30 transition-all">
                               <td className="p-2">
-                                <input 
+                                <input
                                   required
                                   type="text"
                                   value={item.drawingNo}
@@ -668,7 +695,7 @@ const CustomerPO = ({
                                 />
                               </td>
                               <td className="p-2">
-                                <input 
+                                <input
                                   required
                                   type="text"
                                   value={item.description}
@@ -678,7 +705,7 @@ const CustomerPO = ({
                                 />
                               </td>
                               <td className="p-2">
-                                <input 
+                                <input
                                   required
                                   type="number"
                                   value={item.quantity}
@@ -687,7 +714,7 @@ const CustomerPO = ({
                                 />
                               </td>
                               <td className="p-2">
-                                <input 
+                                <input
                                   required
                                   type="text"
                                   value={item.unit}
@@ -696,7 +723,7 @@ const CustomerPO = ({
                                 />
                               </td>
                               <td className="p-2">
-                                <input 
+                                <input
                                   required
                                   type="number"
                                   value={item.rate}
@@ -706,7 +733,7 @@ const CustomerPO = ({
                                 />
                               </td>
                               <td className="p-2">
-                                <input 
+                                <input
                                   type="number"
                                   value={item.cgstPercent}
                                   onChange={(e) => handleItemChange(index, 'cgstPercent', e.target.value)}
@@ -714,7 +741,7 @@ const CustomerPO = ({
                                 />
                               </td>
                               <td className="p-2">
-                                <input 
+                                <input
                                   type="number"
                                   value={item.sgstPercent}
                                   onChange={(e) => handleItemChange(index, 'sgstPercent', e.target.value)}
@@ -722,7 +749,7 @@ const CustomerPO = ({
                                 />
                               </td>
                               <td className="p-2">
-                                <input 
+                                <input
                                   type="number"
                                   value={item.igstPercent}
                                   onChange={(e) => handleItemChange(index, 'igstPercent', e.target.value)}
@@ -734,7 +761,7 @@ const CustomerPO = ({
                               </td>
                               <td className="p-2 text-center">
                                 {poForm.items.length > 1 && (
-                                  <button 
+                                  <button
                                     type="button"
                                     onClick={() => handleRemoveItem(index)}
                                     className="p-2 bg-slate-50 border border-slate-200 rounded  text-slate-400 hover:text-rose-500 hover:border-rose-200 hover:bg-rose-50 transition-all active:scale-90"
@@ -774,7 +801,7 @@ const CustomerPO = ({
                     </div>
                     <h3 className="text-sm  text-slate-800  ">Additional Notes</h3>
                   </div>
-                  <textarea 
+                  <textarea
                     value={poForm.remarks}
                     onChange={(e) => setPoForm(prev => ({ ...prev, remarks: e.target.value }))}
                     rows="4"
@@ -791,14 +818,14 @@ const CustomerPO = ({
                 <p className="text-xs  text-slate-500  mt-1">Check all line items before submitting</p>
               </div>
               <div className="flex items-center gap-2 w-full md:w-auto">
-                <button 
+                <button
                   type="button"
                   onClick={closePoForm}
                   className="flex-1 md:flex-none p-2  rounded text-xs    text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-all active:scale-95"
                 >
                   Cancel
                 </button>
-                <button 
+                <button
                   form="po-manual-form"
                   type="submit"
                   disabled={poFormLoading}
@@ -856,14 +883,14 @@ const CustomerPO = ({
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <button 
+                <button
                   onClick={() => handleDownloadPdf(viewingPo.id, viewingPo.po_number)}
                   className="flex items-center gap-2.5 px-4 py-2 bg-slate-50 text-slate-700 rounded  text-xs    hover:bg-slate-100 transition-all active:scale-95 border border-slate-200 "
                 >
                   <Download className="w-4 h-4" />
                   Download PDF
                 </button>
-                <button 
+                <button
                   onClick={() => setViewingPo(null)}
                   className="p-2.5 rounded hover:bg-slate-100 transition-all text-slate-400 hover:text-slate-900 active:scale-90 bg-slate-50 border border-slate-200"
                 >
@@ -938,7 +965,7 @@ const CustomerPO = ({
                   </div>
                   <h3 className="text-sm  text-slate-800  ">Order Items</h3>
                 </div>
-                
+
                 <div className="overflow-hidden rounded border border-slate-200 bg-white ">
                   <table className="w-full border-collapse">
                     <thead>

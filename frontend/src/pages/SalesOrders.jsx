@@ -2,15 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { Card, DataTable, FormControl, StatusBadge, Badge, SearchableSelect } from '../components/ui.jsx';
 import { Truck } from 'lucide-react';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
-import { 
-  Eye, 
-  Pencil, 
-  Trash2, 
-  Plus, 
-  Package, 
-  ChevronRight, 
-  ArrowLeft, 
-  Save, 
+import {
+  Eye,
+  Pencil,
+  Trash2,
+  Plus,
+  Package,
+  ChevronRight,
+  ArrowLeft,
+  Save,
   Loader2,
   FileText,
   Calendar,
@@ -75,30 +75,49 @@ const SalesOrders = () => {
         fetchBoms();
       }
     } else {
-      fetchOrders();
-      fetchCompanies();
       fetchBoms();
     }
-  }, []);
+
+    // URL-based Navigation
+    const path = window.location.pathname;
+    if (path === '/sales-order') {
+      setViewMode('list');
+    } else if (path.includes('/sales-order/new-sales')) {
+      handleAddOrder();
+    }
+
+    // Handle browser Back/Forward buttons
+    const handlePopState = () => {
+      const currentPath = window.location.pathname;
+      if (currentPath === '/sales-order') {
+        setViewMode('list');
+      } else if (currentPath.includes('/sales-order/new-sales')) {
+        handleAddOrder();
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [location.pathname]);
 
   useEffect(() => {
     // Attempt to match customerPoId with uniqueKey from quotations if it's a simple ID
     if (formData.customerPoId && (formMode === 'edit' || formMode === 'view')) {
       const match = quotations.find(q => {
         if (q.uniqueKey === formData.customerPoId) return true;
-        
+
         // If it's a numeric ID, try to match by dbId and sourceType
         const isNumeric = /^\d+$/.test(String(formData.customerPoId));
         if (isNumeric) {
           const id = Number(formData.customerPoId);
           if (q.dbId === id) {
-             if (formData.sourceType === 'DRAWING') return q.isApprovedDrawing;
-             if (formData.sourceType === 'QUOTATION') return !q.isApprovedDrawing;
+            if (formData.sourceType === 'DRAWING') return q.isApprovedDrawing;
+            if (formData.sourceType === 'QUOTATION') return !q.isApprovedDrawing;
           }
         }
         return false;
       });
-      
+
       if (match && match.uniqueKey !== formData.customerPoId) {
         setFormData(prev => ({ ...prev, customerPoId: match.uniqueKey }));
       }
@@ -163,13 +182,13 @@ const SalesOrders = () => {
       if (quotesRes.ok) {
         const data = await quotesRes.json();
         const companyQuotes = Array.isArray(data) ? data.filter(q => String(q.company_id) === String(companyId)) : [];
-        
+
         const grouped = {};
         companyQuotes.forEach(quote => {
           const date = new Date(quote.created_at);
           const roundedTime = Math.floor(date.getTime() / 10000) * 10000;
           const key = `${quote.company_id}_${roundedTime}`;
-          
+
           if (!grouped[key]) {
             grouped[key] = {
               id: quote.id || quote.qr_id,
@@ -191,7 +210,7 @@ const SalesOrders = () => {
       if (customerPosRes.ok) {
         const data = await customerPosRes.json();
         const companyPos = Array.isArray(data) ? data : [];
-        
+
         companyPos.forEach(po => {
           allOptions.push({
             id: po.id,
@@ -211,7 +230,7 @@ const SalesOrders = () => {
       if (approvedRes.ok) {
         const data = await approvedRes.json();
         const companyApproved = Array.isArray(data) ? data.filter(o => String(o.company_id) === String(companyId)) : [];
-        
+
         companyApproved.forEach(order => {
           const fgItems = (order.items || []).filter(item => item.item_group === 'FG');
           if (fgItems.length > 0) {
@@ -269,7 +288,7 @@ const SalesOrders = () => {
           const poData = await response.json();
           sourceType = 'DIRECT';
           projectName = poData.project_name || poData.remarks || `Order for ${poData.company_name}`;
-          
+
           const poItems = poData.items || [];
           items = poItems.map(item => {
             const qty = Number(item.quantity) || 1;
@@ -277,9 +296,9 @@ const SalesOrders = () => {
             const cgst = Number(item.cgst_percent) || 0;
             const sgst = Number(item.sgst_percent) || 0;
             const igst = Number(item.igst_percent) || 0;
-            
+
             avgGst = cgst + sgst + igst;
-            
+
             return {
               item_code: item.item_code || item.drawing_no || 'Standard',
               drawing_no: item.drawing_no,
@@ -314,12 +333,12 @@ const SalesOrders = () => {
         const qty = Number(item.item_qty) || 1;
         const totalAmount = Number(item.total_amount) || 0;
         const profitP = Number(item.profit_percentage) || avgProfit;
-        
+
         const quotedPrice = qty > 0 ? totalAmount / qty : 0;
         const baseRate = quotedPrice / (1 + (profitP / 100));
         const itemProfit = (quotedPrice - baseRate) * qty;
         totalProfitVal += itemProfit;
-        
+
         return {
           item_code: item.drawing_no || 'Standard',
           drawing_no: item.drawing_no,
@@ -367,6 +386,11 @@ const SalesOrders = () => {
     setFormData(initialFormState);
     setFormMode('create');
     setViewMode('form');
+
+    // Update URL behavior
+    if (window.location.pathname !== '/sales-order/new-sales') {
+      window.history.pushState({}, '', '/sales-order/new-sales');
+    }
   };
 
   const handleCreateShipment = async (order) => {
@@ -417,7 +441,7 @@ const SalesOrders = () => {
       });
       if (response.ok) {
         const data = await response.json();
-        
+
         // Prepare items with calculated amount if missing
         const formattedItems = (data.items || []).map(item => {
           const qty = Number(item.quantity) || 0;
@@ -469,6 +493,9 @@ const SalesOrders = () => {
         }
         setFormMode('edit');
         setViewMode('form');
+
+        // Update URL behavior
+        window.history.pushState({}, '', '/sales-order/edit-order');
       }
     } catch (err) {
       console.error('Error fetching order details:', err);
@@ -481,6 +508,9 @@ const SalesOrders = () => {
   const handleViewOrder = async (order) => {
     await handleEditOrder(order);
     setFormMode('view');
+
+    // Update URL behavior
+    window.history.pushState({}, '', '/sales-order/view-order');
   };
 
   const handleDeleteOrder = async (id) => {
@@ -522,9 +552,9 @@ const SalesOrders = () => {
       const response = await fetch(`${API_BASE}/customer-pos/${selectedPo.dbId}/pdf`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      
+
       if (!response.ok) throw new Error('Failed to generate PDF');
-      
+
       const blob = await response.blob();
       const url = window.URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
       window.open(url, '_blank');
@@ -553,13 +583,13 @@ const SalesOrders = () => {
 
       // Extract numeric IDs from the uniqueKey
       const selectedPo = quotations.find(q => q.uniqueKey === formData.customerPoId);
-      
+
       let quotationId = null;
 
       if (selectedPo) {
         quotationId = selectedPo.dbId;
       } else if (formData.customerPoId) {
-          quotationId = formData.customerPoId;
+        quotationId = formData.customerPoId;
       }
 
       const response = await fetch(url, {
@@ -590,6 +620,9 @@ const SalesOrders = () => {
       if (response.ok) {
         successToast(`Order ${formMode === 'create' ? 'created' : 'updated'} successfully`);
         setViewMode('list');
+        if (window.location.pathname !== '/sales-order') {
+          window.history.pushState({}, '', '/sales-order');
+        }
         fetchOrders();
       } else {
         const errData = await response.json();
@@ -610,31 +643,31 @@ const SalesOrders = () => {
       if (response.ok) {
         const bomDetails = await response.json();
         const selectedBom = boms.find(b => String(b.id) === String(bomId));
-        
+
         // Use saved bom_cost if available, otherwise calculate it
         let totalRate = Number(selectedBom?.bom_cost || 0);
-        
+
         if (totalRate === 0) {
-            if (bomDetails.materials) {
-                totalRate += bomDetails.materials.reduce((sum, m) => sum + (Number(m.qty_per_pc || 0) * Number(m.rate || 0)), 0);
-            }
-            if (bomDetails.components) {
-                totalRate += bomDetails.components.reduce((sum, c) => sum + (Number(c.quantity || 0) * Number(c.rate || 0)), 0);
-            }
-            if (bomDetails.operations) {
-                totalRate += bomDetails.operations.reduce((sum, o) => sum + (Number(o.hourly_rate || 0) * (Number(o.cycle_time_min || 0) / 60)), 0);
-            }
-            
-            // Subtract scrap value if present in calculation
-            if (bomDetails.scrap) {
-                const scrapValue = bomDetails.scrap.reduce((sum, s) => {
-                    const input = Number(s.input_qty || 0);
-                    const loss = Number(s.loss_percent || 0) / 100;
-                    const rate = Number(s.rate || 0);
-                    return sum + (input * loss * rate);
-                }, 0);
-                totalRate -= scrapValue;
-            }
+          if (bomDetails.materials) {
+            totalRate += bomDetails.materials.reduce((sum, m) => sum + (Number(m.qty_per_pc || 0) * Number(m.rate || 0)), 0);
+          }
+          if (bomDetails.components) {
+            totalRate += bomDetails.components.reduce((sum, c) => sum + (Number(c.quantity || 0) * Number(c.rate || 0)), 0);
+          }
+          if (bomDetails.operations) {
+            totalRate += bomDetails.operations.reduce((sum, o) => sum + (Number(o.hourly_rate || 0) * (Number(o.cycle_time_min || 0) / 60)), 0);
+          }
+
+          // Subtract scrap value if present in calculation
+          if (bomDetails.scrap) {
+            const scrapValue = bomDetails.scrap.reduce((sum, s) => {
+              const input = Number(s.input_qty || 0);
+              const loss = Number(s.loss_percent || 0) / 100;
+              const rate = Number(s.rate || 0);
+              return sum + (input * loss * rate);
+            }, 0);
+            totalRate -= scrapValue;
+          }
         }
 
         const items = [{
@@ -723,7 +756,7 @@ const SalesOrders = () => {
               </span>
             </>
           ) : (
-             <span className="text-slate-300 text-xs">—</span>
+            <span className="text-slate-300 text-xs">—</span>
           )}
         </div>
       )
@@ -760,30 +793,30 @@ const SalesOrders = () => {
       className: 'text-right',
       render: (_, row) => (
         <div className="flex justify-end items-center gap-1.5" onClick={e => e.stopPropagation()}>
-          <button 
-            onClick={() => handleCreateShipment(row)} 
+          <button
+            onClick={() => handleCreateShipment(row)}
             className="p-2 hover:bg-blue-50 rounded  text-slate-400 hover:text-blue-600 transition-all border border-transparent hover:border-blue-100 group shadow-sm"
             title="Create Shipment"
           >
             <Truck className="w-4 h-4 group-hover:scale-110" />
           </button>
           <div className="h-4 w-[1px] bg-slate-100 mx-0.5" />
-          <button 
-            onClick={() => handleViewOrder(row)} 
+          <button
+            onClick={() => handleViewOrder(row)}
             className="p-2 hover:bg-indigo-50 rounded  text-slate-400 hover:text-indigo-600 transition-all border border-transparent hover:border-indigo-100 group shadow-sm"
             title="View Details"
           >
             <Eye className="w-4 h-4 group-hover:scale-110" />
           </button>
-          <button 
-            onClick={() => handleEditOrder(row)} 
+          <button
+            onClick={() => handleEditOrder(row)}
             className="p-2 hover:bg-amber-50 rounded  text-slate-400 hover:text-amber-600 transition-all border border-transparent hover:border-amber-100 group shadow-sm"
             title="Edit Order"
           >
             <Pencil className="w-4 h-4 group-hover:scale-110" />
           </button>
-          <button 
-            onClick={() => handleDeleteOrder(row.id)} 
+          <button
+            onClick={() => handleDeleteOrder(row.id)}
             className="p-2 hover:bg-rose-50 rounded  text-slate-400 hover:text-rose-600 transition-all border border-transparent hover:border-rose-100 group shadow-sm"
             title="Delete Order"
           >
@@ -803,7 +836,7 @@ const SalesOrders = () => {
       <div className=" pb-10">
         <div className=" flex flex-col md:flex-row md:items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            
+
             <div>
               <h1 className="text-xl  text-slate-900 ">Sales Orders</h1>
               <div className="flex items-center gap-2 mt-1">
@@ -823,14 +856,14 @@ const SalesOrders = () => {
             </div>
           </div>
           <div className="flex items-center gap-2">
-             <button 
+            <button
               onClick={fetchOrders}
               className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all border border-slate-100"
               title="Refresh Data"
             >
               <Loader2 className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
             </button>
-            <button 
+            <button
               onClick={handleAddOrder}
               className="flex items-center gap-2 p-2  bg-indigo-600 text-white rounded  hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 active:scale-95 text-xs "
             >
@@ -841,7 +874,7 @@ const SalesOrders = () => {
         </div>
 
         <div className=" overflow-hidden my-4">
-          <DataTable 
+          <DataTable
             columns={columns}
             data={orders}
             loading={loading}
@@ -868,8 +901,13 @@ const SalesOrders = () => {
   return (
     <div className="space-y-2 pb-20">
       <div className="flex items-center gap-2 bg-white p-2 rounded  border border-slate-200  sticky top-0 z-10">
-        <button 
-          onClick={() => setViewMode('list')}
+        <button
+          onClick={() => {
+            setViewMode('list');
+            if (window.location.pathname !== '/sales-order') {
+              window.history.pushState({}, '', '/sales-order');
+            }
+          }}
           className="p-2 hover:bg-slate-100 rounded  transition-colors text-slate-500"
         >
           <ArrowLeft className="w-3 h-3" />
@@ -877,7 +915,7 @@ const SalesOrders = () => {
         <div className="flex-1">
           <div className="flex items-center gap-2">
             <div className="p-2 bg-indigo-50 rounded ">
-                <FileText className="w-5 h-5 text-indigo-600" />
+              <FileText className="w-5 h-5 text-indigo-600" />
             </div>
             <div>
               <h1 className="text-xl text-slate-900">{formMode === 'create' ? 'New Sales Order' : formMode === 'edit' ? 'Edit Sales Order' : 'View Sales Order'}</h1>
@@ -886,20 +924,25 @@ const SalesOrders = () => {
           </div>
         </div>
         <div className="flex items-center gap-2">
-           <button 
-              onClick={() => setViewMode('list')}
-              className="p-2 bg-slate-100 text-slate-600 text-xs rounded  hover:bg-slate-200 transition-colors "
+          <button
+            onClick={() => {
+              setViewMode('list');
+              if (window.location.pathname !== '/sales-order') {
+                window.history.pushState({}, '', '/sales-order');
+              }
+            }}
+            className="p-2 bg-slate-100 text-slate-600 text-xs rounded  hover:bg-slate-200 transition-colors "
+          >
+            Cancel
+          </button>
+          {formMode !== 'view' && (
+            <button
+              onClick={handleSaveOrder}
+              className="p-2 bg-indigo-600 text-white rounded  hover:bg-indigo-700 transition-colors  shadow-lg text-xs text-xs"
             >
-              Cancel
+              {formMode === 'create' ? 'Save Sales Order' : 'Update Sales Order'}
             </button>
-            {formMode !== 'view' && (
-              <button 
-                onClick={handleSaveOrder}
-                className="p-2 bg-indigo-600 text-white rounded  hover:bg-indigo-700 transition-colors  shadow-lg text-xs text-xs"
-              >
-                {formMode === 'create' ? 'Save Sales Order' : 'Update Sales Order'}
-              </button>
-            )}
+          )}
         </div>
       </div>
 
@@ -909,35 +952,35 @@ const SalesOrders = () => {
           <Card title="Order Information" className='bg-white' subtitle="Basic details about the order">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 p-2">
               <FormControl label="Series">
-                <input 
-                  className="w-full p-2 border border-slate-200 rounded  text-xs bg-slate-50 text-slate-500" 
-                  value={formData.series} 
-                  disabled 
+                <input
+                  className="w-full p-2 border border-slate-200 rounded  text-xs bg-slate-50 text-slate-500"
+                  value={formData.series}
+                  disabled
                 />
               </FormControl>
               <FormControl label="Order Date *">
-                <input 
-                  type="date" 
-                  className="w-full p-2 border border-slate-200 rounded  text-xs" 
+                <input
+                  type="date"
+                  className="w-full p-2 border border-slate-200 rounded  text-xs"
                   value={formData.orderDate}
-                  onChange={(e) => setFormData({...formData, orderDate: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, orderDate: e.target.value })}
                   disabled={formMode === 'view'}
                 />
               </FormControl>
               <FormControl label="Delivery Date">
-                <input 
-                  type="date" 
-                  className="w-full p-2 border border-slate-200 rounded  text-xs" 
+                <input
+                  type="date"
+                  className="w-full p-2 border border-slate-200 rounded  text-xs"
                   value={formData.deliveryDate}
-                  onChange={(e) => setFormData({...formData, deliveryDate: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, deliveryDate: e.target.value })}
                   disabled={formMode === 'view'}
                 />
               </FormControl>
               <FormControl label="Order Type">
-                <select 
-                  className="w-full p-2 border border-slate-200 rounded  text-xs" 
+                <select
+                  className="w-full p-2 border border-slate-200 rounded  text-xs"
                   value={formData.orderType}
-                  onChange={(e) => setFormData({...formData, orderType: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, orderType: e.target.value })}
                   disabled={formMode === 'view'}
                 >
                   <option value="Sales">Sales</option>
@@ -951,14 +994,14 @@ const SalesOrders = () => {
           <Card title="Customer Details" className='bg-white' subtitle="Customer contact information">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-2 p-2">
               <FormControl label="Customer *">
-                <SearchableSelect 
+                <SearchableSelect
                   options={companies.map(c => ({ value: c.id, label: c.company_name }))}
                   value={formData.customerId}
                   onChange={(e) => {
                     const company = companies.find(c => String(c.id) === String(e.target.value));
                     const primaryContact = company?.contacts?.find(ct => ct.contact_type === 'PRIMARY') || company?.contacts?.[0];
                     setFormData({
-                      ...formData, 
+                      ...formData,
                       customerId: e.target.value,
                       customerEmail: primaryContact?.email || company?.contact_email || '',
                       customerPhone: primaryContact?.phone || company?.contact_mobile || '',
@@ -973,18 +1016,18 @@ const SalesOrders = () => {
                 />
               </FormControl>
               <FormControl label="Email">
-                <input 
-                  className="w-full p-2 border border-slate-200 rounded  text-xs" 
+                <input
+                  className="w-full p-2 border border-slate-200 rounded  text-xs"
                   value={formData.customerEmail}
-                  onChange={(e) => setFormData({...formData, customerEmail: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, customerEmail: e.target.value })}
                   disabled={formMode === 'view'}
                 />
               </FormControl>
               <FormControl label="Phone">
-                <input 
-                  className="w-full p-2 border border-slate-200 rounded  text-xs" 
+                <input
+                  className="w-full p-2 border border-slate-200 rounded  text-xs"
                   value={formData.customerPhone}
-                  onChange={(e) => setFormData({...formData, customerPhone: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, customerPhone: e.target.value })}
                   disabled={formMode === 'view'}
                 />
               </FormControl>
@@ -997,11 +1040,11 @@ const SalesOrders = () => {
               <FormControl label="Select Customer PO *">
                 <div className="flex gap-2">
                   <div className="flex-1">
-                    <SearchableSelect 
+                    <SearchableSelect
                       options={quotations
                         .filter(q => q.isCustomerPo)
                         .map(q => ({
-                          value: q.uniqueKey, 
+                          value: q.uniqueKey,
                           label: `PO: ${q.po_number} - ${q.company_name} - ${q.status}`
                         }))}
                       value={formData.customerPoId}
@@ -1023,19 +1066,19 @@ const SalesOrders = () => {
                 </div>
               </FormControl>
               <FormControl label="Project Name">
-                <input 
-                  className="w-full p-2 border border-slate-200 rounded  text-xs" 
+                <input
+                  className="w-full p-2 border border-slate-200 rounded  text-xs"
                   value={formData.projectName}
-                  onChange={(e) => setFormData({...formData, projectName: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, projectName: e.target.value })}
                   placeholder="Project name..."
                   disabled={formMode === 'view'}
                 />
               </FormControl>
               <FormControl label="Warehouse">
-                <select 
-                  className="w-full p-2 border border-slate-200 rounded  text-xs" 
+                <select
+                  className="w-full p-2 border border-slate-200 rounded  text-xs"
                   value={formData.warehouse}
-                  onChange={(e) => setFormData({...formData, warehouse: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, warehouse: e.target.value })}
                   disabled={formMode === 'view'}
                 >
                   <option value="">Select warehouse...</option>
@@ -1052,7 +1095,7 @@ const SalesOrders = () => {
             <Card title="Items included in selected PO" className='bg-white' subtitle="Order Items">
               <div className="p-2 bg-blue-50/50 rounded  mb-4 border border-blue-100 flex items-center gap-2">
                 <div className="p-2 bg-white rounded   border border-blue-100">
-                    <Package className="w-3 h-3 text-blue-600" />
+                  <Package className="w-3 h-3 text-blue-600" />
                 </div>
                 <div>
                   <p className="text-xs  text-slate-900">Items <span className="text-slate-400 font-normal ml-1">({formData.items.length})</span></p>
@@ -1098,10 +1141,10 @@ const SalesOrders = () => {
           <Card title="Order Status & Taxes" className='bg-white'>
             <div className="space-y-2 p-2">
               <FormControl label="Status">
-                <select 
-                  className="w-full p-2 border border-slate-200 rounded  text-xs" 
+                <select
+                  className="w-full p-2 border border-slate-200 rounded  text-xs"
                   value={formData.status}
-                  onChange={(e) => setFormData({...formData, status: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, status: e.target.value })}
                   disabled={formMode === 'view'}
                 >
                   <option value="Draft">Draft</option>
@@ -1112,20 +1155,20 @@ const SalesOrders = () => {
               </FormControl>
               <div className="grid grid-cols-2 gap-2">
                 <FormControl label="CGST Rate (%)">
-                  <input 
+                  <input
                     type="number"
-                    className="w-full p-2 border border-slate-200 rounded  text-xs" 
+                    className="w-full p-2 border border-slate-200 rounded  text-xs"
                     value={formData.cgstRate}
-                    onChange={(e) => setFormData({...formData, cgstRate: Number(e.target.value)})}
+                    onChange={(e) => setFormData({ ...formData, cgstRate: Number(e.target.value) })}
                     disabled={formMode === 'view'}
                   />
                 </FormControl>
                 <FormControl label="SGST Rate (%)">
-                  <input 
+                  <input
                     type="number"
-                    className="w-full p-2 border border-slate-200 rounded  text-xs" 
+                    className="w-full p-2 border border-slate-200 rounded  text-xs"
                     value={formData.sgstRate}
-                    onChange={(e) => setFormData({...formData, sgstRate: Number(e.target.value)})}
+                    onChange={(e) => setFormData({ ...formData, sgstRate: Number(e.target.value) })}
                     disabled={formMode === 'view'}
                   />
                 </FormControl>
@@ -1150,10 +1193,10 @@ const SalesOrders = () => {
               </div>
               <div className="pt-4 mt-2 border-t border-slate-200 flex items-center justify-between">
                 <div>
-                   <p className="text-sm font-semibold text-slate-700">Total Order Value:</p>
+                  <p className="text-sm font-semibold text-slate-700">Total Order Value:</p>
                 </div>
                 <div className="text-right">
-                   <p className="text-xl  text-emerald-600">₹ {(Number(totalAmount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                  <p className="text-xl  text-emerald-600">₹ {(Number(totalAmount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                 </div>
               </div>
             </div>
@@ -1163,7 +1206,7 @@ const SalesOrders = () => {
 
       {/* Bottom Actions */}
       <div className="flex justify-end gap-2 mt-6 pt-6 border-t border-slate-200">
-        <button 
+        <button
           onClick={() => setViewMode('list')}
           className="p-2 bg-emerald-600 text-white rounded text-xs  hover:bg-emerald-700 transition-colors  flex items-center gap-2 "
         >
@@ -1171,7 +1214,7 @@ const SalesOrders = () => {
           Back
         </button>
         {formMode !== 'view' && (
-          <button 
+          <button
             onClick={handleSaveOrder}
             className="p-2 bg-indigo-600 text-white rounded  hover:bg-indigo-700 transition-colors  shadow-lg text-xs text-xs flex items-center gap-2 "
           >
@@ -1181,7 +1224,7 @@ const SalesOrders = () => {
         )}
       </div>
 
-      <DrawingPreviewModal 
+      <DrawingPreviewModal
         isOpen={!!previewDrawing}
         onClose={() => setPreviewDrawing(null)}
         drawing={previewDrawing}
