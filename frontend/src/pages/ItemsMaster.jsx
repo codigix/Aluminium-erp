@@ -93,7 +93,7 @@ const ItemsMaster = () => {
     try {
       setItemsLoading(true);
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/stock/balance`, {
+      const response = await fetch(`${API_BASE}/stock/balance?includeAll=true`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
@@ -786,13 +786,11 @@ const ItemsMaster = () => {
   ]);
 
   return (
-    <div className="p-2 space-y-2 p-4 animate-in fade-in duration-500">
+    <div className=" space-y-2  animate-in fade-in duration-500">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 bg-white p-2 rounded shadow-sm border border-slate-100">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <div className="p-2 bg-indigo-600 text-white rounded ">
-            <Package size={15} />
-          </div>
+          
           <div>
             <h1 className="text-xl  text-slate-900 ">Items Master</h1>
             <p className="text-xs text-slate-500 ">Manage your products, materials, and categories</p>
@@ -802,13 +800,13 @@ const ItemsMaster = () => {
         <div className="flex items-center gap-2 bg-slate-100 p-1 rounded ">
           <button 
             onClick={() => setActiveTab('items')}
-            className={`flex items-center gap-2 px-4 py-2 rounded  text-sm  transition-all ${activeTab === 'items' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            className={`flex items-center gap-2 p-2 rounded  text-xs  transition-all ${activeTab === 'items' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
           >
             <Package size={15} /> Items List
           </button>
           <button 
             onClick={() => setActiveTab('groups')}
-            className={`flex items-center gap-2 px-4 py-2 rounded  text-sm  transition-all ${activeTab === 'groups' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            className={`flex items-center gap-2 p-2 rounded  text-xs  transition-all ${activeTab === 'groups' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
           >
             <Layers size={15} /> Item Groups
           </button>

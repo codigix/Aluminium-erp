@@ -306,7 +306,7 @@ const DispatchManagement = ({ apiRequest }) => {
           <React.Fragment key={card.id}>
             <div className="flex flex-col items-center text-center min-w-[140px] group cursor-pointer">
               <div className={`w-14 h-14 ${card.bgColor} rounded flex items-center justify-center mb-4 border-2 ${card.borderColor} shadow-sm transition-all duration-300 group-hover:scale-110 group-hover:`}>
-                <card.icon className={`w-6 h-6 ${card.iconColor}`} />
+                <card.icon className={`w-3 h-3 ${card.iconColor}`} />
               </div>
               <h3 className="text-xs font-semibold text-slate-500   mb-1">{card.label}</h3>
               <p className="text-xl  text-slate-900 mb-1">{card.count}</p>
@@ -398,7 +398,7 @@ const DispatchManagement = ({ apiRequest }) => {
                           </td>
                           <td className=" p-2">
                             <div className="flex items-center gap-2">
-                              <div className="w-6 h-6 rounded bg-slate-100 flex items-center justify-center text-xs  text-slate-500">
+                              <div className="w-3 h-3 rounded bg-slate-100 flex items-center justify-center text-xs  text-slate-500">
                                 {(item.driver_name || 'U').charAt(0)}
                               </div>
                               <span className="text-xs text-slate-600">{item.driver_name || 'Unassigned'}</span>

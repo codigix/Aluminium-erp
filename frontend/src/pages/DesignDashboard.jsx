@@ -83,7 +83,7 @@ const DesignDashboard = ({ apiRequest }) => {
           <p className="text-xs text-slate-500 mt-1 font-medium">{subtitle}</p>
         </div>
         <div className={`p-2 rounded ${color.replace('bg-', 'bg-').replace('500', '100')} ${color.replace('bg-', 'text-').replace('500', '600')} transition-transform group-hover:rotate-12 shadow-sm`}>
-          <Icon className="w-6 h-6" />
+          <Icon className="w-3 h-3" />
         </div>
       </div>
     </div>
@@ -99,14 +99,12 @@ const DesignDashboard = ({ apiRequest }) => {
   }
 
   return (
-    <div className="space-y-2 pb-12">
+    <div className="pb-12">
       {/* Professional Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 bg-white p-2 rounded border border-slate-100  relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50/50 rounded -mr-32 -mt-32 blur-3xl" />
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
+        
         <div className="relative z-10 flex items-center gap-6">
-          <div className="p-2 bg-indigo-600 rounded shadow-indigo-200">
-            <Palette className="w-5 h-5 text-white" />
-          </div>
+         
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-xl  text-slate-900 ">Design Studio</h1>
@@ -139,7 +137,7 @@ const DesignDashboard = ({ apiRequest }) => {
       </div>
 
       {/* KPI Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 my-4 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard title="Active Projects" count={stats.activeProjects || 0} subtitle="In design phase" color="bg-indigo-500" icon={PencilRuler} trend={12} />
         <StatCard title="Pending BOMs" count={stats.pendingBoms || 0} subtitle="Awaiting submission" color="bg-emerald-500" icon={Layers} trend={5} />
         <StatCard title="Drawing Reviews" count={stats.drawingReviews || 0} subtitle="Pending approval" color="bg-amber-500" icon={FileSearch} />
@@ -152,7 +150,7 @@ const DesignDashboard = ({ apiRequest }) => {
           <div className="flex items-center justify-between mb-10">
             <div>
               <h3 className="text-md  text-slate-900 tracking-tight flex items-center gap-2">
-                <TrendingUp className="w-6 h-6 text-indigo-600" />
+                <TrendingUp className="w-3 h-3 text-indigo-600" />
                 Engineering velocity
               </h3>
               <p className="text-xs text-slate-500   mt-1 ">PROJECT RELEASE THROUGHPUT</p>
@@ -202,7 +200,7 @@ const DesignDashboard = ({ apiRequest }) => {
       </div>
 
       {/* Pending Design Tasks */}
-      <div className="bg-white rounded  border border-slate-100 shadow-sm overflow-hidden">
+      <div className="bg-white rounded my-4  border border-slate-100 shadow-sm overflow-hidden">
         <div className="p-2 border-b border-slate-50 flex items-center justify-between bg-slate-50/30">
           <div>
             <h3 className="text-xs  text-slate-900 tracking-tight flex items-center gap-2">

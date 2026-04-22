@@ -264,6 +264,7 @@ export const StatusBadge = ({ status }) => {
       case 'APPROVED':
       case 'DESIGN_APPROVED':
       case 'BOM_APPROVED':
+      case 'MASTER':
         return 'bg-blue-50 border-blue-200 text-blue-600'
       case 'PROCESSING':
       case 'DESIGN_IN_REVIEW':

@@ -270,7 +270,7 @@ const KpiCard = ({ label, value, growth, icon, color }) => {
     <div className="bg-white rounded p-2 border border-slate-100 shadow-sm flex flex-col justify-between transition-all hover: hover:border-slate-200">
       <div className="flex items-center gap-2 mb-4">
         <div className={`p-2 rounded border ${colorStyles[color]}`}>
-          {React.cloneElement(icon, { className: "w-6 h-6" })}
+          {React.cloneElement(icon, { className: "w-3 h-3" })}
         </div>
         <div>
           <p className="text-xs  text-slate-400   leading-none mb-1">{label}</p>

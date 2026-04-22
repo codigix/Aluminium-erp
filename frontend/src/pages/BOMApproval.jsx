@@ -230,8 +230,8 @@ const BOMApproval = () => {
   ];
 
   return (
-    <div className="p-2 space-y-2 p-4 animate-in fade-in duration-500">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 bg-white p-2 rounded shadow-sm border border-slate-100">
+    <div className=" space-y-2  animate-in fade-in duration-500">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
         <div>
           <h1 className="text-xl  text-slate-900 ">BOM Approval</h1>
           <p className="text-xs text-slate-500 ">Review and approve finalized Bill of Materials</p>

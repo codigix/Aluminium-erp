@@ -12,8 +12,8 @@ async function run() {
 
   const connection = await mysql.createConnection(config);
   try {
-    await connection.query(`ALTER TABLE job_card_quality_logs ADD COLUMN vendor_invoice VARCHAR(255) NULL;`);
-    console.log('Column vendor_invoice added successfully');
+    await connection.query(`ALTER TABLE production_plan_operations ADD COLUMN item_type VARCHAR(50) DEFAULT 'FG' AFTER source_item;`);
+    console.log('Column item_type added successfully to production_plan_operations');
   } catch (error) {
     if (error.code === 'ER_DUP_COLUMN_NAME') {
       console.log('Column vendor_invoice already exists');

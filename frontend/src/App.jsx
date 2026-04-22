@@ -1473,7 +1473,7 @@ function App() {
               </div>
             </div>
 
-          <div className="flex-1 p-2 min-w-0 overflow-y-auto custom-scrollbar">
+          <div className="flex-1 p-4 min-w-0 overflow-y-auto custom-scrollbar">
             {location.pathname.startsWith('/receipt-details/') ? (
               <POReceiptDetails />
             ) : !allowedModules.includes(activeModule) && user.department_code !== 'ADMIN' ? (

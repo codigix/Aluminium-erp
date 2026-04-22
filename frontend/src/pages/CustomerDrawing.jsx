@@ -31,6 +31,10 @@ const CustomerDrawing = () => {
   
   // Edit Modal State
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showRequirementViewModal, setShowRequirementViewModal] = useState(false);
+  const [showClientDrawingsModal, setShowClientDrawingsModal] = useState(false);
+  const [viewingClient, setViewingClient] = useState(null);
+  const [selectedRequirement, setSelectedRequirement] = useState(null);
   const [modalMode, setModalMode] = useState('edit'); // 'view' or 'edit'
   const [editData, setEditData] = useState({
     id: '',
@@ -56,22 +60,12 @@ const CustomerDrawing = () => {
 
   const requirementColumns = [
     { 
-      label: 'Client', 
+      label: 'Client Name', 
       key: 'client_name', 
       sortable: true,
       render: (val, row) => (
         <div className="flex flex-col">
-          <span className=" text-slate-900">{val || row.company_name || '—'}</span>
-        </div>
-      )
-    },
-    { 
-      label: 'Drawing No', 
-      key: 'drawing_no', 
-      sortable: true,
-      render: (val) => (
-        <div className="max-w-[250px] max-h-[60px] overflow-y-auto text-xs  leading-relaxed pr-2 text-slate-500" title={val}>
-          {val}
+          <span className="font-medium text-slate-900">{val || row.company_name || '—'}</span>
         </div>
       )
     },
@@ -80,23 +74,51 @@ const CustomerDrawing = () => {
       key: 'contact_person',
       render: (val, row) => (
         <div className="flex flex-col">
-          <span className=" text-slate-900">{row.contact_phone || val || '—'}</span>
+          <span className="font-medium text-slate-900">{row.contact_phone || val || '—'}</span>
           {row.contact_phone && val && val !== row.contact_phone && (
             <span className="text-xs text-slate-500">{val}</span>
           )}
         </div>
       )
     },
-    { label: 'Email', key: 'email_address' },
+    { 
+      label: 'Delivery Date', 
+      key: 'delivery_date', 
+      render: (val) => val ? new Date(val).toLocaleDateString() : '—' 
+    },
     { 
       label: 'Status', 
       key: 'status', 
       render: (val) => <StatusBadge status={val || 'PENDING'} /> 
     },
-    { 
-      label: 'Date', 
-      key: 'created_at', 
-      render: (val) => val ? new Date(val).toLocaleDateString() : '—' 
+    {
+      label: 'Actions',
+      key: 'actions',
+      render: (_, row) => (
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={() => handleViewRequirement(row)}
+            className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded transition-all"
+            title="View Details"
+          >
+            <Eye size={15} />
+          </button>
+          <button 
+            onClick={() => handleSendToDesign(row)}
+            className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded transition-all"
+            title="Send to Design"
+          >
+            <Send size={15} />
+          </button>
+          <button 
+            onClick={() => handleDeleteRequirement(row.id)}
+            className="p-1.5 text-rose-600 hover:bg-rose-50 rounded transition-all"
+            title="Delete Requirement"
+          >
+            <Trash2 size={15} />
+          </button>
+        </div>
+      )
     }
   ];
 
@@ -328,7 +350,11 @@ const CustomerDrawing = () => {
       });
       if (!response.ok) throw new Error('Failed to fetch requirements');
       const data = await response.json();
-      const filtered = data.filter(so => so.project_name?.includes('Design Review') || so.current_department === 'DESIGN_ENG');
+      const filtered = data.filter(so => 
+        so.project_name?.includes('Design Review') || 
+        so.current_department === 'DESIGN_ENG' || 
+        so.current_department === 'SALES'
+      );
       setRequirements(filtered);
     } catch (error) {
       console.error(error);
@@ -472,54 +498,6 @@ const CustomerDrawing = () => {
     }
   };
 
-  const handleEditAndSendToDesign = async (e) => {
-    e.preventDefault();
-    try {
-      setSaveLoading(true);
-      const token = localStorage.getItem('authToken');
-      const formData = new FormData();
-      formData.append('id', editData.id);
-      formData.append('drawingNo', editData.drawing_no);
-      formData.append('revisionNo', editData.revision_no);
-      formData.append('description', editData.description);
-      formData.append('clientName', editData.client_name);
-      formData.append('contactPerson', editData.contact_person);
-      formData.append('phoneNumber', editData.phone);
-      formData.append('emailAddress', editData.email);
-      formData.append('customerType', editData.customer_type);
-      formData.append('gstin', editData.gstin);
-      formData.append('city', editData.city);
-      formData.append('state', editData.state);
-      formData.append('billingAddress', editData.billing_address);
-      formData.append('shippingAddress', editData.shipping_address);
-      formData.append('qty', editData.qty);
-      formData.append('remarks', editData.remarks);
-
-      if (editData.drawing_pdf) {
-        formData.append('drawing_pdf', editData.drawing_pdf);
-      }
-
-      const response = await fetch(`${API_BASE}/drawings/${editData.id}`, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
-        body: formData
-      });
-
-      if (!response.ok) throw new Error('Failed to update drawing');
-      
-      // Share with design
-      await handleShareWithDesign(editData.id);
-      
-      setShowEditModal(false);
-    } catch (error) {
-      console.error(error);
-      errorToast(error.message);
-    } finally {
-      setSaveLoading(false);
-    }
-  };
 
   // Formik validation schema
   const validationSchema = Yup.object().shape({
@@ -763,7 +741,7 @@ const CustomerDrawing = () => {
       if (sendToDesign && drawingId) {
         await handleShareWithDesign(drawingId);
       } else if (isExcelUpload && sendToDesign) {
-        await sendBulkUploadedToDesign(newDrawing.client_name, savedDrawing.count);
+        await sendBulkUploadedToDesign(drawingData.client_name, savedDrawing.count);
       }
       
       return { drawingId, isExcelUpload, count: savedDrawing.count };
@@ -815,7 +793,7 @@ const CustomerDrawing = () => {
   };
 
   const handleShareClientGroupWithDesign = async (clientName) => {
-    const unsharedDrawings = groupedDrawings[clientName].filter(d => !d.drawing_status || d.drawing_status !== 'SHARED');
+    const unsharedDrawings = groupedDrawings[clientName].filter(d => !d.status || d.status !== 'SHARED');
     
     if (unsharedDrawings.length === 0) {
       infoToast('All drawings for this client are already shared.');
@@ -852,47 +830,6 @@ const CustomerDrawing = () => {
     }
   };
 
-  const handleAddAndSendToDesign = async (e) => {
-    e.preventDefault();
-    if (!newDrawing.client_name) {
-      return warningToast('Client Name is mandatory');
-    }
-
-    try {
-      setLoading(true);
-      if (uploadMode === 'bulk') {
-        const result = await saveSingleDrawing(newDrawing, true);
-        if (result) {
-          setNewDrawing({
-            client_name: '', contact_person: '', phone_number: '', email_address: '', customer_type: '', gstin: '', city: '', state: '', billing_address: '', shipping_address: '', drawing_no: '', revision: '', qty: 1, description: '', file: null, zipFile: null, remarks: ''
-          });
-          setShowFormModal(false);
-        }
-      } else {
-        let successIds = [];
-        for (const drawing of manualDrawings) {
-          if (!drawing.drawing_no || !drawing.file) continue;
-          const result = await saveSingleDrawing(drawing, false); // Don't share individually
-          if (result && result.drawingId) {
-            successIds.push(result.drawingId);
-          }
-        }
-        if (successIds.length > 0) {
-          await shareDrawingsBulkAPI(successIds);
-          successToast(`${successIds.length} drawings added and sent to Design Engineering as a single request`);
-          setManualDrawings([{ id: Date.now(), drawing_no: '', revision: '', qty: 1, description: '', file: null, remarks: '' }]);
-          setClientLocked(true);
-          setShowFormModal(false);
-        }
-      }
-      fetchDrawings(searchTerm);
-      fetchRequirements();
-    } catch (error) {
-      errorToast(error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleShareWithDesign = async (id) => {
     try {
@@ -944,6 +881,79 @@ const CustomerDrawing = () => {
     }
   };
 
+  const handleViewRequirement = (requirement) => {
+    setSelectedRequirement(requirement);
+    setShowRequirementViewModal(true);
+  };
+
+  const handleViewClientDrawings = (clientName) => {
+    setViewingClient({
+      name: clientName,
+      drawings: groupedDrawings[clientName] || []
+    });
+    setShowClientDrawingsModal(true);
+  };
+
+  const handleDeleteRequirement = async (id) => {
+    const result = await Swal.fire({
+      title: 'Delete Requirement?',
+      text: "This will remove the client requirement. You won't be able to revert this!",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#dc2626',
+      cancelButtonColor: '#6b7280',
+      confirmButtonText: 'Yes, delete it'
+    });
+
+    if (result.isConfirmed) {
+      try {
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE}/sales-orders/${id}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        if (!response.ok) throw new Error('Delete failed');
+        successToast('Requirement has been deleted.');
+        fetchRequirements();
+      } catch (error) {
+        errorToast(error.message);
+      }
+    }
+  };
+
+  const handleSendToDesign = async (requirement) => {
+    const result = await Swal.fire({
+      title: 'Send to Design?',
+      text: "Send this requirement to the Design Engineer for approval?",
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonColor: '#10b981',
+      cancelButtonColor: '#6b7280',
+      confirmButtonText: 'Yes, send it'
+    });
+
+    if (result.isConfirmed) {
+      try {
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE}/sales-orders/${requirement.id}/send-to-design`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (!response.ok) throw new Error('Failed to send to design');
+        
+        successToast('Requirement sent to Design Engineer successfully');
+        fetchRequirements();
+      } catch (error) {
+        errorToast(error.message);
+      }
+    }
+  };
+
   const handleDeleteClientGroup = async (clientName) => {
     const clientDrawings = groupedDrawings[clientName];
     const result = await Swal.fire({
@@ -989,13 +999,11 @@ const CustomerDrawing = () => {
   };
 
   return (
-    <div className="p-2 space-y-2 p-4 animate-in fade-in duration-500">
+    <div className=" space-y-2  animate-in fade-in duration-500">
       {/* Header Section */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 bg-white p-2 rounded shadow-sm border border-slate-100">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <div className="p-2 bg-indigo-600 text-white rounded ">
-            <FileText size={15} />
-          </div>
+          
           <div>
             <h1 className="text-xl  text-slate-900 ">Customer Drawing Master</h1>
             <p className="text-xs text-slate-500 ">Manage customer reference drawings and technical documentation</p>
@@ -1146,7 +1154,7 @@ const CustomerDrawing = () => {
                         <span className="p-1 bg-indigo-100 text-indigo-700 rounded text-xs ">
                           {clientDrawings.length} Drawings
                         </span>
-                        {clientDrawings.some(d => !d.drawing_status || d.drawing_status !== 'SHARED') && (
+                        {clientDrawings.some(d => !d.status || d.status !== 'SHARED') && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -1158,16 +1166,28 @@ const CustomerDrawing = () => {
                           </button>
                         )}
                       </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteClientGroup(clientName);
-                        }}
-                        className="p-2 ml-4 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded  transition-all active:scale-95"
-                        title="Delete all drawings for this client"
-                      >
-                        <Trash2 size={15} />
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleViewClientDrawings(clientName);
+                          }}
+                          className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-all active:scale-95"
+                          title="View all drawings for this client"
+                        >
+                          <Eye size={15} />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteClientGroup(clientName);
+                          }}
+                          className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded  transition-all active:scale-95"
+                          title="Delete all drawings for this client"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
                     </div>
 
                     {/* DRAWINGS TABLE (ACCORDION CONTENT) */}
@@ -1514,7 +1534,7 @@ const CustomerDrawing = () => {
               {revisionsLoading ? (
                 <div className="py-8 text-center">
                   <div className="flex justify-center mb-2">
-                    <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded  animate-spin"></div>
+                    <div className="w-3 h-3 border-2 border-indigo-600 border-t-transparent rounded  animate-spin"></div>
                   </div>
                   <p className="text-slate-600  text-xs">Loading...</p>
                 </div>
@@ -1598,7 +1618,7 @@ const CustomerDrawing = () => {
               {approvedLoading ? (
                 <div className="py-8 text-center">
                   <div className="flex justify-center mb-2">
-                    <div className="w-6 h-6 border-2 border-emerald-600 border-t-transparent rounded  animate-spin"></div>
+                    <div className="w-3 h-3 border-2 border-emerald-600 border-t-transparent rounded  animate-spin"></div>
                   </div>
                   <p className="text-slate-600  text-xs">Loading approved drawings...</p>
                 </div>
@@ -2167,6 +2187,182 @@ const CustomerDrawing = () => {
             </div>
           )}
         </form>
+      </Modal>
+
+      {/* Requirement View Modal */}
+      <Modal
+        isOpen={showRequirementViewModal}
+        onClose={() => setShowRequirementViewModal(false)}
+        title="Requirement Details"
+        width="max-w-4xl"
+      >
+        {selectedRequirement && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-slate-50 rounded-lg">
+              <div>
+                <label className="text-[10px] text-slate-500 uppercase font-semibold">Client Name</label>
+                <p className="text-sm text-slate-900 font-medium">{selectedRequirement.client || selectedRequirement.company_name}</p>
+              </div>
+              <div>
+                <label className="text-[10px] text-slate-500 uppercase font-semibold">Contact Person</label>
+                <p className="text-sm text-slate-900 font-medium">{selectedRequirement.contact_person || '—'}</p>
+              </div>
+              <div>
+                <label className="text-[10px] text-slate-500 uppercase font-semibold">Delivery Date</label>
+                <p className="text-sm text-slate-900 font-medium">
+                  {selectedRequirement.delivery_date ? new Date(selectedRequirement.delivery_date).toLocaleDateString() : '—'}
+                </p>
+              </div>
+              <div>
+                <label className="text-[10px] text-slate-500 uppercase font-semibold">Status</label>
+                <div className="mt-1">
+                  <StatusBadge status={selectedRequirement.status} />
+                </div>
+              </div>
+            </div>
+
+            <div className="border border-slate-100 rounded overflow-hidden">
+              <table className="min-w-full divide-y divide-slate-50">
+                <thead className="bg-slate-50/50">
+                  <tr>
+                    <th className="p-2 text-left text-xs text-slate-500 font-medium w-10">#</th>
+                    <th className="p-2 text-left text-xs text-slate-500 font-medium">Drawing</th>
+                    <th className="p-2 text-left text-xs text-slate-500 font-medium">Description</th>
+                    <th className="p-2 text-center text-xs text-slate-500 font-medium">Qty</th>
+                    <th className="p-2 text-center text-xs text-slate-500 font-medium">UOM</th>
+                    <th className="p-2 text-center text-xs text-slate-500 font-medium">File</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-slate-50">
+                  {selectedRequirement.items?.filter(item => !item.item_code).map((item, idx) => (
+                    <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="p-2 text-xs text-slate-400">{idx + 1}</td>
+                      <td className="p-2 text-xs text-slate-900 font-medium">{item.drawing_no || '—'}</td>
+                      <td className="p-2 text-xs text-slate-600">{item.description || '—'}</td>
+                      <td className="p-2 text-sm text-indigo-600 font-medium text-center">{item.quantity}</td>
+                      <td className="p-2 text-xs text-slate-500 text-center uppercase">{item.unit || 'Nos'}</td>
+                      <td className="p-2 text-center">
+                        {item.file_path ? (
+                          <button 
+                            onClick={() => handlePreview({ ...item, drawing_pdf: item.file_path })}
+                            className="inline-flex items-center justify-center p-2 bg-indigo-50 text-indigo-600 rounded hover:bg-indigo-600 hover:text-white transition-all active:scale-95 shadow-sm"
+                            title="View Drawing"
+                          >
+                            <Eye size={15} />
+                          </button>
+                        ) : (
+                          <span className="text-slate-300 italic text-[10px]">No File</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                  {(!selectedRequirement.items || selectedRequirement.items.length === 0) && (
+                    <tr>
+                      <td colSpan="6" className="p-8 text-center text-slate-400 italic text-xs">No items found for this requirement</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            
+            <div className="flex justify-end pt-4">
+              <button
+                onClick={() => setShowRequirementViewModal(false)}
+                className="px-6 py-2 bg-slate-100 text-slate-700 rounded-md text-xs font-semibold hover:bg-slate-200 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Client Drawings Modal */}
+      <Modal
+        isOpen={showClientDrawingsModal}
+        onClose={() => setShowClientDrawingsModal(false)}
+        title={viewingClient ? `Drawings for ${viewingClient.name}` : 'Client Drawings'}
+        width="max-w-5xl"
+      >
+        {viewingClient && (
+          <div className="space-y-4">
+            <div className="border border-slate-200 rounded-lg overflow-hidden">
+              <table className="min-w-full divide-y divide-slate-200">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">#</th>
+                    <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Drawing No</th>
+                    <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Description</th>
+                    <th className="px-4 py-3 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider">Revision</th>
+                    <th className="px-4 py-3 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider">Qty</th>
+                    <th className="px-4 py-3 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider">File</th>
+                    <th className="px-4 py-3 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-slate-200">
+                  {viewingClient.drawings.map((drawing, idx) => (
+                    <tr key={drawing.id || idx} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-4 py-3 text-xs text-slate-400">{idx + 1}</td>
+                      <td className="px-4 py-3 text-sm text-slate-900 font-medium">{drawing.drawing_no}</td>
+                      <td className="px-4 py-3 text-sm text-slate-500">{drawing.description || '—'}</td>
+                      <td className="px-4 py-3 text-sm text-center">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
+                          {drawing.revision || drawing.revision_no || '0'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-center text-indigo-600 font-medium">{drawing.qty || 1}</td>
+                      <td className="px-4 py-3 text-center">
+                        {(drawing.file_path || drawing.drawing_pdf) ? (
+                          <button 
+                            onClick={() => handlePreview(drawing)}
+                            className="inline-flex items-center justify-center p-2 bg-indigo-50 text-indigo-600 rounded hover:bg-indigo-600 hover:text-white transition-all active:scale-95 shadow-sm"
+                            title="View Drawing"
+                          >
+                            <Eye size={15} />
+                          </button>
+                        ) : (
+                          <span className="text-slate-300 italic text-xs">No File</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <button 
+                            onClick={() => handleEdit(drawing)}
+                            className="p-1.5 text-amber-600 hover:bg-amber-50 rounded transition-all"
+                            title="Edit"
+                          >
+                            <Edit2 size={14} />
+                          </button>
+                          <button 
+                            onClick={() => handleDelete(drawing.id)}
+                            className="p-1.5 text-rose-600 hover:bg-rose-50 rounded transition-all"
+                            title="Delete"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {viewingClient.drawings.length === 0 && (
+                    <tr>
+                      <td colSpan="7" className="px-4 py-8 text-center text-slate-400 italic">No drawings found for this client</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            
+            <div className="flex justify-end pt-4">
+              <button
+                onClick={() => setShowClientDrawingsModal(false)}
+                className="px-6 py-2 bg-slate-100 text-slate-700 rounded-md text-xs font-semibold hover:bg-slate-200 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        )}
       </Modal>
 
       {/* Drawing Preview Modal */}

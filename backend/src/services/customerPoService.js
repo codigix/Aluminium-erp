@@ -273,12 +273,62 @@ const deleteCustomerPo = async id => {
     // Delete items first
     await connection.execute('DELETE FROM customer_po_items WHERE customer_po_id = ?', [id]);
     
-    // Delete linked sales order items and sales order
+    // Find linked sales orders
     const [soRows] = await connection.execute('SELECT id FROM sales_orders WHERE customer_po_id = ?', [id]);
+    
     for (const so of soRows) {
+      // Find and delete related production plans, work orders, and job cards
+      const [planRows] = await connection.execute('SELECT id FROM production_plans WHERE sales_order_id = ?', [so.id]);
+      for (const plan of planRows) {
+        // Delete job cards linked via work orders
+        await connection.execute(
+          `DELETE FROM job_cards 
+           WHERE work_order_id IN (SELECT id FROM work_orders WHERE plan_id = ?)`,
+          [plan.id]
+        );
+        // Delete work orders
+        await connection.execute('DELETE FROM work_orders WHERE plan_id = ?', [plan.id]);
+        
+        // Delete material requests linked to this plan
+        await connection.execute('DELETE FROM material_request_items WHERE mr_id IN (SELECT id FROM material_requests WHERE plan_id = ?)', [plan.id]);
+        await connection.execute('DELETE FROM material_requests WHERE plan_id = ?', [plan.id]);
+
+        // Delete production plan (cascades to production_plan_items, materials, operations, etc. in many schemas)
+        await connection.execute('DELETE FROM production_plans WHERE id = ?', [plan.id]);
+      }
+
+      // Find sales order items to clean up their BOM components
+      const [soiRows] = await connection.execute('SELECT id FROM sales_order_items WHERE sales_order_id = ?', [so.id]);
+      for (const soi of soiRows) {
+        await connection.execute('DELETE FROM sales_order_item_materials WHERE sales_order_item_id = ?', [soi.id]);
+        await connection.execute('DELETE FROM sales_order_item_components WHERE sales_order_item_id = ?', [soi.id]);
+        await connection.execute('DELETE FROM sales_order_item_operations WHERE sales_order_item_id = ?', [soi.id]);
+        await connection.execute('DELETE FROM sales_order_item_scrap WHERE sales_order_item_id = ?', [soi.id]);
+      }
+
+      // Delete linked sales order items
       await connection.execute('DELETE FROM sales_order_items WHERE sales_order_id = ?', [so.id]);
+      // Delete the sales order
+      await connection.execute('DELETE FROM sales_orders WHERE id = ?', [so.id]);
     }
-    await connection.execute('DELETE FROM sales_orders WHERE customer_po_id = ?', [id]);
+
+    // Also check for direct orders in the new system linked to this PO (if any)
+    const [orderRows] = await connection.execute('SELECT id FROM orders WHERE quotation_id IN (SELECT id FROM sales_orders WHERE customer_po_id = ?)', [id]);
+    for (const order of orderRows) {
+       // Cleanup production plans for direct orders
+       const [planRows] = await connection.execute('SELECT id FROM production_plans WHERE sales_order_id = ?', [order.id]);
+       for (const plan of planRows) {
+         await connection.execute(`DELETE FROM job_cards WHERE work_order_id IN (SELECT id FROM work_orders WHERE plan_id = ?)`, [plan.id]);
+         await connection.execute('DELETE FROM work_orders WHERE plan_id = ?', [plan.id]);
+         await connection.execute('DELETE FROM material_request_items WHERE mr_id IN (SELECT id FROM material_requests WHERE plan_id = ?)', [plan.id]);
+         await connection.execute('DELETE FROM material_requests WHERE plan_id = ?', [plan.id]);
+         await connection.execute('DELETE FROM production_plans WHERE id = ?', [plan.id]);
+       }
+       // Note: order_items usually don't have separate BOM tables like sales_order_items yet, 
+       // they often link back to sales_order_items for BOM.
+       await connection.execute('DELETE FROM order_items WHERE order_id = ?', [order.id]);
+       await connection.execute('DELETE FROM orders WHERE id = ?', [order.id]);
+    }
 
     // Delete the PO
     const [result] = await connection.execute('DELETE FROM customer_pos WHERE id = ?', [id]);

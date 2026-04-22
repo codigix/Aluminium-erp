@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Card, Modal, FormControl, StatusBadge, SearchableSelect } from '../components/ui.jsx';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
@@ -43,6 +43,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
   const [showAddItem, setShowAddItem] = useState(false);
   const [selectedNewItem, setSelectedNewItem] = useState(null);
   const [newItemQty, setNewItemQty] = useState(1);
+  const [expandedRows, setExpandedRows] = useState({});
 
   const [newPlan, setNewPlan] = useState({
     planCode: '',
@@ -218,7 +219,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
     
     if (parts.length === 0) return null;
     return (
-      <div className="flex flex-wrap items-center gap-1 mt-0.5 text-[10px] text-slate-500 font-medium">
+      <div className="flex flex-wrap items-center gap-1 mt-0.5 text-xs text-slate-500 font-medium">
         {parts.map((p, i) => (
           <React.Fragment key={i}>
             <span>{p}</span>
@@ -637,14 +638,24 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
         setSelectedOrderDetails(data);
         
         // Populate available BOMs from SO items
-        const boms = data.items || [];
-        setAvailableBoms(boms);
+        // Filter to ensure we only show BOMs for this specific order and avoid duplicates by identity
+        const rawItems = (data.items && data.items.length > 0) ? data.items : (designData || []);
+        const filteredBoms = rawItems.filter(item => {
+          if (!item) return false;
+          // Ensure item belongs to the selected order (some fallback items might not)
+          const itemOrderId = item.order_id || item.sales_order_id;
+          return !itemOrderId || String(itemOrderId) === String(orderId);
+        });
+        setAvailableBoms(filteredBoms);
         
         // If only one BOM, auto-select it
-        if (boms.length === 1) {
-          const singleBomId = boms[0].id.toString();
-          setSelectedBomId(singleBomId);
-          handleBomSelect(singleBomId, boms, designData);
+        if (filteredBoms.length === 1 && filteredBoms[0]) {
+          const firstBom = filteredBoms[0];
+          const singleBomId = (firstBom.id || firstBom.sales_order_item_id || firstBom.order_item_id)?.toString();
+          if (singleBomId) {
+            setSelectedBomId(singleBomId);
+            handleBomSelect(singleBomId, filteredBoms, designData);
+          }
         }
       }
     } catch (error) {
@@ -654,17 +665,23 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
   };
 
   const handleBomSelect = (bomId, itemsOverride = null, designItemsOverride = null) => {
-    setSelectedBomId(bomId);
+    const finalBomId = bomId?.toString();
+    setSelectedBomId(finalBomId);
     setIsViewing(false);
-    if (!bomId) {
+    if (!finalBomId) {
       setNewPlan(prev => ({ ...prev, items: [] }));
       return;
     }
 
     // When a BOM is selected, find the item in designOrderItems or selectedOrderDetails and select it
     // The user wants STRICT behavior: only this item should be in the plan
-    const itemsToSearch = itemsOverride || selectedOrderDetails?.items || readyItems;
-    const itemInReady = itemsToSearch.find(item => (item.id || item.sales_order_item_id).toString() === bomId.toString());
+    const itemsToSearch = itemsOverride || selectedOrderDetails?.items || readyItems || [];
+    const itemInReady = itemsToSearch.find(item => {
+      if (!item) return false;
+      const itemId = (item.id || item.sales_order_item_id || item.order_item_id);
+      if (itemId === null || itemId === undefined) return false;
+      return String(itemId) === finalBomId;
+    });
     
     if (itemInReady) {
       const designItemsToSearch = designItemsOverride || designOrderItems;
@@ -677,7 +694,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
       const designQty = designItem ? parseFloat(designItem.qty || 0) : parseFloat(itemInReady.total_qty || itemInReady.quantity || 1);
 
       // Clear existing items and only add this one
-      const salesOrderItemId = itemInReady.id || itemInReady.sales_order_item_id;
+      const salesOrderItemId = itemInReady.id || itemInReady.sales_order_item_id || itemInReady.order_item_id;
       const orderNo = itemInReady.order_no || selectedOrderDetails?.order_no;
       const projectName = itemInReady.project_name || selectedOrderDetails?.project_name;
       
@@ -729,7 +746,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
 
   const toggleItemSelection = async (item, designItemsOverride = null) => {
     const itemsToUse = designItemsOverride || designOrderItems;
-    const salesOrderItemId = item.id || item.sales_order_item_id;
+    const salesOrderItemId = item.id || item.sales_order_item_id || item.order_item_id;
     const exists = newPlan.items.find(i => i.salesOrderItemId === salesOrderItemId);
     
     if (exists) {
@@ -786,7 +803,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
     }
   };
 
-  const calculatePlanDetails = () => {
+  const planDetails = useMemo(() => {
     // 1. Collect all materials
     const consolidatedMaterialsMap = new Map();
     const processedMaterialSOItems = new Set();
@@ -802,31 +819,24 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
         const weightMultiplier = mat.is_kg_material ? (parseFloat(mat.total_wt) || 1) : 1;
         const baseQty = parseFloat(mat.qty_per_pc || mat.required_qty || 0) * weightMultiplier;
         const itemPlannedQty = parseFloat(item.plannedQty || newPlan.targetQuantity || 1);
+        const plannedQty = baseQty * itemPlannedQty;
         
-        // Use a key that represents the material identity
-        const mKey = `${itemCode}-${matName}`;
+        // Use a key that represents the material identity - de-duplicate by name and unit
+        const mKey = `${matName.toLowerCase().trim()}-${(mat.uom || mat.unit || '').toLowerCase().trim()}`;
         
-        // If this is a CORE material and we've already processed this Sales Order Item's core materials,
-        // we might be double-counting the same FG-level materials from different sub-assemblies.
+        // If this is a material and we've already processed this identity from this SO Item,
+        // we might be double-counting if the recursion hits it multiple times.
         const soItemMaterialKey = `${soItemId}-${mKey}`;
 
         if (consolidatedMaterialsMap.has(mKey)) {
           const existing = consolidatedMaterialsMap.get(mKey);
           
-          // Logic: If same material comes from same SO Item multiple times (via different plan items),
-          // it's likely a shared material that shouldn't be summed again.
-          if (!processedMaterialSOItems.has(soItemMaterialKey)) {
-            const plannedQty = baseQty * itemPlannedQty;
-            existing.totalPlannedQty += plannedQty;
-            existing.required_qty = (parseFloat(existing.required_qty) || 0) + plannedQty;
-            // Accumulate bomQty for consolidation if needed, but usually it should be the same
-            existing.bomQty = baseQty; 
-            processedMaterialSOItems.add(soItemMaterialKey);
-          }
+          // Sum up quantities for the same material
+          existing.totalPlannedQty += plannedQty;
+          existing.required_qty = (parseFloat(existing.required_qty) || 0) + plannedQty;
           
           if (matCat === 'CORE') existing.material_category = 'CORE';
         } else {
-          const plannedQty = baseQty * itemPlannedQty;
           consolidatedMaterialsMap.set(mKey, {
             ...mat,
             item_code: itemCode,
@@ -839,8 +849,8 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
             bom_no: mat.bom_no || mat.bom_ref || item.bom_no || 'BOM-REF',
             source_fg: item.itemCode
           });
-          processedMaterialSOItems.add(soItemMaterialKey);
         }
+        processedMaterialSOItems.add(soItemMaterialKey);
       });
     });
     const allMaterials = Array.from(consolidatedMaterialsMap.values());
@@ -946,22 +956,30 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
     const coreMaterials = materialsToDisplay.filter(m => m.material_category === 'CORE');
     const explodedMaterials = materialsToDisplay.filter(m => m.material_category === 'EXPLODED');
 
-    const operationsToDisplay = isViewing 
+    const operationsToDisplay = (isViewing 
       ? (newPlan.operations || []).map(op => ({
           ...op,
           operation_name: op.operation_name || op.name,
           workstation: op.workstation || op.workstation_name,
           base_hour: op.base_hour ?? op.base_time ?? op.cycle_time_min ?? 0,
-          itemCode: op.itemCode || op.source_item
+          itemCode: (op.itemCode || op.source_item || '').toString().trim()
         }))
       : newPlan.items.flatMap(item => (item.operations || []).map(op => ({ 
           ...op, 
-          itemCode: op.source_item || op.itemCode || item.itemCode || item.item_code,
+          itemCode: (op.source_item || op.itemCode || item.itemCode || item.item_code || '').toString().trim(),
           operation_name: op.operation_name || op.name,
           workstation: op.workstation || op.workstation_name,
           base_hour: op.base_hour ?? op.base_time ?? op.cycle_time_min ?? 0,
           source_fg: item.itemCode
-        })));
+        })))).sort((a, b) => {
+          const typeA = (a.item_type || a.itemType || 'FG').toUpperCase();
+          const typeB = (b.item_type || b.itemType || 'FG').toUpperCase();
+          const isA_SA = typeA === 'SUB ASSEMBLY' || typeA === 'SA';
+          const isB_SA = typeB === 'SUB ASSEMBLY' || typeB === 'SA';
+          if (isA_SA && !isB_SA) return -1;
+          if (!isA_SA && isB_SA) return 1;
+          return (a.step_no || a.step || 0) - (b.step_no || b.step || 0);
+        });
 
     return { 
       materialsToDisplay, 
@@ -971,6 +989,83 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
       explodedMaterials,
       totalMaterialCount: materialsToDisplay.length
     };
+  }, [newPlan.items, newPlan.targetQuantity, isViewing, newPlan.materials, newPlan.subAssemblies, newPlan.operations]);
+
+  const toggleRow = (id) => {
+    setExpandedRows(prev => ({
+      ...prev,
+      [id]: !prev[id]
+    }));
+  };
+
+  const renderOperationsAccordion = (itemCode, allOperations) => {
+    const targetCode = String(itemCode || '').trim().toUpperCase();
+    
+    const filteredOps = allOperations.filter(op => {
+      const opCode = String(op.itemCode || op.item_code || op.source_item || op.sourceItem || '').trim().toUpperCase();
+      return opCode === targetCode;
+    });
+
+    if (filteredOps.length === 0) {
+      return (
+        <div className="p-4 text-center text-slate-400 italic bg-slate-50/30">
+          No operations defined for this item.
+        </div>
+      );
+    }
+
+    return (
+      <div className="bg-slate-50/50 p-4 border-t border-slate-100 shadow-inner">
+        <div className="flex items-center gap-2 mb-3">
+          <Activity className="w-4 h-4 text-indigo-500" />
+          <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Manufacturing Operations</h4>
+        </div>
+        <div className="grid grid-cols-1 gap-2">
+          {filteredOps.map((op, i) => {
+            const cycleTime = parseFloat(op.cycle_time_min || op.base_time || 0);
+            const setupTime = parseFloat(op.setup_time_min || 0);
+            const hourlyRate = parseFloat(op.hourly_rate || op.rate || 0);
+            const totalHours = (cycleTime + setupTime) / 60;
+            const totalCost = totalHours * hourlyRate;
+
+            return (
+              <div key={i} className="flex items-center justify-between bg-white p-3 rounded border border-slate-200 shadow-sm hover:border-indigo-200 transition-colors">
+                <div className="flex items-center gap-3">
+                  <div className="w-6 h-6 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center text-[10px] font-bold">
+                    {i + 1}
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-slate-800">{op.operation_name}</div>
+                    <div className="flex items-center gap-3 mt-1 text-[10px] text-slate-500 font-medium">
+                      <span className="flex items-center gap-1">
+                        <Settings className="w-3 h-3" /> {op.workstation || 'N/A'}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Layers className="w-3 h-3" /> {op.process_type || op.operation_type || 'In-House'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-6">
+                  <div className="text-right">
+                    <div className="text-[10px] text-slate-400 uppercase tracking-tighter">Cycle / Setup</div>
+                    <div className="text-xs font-medium text-slate-700">{cycleTime}m / {setupTime}m</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-[10px] text-slate-400 uppercase tracking-tighter">Rate / Hr</div>
+                    <div className="text-xs font-medium text-slate-700">₹{hourlyRate.toFixed(2)}</div>
+                  </div>
+                  <div className="text-right min-w-[80px]">
+                    <div className="text-[10px] text-slate-400 uppercase tracking-tighter">Total Cost</div>
+                    <div className="text-xs font-bold text-emerald-600">₹{totalCost.toFixed(2)}</div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
   };
 
   const renderCreateForm = () => {
@@ -980,14 +1075,14 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
       operationsToDisplay,
       coreMaterials,
       explodedMaterials
-    } = calculatePlanDetails();
+    } = planDetails;
 
     const totalMaterialCount = materialsToDisplay.length;
     
     return (
-      <div className="flex flex-col h-full bg-[#F8FAFC]">
+      <div className="flex flex-col">
         {/* Header Section */}
-        <div className="flex items-center justify-between px-4 py-4 bg-[#F8FAFC] border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+        <div className="flex items-center justify-between z-30 ">
           <div className="flex items-center gap-2">
             <button onClick={() => setIsCreating(false)} className="p-2 hover:bg-slate-100 rounded  transition-colors">
               <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
@@ -997,20 +1092,20 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                 <span className="text-xs  text-slate-400">PP /</span>
                 <h1 className="text-xl  text-slate-900 leading-tight">{isViewing ? `VIEW PLAN: ${newPlan.planCode}` : 'New Production Plan'}</h1>
               </div>
-              <span className="p-1  bg-slate-100 text-slate-600 text-[10px] font-bold uppercase rounded tracking-wider">{isViewing ? newPlan.operationalStatus : 'draft'}</span>
+              <span className="p-1  bg-slate-100 text-slate-600 text-xs   rounded tracking-wider">{isViewing ? newPlan.operationalStatus : 'draft'}</span>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <button 
               onClick={() => setIsCreating(false)}
-              className="px-4 py-2 text-slate-600 hover:text-slate-900 text-xs font-bold transition-colors"
+              className="p-2 text-slate-600 hover:text-slate-900 text-xs  transition-colors"
             >
               {isViewing ? 'Close' : 'Discard Changes'}
             </button>
             {!isViewing && (
               <button 
                 onClick={handleSubmit}
-                className="px-5 py-2.5 bg-slate-900 text-white rounded-lg hover:bg-slate-800 text-xs font-bold shadow-lg shadow-slate-200 transition-all"
+                className="p-2 bg-slate-900 text-white rounded hover:bg-slate-800 text-xs  shadow-lg shadow-slate-200 transition-all"
               >
                 Save Strategic Plan
               </button>
@@ -1020,46 +1115,12 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
 
         {/* Tab Navigation & Content Container */}
         <div className="flex-1 overflow-y-auto">
-          <div className="max-w-[1600px] mx-auto p-4 space-y-4 pb-20">
+          <div className="mx-auto p-2 space-y-4 pb-20">
             {/* Tab Navigation */}
-            <div className="flex items-center gap-2 bg-white/50 backdrop-blur-sm p-1 rounded-xl border border-slate-200/60 sticky top-0 z-20 shadow-sm">
-              {['Basic Info', 'Finished Goods', 'Materials', 'Sub Assemblies'].map(tab => (
-                <button
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  className={`px-4 py-2 text-xs font-bold transition-all rounded-lg relative ${
-                    activeTab === tab 
-                      ? 'text-indigo-600 bg-indigo-50' 
-                      : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 ">
-                    {tab}
-                    {(tab === 'Sub Assemblies' || tab === 'Materials') && (
-                      <span className="w-1.5 h-1.5 bg-rose-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(244,63,94,0.4)]"></span>
-                    )}
-                  </div>
-                </button>
-              ))}
-              <div className="ml-auto flex gap-2">
-                {isViewing && newPlan.operationalStatus !== 'Completed' && (
-                  <button 
-                    onClick={() => handleCreateWorkOrders(newPlan.id)}
-                    className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-xs font-bold transition-all shadow-sm shadow-indigo-100"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Work Orders
-                  </button>
-                )}
-                <button className="flex items-center gap-2 px-3 py-1.5 bg-rose-500 text-white rounded-lg hover:bg-rose-600 text-xs font-bold transition-all shadow-sm shadow-rose-100">
-                  Production Progress
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" /></svg>
-                </button>
-              </div>
-            </div>
+            
 
         {/* Section 01: Strategic Parameters */}
-        <Card className="bg-white border border-slate-200  rounded  overflow-hidden">
+        <Card className="bg-white border border-slate-200  rounded  ">
           <div className="p-2">
             <div className="flex items-center gap-2 mb-4">
               <div className="w-5 h-5 bg-indigo-50 text-indigo-600 rounded  flex items-center justify-center">
@@ -1111,7 +1172,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                 <div className="relative">
                   <SearchableSelect 
                     options={productionReadyOrders.map(so => ({
-                      label: `${so.order_no} - ${so.company_name} ${so.project_name ? `(${so.project_name})` : ''}`,
+                      label: `Order: ${so.order_no} - ${so.company_name || 'No Client'}`,
                       value: so.id.toString(),
                       order_no: so.order_no
                     }))}
@@ -1140,11 +1201,14 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                     disabled={isViewing}
                   >
                     <option value="">{availableBoms.length === 0 ? (selectedOrderId ? 'No BOMs Available' : 'Select Order First') : 'Select BOM...'}</option>
-                    {availableBoms.map(bom => (
-                      <option key={bom.id} value={bom.id}>
-                        {bom.item_code} - {bom.description}
-                      </option>
-                    ))}
+                    {availableBoms && availableBoms.length > 0 && availableBoms.map((bom, idx) => {
+                      const id = (bom.id || bom.sales_order_item_id || bom.order_item_id || idx)?.toString();
+                      return (
+                        <option key={id} value={id}>
+                          {bom.item_code || 'No Code'} - {bom.description || 'No Description'} {bom.bom_no ? `(BOM: ${bom.bom_no})` : ''}
+                        </option>
+                      );
+                    })}
                   </select>
                   <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
@@ -1169,7 +1233,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
         </Card>
 
         {/* Section 02: Finished Goods */}
-        <Card className="bg-white border border-slate-200  rounded  overflow-hidden">
+        <Card className="bg-white border border-slate-200  rounded  ">
           <div className="p-2">
             <div className="flex items-center gap-2 mb-6">
               <div className="w-5 h-5 bg-blue-50 text-blue-600 rounded  flex items-center justify-center">
@@ -1200,48 +1264,71 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                     <th className="p-2   text-center">UOM</th>
                     <th className="p-2  ">Finished Goods Warehouse</th>
                     <th className="p-2  ">Planned Start Date</th>
+                    <th className="p-2   text-center">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {newPlan.items.map((item, idx) => (
-                    <tr key={idx} className="group hover:bg-slate-50/50 transition-colors">
-                      <td className="p-2  text-slate-400 ">{idx + 1}</td>
-                      <td className="p-2 ">
-                        <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 bg-blue-50 rounded flex items-center justify-center text-blue-600">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
-                          </div>
-                          <div>
-                            <div className=" text-slate-800 text-xs">{item.itemCode}</div>
-                            <div className="text-xs text-slate-400">{item.description}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="p-2  text-center">
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 text-indigo-600 text-xs   rounded-md border border-slate-100">
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                          {item.bom_no || 'BOM-' + (item.salesOrderItemId || 'REF')}
-                        </span>
-                      </td>
-                      <td className="p-2  text-center  text-slate-700">
-                        {Number(item.designQty || item.totalQty || item.quantity || 0).toFixed(3)}
-                      </td>
-                      <td className="p-2  text-center  text-indigo-600">{item.plannedQty}</td>
-                      <td className="p-2  text-center text-slate-400 text-xs">Nos</td>
-                      <td className="p-2 ">
-                        <div className="flex items-center gap-2  text-slate-600">
-                          <svg className="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
-                          <span className="text-xs ">Finished Goods - NC</span>
-                        </div>
-                      </td>
-                      <td className="p-2 ">
-                        <div className="flex items-center gap-2  text-slate-600">
-                          <svg className="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                          <span className="text-xs ">{item.plannedStartDate || '2026-02-04'}</span>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                  {newPlan.items.map((item, idx) => {
+                    const rowId = `fg-${item.id || item.itemCode}-${idx}`;
+                    const isExpanded = expandedRows[rowId];
+                    return (
+                      <React.Fragment key={idx}>
+                        <tr className="group hover:bg-slate-50/50 transition-colors">
+                          <td className="p-2  text-slate-400 ">{idx + 1}</td>
+                          <td className="p-2 ">
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 bg-blue-50 rounded flex items-center justify-center text-blue-600">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
+                              </div>
+                              <div>
+                                <div className=" text-slate-800 text-xs">{item.itemCode || item.item_code}</div>
+                                <div className="text-xs text-slate-400">{item.description}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="p-2  text-center">
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 text-indigo-600 text-xs   rounded-md border border-slate-100">
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                              {item.bom_no || 'BOM-' + (item.salesOrderItemId || 'REF')}
+                            </span>
+                          </td>
+                          <td className="p-2  text-center  text-slate-700">
+                            {Number(item.designQty || item.totalQty || item.quantity || 0).toFixed(3)}
+                          </td>
+                          <td className="p-2  text-center  text-indigo-600">{item.plannedQty}</td>
+                          <td className="p-2  text-center text-slate-400 text-xs">Nos</td>
+                          <td className="p-2 ">
+                            <div className="flex items-center gap-2  text-slate-600">
+                              <svg className="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                              <span className="text-xs ">Finished Goods - NC</span>
+                            </div>
+                          </td>
+                          <td className="p-2 ">
+                            <div className="flex items-center gap-2  text-slate-600">
+                              <svg className="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                              <span className="text-xs ">{item.plannedStartDate || '2026-02-04'}</span>
+                            </div>
+                          </td>
+                          <td className="p-2  text-center">
+                            <button 
+                              onClick={() => toggleRow(rowId)}
+                              className={`flex items-center gap-1 mx-auto px-2 py-1 rounded transition-all text-[10px] font-bold uppercase tracking-wider ${isExpanded ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100 border border-indigo-100'}`}
+                            >
+                              <Activity className="w-3 h-3" />
+                              {isExpanded ? 'Hide Ops' : 'Operations'}
+                            </button>
+                          </td>
+                        </tr>
+                        {isExpanded && (
+                          <tr>
+                            <td colSpan="9" className="p-0 border-none overflow-hidden">
+                              {renderOperationsAccordion(item.itemCode || item.item_code, operationsToDisplay)}
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
                   {newPlan.items.length === 0 && (
                     <tr>
                       <td colSpan="8" className="px-4 p-2 text-center text-slate-400 italic text-xs">
@@ -1256,7 +1343,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
         </Card>
 
         {/* Section 04: Sub Assemblies */}
-        <Card className="bg-white border border-slate-200  rounded  overflow-hidden">
+        <Card className="bg-white border border-slate-200  rounded  ">
           <div className="p-2">
             <div className="flex items-center gap-2 mb-6">
               <div className="w-5 h-5 bg-rose-50 text-rose-600 rounded  flex items-center justify-center">
@@ -1289,58 +1376,81 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                     <th className="p-2  ">Bom No</th>
                     <th className="p-2  ">Source FG</th>
                     <th className="p-2   text-center">Manufacturing Type</th>
+                    <th className="p-2   text-center">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {subAssembliesToDisplay.map((sa, idx) => (
-                    <tr key={idx} className="group hover:bg-slate-50/50 transition-colors">
-                      <td className="p-2  text-slate-400 ">{idx + 1}</td>
-                      <td className="p-2 ">
-                        <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 bg-rose-50 rounded flex items-center justify-center text-rose-600">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
-                          </div>
-                          <div>
-                            <div className=" text-slate-800 text-xs">{sa.itemCode || sa.item_code}</div>
-                            <div className="text-xs text-slate-400">{sa.description || 'Sub-Assembly'}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="p-2 ">
-                        <div className="flex items-center gap-2  text-slate-600">
-                          <svg className="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
-                          <span className="text-xs ">{sa.targetWarehouse || sa.target_warehouse || 'Work In Progress - NC'}</span>
-                        </div>
-                      </td>
-                      <td className="p-2 ">
-                        <div className="flex items-center gap-2  text-slate-600">
-                          <svg className="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2-2v12a2 2 0 002 2z" /></svg>
-                          <span className="text-xs ">{isViewing ? (sa.scheduled_date ? sa.scheduled_date.split('T')[0] : '-') : '2026-02-04'}</span>
-                        </div>
-                      </td>
-                      <td className="p-2  text-center  text-slate-700">
-                        {Number(isViewing ? (sa.design_qty || sa.required_qty) : (sa.designQty || 0)).toFixed(3)}
-                      </td>
-                      <td className="p-2  text-center">
-                        <div className=" text-rose-600">{Number(isViewing ? sa.required_qty : (sa.plannedQty || 0)).toFixed(3)}</div>
-                        <div className="text-[8px] text-slate-400   ">NOS</div>
-                      </td>
-                      <td className="p-2 ">
-                        <span className="inline-flex items-center gap-1.5 p-1  bg-slate-50 text-rose-600text-xs   rounded border border-slate-100">
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                          {sa.bomNo || sa.bom_no}
-                        </span>
-                      </td>
-                      <td className="p-2 ">
-                        <span className="text-xs text-slate-500 ">
-                          {sa.sourceFg || sa.source_fg || '-'}
-                        </span>
-                      </td>
-                      <td className="p-2  text-center">
-                        <span className="p-1  bg-rose-50 text-rose-600text-xs   rounded  border border-rose-100">{sa.manufacturingType || sa.manufacturing_type || 'In House'}</span>
-                      </td>
-                    </tr>
-                  ))}
+                  {subAssembliesToDisplay.map((sa, idx) => {
+                    const rowId = `sa-${sa.id || (sa.itemCode || sa.item_code)}-${idx}`;
+                    const isExpanded = expandedRows[rowId];
+                    return (
+                      <React.Fragment key={idx}>
+                        <tr className="group hover:bg-slate-50/50 transition-colors">
+                          <td className="p-2  text-slate-400 ">{idx + 1}</td>
+                          <td className="p-2 ">
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 bg-rose-50 rounded flex items-center justify-center text-rose-600">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+                              </div>
+                              <div>
+                                <div className=" text-slate-800 text-xs">{sa.itemCode || sa.item_code}</div>
+                                <div className="text-xs text-slate-400">{sa.description || 'Sub-Assembly'}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="p-2 ">
+                            <div className="flex items-center gap-2  text-slate-600">
+                              <svg className="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                              <span className="text-xs ">{sa.targetWarehouse || sa.target_warehouse || 'Work In Progress - NC'}</span>
+                            </div>
+                          </td>
+                          <td className="p-2 ">
+                            <div className="flex items-center gap-2  text-slate-600">
+                              <svg className="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2-2v12a2 2 0 002 2z" /></svg>
+                              <span className="text-xs ">{isViewing ? (sa.scheduled_date ? sa.scheduled_date.split('T')[0] : '-') : '2026-02-04'}</span>
+                            </div>
+                          </td>
+                          <td className="p-2  text-center  text-slate-700">
+                            {Number(isViewing ? (sa.design_qty || sa.required_qty) : (sa.designQty || 0)).toFixed(3)}
+                          </td>
+                          <td className="p-2  text-center">
+                            <div className=" text-rose-600">{Number(isViewing ? sa.required_qty : (sa.plannedQty || 0)).toFixed(3)}</div>
+                            <div className="text-[8px] text-slate-400   ">NOS</div>
+                          </td>
+                          <td className="p-2 ">
+                            <span className="inline-flex items-center gap-1.5 p-1  bg-slate-50 text-rose-600text-xs   rounded border border-slate-100">
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                              {sa.bomNo || sa.bom_no}
+                            </span>
+                          </td>
+                          <td className="p-2 ">
+                            <span className="text-xs text-slate-500 ">
+                              {sa.sourceFg || sa.source_fg || '-'}
+                            </span>
+                          </td>
+                          <td className="p-2  text-center">
+                            <span className="p-1  bg-rose-50 text-rose-600text-xs   rounded  border border-rose-100">{sa.manufacturingType || sa.manufacturing_type || 'In House'}</span>
+                          </td>
+                          <td className="p-2  text-center">
+                            <button 
+                              onClick={() => toggleRow(rowId)}
+                              className={`flex items-center gap-1 mx-auto px-2 py-1 rounded transition-all text-[10px] font-bold uppercase tracking-wider ${isExpanded ? 'bg-rose-600 text-white shadow-md shadow-rose-200' : 'bg-rose-50 text-rose-600 hover:bg-rose-100 border border-rose-100'}`}
+                            >
+                              <Activity className="w-3 h-3" />
+                              {isExpanded ? 'Hide Ops' : 'Operations'}
+                            </button>
+                          </td>
+                        </tr>
+                        {isExpanded && (
+                          <tr>
+                            <td colSpan="10" className="p-0 border-none overflow-hidden">
+                              {renderOperationsAccordion(sa.itemCode || sa.item_code, operationsToDisplay)}
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
                   {subAssembliesToDisplay.length === 0 && (
                     <tr>
                       <td colSpan="8" className="px-4 p-2 text-center text-slate-400 italic text-xs">
@@ -1355,7 +1465,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
         </Card>
 
         {/* Section 03: Materials */}
-        <Card className="bg-white border border-slate-200  rounded  overflow-hidden">
+        <Card className="bg-white border border-slate-200  rounded  ">
           <div className="p-2">
             <div className="flex items-center gap-2 mb-4">
               <div className="w-5 h-5 bg-amber-50 text-amber-600 rounded  flex items-center justify-center">
@@ -1398,7 +1508,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                       <tr key={idx} className="hover:bg-slate-50/50">
                         <td className="p-2 ">
                           <div className=" text-slate-800 text-xs font-medium">{mat.material_name}</div>
-                          <div className="text-[10px] text-slate-500 flex items-center gap-1.5 flex-wrap">
+                          <div className="text-xs text-slate-500 flex items-center gap-1.5 flex-wrap">
                             {renderDimensions(mat.dimensions) || (
                               <span>{mat.description || mat.item_code || mat.itemCode || 'Direct Material'}</span>
                             )}
@@ -1411,13 +1521,13 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                           <div className=" text-amber-600 font-medium">
                             {Number(isViewing ? mat.required_qty : mat.totalPlannedQty).toFixed(3)}
                           </div>
-                          <div className="text-[10px] text-slate-400 uppercase">
+                          <div className="text-xs text-slate-400 ">
                             {mat.uom || mat.unit || 'Nos'}
-                            {isWeightBased(mat.uom || mat.unit) && (
-                              <span className="ml-1 text-slate-300">
-                                ({Number(isViewing ? (mat.design_qty || newPlan.targetQuantity) : mat.totalDesignQty).toFixed(0)} × {Number(mat.bomQty || mat.total_wt || 0).toFixed(3)})
-                              </span>
-                            )}
+                          {isWeightBased(mat.uom || mat.unit) && (
+                            <span className="ml-1 text-slate-300">
+                              ({Number(isViewing ? (mat.design_qty || newPlan.targetQuantity) : mat.totalDesignQty).toFixed(0)} × {Number((parseFloat(mat.required_qty || mat.totalPlannedQty) || 0) / (parseFloat(isViewing ? (mat.design_qty || newPlan.targetQuantity) : mat.totalDesignQty) || 1)).toFixed(3)})
+                            </span>
+                          )}
                           </div>
                         </td>
                         <td className="p-2 ">
@@ -1469,7 +1579,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                       <tr key={idx} className="hover:bg-slate-50/50">
                         <td className="p-2 ">
                           <div className=" text-slate-800 text-xs font-medium">{mat.material_name || mat.materialName}</div>
-                          <div className="text-[10px] text-slate-500 flex items-center gap-1.5 flex-wrap">
+                          <div className="text-xs text-slate-500 flex items-center gap-1.5 flex-wrap">
                             {mat.dimensions ? (
                               <>
                                 {mat.dimensions.length > 0 && <span>L: {mat.dimensions.length}</span>}
@@ -1490,13 +1600,13 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                           <div className=" text-rose-600 font-medium">
                             {Number(isViewing ? mat.required_qty : mat.totalPlannedQty).toFixed(3)}
                           </div>
-                          <div className="text-[10px] text-slate-400 uppercase">
+                          <div className="text-xs text-slate-400 ">
                             {mat.uom || mat.unit || 'Nos'}
-                            {isWeightBased(mat.uom || mat.unit) && (
-                              <span className="ml-1 text-slate-300">
-                                ({Number(isViewing ? (mat.design_qty || newPlan.targetQuantity) : mat.totalDesignQty).toFixed(0)} × {Number(mat.bomQty || mat.total_wt || 0).toFixed(3)})
-                              </span>
-                            )}
+                          {isWeightBased(mat.uom || mat.unit) && (
+                            <span className="ml-1 text-slate-300">
+                              ({Number(isViewing ? (mat.design_qty || newPlan.targetQuantity) : mat.totalDesignQty).toFixed(0)} × {Number((parseFloat(mat.required_qty || mat.totalPlannedQty) || 0) / (parseFloat(isViewing ? (mat.design_qty || newPlan.targetQuantity) : mat.totalDesignQty) || 1)).toFixed(3)})
+                            </span>
+                          )}
                           </div>
                         </td>
                         <td className="p-2 ">
@@ -1524,7 +1634,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
 
         {/* Section 05: Operations (Hidden) */}
         {/*
-        <Card className="bg-white border border-slate-200  rounded  overflow-hidden">
+        <Card className="bg-white border border-slate-200  rounded  ">
           <div className="p-6">
             <div className="flex items-center gap-2 mb-6">
               <div className="w-5 h-5 bg-indigo-50 text-indigo-600 rounded  flex items-center justify-center">
@@ -1597,36 +1707,36 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
         </div>
 
         {/* Sticky Bottom Bar */}
-        <div className="bg-white border-t border-slate-200 px-6 py-3 flex items-center justify-between z-20 flex-shrink-0 shadow-[0_-4px_12px_rgba(0,0,0,0.03)]">
+        <div className="bg-white border-t border-slate-200 p-2 flex items-center justify-between z-20 flex-shrink-0 shadow-[0_-4px_12px_rgba(0,0,0,0.03)]">
           <div className="flex items-center gap-8">
             <div>
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-0.5">Plan Status</span>
+              <span className="text-xs  text-slate-400   block mb-0.5">Plan Status</span>
               <div className="flex items-center gap-2 ">
-                <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-[10px] font-bold uppercase rounded border border-slate-200">{isViewing ? newPlan.operationalStatus : 'draft'}</span>
+                <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-xs   rounded border border-slate-200">{isViewing ? newPlan.operationalStatus : 'draft'}</span>
               </div>
             </div>
             <div className="h-8 w-px bg-slate-100"></div>
             <div>
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-0.5">Calculated Materials</span>
-              <span className="text-xs font-bold text-slate-700 tracking-tight">{totalMaterialCount} Items Identified</span>
+              <span className="text-xs  text-slate-400   block mb-0.5">Calculated Materials</span>
+              <span className="text-xs  text-slate-700 tracking-tight">{totalMaterialCount} Items Identified</span>
             </div>
           </div>
           <div className="flex items-center gap-3">
             <button 
               onClick={() => handleCreateWorkOrders(newPlan.id)}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 text-xs font-bold transition-all border border-emerald-200/50 shadow-sm"
+              className="flex items-center gap-2 p-2 bg-emerald-50 text-emerald-600 rounded hover:bg-emerald-100 text-xs  transition-all border border-emerald-200/50 shadow-sm"
             >
               <Plus className="w-4 h-4" />
               Generate Work Orders
             </button>
-            <button className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 text-xs font-bold transition-all border border-indigo-200/50 shadow-sm">
+            <button className="flex items-center gap-2 p-2 bg-indigo-50 text-indigo-600 rounded hover:bg-indigo-100 text-xs  transition-all border border-indigo-200/50 shadow-sm">
               <Zap className="w-4 h-4" />
               Transmit MR
             </button>
             {!isViewing && (
               <button 
                 onClick={handleSubmit}
-                className="flex items-center gap-2 px-6 py-2.5 bg-slate-900 text-white rounded-lg hover:bg-slate-800 text-xs font-bold transition-all shadow-lg shadow-slate-200"
+                className="flex items-center gap-2 px-6 py-2.5 bg-slate-900 text-white rounded hover:bg-slate-800 text-xs  transition-all shadow-lg shadow-slate-200"
               >
                 <CheckCircle2 className="w-4 h-4" />
                 {newPlan.id ? 'Update Strategic Plan' : 'Commit Strategy'}
@@ -1659,7 +1769,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
         materialsToDisplay, 
         subAssembliesToDisplay, 
         operationsToDisplay 
-      } = calculatePlanDetails();
+      } = planDetails;
 
       const payload = {
         ...newPlan,
@@ -1795,12 +1905,12 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
   }
 
   return (
-    <div className="p-4 space-y-2 min-w-0">
+    <div className=" min-w-0">
       {/* Header Section */}
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-2">
           <div className="w-5 h-5 bg-slate-900 text-white rounded  flex items-center justify-center shadow-lg shadow-slate-200">
-            <Layers className="w-6 h-6" />
+            <Layers className="w-3 h-3" />
           </div>
           <div>
             <h1 className="text-xl  text-slate-900  flex items-center gap-2 ">
@@ -1845,7 +1955,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
             <div className="p-2">
               <div className="flex items-center justify-between mb-4">
                 <div className={`w-5 h-5 rounded  bg-${stat.color}-50 text-${stat.color}-600 flex items-center justify-center transition-transform group-hover:scale-110 duration-300`}>
-                  <stat.icon className="w-6 h-6" />
+                  <stat.icon className="w-3 h-3" />
                 </div>
                 <div className="text-right">
                   <div className="text-xl  text-slate-900">{stat.value}</div>
@@ -1922,7 +2032,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                         <div>
                           <div className="text-xs   text-slate-800 tracking-tight">{plan.plan_code}</div>
                           <div className="text-xs text-slate-400 ">
-                            {plan.item_code ? `${plan.item_code} - ${plan.item_description}` : (plan.project_name || 'Global Manufacturing')}
+                            {plan.company_name || (plan.item_code ? `${plan.item_code} - ${plan.item_description}` : (plan.project_name || 'Global Manufacturing'))}
                           </div>
                         </div>
                       </div>
@@ -2192,7 +2302,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                         <span className="text-xs font-medium text-slate-800">
                           {isWeightBased(item.uom) ? Number(item.design_qty || 0).toFixed(3) : Number(item.design_qty || 0).toFixed(0)}
                         </span>
-                        <span className="text-[10px] text-slate-400 font-medium">{item.uom}</span>
+                        <span className="text-xs text-slate-400 font-medium">{item.uom}</span>
                       </div>
                     </td>
                     <td className="py-4 text-center">
@@ -2330,7 +2440,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
             <button
               onClick={() => setMrModalOpen(false)}
               disabled={transmittingMr}
-              className="px-4 py-2 text-xs  text-slate-400 hover:text-slate-600 transition-colors"
+              className="p-2 text-xs  text-slate-400 hover:text-slate-600 transition-colors"
             >
               Abort Request
             </button>
@@ -2367,8 +2477,8 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
               <Zap className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-lg text-slate-800 tracking-tight font-bold">Configure Work Order</h2>
-              <div className="flex items-center gap-1 text-xs text-indigo-500 font-bold uppercase tracking-wider">
+              <h2 className="text-lg text-slate-800 tracking-tight ">Configure Work Order</h2>
+              <div className="flex items-center gap-1 text-xs text-indigo-500   tracking-wider">
                 <Activity className="w-3 h-3" />
                 Strategy Implementation Phase
               </div>
@@ -2381,22 +2491,22 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
           {/* Header Info Cards */}
           <div className="grid grid-cols-4 gap-4">
             <div className="p-3 bg-slate-50/50 rounded-xl border border-slate-100">
-              <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">Item Code</label>
-              <div className="text-sm font-bold text-slate-800 truncate">{selectedPlanConfig?.item_code || '---'}</div>
+              <label className="text-xs text-slate-400   tracking-wider block mb-1">Item Code</label>
+              <div className="text-sm  text-slate-800 truncate">{selectedPlanConfig?.item_code || '---'}</div>
             </div>
             <div className="p-3 bg-slate-50/50 rounded-xl border border-slate-100">
-              <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">BOM Reference</label>
-              <div className="text-sm font-bold text-slate-800 truncate">{selectedPlanConfig?.bom_no || '---'}</div>
+              <label className="text-xs text-slate-400   tracking-wider block mb-1">BOM Reference</label>
+              <div className="text-sm  text-slate-800 truncate">{selectedPlanConfig?.bom_no || '---'}</div>
             </div>
             <div className="p-3 bg-slate-50/50 rounded-xl border border-slate-100">
-              <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">Target Qty</label>
-              <div className="text-sm font-bold text-slate-800">{selectedPlanConfig?.target_qty || 0} Units</div>
+              <label className="text-xs text-slate-400   tracking-wider block mb-1">Target Qty</label>
+              <div className="text-sm  text-slate-800">{selectedPlanConfig?.target_qty || 0} Units</div>
             </div>
             <div className="p-3 bg-slate-50/50 rounded-xl border border-slate-100">
-              <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-1">Priority</label>
+              <label className="text-xs text-slate-400   tracking-wider block mb-1">Priority</label>
               <div className="flex items-center gap-1.5">
                 <div className="w-1.5 h-1.5 bg-amber-500 rounded-full" />
-                <span className="text-xs font-bold text-amber-600 uppercase">Medium</span>
+                <span className="text-xs  text-amber-600 ">Medium</span>
               </div>
             </div>
           </div>
@@ -2406,14 +2516,14 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
             <div className="flex items-center gap-8 border-b border-slate-100">
               <button 
                 onClick={() => setActiveConfigTab('ops')}
-                className={`pb-3 text-xs font-bold uppercase tracking-wider transition-all relative ${activeConfigTab === 'ops' ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
+                className={`pb-3 text-xs   tracking-wider transition-all relative ${activeConfigTab === 'ops' ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
               >
                 Operational Sequence ({selectedPlanConfig?.operations?.length || 0})
                 {activeConfigTab === 'ops' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 rounded-full" />}
               </button>
               <button 
                 onClick={() => setActiveConfigTab('mats')}
-                className={`pb-3 text-xs font-bold uppercase tracking-wider transition-all relative ${activeConfigTab === 'mats' ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
+                className={`pb-3 text-xs   tracking-wider transition-all relative ${activeConfigTab === 'mats' ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
               >
                 Resource Allocation ({selectedPlanConfig?.materials?.length || 0})
                 {activeConfigTab === 'mats' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 rounded-full" />}
@@ -2425,12 +2535,12 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                 <table className="w-full text-left text-xs">
                   <thead className="sticky top-0 bg-white z-10 border-b border-slate-100">
                     <tr>
-                      <th className="py-3 px-2 font-bold text-slate-400 uppercase tracking-wider">Item / Operation</th>
-                      <th className="py-3 px-2 font-bold text-slate-400 uppercase tracking-wider">Workstation</th>
-                      <th className="py-3 px-2 font-bold text-slate-400 uppercase tracking-wider">Process Type</th>
-                      <th className="py-3 px-2 font-bold text-slate-400 uppercase tracking-wider text-right">Net Time (M/U)</th>
-                      <th className="py-3 px-2 font-bold text-slate-400 uppercase tracking-wider text-right">Rate/Hr</th>
-                      <th className="py-3 px-2 font-bold text-slate-400 uppercase tracking-wider text-right text-emerald-600">Total Cost</th>
+                      <th className="py-3 px-2  text-slate-400  tracking-wider">Item / Operation</th>
+                      <th className="py-3 px-2  text-slate-400  tracking-wider">Workstation</th>
+                      <th className="py-3 px-2  text-slate-400  tracking-wider">Process Type</th>
+                      <th className="py-3 px-2  text-slate-400  tracking-wider text-right">Net Time (M/U)</th>
+                      <th className="py-3 px-2  text-slate-400  tracking-wider text-right">Rate/Hr</th>
+                      <th className="py-3 px-2  text-slate-400  tracking-wider text-right text-emerald-600">Total Cost</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50 font-medium">
@@ -2440,12 +2550,20 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                           <td className="py-4 px-2">
                             <div className="flex items-center gap-2">
                               <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full" />
-                              <span className="text-slate-700 font-bold">{op.operation_name}</span>
+                              <div>
+                                <span className="text-slate-700 ">{op.operation_name}</span>
+                                <div className="text-[10px] text-slate-400 font-normal tracking-tight flex items-center gap-1">
+                                  <span className={op.item_type === 'FG' ? 'text-indigo-500' : 'text-rose-500'}>
+                                    {op.item_type === 'FG' ? 'Finished Goods' : 'Sub Assembly'}:
+                                  </span>
+                                  <span className="text-slate-500">{op.source_item || op.itemCode || 'Main Item'}</span>
+                                </div>
+                              </div>
                             </div>
                           </td>
                           <td className="py-4 px-2 text-slate-500">{op.workstation || 'Unassigned'}</td>
                           <td className="py-4 px-2 text-slate-500">
-                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                            <span className={`px-2 py-0.5 rounded-full text-xs   tracking-wider ${
                               (op.process_type || op.operation_type || 'In-House') === 'Sub-Contract' 
                                 ? 'bg-amber-50 text-amber-600 border border-amber-100' 
                                 : 'bg-indigo-50 text-indigo-600 border border-indigo-100'
@@ -2453,9 +2571,9 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                               {op.process_type || op.operation_type || 'In-House'}
                             </span>
                           </td>
-                          <td className="py-4 px-2 text-right text-slate-400 font-bold">{Math.round(parseFloat(op.net_time || op.base_time || 0) * 60)} min</td>
+                          <td className="py-4 px-2 text-right text-slate-400 ">{Math.round(parseFloat(op.net_time || op.base_time || 0) * 60)} min</td>
                           <td className="py-4 px-2 text-right text-slate-400">₹{op.hourly_rate || 0}</td>
-                          <td className="py-4 px-2 text-right font-bold text-emerald-600">₹{(parseFloat(op.base_time || 0) * (selectedPlanConfig.target_qty || 1) * parseFloat(op.hourly_rate || 0)).toFixed(2)}</td>
+                          <td className="py-4 px-2 text-right  text-emerald-600">₹{(parseFloat(op.base_time || 0) * (selectedPlanConfig.target_qty || 1) * parseFloat(op.hourly_rate || 0)).toFixed(2)}</td>
                         </tr>
                       ))
                     ) : (
@@ -2469,10 +2587,10 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                 <table className="w-full text-left text-xs">
                   <thead className="sticky top-0 bg-white z-10 border-b border-slate-100">
                     <tr>
-                      <th className="py-3 px-2 font-bold text-slate-400 uppercase tracking-wider">Component</th>
-                      <th className="py-3 px-2 font-bold text-slate-400 uppercase tracking-wider text-right">Required</th>
-                      <th className="py-3 px-2 font-bold text-slate-400 uppercase tracking-wider text-right">Available</th>
-                      <th className="py-3 px-2 font-bold text-slate-400 uppercase tracking-wider text-center">Status</th>
+                      <th className="py-3 px-2  text-slate-400  tracking-wider">Component</th>
+                      <th className="py-3 px-2  text-slate-400  tracking-wider text-right">Required</th>
+                      <th className="py-3 px-2  text-slate-400  tracking-wider text-right">Available</th>
+                      <th className="py-3 px-2  text-slate-400  tracking-wider text-center">Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50 font-medium">
@@ -2480,11 +2598,11 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                       selectedPlanConfig.materials.map((mat, idx) => (
                         <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
                           <td className="py-4 px-2">
-                            <div className="font-bold text-slate-700">{mat.item_code}</div>
-                            <div className="text-[10px] text-slate-400 uppercase tracking-tight mt-0.5">{mat.material_name}</div>
+                            <div className=" text-slate-700">{mat.item_code}</div>
+                            <div className="text-xs text-slate-400  tracking-tight mt-0.5">{mat.material_name}</div>
                           </td>
-                          <td className="py-4 px-2 text-right font-bold text-slate-900">{mat.required_qty} <span className="text-slate-400 font-normal">{mat.uom}</span></td>
-                          <td className="py-4 px-2 text-right font-bold text-slate-500">0.00 <span className="text-slate-400 font-normal">{mat.uom}</span></td>
+                          <td className="py-4 px-2 text-right  text-slate-900">{mat.required_qty} <span className="text-slate-400 font-normal">{mat.uom}</span></td>
+                          <td className="py-4 px-2 text-right  text-slate-500">0.00 <span className="text-slate-400 font-normal">{mat.uom}</span></td>
                           <td className="py-4 px-2 text-center">
                             <div className="w-5 h-5 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mx-auto border border-rose-100">
                               <AlertCircle className="w-3 h-3" />
@@ -2507,13 +2625,13 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
           <div className="flex items-center justify-between pt-6 border-t border-slate-100">
             <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-full border border-emerald-100 shadow-sm">
               <CheckCircle2 className="w-3.5 h-3.5" />
-              <span className="text-[10px] font-bold uppercase tracking-wider">All Stocks Verified</span>
+              <span className="text-xs   tracking-wider">All Stocks Verified</span>
             </div>
             
             <div className="flex items-center gap-3">
               <button 
                 onClick={() => setConfigModalOpen(false)}
-                className="px-5 py-2.5 text-xs font-bold text-slate-400 hover:text-slate-600 transition-colors uppercase tracking-wider"
+                className="p-2 text-xs  text-slate-400 hover:text-slate-600 transition-colors  tracking-wider"
               >
                 Discard
               </button>
@@ -2521,7 +2639,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                 <button 
                   onClick={() => handleCreateWorkOrders(selectedPlanConfig.id)}
                   disabled={initiatingProduction}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all text-xs font-bold shadow-sm shadow-indigo-100 disabled:opacity-50"
+                  className="flex items-center gap-2 p-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-all text-xs  shadow-sm shadow-indigo-100 disabled:opacity-50"
                 >
                   {initiatingProduction ? (
                     <>

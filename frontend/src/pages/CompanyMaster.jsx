@@ -304,7 +304,7 @@ const CompanyMaster = ({
         <div>
           <div className="flex items-center gap-2 mb-1">
             <div className="p-2 bg-indigo-600 text-white rounded shadow-lg shadow-indigo-100">
-              <Building2 className="w-6 h-6" />
+              <Building2 className="w-3 h-3" />
             </div>
             <h2 className="text-xl  text-slate-900 ">Company Master</h2>
           </div>

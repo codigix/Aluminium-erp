@@ -538,7 +538,7 @@ const POMaterialRequest = () => {
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-center gap-2">
             <div className="p-2 bg-white rounded  ">
-              <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-3 h-3 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
               </svg>
             </div>
@@ -756,7 +756,7 @@ const POMaterialRequest = () => {
                 )}
 
                 <div className="mt-auto p-2 bg-blue-50/50 rounded  border border-blue-100 flex items-start gap-2">
-                  <div className="w-6 h-6 rounded  bg-blue-100 flex items-center justify-center shrink-0 mt-0.5">
+                  <div className="w-3 h-3 rounded  bg-blue-100 flex items-center justify-center shrink-0 mt-0.5">
                     <svg className="w-3.5 h-3.5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                   </div>
                   <p className="text-xs text-blue-700 leading-relaxed">
@@ -840,7 +840,7 @@ const POMaterialRequest = () => {
                     }).length === 0 ? (
                       <div className="p-8 text-center">
                         <div className="w-5 h-5 bg-slate-50 rounded  flex items-center justify-center mx-auto mb-2 text-slate-300">
-                          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 11m8 4V5" /></svg>
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 11m8 4V5" /></svg>
                         </div>
                         <p className="text-xs text-slate-400 italic">No items added yet</p>
                       </div>
@@ -880,7 +880,7 @@ const POMaterialRequest = () => {
                 </div>
 
                 <div className="mt-6 p-2 bg-blue-50/50 rounded  border border-blue-100 flex items-start gap-2">
-                  <div className="w-6 h-6 rounded  bg-blue-100 flex items-center justify-center shrink-0 mt-0.5">
+                  <div className="w-3 h-3 rounded  bg-blue-100 flex items-center justify-center shrink-0 mt-0.5">
                     <svg className="w-3.5 h-3.5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                   </div>
                   <p className="text-xs text-blue-700 leading-relaxed">
@@ -948,7 +948,7 @@ const POMaterialRequest = () => {
           <div className="grid grid-cols-5 gap-2 mb-8">
             <div className="bg-white p-2 rounded  border border-slate-100  flex items-center gap-2 transition-all hover:">
               <div className="w-5 h-5 rounded  bg-orange-50 flex items-center justify-center text-orange-500  shadow-orange-100/50">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
               </div>
               <div>
                 <p className="text-xs  text-slate-400   mb-1.5">Status</p>
@@ -957,7 +957,7 @@ const POMaterialRequest = () => {
             </div>
             <div className="bg-white p-2 rounded  border border-slate-100  flex items-center gap-2 transition-all hover:">
               <div className="w-5 h-5 rounded  bg-blue-50 flex items-center justify-center text-blue-500  shadow-blue-100/50">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
               </div>
               <div>
                 <p className="text-xs  text-slate-400   mb-1.5">Purpose</p>
@@ -966,7 +966,7 @@ const POMaterialRequest = () => {
             </div>
             <div className="bg-white p-2 rounded  border border-slate-100  flex items-center gap-2 transition-all hover:">
               <div className="w-5 h-5 rounded  bg-purple-50 flex items-center justify-center text-purple-500  shadow-purple-100/50">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
               </div>
               <div>
                 <p className="text-xs  text-slate-400   mb-1.5">Department</p>
@@ -975,7 +975,7 @@ const POMaterialRequest = () => {
             </div>
             <div className="bg-white p-2 rounded  border border-slate-100  flex items-center gap-2 transition-all hover:">
               <div className="w-5 h-5 rounded  bg-emerald-50 flex items-center justify-center text-emerald-500  shadow-emerald-100/50">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
               </div>
               <div>
                 <p className="text-xs  text-slate-400   mb-1.5">Requested By</p>
@@ -984,7 +984,7 @@ const POMaterialRequest = () => {
             </div>
             <div className="bg-white p-2 rounded  border border-slate-100  flex items-center gap-2 transition-all hover:">
               <div className="w-5 h-5 rounded  bg-indigo-50 flex items-center justify-center text-indigo-500  shadow-indigo-100/50">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
               </div>
               <div className="overflow-hidden">
                 <p className="text-xs  text-slate-400   mb-1.5">Linked PO</p>

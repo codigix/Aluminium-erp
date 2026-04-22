@@ -725,11 +725,17 @@ const JobCard = () => {
     }
 
     return [...result].sort((a, b) => {
-      // Primary sort: Work Order (Descending)
+      // Primary sort: Source Type (SA before FG)
+      const saTypes = ['SA', 'SFG', 'Sub Assembly'];
+      const aType = saTypes.includes(a.source_type) ? 0 : 1;
+      const bType = saTypes.includes(b.source_type) ? 0 : 1;
+      if (aType !== bType) return aType - bType;
+
+      // Secondary sort: Work Order (Descending - newest WOs first)
       if (a.wo_number !== b.wo_number) {
         return (b.wo_number || "").localeCompare(a.wo_number || "");
       }
-      // Secondary sort: Sequence Number (Ascending)
+      // Tertiary sort: Sequence Number (Ascending)
       return (a.sequence_no || 0) - (b.sequence_no || 0);
     });
   }, [jobCards, searchQuery]);
@@ -1523,7 +1529,7 @@ const JobCard = () => {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="w-5 h-5 bg-slate-50 rounded  flex items-center justify-center border border-slate-100">
-                <Box className="w-6 h-6 text-slate-400" />
+                <Box className="w-3 h-3 text-slate-400" />
               </div>
               <div>
                 <p className="text-xs  text-slate-400   mb-0.5">Target Item</p>
@@ -1929,7 +1935,7 @@ const JobCard = () => {
                               </td>
                               <td className="p-2">
                                 <div className="flex items-center gap-2">
-                                  <div className="w-6 h-6 bg-slate-100 rounded flex items-center justify-center text-xs  text-slate-600">
+                                  <div className="w-3 h-3 bg-slate-100 rounded flex items-center justify-center text-xs  text-slate-600">
                                     {log.operator_name?.[0]}
                                   </div>
                                   <span className="text-slate-600">{log.operator_name}</span>
@@ -3561,7 +3567,7 @@ const JobCard = () => {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="w-5 h-5 bg-indigo-600 text-white rounded  flex items-center justify-center shadow-lg shadow-indigo-100">
-                <ClipboardList className="w-6 h-6" />
+                <ClipboardList className="w-3 h-3" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
@@ -3641,17 +3647,19 @@ const JobCard = () => {
 
           {/* Flat Table Layout */}
           <Card className="border-none bg-white rounded  shadow-sm">
-            <div className="overflow-visible">
-              <table className="w-full text-left">
+            <div className="overflow-auto">
+              <table className=" text-left ">
                 <thead className="bg-slate-50/50 border-b border-slate-100">
                   <tr>
                     <th className="p-2 text-xs  text-slate-500   min-w-[140px]">ID</th>
+                    <th className="p-2 text-xs  text-slate-500  ">Project / Client</th>
                     <th className="p-2 text-xs  text-slate-500  ">Operation</th>
+                    <th className="p-2 text-xs  text-slate-500  ">Specification</th>
                     <th className="p-2 text-xs  text-slate-500  ">Status</th>
                     <th className="p-2 text-xs  text-slate-500  ">Execution Type</th>
-                    <th className="p-2 text-xs  text-slate-500  ">Qty To Manufacture</th>
-                    <th className="p-2 text-xs  text-slate-500  ">Produced Qty</th>
-                    <th className="p-2 text-xs  text-slate-500  ">Accepted Qty</th>
+                    <th className="p-2 text-xs  text-slate-500  ">Qty</th>
+                    <th className="p-2 text-xs  text-slate-500  ">Produced</th>
+                    <th className="p-2 text-xs  text-slate-500  ">Accepted</th>
                     <th className="p-2 text-xs  text-slate-500  ">Workstation</th>
                     <th className="p-2 text-xs  text-slate-500  ">Assignee</th>
                     <th className="p-2 text-xs  text-slate-500   text-right">Actions</th>
@@ -3679,8 +3687,22 @@ const JobCard = () => {
                       </td>
                       <td className="p-2">
                         <div className="flex flex-col">
-                          <span className="text-xs  text-slate-900">{jc.operation_name}</span>
-                          <span className="text-xs text-slate-400 mt-0.5 leading-tight">{jc.item_name}</span>
+                          <span className="text-[10px] text-slate-500 mt-0.5 uppercase tracking-wider">{jc.client_name || "Internal"}</span>
+                        </div>
+                      </td>
+                      <td className="p-2">
+                        <div className="flex flex-col">
+                          <span className="text-xs  text-slate-900 font-medium">{jc.operation_name}</span>
+                        </div>
+                      </td>
+                      <td className="p-2">
+                        <div className="flex flex-col gap-1">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest w-fit ${jc.source_type === 'SA' ? 'bg-amber-50 text-amber-700 border border-amber-100' : 'bg-indigo-50 text-indigo-700 border border-indigo-100'}`}>
+                            {jc.source_type === 'SA' ? 'Sub Assembly' : 'Finished Good'}
+                          </span>
+                          <span className="text-[10px] text-slate-500 font-medium truncate max-w-[150px]" title={jc.item_name}>
+                            {jc.item_name}
+                          </span>
                         </div>
                       </td>
                       <td className="p-2 ">
@@ -3697,17 +3719,17 @@ const JobCard = () => {
                       </td>
                       <td className="p-2 ">
                         <span className="text-xs   text-slate-900">
-                          {jc.planned_qty || 0} <span className="text-slate-400 font-normal">units</span>
+                          {jc.planned_qty || 0}
                         </span>
                       </td>
                       <td className="p-2 ">
                         <span className="text-xs   text-indigo-600">
-                          {parseFloat(jc.produced_qty || 0).toFixed(2)} <span className="text-slate-400 font-normal">units</span>
+                          {parseFloat(jc.produced_qty || 0).toFixed(2)}
                         </span>
                       </td>
                       <td className="p-2 ">
                         <span className="text-xs   text-emerald-600">
-                          {parseFloat(jc.accepted_qty || 0).toFixed(2)} <span className="text-slate-400 font-normal">units</span>
+                          {parseFloat(jc.accepted_qty || 0).toFixed(2)}
                         </span>
                       </td>
                       <td className="p-2 ">
@@ -3949,7 +3971,7 @@ const JobCard = () => {
                       <td colSpan="10" className="px-6 py-8 text-center">
                         <div className="flex flex-col items-center gap-2">
                           <div className="w-5 h-5 bg-slate-50 text-slate-300 rounded flex items-center justify-center">
-                            <AlertCircle className="w-6 h-6" />
+                            <AlertCircle className="w-3 h-3" />
                           </div>
                           <p className="text-slate-400 text-sm italic">No job cards found</p>
                         </div>

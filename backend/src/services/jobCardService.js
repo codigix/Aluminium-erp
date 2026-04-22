@@ -3,6 +3,7 @@ const pool = require('../config/db');
 const listJobCards = async () => {
   const [rows] = await pool.query(
     `SELECT jc.*, wo.wo_number, wo.item_name, wo.priority, wo.quantity as wo_quantity, wo.status as wo_status, wo.end_date as wo_end_date, wo.source_type,
+            so.project_name, c.company_name as client_name,
             COALESCE(o.operation_name, jc.operation_name) as operation_name, 
             COALESCE(NULLIF(jc.std_time, 0), o.std_time, 0) as std_time, 
             COALESCE(jc.time_uom, o.time_uom, 'Min') as time_uom, 
@@ -16,11 +17,13 @@ const listJobCards = async () => {
             (SELECT end_time FROM job_card_time_logs WHERE job_card_id = jc.id ORDER BY log_date DESC, start_time DESC, id DESC LIMIT 1) as latest_log_end_time
      FROM job_cards jc
      JOIN work_orders wo ON jc.work_order_id = wo.id
+     LEFT JOIN sales_orders so ON wo.sales_order_id = so.id
+     LEFT JOIN companies c ON so.company_id = c.id
      LEFT JOIN sales_order_items soi ON wo.sales_order_item_id = soi.id
      LEFT JOIN operations o ON jc.operation_id = o.id
      LEFT JOIN workstations w ON jc.workstation_id = w.id
      LEFT JOIN users u ON jc.assigned_to = u.id
-     ORDER BY wo.wo_number DESC, jc.sequence_no ASC`
+     ORDER BY wo.sales_order_id DESC, CASE WHEN wo.source_type = 'SA' THEN 0 ELSE 1 END ASC, jc.job_card_no ASC, jc.sequence_no ASC`
   );
   return rows;
 };

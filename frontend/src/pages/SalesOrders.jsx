@@ -176,6 +176,7 @@ const SalesOrders = () => {
               dbId: quote.id || quote.qr_id,
               uniqueKey: key,
               company_id: quote.company_id,
+              company_name: quote.company_name,
               created_at: quote.created_at,
               status: quote.status,
               po_number: quote.po_number,
@@ -200,6 +201,7 @@ const SalesOrders = () => {
             created_at: po.created_at,
             status: po.status,
             po_number: po.po_number,
+            company_name: po.company_name,
             isCustomerPo: true,
             items: [] // Items will be fetched when selected if needed, or we can fetch them here
           });
@@ -219,6 +221,7 @@ const SalesOrders = () => {
               dbId: order.id,
               uniqueKey: key,
               company_id: order.company_id,
+              company_name: order.company_name,
               created_at: order.created_at,
               status: 'Approved _DRAWING',
               po_number: order.po_number,
@@ -686,6 +689,11 @@ const SalesOrders = () => {
             <span className="text-xs  text-slate-500 italic">
               {row.project_name || 'General Project'}
             </span>
+            {row.total_items_count > 0 && (
+              <span className="text-[10px] mt-1 px-1.5 py-0.5 bg-emerald-50 text-emerald-600 rounded-full border border-emerald-100 w-fit font-medium">
+                {row.approved_items_count} / {row.total_items_count} Approved Designs
+              </span>
+            )}
           </div>
         </div>
       )
@@ -792,12 +800,10 @@ const SalesOrders = () => {
     const completedOrders = orders.filter(o => ['COMPLETED', 'FULFILLED', 'DELIVERED'].includes(o.status?.toUpperCase())).length;
 
     return (
-      <div className="space-y-2 pb-10">
-        <div className="bg-white p-2 rounded border border-slate-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-2">
+      <div className=" pb-10">
+        <div className=" flex flex-col md:flex-row md:items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <div className="p-2 bg-indigo-50 rounded text-indigo-600 ">
-               <Package className="w-8 h-8" />
-            </div>
+            
             <div>
               <h1 className="text-xl  text-slate-900 ">Sales Orders</h1>
               <div className="flex items-center gap-2 mt-1">
@@ -819,7 +825,7 @@ const SalesOrders = () => {
           <div className="flex items-center gap-2">
              <button 
               onClick={fetchOrders}
-              className="p-2.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all border border-slate-100"
+              className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all border border-slate-100"
               title="Refresh Data"
             >
               <Loader2 className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
@@ -834,7 +840,7 @@ const SalesOrders = () => {
           </div>
         </div>
 
-        <div className="bg-white rounded border border-slate-100 shadow-sm overflow-hidden p-2">
+        <div className=" overflow-hidden my-4">
           <DataTable 
             columns={columns}
             data={orders}
@@ -866,7 +872,7 @@ const SalesOrders = () => {
           onClick={() => setViewMode('list')}
           className="p-2 hover:bg-slate-100 rounded  transition-colors text-slate-500"
         >
-          <ArrowLeft className="w-6 h-6" />
+          <ArrowLeft className="w-3 h-3" />
         </button>
         <div className="flex-1">
           <div className="flex items-center gap-2">
@@ -996,7 +1002,7 @@ const SalesOrders = () => {
                         .filter(q => q.isCustomerPo)
                         .map(q => ({
                           value: q.uniqueKey, 
-                          label: `PO: ${q.po_number} - ${q.status}`
+                          label: `PO: ${q.po_number} - ${q.company_name} - ${q.status}`
                         }))}
                       value={formData.customerPoId}
                       onChange={(e) => handleCustomerPoChange(e.target.value)}
@@ -1046,7 +1052,7 @@ const SalesOrders = () => {
             <Card title="Items included in selected PO" className='bg-white' subtitle="Order Items">
               <div className="p-2 bg-blue-50/50 rounded  mb-4 border border-blue-100 flex items-center gap-2">
                 <div className="p-2 bg-white rounded   border border-blue-100">
-                    <Package className="w-6 h-6 text-blue-600" />
+                    <Package className="w-3 h-3 text-blue-600" />
                 </div>
                 <div>
                   <p className="text-xs  text-slate-900">Items <span className="text-slate-400 font-normal ml-1">({formData.items.length})</span></p>

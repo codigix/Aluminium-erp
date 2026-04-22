@@ -227,9 +227,13 @@ const ClientQuotations = () => {
           initialProfits[clientName] = {};
           initialGst[clientName] = {};
         }
-        const fgItems = (order.items || []).filter(item => 
-          (item.item_group === 'FG' || item.item_type === 'FG' || (item.item_group || '').toLowerCase().includes('finished') || !item.item_group) && (item.status === 'REJECTED' || Number(item.bom_cost) >= 0)
-        );
+        const fgItems = (order.items || []).filter(item => {
+          const group = (item.item_group || '').trim().toUpperCase();
+          const type = (item.item_type || '').trim().toUpperCase();
+          const isFG = (group === 'FG' || type === 'FG' || group === 'FINISHED GOODS' || group === 'FINISHED_GOODS');
+          const isSA = (group === 'SUB ASSEMBLY' || group === 'SUB_ASSEMBLY' || group === 'SA');
+          return isFG && !isSA && (item.status !== 'REJECTED') && Number(item.bom_cost) > 0;
+        });
         order.items = fgItems;
         grouped[clientName].orders.push(order);
         
@@ -352,7 +356,7 @@ const ClientQuotations = () => {
       
       const grouped = {};
       data.forEach(quote => {
-        // Group by project name and company to catch all versions of the same quotation project
+        // Group by project name and company to consolidate all versions into ONE row
         const groupKey = `received_${quote.company_id}_${(quote.project_name || 'manual').toLowerCase()}`;
         
         if (!grouped[groupKey]) {
@@ -377,7 +381,13 @@ const ClientQuotations = () => {
         grouped[groupKey].quotes.push(quote);
 
         // Update top-level group details if this quote is a newer version
-        if ((quote.version || 1) > (grouped[groupKey].version || 0)) {
+        // OR if it's the same version but we prefer "Approved" status over others
+        const currentVersion = grouped[groupKey].version || 0;
+        const quoteVersion = quote.version || 1;
+        const currentStatus = (grouped[groupKey].status || '').trim().toUpperCase();
+        const quoteStatus = (quote.status || '').trim().toUpperCase();
+
+        if (quoteVersion > currentVersion || (quoteVersion === currentVersion && quoteStatus === 'APPROVED' && currentStatus !== 'APPROVED')) {
           grouped[groupKey].id = quote.id;
           grouped[groupKey].status = quote.status;
           grouped[groupKey].version = quote.version;
@@ -389,22 +399,45 @@ const ClientQuotations = () => {
         }
       });
       
-      // Filter groups: ONLY keep those where the LATEST version is APPROVED or REVISED
+      // Filter groups: keep those where the LATEST version has a "Received" type status
       const filteredGroups = Object.values(grouped).filter(group => {
         const s = (group.status || '').trim().toUpperCase();
-        return s === 'APPROVED' || s === 'REVISED';
+        return s === 'APPROVED' || s === 'ACCEPTED' || s === 'REVISED' || s === 'COMPLETED';
       });
 
       filteredGroups.forEach(group => {
         // Sort quotes DESC by version so group.quotes[0] is always the latest
         group.quotes.sort((a, b) => (b.version || 0) - (a.version || 0));
 
-        // RECALCULATE total based ONLY on the latest version found in this group
+        // RECALCULATE total and items based ONLY on the latest version found in this group
         const latestVersion = group.version || 1;
-        const latestQuotes = group.quotes.filter(q => (q.version || 1) === latestVersion);
+        const targetBatchId = group.batch_id;
+        const targetParentId = group.parent_id;
+        const targetCreatedAt = group.created_at;
+
+        const latestQuotes = group.quotes.filter(q => {
+          if ((q.version || 1) !== latestVersion) return false;
+          
+          // 1. Match by batch_id if available
+          if (targetBatchId && q.batch_id) {
+            return q.batch_id === targetBatchId;
+          }
+          
+          // 2. Match by parent_id if batch_id is missing
+          if (targetParentId && q.parent_id) {
+            return q.parent_id === targetParentId;
+          }
+
+          // 3. Fallback: Check if this item is the "latest" one itself or shares the same creation window
+          if (q.id === group.id) return true;
+          
+          const diff = Math.abs(new Date(q.created_at) - new Date(targetCreatedAt));
+          return diff < 10000; // 10 seconds window for legacy items without batch_id
+        });
         
         group.total_amount = latestQuotes.reduce((sum, q) => sum + (parseFloat(q.total_amount) || 0), 0);
         group.received_amount = latestQuotes.reduce((sum, q) => sum + (parseFloat(q.received_amount) || 0), 0);
+        group.quotes = latestQuotes; // Fix: Only keep latest version items to avoid incorrect drawing/item counts
       });
       
       setReceivedQuotations(filteredGroups.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)));
@@ -937,12 +970,10 @@ const ClientQuotations = () => {
   };
 
   return (
-    <div className="p-2 space-y-2 p-4 animate-in fade-in duration-500">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 bg-white p-2 rounded shadow-sm border border-slate-100">
+    <div className="  animate-in fade-in duration-500">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <div className="p-2 bg-indigo-600 text-white rounded ">
-            <ClipboardList size={15} />
-          </div>
+          
           <div>
             <h1 className="text-xl  text-slate-900 ">Client Quotations</h1>
             <p className="text-xs text-slate-500 ">Track all quotations from BOM-approved orders</p>
@@ -952,7 +983,7 @@ const ClientQuotations = () => {
         <div className="flex items-center gap-2">
           <button
             onClick={() => navigate('/quotation-form')}
-            className="p-2.5 bg-indigo-600 text-white hover:bg-indigo-700 rounded transition-all shadow-md flex items-center gap-2 text-xs"
+            className="p-2 bg-indigo-600 text-white hover:bg-indigo-700 rounded transition-all shadow-md flex items-center gap-2 text-xs"
           >
             <Plus size={15} />
             Create Quotation
@@ -961,7 +992,7 @@ const ClientQuotations = () => {
           <button
             onClick={fetchAllData}
             disabled={loading}
-            className="p-2.5 text-slate-500 hover:bg-slate-50 rounded  transition-all border border-slate-200 flex items-center gap-2 text-xs "
+            className="p-2 text-slate-500 hover:bg-slate-50 rounded  transition-all border border-slate-200 flex items-center gap-2 text-xs "
           >
             <RotateCw size={15} className={loading ? 'animate-spin' : ''} />
             Refresh All
@@ -969,7 +1000,7 @@ const ClientQuotations = () => {
         </div>
       </div>
 
-      <div className="flex gap-2 p-1 bg-slate-100/50 rounded-lg w-fit border border-slate-200">
+      <div className="flex gap-2 p-1 my-4 bg-slate-100/50 rounded-lg w-fit border border-slate-200">
         <button
           onClick={() => setActiveTab('pending')}
           className={`px-4 py-1.5 rounded-md text-xs font-medium transition-all ${
@@ -1005,8 +1036,8 @@ const ClientQuotations = () => {
       <div className="space-y-2">
         <Card>
           <div className="overflow-x-auto custom-scrollbar">
-            <table className="min-w-full divide-y divide-slate-100">
-              <thead className="bg-slate-50/50">
+            <table className="min-w-full divide-y divide-slate-100 border border-slate-200">
+              <thead className="bg-white">
                 <tr>
                   <th className=" p-2 text-left text-xs  text-slate-500  ">Quotation ID / Type</th>
                   <th className=" p-2 text-left text-xs  text-slate-500  ">Client & Project</th>
@@ -1037,9 +1068,16 @@ const ClientQuotations = () => {
                                 NEW PENDING
                               </span>
                             ) : (
-                              <span className="p-1 bg-indigo-50 text-indigo-600 rounded  text-xs  border border-indigo-100">
-                                QRT-{String(group.id).padStart(4, '0')}
-                              </span>
+                              <div className="flex flex-col gap-1">
+                                <span className="p-1 bg-indigo-50 text-indigo-600 rounded  text-xs  border border-indigo-100 w-fit">
+                                  QRT-{String(group.id).padStart(4, '0')}
+                                </span>
+                                {group.version && (
+                                  <span className="text-[10px] text-slate-500 font-medium ml-1">
+                                    Version {group.version}
+                                  </span>
+                                )}
+                              </div>
                             )}
                           </td>
                           <td className=" p-2 whitespace-nowrap">
@@ -1056,10 +1094,18 @@ const ClientQuotations = () => {
                           <td className=" p-2 whitespace-nowrap">
                             <div className="flex flex-col gap-0.5">
                               <span className="text-xs  text-slate-700 font-medium">
-                                {group.quotes.length > 1 ? `${group.quotes.length} Drawings` : (group.quotes[0]?.drawing_no || '—')}
+                                {(() => {
+                                  const uniqueDrawings = [...new Set(group.quotes.map(q => q.drawing_no).filter(Boolean))];
+                                  return uniqueDrawings.length > 1 
+                                    ? `${uniqueDrawings.length} Drawings` 
+                                    : (uniqueDrawings[0] || '—');
+                                })()}
                               </span>
                               <span className="text-[10px] text-slate-400">
-                                {group.quotes.length} item(s)
+                                {(() => {
+                                  const uniqueDrawingsCount = [...new Set(group.quotes.map(q => q.drawing_no).filter(Boolean))].length;
+                                  return `${uniqueDrawingsCount} item(s)`;
+                                })()}
                               </span>
                             </div>
                           </td>

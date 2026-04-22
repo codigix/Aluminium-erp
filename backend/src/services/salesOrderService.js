@@ -13,7 +13,9 @@ const listSalesOrders = async (includeWithoutPo = true) => {
             so.target_dispatch_date as delivery_date, c.company_name, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path,
             COALESCE(ct.email, "") as email_address, COALESCE(ct.phone, "") as contact_phone,
             (SELECT GROUP_CONCAT(DISTINCT drawing_no SEPARATOR ', ') FROM sales_order_items WHERE sales_order_id = so.id) as drawing_no,
-            (SELECT reason FROM design_rejections WHERE sales_order_id = so.id ORDER BY created_at DESC LIMIT 1) as rejection_reason
+            (SELECT reason FROM design_rejections WHERE sales_order_id = so.id ORDER BY created_at DESC LIMIT 1) as rejection_reason,
+            (SELECT COUNT(*) FROM sales_order_items WHERE sales_order_id = so.id AND UPPER(TRIM(status)) = 'APPROVED') as approved_items_count,
+            (SELECT COUNT(*) FROM sales_order_items WHERE sales_order_id = so.id) as total_items_count
      FROM sales_orders so
      LEFT JOIN companies c ON c.id = so.company_id
      LEFT JOIN customer_pos cp ON cp.id = so.customer_po_id
@@ -28,7 +30,10 @@ const listSalesOrders = async (includeWithoutPo = true) => {
   
   for (const order of rows) {
     const [items] = await pool.query(
-      'SELECT *, quantity as design_qty FROM sales_order_items WHERE sales_order_id = ?',
+      `SELECT soi.*, soi.quantity as design_qty, cd.file_path 
+       FROM sales_order_items soi
+       LEFT JOIN customer_drawings cd ON soi.drawing_id = cd.id
+       WHERE soi.sales_order_id = ?`,
       [order.id]
     );
     order.items = items;
@@ -61,7 +66,10 @@ const getSalesOrderById = async (id) => {
   order.client = order.company_name;
 
   const [items] = await pool.query(
-    'SELECT * FROM sales_order_items WHERE sales_order_id = ?',
+    `SELECT soi.*, cd.file_path 
+     FROM sales_order_items soi
+     LEFT JOIN customer_drawings cd ON soi.drawing_id = cd.id
+     WHERE soi.sales_order_id = ?`,
     [order.id]
   );
   order.items = items;
@@ -817,23 +825,30 @@ const getApprovedDrawings = async (companyId = null) => {
   
   for (const order of rows) {
     const [items] = await pool.query(
-      `SELECT soi.*, 
-              COALESCE(NULLIF(soi.item_group, ''), NULLIF(soi.item_type, ''), 'FG') as item_group,
-              COALESCE(
-                poi.quantity, 
-                (SELECT MAX(quantity) FROM sales_order_items WHERE sales_order_id = soi.sales_order_id AND TRIM(drawing_no) = TRIM(soi.drawing_no)),
-                soi.quantity
-              ) as design_qty 
-       FROM sales_order_items soi
-       LEFT JOIN sales_orders so ON soi.sales_order_id = so.id
-       LEFT JOIN customer_po_items poi ON so.customer_po_id = poi.customer_po_id 
-            AND (TRIM(soi.drawing_no) = TRIM(poi.drawing_no) AND soi.drawing_no IS NOT NULL)
-       WHERE soi.sales_order_id = ? 
-       AND (soi.item_group IN ('FG', 'FINISHED_GOODS', 'SA', 'SUB_ASSEMBLY', 'SFG', 'SEMI_FINISHED') 
-            OR soi.item_type IN ('FG', 'FINISHED_GOODS', 'SA', 'SUB_ASSEMBLY', 'SFG', 'SEMI_FINISHED') 
-            OR soi.item_group IS NULL OR soi.item_group = '' 
-            OR soi.item_group LIKE '%FINISHED%' 
-            OR soi.item_group LIKE '%ASSEMBLY%')`,
+      `SELECT * FROM (
+        SELECT soi.*, 
+                COALESCE(NULLIF(soi.item_group, ''), NULLIF(soi.item_type, '')) as item_group_calc,
+                COALESCE(
+                  poi.quantity, 
+                  (SELECT MAX(quantity) FROM sales_order_items WHERE sales_order_id = soi.sales_order_id AND TRIM(drawing_no) = TRIM(soi.drawing_no)),
+                  soi.quantity
+                ) as design_qty,
+                ROW_NUMBER() OVER (PARTITION BY TRIM(soi.drawing_no) ORDER BY soi.bom_cost DESC, soi.id DESC) as rn
+         FROM sales_order_items soi
+         LEFT JOIN sales_orders so ON soi.sales_order_id = so.id
+         LEFT JOIN customer_po_items poi ON so.customer_po_id = poi.customer_po_id 
+              AND (TRIM(soi.drawing_no) = TRIM(poi.drawing_no) AND soi.drawing_no IS NOT NULL)
+         WHERE soi.sales_order_id = ? 
+         AND (
+           TRIM(UPPER(soi.item_group)) IN ('FG', 'FINISHED GOODS', 'FINISHED_GOODS') 
+           OR (
+             TRIM(UPPER(soi.item_type)) IN ('FG', 'FINISHED GOODS', 'FINISHED_GOODS') 
+             AND TRIM(UPPER(COALESCE(soi.item_group, ''))) NOT IN ('SUB ASSEMBLY', 'SUB_ASSEMBLY', 'SA')
+           )
+         )
+         AND (soi.status IS NULL OR TRIM(UPPER(soi.status)) NOT IN ('REJECTED', 'CANCELLED'))
+         AND soi.bom_cost > 0
+      ) t WHERE rn = 1`,
       [order.id]
     );
     order.items = items;
@@ -851,6 +866,7 @@ const getApprovedDrawings = async (companyId = null) => {
 };
 
 const getOrderTimeline = async salesOrderId => {
+  // 1. Get order-specific items
   const [items] = await pool.query(
     `SELECT soi.*, sb.material_type as item_group, sb.product_type,
             so.status as sales_order_status,
@@ -872,11 +888,40 @@ const getOrderTimeline = async salesOrderId => {
     [salesOrderId]
   );
   
+  // 2. Also fetch any Master BOMs (sales_order_id is NULL) for these same drawings
+  // to show them as available versions/options
+  const drawingNos = [...new Set(items.map(i => i.drawing_no).filter(Boolean))];
+  
+  if (drawingNos.length > 0) {
+    const [masterItems] = await pool.query(
+      `SELECT soi.*, sb.material_type as item_group, sb.product_type,
+              'MASTER' as sales_order_status,
+              COALESCE(soi.drawing_id, cd.latest_drawing_id) as drawing_id,
+              cd.drawing_name
+       FROM sales_order_items soi
+       LEFT JOIN stock_balance sb ON sb.item_code = soi.item_code
+       LEFT JOIN (
+         SELECT d1.drawing_no, d1.id as latest_drawing_id, d1.description as drawing_name
+         FROM customer_drawings d1
+         JOIN (
+           SELECT drawing_no, MAX(id) as max_id
+           FROM customer_drawings
+           GROUP BY drawing_no
+         ) d2 ON d1.id = d2.max_id
+       ) cd ON cd.drawing_no = soi.drawing_no
+       WHERE soi.sales_order_id IS NULL AND soi.drawing_no IN (?)`,
+      [drawingNos]
+    );
+    
+    // Append master items to the list so they show up in the versions list in frontend
+    items.push(...masterItems);
+  }
+
   if (items.length === 0) return [];
 
   const itemIds = items.map(i => i.id);
   const itemCodes = items.map(i => i.item_code).filter(Boolean);
-  const drawingNos = items.map(i => i.drawing_no).filter(Boolean);
+  const drawingNosForLookup = items.map(i => i.drawing_no).filter(Boolean);
 
   // Fetch all related data in bulk
   const [allMaterials] = await pool.query(
@@ -885,7 +930,7 @@ const getOrderTimeline = async salesOrderId => {
      OR (item_code IN (?) AND sales_order_item_id IS NULL)
      OR (drawing_no IN (?) AND sales_order_item_id IS NULL AND item_code IS NULL)
      ORDER BY created_at ASC`,
-    [itemIds, itemCodes.length > 0 ? itemCodes : [null], drawingNos.length > 0 ? drawingNos : [null]]
+    [itemIds, itemCodes.length > 0 ? itemCodes : [null], drawingNosForLookup.length > 0 ? drawingNosForLookup : [null]]
   );
 
   const [allComponents] = await pool.query(
@@ -1165,7 +1210,46 @@ const generateSalesOrderPDF = async (salesOrderId) => {
 };
 
 const deleteSalesOrder = async (salesOrderId) => {
-  await pool.execute('DELETE FROM sales_orders WHERE id = ?', [salesOrderId]);
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // 1. Delete linked production plans, work orders, job cards
+    const [planRows] = await connection.execute('SELECT id FROM production_plans WHERE sales_order_id = ?', [salesOrderId]);
+    for (const plan of planRows) {
+      await connection.execute(
+        `DELETE FROM job_cards 
+         WHERE work_order_id IN (SELECT id FROM work_orders WHERE plan_id = ?)`,
+        [plan.id]
+      );
+      await connection.execute('DELETE FROM work_orders WHERE plan_id = ?', [plan.id]);
+      await connection.execute('DELETE FROM material_request_items WHERE mr_id IN (SELECT id FROM material_requests WHERE plan_id = ?)', [plan.id]);
+      await connection.execute('DELETE FROM material_requests WHERE plan_id = ?', [plan.id]);
+      await connection.execute('DELETE FROM production_plans WHERE id = ?', [plan.id]);
+    }
+
+    // 2. Delete sales order item details (BOM stuff)
+    const [soiRows] = await connection.execute('SELECT id FROM sales_order_items WHERE sales_order_id = ?', [salesOrderId]);
+    for (const soi of soiRows) {
+      await connection.execute('DELETE FROM sales_order_item_materials WHERE sales_order_item_id = ?', [soi.id]);
+      await connection.execute('DELETE FROM sales_order_item_components WHERE sales_order_item_id = ?', [soi.id]);
+      await connection.execute('DELETE FROM sales_order_item_operations WHERE sales_order_item_id = ?', [soi.id]);
+      await connection.execute('DELETE FROM sales_order_item_scrap WHERE sales_order_item_id = ?', [soi.id]);
+    }
+
+    // 3. Delete sales order items
+    await connection.execute('DELETE FROM sales_order_items WHERE sales_order_id = ?', [salesOrderId]);
+
+    // 4. Delete the sales order itself
+    await connection.execute('DELETE FROM sales_orders WHERE id = ?', [salesOrderId]);
+
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 };
 
 const getBOMApprovalHistory = async () => {

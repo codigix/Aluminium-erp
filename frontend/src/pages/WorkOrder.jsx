@@ -186,7 +186,7 @@ const WorkOrder = () => {
             <Card key={i} className="border-none  bg-white overflow-hidden group hover: transition-all">
               <div className="p-2 flex items-center gap-2">
                 <div className={`p-2 bg-${stat.color}-50 text-${stat.color}-600 rounded  flex items-center justify-center group-hover:scale-110 transition-transform`}>
-                  <stat.icon className="w-6 h-6" />
+                  <stat.icon className="w-3 h-3" />
                 </div>
                 <div>
                   <p className="text-xs  text-slate-400  ">{stat.label}</p>
@@ -203,12 +203,13 @@ const WorkOrder = () => {
             <table className="w-full text-left">
               <thead className="bg-slate-50/50 border-b border-slate-100">
                 <tr>
+                  <th className="p-2 text-xs  text-slate-500  ">Project / Client</th>
+                  <th className="p-2 text-xs  text-slate-500  ">Specification</th>
                   <th className="p-2 text-xs  text-slate-500  ">Item To Manufacture</th>
                   <th className="p-2 text-xs  text-slate-500  ">Status</th>
                   <th className="p-2 text-xs  text-slate-500  ">Qty To Manufacture</th>
                   <th className="p-2 text-xs  text-slate-500  ">Planned Start Date</th>
                   <th className="p-2 text-xs  text-slate-500  ">Manufacturing Progress</th>
-                  <th className="p-2 text-xs  text-slate-500  ">Process Loss</th>
                   <th className="p-2 text-xs  text-slate-500  ">Work Order ID</th>
                   <th className="p-2 text-xs  text-slate-500   text-right">Actions</th>
                 </tr>
@@ -218,6 +219,19 @@ const WorkOrder = () => {
                   const progress = wo.total_job_cards > 0 ? Math.round((wo.completed_job_cards / wo.total_job_cards) * 100) : 0;
                   return (
                     <tr key={wo.id} className="group hover:bg-slate-50/50 transition-colors">
+                      <td className="p-2 ">
+                        <div className="flex flex-col">
+                          <span className="text-xs  text-slate-900 leading-tight">{wo.project_name || 'N/A'}</span>
+                          <span className="text-[10px] text-slate-400 mt-0.5">{wo.client_name || '---'}</span>
+                        </div>
+                      </td>
+                      <td className="p-2 ">
+                        <span className={`px-2 py-0.5 rounded text-[10px]   ${
+                          wo.source_type === 'SA' ? 'bg-rose-50 text-rose-600 border border-rose-100' : 'bg-indigo-50 text-indigo-600 border border-indigo-100'
+                        }`}>
+                          {wo.source_type === 'SA' ? 'Sub Assembly' : 'Finished Goods'}
+                        </span>
+                      </td>
                       <td className="p-2 ">
                         <div className="flex flex-col">
                           <span className="text-xs  text-slate-900 leading-tight">{wo.item_name || wo.item_code}</span>
@@ -300,7 +314,7 @@ const WorkOrder = () => {
                     <td colSpan="5" className="p-2 text-center">
                       <div className="flex flex-col items-center gap-2">
                         <div className="p-2 bg-slate-50 text-slate-300 rounded  flex items-center justify-center">
-                          <FileText className="w-6 h-6" />
+                          <FileText className="w-3 h-3" />
                         </div>
                         <p className="text-slate-400 text-sm italic ">No manufacturing sequences found</p>
                       </div>

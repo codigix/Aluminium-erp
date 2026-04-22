@@ -1610,12 +1610,15 @@ const BOMFormPage = () => {
         throw new Error(errorData.message || 'Failed to create BOM');
       }
 
-      await response.json();
+      const responseData = await response.json();
+      const newId = responseData.id;
       successToast(isDraft ? 'BOM saved as draft' : 'BOM created successfully');
 
       // Instead of resetting and navigating to list, stay on the page in view mode
       // This solves the "did not show saved bom" problem
-      if (itemId && itemId !== 'bom-form') {
+      if (newId) {
+        navigate(`/bom-form/${newId}?view=true`);
+      } else if (itemId && itemId !== 'bom-form') {
         navigate(`/bom-form/${itemId}?view=true`);
       } else if (selectedItem) {
         const targetId = selectedItem.source === 'order' ? selectedItem.id : 'bom-form';
@@ -2881,7 +2884,7 @@ const BOMFormPage = () => {
                           <tr key={o.id} className="hover:bg-slate-50/80 transition-colors group">
                             <td className="p-2  whitespace-nowrap">
                               <div className="flex items-center gap-2">
-                                <span className="w-6 h-6 rounded  bg-slate-100 flex items-center justify-centertext-xs   text-slate-500 border border-slate-200">{idx + 1}</span>
+                                <span className="w-3 h-3 rounded  bg-slate-100 flex items-center justify-centertext-xs   text-slate-500 border border-slate-200">{idx + 1}</span>
                                 <div className="flex flex-col">
                                   <span className="text-xs  text-slate-800">{o.operation_name || o.operationName}</span>
                                   <span className="text-xs text-slate-400   flex items-center gap-1">
