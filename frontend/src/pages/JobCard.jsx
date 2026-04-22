@@ -1351,16 +1351,64 @@ const JobCard = () => {
 
   useEffect(() => {
     const isProductionEntryPath = location.pathname.includes('/production-entry');
+    const isAddPath = location.pathname.includes('/job-card/add');
+    const isEditPath = location.pathname.includes('/job-card/edit');
+    const isViewPath = location.pathname.includes('/job-card/view');
+    const isOutwardPath = location.pathname.includes('/job-card/outward');
+    const isInwardPath = location.pathname.includes('/job-card/inward');
     const jcId = searchParams.get('id');
 
-    if (isProductionEntryPath && jcId && jobCards.length > 0) {
-      const jc = jobCards.find(j => String(j.id) === String(jcId));
-      if (jc && (!selectedJC || String(selectedJC.id) !== String(jcId))) {
-        handleLogProgress(jc);
+    if (jobCards.length > 0) {
+      if (isProductionEntryPath && jcId) {
+        const jc = jobCards.find(j => String(j.id) === String(jcId));
+        if (jc && (!selectedJC || String(selectedJC.id) !== String(jcId) || !showProductionEntry)) {
+          handleLogProgress(jc);
+        }
+      } else if (isAddPath && !isModalOpen) {
+        handleCreateNew();
+      } else if (isEditPath && jcId) {
+        const jc = jobCards.find(j => String(j.id) === String(jcId));
+        if (jc && (!formData.id || String(formData.id) !== String(jcId) || !isModalOpen)) {
+          handleEdit(jc);
+        }
+      } else if (isViewPath && jcId) {
+        const jc = jobCards.find(j => String(j.id) === String(jcId));
+        if (jc && (!viewingJobCard || String(viewingJobCard.id) !== String(jcId))) {
+          setViewingJobCard(jc);
+        }
+      } else if (isOutwardPath && jcId) {
+        const jc = jobCards.find(j => String(j.id) === String(jcId));
+        if (jc && (!selectedJCOutward || String(selectedJCOutward.id) !== String(jcId) || !isOutwardModalOpen)) {
+          handleOutwardChallan(jc);
+        }
+      } else if (isInwardPath && jcId) {
+        const jc = jobCards.find(j => String(j.id) === String(jcId));
+        if (jc && (!selectedJCOutward || String(selectedJCOutward.id) !== String(jcId) || !isInwardModalOpen)) {
+          // Special case for inward - needs fetchInwardItems
+          setSelectedJCOutward(jc);
+          setInwardFormData(prev => ({
+            ...prev,
+            receivedQty: jc.dispatch_qty || jc.planned_qty,
+            acceptedQty: jc.dispatch_qty || jc.planned_qty,
+            inwardItems: [],
+            vendorInvoice: null
+          }));
+          fetchInwardItems(jc.id);
+          setIsInwardModalOpen(true);
+        }
       }
-    } else if (!isProductionEntryPath && showProductionEntry) {
-      setShowProductionEntry(false);
-      setSelectedJC(null);
+    }
+
+    // Reset modals if path doesn't match
+    if (location.pathname === '/job-card' || location.pathname === '/job-card/') {
+      if (isModalOpen) setIsModalOpen(false);
+      if (viewingJobCard) setViewingJobCard(null);
+      if (isOutwardModalOpen) setIsOutwardModalOpen(false);
+      if (isInwardModalOpen) setIsInwardModalOpen(false);
+      if (showProductionEntry) {
+        setShowProductionEntry(false);
+        setSelectedJC(null);
+      }
     }
   }, [location.pathname, searchParams, jobCards]);
 
@@ -3409,7 +3457,7 @@ const JobCard = () => {
 
       if (response.ok) {
         successToast('Outward Challan created successfully');
-        setIsOutwardModalOpen(false);
+        navigate('/job-card');
         fetchJobCards();
       } else {
         errorToast('Failed to create outward challan');
@@ -3455,7 +3503,7 @@ const JobCard = () => {
         // Also update the job card status to completed if everything is received
         await handleUpdateStatus(selectedJCOutward, 'COMPLETED');
         successToast('Vendor Receipt recorded successfully');
-        setIsInwardModalOpen(false);
+        navigate('/job-card');
         fetchJobCards();
       } else {
         errorToast('Failed to record vendor receipt');
@@ -3568,7 +3616,7 @@ const JobCard = () => {
 
       if (response.ok) {
         successToast(`Job Card ${isEdit ? 'updated' : 'created'} successfully`);
-        setIsModalOpen(false);
+        navigate('/job-card');
         fetchJobCards();
       } else {
         const error = await response.json();
@@ -3613,7 +3661,7 @@ const JobCard = () => {
                 Reset Queue
               </button>
               <button
-                onClick={handleCreateNew}
+                onClick={() => navigate('/job-card/add')}
                 className="flex items-center gap-2  p-2 bg-slate-900 text-white rounded  hover:bg-slate-800 transition-all  text-xs shadow-lg shadow-slate-200"
               >
                 <Play className="w-4 h-4" />
@@ -3904,7 +3952,7 @@ const JobCard = () => {
                         <div className="flex items-center justify-end gap-1">
                           {/* View Details - Always Show */}
                           <button
-                            onClick={() => setViewingJobCard(jc)}
+                            onClick={() => navigate(`/job-card/view?id=${jc.id}`)}
                             className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded transition-all"
                             title="View Details"
                           >
@@ -3939,7 +3987,7 @@ const JobCard = () => {
                           {(jc.execution_type === 'Outsource' || jc.execution_type === 'Subcontract' || jc.execution_type === 'Sub-Contract' || jc.outward_challan_id) && (
                             <>
                               <button
-                                onClick={() => handleOutwardChallan(jc)}
+                                onClick={() => navigate(`/job-card/outward?id=${jc.id}`)}
                                 className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-all"
                                 title="Outward Challan"
                               >
@@ -3947,18 +3995,7 @@ const JobCard = () => {
                               </button>
 
                               <button
-                                onClick={() => {
-                                  setSelectedJCOutward(jc);
-                                  setInwardFormData(prev => ({
-                                    ...prev,
-                                    receivedQty: jc.dispatch_qty || jc.planned_qty,
-                                    acceptedQty: jc.dispatch_qty || jc.planned_qty,
-                                    inwardItems: [], // Reset while fetching
-                                    vendorInvoice: null
-                                  }));
-                                  fetchInwardItems(jc.id);
-                                  setIsInwardModalOpen(true);
-                                }}
+                                onClick={() => navigate(`/job-card/inward?id=${jc.id}`)}
                                 className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded transition-all"
                                 title="Vendor Receipt (Inward)"
                               >
@@ -3969,7 +4006,7 @@ const JobCard = () => {
 
                           {/* Edit & Delete - Always Show */}
                           <button
-                            onClick={() => handleEdit(jc)}
+                            onClick={() => navigate(`/job-card/edit?id=${jc.id}`)}
                             className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-all"
                             title="Edit"
                           >
@@ -4038,7 +4075,7 @@ const JobCard = () => {
       {/* Job Card View Modal */}
       <Modal
         isOpen={!!viewingJobCard}
-        onClose={() => setViewingJobCard(null)}
+        onClose={() => navigate('/job-card')}
         title="Operational Intelligence"
         maxWidth="max-w-2xl"
       >
@@ -4167,7 +4204,7 @@ const JobCard = () => {
             {/* Action Buttons */}
             <div className="flex justify-between items-center pt-4 border-t border-slate-100">
               <button
-                onClick={() => setViewingJobCard(null)}
+                onClick={() => navigate('/job-card')}
                 className="px-4 py-2 text-sm text-slate-600 hover:text-slate-900 transition-colors"
               >
                 ✕ Terminate View
@@ -4176,7 +4213,7 @@ const JobCard = () => {
                 <button
                   onClick={() => {
                     handleUpdateStatus(viewingJobCard.id, 'COMPLETED');
-                    setViewingJobCard(null);
+                    navigate('/job-card');
                   }}
                   className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded  hover:shadow-lg transition-all font-medium"
                 >
@@ -4192,7 +4229,7 @@ const JobCard = () => {
       {/* Edit Job Card Modal */}
       <Modal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={() => navigate('/job-card')}
         title={`${formData.id ? "Edit Job Card" : "Create Job Card"}${formData.jcNumber ? `: ${formData.jcNumber}` : ''}${selectedWO ? ` - ${selectedWO.wo_number}` : ''}`}
         size="4xl"
       >
@@ -4490,7 +4527,7 @@ const JobCard = () => {
           <div className="flex justify-end gap-3 pt-6 border-t border-slate-100 mt-4">
             <button
               type="button"
-              onClick={() => setIsModalOpen(false)}
+              onClick={() => navigate('/job-card')}
               className="px-6 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 border border-slate-200 rounded-md transition-all"
             >
               Discard Changes
@@ -4508,7 +4545,7 @@ const JobCard = () => {
       {/* Existing Modals */}
       <Modal
         isOpen={isOutwardModalOpen}
-        onClose={() => setIsOutwardModalOpen(false)}
+        onClose={() => navigate('/job-card')}
         title="Outward Challan"
         size="2xl"
       >
@@ -4688,7 +4725,7 @@ const JobCard = () => {
 
           <div className="flex justify-end items-center gap-2 pt-4 border-t border-slate-100">
             <button
-              onClick={() => setIsOutwardModalOpen(false)}
+              onClick={() => navigate('/job-card')}
               className="px-4 py-2 text-xs  text-slate-500 hover:text-slate-700  "
             >
               Cancel
@@ -4706,7 +4743,7 @@ const JobCard = () => {
 
       <Modal
         isOpen={isInwardModalOpen}
-        onClose={() => setIsInwardModalOpen(false)}
+        onClose={() => navigate('/job-card')}
         title="Vendor Receipt (Inward)"
         size="xl"
       >
@@ -4874,7 +4911,7 @@ const JobCard = () => {
 
           <div className="flex justify-end items-center gap-2 pt-4 border-t border-slate-100">
             <button
-              onClick={() => setIsInwardModalOpen(false)}
+              onClick={() => navigate('/job-card')}
               className="px-4 py-2 text-xs  text-slate-500 hover:text-slate-700  "
             >
               Cancel

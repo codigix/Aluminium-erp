@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { DataTable } from '../components/ui.jsx';
 import PaymentReceivedModal from '../components/PaymentReceivedModal.jsx';
 import { errorToast } from '../utils/toast';
@@ -23,20 +23,48 @@ const formatDate = (date) => {
 
 const PaymentReceived = () => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState(null);
 
+  // URL Synchronization
+  useEffect(() => {
+    const path = location.pathname;
+    const segments = path.split('/').filter(Boolean);
+    const id = searchParams.get('id');
+
+    if (segments.includes('add')) {
+      setSelectedInvoice(null);
+      setIsPaymentModalOpen(true);
+    } else if (segments.includes('record') && id && payments.length > 0) {
+      const row = payments.find(p => p.id === parseInt(id));
+      if (row) {
+        setSelectedInvoice({
+          ...row,
+          customer_id: row.company_id,
+          customer_name: row.company_name,
+          sales_order_id: row.id,
+          sales_order_source: row.source,
+          po_number: row.so_number,
+          outstanding: row.outstanding,
+          already_paid: row.paid_amount,
+          total_amount: row.total_amount
+        });
+        setIsPaymentModalOpen(true);
+      }
+    } else if (!path.includes('/add') && !path.includes('/record')) {
+      setIsPaymentModalOpen(false);
+      setSelectedInvoice(null);
+    }
+  }, [location.pathname, searchParams, payments]);
+
   useEffect(() => {
     fetchOutstandingInvoices();
-    
-    if (location.state?.selectedInvoice) {
-      setSelectedInvoice(location.state.selectedInvoice);
-      setIsPaymentModalOpen(true);
-    }
-  }, [location.state]);
+  }, []);
 
   const fetchOutstandingInvoices = async () => {
     try {
@@ -101,18 +129,7 @@ const PaymentReceived = () => {
         <div className="flex justify-end gap-2">
           <button
             onClick={() => {
-              setSelectedInvoice({
-                ...row,
-                customer_id: row.company_id,
-                customer_name: row.company_name,
-                sales_order_id: row.id,
-                sales_order_source: row.source,
-                po_number: row.so_number,
-                outstanding: row.outstanding,
-                already_paid: row.paid_amount,
-                total_amount: row.total_amount
-              });
-              setIsPaymentModalOpen(true);
+              navigate(`/payment-received/record?id=${row.id}`);
             }}
             className="flex items-center gap-1 p-1.5 bg-emerald-600 text-white rounded  text-xs  hover:bg-emerald-700 transition-all shadow-sm"
           >
@@ -165,8 +182,7 @@ const PaymentReceived = () => {
 
           <button 
             onClick={() => {
-              setSelectedInvoice(null);
-              setIsPaymentModalOpen(true);
+              navigate('/payment-received/add');
             }}
             className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded text-xs  hover:bg-emerald-700 transition-all "
           >
@@ -191,8 +207,7 @@ const PaymentReceived = () => {
       <PaymentReceivedModal
         isOpen={isPaymentModalOpen}
         onClose={() => {
-          setIsPaymentModalOpen(false);
-          setSelectedInvoice(null);
+          navigate('/payment-received');
         }}
         invoice={selectedInvoice}
         onSuccess={handlePaymentSuccess}

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { Card, DataTable, Modal, FormControl } from '../components/ui.jsx';
 import { Beaker, Clock, Inbox, Search, CheckCircle2, Eye, Edit, Trash2, ListTodo, AlertTriangle, RefreshCw, X, CheckCircle, XCircle, ShieldCheck, Mail, Paperclip, Send, Database, ShoppingCart, Truck } from 'lucide-react';
 import Swal from 'sweetalert2';
@@ -17,6 +18,9 @@ const qcStatusColors = {
 };
 
 const IncomingQC = ({ initialTab = 'incoming' }) => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState(initialTab);
   const [qcInspections, setQcInspections] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -41,6 +45,38 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
     failQuantity: '',
     items: []
   });
+
+  // URL Synchronization
+  useEffect(() => {
+    const path = location.pathname;
+    const segments = path.split('/').filter(Boolean);
+    const id = searchParams.get('id');
+
+    // Tab Sync
+    if (segments[1] === 'in-progress') setActiveTab('in-progress');
+    else if (segments[1] === 'final') setActiveTab('final');
+    else setActiveTab('incoming');
+
+    // Modal Sync
+    if (id && qcInspections.length > 0) {
+      const qc = qcInspections.find(q => q.id === parseInt(id));
+      if (qc) {
+        if (segments.includes('view')) {
+          setSelectedQC(qc);
+          setShowViewModal(true);
+        } else if (segments.includes('edit')) {
+          handleEditQC(qc);
+        } else if (segments.includes('email')) {
+          setSelectedQC(qc);
+          openEmailModal(qc);
+        }
+      }
+    } else {
+      setShowViewModal(false);
+      setShowEditModal(false);
+      setShowEmailModal(false);
+    }
+  }, [location.pathname, searchParams, qcInspections]);
 
   useEffect(() => {
     setActiveTab(initialTab);
@@ -103,11 +139,18 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
   }, [fetchQCInspections, fetchStats]);
 
   const handleViewQC = (qc) => {
-    setSelectedQC(qc);
-    setShowViewModal(true);
+    const tabPath = activeTab === 'incoming' ? '/incoming-qc' : `/incoming-qc/${activeTab}`;
+    navigate(`${tabPath}/view?id=${qc.id}`);
   };
 
   const handleEditQC = (qc) => {
+    const tabPath = activeTab === 'incoming' ? '/incoming-qc' : `/incoming-qc/${activeTab}`;
+    // If we're already on the edit path (e.g. from URL sync), don't navigate again
+    if (!location.pathname.includes('/edit')) {
+      navigate(`${tabPath}/edit?id=${qc.id}`);
+      return;
+    }
+    
     setSelectedQC(qc);
     const items = (qc.items_detail || []).map(item => ({
       ...item,
@@ -264,6 +307,12 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
   };
 
   const openEmailModal = async (qc) => {
+    const tabPath = activeTab === 'incoming' ? '/incoming-qc' : `/incoming-qc/${activeTab}`;
+    if (!location.pathname.includes('/email')) {
+      navigate(`${tabPath}/email?id=${qc.id}`);
+      return;
+    }
+
     try {
       setSelectedQC(qc);
       const shortageItems = (qc.items_detail || []).filter(item => (parseFloat(item.received_qty) || 0) > (parseFloat(item.accepted_qty) || 0));
@@ -748,7 +797,10 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
         {tabs.map((tab) => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => {
+              const tabPath = tab.id === 'incoming' ? '/incoming-qc' : `/incoming-qc/${tab.id}`;
+              navigate(tabPath);
+            }}
             className={`flex items-center gap-2  p-2  text-sm  transition-all duration-200 rounded  ${
               activeTab === tab.id
                 ? 'bg-white text-slate-900 '
@@ -767,7 +819,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
 
       <Modal
         isOpen={showViewModal}
-        onClose={() => setShowViewModal(false)}
+        onClose={() => navigate(activeTab === 'incoming' ? '/incoming-qc' : `/incoming-qc/${activeTab}`)}
         title={`Inspection Details - GRN-${String(selectedQC?.grn_id).padStart(4, '0')}`}
         size="6xl"
       >
@@ -907,7 +959,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
 
             <div className="flex justify-end pt-4 border-t border-slate-50">
               <button
-                onClick={() => setShowViewModal(false)}
+                onClick={() => navigate(activeTab === 'incoming' ? '/incoming-qc' : `/incoming-qc/${activeTab}`)}
                 className="px-8 py-2.5 bg-slate-900 text-white rounded  text-xs  hover:bg-slate-800 transition-all shadow-lg shadow-slate-200 active:scale-95"
               >
                 Close Details
@@ -919,7 +971,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
 
       <Modal
         isOpen={showEditModal}
-        onClose={() => setShowEditModal(false)}
+        onClose={() => navigate(activeTab === 'incoming' ? '/incoming-qc' : `/incoming-qc/${activeTab}`)}
         title="QUALITY CONTROL INSPECTION"
         size="6xl"
       >
@@ -1103,7 +1155,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
             <div className="flex gap-2">
               <button
                 type="button"
-                onClick={() => setShowEditModal(false)}
+                onClick={() => navigate(activeTab === 'incoming' ? '/incoming-qc' : `/incoming-qc/${activeTab}`)}
                 className="px-8 py-2.5 bg-white border border-slate-200 text-slate-600 rounded  text-xs  hover:bg-slate-50 transition-all active:scale-95"
               >
                 CANCEL
@@ -1135,7 +1187,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
                 </div>
               </div>
               <button 
-                onClick={() => setShowEmailModal(false)}
+                onClick={() => navigate(activeTab === 'incoming' ? '/incoming-qc' : `/incoming-qc/${activeTab}`)}
                 className="p-2 hover:bg-slate-100 rounded  transition-colors text-slate-400"
               >
                 <X className="w-3 h-3" />
@@ -1199,7 +1251,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
               <div className="flex gap-2 justify-end pt-2">
                 <button
                   type="button"
-                  onClick={() => setShowEmailModal(false)}
+                  onClick={() => navigate(activeTab === 'incoming' ? '/incoming-qc' : `/incoming-qc/${activeTab}`)}
                   className="p-2.5 border border-slate-200 text-slate-600 rounded  text-sm  hover:bg-slate-50 transition-all "
                 >
                   Cancel

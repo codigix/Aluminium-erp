@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { DataTable } from '../components/ui.jsx';
 import { errorToast, successToast } from '../utils/toast';
 import SendEmailModal from '../components/SendEmailModal.jsx';
@@ -21,12 +22,33 @@ const formatDate = (date) => {
 };
 
 const PaymentHistory = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState(null);
   const [emailData, setEmailData] = useState(null);
+
+  // URL Synchronization
+  useEffect(() => {
+    const path = location.pathname;
+    const segments = path.split('/').filter(Boolean);
+    const id = searchParams.get('id');
+
+    if (segments.includes('email') && id && history.length > 0) {
+      const payment = history.find(p => p.id === parseInt(id));
+      if (payment) {
+        openEmailModal(payment);
+      }
+    } else if (!path.includes('/email')) {
+      setShowEmailModal(false);
+      setSelectedPayment(null);
+      setEmailData(null);
+    }
+  }, [location.pathname, searchParams, history]);
 
   useEffect(() => {
     fetchPaymentHistory();
@@ -80,6 +102,11 @@ const PaymentHistory = () => {
   };
 
   const openEmailModal = (payment) => {
+    if (!location.pathname.includes('/email')) {
+      navigate(`/payment-history/email?id=${payment.id}`);
+      return;
+    }
+
     setSelectedPayment(payment);
     setEmailData({
       to: payment.vendor_email || '',
@@ -108,7 +135,7 @@ const PaymentHistory = () => {
       }
 
       successToast('Payment voucher sent to vendor email');
-      setShowEmailModal(false);
+      navigate('/payment-history');
     } catch (error) {
       console.error('Error sending email:', error);
       errorToast(error.message || 'Failed to send email');
@@ -239,7 +266,7 @@ const PaymentHistory = () => {
 
       <SendEmailModal
         isOpen={showEmailModal}
-        onClose={() => setShowEmailModal(false)}
+        onClose={() => navigate('/payment-history')}
         onSend={handleSendEmail}
         data={emailData}
         title="Send Receipt to Vendor"
