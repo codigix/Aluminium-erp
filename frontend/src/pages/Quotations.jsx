@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useLocation, useNavigate } from 'react-router-dom';
 import { Card, DataTable, Modal, SearchableSelect, MultiSelect } from '../components/ui.jsx';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
 import { 
@@ -71,6 +71,8 @@ const daysValid = (validUntil) => {
 
 const Quotations = () => {
   const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('sent');
   const [quotations, setQuotations] = useState([]);
   const [rawRfqs, setRawRfqs] = useState([]);
@@ -184,13 +186,65 @@ const Quotations = () => {
   };
 
   useEffect(() => {
+    const path = location.pathname;
+    
+    if (path === '/quotations/request') {
+      setActiveTab('sent');
+      if (!showCreateModal) {
+        if (!location.state?.fromRFQ) {
+          setFormData({
+            vendorId: '',
+            vendorIds: [],
+            salesOrderId: '',
+            rfq_id: null,
+            validUntil: '',
+            notes: '',
+            items: [{ drawing_no: '', material_name: '', material_type: '', quantity: 0, uom: 'NOS', unit_rate: 0 }]
+          });
+        }
+        setShowCreateModal(true);
+      }
+    } else if (path === '/quotations/record') {
+      setActiveTab('received');
+      if (!showCreateModal) {
+        if (!location.state?.fromRFQ) {
+          setRecordData({
+            projectId: '',
+            vendorId: '',
+            quotationId: '',
+            amount: 0,
+            validUntil: '',
+            items: [],
+            notes: '',
+            recordFile: null
+          });
+        }
+        setShowCreateModal(true);
+      }
+    } else if (path === '/quotations/received') {
+      setActiveTab('received');
+      if (showCreateModal) {
+        setShowCreateModal(false);
+      }
+      return;
+    } else if (path === '/quotations') {
+      if (showCreateModal) {
+        setShowCreateModal(false);
+      }
+      if (activeTab !== 'sent') {
+        setActiveTab('sent');
+      }
+    }
+  }, [location.pathname]);
+
+  useEffect(() => {
     const mrId = searchParams.get('mr');
     const rfqId = searchParams.get('rfq');
 
     if (mrId && materialRequests.length > 0) {
       handleSalesOrderChange({ target: { value: `MR-${mrId}` } });
-      setShowCreateModal(true);
       setSearchParams({});
+      navigate('/quotations/request', { state: { fromRFQ: true }, replace: true });
     } else if (rfqId && rawRfqs.length > 0) {
       const rfq = rawRfqs.find(r => String(r.id) === String(rfqId));
       if (rfq) {
@@ -782,7 +836,7 @@ const Quotations = () => {
       }
 
       successToast(`Successfully created RFQs for ${formData.vendorIds.length} vendor(s)`);
-      setShowCreateModal(false);
+      navigate('/quotations');
       setFormData({
         vendorId: '',
         vendorIds: [],
@@ -859,7 +913,7 @@ const Quotations = () => {
       }
 
       successToast('Quote details recorded successfully');
-      setShowCreateModal(false);
+      navigate('/quotations');
       setRecordData({ projectId: '', vendorId: '', quotationId: '', amount: 0, validUntil: '', items: [], notes: '', recordFile: null });
       fetchQuotations();
       fetchStats();
@@ -1038,8 +1092,7 @@ const Quotations = () => {
       notes: q.notes || `Response to ${q.quote_number}`,
       recordFile: null
     });
-    setActiveTab('received');
-    setShowCreateModal(true);
+    navigate('/quotations/record', { state: { fromRFQ: true } });
   };
 
   const handleSendEmail = async (e) => {
@@ -1176,7 +1229,7 @@ const Quotations = () => {
     });
 
     // 2. Open create modal
-    setShowCreateModal(true);
+    navigate('/quotations/request', { state: { fromRFQ: true } });
   };
 
   const displayQuotations = useMemo(() => {
@@ -1465,27 +1518,10 @@ const Quotations = () => {
           <button
             onClick={() => {
               if (activeTab === 'sent') {
-                setFormData({
-                  vendorId: '',
-                  salesOrderId: '',
-                  rfq_id: null,
-                  validUntil: '',
-                  notes: '',
-                  items: [{ drawing_no: '', material_name: '', material_type: '', quantity: 0, uom: 'NOS', unit_rate: 0 }]
-                });
+                navigate('/quotations/request');
               } else {
-                setRecordData({
-                  projectId: '',
-                  vendorId: '',
-                  quotationId: '',
-                  amount: 0,
-                  validUntil: '',
-                  items: [],
-                  notes: '',
-                  recordFile: null
-                });
+                navigate('/quotations/record');
               }
-              setShowCreateModal(true);
             }}
             className="flex items-center gap-2  p-2  bg-blue-600 text-white rounded  text-sm  hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95"
           >
@@ -1498,7 +1534,7 @@ const Quotations = () => {
       <div className="flex items-center justify-between">
         <div className="flex gap-2 p-1 bg-slate-50 rounded  w-fit border border-slate-100">
           <button
-            onClick={() => setActiveTab('sent')}
+            onClick={() => navigate('/quotations')}
             className={`p-2 rounded  text-sm  transition ${
               activeTab === 'sent'
                 ? 'bg-white text-blue-600  border border-slate-100'
@@ -1509,7 +1545,7 @@ const Quotations = () => {
           </button>
           
           <button
-            onClick={() => setActiveTab('received')}
+            onClick={() => navigate('/quotations/received')}
             className={`p-2 rounded  text-sm  transition-all ${
               activeTab === 'received'
                 ? 'bg-white text-blue-600  border border-slate-100'
@@ -1628,7 +1664,7 @@ const Quotations = () => {
                   <p className="text-xs text-slate-500 mt-1">Record details from vendor response</p>
                 )}
               </div>
-              <button onClick={() => setShowCreateModal(false)} className="text-slate-500 text-2xl leading-none">&times;</button>
+              <button onClick={() => navigate('/quotations')} className="text-slate-500 text-2xl leading-none">&times;</button>
             </div>
 
             <form onSubmit={activeTab === 'sent' ? handleCreateQuotation : handleRecordQuote} className="">
@@ -2071,7 +2107,7 @@ const Quotations = () => {
               <div className="flex gap-2 justify-end pt-4 border-t border-slate-200">
                 <button
                   type="button"
-                  onClick={() => setShowCreateModal(false)}
+                  onClick={() => navigate('/quotations')}
                   className="p-2  border border-slate-200 rounded text-xs  hover:bg-slate-50"
                 >
                   Cancel
