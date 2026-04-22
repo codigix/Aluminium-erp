@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Card, Modal, FormControl, DataTable } from '../components/ui.jsx';
 import { 
   Plus, 
@@ -40,6 +41,8 @@ const StarRating = ({ rating }) => {
 };
 
 const Suppliers = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [suppliers, setSuppliers] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -57,6 +60,55 @@ const Suppliers = () => {
     location: '',
     rating: 5.0
   });
+
+  useEffect(() => {
+    const path = location.pathname;
+    
+    if (path === '/suppliers/add') {
+      if (!showForm || editingSupplier) {
+        setFormData({
+          vendorName: '',
+          gstin: '',
+          groupName: '',
+          leadTime: '',
+          category: 'Material Supplier',
+          status: 'ACTIVE',
+          email: '',
+          phone: '',
+          location: '',
+          rating: 5.0
+        });
+        setEditingSupplier(null);
+        setShowForm(true);
+      }
+    } else if (path.startsWith('/suppliers/edit/')) {
+      const id = path.split('/').pop();
+      const supplier = suppliers.find(s => s.id.toString() === id);
+      if (supplier) {
+        if (!showForm || editingSupplier?.id !== supplier.id) {
+          setEditingSupplier(supplier);
+          setFormData({
+            vendorName: supplier.vendor_name || '',
+            gstin: supplier.gstin || '',
+            groupName: supplier.group_name || '',
+            leadTime: supplier.lead_time || '',
+            category: supplier.category || 'Material Supplier',
+            status: supplier.status || 'ACTIVE',
+            email: supplier.email || '',
+            phone: supplier.phone || '',
+            location: supplier.location || '',
+            rating: supplier.rating || 5.0
+          });
+          setShowForm(true);
+        }
+      }
+    } else if (path === '/suppliers') {
+      if (showForm) {
+        setShowForm(false);
+        setEditingSupplier(null);
+      }
+    }
+  }, [location.pathname, suppliers]);
 
   useEffect(() => {
     fetchSuppliers();
@@ -128,7 +180,7 @@ const Suppliers = () => {
       if (!response.ok) throw new Error(`Failed to ${editingSupplier ? 'update' : 'create'} supplier`);
 
       successToast(`Supplier ${editingSupplier ? 'updated' : 'added'} successfully`);
-      resetForm();
+      navigate('/suppliers');
       fetchSuppliers();
       fetchStats();
     } catch (error) {
@@ -137,37 +189,11 @@ const Suppliers = () => {
   };
 
   const resetForm = () => {
-    setFormData({
-      vendorName: '',
-      gstin: '',
-      groupName: '',
-      leadTime: '',
-      category: 'Material Supplier',
-      status: 'ACTIVE',
-      email: '',
-      phone: '',
-      location: '',
-      rating: 5.0
-    });
-    setEditingSupplier(null);
-    setShowForm(false);
+    navigate('/suppliers');
   };
 
   const handleEdit = (supplier) => {
-    setEditingSupplier(supplier);
-    setFormData({
-      vendorName: supplier.vendor_name || '',
-      gstin: supplier.gstin || '',
-      groupName: supplier.group_name || '',
-      leadTime: supplier.lead_time || '',
-      category: supplier.category || 'Material Supplier',
-      status: supplier.status || 'ACTIVE',
-      email: supplier.email || '',
-      phone: supplier.phone || '',
-      location: supplier.location || '',
-      rating: supplier.rating || 5.0
-    });
-    setShowForm(true);
+    navigate(`/suppliers/edit/${supplier.id}`);
   };
 
   const handleDelete = async (id, name) => {
@@ -285,7 +311,7 @@ const Suppliers = () => {
           <p className="text-slate-500 text-xs mt-1">Manage your supplier network and relationships</p>
         </div>
         <button
-          onClick={() => setShowForm(true)}
+          onClick={() => navigate('/suppliers/add')}
           className="flex items-center justify-center gap-2 p-2 bg-indigo-600 text-white rounded  text-xs  hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all active:scale-95"
         >
           <Plus size={15} />

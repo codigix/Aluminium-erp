@@ -148,17 +148,23 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
         <div className="flex items-center gap-2">
           <button
             onClick={onBack}
-            className="w-4 h-4 p-2 flex items-center justify-center rounded  bg-blue-50 text-blue-600 hover:bg-blue-100 transition-all  border border-blue-100"
+            className="p-2.5 flex items-center justify-center rounded-md bg-white text-slate-600 hover:text-blue-600 hover:bg-blue-50 transition-all border border-slate-200 active:scale-95 shadow-sm"
+            title="Back to List"
           >
-            <ArrowLeft className="w-4 h-4" />
+            <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
-            <div className="flex items-center gap-2 text-xs  text-slate-400   ">
+            <div className="flex items-center gap-2 text-xs text-slate-400">
               <span>Buying</span>
-              <ChevronRight className="w-2 h-2" />
-              <span>Purchase Orders</span>
-              <ChevronRight className="w-2 h-2" />
-              <span className="text-blue-600">{po.po_number}</span>
+              <ChevronRight className="w-2.5 h-2.5" />
+              <span 
+                className="cursor-pointer hover:text-blue-600 transition-colors"
+                onClick={onBack}
+              >
+                Purchase Orders
+              </span>
+              <ChevronRight className="w-2.5 h-2.5" />
+              <span className="text-blue-600 font-medium">{po.po_number}</span>
             </div>
             <div className="flex items-center gap-2 mt-1">
               <h1 className="text-xl  text-slate-900 ">{po.po_number}</h1>

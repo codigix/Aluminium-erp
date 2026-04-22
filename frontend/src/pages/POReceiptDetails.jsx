@@ -129,7 +129,18 @@ const POReceiptDetails = () => {
     <div className="min-h-screen bg-slate-50 p-8">
       <div className="max-w-4xl mx-auto">
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-xl text-slate-900">PO Receipt Details</h1>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => window.history.back()}
+              className="p-2 flex items-center justify-center rounded-md bg-white text-slate-600 hover:text-blue-600 hover:bg-blue-50 transition-all border border-slate-200 active:scale-95 shadow-sm"
+              title="Back"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+            </button>
+            <h1 className="text-xl text-slate-900">PO Receipt Details</h1>
+          </div>
           <button
             onClick={() => window.close()}
             className="p-2  border border-slate-200 rounded text-xs  hover:bg-slate-50"

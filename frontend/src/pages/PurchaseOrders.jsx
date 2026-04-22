@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Card, DataTable, SearchableSelect } from '../components/ui.jsx';
 import PurchaseOrderDetail from './PurchaseOrderDetail.jsx';
 import Swal from 'sweetalert2';
@@ -44,6 +45,8 @@ const formatCurrency = (value, currency = 'INR') => {
 };
 
 const PurchaseOrders = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [pos, setPos] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -54,6 +57,63 @@ const PurchaseOrders = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
+
+  useEffect(() => {
+    const path = location.pathname;
+    
+    if (path === '/purchase-orders/add') {
+      if (!showCreateModal) {
+        setFormData({
+          quotationId: '',
+          projectName: '',
+          quoteNumber: '',
+          poNumber: '',
+          vendorName: '',
+          expectedDeliveryDate: '',
+          notes: ''
+        });
+        setShowCreateModal(true);
+        setShowManualCreateModal(false);
+        setViewMode('list');
+      }
+    } else if (path === '/purchase-orders/manual-add') {
+      if (!showManualCreateModal) {
+        setManualFormData({ id: null, vendorId: '', expectedDeliveryDate: '', notes: '', currency: 'INR (Indian Rupee)', items: [] });
+        setShowManualCreateModal(true);
+        setShowCreateModal(false);
+        setViewMode('list');
+      }
+    } else if (path.startsWith('/purchase-orders/edit-manual/')) {
+      const id = path.split('/').pop();
+      const po = pos.find(p => p.id.toString() === id);
+      if (po && po.status === 'PO_REQUEST') {
+        if (!showManualCreateModal || manualFormData.id !== po.id) {
+          handleEditPO(po.id);
+          setShowManualCreateModal(true);
+          setShowCreateModal(false);
+          setViewMode('list');
+        }
+      }
+    } else if (path.startsWith('/purchase-orders/view/')) {
+      const id = path.split('/').pop();
+      const po = pos.find(p => p.id.toString() === id);
+      if (po) {
+        if (viewMode !== 'detail' || selectedPO?.id !== po.id) {
+          handleViewPODetail(po.id);
+          setShowCreateModal(false);
+          setShowManualCreateModal(false);
+        }
+      }
+    } else if (path === '/purchase-orders') {
+      if (showCreateModal) setShowCreateModal(false);
+      if (showManualCreateModal) setShowManualCreateModal(false);
+      if (viewMode === 'detail') {
+        setViewMode('list');
+        setSelectedPO(null);
+      }
+    }
+  }, [location.pathname, pos]);
+
   const [emailData, setEmailData] = useState({
     to: '',
     subject: '',
@@ -877,7 +937,7 @@ const PurchaseOrders = () => {
             </button>
           )}
           <button
-            onClick={() => handleViewPODetail(row.id)}
+            onClick={() => navigate(`/purchase-orders/view/${row.id}`)}
             className="p-1 text-blue-500 hover:bg-blue-50 rounded  transition-all active:scale-90"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -913,7 +973,13 @@ const PurchaseOrders = () => {
             </button>
           )}
           <button
-            onClick={() => handleEditPO(row.id)}
+            onClick={() => {
+                if (row.status === 'PO_REQUEST') {
+                    navigate(`/purchase-orders/edit-manual/${row.id}`);
+                } else {
+                    handleEditPO(row.id);
+                }
+            }}
             className=" text-slate-400 hover:bg-slate-50 hover:text-slate-600   transition-all   active:scale-90"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -948,7 +1014,7 @@ const PurchaseOrders = () => {
     return (
       <PurchaseOrderDetail 
         po={selectedPO} 
-        onBack={() => setViewMode('list')} 
+        onBack={() => navigate('/purchase-orders')} 
         onRefresh={() => {
           handleViewPODetail(selectedPO.id);
           fetchPOs();
@@ -1001,10 +1067,7 @@ const PurchaseOrders = () => {
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
           </button>
           <button
-            onClick={() => {
-              setManualFormData({ id: null, vendorId: '', expectedDeliveryDate: '', notes: '', currency: 'INR (Indian Rupee)', items: [] });
-              setShowManualCreateModal(true);
-            }}
+            onClick={() => navigate('/purchase-orders/manual-add')}
             className="flex items-center gap-2 p-2  bg-blue-600 text-white rounded text-xs  hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" /></svg>
@@ -1107,10 +1170,7 @@ const PurchaseOrders = () => {
             <div className="flex justify-between items-center p-2 border-b border-slate-50">
               <h2 className="text-xl  text-slate-800">{manualFormData.id ? 'Edit Purchase Order Request' : 'Create New Purchase Order'}</h2>
               <button 
-                onClick={() => {
-                  setShowManualCreateModal(false);
-                  setManualFormData({ id: null, vendorId: '', expectedDeliveryDate: '', notes: '', currency: 'INR (Indian Rupee)', items: [] });
-                }}
+                onClick={() => navigate('/purchase-orders')}
                 className="p-2 hover:bg-slate-100 rounded transition-colors text-slate-400"
               >
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>

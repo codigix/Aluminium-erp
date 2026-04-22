@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Card, DataTable, StatusBadge, Modal, FormControl } from '../components/ui.jsx';
 import { 
   Plus, 
@@ -50,6 +50,8 @@ const formatCurrency = (value, currency = 'INR') => {
 };
 
 const POReceipts = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [receipts, setReceipts] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -67,6 +69,73 @@ const POReceipts = () => {
   const [stockBalances, setStockBalances] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+
+  useEffect(() => {
+    const path = location.pathname;
+    
+    if (path === '/purchase-receipts/add') {
+      if (!showCreateModal) {
+        setFormData({
+          poId: '',
+          vendorName: '',
+          vendorId: '',
+          receiptDate: new Date().toISOString().split('T')[0],
+          receivedQuantity: 0,
+          totalValuation: 0,
+          notes: '',
+          items: []
+        });
+        setShowCreateModal(true);
+        setShowEditModal(false);
+        setShowViewModal(false);
+      }
+    } else if (path.startsWith('/purchase-receipts/view/')) {
+      const id = path.split('/').pop();
+      if (!showViewModal || selectedReceiptForView?.id?.toString() !== id) {
+        handleViewReceiptDetail(id);
+        setShowCreateModal(false);
+        setShowEditModal(false);
+      }
+    } else if (path.startsWith('/purchase-receipts/edit/')) {
+      const id = path.split('/').pop();
+      if (!showEditModal || selectedReceipt?.id?.toString() !== id) {
+        handleEditReceipt(id);
+        setShowCreateModal(false);
+        setShowViewModal(false);
+      }
+    } else if (path === '/purchase-receipts/stocks') {
+      if (activeTab !== 'stocks') {
+        setActiveTab('stocks');
+        setShowCreateModal(false);
+        setShowEditModal(false);
+        setShowViewModal(false);
+      }
+    } else if (path === '/purchase-receipts') {
+      if (showCreateModal) setShowCreateModal(false);
+      if (showEditModal) setShowEditModal(false);
+      if (showViewModal) {
+        setShowViewModal(false);
+        setSelectedReceiptForView(null);
+      }
+      if (activeTab !== 'grn') setActiveTab('grn');
+    }
+  }, [location.pathname, receipts]);
+
+  const handleViewReceiptDetail = async (receiptId) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/po-receipts/${receiptId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setSelectedReceiptForView(data);
+        setShowViewModal(true);
+      }
+    } catch (error) {
+      errorToast('Failed to load receipt details');
+    }
+  };
 
   const [formData, setFormData] = useState({
     poId: '',
@@ -576,21 +645,7 @@ const POReceipts = () => {
       render: (_, row) => (
         <div className="flex justify-center gap-2" onClick={(e) => e.stopPropagation()}>
           <button 
-            onClick={async () => {
-              try {
-                const token = localStorage.getItem('authToken');
-                const response = await fetch(`${API_BASE}/po-receipts/${row.id}`, {
-                  headers: { 'Authorization': `Bearer ${token}` }
-                });
-                if (response.ok) {
-                  const data = await response.json();
-                  setSelectedReceiptForView(data);
-                  setShowViewModal(true);
-                }
-              } catch (error) {
-                errorToast('Failed to load receipt details');
-              }
-            }} 
+            onClick={() => navigate(`/purchase-receipts/view/${row.id}`)} 
             className="p-2 text-indigo-500 hover:bg-indigo-50 rounded  transition-all border border-indigo-50  active:scale-90"
             title="View Details"
           >
@@ -703,7 +758,7 @@ const POReceipts = () => {
             <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
           </button>
           <button
-            onClick={() => setShowCreateModal(true)}
+            onClick={() => navigate('/purchase-receipts/add')}
             className="flex items-center gap-2  p-2  bg-blue-600 text-white rounded  text-sm  hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95"
           >
             <Plus className="w-5 h-5" />
@@ -741,14 +796,14 @@ const POReceipts = () => {
       <div className="flex items-center my-5 gap-2">
         <div className="flex bg-white p-1 rounded  border border-slate-200 ">
           <button 
-            onClick={() => setActiveTab('grn')}
+            onClick={() => navigate('/purchase-receipts')}
             className={`flex items-center gap-2  p-2 rounded  text-xs  transition-all ${activeTab === 'grn' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'text-slate-400 hover:text-slate-600'}`}
           >
             <FileText className="w-4 h-4" />
             GRN Request
           </button>
           <button 
-            onClick={() => setActiveTab('stocks')}
+            onClick={() => navigate('/purchase-receipts/stocks')}
             className={`flex items-center gap-2  p-2 rounded  text-xs  transition-all ${activeTab === 'stocks' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'text-slate-400 hover:text-slate-600'}`}
           >
             <Package className="w-4 h-4" />
@@ -962,7 +1017,7 @@ const POReceipts = () => {
                 PRINT GRN
               </button>
               <button 
-                onClick={() => setShowViewModal(false)}
+                onClick={() => navigate('/purchase-receipts')}
                 className="px-8 py-2.5 bg-emerald-500 text-white rounded  text-xs  hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-100 active:scale-95"
               >
                 Close
@@ -975,7 +1030,7 @@ const POReceipts = () => {
       {/* Modal logic remains same but with updated styling if needed */}
       <Modal 
         isOpen={showCreateModal} 
-        onClose={() => setShowCreateModal(false)} 
+        onClose={() => navigate('/purchase-receipts')} 
         title="Create GRN Request"
         size="6xl"
       >
@@ -1248,7 +1303,7 @@ const POReceipts = () => {
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => setShowCreateModal(false)}
+                onClick={() => navigate('/purchase-receipts')}
                 className="p-2.5 bg-white border border-slate-200 text-slate-600 rounded  text-sm  hover:bg-slate-50 transition-all active:scale-95"
               >
                 Cancel
@@ -1265,7 +1320,7 @@ const POReceipts = () => {
         </form>
       </Modal>
 
-        <Modal isOpen={showEditModal} onClose={() => setShowEditModal(false)} title="Edit PO Receipt" size="xl">
+        <Modal isOpen={showEditModal} onClose={() => navigate('/purchase-receipts')} title="Edit PO Receipt" size="xl">
           <form onSubmit={handleUpdateReceipt} className="space-y-2">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               <FormControl label="Receipt Date *">
@@ -1313,7 +1368,7 @@ const POReceipts = () => {
             <div className="flex gap-2 justify-end pt-4 border-t border-slate-100">
               <button
                 type="button"
-                onClick={() => setShowEditModal(false)}
+                onClick={() => navigate('/purchase-receipts')}
                 className="p-2.5 border border-slate-200 rounded text-xs  text-slate-500 hover:bg-slate-50 transition-all active:scale-95"
               >
                 Cancel
