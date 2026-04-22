@@ -195,8 +195,18 @@ function App() {
   const getActiveModuleFromPath = () => {
     const path = location.pathname.replace(/\/$/, '') || '/'
     if (path === '/') return 'dashboard'
-    const modulePath = path.split('/')[1]
-    return MODULE_IDS.includes(modulePath) ? modulePath : DEFAULT_MODULE
+    
+    // Split the path and handle segments
+    const segments = path.split('/').filter(Boolean)
+    const firstSegment = segments[0]
+    
+    // Handle special cases for dash-separated module names that might have subpaths
+    // For example /item-master/add-items should map to item-master
+    if (MODULE_IDS.includes(firstSegment)) {
+      return firstSegment
+    }
+    
+    return DEFAULT_MODULE
   }
   
   const activeModule = getActiveModuleFromPath()
