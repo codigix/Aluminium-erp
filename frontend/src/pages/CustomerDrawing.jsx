@@ -19,9 +19,6 @@ const CustomerDrawing = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [uploadMode, setUploadMode] = useState('bulk'); // 'bulk' or 'manual'
   const [clientLocked, setClientLocked] = useState(false);
-  const [expandedClients, setExpandedClients] = useState({});
-  const [clientFilter, setClientFilter] = useState('ALL');
-  const [lastUploadedDrawings, setLastUploadedDrawings] = useState([]);
   
   // Revisions Modal State
   const [showRevisions, setShowRevisions] = useState(false);
@@ -31,10 +28,8 @@ const CustomerDrawing = () => {
   
   // Edit Modal State
   const [showEditModal, setShowEditModal] = useState(false);
-  const [showRequirementViewModal, setShowRequirementViewModal] = useState(false);
   const [showClientDrawingsModal, setShowClientDrawingsModal] = useState(false);
   const [viewingClient, setViewingClient] = useState(null);
-  const [selectedRequirement, setSelectedRequirement] = useState(null);
   const [modalMode, setModalMode] = useState('edit'); // 'view' or 'edit'
   const [editData, setEditData] = useState({
     id: '',
@@ -66,6 +61,9 @@ const CustomerDrawing = () => {
       render: (val, row) => (
         <div className="flex flex-col">
           <span className="font-medium text-slate-900">{val || row.company_name || '—'}</span>
+          {row.drawing_count > 0 && (
+            <span className="text-[10px] text-indigo-600 font-semibold">{row.drawing_count} Drawings</span>
+          )}
         </div>
       )
     },
@@ -97,19 +95,45 @@ const CustomerDrawing = () => {
       render: (_, row) => (
         <div className="flex items-center gap-2">
           <button 
-            onClick={() => handleViewRequirement(row)}
+            onClick={() => handleViewClientDrawings(row.client_name || row.company_name)}
             className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded transition-all"
             title="View Details"
           >
             <Eye size={15} />
           </button>
           <button 
-            onClick={() => handleSendToDesign(row)}
-            className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded transition-all"
-            title="Send to Design"
+            onClick={() => {
+              // Map requirement item to drawing structure for editing
+              const firstItem = row.original_items?.[0];
+              if (firstItem) {
+                // Find corresponding drawing from drawings database if possible, 
+                // or use the item data directly
+                const fullDrawing = drawings.find(d => d.drawing_no === firstItem.drawing_no) || {
+                  id: firstItem.id,
+                  drawing_no: firstItem.drawing_no,
+                  revision: firstItem.revision || '0',
+                  description: firstItem.description || '',
+                  client_name: row.client_name || row.company_name,
+                  qty: firstItem.quantity || 1,
+                  file_path: firstItem.file_path
+                };
+                handleEdit(fullDrawing);
+              }
+            }}
+            className="p-1.5 text-amber-600 hover:bg-amber-50 rounded transition-all"
+            title="Edit Drawing"
           >
-            <Send size={15} />
+            <Edit2 size={15} />
           </button>
+          {drawings.some(d => (d.client_name === (row.client_name || row.company_name)) && (!d.status || d.status !== 'SHARED')) && (
+            <button 
+              onClick={() => handleShareClientGroupWithDesign(row.client_name || row.company_name)}
+              className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded transition-all"
+              title="Send to Design"
+            >
+              <Send size={15} />
+            </button>
+          )}
           <button 
             onClick={() => handleDeleteRequirement(row.id)}
             className="p-1.5 text-rose-600 hover:bg-rose-50 rounded transition-all"
@@ -326,16 +350,8 @@ const CustomerDrawing = () => {
     }
   };
 
-  const toggleClientGroup = (clientName) => {
-    setExpandedClients(prev => ({
-      ...prev,
-      [clientName]: !prev[clientName]
-    }));
-  };
-
   const groupedDrawings = drawings.reduce((acc, drawing) => {
     const client = drawing.client_name || 'Unassigned';
-    if (clientFilter !== 'ALL' && client !== clientFilter) return acc;
     if (!acc[client]) acc[client] = [];
     acc[client].push(drawing);
     return acc;
@@ -355,7 +371,33 @@ const CustomerDrawing = () => {
         so.current_department === 'DESIGN_ENG' || 
         so.current_department === 'SALES'
       );
-      setRequirements(filtered);
+
+      // Group by client to avoid duplicates
+      const grouped = filtered.reduce((acc, so) => {
+        const clientName = so.client_name || so.company_name || 'Unassigned';
+        if (!acc[clientName]) {
+          acc[clientName] = {
+            ...so,
+            client_name: clientName,
+            drawing_count: 0,
+            original_items: []
+          };
+        }
+        
+        // Count items that are actual drawings (not existing items)
+        const items = so.items?.filter(item => !item.item_code) || [];
+        acc[clientName].drawing_count += items.length;
+        acc[clientName].original_items = [...acc[clientName].original_items, ...items];
+        
+        // Keep the most recent delivery date if multiple exist
+        if (so.delivery_date && (!acc[clientName].delivery_date || new Date(so.delivery_date) > new Date(acc[clientName].delivery_date))) {
+          acc[clientName].delivery_date = so.delivery_date;
+        }
+
+        return acc;
+      }, {});
+
+      setRequirements(Object.values(grouped));
     } catch (error) {
       console.error(error);
     } finally {
@@ -564,7 +606,6 @@ const CustomerDrawing = () => {
           if (result) {
             successToast(result.isExcelUpload ? `${result.count} Excel drawings imported successfully` : 'Drawing added successfully');
             formik.resetForm();
-            setLastUploadedDrawings({ clientName: values.client_name, count: result.count, timestamp: Date.now() });
           }
         } else {
           let successCount = 0;
@@ -781,7 +822,6 @@ const CustomerDrawing = () => {
       if (recentDrawings.length > 0) {
         await shareDrawingsBulkAPI(recentDrawings.map(d => d.id));
         successToast(`All ${recentDrawings.length} imported drawings sent to Design Engineer for review as a single request`);
-        setLastUploadedDrawings([]);
         setShowFormModal(false);
         fetchDrawings(searchTerm);
         fetchRequirements();
@@ -881,11 +921,6 @@ const CustomerDrawing = () => {
     }
   };
 
-  const handleViewRequirement = (requirement) => {
-    setSelectedRequirement(requirement);
-    setShowRequirementViewModal(true);
-  };
-
   const handleViewClientDrawings = (clientName) => {
     setViewingClient({
       name: clientName,
@@ -950,50 +985,6 @@ const CustomerDrawing = () => {
         fetchRequirements();
       } catch (error) {
         errorToast(error.message);
-      }
-    }
-  };
-
-  const handleDeleteClientGroup = async (clientName) => {
-    const clientDrawings = groupedDrawings[clientName];
-    const result = await Swal.fire({
-      title: 'Delete All Drawings?',
-      html: `<p>Remove all <strong>${clientDrawings.length}</strong> drawings for <strong>${clientName}</strong>?</p><p style="color: #ef4444; font-size: 0.875rem; margin-top: 8px;">This action cannot be undone.</p>`,
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonColor: '#dc2626',
-      cancelButtonColor: '#6b7280',
-      confirmButtonText: 'Yes, delete all'
-    });
-
-    if (result.isConfirmed) {
-      try {
-        const token = localStorage.getItem('authToken');
-        setLoading(true);
-        
-        const deletePromises = clientDrawings.map(drawing =>
-          fetch(`${API_BASE}/drawings/${drawing.id}`, {
-            method: 'DELETE',
-            headers: {
-              'Authorization': `Bearer ${token}`
-            }
-          })
-        );
-
-        const results = await Promise.all(deletePromises);
-        const failed = results.filter(r => !r.ok);
-
-        if (failed.length === 0) {
-          successToast(`All drawings for ${clientName} have been deleted.`);
-          fetchDrawings(searchTerm);
-        } else {
-          warningToast(`${failed.length} drawings failed to delete.`);
-          fetchDrawings(searchTerm);
-        }
-      } catch (error) {
-        errorToast(error.message);
-      } finally {
-        setLoading(false);
       }
     }
   };
@@ -1073,211 +1064,6 @@ const CustomerDrawing = () => {
             />
           </div>
         </Card>
-
-        {/* SECTION 3: CUSTOMER DRAWINGS TABLE */}
-        <Card className="">
-          <div className="border-b border-slate-50 bg-slate-50/50 flex flex-col md:flex-row md:items-center justify-between gap-2">
-            <div>
-              <h2 className="text-md  text-slate-900 flex items-center gap-2">
-                <Package className="w-5 h-5 text-indigo-600" />
-                Drawings Database
-              </h2>
-              <p className="text-xs text-slate-500 font-medium">{drawings.length} drawings | {Object.keys(groupedDrawings).length} clients</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <select 
-                className="p-2  bg-white border border-slate-200 rounded text-xs text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all appearance-none"
-                value={clientFilter}
-                onChange={(e) => setClientFilter(e.target.value)}
-              >
-                <option value="ALL">👥 All Clients</option>
-                {Object.keys(drawings.reduce((acc, d) => {
-                  if (d.client_name) acc[d.client_name] = true;
-                  return acc;
-                }, {})).sort().map(client => (
-                  <option key={client} value={client}>{client}</option>
-                ))}
-              </select>
-              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded ">
-                <button 
-                  onClick={() => {
-                    const allExpanded = Object.keys(groupedDrawings).reduce((acc, client) => {
-                      acc[client] = true;
-                      return acc;
-                    }, {});
-                    setExpandedClients(allExpanded);
-                  }}
-                  className="p-2 bg-white text-indigo-600 rounded  shadow-sm hover:bg-slate-50 transition-all active:scale-95"
-                  title="Expand All"
-                >
-                  <ChevronDown size={15} />
-                </button>
-                <button 
-                  onClick={() => setExpandedClients({})}
-                  className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-white rounded  transition-all active:scale-95"
-                  title="Collapse All"
-                >
-                  <ChevronUp size={15} />
-                </button>
-              </div>
-            </div>
-          </div>
-        
-          <div className="my-3">
-            {loading ? (
-              <div className="py-12 text-center">
-                <Loader2 className="mx-auto h-8 w-8 text-indigo-600 animate-spin mb-4" />
-                <p className="text-slate-500 font-medium">Loading drawings...</p>
-              </div>
-            ) : Object.keys(groupedDrawings).length === 0 ? (
-              <div className="py-12 text-center bg-slate-50 rounded border border-dashed border-slate-200">
-                <Package className="mx-auto h-12 w-12 text-slate-200 mb-4" />
-                <p className="text-slate-500 ">No drawings found</p>
-                <p className="text-slate-400 text-sm">Add drawings using the Client Requirement form</p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {Object.entries(groupedDrawings).map(([clientName, clientDrawings]) => (
-                  <div key={clientName} className="border border-slate-100 rounded bg-white overflow-hidden transition-all hover: hover:border-indigo-100">
-                    {/* CLIENT GROUP HEADER */}
-                    <div 
-                      onClick={() => toggleClientGroup(clientName)}
-                      className={`p-2 cursor-pointer flex justify-between items-center transition-all group ${expandedClients[clientName] ? 'bg-indigo-50/50 border-b border-slate-100' : 'hover:bg-slate-50'}`}
-                    >
-                      <div className="flex items-center gap-2 flex-1">
-                        <div className={`p-1.5 rounded  text-indigo-600 bg-white shadow-sm transition-all ${expandedClients[clientName] ? 'rotate-180 bg-indigo-600 text-white' : ''}`}>
-                          <ChevronDown size={15} />
-                        </div>
-                        <div className="flex flex-col flex-1">
-                          <span className="text-xs  text-slate-900">{clientName}</span>
-                        </div>
-                        <span className="p-1 bg-indigo-100 text-indigo-700 rounded text-xs ">
-                          {clientDrawings.length} Drawings
-                        </span>
-                        {clientDrawings.some(d => !d.status || d.status !== 'SHARED') && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleShareClientGroupWithDesign(clientName);
-                            }}
-                            className="p-2 bg-emerald-600 text-white hover:bg-emerald-700 rounded  text-xs  transition-all flex items-center gap-2 shadow-sm active:scale-95"
-                          >
-                            <Send size={14} /> Send to Design
-                          </button>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleViewClientDrawings(clientName);
-                          }}
-                          className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-all active:scale-95"
-                          title="View all drawings for this client"
-                        >
-                          <Eye size={15} />
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteClientGroup(clientName);
-                          }}
-                          className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded  transition-all active:scale-95"
-                          title="Delete all drawings for this client"
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* DRAWINGS TABLE (ACCORDION CONTENT) */}
-                    {expandedClients[clientName] && (
-                      <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-slate-100">
-                          <thead className="bg-slate-50/50">
-                            <tr>
-                              <th className=" p-2 text-left text-xs  text-slate-500  ">#</th>
-                              <th className=" p-2 text-left text-xs  text-slate-500  ">Drawing</th>
-                              <th className=" p-2 text-left text-xs  text-slate-500  ">Description</th>
-                              <th className=" p-2 text-left text-xs  text-slate-500   text-center">Rev</th>
-                              <th className=" p-2 text-left text-xs  text-slate-500   text-center">Qty</th>
-                              <th className=" p-2 text-left text-xs  text-slate-500   text-center">File</th>
-                              <th className=" p-2 text-left text-xs  text-slate-500  ">By</th>
-                              <th className=" p-2 text-right text-xs  text-slate-500  ">Actions</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-50">
-                            {clientDrawings.map((drawing, idx) => (
-                              <tr key={drawing.id || `${drawing.drawing_no}-${idx}`} className="hover:bg-slate-50/50 transition-colors">
-                                <td className=" p-2 whitespace-nowrap text-xs text-slate-400">{idx + 1}</td>
-                                <td className=" p-2 whitespace-nowrap text-xs  text-slate-900">{drawing.drawing_no}</td>
-                                <td className=" p-2 whitespace-nowrap text-sm text-slate-600">
-                                  {drawing.description || <span className="text-slate-300 italic">No description</span>}
-                                </td>
-                                <td className=" p-2 whitespace-nowrap text-center">
-                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded text-xs  bg-slate-100 text-slate-700">
-                                    {drawing.revision || drawing.revision_no || '0'}
-                                  </span>
-                                </td>
-                                <td className=" p-2 whitespace-nowrap text-center text-sm  text-indigo-600">
-                                  {drawing.qty || 1}
-                                </td>
-                                <td className=" p-2 whitespace-nowrap text-center">
-                                  {(drawing.file_path || drawing.drawing_pdf) ? (
-                                    <button 
-                                      onClick={() => handlePreview(drawing)}
-                                      className="inline-flex items-center justify-center p-2 bg-indigo-50 text-indigo-600 rounded  hover:bg-indigo-600 hover:text-white transition-all active:scale-95"
-                                      title="View Drawing"
-                                    >
-                                      <Eye size={15} />
-                                    </button>
-                                  ) : (
-                                    <span className="text-slate-300">
-                                      <FileText size={15} className="mx-auto opacity-30" />
-                                    </span>
-                                  )}
-                                </td>
-                                <td className=" p-2 whitespace-nowrap text-sm text-slate-600">
-                                  {drawing.uploaded_by || '—'}
-                                </td>
-                                <td className=" p-2 whitespace-nowrap text-right text-sm font-medium">
-                                  <div className="flex items-center justify-end gap-2">
-                                    <button 
-                                      onClick={() => handleViewRevisions(drawing)}
-                                      className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all"
-                                      title="Revision History"
-                                    >
-                                      <History size={15} />
-                                    </button>
-                                    <button 
-                                      onClick={() => handleEdit(drawing)}
-                                      className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded  transition-all"
-                                      title="Edit Drawing"
-                                    >
-                                      <Edit2 size={15} />
-                                    </button>
-                                    <button 
-                                      onClick={() => handleDelete(drawing.id)}
-                                      className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded  transition-all"
-                                      title="Delete"
-                                    >
-                                      <Trash2 size={15} />
-                                    </button>
-                                  </div>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </Card>
-
 
       {/* Edit/View Modal */}
       <Modal 
@@ -2161,120 +1947,7 @@ const CustomerDrawing = () => {
               {uploadMode === 'bulk' ? 'Upload Excel' : 'Add Requirements'}
             </button>
           </div>
-
-          {lastUploadedDrawings && lastUploadedDrawings.clientName && (
-            <div className="mt-4 p-2 bg-emerald-50 border border-emerald-200 rounded ">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 bg-emerald-100 rounded  text-emerald-600">
-                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
-                  </div>
-                  <div>
-                    <p className="text-sm  text-emerald-900">{lastUploadedDrawings.count} Drawings Uploaded</p>
-                    <p className="text-xs text-emerald-700 mt-0.5">Ready to be sent to the Design Engineering department</p>
-                  </div>
-                </div>
-                {/* <button
-                  type="button"
-                  onClick={() => sendBulkUploadedToDesign(lastUploadedDrawings.clientName, lastUploadedDrawings.count)}
-                  disabled={loading}
-                  className="p-2  bg-emerald-600 text-white rounded  text-xs  hover:bg-emerald-700 transition-all flex items-center gap-2 "
-                >
-                  <Send className="w-4 h-4" />
-                  Send to Design Now
-                </button> */}
-              </div>
-            </div>
-          )}
         </form>
-      </Modal>
-
-      {/* Requirement View Modal */}
-      <Modal
-        isOpen={showRequirementViewModal}
-        onClose={() => setShowRequirementViewModal(false)}
-        title="Requirement Details"
-        width="max-w-4xl"
-      >
-        {selectedRequirement && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-slate-50 rounded-lg">
-              <div>
-                <label className="text-[10px] text-slate-500 uppercase font-semibold">Client Name</label>
-                <p className="text-sm text-slate-900 font-medium">{selectedRequirement.client || selectedRequirement.company_name}</p>
-              </div>
-              <div>
-                <label className="text-[10px] text-slate-500 uppercase font-semibold">Contact Person</label>
-                <p className="text-sm text-slate-900 font-medium">{selectedRequirement.contact_person || '—'}</p>
-              </div>
-              <div>
-                <label className="text-[10px] text-slate-500 uppercase font-semibold">Delivery Date</label>
-                <p className="text-sm text-slate-900 font-medium">
-                  {selectedRequirement.delivery_date ? new Date(selectedRequirement.delivery_date).toLocaleDateString() : '—'}
-                </p>
-              </div>
-              <div>
-                <label className="text-[10px] text-slate-500 uppercase font-semibold">Status</label>
-                <div className="mt-1">
-                  <StatusBadge status={selectedRequirement.status} />
-                </div>
-              </div>
-            </div>
-
-            <div className="border border-slate-100 rounded overflow-hidden">
-              <table className="min-w-full divide-y divide-slate-50">
-                <thead className="bg-slate-50/50">
-                  <tr>
-                    <th className="p-2 text-left text-xs text-slate-500 font-medium w-10">#</th>
-                    <th className="p-2 text-left text-xs text-slate-500 font-medium">Drawing</th>
-                    <th className="p-2 text-left text-xs text-slate-500 font-medium">Description</th>
-                    <th className="p-2 text-center text-xs text-slate-500 font-medium">Qty</th>
-                    <th className="p-2 text-center text-xs text-slate-500 font-medium">UOM</th>
-                    <th className="p-2 text-center text-xs text-slate-500 font-medium">File</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-slate-50">
-                  {selectedRequirement.items?.filter(item => !item.item_code).map((item, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="p-2 text-xs text-slate-400">{idx + 1}</td>
-                      <td className="p-2 text-xs text-slate-900 font-medium">{item.drawing_no || '—'}</td>
-                      <td className="p-2 text-xs text-slate-600">{item.description || '—'}</td>
-                      <td className="p-2 text-sm text-indigo-600 font-medium text-center">{item.quantity}</td>
-                      <td className="p-2 text-xs text-slate-500 text-center uppercase">{item.unit || 'Nos'}</td>
-                      <td className="p-2 text-center">
-                        {item.file_path ? (
-                          <button 
-                            onClick={() => handlePreview({ ...item, drawing_pdf: item.file_path })}
-                            className="inline-flex items-center justify-center p-2 bg-indigo-50 text-indigo-600 rounded hover:bg-indigo-600 hover:text-white transition-all active:scale-95 shadow-sm"
-                            title="View Drawing"
-                          >
-                            <Eye size={15} />
-                          </button>
-                        ) : (
-                          <span className="text-slate-300 italic text-[10px]">No File</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                  {(!selectedRequirement.items || selectedRequirement.items.length === 0) && (
-                    <tr>
-                      <td colSpan="6" className="p-8 text-center text-slate-400 italic text-xs">No items found for this requirement</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-            
-            <div className="flex justify-end pt-4">
-              <button
-                onClick={() => setShowRequirementViewModal(false)}
-                className="px-6 py-2 bg-slate-100 text-slate-700 rounded-md text-xs font-semibold hover:bg-slate-200 transition-colors"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        )}
       </Modal>
 
       {/* Client Drawings Modal */}
