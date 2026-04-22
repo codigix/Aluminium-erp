@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { Card, Modal, FormControl, DataTable, StatusBadge } from '../components/ui.jsx';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
 import { Eye, Edit2, Trash2, History, Search, RefreshCw, FileText, PencilLine, Plus, X, ChevronRight, ChevronDown, Check, ChevronUp } from 'lucide-react';
@@ -8,9 +9,28 @@ import { successToast, errorToast } from '../utils/toast';
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
 const DrawingMaster = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
   const [drawings, setDrawings] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+
+  useEffect(() => {
+    const isEditPath = location.pathname.includes('/drawing-master/edit');
+    const id = searchParams.get('id');
+
+    if (isEditPath && id && drawings.length > 0) {
+      const drawing = drawings.find(d => String(d.id) === String(id));
+      if (drawing) {
+        if (!showEditForm || String(editData.id) !== String(id)) {
+          handleEdit(drawing);
+        }
+      }
+    } else if (!isEditPath && showEditForm) {
+      setShowEditForm(false);
+    }
+  }, [location.pathname, searchParams, drawings]);
   
   // Expanded Revisions State
   const [expandedRevisions, setExpandedRevisions] = useState({});
@@ -377,7 +397,7 @@ const DrawingMaster = () => {
           <button 
             onClick={(e) => {
               e.stopPropagation();
-              handleEdit(row);
+              navigate(`/drawing-master/edit?id=${row.id}`);
             }}
             className="p-2 text-amber-500 hover:bg-amber-50 rounded  transition-all border border-transparent hover:border-amber-100"
             title="Edit Drawing"
@@ -433,6 +453,9 @@ const DrawingMaster = () => {
       drawing_pdf: null,
       file_path: drawing.file_path || drawing.drawing_pdf || ''
     });
+    if (!location.pathname.includes('/drawing-master/edit')) {
+      navigate(`/drawing-master/edit?id=${drawing.id}`);
+    }
     setShowEditForm(true);
   };
 
@@ -474,7 +497,7 @@ const DrawingMaster = () => {
       if (!response.ok) throw new Error('Failed to update drawing');
       
       successToast('Drawing updated successfully');
-      setShowEditForm(false);
+      navigate('/drawing-master');
       fetchDrawings();
       setExpandedRevisions(prev => {
         const next = { ...prev };
@@ -673,7 +696,7 @@ const DrawingMaster = () => {
                     </div>
                 </div>
                 <button 
-                    onClick={() => setShowEditForm(false)}
+                    onClick={() => navigate('/drawing-master')}
                     className="p-2 text-slate-400 hover:bg-white hover:text-slate-600 rounded  transition-all border border-transparent hover:border-slate-200"
                 >
                     <X size={20} />
@@ -751,7 +774,7 @@ const DrawingMaster = () => {
                 <div className="pt-6 border-t border-slate-50 flex justify-end gap-2">
                     <button 
                         type="button" 
-                        onClick={() => setShowEditForm(false)}
+                        onClick={() => navigate('/drawing-master')}
                         className="p-2 bg-white border border-slate-200 text-slate-600 rounded text-xs  hover:bg-slate-50 transition-all"
                     >
                         Discard Changes

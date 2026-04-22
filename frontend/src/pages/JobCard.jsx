@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { Card, Modal, FormControl, StatusBadge, SearchableSelect } from '../components/ui.jsx';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
 import {
@@ -122,6 +122,8 @@ const TimePicker = ({ value, ampmValue, onTimeChange, onAMPMChange, label, small
 };
 
 const JobCard = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const [jobCards, setJobCards] = useState([]);
   const [users, setUsers] = useState([]);
@@ -1341,8 +1343,26 @@ const JobCard = () => {
       executionMode: normalizedMode
     });
 
+    if (!location.pathname.includes('/production-entry')) {
+      navigate(`/job-card/production-entry?id=${jc.id}`);
+    }
     setShowProductionEntry(true);
   };
+
+  useEffect(() => {
+    const isProductionEntryPath = location.pathname.includes('/production-entry');
+    const jcId = searchParams.get('id');
+
+    if (isProductionEntryPath && jcId && jobCards.length > 0) {
+      const jc = jobCards.find(j => String(j.id) === String(jcId));
+      if (jc && (!selectedJC || String(selectedJC.id) !== String(jcId))) {
+        handleLogProgress(jc);
+      }
+    } else if (!isProductionEntryPath && showProductionEntry) {
+      setShowProductionEntry(false);
+      setSelectedJC(null);
+    }
+  }, [location.pathname, searchParams, jobCards]);
 
   const handleEditTimeLog = (log) => {
     const startStr = formatLocalTime(log.start_time);
@@ -1516,7 +1536,7 @@ const JobCard = () => {
             </div>
           </div>
           <button
-            onClick={() => setShowProductionEntry(false)}
+            onClick={() => navigate('/job-card')}
             className="flex items-center gap-2 p-1.5 text-slate-500 hover:text-slate-900 transition-colors"
           >
             <ChevronLeft className="w-4 h-4" />

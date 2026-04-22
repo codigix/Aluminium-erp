@@ -464,7 +464,11 @@ const DesignOrders = () => {
     }
   };
 
-  const handleViewDetails = async (order) => {
+  const handleViewDetails = async (order, shouldNavigate = true) => {
+    if (shouldNavigate) {
+      navigate(`/design-orders/details/${order.id}`);
+      return;
+    }
     try {
       setSelectedOrder(order);
       setShowDetails(true);
@@ -616,7 +620,7 @@ const DesignOrders = () => {
 
             <div className="flex items-center p-1 bg-slate-100 rounded  border border-slate-200/60 ">
               <button
-                onClick={() => setActiveTab('incoming')}
+                onClick={() => navigate('/design-orders/incoming')}
                 className={`flex items-center gap-2 p-2 rounded  text-xs  transition-all duration-300 ${
                   activeTab === 'incoming' 
                     ? 'bg-white text-indigo-600  ring-1 ring-slate-200/50' 
@@ -627,7 +631,7 @@ const DesignOrders = () => {
                 Incoming Requests
               </button>
               <button
-                onClick={() => setActiveTab('progress')}
+                onClick={() => navigate('/design-orders/progress')}
                 className={`flex items-center gap-2 p-2 rounded  text-xs  transition-all duration-300 ${
                   activeTab === 'progress' 
                     ? 'bg-white text-indigo-600  ring-1 ring-slate-200/50' 
@@ -1555,7 +1559,7 @@ const DesignOrders = () => {
                 <button 
                   type="button" 
                   className="p-2 bg-indigo-600 text-white rounded  text-xs  hover:bg-indigo-700 transition-colors"
-                  onClick={() => setShowDetails(false)}
+                  onClick={() => navigate('/design-orders/progress')}
                 >
                   Close
                 </button>
@@ -1725,7 +1729,7 @@ const DesignOrders = () => {
             <div className="bg-slate-50 p-2 border-t border-slate-200 flex justify-end gap-2">
               <div className="flex gap-2">
                 <button 
-                  onClick={() => setShowReviewModal(false)}
+                  onClick={() => navigate('/design-orders/incoming')}
                   className="p-2  bg-slate-300 text-slate-900 rounded  text-xs  hover:bg-slate-400 transition-colors"
                 >
                   Cancel

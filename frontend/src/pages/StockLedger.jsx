@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Card, Modal, DataTable, FormControl } from '../components/ui.jsx';
 import { 
   Plus, 
@@ -25,6 +26,8 @@ const transactionTypeColors = {
 };
 
 const StockLedger = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [ledger, setLedger] = useState([]);
   const [loading, setLoading] = useState(false);
   const [shapes, setShapes] = useState([]);
@@ -33,6 +36,14 @@ const StockLedger = () => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [showModal, setShowModal] = useState(false);
+
+  useEffect(() => {
+    if (location.pathname === '/stock-ledger/new-entry') {
+      setShowModal(true);
+    } else {
+      setShowModal(false);
+    }
+  }, [location.pathname]);
   const [formData, setFormData] = useState({
     itemCode: '',
     transactionType: 'IN',
@@ -292,7 +303,7 @@ const StockLedger = () => {
       if (!response.ok) throw new Error('Failed to add ledger entry');
 
       successToast('Ledger entry added successfully');
-      setShowModal(false);
+      navigate('/stock-ledger');
       setFormData({
         itemCode: '',
         transactionType: 'IN',
@@ -314,7 +325,7 @@ const StockLedger = () => {
         subtitle="Detailed history of inventory movements and adjustments"
         action={
           <button
-            onClick={() => setShowModal(true)}
+            onClick={() => navigate('/stock-ledger/new-entry')}
             className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded text-xs  hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95"
           >
             <Plus className="w-4 h-4" />
@@ -387,7 +398,7 @@ const StockLedger = () => {
 
       <Modal 
         isOpen={showModal} 
-        onClose={() => setShowModal(false)} 
+        onClose={() => navigate('/stock-ledger')} 
         title="Add Stock Ledger Entry"
         size="2xl"
       >

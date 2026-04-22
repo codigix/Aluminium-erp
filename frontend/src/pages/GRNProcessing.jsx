@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { Card, DataTable, Badge } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
 import { successToast, errorToast, warningToast } from '../utils/toast';
@@ -47,6 +48,9 @@ const StatCard = ({ label, value, icon: Icon, colorClass, iconBg }) => (
 );
 
 const GRNProcessing = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
   const [grns, setGrns] = useState([]);
   const [stats, setStats] = useState({
     totalGrns: 0,
@@ -78,6 +82,46 @@ const GRNProcessing = () => {
   const [itemData, setItemData] = useState({});
   const [validationErrors, setValidationErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    const isNew = location.pathname.includes('/add');
+    const viewId = searchParams.get('id');
+
+    if (isNew) {
+      setShowModal(true);
+      setShowViewModal(false);
+    } else if (viewId) {
+      const grn = grns.find(g => g.id === parseInt(viewId));
+      if (grn) {
+        setSelectedGRNForView(grn);
+        setShowViewModal(true);
+        setShowModal(false);
+      } else if (grns.length > 0) {
+        // Fetch single if not in list
+        const fetchSingle = async () => {
+          try {
+            const token = localStorage.getItem('authToken');
+            const response = await fetch(`${API_BASE}/grns/${viewId}`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (response.ok) {
+              const data = await response.json();
+              setSelectedGRNForView(data);
+              setShowViewModal(true);
+              setShowModal(false);
+            }
+          } catch (err) {
+            console.error(err);
+          }
+        };
+        fetchSingle();
+      }
+    } else {
+      setShowModal(false);
+      setShowViewModal(false);
+      setSelectedGRNForView(null);
+    }
+  }, [location.pathname, searchParams, grns]);
 
   useEffect(() => {
     const storedUser = localStorage.getItem('authUser');
@@ -554,7 +598,7 @@ const GRNProcessing = () => {
           <button
             onClick={(e) => {
               e.stopPropagation();
-              handleViewGRN(row.id);
+              navigate(`/grn?id=${row.id}`);
             }}
             className="p-1.5 bg-emerald-500 text-white rounded  hover:bg-emerald-600 transition-colors "
             title="View Details"
@@ -890,7 +934,7 @@ const GRNProcessing = () => {
             <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end gap-2">
               <button
                 type="button"
-                onClick={() => setShowModal(false)}
+                onClick={() => navigate('/grn')}
                 className="p-2.5 rounded  border border-slate-200 text-slate-700  hover:bg-white transition-all"
               >
                 Cancel
@@ -916,7 +960,7 @@ const GRNProcessing = () => {
                 <p className="text-sm text-slate-500">View recorded material receipt and verify quantities</p>
               </div>
               <button
-                onClick={() => setShowViewModal(false)}
+                onClick={() => navigate('/grn')}
                 className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded  transition-colors"
               >
                 <XCircle className="w-3 h-3" />
@@ -988,7 +1032,7 @@ const GRNProcessing = () => {
                 Print GRN
               </button>
               <button
-                onClick={() => setShowViewModal(false)}
+                onClick={() => navigate('/grn')}
                 className="p-2.5 rounded  border border-slate-200 text-slate-700  hover:bg-white transition-all"
               >
                 Close

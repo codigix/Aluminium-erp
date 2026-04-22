@@ -203,6 +203,36 @@ function App() {
     // Handle special cases for dash-separated module names that might have subpaths
     // For example /item-master/add-items should map to item-master
     if (MODULE_IDS.includes(firstSegment)) {
+      if (firstSegment === 'work-order' && segments[1] === 'edit-work') {
+        return 'work-order-form';
+      }
+      if (firstSegment === 'job-card' && segments[1] === 'production-entry') {
+        return 'job-card';
+      }
+      if (firstSegment === 'workstation-master' && segments[1] === 'form') {
+        return 'workstation-master';
+      }
+      if (firstSegment === 'operation-master' && segments[1] === 'form') {
+        return 'operation-master';
+      }
+      if (firstSegment === 'drawing-master' && segments[1] === 'edit') {
+        return 'drawing-master';
+      }
+      if (firstSegment === 'po-material-request') {
+        return 'po-material-request';
+      }
+      if (firstSegment === 'grn') {
+        return 'grn';
+      }
+      if (firstSegment === 'stock-entries') {
+        return 'stock-entries';
+      }
+      if (firstSegment === 'warehouses') {
+        return 'warehouses';
+      }
+      if (firstSegment === 'sub-contract-challans') {
+        return 'sub-contract-challans';
+      }
       return firstSegment
     }
     

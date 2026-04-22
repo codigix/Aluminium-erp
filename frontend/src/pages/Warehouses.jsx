@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { Card, Modal, FormControl, DataTable, StatusBadge } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
@@ -11,11 +12,59 @@ const warehouseStatusColors = {
 };
 
 const Warehouses = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState('list'); // 'list' or 'allocation'
   const [warehouses, setWarehouses] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editingWarehouse, setEditingWarehouse] = useState(null);
+
+  useEffect(() => {
+    const path = location.pathname;
+    const isAdd = path.includes('/add-warehouse');
+    const isEdit = path.includes('/edit-warehouse');
+    const id = searchParams.get('id');
+
+    if (isAdd) {
+      if (!showForm || editingWarehouse) {
+        setFormData({
+          warehouseCode: generateWarehouseCode(),
+          warehouseName: '',
+          warehouseType: '',
+          location: '',
+          capacity: '',
+          status: 'ACTIVE'
+        });
+        setEditingWarehouse(null);
+        setShowForm(true);
+      }
+    } else if (isEdit && id) {
+      const warehouse = warehouses.find(w => String(w.id) === String(id));
+      if (warehouse) {
+        setEditingWarehouse(warehouse);
+        setFormData({
+          warehouseCode: warehouse.warehouse_code || '',
+          warehouseName: warehouse.warehouse_name || '',
+          warehouseType: warehouse.warehouse_type || '',
+          location: warehouse.location || '',
+          capacity: warehouse.capacity || '',
+          status: warehouse.status || 'ACTIVE'
+        });
+        setShowForm(true);
+      }
+    } else {
+      setShowForm(false);
+      setEditingWarehouse(null);
+    }
+
+    if (path.includes('/allocation')) {
+      setActiveTab('allocation');
+    } else {
+      setActiveTab('list');
+    }
+  }, [location.pathname, searchParams, warehouses]);
   const [formData, setFormData] = useState({
     warehouseCode: '',
     warehouseName: '',
@@ -197,7 +246,7 @@ const Warehouses = () => {
       if (!response.ok) throw new Error(`Failed to ${editingWarehouse ? 'update' : 'create'} warehouse`);
 
       successToast(`Warehouse ${editingWarehouse ? 'updated' : 'added'} successfully`);
-      resetForm();
+      navigate('/warehouses');
       fetchWarehouses();
     } catch (error) {
       errorToast(error.message);
@@ -205,29 +254,11 @@ const Warehouses = () => {
   };
 
   const resetForm = () => {
-    setFormData({
-      warehouseCode: '',
-      warehouseName: '',
-      warehouseType: '',
-      location: '',
-      capacity: '',
-      status: 'ACTIVE'
-    });
-    setEditingWarehouse(null);
-    setShowForm(false);
+    navigate('/warehouses');
   };
 
   const handleEdit = (warehouse) => {
-    setEditingWarehouse(warehouse);
-    setFormData({
-      warehouseCode: warehouse.warehouse_code || '',
-      warehouseName: warehouse.warehouse_name || '',
-      warehouseType: warehouse.warehouse_type || '',
-      location: warehouse.location || '',
-      capacity: warehouse.capacity || '',
-      status: warehouse.status || 'ACTIVE'
-    });
-    setShowForm(true);
+    navigate(`/warehouses/edit-warehouse?id=${warehouse.id}`);
   };
 
   const handleDelete = async (id, name) => {
@@ -340,7 +371,7 @@ const Warehouses = () => {
         </div>
         {activeTab === 'list' && (
           <button
-            onClick={handleOpenCreateModal}
+            onClick={() => navigate('/warehouses/add-warehouse')}
             className="flex items-center justify-center gap-2 p-2  bg-orange-500 text-white rounded  text-sm  hover:bg-orange-600  shadow-orange-200 transition-all active:scale-95"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -353,7 +384,7 @@ const Warehouses = () => {
 
       <div className="flex gap-1 bg-slate-100 p-1 rounded  w-fit">
         <button
-          onClick={() => setActiveTab('list')}
+          onClick={() => navigate('/warehouses')}
           className={`p-2  rounded  text-sm  transition-all ${
             activeTab === 'list' ? 'bg-white text-orange-600 ' : 'text-slate-500 hover:text-slate-700'
           }`}
@@ -361,7 +392,7 @@ const Warehouses = () => {
           Warehouse List
         </button>
         <button
-          onClick={() => setActiveTab('allocation')}
+          onClick={() => navigate('/warehouses/allocation')}
           className={`p-2  rounded  text-sm  transition-all ${
             activeTab === 'allocation' ? 'bg-white text-orange-600 ' : 'text-slate-500 hover:text-slate-700'
           }`}

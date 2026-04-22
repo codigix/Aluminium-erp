@@ -88,6 +88,41 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
     }
   }, [newPlan.targetQuantity]);
 
+  useEffect(() => {
+    const path = location.pathname;
+    if (path === '/production-plan/new') {
+      if (!isCreating || isViewing) {
+        initializeNewPlan();
+      }
+    } else if (path.startsWith('/production-plan/view/')) {
+      const planId = path.split('/').pop();
+      if (planId && (!isViewing || newPlan.id?.toString() !== planId)) {
+        loadPlanDetails(planId);
+      }
+    } else if (path.startsWith('/production-plan/edit/')) {
+      const planId = path.split('/').pop();
+      if (planId && (isViewing || !isCreating || newPlan.id?.toString() !== planId)) {
+        loadPlanForEdit(planId);
+      }
+    } else if (path === '/production-plan') {
+      if (isCreating || isViewing) {
+        setIsCreating(false);
+        setIsViewing(false);
+        setNewPlan({
+          planCode: '',
+          planDate: new Date().toISOString().split('T')[0],
+          startDate: '',
+          endDate: '',
+          remarks: '',
+          namingSeries: 'PP',
+          operationalStatus: 'Draft',
+          targetQuantity: 0,
+          items: []
+        });
+      }
+    }
+  }, [location.pathname]);
+
   const fetchPlans = async () => {
     try {
       setLoading(true);
@@ -425,7 +460,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
     successToast('Item added to material request');
   };
 
-  const handleCreateNew = () => {
+  const initializeNewPlan = () => {
     fetchReadyItems();
     fetchReadyOrders();
     fetchNextCode();
@@ -449,7 +484,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
     setIsCreating(true);
   };
 
-  const handleViewPlan = async (id) => {
+  const loadPlanDetails = async (id) => {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
@@ -532,7 +567,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
     }
   };
 
-  const handleEditPlan = async (id) => {
+  const loadPlanForEdit = async (id) => {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
@@ -603,6 +638,18 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleEditPlan = (id) => {
+    navigate(`/production-plan/edit/${id}`);
+  };
+
+  const handleCreateNew = () => {
+    navigate('/production-plan/new');
+  };
+
+  const handleViewPlan = async (id) => {
+    navigate(`/production-plan/view/${id}`);
   };
 
   const handleOrderSelect = async (orderId) => {
@@ -1084,7 +1131,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
         {/* Header Section */}
         <div className="flex items-center justify-between z-30 ">
           <div className="flex items-center gap-2">
-            <button onClick={() => setIsCreating(false)} className="p-2 hover:bg-slate-100 rounded  transition-colors">
+            <button onClick={() => navigate('/production-plan')} className="p-2 hover:bg-slate-100 rounded  transition-colors">
               <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
             </button>
             <div>
@@ -1097,7 +1144,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
           </div>
           <div className="flex items-center gap-2">
             <button 
-              onClick={() => setIsCreating(false)}
+              onClick={() => navigate('/production-plan')}
               className="p-2 text-slate-600 hover:text-slate-900 text-xs  transition-colors"
             >
               {isViewing ? 'Close' : 'Discard Changes'}
@@ -1834,7 +1881,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
 
       if (response.ok) {
         successToast(`Production plan ${newPlan.id ? 'updated' : 'created'} successfully`);
-        setIsCreating(false);
+        navigate('/production-plan');
         fetchPlans();
       } else {
         const error = await response.json();

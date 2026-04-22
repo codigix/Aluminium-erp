@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { Card, StatusBadge, FormControl, Modal, DataTable, Badge, SearchableSelect } from '../components/ui.jsx';
 import { Search, Plus, RefreshCw, Edit2, Trash2 } from 'lucide-react';
 import Swal from 'sweetalert2';
@@ -6,11 +7,42 @@ import { successToast, errorToast } from '../utils/toast.js';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
-const WorkstationMaster = ({ showForm, setShowForm }) => {
+const WorkstationMaster = ({ showForm: propShowForm, setShowForm: propSetShowForm }) => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
   const [workstations, setWorkstations] = useState([]);
   const [loading, setLoading] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editingId, setEditingId] = useState(null);
+
+  const [showFormInternal, setShowFormInternal] = useState(false);
+  const showForm = propShowForm !== undefined ? propShowForm : showFormInternal;
+  const setShowForm = propSetShowForm || setShowFormInternal;
+
+  useEffect(() => {
+    const isFormPath = location.pathname.includes('/workstation-master/form');
+    const id = searchParams.get('id');
+
+    if (isFormPath) {
+      if (id) {
+        if (!isEditing || String(editingId) !== String(id)) {
+          const ws = workstations.find(w => String(w.id) === String(id));
+          if (ws) {
+            handleEdit(ws);
+          }
+        }
+      } else {
+        if (isEditing || !showForm) {
+          resetForm();
+          setShowForm(true);
+        }
+      }
+    } else if (showForm) {
+      resetForm();
+      setShowForm(false);
+    }
+  }, [location.pathname, searchParams, workstations]);
 
   const [formData, setFormData] = useState({
     workstation_code: '',
@@ -160,6 +192,9 @@ const WorkstationMaster = ({ showForm, setShowForm }) => {
     });
     setEditingId(ws.id);
     setIsEditing(true);
+    if (!location.pathname.includes('/workstation-master/form')) {
+      navigate(`/workstation-master/form?id=${ws.id}`);
+    }
     setShowForm(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -250,7 +285,7 @@ const WorkstationMaster = ({ showForm, setShowForm }) => {
 
   return (
     <div className="p-4">
-      <Modal isOpen={showForm} onClose={() => { resetForm(); setShowForm(false); }} title={isEditing ? "Edit Workstation" : "Create Workstation"}>
+      <Modal isOpen={showForm} onClose={() => { navigate('/workstation-master'); }} title={isEditing ? "Edit Workstation" : "Create Workstation"}>
         <form onSubmit={handleSubmit} className="space-y-3">
             {/* Basic Information */}
             <section className="space-y-3">
@@ -309,7 +344,7 @@ const WorkstationMaster = ({ showForm, setShowForm }) => {
             <div className="flex justify-end gap-2 pt-8 border-t border-slate-100">
               <button
                 type="button"
-                onClick={() => { resetForm(); setShowForm(false); }}
+                onClick={() => { navigate('/workstation-master'); }}
                 className="p-2.5 rounded  border border-slate-200 text-sm  text-slate-600 hover:bg-slate-50 transition-all"
               >
                 Cancel
@@ -339,7 +374,7 @@ const WorkstationMaster = ({ showForm, setShowForm }) => {
           </div>
         </div>
         <button
-          onClick={() => { resetForm(); setShowForm(true); }}
+          onClick={() => { navigate('/workstation-master/form'); }}
           className="flex items-center justify-center gap-2 p-2 text-xs bg-indigo-600 hover:bg-indigo-700 text-white rounded  transition-all shadow-lg shadow-indigo-200 "
         >
           <Plus className="w-5 h-5" />

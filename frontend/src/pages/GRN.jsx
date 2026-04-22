@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { Card, DataTable } from '../components/ui.jsx';
 import { 
   Plus, 
@@ -49,6 +50,9 @@ const formatDate = (date) => {
 };
 
 const GRN = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
   const [grns, setGrns] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -56,6 +60,46 @@ const GRN = () => {
   const [selectedGRN, setSelectedGRN] = useState(null);
   const [showViewModal, setShowViewModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+
+  useEffect(() => {
+    const isNew = location.pathname.includes('/new');
+    const viewId = searchParams.get('id');
+
+    if (isNew) {
+      setShowModal(true);
+      setShowViewModal(false);
+    } else if (viewId) {
+      const grn = grns.find(g => g.id === parseInt(viewId));
+      if (grn) {
+        setSelectedGRN(grn);
+        setShowViewModal(true);
+        setShowModal(false);
+      } else if (grns.length > 0) {
+        // Fetch single if not in list
+        const fetchSingle = async () => {
+          try {
+            const token = localStorage.getItem('authToken');
+            const response = await fetch(`${API_BASE}/grns/${viewId}`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (response.ok) {
+              const data = await response.json();
+              setSelectedGRN(data);
+              setShowViewModal(true);
+              setShowModal(false);
+            }
+          } catch (err) {
+            console.error(err);
+          }
+        };
+        fetchSingle();
+      }
+    } else {
+      setShowModal(false);
+      setShowViewModal(false);
+      setSelectedGRN(null);
+    }
+  }, [location.pathname, searchParams, grns]);
 
   const [formData, setFormData] = useState({
     poNumber: '',
@@ -302,7 +346,7 @@ const GRN = () => {
       render: (_, grn) => (
         <div className="flex justify-end gap-2">
           <button 
-            onClick={() => handleViewGRN(grn)} 
+            onClick={() => navigate(`/grns?id=${grn.id}`)} 
             className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all"
             title="View Details"
           >
@@ -340,7 +384,7 @@ const GRN = () => {
           </div>
         </div>
         <button
-          onClick={() => setShowModal(true)}
+          onClick={() => navigate('/grns/new')}
           className="flex items-center justify-center gap-2 px-6 p-2 bg-indigo-600 text-white rounded  text-sm font-semibold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95"
         >
           <Plus size={15} />
@@ -376,7 +420,7 @@ const GRN = () => {
                 <p className="text-xs text-slate-500 tracking-wide mt-0.5">Record incoming material from vendor</p>
               </div>
               <button 
-                onClick={() => setShowModal(false)} 
+                onClick={() => navigate('/grns')} 
                 className="p-2 text-slate-400 hover:text-slate-600 hover:bg-white rounded  transition-all border border-transparent hover:border-slate-200"
               >
                 <X size={20} />
@@ -462,7 +506,7 @@ const GRN = () => {
                 <p className="text-xs text-slate-500  tracking-wide mt-0.5">Goods Received Note Information</p>
               </div>
               <button 
-                onClick={() => setShowViewModal(false)} 
+                onClick={() => navigate('/grns')} 
                 className="p-2 text-slate-400 hover:text-slate-600 hover:bg-white rounded  transition-all border border-transparent hover:border-slate-200"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -506,7 +550,7 @@ const GRN = () => {
 
               <div className="flex justify-end pt-4">
                 <button
-                  onClick={() => setShowViewModal(false)}
+                  onClick={() => navigate('/grns')}
                   className="px-8 py-2.5 bg-slate-900 text-white rounded  text-sm  hover:bg-slate-800 transition-all shadow-lg shadow-slate-200"
                 >
                   Close

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { Card, DataTable, Modal, StatusBadge, FormControl } from '../components/ui.jsx';
 import { 
   Box, 
@@ -20,6 +21,9 @@ import { successToast, errorToast } from '../utils/toast';
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
 const StockBalance = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
   const [balances, setBalances] = useState([]);
   const [loading, setLoading] = useState(false);
   const [shapes, setShapes] = useState([]);
@@ -28,6 +32,27 @@ const StockBalance = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    const isAdd = location.pathname.includes('/add');
+    const isEdit = location.pathname.includes('/edit');
+    const id = searchParams.get('id');
+
+    if (isAdd) {
+      setShowAddModal(true);
+      setShowEditModal(false);
+    } else if (isEdit && id) {
+      const item = balances.find(b => String(b.id) === String(id));
+      if (item) {
+        setEditingItem({ ...item });
+        setShowEditModal(true);
+        setShowAddModal(false);
+      }
+    } else {
+      setShowAddModal(false);
+      setShowEditModal(false);
+    }
+  }, [location.pathname, searchParams, balances]);
   const [newItem, setNewItem] = useState({
     itemName: '',
     itemGroup: 'Raw Material',
@@ -86,7 +111,7 @@ const StockBalance = () => {
       }
 
       successToast('New item created successfully');
-      setShowAddModal(false);
+      navigate('/stock-balance');
       setNewItem({
         itemName: '',
         itemGroup: 'Raw Material',
@@ -129,7 +154,7 @@ const StockBalance = () => {
       if (!response.ok) throw new Error('Failed to update item');
 
       successToast('Item updated successfully');
-      setShowEditModal(false);
+      navigate('/stock-balance');
       fetchStockBalance();
     } catch (error) {
       errorToast(error.message);
@@ -139,8 +164,7 @@ const StockBalance = () => {
   };
 
   const openEditModal = (item) => {
-    setEditingItem({ ...item });
-    setShowEditModal(true);
+    navigate(`/stock-balance/edit?id=${item.id}`);
   };
 
   const fetchStockBalance = async () => {
@@ -365,7 +389,7 @@ const StockBalance = () => {
           <p className="text-xs text-slate-500">Manage master items and monitor stock levels</p>
         </div>
         <button
-          onClick={() => setShowAddModal(true)}
+          onClick={() => navigate('/stock-balance/add')}
           className="flex items-center gap-2 p-2  bg-indigo-600 text-white rounded text-xs  hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95"
         >
           <Plus className="w-4 h-4" />
@@ -386,11 +410,12 @@ const StockBalance = () => {
       {/* Add Item Modal */}
       <Modal 
         isOpen={showAddModal} 
-        onClose={() => setShowAddModal(false)} 
+        onClose={() => navigate('/stock-balance')} 
         title="Add New Master Item"
         size="2xl"
       >
         <form onSubmit={handleCreateItem} className="space-y-2">
+          {/* ... existing form fields ... */}
           <div className="grid grid-cols-2 gap-2">
             <FormControl label="Item Name">
               <input
@@ -460,7 +485,7 @@ const StockBalance = () => {
           <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
             <button
               type="button"
-              onClick={() => setShowAddModal(false)}
+              onClick={() => navigate('/stock-balance')}
               className="px-6 py-2.5 bg-white border border-slate-200 text-slate-600 rounded  text-xs  hover:bg-slate-50 transition-all active:scale-95"
             >
               Cancel
@@ -480,7 +505,7 @@ const StockBalance = () => {
       {/* Edit Item Modal */}
       <Modal 
         isOpen={showEditModal} 
-        onClose={() => setShowEditModal(false)} 
+        onClose={() => navigate('/stock-balance')} 
         title="Edit Master Item"
         size="2xl"
       >
@@ -552,7 +577,7 @@ const StockBalance = () => {
             <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
               <button
                 type="button"
-                onClick={() => setShowEditModal(false)}
+                onClick={() => navigate('/stock-balance')}
                 className="px-6 py-2.5 bg-white border border-slate-200 text-slate-600 rounded  text-xs  hover:bg-slate-50 transition-all active:scale-95"
               >
                 Cancel

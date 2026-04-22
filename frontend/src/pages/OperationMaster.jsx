@@ -1,17 +1,49 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { Card, Modal, DataTable, Badge, FormControl, StatusBadge, SearchableSelect, MultiSelect } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
-const OperationMaster = ({ showForm, setShowForm }) => {
+const OperationMaster = ({ showForm: propShowForm, setShowForm: propSetShowForm }) => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
   const [operations, setOperations] = useState([]);
   const [workstations, setWorkstations] = useState([]);
   const [loading, setLoading] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+
+  const [showFormInternal, setShowFormInternal] = useState(false);
+  const showForm = propShowForm !== undefined ? propShowForm : showFormInternal;
+  const setShowForm = propSetShowForm || setShowFormInternal;
+
+  useEffect(() => {
+    const isFormPath = location.pathname.includes('/operation-master/form');
+    const id = searchParams.get('id');
+
+    if (isFormPath) {
+      if (id) {
+        if (!isEditing || String(editingId) !== String(id)) {
+          const op = operations.find(o => String(o.id) === String(id));
+          if (op) {
+            handleEdit(op);
+          }
+        }
+      } else {
+        if (isEditing || !showForm) {
+          resetForm();
+          setShowForm(true);
+        }
+      }
+    } else if (showForm) {
+      resetForm();
+      setShowForm(false);
+    }
+  }, [location.pathname, searchParams, operations]);
 
   const [formData, setFormData] = useState({
     operation_code: '',
@@ -150,6 +182,9 @@ const OperationMaster = ({ showForm, setShowForm }) => {
     });
     setEditingId(op.id);
     setIsEditing(true);
+    if (!location.pathname.includes('/operation-master/form')) {
+      navigate(`/operation-master/form?id=${op.id}`);
+    }
     setShowForm(true);
   };
 
@@ -327,7 +362,7 @@ const OperationMaster = ({ showForm, setShowForm }) => {
             </svg>
           </button>
           <button 
-            onClick={() => { resetForm(); setShowForm(true); }}
+            onClick={() => { navigate('/operation-master/form'); }}
             className="flex items-center gap-2  p-2  bg-indigo-600 text-white rounded  text-xs  hover:bg-indigo-700  shadow-indigo-200 transition-all active:scale-95"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -347,7 +382,7 @@ const OperationMaster = ({ showForm, setShowForm }) => {
 
       <Modal 
         isOpen={showForm} 
-        onClose={() => { setShowForm(false); resetForm(); }}
+        onClose={() => { navigate('/operation-master'); }}
         title={isEditing ? 'Edit Operation' : 'Add New Operation'}
       >
         <form onSubmit={handleSubmit} className="space-y-3">

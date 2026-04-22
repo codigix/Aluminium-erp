@@ -47,11 +47,11 @@ const WorkOrder = () => {
   };
 
   const handleCreateNew = () => {
-    navigate('/work-order-form');
+    navigate('/work-order/edit-work');
   };
 
   const handleEdit = (id) => {
-    navigate('/work-order-form', { state: { workOrderId: id } });
+    navigate(`/work-order/edit-work?id=${id}`);
   };
 
   const columns = [

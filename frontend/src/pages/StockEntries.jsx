@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { Card, Badge } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
@@ -50,6 +51,9 @@ const StatCard = ({ label, value, icon: Icon, colorClass, iconBg }) => (
 );
 
 const StockEntries = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
@@ -60,6 +64,22 @@ const StockEntries = () => {
   const [typeFilter, setTypeFilter] = useState('all');
   const [warehouseFilter, setWarehouseFilter] = useState('all');
   const [expandedId, setExpandedId] = useState(null);
+
+  useEffect(() => {
+    const isNew = location.pathname.includes('/new');
+    const viewId = searchParams.get('id');
+
+    if (isNew) {
+      setShowModal(true);
+      setExpandedId(null);
+    } else if (viewId) {
+      setExpandedId(parseInt(viewId));
+      setShowModal(false);
+    } else {
+      setShowModal(false);
+      setExpandedId(null);
+    }
+  }, [location.pathname, searchParams]);
 
   const [formData, setFormData] = useState({
     entryType: 'Material Receipt',
@@ -395,7 +415,7 @@ const StockEntries = () => {
             </select>
 
             <button 
-              onClick={() => { setShowModal(true); setFormData(prev => ({ ...prev, items: [] })); }}
+              onClick={() => { navigate('/stock-entries/new'); setFormData(prev => ({ ...prev, items: [] })); }}
               className="flex items-center gap-2  p-2  bg-indigo-600 text-white rounded  text-sm  hover:bg-indigo-700 transition-colors "
             >
               <Plus className="w-4 h-4" />
@@ -496,7 +516,10 @@ const StockEntries = () => {
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
-                      <button className="p-2 text-slate-400 hover:bg-slate-100 rounded  transition-colors">
+                      <button 
+                        onClick={() => navigate(`/stock-entries?id=${entry.id}`)}
+                        className="p-2 text-slate-400 hover:bg-slate-100 rounded  transition-colors"
+                      >
                         <ExternalLink className="w-4 h-4" />
                       </button>
                     </div>
@@ -511,7 +534,7 @@ const StockEntries = () => {
       {/* Creation Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-2">
-          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowModal(false)} />
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => navigate('/stock-entries')} />
           <div className="relative bg-white rounded shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col animate-in fade-in zoom-in duration-200">
             <div className="p-2  border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
               <div>
@@ -519,7 +542,7 @@ const StockEntries = () => {
                 <p className="text-xs text-slate-500 mt-1">Record material movements between warehouses or adjust stock levels.</p>
               </div>
               <button 
-                onClick={() => setShowModal(false)}
+                onClick={() => navigate('/stock-entries')}
                 className="p-2 hover:bg-white rounded  transition-colors text-slate-400 hover:text-slate-900  border border-slate-100"
               >
                 <XCircle className="w-5 h-5" />
@@ -733,7 +756,7 @@ const StockEntries = () => {
 
             <div className="p-2  border-t border-slate-100 flex items-center justify-end gap-2 bg-slate-50/50">
               <button 
-                onClick={() => setShowModal(false)}
+                onClick={() => navigate('/stock-entries')}
                 className="p-2.5 rounded  border border-slate-200 text-slate-600  text-sm hover:bg-white transition-all"
               >
                 Cancel
