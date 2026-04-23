@@ -86,13 +86,22 @@ const QuotationFormPage = () => {
       });
       setProjectName(initialData.projectName || '');
       
-      const mappedItems = (initialData.items || []).map(item => ({
-        ...item,
-        id: item.id || Date.now() + Math.random(),
-        total: (parseFloat(item.quantity) || 0) * (parseFloat(item.rate) || 0),
-        gst_percentage: item.gst_percentage || 18,
-        isManual: !item.drawing_id && !!item.drawing_no
-      }));
+      const mappedItems = (initialData.items || [])
+        .filter(item => {
+          const g = (item.item_group || '').toUpperCase();
+          return g === 'FG' || g === 'FINISHED GOODS' || g === 'FINISHED_GOODS';
+        })
+        .map(item => {
+          const latestRate = parseFloat(item.bom_cost || item.rate || 0);
+          return {
+            ...item,
+            id: item.id || Date.now() + Math.random(),
+            rate: latestRate,
+            total: (parseFloat(item.quantity) || 0) * latestRate,
+            gst_percentage: item.gst_percentage || 18,
+            isManual: !item.drawing_id && !!item.drawing_no
+          };
+        });
       
       setItems(mappedItems);
       setNotes(initialData.notes || '');
@@ -213,7 +222,9 @@ const QuotationFormPage = () => {
         total: (parseFloat(item.quantity) || 0) * (parseFloat(item.rate) || 0),
         gst_percentage: item.gst_percentage || 18,
         drawing_no: item.drawing_no,
-        description: item.description
+        description: item.description,
+        bom_id: item.bom_id,
+        revision_no: item.revision_no
       })));
     }
   };
@@ -472,6 +483,8 @@ const QuotationFormPage = () => {
         projectName: projectName,
         items: items.map(item => ({
           salesOrderItemId: item.salesOrderItemId || null,
+          bom_id: item.bom_id || null,
+          revision_no: item.revision_no || null,
           orderId: item.orderId || null,
           drawing_no: item.drawing_no,
           description: item.description,

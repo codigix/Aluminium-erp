@@ -172,6 +172,16 @@ const getBOMHistory = async (req, res, next) => {
   }
 };
 
+const getLatestBOMCost = async (req, res, next) => {
+  try {
+    const { itemCode, drawingNo, bomId } = req.query;
+    const result = await bomService.getLatestBOMCost(itemCode, drawingNo, bomId);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getItemMaterials,
   addItemMaterial,
@@ -190,5 +200,6 @@ module.exports = {
   getApprovedBOMs,
   createBOMRequest,
   deleteBOM,
-  getBOMHistory
+  getBOMHistory,
+  getLatestBOMCost
 };

@@ -1550,11 +1550,13 @@ const BOMFormPage = () => {
       // Determine version number
       let nextRevision = productForm.revision;
       if (isNewVersion) {
-        // Find highest version in history
-        const maxVersion = bomHistory.reduce((max, item) => {
+        // Find highest version in history or current revision
+        const currentRev = parseInt(productForm.revision || 0);
+        const maxHistoryVersion = bomHistory.reduce((max, item) => {
           const v = parseInt(item.version || 0);
           return v > max ? v : max;
         }, 0);
+        const maxVersion = Math.max(currentRev, maxHistoryVersion);
         nextRevision = (maxVersion + 1).toString();
       }
 

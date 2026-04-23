@@ -480,7 +480,14 @@ const createBOMRequest = async (bomData) => {
       // Get existing bom_id
       const [existing] = await connection.query('SELECT bom_id FROM sales_order_items WHERE id = ?', [itemId]);
       if (existing.length > 0) {
-        effectiveBomId = existing[0].bom_id || itemId; // Fallback to current ID if no bom_id yet
+        effectiveBomId = existing[0].bom_id;
+        
+        // If the original item doesn't have a bom_id yet, it becomes the root
+        if (!effectiveBomId) {
+          effectiveBomId = itemId;
+          // Update the original item to point to itself as the root
+          await connection.execute('UPDATE sales_order_items SET bom_id = ? WHERE id = ?', [itemId, itemId]);
+        }
       }
     }
 
@@ -809,32 +816,32 @@ const getBOMHistory = async (itemCode, drawingNo, itemId = null) => {
   }
 
   const queryParams = [];
-  let whereClause = '';
+  const clauses = [];
   
   if (effectiveBomId) {
-    whereClause = 'soi.bom_id = ?';
-    queryParams.push(effectiveBomId);
-  } else {
-    // Legacy fallback for records without bom_id
-    let fallbackClause = '(';
-    if (effectiveItemCode && effectiveItemCode.trim() !== '') {
-      fallbackClause += 'LOWER(TRIM(soi.item_code)) = LOWER(TRIM(?))';
+    clauses.push('(soi.bom_id = ? OR soi.id = ?)');
+    queryParams.push(effectiveBomId, effectiveBomId);
+  }
+
+  if (effectiveItemCode && effectiveItemCode.trim() !== '') {
+    if (effectiveDrawingNo && effectiveDrawingNo.trim() !== '') {
+      clauses.push('(LOWER(TRIM(soi.item_code)) = LOWER(TRIM(?)) AND LOWER(TRIM(soi.drawing_no)) = LOWER(TRIM(?)))');
+      queryParams.push(effectiveItemCode, effectiveDrawingNo);
+    } else {
+      clauses.push('LOWER(TRIM(soi.item_code)) = LOWER(TRIM(?))');
       queryParams.push(effectiveItemCode);
     }
-    
-    if (effectiveDrawingNo && effectiveDrawingNo.trim() !== '') {
-      if (queryParams.length > 0) fallbackClause += ' OR ';
-      fallbackClause += 'LOWER(TRIM(soi.drawing_no)) = LOWER(TRIM(?))';
-      queryParams.push(effectiveDrawingNo);
-    }
-    fallbackClause += ')';
-
-    if (queryParams.length === 0) {
-      console.log('[getBOMHistory] No identity found, returning empty array');
-      return [];
-    }
-    whereClause = fallbackClause;
+  } else if (effectiveDrawingNo && effectiveDrawingNo.trim() !== '') {
+    clauses.push('LOWER(TRIM(soi.drawing_no)) = LOWER(TRIM(?))');
+    queryParams.push(effectiveDrawingNo);
   }
+
+  if (clauses.length === 0) {
+    console.log('[getBOMHistory] No identity found, returning empty array');
+    return [];
+  }
+  
+  whereClause = `(${clauses.join(' OR ')})`;
 
   const sql = `
     SELECT 

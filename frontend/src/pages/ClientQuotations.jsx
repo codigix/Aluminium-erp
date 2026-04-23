@@ -284,7 +284,11 @@ const ClientQuotations = () => {
           initialGst[clientName][item.id] = 18;
 
           if (item.bom_cost && Number(item.bom_cost) > 0) {
-            const calculatedPrice = Number(item.bom_cost) * (1 + margin / 100);
+            const g = (item.item_group || item.item_group_calc || '').toUpperCase();
+            const isFG = g === 'FG' || g === 'FINISHED GOODS' || g === 'FINISHED_GOODS';
+            
+            // Sub-assemblies default to 0 rate as they are usually included in FG price
+            const calculatedPrice = isFG ? Number(item.bom_cost) * (1 + margin / 100) : 0;
             initialPrices[clientName][item.id] = calculatedPrice.toFixed(2);
           }
         });
@@ -735,6 +739,9 @@ const ClientQuotations = () => {
             return {
               id: item.id,
               salesOrderItemId: item.id,
+              bom_id: item.bom_id,
+              revision_no: item.revision_no,
+              bom_cost: item.bom_cost,
               orderId: item.sales_order_id, // Link to original sales order
               drawing_id: item.drawing_id,
               drawing_no: item.drawing_no,
@@ -743,6 +750,7 @@ const ClientQuotations = () => {
               unit: item.unit,
               rate: itemPrice,
               total: item.design_qty * itemPrice,
+              item_group: item.item_group || item.item_group_calc,
               gst_percentage: gsts[item.id] || 18,
               status: item.status,
               rejection_reason: item.rejection_reason

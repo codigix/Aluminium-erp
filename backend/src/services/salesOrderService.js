@@ -825,7 +825,23 @@ const getApprovedDrawings = async (companyId = null) => {
   
   for (const order of rows) {
     const [items] = await pool.query(
-      `SELECT soi.*, 
+      `SELECT soi.id, soi.sales_order_id, soi.bom_id, soi.item_code, soi.item_type, soi.item_group, 
+              soi.unit, soi.description, soi.is_active, soi.is_default, soi.quantity, 
+              soi.drawing_no, soi.drawing_id, soi.status, soi.created_by, soi.created_at, soi.updated_at,
+              (
+                SELECT bom_cost FROM sales_order_items v2 
+                WHERE ((v2.bom_id = soi.bom_id AND soi.bom_id IS NOT NULL)
+                   OR (v2.item_code = soi.item_code AND v2.drawing_no = soi.drawing_no AND v2.item_code IS NOT NULL AND v2.drawing_no IS NOT NULL))
+                   AND v2.bom_cost > 0
+                ORDER BY v2.id DESC LIMIT 1
+              ) as bom_cost,
+              (
+                SELECT revision_no FROM sales_order_items v3 
+                WHERE ((v3.bom_id = soi.bom_id AND soi.bom_id IS NOT NULL)
+                   OR (v3.item_code = soi.item_code AND v3.drawing_no = soi.drawing_no AND v3.item_code IS NOT NULL AND v3.drawing_no IS NOT NULL))
+                   AND v3.bom_cost > 0
+                ORDER BY v3.id DESC LIMIT 1
+              ) as revision_no,
               COALESCE(NULLIF(soi.item_group, ''), NULLIF(soi.item_type, '')) as item_group_calc,
               COALESCE(
                 poi.quantity, 
@@ -833,6 +849,11 @@ const getApprovedDrawings = async (companyId = null) => {
                 soi.quantity
               ) as design_qty
        FROM sales_order_items soi
+       INNER JOIN (
+         SELECT sales_order_id, drawing_no, item_code, MAX(id) as max_id
+         FROM sales_order_items
+         GROUP BY sales_order_id, drawing_no, item_code
+       ) latest ON soi.id = latest.max_id
        LEFT JOIN sales_orders so ON soi.sales_order_id = so.id
        LEFT JOIN customer_po_items poi ON so.customer_po_id = poi.customer_po_id 
             AND (TRIM(soi.drawing_no) = TRIM(poi.drawing_no) AND soi.drawing_no IS NOT NULL)
@@ -843,8 +864,7 @@ const getApprovedDrawings = async (companyId = null) => {
            TRIM(UPPER(soi.item_type)) IN ('FG', 'FINISHED GOODS', 'FINISHED_GOODS', 'SA', 'SUB ASSEMBLY', 'SUB_ASSEMBLY')
          )
        )
-       AND (soi.status IS NULL OR TRIM(UPPER(soi.status)) NOT IN ('REJECTED', 'CANCELLED'))
-       AND soi.bom_cost > 0`,
+       AND (soi.status IS NULL OR TRIM(UPPER(soi.status)) NOT IN ('REJECTED', 'CANCELLED'))`,
       [order.id]
     );
     order.items = items;

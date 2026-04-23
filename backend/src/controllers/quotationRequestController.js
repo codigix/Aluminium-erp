@@ -28,6 +28,13 @@ const getQuotationRequests = async (req, res, next) => {
                COALESCE(soi.unit, qr.item_unit, 'NOS') as item_unit,
                COALESCE(soi.unit, qr.item_unit, 'NOS') as uom,
                COALESCE(qr.item_group, soi.item_group, 'FG') as item_group,
+               (
+                 SELECT bom_cost FROM sales_order_items v2 
+                 WHERE ((v2.bom_id = soi.bom_id AND soi.bom_id IS NOT NULL)
+                    OR (v2.item_code = soi.item_code AND v2.drawing_no = soi.drawing_no AND v2.item_code IS NOT NULL AND v2.drawing_no IS NOT NULL))
+                    AND v2.bom_cost > 0
+                 ORDER BY v2.id DESC LIMIT 1
+               ) as latest_bom_cost,
                qr.id as id
         FROM quotation_requests qr
         LEFT JOIN sales_orders so ON so.id = qr.sales_order_id
@@ -84,7 +91,14 @@ const getQuotationVersionHistory = async (req, res, next) => {
       `SELECT qr.*, c.company_name, 
               COALESCE(soi.drawing_no, qr.drawing_no) as drawing_no,
               COALESCE(soi.description, qr.description) as item_description,
-              COALESCE(soi.unit, qr.item_unit) as item_unit
+              COALESCE(soi.unit, qr.item_unit) as item_unit,
+              (
+                SELECT bom_cost FROM sales_order_items v2 
+                WHERE ((v2.bom_id = soi.bom_id AND soi.bom_id IS NOT NULL)
+                   OR (v2.item_code = soi.item_code AND v2.drawing_no = soi.drawing_no AND v2.item_code IS NOT NULL AND v2.drawing_no IS NOT NULL))
+                   AND v2.bom_cost > 0
+                ORDER BY v2.id DESC LIMIT 1
+              ) as latest_bom_cost
        FROM quotation_requests qr
        JOIN companies c ON qr.company_id = c.id
        LEFT JOIN sales_order_items soi ON soi.id = qr.sales_order_item_id
@@ -119,6 +133,9 @@ const getQuotationVersionHistory = async (req, res, next) => {
       }
       
       const group = versionMap[row.version];
+      const itemRate = parseFloat(row.latest_bom_cost || (row.total_amount / (row.item_qty || 1))) || 0;
+      const itemTotal = itemRate * (row.item_qty || 0);
+
       group.items.push({
         id: row.id,
         sales_order_item_id: row.sales_order_item_id,
@@ -126,14 +143,14 @@ const getQuotationVersionHistory = async (req, res, next) => {
         description: row.item_description,
         quantity: row.item_qty,
         unit: row.item_unit,
-        rate: row.total_amount / (row.item_qty || 1),
-        total: row.total_amount,
+        rate: itemRate,
+        total: itemTotal,
         gst_percentage: row.gst_percentage,
         status: row.status
       });
       
-      group.total_amount += parseFloat(row.total_amount) || 0;
-      group.received_amount += parseFloat(row.received_amount) || 0;
+      group.total_amount += itemTotal;
+      group.received_amount += itemTotal * (1 + (row.gst_percentage || 18) / 100);
     });
 
     res.json(versionGroups);
