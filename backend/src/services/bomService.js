@@ -20,6 +20,17 @@ const getItemMaterials = async (itemId, itemCode = null, drawingNo = null) => {
   
   // Fallback to Master/Template if no specific ID data found or NO ID provided
   if (rows.length === 0 && (itemCode || drawingNo)) {
+    // If we have an ID but no specific materials, check if we should even fallback.
+    // If the cost of the item doesn't match the master, fallback might show wrong data.
+    if (parsedItemId) {
+      const [itemRow] = await pool.query('SELECT bom_cost FROM sales_order_items WHERE id = ?', [parsedItemId]);
+      if (itemRow.length > 0 && parseFloat(itemRow[0].bom_cost) > 0) {
+        // Only fallback if master exists and has similar cost? 
+        // For now, let's just proceed but log it.
+        console.log(`[getItemMaterials] Fallback triggered for ID ${parsedItemId} with cost ${itemRow[0].bom_cost}`);
+      }
+    }
+
     let query = `SELECT m.*, i.item_code as actual_item_code, i.material_name as actual_item_name 
                  FROM sales_order_item_materials m 
                  LEFT JOIN (
@@ -68,6 +79,9 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null) => {
   
   // Fallback to Master/Template if no specific ID data found or NO ID provided
   if (rows.length === 0 && (itemCode || drawingNo)) {
+    if (parsedItemId) {
+      console.log(`[getItemComponents] Fallback triggered for ID ${parsedItemId}`);
+    }
     let query = 'SELECT * FROM sales_order_item_components WHERE ';
     let params = [];
 
@@ -104,6 +118,9 @@ const getItemOperations = async (itemId, itemCode = null, drawingNo = null) => {
   
   // Fallback to Master/Template if no specific ID data found or NO ID provided
   if (rows.length === 0 && (itemCode || drawingNo)) {
+    if (parsedItemId) {
+      console.log(`[getItemOperations] Fallback triggered for ID ${parsedItemId}`);
+    }
     let query = 'SELECT * FROM sales_order_item_operations WHERE ';
     let params = [];
 
@@ -151,6 +168,9 @@ const getItemScrap = async (itemId, itemCode = null, drawingNo = null) => {
   
   // Fallback to Master/Template if no specific ID data found or NO ID provided
   if (rows.length === 0 && (itemCode || drawingNo)) {
+    if (parsedItemId) {
+      console.log(`[getItemScrap] Fallback triggered for ID ${parsedItemId}`);
+    }
     let query = 'SELECT * FROM sales_order_item_scrap WHERE ';
     let params = [];
 
@@ -828,10 +848,8 @@ const getBOMHistory = async (itemCode, drawingNo, itemId = null) => {
     LEFT JOIN sales_orders so ON soi.sales_order_id = so.id
     LEFT JOIN users u ON soi.created_by = u.id
     WHERE ${whereClause}
-    ORDER BY (CASE WHEN soi.id = ? THEN 0 ELSE 1 END) ASC, soi.updated_at DESC, soi.id DESC
+    ORDER BY CAST(soi.revision_no AS UNSIGNED) ASC, soi.id ASC
   `;
-  
-  queryParams.push(itemId);
   
   console.log(`[getBOMHistory] Executing SQL with params:`, queryParams);
 

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Card, StatusBadge, DataTable } from '../components/ui.jsx';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
-import { Eye, FileText, RotateCw, Clock, History, Check, X, ExternalLink } from 'lucide-react';
+import { Eye, FileText, RotateCw, Clock, History, Check, X, ExternalLink, Trash2, Edit2 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
 
@@ -705,8 +705,15 @@ const BOMCreation = () => {
                                           className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded transition-all" 
                                           title="Edit Latest BOM"
                                         >
-                                          <FileText className="w-4 h-4" />
+                                          <Edit2 className="w-4 h-4" />
                                         </Link>
+                                        <button 
+                                          onClick={(e) => { e.stopPropagation(); handleDeleteBOM(latest.id); }}
+                                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-all" 
+                                          title="Delete BOM"
+                                        >
+                                          <Trash2 className="w-4 h-4" />
+                                        </button>
                                       </div>
                                     </td>
                                   </tr>

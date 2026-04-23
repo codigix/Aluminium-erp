@@ -121,7 +121,19 @@ const BOMApproval = () => {
       });
       if (!response.ok) throw new Error('Failed to fetch BOM details');
       const data = await response.json();
-      setOrderItems(data);
+      
+      // Group items by identity to only show the latest version for approval
+      const grouped = (data || []).reduce((acc, item) => {
+        const identity = `${item.drawing_no || 'NA'}_${item.item_code || 'NA'}`;
+        if (!acc[identity] || 
+            (parseFloat(item.revision_no || item.version || 0) > parseFloat(acc[identity].revision_no || acc[identity].version || 0)) ||
+            (parseFloat(item.revision_no || item.version || 0) === parseFloat(acc[identity].revision_no || acc[identity].version || 0) && item.id > acc[identity].id)) {
+          acc[identity] = item;
+        }
+        return acc;
+      }, {});
+
+      setOrderItems(Object.values(grouped));
     } catch (error) {
       console.error(error);
       errorToast('Failed to load BOM details');

@@ -851,36 +851,40 @@ const BOMFormPage = () => {
 
   const fetchData = useCallback(async (showLoading = true) => {
     try {
-      if (showLoading) setLoading(true);
-      fetchItemGroups();
+      console.log(`[fetchData] Starting - itemId: ${itemId}, showLoading: ${showLoading}`);
+      if (showLoading) {
+        setLoading(true);
+        // Reset BOM data to avoid stale data flash
+        setBomData({ materials: [], components: [], operations: [], scrap: [] });
+      }
+      
       const token = localStorage.getItem('authToken');
+      if (!token) {
+        setLoading(false);
+        return;
+      }
 
-      // Fetch Stock Items (Raw Materials and Producible items like FG/SFG)
-      const stockResponse = await fetch(`${API_BASE}/stock/balance?includeAll=true`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      fetchItemGroups();
+
+      // Fetch foundational data in parallel
+      console.log('[fetchData] Fetching foundational data...');
+      const [stockRes, bomsRes, dwgsRes] = await Promise.all([
+        fetch(`${API_BASE}/stock/balance?includeAll=true`, { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(`${API_BASE}/bom/approved`, { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(`${API_BASE}/sales-orders/approved-drawings`, { headers: { 'Authorization': `Bearer ${token}` } })
+      ]);
+
       let latestStockItems = [];
-      if (stockResponse.ok) {
-        latestStockItems = await stockResponse.json();
+      if (stockRes.ok) {
+        latestStockItems = await stockRes.json();
         setStockItems(latestStockItems);
       }
-
-      // Fetch Approved BOMs for Sub-Assembly Rates
-      const approvedBomsResponse = await fetch(`${API_BASE}/bom/approved`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (approvedBomsResponse.ok) {
-        const approvedBomsData = await approvedBomsResponse.json();
-        setApprovedBOMs(approvedBomsData);
-      }
-
-      // Fetch All Approved Drawings for Selection
-      const drawingsResponse = await fetch(`${API_BASE}/sales-orders/approved-drawings`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      
+      if (bomsRes.ok) setApprovedBOMs(await bomsRes.json());
+      
       let currentApprovedDrawings = [];
-      if (drawingsResponse.ok) {
-        const drawingsData = await drawingsResponse.json();
+      if (dwgsRes.ok) {
+        const drawingsData = await dwgsRes.json();
         currentApprovedDrawings = drawingsData.flatMap(order => (order.items || []).map(item => ({
           ...item,
           company_name: order.company_name,
@@ -894,49 +898,42 @@ const BOMFormPage = () => {
       const drawingNoFromUrl = params.get('drawing_no');
       const drawingIdFromUrl = params.get('drawing_id') === 'N/A' ? '' : params.get('drawing_id');
       const salesOrderIdFromUrl = params.get('sales_order_id');
-      const effectiveId = (itemId && itemId !== 'bom-form') 
-        ? itemId 
-        : (selectedItemRef.current?.source === 'order' ? selectedItemRef.current?.id : null);
+      
+      const effectiveId = (itemId && itemId !== 'bom-form') ? itemId : null;
 
-      if (effectiveId || itemCodeFromUrl || selectedItemRef.current?.item_code || drawingNoFromUrl) {
+      if (effectiveId || itemCodeFromUrl || drawingNoFromUrl) {
         let currentItem = selectedItemRef.current;
-        
-        // If we have drawing_no and sales_order_id from URL but no effectiveId,
-        // try to find the matching item in currentApprovedDrawings to auto-link it.
+
+        // 1. Auto-link drawing to Sales Order Item if needed
         if (!effectiveId && drawingNoFromUrl && salesOrderIdFromUrl && currentApprovedDrawings.length > 0) {
           const matchedItem = currentApprovedDrawings.find(d => 
             String(d.drawing_no) === String(drawingNoFromUrl) && 
             String(d.sales_order_id) === String(salesOrderIdFromUrl)
           );
           if (matchedItem) {
+            console.log(`[fetchData] Auto-linked drawing to item ID: ${matchedItem.id}`);
             currentItem = { ...matchedItem, source: 'order' };
             setSelectedItem(currentItem);
           }
         }
 
-        // If we have an ID but not selectedItem data (and it's not the one we just selected)
-        if (effectiveId && (!selectedItemRef.current || String(selectedItemRef.current.id) !== String(effectiveId))) {
-          const itemResponse = await fetch(`${API_BASE}/sales-orders/items/${effectiveId}`, {
+        // 2. Fetch Item Info if we have an ID but no data
+        if (effectiveId && (!currentItem || String(currentItem.id) !== String(effectiveId))) {
+          console.log(`[fetchData] Fetching sales order item: ${effectiveId}`);
+          const itemRes = await fetch(`${API_BASE}/sales-orders/items/${effectiveId}`, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
-          if (itemResponse.ok) {
-            const itemData = await itemResponse.json();
+          if (itemRes.ok) {
+            const itemData = await itemRes.json();
             currentItem = { ...itemData, source: 'order' };
-
-            // Auto-select if in read-only mode OR if we're editing an existing BOM
-            if (isReadOnly || (itemId && itemId !== 'bom-form')) {
-              setSelectedItem(currentItem);
-            }
-
-            if (itemData.drawing_no && itemData.drawing_no !== 'N/A') {
-              setDrawingFilter(itemData.drawing_no);
-            }
-
-            // Manually populate drawing info in form without setting product code/name/group
+            setSelectedItem(currentItem);
+            
             setProductForm(prev => ({
               ...prev,
+              itemCode: itemData.item_code || prev.itemCode,
               drawingNo: itemData.drawing_no || prev.drawingNo,
               drawing_id: itemData.drawing_id || drawingIdFromUrl || prev.drawing_id,
+              description: itemData.drawing_name || itemData.description || prev.description,
               uom: itemData.unit || itemData.uom || prev.uom,
               revision: itemData.revision_no || itemData.revision || prev.revision,
               quantity: itemData.quantity || prev.quantity
@@ -944,118 +941,65 @@ const BOMFormPage = () => {
           }
         }
 
-        // Fetch BOM Details
-        const itemCodeParam = itemCodeFromUrl || currentItem?.item_code || currentItem?.itemCode;
-        const drawingNoParam = drawingNoFromUrl || currentItem?.drawing_no || currentItem?.drawingNo || productForm.drawingNo;
+        // 3. Fetch BOM structure
+        const itemCodeParam = itemCodeFromUrl || currentItem?.item_code || productForm.itemCode;
+        const drawingNoParam = drawingNoFromUrl || currentItem?.drawing_no || productForm.drawingNo;
 
         let bomUrl = `${API_BASE}/bom/items/${effectiveId || 'null'}`;
-        const queryParams = [];
-        if (itemCodeParam) {
-          queryParams.push(`itemCode=${encodeURIComponent(itemCodeParam)}`);
-        }
-        if (drawingNoParam && drawingNoParam !== 'N/A') {
-          queryParams.push(`drawingNo=${encodeURIComponent(drawingNoParam)}`);
-        }
+        const qp = [];
+        if (itemCodeParam) qp.push(`itemCode=${encodeURIComponent(itemCodeParam)}`);
+        if (drawingNoParam && drawingNoParam !== 'N/A') qp.push(`drawingNo=${encodeURIComponent(drawingNoParam)}`);
+        if (qp.length > 0) bomUrl += `?${qp.join('&')}`;
 
-        if (queryParams.length > 0) {
-          bomUrl += `?${queryParams.join('&')}`;
-        }
-
-        const bomResponse = await fetch(bomUrl, {
+        console.log(`[fetchData] Fetching BOM items: ${bomUrl}`);
+        const bomRes = await fetch(bomUrl, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
-        if (bomResponse.ok) {
-          const data = await bomResponse.json();
 
-          // Sync rates with latest stock data if rate is 0 or missing
+        if (bomRes.ok) {
+          const data = await bomRes.json();
+          console.log(`[fetchData] BOM items loaded: ${data.materials?.length || 0} mat, ${data.components?.length || 0} comp`);
+          
           if (data.materials) {
             data.materials = data.materials.map(m => {
               const s = latestStockItems.find(si => si.material_name === m.material_name);
-              if (s) {
-                // Prioritize Selling Rate as it's often the manual rate added during item creation
-                const targetRate = (!m.rate || parseFloat(m.rate) === 0) ? (s.selling_rate > 0 ? s.selling_rate : (s.valuation_rate || 0)) : m.rate;
-                return { 
-                  ...m, 
-                  rate: targetRate,
-                  item_code: m.item_code || s.item_code,
-                  length: s.length,
-                  width: s.width,
-                  thickness: s.thickness,
-                  diameter: s.diameter,
-                  outer_diameter: s.outer_diameter
-                };
-              }
-              return m;
+              const rate = (!m.rate || parseFloat(m.rate) === 0) ? (s?.selling_rate || s?.valuation_rate || 0) : m.rate;
+              return { ...m, rate, item_code: m.item_code || s?.item_code, length: m.length || s?.length, width: m.width || s?.width, thickness: m.thickness || s?.thickness };
             });
           }
           if (data.components) {
             data.components = data.components.map(c => {
               const s = latestStockItems.find(si => si.item_code === c.component_code);
-              if (s) {
-                const targetRate = (s && (!c.rate || parseFloat(c.rate) === 0)) ? (s.selling_rate > 0 ? s.selling_rate : (s.valuation_rate || 0)) : c.rate;
-                return { 
-                  ...c, 
-                  rate: targetRate,
-                  weight_per_unit: c.weight_per_unit || s.weight_per_unit || 0,
-                  scrap_percent: c.scrap_percent || s.scrap_percent || 0,
-                  item_group: c.item_group || s.item_group || s.material_type || "",
-                  length: s.length,
-                  width: s.width,
-                  thickness: s.thickness,
-                  diameter: s.diameter,
-                  outer_diameter: s.outer_diameter
-                };
-              }
-              return c;
-            });
-          }
-          if (data.scrap) {
-            data.scrap = data.scrap.map(sc => {
-              const s = latestStockItems.find(si => si.item_code === sc.item_code);
-              if (s && (!sc.rate || parseFloat(sc.rate) === 0)) {
-                const targetRate = s.selling_rate > 0 ? s.selling_rate : (s.valuation_rate || 0);
-                return { ...sc, rate: targetRate };
-              }
-              return sc;
+              const rate = (!c.rate || parseFloat(c.rate) === 0) ? (s?.selling_rate || s?.valuation_rate || 0) : c.rate;
+              return { ...c, rate, weight_per_unit: c.weight_per_unit || s?.weight_per_unit || 0 };
             });
           }
 
           setBomData(data);
-        } else if (bomResponse.status === 404) {
-          setBomData({ materials: [], components: [], operations: [], scrap: [] });
         }
       }
 
-      // Fetch Workstations
-      const wsResponse = await fetch(`${API_BASE}/workstations`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (wsResponse.ok) {
-        const wsData = await wsResponse.json();
-        setWorkstations(wsData);
-      }
-
-      // Fetch Operations Master
-      const opsResponse = await fetch(`${API_BASE}/operations`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (opsResponse.ok) {
-        const opsData = await opsResponse.json();
-        setOperationsList(opsData);
-      }
+      // Fetch Workstations & Operations List
+      const [wsRes, opsRes] = await Promise.all([
+        fetch(`${API_BASE}/workstations`, { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(`${API_BASE}/operations`, { headers: { 'Authorization': `Bearer ${token}` } })
+      ]);
+      if (wsRes.ok) setWorkstations(await wsRes.json());
+      if (opsRes.ok) setOperationsList(await opsRes.json());
 
     } catch (error) {
+      console.error('[fetchData] Error:', error);
       errorToast(error.message);
     } finally {
       if (showLoading) setLoading(false);
+      console.log('[fetchData] Finished');
     }
-  }, [itemId, isReadOnly, location.search]);
+  }, [itemId, location.search]);
 
   useEffect(() => {
-    // Only show full page loading on the very first mount
-    const isFirstRun = !stockItems.length && !approvedDrawings.length;
-    fetchData(isFirstRun);
-  }, [itemId, fetchData, location.search]); // Trigger on itemId or location.search changes
+    // Show loading when itemId changes to avoid showing stale data
+    fetchData(true);
+  }, [itemId, fetchData]);
 
   // Sync productForm with selectedItem when it changes
   useEffect(() => {
@@ -1760,7 +1704,7 @@ const BOMFormPage = () => {
   const costPerUnit = totalBOMCost;
   const totalScrapQty = bomData.scrap.reduce((sum, s) => sum + (parseFloat(s.input_qty || 0) * (parseFloat(s.loss_percent || 0) / 100)), 0) / batchQty;
 
-  if (loading && stockItems.length === 0) return (
+  if (loading && stockItems.length === 0 && bomData.materials.length === 0 && bomData.components.length === 0) return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-2">
       <Loader2 className="w-5 h-5 text-indigo-600 animate-spin" />
       <div className="text-slate-500 animate-pulse">Loading Item Details...</div>
@@ -3298,9 +3242,9 @@ const BOMFormPage = () => {
       </div>
 
       {/* Side-by-Side Costing and Version History */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+      <div className={itemId && itemId !== 'bom-form' ? "grid grid-cols-1 xl:grid-cols-2 gap-4" : "w-full"}>
         {/* SECTION 6: BOM Costing */}
-        <Card className="p-0 border-slate-200 overflow-hidden ">
+        <Card className={`p-0 border-slate-200 overflow-hidden ${!(itemId && itemId !== 'bom-form') ? 'w-full' : ''}`}>
           <div
             className="bg-white p-2 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition-colors"
             onClick={() => toggleSection('costing')}
@@ -3376,6 +3320,7 @@ const BOMFormPage = () => {
         </Card>
 
         {/* BOM Version History */}
+        {(itemId && itemId !== 'bom-form') && (
         <Card className="p-0 border-slate-200 overflow-hidden h-full">
           <div className="bg-white p-2 flex items-center justify-between border-b border-slate-100">
             <div className="flex items-center gap-2">
@@ -3394,72 +3339,79 @@ const BOMFormPage = () => {
               <Plus className="w-3 h-3" /> Save as New Version
             </button>
           </div>
-          <div className="p-0 overflow-auto max-h-[250px]">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-100">
-                  <th className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Version</th>
-                  <th className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Status</th>
-                  <th className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Revision Date</th>
-                  <th className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total Cost (Per Unit)</th>
-                  <th className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Changed By</th>
-                  <th className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {loadingHistory ? (
-                  <tr>
-                    <td colSpan="6" className="px-3 py-8 text-center text-slate-400">
-                      <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2" />
-                      <span className="text-xs">Loading history...</span>
-                    </td>
-                  </tr>
-                ) : bomHistory.length > 0 ? (
-                  bomHistory.map((v, idx) => (
-                    <tr key={v.id || idx} className="hover:bg-slate-50 transition-colors">
-                      <td className="px-3 py-2 text-xs font-medium text-slate-900">{v.version || '1'}</td>
-                      <td className="px-3 py-2">
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                          v.status === 'APPROVED' || v.status === 'Active' ? 'bg-emerald-100 text-emerald-700' : 
-                          v.status === 'DRAFT' ? 'bg-slate-100 text-slate-600' : 'bg-amber-100 text-amber-700'
-                        }`}>
-                          {v.status || 'Active'}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 text-[11px] text-slate-500">
-                        {v.revision_date ? new Date(v.revision_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
-                        <div className="text-[9px] opacity-60">{v.revision_date ? new Date(v.revision_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</div>
-                      </td>
-                      <td className="px-3 py-2 text-xs font-bold text-slate-700">₹{parseFloat(v.total_cost || 0).toFixed(2)}</td>
-                      <td className="px-3 py-2 text-[11px] text-slate-600">
-                        <div className="font-medium">{v.changed_by || 'SPTECH'}</div>
-                        <div className="text-[9px] text-slate-400">(Sales)</div>
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        <button 
-                          onClick={() => navigate(`/bom-form/${v.id}?view=true`)}
-                          className="p-1 text-slate-400 hover:text-indigo-600 transition-colors"
-                          title="View this version"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan="6" className="px-3 py-8 text-center text-slate-400 text-xs">
-                      No version history found for this item
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+          <div className="p-2 overflow-auto max-h-[350px]">
+            {loadingHistory ? (
+              <div className="py-12 text-center text-slate-400">
+                <Loader2 className="w-6 h-6 animate-spin mx-auto mb-3" />
+                <p className="text-xs font-medium">Retrieving version history...</p>
+              </div>
+            ) : bomHistory.length > 0 ? (
+              <div className="grid grid-cols-1 gap-2">
+                {bomHistory.map((v, idx) => {
+                  const isCurrent = String(v.id) === String(itemId);
+                  return (
+                    <div 
+                      key={v.id || idx}
+                      onClick={() => navigate(`/bom-form/${v.id}${isReadOnly ? '?view=true' : ''}`)}
+                      className={`group relative p-3 rounded-lg border transition-all cursor-pointer ${
+                        isCurrent 
+                          ? 'bg-indigo-50/50 border-indigo-200 ring-1 ring-indigo-100' 
+                          : 'bg-white border-slate-100 hover:border-indigo-200 hover:shadow-md hover:shadow-indigo-50'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs ${
+                            isCurrent ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'bg-slate-100 text-slate-600 group-hover:bg-indigo-50 group-hover:text-indigo-600'
+                          }`}>
+                            V{v.version || '1'}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-bold text-slate-800">₹{parseFloat(v.total_cost || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                              {isCurrent && (
+                                <span className="px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded text-[9px] font-bold uppercase tracking-wider">Current</span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <Clock className="w-3 h-3 text-slate-400" />
+                              <span className="text-[10px] text-slate-500">
+                                {v.revision_date ? new Date(v.revision_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="text-right">
+                          <div className="text-[10px] font-medium text-slate-600">{v.changed_by || 'SPTECH'}</div>
+                          <div className="text-[9px] text-slate-400">Technical Design</div>
+                          <div className="mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <span className="text-[10px] text-indigo-600 font-bold flex items-center gap-1">
+                              View Details <ChevronRight className="w-3 h-3" />
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="py-12 text-center">
+                <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <History className="w-6 h-6 text-slate-300" />
+                </div>
+                <p className="text-xs text-slate-400 font-medium">No version history found for this item</p>
+                <p className="text-[10px] text-slate-300 mt-1">This appears to be the initial version.</p>
+              </div>
+            )}
           </div>
           <div className="p-2 border-t border-slate-50 bg-slate-50/30">
             <button className="text-[10px] text-indigo-600 font-bold hover:underline">View Full Version History →</button>
           </div>
         </Card>
+        )}
+
       </div>
 
       {/* Footer Actions */}

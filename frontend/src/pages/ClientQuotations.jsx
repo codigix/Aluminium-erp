@@ -221,41 +221,81 @@ const ClientQuotations = () => {
             phone: order.phone || '',
             address: order.address || '',
             created_at: order.created_at,
-            orders: []
+            orders: [],
+            // Store all items here for client-wide grouping
+            all_items_map: {} 
           };
           initialPrices[clientName] = {};
           initialProfits[clientName] = {};
           initialGst[clientName] = {};
         }
-        const fgItems = (order.items || []).filter(item => {
-          const group = (item.item_group || '').trim().toUpperCase();
-          const type = (item.item_type || '').trim().toUpperCase();
-          const isFG = (group === 'FG' || type === 'FG' || group === 'FINISHED GOODS' || group === 'FINISHED_GOODS');
-          const isSA = (group === 'SUB ASSEMBLY' || group === 'SUB_ASSEMBLY' || group === 'SA' || type === 'SA' || type === 'SUB ASSEMBLY' || type === 'SUB_ASSEMBLY');
-          return (isFG || isSA) && (item.status !== 'REJECTED') && Number(item.bom_cost) > 0;
-        });
-        order.items = fgItems;
-        grouped[clientName].orders.push(order);
-        
-        if (order.items) {
-          order.items.forEach(item => {
-            const margin = Number(order.profit_margin) || 0;
-            initialProfits[clientName][item.id] = margin;
-            initialGst[clientName][item.id] = 18;
 
-            if (item.bom_cost && Number(item.bom_cost) > 0) {
-              const calculatedPrice = Number(item.bom_cost) * (1 + margin / 100);
-              initialPrices[clientName][item.id] = calculatedPrice.toFixed(2);
-            } else if (item.rate && Number(item.rate) > 0) {
-              initialPrices[clientName][item.id] = item.rate;
+        // Process items and group by identity across ALL orders for this client
+        (order.items || []).forEach(item => {
+          const g = (item.item_group || '').trim().toUpperCase();
+          const t = (item.item_type || '').trim().toUpperCase();
+          const p = (item.product_type || '').trim().toUpperCase();
+          
+          // INCLUDE both FG and Sub-Assemblies (SA)
+          const isFG = g.includes('FG') || t.includes('FG') || p.includes('FG') || g.includes('FINISHED');
+          const isSA = g.includes('SA') || g.includes('SUB') || t.includes('SA') || t.includes('SUB');
+          
+          // Skip if not FG/SA, rejected, or has no cost
+          if ((!isFG && !isSA) || item.status === 'REJECTED' || !Number(item.bom_cost)) return;
+
+          // Set calc group for UI badge
+          item.item_group_calc = isFG ? 'FG' : 'SUB ASSEMBLY';
+
+          const identity = `${item.drawing_no || 'NA'}_${item.item_code || 'NA'}`;
+          const existing = grouped[clientName].all_items_map[identity];
+          
+          const parseVer = (v) => parseFloat(String(v || 0).replace(/[^\d.]/g, '')) || 0;
+
+          if (!existing) {
+            grouped[clientName].all_items_map[identity] = { ...item, project_name: order.project_name };
+          } else {
+            const currentRev = parseVer(item.revision_no || item.version);
+            const existingRev = parseVer(existing.revision_no || existing.version);
+            
+            // Prioritize higher revision, then higher ID
+            if (currentRev > existingRev || (currentRev === existingRev && parseInt(item.id) > parseInt(existing.id))) {
+              grouped[clientName].all_items_map[identity] = { ...item, project_name: order.project_name };
             }
-          });
-        }
+          }
+        });
       });
+
+      // Finalize the grouped data structure
+      Object.keys(grouped).forEach(clientName => {
+        const client = grouped[clientName];
+        const items = Object.values(client.all_items_map);
+        
+        // Clear temporary maps and set final items
+        // We simulate an 'order' structure to keep compatibility with existing render logic
+        client.orders = [{
+          id: `grouped_${client.company_id}`,
+          items: items,
+          project_name: items[0]?.project_name || 'Multiple Projects'
+        }];
+
+        items.forEach(item => {
+          const margin = 0; // Default margin
+          initialProfits[clientName][item.id] = margin;
+          initialGst[clientName][item.id] = 18;
+
+          if (item.bom_cost && Number(item.bom_cost) > 0) {
+            const calculatedPrice = Number(item.bom_cost) * (1 + margin / 100);
+            initialPrices[clientName][item.id] = calculatedPrice.toFixed(2);
+          }
+        });
+        
+        delete client.all_items_map;
+      });
+
       setGroupedByClient(grouped);
-      setQuotePricesMap(prev => ({ ...prev, ...initialPrices }));
-      setProfitMap(prev => ({ ...prev, ...initialProfits }));
-      setGstMap(prev => ({ ...prev, ...initialGst }));
+      setQuotePricesMap(initialPrices);
+      setProfitMap(initialProfits);
+      setGstMap(initialGst);
     } catch (error) {
       console.error(error);
       errorToast(error.message);
