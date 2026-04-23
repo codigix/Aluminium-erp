@@ -453,6 +453,34 @@ const BOMFormPage = () => {
   // Preview State
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [previewDrawing, setPreviewDrawing] = useState(null);
+  const [bomHistory, setBomHistory] = useState([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+
+  const fetchBOMHistory = useCallback(async (itemCode, drawingNo, currentItemId = null) => {
+    const effectiveId = (currentItemId === 'bom-form' || !currentItemId) ? null : currentItemId;
+    if (!itemCode && !drawingNo && !effectiveId) return;
+    
+    setLoadingHistory(true);
+    try {
+      const token = localStorage.getItem('authToken');
+      const url = new URL(`${API_BASE}/bom/history`);
+      if (itemCode) url.searchParams.append('itemCode', itemCode);
+      if (drawingNo) url.searchParams.append('drawingNo', drawingNo);
+      if (effectiveId) url.searchParams.append('itemId', effectiveId);
+
+      const response = await fetch(url, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setBomHistory(data);
+      }
+    } catch (error) {
+      console.error('Error fetching BOM history:', error);
+    } finally {
+      setLoadingHistory(false);
+    }
+  }, []);
 
   const handlePreviewByNo = async (drawingNo) => {
     if (!drawingNo || drawingNo === 'N/A') {
@@ -746,6 +774,18 @@ const BOMFormPage = () => {
 
     handleInitialParams();
   }, [location.search, drawingFilter, selectedItem, approvedDrawings, stockItems, itemId, productForm.drawingNo, fetchDrawingName]);
+
+  useEffect(() => {
+    const effectiveId = (itemId === 'bom-form' || !itemId) ? null : itemId;
+    const itemCode = productForm.itemCode;
+    const drawingNo = productForm.drawingNo;
+
+    if (itemCode || (drawingNo && drawingNo !== 'N/A') || effectiveId) {
+      fetchBOMHistory(itemCode, drawingNo, effectiveId);
+    } else {
+      setBomHistory([]);
+    }
+  }, [productForm.itemCode, productForm.drawingNo, itemId, fetchBOMHistory]);
 
   const getItemGroupFromMaterialType = (type) => {
     const t = (type || '').toLowerCase();
@@ -1542,7 +1582,7 @@ const BOMFormPage = () => {
     }
   };
 
-  const handleCreateBOM = async (status = 'Active') => {
+  const handleCreateBOM = async (status = 'Active', isNewVersion = false) => {
     try {
       const isDraft = status === 'Draft';
 
@@ -1563,6 +1603,17 @@ const BOMFormPage = () => {
         }
       }
 
+      // Determine version number
+      let nextRevision = productForm.revision;
+      if (isNewVersion) {
+        // Find highest version in history
+        const maxVersion = bomHistory.reduce((max, item) => {
+          const v = parseInt(item.version || 0);
+          return v > max ? v : max;
+        }, 0);
+        nextRevision = (maxVersion + 1).toString();
+      }
+
       const effectiveItemId = (itemId && itemId !== 'bom-form') 
         ? itemId 
         : (selectedItem?.source === 'order' ? selectedItem?.id : null);
@@ -1573,9 +1624,13 @@ const BOMFormPage = () => {
 
       const bomPayload = {
         itemId: effectiveItemId,
-        salesOrderId: salesOrderIdFromUrl,
+        isNewVersion,
+        salesOrderId: salesOrderIdFromUrl || (selectedItem?.source === 'order' ? (selectedItem.sales_order_id || selectedItem.salesOrderId) : null),
         status: status,
-        productForm: productForm,
+        productForm: {
+          ...productForm,
+          revision: nextRevision
+        },
         materials: bomData.materials,
         components: bomData.components.map(c => ({
           ...c,
@@ -1612,13 +1667,12 @@ const BOMFormPage = () => {
 
       const responseData = await response.json();
       const newId = responseData.id;
-      successToast(isDraft ? 'BOM saved as draft' : 'BOM created successfully');
+      successToast(isDraft ? 'BOM saved as draft' : (isNewVersion ? `BOM Revision V${nextRevision} created successfully` : 'BOM created successfully'));
 
       // Instead of resetting and navigating to list, stay on the page in view mode
-      // This solves the "did not show saved bom" problem
       if (newId) {
         navigate(`/bom-form/${newId}?view=true`);
-      } else if (itemId && itemId !== 'bom-form') {
+      } else if (itemId && itemId !== 'bom-form' && !isNewVersion) {
         navigate(`/bom-form/${itemId}?view=true`);
       } else if (selectedItem) {
         const targetId = selectedItem.source === 'order' ? selectedItem.id : 'bom-form';
@@ -1627,8 +1681,6 @@ const BOMFormPage = () => {
           : '?view=true';
         navigate(`/bom-form/${targetId}${queryParams}`);
       } else {
-        // If it was a draft without specific item selection, we might need a better way to find it
-        // but for now, redirect back to creation list
         navigate('/bom-creation');
       }
     } catch (error) {
@@ -3245,81 +3297,170 @@ const BOMFormPage = () => {
         )}
       </div>
 
-      {/* SECTION 6: BOM Costing */}
-      <Card className="p-0 border-slate-200 overflow-hidden ">
-        <div
-          className="bg-white p-2 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition-colors"
-          onClick={() => toggleSection('costing')}
-        >
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-blue-600 rounded  flex items-center justify-center text-white text-sm">₹</div>
-            <div>
-              <h4 className="text-sm  text-slate-800">BOM Costing</h4>
-              <p className="text-xs text-slate-400  ">₹{totalBOMCost.toFixed(2)} Analysis Per Unit</p>
+      {/* Side-by-Side Costing and Version History */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        {/* SECTION 6: BOM Costing */}
+        <Card className="p-0 border-slate-200 overflow-hidden ">
+          <div
+            className="bg-white p-2 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition-colors"
+            onClick={() => toggleSection('costing')}
+          >
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 bg-blue-600 rounded  flex items-center justify-center text-white text-sm">₹</div>
+              <div>
+                <h4 className="text-sm  text-slate-800">BOM Costing</h4>
+                <p className="text-xs text-slate-400  ">₹{totalBOMCost.toFixed(2)} Analysis Per Unit</p>
+              </div>
             </div>
+            <div className="text-slate-400">{collapsedSections.costing ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}</div>
           </div>
-          <div className="text-slate-400">{collapsedSections.costing ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}</div>
-        </div>
-        {!collapsedSections.costing && (
-          <div className="p-2  space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-3">
-              <div className="p-2 bg-blue-50 rounded-md border border-blue-100">
-                <p className="text-xs text-blue-600  mb-1">Material Cost / FG</p>
-                <p className="text-2xl  text-blue-900">₹{materialCostAfterScrap.toFixed(2)}</p>
-                <p className="text-xs text-blue-400  mt-1">(Materials + Components - Scrap)</p>
+          {!collapsedSections.costing && (
+            <div className="p-2  space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-3">
+                <div className="p-2 bg-blue-50 rounded-md border border-blue-100">
+                  <p className="text-xs text-blue-600  mb-1">Material Cost / FG</p>
+                  <p className="text-2xl  text-blue-900">₹{materialCostAfterScrap.toFixed(2)}</p>
+                  <p className="text-xs text-blue-400  mt-1">(Materials + Components - Scrap)</p>
+                </div>
+                <div className="p-2 bg-purple-50 rounded-md border border-purple-100">
+                  <p className="text-xs text-purple-600  mb-1">Operations Cost / FG</p>
+                  <p className="text-2xl  text-purple-900">₹{operationsCost.toFixed(2)}</p>
+                  <p className="text-xs text-purple-400  mt-1">Based on (Cycle + Setup) / 60 * Rate</p>
+                </div>
+                <div className="p-2 bg-emerald-50 rounded-md border border-emerald-100">
+                  <p className="text-xs text-emerald-600  mb-1">Total Cost / FG</p>
+                  <p className="text-2xl  text-emerald-900">₹{totalBOMCost.toFixed(2)}</p>
+                  <p className="text-xs text-emerald-400  mt-1">Base Quantity: {batchQty}</p>
+                </div>
               </div>
-              <div className="p-2 bg-purple-50 rounded-md border border-purple-100">
-                <p className="text-xs text-purple-600  mb-1">Operations Cost / FG</p>
-                <p className="text-2xl  text-purple-900">₹{operationsCost.toFixed(2)}</p>
-                <p className="text-xs text-purple-400  mt-1">Based on (Cycle + Setup) / 60 * Rate</p>
-              </div>
-              <div className="p-2 bg-emerald-50 rounded-md border border-emerald-100">
-                <p className="text-xs text-emerald-600  mb-1">Total Cost / FG</p>
-                <p className="text-2xl  text-emerald-900">₹{totalBOMCost.toFixed(2)}</p>
-                <p className="text-xs text-emerald-400  mt-1">Base Quantity: {batchQty}</p>
-              </div>
-            </div>
 
-            <div className="bg-white border border-slate-100 rounded-md overflow-hidden">
-              <div className="divide-y divide-slate-50">
-                <div className="p-2  flex justify-between items-center hover:bg-slate-50 transition-colors">
-                  <span className="text-xs  text-slate-600">Components Cost:</span>
-                  <span className="text-xs  text-slate-900">₹{componentsCost.toFixed(2)}</span>
-                </div>
-                <div className="p-2  flex justify-between items-center hover:bg-slate-50 transition-colors">
-                  <span className="text-xs  text-slate-600">Raw Materials Cost:</span>
-                  <span className="text-xs  text-slate-900">₹{rawMaterialsCost.toFixed(2)}</span>
-                </div>
-                <div className="p-2  flex justify-between items-center hover:bg-slate-50 transition-colors text-red-600">
-                  <span className="text-xs ">Scrap Loss (Deduction):</span>
-                  <span className="text-xs ">-₹{scrapLoss.toFixed(2)}</span>
-                </div>
-                <div className="p-2  flex justify-between items-center bg-blue-50/50">
-                  <span className="text-xs  text-blue-700 ">Material Cost (after Scrap):</span>
-                  <span className="text-xs  text-blue-900 ">₹{materialCostAfterScrap.toFixed(2)}</span>
-                </div>
-                <div className="p-2  flex justify-between items-center hover:bg-slate-50 transition-colors text-purple-600">
-                  <span className="text-xs ">Operations Cost:</span>
-                  <span className="text-xs  text-purple-900 ">₹{operationsCost.toFixed(2)}</span>
-                </div>
-                <div className="p-2  flex justify-between items-center bg-amber-50/50">
-                  <span className="text-xs  text-amber-700">Total Scrap Qty:</span>
-                  <span className="text-xs  text-amber-900">{totalScrapQty.toFixed(2)} Kg</span>
-                </div>
-                <div className="p-2  flex justify-between items-center bg-slate-50  border-t border-slate-200">
-                  <span className="text-xs text-slate-700">ORDER TOTAL ({batchQty} {productForm.uom}):</span>
-                  <span className="text-sm text-slate-900">₹{(totalBOMCost * batchQty).toFixed(2)}</span>
+              <div className="bg-white border border-slate-100 rounded-md overflow-hidden">
+                <div className="divide-y divide-slate-50">
+                  <div className="p-2  flex justify-between items-center hover:bg-slate-50 transition-colors">
+                    <span className="text-xs  text-slate-600">Components Cost:</span>
+                    <span className="text-xs  text-slate-900">₹{componentsCost.toFixed(2)}</span>
+                  </div>
+                  <div className="p-2  flex justify-between items-center hover:bg-slate-50 transition-colors">
+                    <span className="text-xs  text-slate-600">Raw Materials Cost:</span>
+                    <span className="text-xs  text-slate-900">₹{rawMaterialsCost.toFixed(2)}</span>
+                  </div>
+                  <div className="p-2  flex justify-between items-center hover:bg-slate-50 transition-colors text-red-600">
+                    <span className="text-xs ">Scrap Loss (Deduction):</span>
+                    <span className="text-xs ">-₹{scrapLoss.toFixed(2)}</span>
+                  </div>
+                  <div className="p-2  flex justify-between items-center bg-blue-50/50">
+                    <span className="text-xs  text-blue-700 ">Material Cost (after Scrap):</span>
+                    <span className="text-xs  text-blue-900 ">₹{materialCostAfterScrap.toFixed(2)}</span>
+                  </div>
+                  <div className="p-2  flex justify-between items-center hover:bg-slate-50 transition-colors text-purple-600">
+                    <span className="text-xs ">Operations Cost:</span>
+                    <span className="text-xs  text-purple-900 ">₹{operationsCost.toFixed(2)}</span>
+                  </div>
+                  <div className="p-2  flex justify-between items-center bg-amber-50/50">
+                    <span className="text-xs  text-amber-700">Total Scrap Qty:</span>
+                    <span className="text-xs  text-amber-900">{totalScrapQty.toFixed(2)} Kg</span>
+                  </div>
+                  <div className="p-2  flex justify-between items-center bg-slate-50  border-t border-slate-200">
+                    <span className="text-xs text-slate-700">ORDER TOTAL ({batchQty} {productForm.uom}):</span>
+                    <span className="text-sm text-slate-900">₹{(totalBOMCost * batchQty).toFixed(2)}</span>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div className="flex justify-between items-center p-2 bg-slate-200 rounded-md text-white">
-              <span className="text-sm   ">Cost Per Unit:</span>
-              <span className="text-xl ">₹{costPerUnit.toFixed(2)}</span>
+              <div className="flex justify-between items-center p-2 bg-slate-200 rounded-md text-white">
+                <span className="text-sm   ">Cost Per Unit:</span>
+                <span className="text-xl ">₹{costPerUnit.toFixed(2)}</span>
+              </div>
             </div>
+          )}
+        </Card>
+
+        {/* BOM Version History */}
+        <Card className="p-0 border-slate-200 overflow-hidden h-full">
+          <div className="bg-white p-2 flex items-center justify-between border-b border-slate-100">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 bg-indigo-600 rounded flex items-center justify-center text-white text-sm">
+                <History className="w-4 h-4" />
+              </div>
+              <div>
+                <h4 className="text-sm font-medium text-slate-800">BOM Version History</h4>
+                <p className="text-[10px] text-slate-400">Manage BOM revisions and compare changes</p>
+              </div>
+            </div>
+            <button 
+              onClick={() => handleCreateBOM('Active', true)}
+              className="text-[10px] text-indigo-600 font-medium hover:underline flex items-center gap-1"
+            >
+              <Plus className="w-3 h-3" /> Save as New Version
+            </button>
           </div>
-        )}
-      </Card>
+          <div className="p-0 overflow-auto max-h-[250px]">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-100">
+                  <th className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Version</th>
+                  <th className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Status</th>
+                  <th className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Revision Date</th>
+                  <th className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total Cost (Per Unit)</th>
+                  <th className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Changed By</th>
+                  <th className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {loadingHistory ? (
+                  <tr>
+                    <td colSpan="6" className="px-3 py-8 text-center text-slate-400">
+                      <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2" />
+                      <span className="text-xs">Loading history...</span>
+                    </td>
+                  </tr>
+                ) : bomHistory.length > 0 ? (
+                  bomHistory.map((v, idx) => (
+                    <tr key={v.id || idx} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-3 py-2 text-xs font-medium text-slate-900">{v.version || '1'}</td>
+                      <td className="px-3 py-2">
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                          v.status === 'APPROVED' || v.status === 'Active' ? 'bg-emerald-100 text-emerald-700' : 
+                          v.status === 'DRAFT' ? 'bg-slate-100 text-slate-600' : 'bg-amber-100 text-amber-700'
+                        }`}>
+                          {v.status || 'Active'}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-[11px] text-slate-500">
+                        {v.revision_date ? new Date(v.revision_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                        <div className="text-[9px] opacity-60">{v.revision_date ? new Date(v.revision_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</div>
+                      </td>
+                      <td className="px-3 py-2 text-xs font-bold text-slate-700">₹{parseFloat(v.total_cost || 0).toFixed(2)}</td>
+                      <td className="px-3 py-2 text-[11px] text-slate-600">
+                        <div className="font-medium">{v.changed_by || 'SPTECH'}</div>
+                        <div className="text-[9px] text-slate-400">(Sales)</div>
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        <button 
+                          onClick={() => navigate(`/bom-form/${v.id}?view=true`)}
+                          className="p-1 text-slate-400 hover:text-indigo-600 transition-colors"
+                          title="View this version"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="6" className="px-3 py-8 text-center text-slate-400 text-xs">
+                      No version history found for this item
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div className="p-2 border-t border-slate-50 bg-slate-50/30">
+            <button className="text-[10px] text-indigo-600 font-bold hover:underline">View Full Version History →</button>
+          </div>
+        </Card>
+      </div>
 
       {/* Footer Actions */}
       <div className="flex justify-end gap-2 pb-8">
@@ -3334,6 +3475,13 @@ const BOMFormPage = () => {
             >
               <FileText className="w-4 h-4" />
               Save as Draft
+            </button>
+            <button 
+              onClick={() => handleCreateBOM('Active', true)} 
+              className="px-8 py-2.5 bg-indigo-50 border border-indigo-200 text-indigo-700 rounded text-sm hover:bg-indigo-100 transition-all flex items-center gap-2"
+            >
+              <History className="w-4 h-4" />
+              Save as New Version
             </button>
             <button onClick={() => handleCreateBOM('Active')} className="px-8 py-2.5 bg-orange-500 text-white rounded  text-sm  hover:bg-orange-600 shadow-lg shadow-orange-100 transition-all flex items-center gap-2 ">
               {itemId && itemId !== 'bom-form' ? 'Update BOM' : 'Create BOM'}

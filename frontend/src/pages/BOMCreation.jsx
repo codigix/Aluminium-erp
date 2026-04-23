@@ -24,6 +24,7 @@ const BOMCreation = () => {
   const [loading, setLoading] = useState(false);
   const [clientData, setClientData] = useState({}); // { [clientId]: { items: [], loading: false } }
   const [expandedDrawings, setExpandedDrawings] = useState({}); // { drawingKey: boolean }
+  const [expandedBOMGroups, setExpandedBOMGroups] = useState(new Set());
   const location = useLocation();
 
   // Preview State
@@ -246,6 +247,16 @@ const BOMCreation = () => {
     setExpandedDrawings(prev => ({ ...prev, [dwgKey]: !prev[dwgKey] }));
   };
 
+  const toggleBOMGroup = (groupId) => {
+    const newExpanded = new Set(expandedBOMGroups);
+    if (newExpanded.has(groupId)) {
+      newExpanded.delete(groupId);
+    } else {
+      newExpanded.add(groupId);
+    }
+    setExpandedBOMGroups(newExpanded);
+  };
+
   const handleDeleteBOM = async (itemId) => {
     try {
       const result = await Swal.fire({
@@ -353,11 +364,6 @@ const BOMCreation = () => {
         const dwgNo = cleanText(i.drawing_no || 'N/A');
         if (!drawingsMap[dwgNo]) drawingsMap[dwgNo] = [];
         drawingsMap[dwgNo].push(i);
-        
-        const isFG = (i.item_group === 'FG' || i.product_type === 'FG' || (i.item_group || '').toLowerCase().includes('finished'));
-        if (isFG) {
-          totalCost += (parseFloat(i.bom_cost || 0) * (i.quantity || 0));
-        }
       });
 
       const drawings = Object.keys(drawingsMap);
@@ -365,9 +371,34 @@ const BOMCreation = () => {
       
       drawings.forEach(dwgNo => {
         const dwgItems = drawingsMap[dwgNo];
-        const hasFGBOM = dwgItems.some(i => 
-          (i.has_bom || i.has_master_bom) && (i.item_group === 'FG' || i.product_type === 'FG' || (i.item_group || '').toLowerCase().includes('finished'))
-        );
+        
+        // Group by item to handle versions in cost calculation
+        const itemGroups = dwgItems.reduce((acc, i) => {
+          const groupId = i.item_code || cleanText(i.description || i.item_name || i.material_name || 'BOM Item');
+          if (!acc[groupId]) acc[groupId] = [];
+          acc[groupId].push(i);
+          return acc;
+        }, {});
+
+        Object.values(itemGroups).forEach(versions => {
+          // Sort to get latest version
+          const latest = versions.sort((a, b) => {
+            const vA = parseFloat(a.version || a.revision_no || 0);
+            const vB = parseFloat(b.version || b.revision_no || 0);
+            if (vB !== vA) return vB - vA;
+            return b.id - a.id;
+          })[0];
+
+          const isFG = (latest.item_group === 'FG' || latest.product_type === 'FG' || (latest.item_group || '').toLowerCase().includes('finished'));
+          if (isFG && (latest.has_bom || latest.has_master_bom)) {
+            totalCost += (parseFloat(latest.bom_cost || 0) * (latest.quantity || 0));
+          }
+        });
+
+        const hasFGBOM = Object.values(itemGroups).some(versions => {
+          const latest = versions[0];
+          return (latest.has_bom || latest.has_master_bom) && (latest.item_group === 'FG' || latest.product_type === 'FG' || (latest.item_group || '').toLowerCase().includes('finished'));
+        });
         if (hasFGBOM) completedDrawings++;
       });
     });
@@ -420,13 +451,30 @@ const BOMCreation = () => {
       key: 'fg_bom_cost',
       render: (_, row) => {
         const items = clientData[row.id]?.items || [];
-        const fgBomCost = items.reduce((total, i) => {
-          const isFG = (i.item_group === 'FG' || i.product_type === 'FG' || (i.item_group || '').toLowerCase().includes('finished'));
-          if (isFG) {
-            return total + (parseFloat(i.bom_cost || 0) * (i.quantity || 0));
+        
+        // Group by item to handle versions
+        const itemGroups = items.reduce((acc, i) => {
+          const groupId = i.item_code || cleanText(i.description || i.item_name || i.material_name || 'BOM Item');
+          if (!acc[groupId]) acc[groupId] = [];
+          acc[groupId].push(i);
+          return acc;
+        }, {});
+
+        const fgBomCost = Object.values(itemGroups).reduce((total, versions) => {
+          const latest = versions.sort((a, b) => {
+            const vA = parseFloat(a.version || a.revision_no || 0);
+            const vB = parseFloat(b.version || b.revision_no || 0);
+            if (vB !== vA) return vB - vA;
+            return b.id - a.id;
+          })[0];
+
+          const isFG = (latest.item_group === 'FG' || latest.product_type === 'FG' || (latest.item_group || '').toLowerCase().includes('finished'));
+          if (isFG && (latest.has_bom || latest.has_master_bom)) {
+            return total + (parseFloat(latest.bom_cost || 0) * (latest.quantity || 0));
           }
           return total;
         }, 0);
+        
         return <span className="font-semibold text-slate-900">₹{fgBomCost.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>;
       }
     },
@@ -580,78 +628,92 @@ const BOMCreation = () => {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-50">
-                          {dwgItems.filter(item => item.has_bom || item.has_master_bom).map((item, idx) => (
-                            <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
-                              <td className="px-4 p-2">
-                                <div className="flex flex-col">
-                                  <span className="text-xs  text-slate-700">{cleanText(item.description || item.material_name || `Item ${idx + 1}`)}</span>
-                                  <span className="text-xs text-slate-400 ">{item.item_code}</span>
-                                </div>
-                              </td>
-                              <td className="px-4 p-2 text-center">
-                                <span className="text-xs font-medium text-slate-600">
-                                  {item.revision_no || 'R0'}
-                                </span>
-                              </td>
-                              <td className="px-4 p-2 text-center">
-                                <span className="text-[10px] text-slate-500">
-                                  {formatDate(item.created_at)}
-                                </span>
-                              </td>
-                              <td className="px-4 p-2 text-center">
-                                <span className="px-2 py-1 bg-slate-100 text-slate-600 rounded text-xs ">
-                                  {item.item_group || '—'}
-                                </span>
-                              </td>
-                              <td className="px-4 p-2 text-center">
-                                <span className="text-xs  text-slate-700">
-                                  {item.total_quantity || item.quantity} <span className="text-xs text-slate-400 font-normal">{item.unit || 'NOS'}</span>
-                                </span>
-                              </td>
-                              <td className="px-4 p-2 text-center">
-                                <span className="text-xs  text-indigo-600">
-                                  ₹{parseFloat(item.bom_cost || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                </span>
-                              </td>
-                              <td className="px-4 p-2 text-center">
-                                <StatusBadge status={item.status === 'DRAFT' ? 'DRAFT' : ((item.has_bom || item.has_master_bom) ? "FINALIZED" : "PENDING")} />
-                              </td>
-                              <td className="px-4 p-2">
-                                <div className="flex justify-end gap-1">
-                                  <Link 
-                                    to={`/bom-form/${item.id}?view=true`} 
-                                    onClick={(e) => e.stopPropagation()}
-                                    className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all" 
-                                    title="View BOM"
-                                  >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                    </svg>
-                                  </Link>
-                                  <Link 
-                                    to={`/bom-form/${item.id}`} 
-                                    onClick={(e) => e.stopPropagation()}
-                                    className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded  transition-all" 
-                                    title="Edit BOM"
-                                  >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                    </svg>
-                                  </Link>
-                                  <button 
-                                    onClick={(e) => { e.stopPropagation(); handleDeleteBOM(item.id); }}
-                                    className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded  transition-all"
-                                    title="Delete BOM"
-                                  >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                    </svg>
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
+                          {(() => {
+                            // Group items by item_code or description to handle versions
+                            const groupedBOMs = dwgItems.filter(item => item.has_bom || item.has_master_bom).reduce((acc, item) => {
+                              const groupId = item.item_code || cleanText(item.description || item.item_name || item.material_name || 'BOM Item');
+                              if (!acc[groupId]) acc[groupId] = [];
+                              acc[groupId].push(item);
+                              return acc;
+                            }, {});
+
+                            return Object.entries(groupedBOMs).map(([groupId, versions]) => {
+                              // Sort versions descending by revision_no then ID
+                              const sortedVersions = versions.sort((a, b) => {
+                                const vA = parseFloat(a.version || a.revision_no || 0);
+                                const vB = parseFloat(b.version || b.revision_no || 0);
+                                if (vB !== vA) return vB - vA;
+                                return b.id - a.id;
+                              });
+                              const latest = sortedVersions[0];
+                              const hasMultiple = sortedVersions.length > 1;
+
+                              return (
+                                <React.Fragment key={groupId}>
+                                  <tr className="hover:bg-slate-50/50 transition-colors">
+                                    <td className="px-4 p-2">
+                                      <div className="flex items-center gap-2">
+                                        <div className="flex flex-col">
+                                          <span className="text-xs font-medium text-slate-700">
+                                            {cleanText(latest.description || latest.material_name || 'BOM Item')}
+                                          </span>
+                                          <span className="text-[10px] text-slate-400 ">{latest.item_code}</span>
+                                        </div>
+                                      </div>
+                                    </td>
+                                    <td className="px-4 p-2 text-center">
+                                      <span className="text-[11px] font-bold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
+                                        V{latest.version || latest.revision_no || '1'}
+                                      </span>
+                                    </td>
+                                    <td className="px-4 p-2 text-center">
+                                      <span className="text-[10px] text-slate-500">
+                                        {formatDate(latest.created_at)}
+                                      </span>
+                                    </td>
+                                    <td className="px-4 p-2 text-center">
+                                      <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px] font-medium uppercase">
+                                        {latest.item_group || '—'}
+                                      </span>
+                                    </td>
+                                    <td className="px-4 p-2 text-center">
+                                      <span className="text-xs  text-slate-700">
+                                        {latest.total_quantity || latest.quantity} <span className="text-[10px] text-slate-400 font-normal">{latest.unit || 'NOS'}</span>
+                                      </span>
+                                    </td>
+                                    <td className="px-4 p-2 text-center">
+                                      <span className="text-xs font-bold text-indigo-600">
+                                        ₹{parseFloat(latest.bom_cost || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                      </span>
+                                    </td>
+                                    <td className="px-4 p-2 text-center">
+                                      <StatusBadge status={latest.status === 'DRAFT' ? 'DRAFT' : "FINALIZED"} />
+                                    </td>
+                                    <td className="px-4 p-2">
+                                      <div className="flex justify-end gap-1">
+                                        <Link 
+                                          to={`/bom-form/${latest.id}?view=true`} 
+                                          onClick={(e) => e.stopPropagation()}
+                                          className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-all" 
+                                          title="View Latest BOM"
+                                        >
+                                          <Eye className="w-4 h-4" />
+                                        </Link>
+                                        <Link 
+                                          to={`/bom-form/${latest.id}`} 
+                                          onClick={(e) => e.stopPropagation()}
+                                          className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded transition-all" 
+                                          title="Edit Latest BOM"
+                                        >
+                                          <FileText className="w-4 h-4" />
+                                        </Link>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                </React.Fragment>
+                              );
+                            });
+                          })()}
                         </tbody>
                       </table>
                     </div>

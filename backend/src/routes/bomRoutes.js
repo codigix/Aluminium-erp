@@ -19,6 +19,7 @@ router.delete('/components/:id', authenticate, authorize(['BOM_MANAGE']), bomCon
 router.delete('/operations/:id', authenticate, authorize(['BOM_MANAGE']), bomController.deleteOperation);
 router.delete('/scrap/:id', authenticate, authorize(['BOM_MANAGE']), bomController.deleteScrap);
 router.get('/sales-order/:salesOrderId', authenticate, authorize(['BOM_VIEW', 'PROD_VIEW']), bomController.getBOMBySalesOrder);
+router.get('/history', authenticate, authorize(['BOM_VIEW']), bomController.getBOMHistory);
 router.post('/createRequest', authenticate, authorize(['BOM_MANAGE']), bomController.createBOMRequest);
 
 router.delete('/items/:itemId', authenticate, authorize(['BOM_MANAGE']), bomController.deleteBOM);

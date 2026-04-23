@@ -162,6 +162,16 @@ const deleteBOM = async (req, res, next) => {
   }
 };
 
+const getBOMHistory = async (req, res, next) => {
+  try {
+    const { itemCode, drawingNo, itemId } = req.query;
+    const history = await bomService.getBOMHistory(itemCode, drawingNo, itemId);
+    res.json(history);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getItemMaterials,
   addItemMaterial,
@@ -179,5 +189,6 @@ module.exports = {
   getBOMBySalesOrder,
   getApprovedBOMs,
   createBOMRequest,
-  deleteBOM
+  deleteBOM,
+  getBOMHistory
 };

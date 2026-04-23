@@ -431,25 +431,21 @@ const getBOMBySalesOrder = async (salesOrderId) => {
 };
 
 const createBOMRequest = async (bomData) => {
-  const { itemId, salesOrderId, status, productForm, materials, components, operations, scrap, source, costing } = bomData;
-  console.log(`[createBOMRequest] ItemID: ${itemId}, SOID: ${salesOrderId}, Status: ${status}, Source: ${source}, Drawing: ${productForm.drawingNo}`);
+  const { itemId, salesOrderId, status, productForm, materials, components, operations, scrap, source, costing, isNewVersion } = bomData;
+  console.log(`[createBOMRequest] ItemID: ${itemId}, SOID: ${salesOrderId}, Status: ${status}, Source: ${source}, Drawing: ${productForm.drawingNo}, isNewVersion: ${isNewVersion}`);
   
   const { itemCode, itemGroup, uom, revision, description, notes, isActive, isDefault, quantity, drawingNo, drawing_id } = productForm;
   const bom_cost = costing?.costPerUnit || 0;
   const finalStatus = status || 'Active';
   
-  // If notes are provided separately, we should prioritize them for 'description' or merge if needed
-  // Since DB currently uses 'description' column, we use notes if they exist, or fallback to description
   const effectiveDescription = (notes && notes.trim()) ? notes : description;
 
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
 
-    const isMasterBOM = source === 'stock' || (!itemId && !salesOrderId);
     const safeItemCode = itemCode || null;
 
-    // Determine item_type from item_code prefix or default to FG
     let itemType = 'FG';
     if (safeItemCode) {
       if (safeItemCode.startsWith('SA-')) itemType = 'SA';
@@ -458,14 +454,22 @@ const createBOMRequest = async (bomData) => {
     }
 
     let targetItemId = itemId;
+    let effectiveBomId = null;
 
     if (itemId) {
-      // 1. Update specific sales_order_item
-      // NOTE: We do NOT update 'quantity' here to preserve the original Sales Order/Design quantity.
-      // Quotation quantity is always the Design quantity. Sales never redefines quantity at quotation stage.
+      // Get existing bom_id
+      const [existing] = await connection.query('SELECT bom_id FROM sales_order_items WHERE id = ?', [itemId]);
+      if (existing.length > 0) {
+        effectiveBomId = existing[0].bom_id || itemId; // Fallback to current ID if no bom_id yet
+      }
+    }
+
+    if (itemId && !isNewVersion) {
+      // 1. UPDATE Mode
       await connection.execute(
         `UPDATE sales_order_items 
          SET item_code = ?, item_type = ?, item_group = ?, unit = ?, revision_no = ?, description = ?, is_active = ?, is_default = ?, drawing_no = ?, drawing_id = ?, bom_cost = ?, 
+             bom_id = IFNULL(bom_id, ?),
              status = CASE WHEN UPPER(TRIM(status)) = 'APPROVED' THEN status ELSE ? END
          WHERE id = ?`,
         [
@@ -480,20 +484,19 @@ const createBOMRequest = async (bomData) => {
           drawingNo || null, 
           drawing_id || null, 
           bom_cost,
+          effectiveBomId || itemId,
           finalStatus === 'Draft' ? 'DRAFT' : 'PENDING',
           itemId
         ]
       );
 
-      // Clear existing BOM items for this sales order item
+      // Clear existing BOM items
       await connection.execute('DELETE FROM sales_order_item_materials WHERE sales_order_item_id = ?', [itemId]);
       await connection.execute('DELETE FROM sales_order_item_components WHERE sales_order_item_id = ?', [itemId]);
       await connection.execute('DELETE FROM sales_order_item_operations WHERE sales_order_item_id = ?', [itemId]);
       await connection.execute('DELETE FROM sales_order_item_scrap WHERE sales_order_item_id = ?', [itemId]);
     } else {
-      // 2. CREATE Mode (ALWAYS insert a new record for independent BOMs)
-      
-      // Inherit "Approved" status if the drawing is already approved elsewhere in this Sales Order
+      // 2. CREATE or NEW VERSION Mode
       let initialStatus = finalStatus === 'Draft' ? 'DRAFT' : 'PENDING';
       if (salesOrderId && drawingNo) {
         const [approvalCheck] = await connection.query(
@@ -505,10 +508,11 @@ const createBOMRequest = async (bomData) => {
 
       const [result] = await connection.execute(
         `INSERT INTO sales_order_items 
-         (sales_order_id, item_code, item_type, item_group, unit, revision_no, description, is_active, is_default, quantity, drawing_no, drawing_id, bom_cost, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (sales_order_id, bom_id, item_code, item_type, item_group, unit, revision_no, description, is_active, is_default, quantity, drawing_no, drawing_id, bom_cost, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           salesOrderId || null,
+          effectiveBomId, // Will be NULL if completely new, or parent ID if new version
           safeItemCode,
           itemType,
           itemGroup || null,
@@ -525,6 +529,11 @@ const createBOMRequest = async (bomData) => {
         ]
       );
       targetItemId = result.insertId;
+
+      // If this is the first version of a new BOM, update bom_id to point to itself
+      if (!effectiveBomId) {
+        await connection.execute('UPDATE sales_order_items SET bom_id = ? WHERE id = ?', [targetItemId, targetItemId]);
+      }
     }
 
     // 3. Insert new BOM items
@@ -668,8 +677,9 @@ const createBOMRequest = async (bomData) => {
 
 const getApprovedBOMs = async () => {
   const [rows] = await pool.query(`
-    SELECT DISTINCT
+    SELECT 
       soi.id,
+      soi.bom_id,
       soi.item_code,
       soi.item_group,
       soi.drawing_no,
@@ -677,13 +687,23 @@ const getApprovedBOMs = async () => {
       soi.unit,
       soi.quantity,
       soi.bom_cost,
+      soi.revision_no as version,
+      soi.status as item_status,
       c.company_name,
       so.project_name,
       so.id as sales_order_id,
-      soi.created_at
+      soi.created_at,
+      (SELECT COUNT(*) FROM sales_order_items v WHERE v.bom_id = soi.bom_id OR (v.item_code = soi.item_code AND v.drawing_no = soi.drawing_no)) as version_count
     FROM sales_order_items soi
     LEFT JOIN sales_orders so ON soi.sales_order_id = so.id
     LEFT JOIN companies c ON so.company_id = c.id
+    INNER JOIN (
+      SELECT 
+        IFNULL(bom_id, id) as group_id,
+        MAX(id) as latest_id
+      FROM sales_order_items
+      GROUP BY group_id
+    ) latest ON (IFNULL(soi.bom_id, soi.id) = latest.group_id AND soi.id = latest.latest_id)
     WHERE (
       TRIM(IFNULL(so.status, '')) IN ('CREATED', 'DESIGN_IN_REVIEW', 'DESIGN_Approved', 'BOM_SUBMITTED', 'BOM_Approved', 'PROCUREMENT_IN_PROGRESS', 'IN_PRODUCTION', 'PRODUCTION_COMPLETED', 'MATERIAL_PURCHASE_IN_PROGRESS', 'MATERIAL_READY')
       OR soi.status IN ('DRAFT', 'PENDING')
@@ -747,6 +767,79 @@ const findAnyBOM = async (itemCode, drawingNo) => {
   return { materials, components, operations };
 };
 
+const getBOMHistory = async (itemCode, drawingNo, itemId = null) => {
+  let effectiveItemCode = itemCode;
+  let effectiveDrawingNo = drawingNo;
+  let effectiveBomId = null;
+
+  console.log(`[getBOMHistory] Input - itemCode: ${itemCode}, drawingNo: ${drawingNo}, itemId: ${itemId}`);
+
+  // If we have an itemId, fetch identity and bom_id
+  if (itemId) {
+    const [itemRows] = await pool.query(
+      'SELECT item_code, drawing_no, bom_id FROM sales_order_items WHERE id = ?',
+      [itemId]
+    );
+    if (itemRows.length > 0) {
+      effectiveItemCode = effectiveItemCode || itemRows[0].item_code;
+      effectiveDrawingNo = effectiveDrawingNo || itemRows[0].drawing_no;
+      effectiveBomId = itemRows[0].bom_id;
+      console.log(`[getBOMHistory] Resolved from DB - itemCode: ${effectiveItemCode}, drawingNo: ${effectiveDrawingNo}, bomId: ${effectiveBomId}`);
+    }
+  }
+
+  const queryParams = [];
+  let whereClause = '';
+  
+  if (effectiveBomId) {
+    whereClause = 'soi.bom_id = ?';
+    queryParams.push(effectiveBomId);
+  } else {
+    // Legacy fallback for records without bom_id
+    let fallbackClause = '(';
+    if (effectiveItemCode && effectiveItemCode.trim() !== '') {
+      fallbackClause += 'LOWER(TRIM(soi.item_code)) = LOWER(TRIM(?))';
+      queryParams.push(effectiveItemCode);
+    }
+    
+    if (effectiveDrawingNo && effectiveDrawingNo.trim() !== '') {
+      if (queryParams.length > 0) fallbackClause += ' OR ';
+      fallbackClause += 'LOWER(TRIM(soi.drawing_no)) = LOWER(TRIM(?))';
+      queryParams.push(effectiveDrawingNo);
+    }
+    fallbackClause += ')';
+
+    if (queryParams.length === 0) {
+      console.log('[getBOMHistory] No identity found, returning empty array');
+      return [];
+    }
+    whereClause = fallbackClause;
+  }
+
+  const sql = `
+    SELECT 
+      soi.id,
+      soi.revision_no as version,
+      soi.status,
+      soi.updated_at as revision_date,
+      soi.bom_cost as total_cost,
+      CONCAT(u.first_name, ' ', u.last_name) as changed_by
+    FROM sales_order_items soi
+    LEFT JOIN sales_orders so ON soi.sales_order_id = so.id
+    LEFT JOIN users u ON soi.created_by = u.id
+    WHERE ${whereClause}
+    ORDER BY (CASE WHEN soi.id = ? THEN 0 ELSE 1 END) ASC, soi.updated_at DESC, soi.id DESC
+  `;
+  
+  queryParams.push(itemId);
+  
+  console.log(`[getBOMHistory] Executing SQL with params:`, queryParams);
+
+  const [rows] = await pool.query(sql, queryParams);
+  console.log(`[getBOMHistory] Found ${rows.length} records`);
+  return rows;
+};
+
 module.exports = {
   getItemMaterials,
   getItemComponents,
@@ -766,5 +859,6 @@ module.exports = {
   getApprovedBOMs,
   createBOMRequest,
   deleteBOM,
-  findAnyBOM
+  findAnyBOM,
+  getBOMHistory
 };
