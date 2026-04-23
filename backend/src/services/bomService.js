@@ -865,6 +865,39 @@ const getBOMHistory = async (itemCode, drawingNo, itemId = null) => {
   return rows;
 };
 
+const getLatestBOMCost = async (itemCode, drawingNo, bomId) => {
+  let whereClause = '1=1';
+  let queryParams = [];
+
+  if (bomId) {
+    whereClause = 'soi.bom_id = ?';
+    queryParams.push(bomId);
+  } else if (itemCode && drawingNo) {
+    whereClause = 'soi.item_code = ? AND soi.drawing_no = ?';
+    queryParams.push(itemCode, drawingNo);
+  } else {
+    return { bom_cost: 0, revision_no: null };
+  }
+
+  const sql = `
+    SELECT bom_cost, revision_no
+    FROM sales_order_items soi
+    WHERE ${whereClause}
+    AND bom_cost > 0
+    ORDER BY id DESC
+    LIMIT 1
+  `;
+
+  const [rows] = await pool.query(sql, queryParams);
+  if (rows.length > 0) {
+    return { 
+      bom_cost: parseFloat(rows[0].bom_cost) || 0, 
+      revision_no: rows[0].revision_no 
+    };
+  }
+  return { bom_cost: 0, revision_no: null };
+};
+
 module.exports = {
   getItemMaterials,
   getItemComponents,
@@ -876,6 +909,8 @@ module.exports = {
   addScrap,
   updateItemMaterial,
   updateOperation,
+  updateComponent,
+  updateScrap,
   deleteItemMaterial,
   deleteComponent,
   deleteOperation,
@@ -885,5 +920,6 @@ module.exports = {
   createBOMRequest,
   deleteBOM,
   findAnyBOM,
-  getBOMHistory
+  getBOMHistory,
+  getLatestBOMCost
 };
