@@ -37,9 +37,30 @@ const recordPaymentReceived = async (payload) => {
   } = payload;
 
   const receiptNo = await generatePaymentReceiptNo();
-  const isNumericId = !isNaN(parseInt(bankAccount)) && isFinite(bankAccount);
-  const bankAccountId = isNumericId ? parseInt(bankAccount) : null;
-  const actualManualBankAccount = isNumericId ? (manualBankAccount || null) : bankAccount;
+  
+  // Logic to handle bank account: either a numeric ID from bank_accounts or a manual string
+  let bankAccountId = null;
+  let actualManualBankAccount = null;
+
+  if (bankAccount) {
+    const isNumericId = !isNaN(parseInt(bankAccount)) && isFinite(bankAccount);
+    if (isNumericId) {
+      // Check if this ID actually exists in bank_accounts table
+      const [banks] = await pool.query('SELECT id FROM bank_accounts WHERE id = ?', [parseInt(bankAccount)]);
+      if (banks.length > 0) {
+        bankAccountId = parseInt(bankAccount);
+        actualManualBankAccount = manualBankAccount || null;
+      } else {
+        // If it's numeric but not in DB, treat it as manual bank account info
+        bankAccountId = null;
+        actualManualBankAccount = bankAccount;
+      }
+    } else {
+      // Non-numeric means it's manual bank info
+      bankAccountId = null;
+      actualManualBankAccount = bankAccount;
+    }
+  }
 
   try {
     const [result] = await pool.execute(

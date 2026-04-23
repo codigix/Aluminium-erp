@@ -231,8 +231,8 @@ const ClientQuotations = () => {
           const group = (item.item_group || '').trim().toUpperCase();
           const type = (item.item_type || '').trim().toUpperCase();
           const isFG = (group === 'FG' || type === 'FG' || group === 'FINISHED GOODS' || group === 'FINISHED_GOODS');
-          const isSA = (group === 'SUB ASSEMBLY' || group === 'SUB_ASSEMBLY' || group === 'SA');
-          return isFG && !isSA && (item.status !== 'REJECTED') && Number(item.bom_cost) > 0;
+          const isSA = (group === 'SUB ASSEMBLY' || group === 'SUB_ASSEMBLY' || group === 'SA' || type === 'SA' || type === 'SUB ASSEMBLY' || type === 'SUB_ASSEMBLY');
+          return (isFG || isSA) && (item.status !== 'REJECTED') && Number(item.bom_cost) > 0;
         });
         order.items = fgItems;
         grouped[clientName].orders.push(order);
@@ -1101,12 +1101,29 @@ const ClientQuotations = () => {
                                     : (uniqueDrawings[0] || '—');
                                 })()}
                               </span>
-                              <span className="text-[10px] text-slate-400">
+                              <div className="flex items-center gap-1">
                                 {(() => {
-                                  const uniqueDrawingsCount = [...new Set(group.quotes.map(q => q.drawing_no).filter(Boolean))].length;
-                                  return `${uniqueDrawingsCount} item(s)`;
+                                  const items = group.quotes || [];
+                                  const fgCount = items.filter(q => {
+                                    const g = (q.item_group || q.item_group_calc || '').toUpperCase();
+                                    return g === 'FG' || g === 'FINISHED GOODS' || g === 'FINISHED_GOODS';
+                                  }).length;
+                                  const saCount = items.filter(q => {
+                                    const g = (q.item_group || q.item_group_calc || '').toUpperCase();
+                                    return g === 'SA' || g === 'SUB ASSEMBLY' || g === 'SUB_ASSEMBLY';
+                                  }).length;
+                                  
+                                  const parts = [];
+                                  if (fgCount > 0) parts.push(`${fgCount} FG`);
+                                  if (saCount > 0) parts.push(`${saCount} SA`);
+                                  
+                                  return (
+                                    <span className="text-[10px] text-slate-400 font-medium bg-slate-50 px-1 rounded border border-slate-100">
+                                      {parts.length > 0 ? parts.join(' + ') : `${items.length} item(s)`}
+                                    </span>
+                                  );
                                 })()}
-                              </span>
+                              </div>
                             </div>
                           </td>
                           <td className=" p-2 whitespace-nowrap">
@@ -1287,7 +1304,18 @@ const ClientQuotations = () => {
                                           <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
                                             <td className="px-4 p-2">
                                               <div className="flex flex-col">
-                                                <span className="text-xs font-medium text-slate-900">{item.drawing_no || 'N/A'}</span>
+                                                <div className="flex items-center gap-2">
+                                                  <span className="text-xs font-medium text-slate-900">{item.drawing_no || 'N/A'}</span>
+                                                  {item.item_group_calc && (
+                                                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${
+                                                      (item.item_group_calc === 'SA' || item.item_group_calc === 'SUB ASSEMBLY' || item.item_group_calc === 'SUB_ASSEMBLY') 
+                                                        ? 'bg-blue-100 text-blue-700 border border-blue-200' 
+                                                        : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                                                    }`}>
+                                                      {item.item_group_calc}
+                                                    </span>
+                                                  )}
+                                                </div>
                                                 <span className="text-xs text-slate-500">{item.description || '—'}</span>
                                                 {item.status === 'REJECTED' && (
                                                   <span className="mt-1 px-1.5 py-0.5 bg-rose-100 text-rose-600 rounded text-xs  w-fit">Rejected</span>
@@ -1338,7 +1366,18 @@ const ClientQuotations = () => {
                                           <tr key={quote.id} className="hover:bg-slate-50/50 transition-colors">
                                             <td className="px-4 p-2">
                                               <div className="flex flex-col">
-                                                <span className="text-xs font-medium text-slate-900">{quote.drawing_no || 'N/A'}</span>
+                                                <div className="flex items-center gap-2">
+                                                  <span className="text-xs font-medium text-slate-900">{quote.drawing_no || 'N/A'}</span>
+                                                  {quote.item_group && (
+                                                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${
+                                                      (quote.item_group === 'SA' || quote.item_group === 'SUB ASSEMBLY' || quote.item_group === 'SUB_ASSEMBLY') 
+                                                        ? 'bg-blue-100 text-blue-700 border border-blue-200' 
+                                                        : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                                                    }`}>
+                                                      {quote.item_group}
+                                                    </span>
+                                                  )}
+                                                </div>
                                                 <span className="text-xs text-slate-600">{quote.item_description || quote.description || '—'}</span>
                                               </div>
                                             </td>

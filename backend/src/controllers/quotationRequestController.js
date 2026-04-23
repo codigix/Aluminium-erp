@@ -27,7 +27,7 @@ const getQuotationRequests = async (req, res, next) => {
                ) as item_qty,
                COALESCE(soi.unit, qr.item_unit, 'NOS') as item_unit,
                COALESCE(soi.unit, qr.item_unit, 'NOS') as uom,
-               COALESCE(soi.item_group, 'FG') as item_group,
+               COALESCE(qr.item_group, soi.item_group, 'FG') as item_group,
                qr.id as id
         FROM quotation_requests qr
         LEFT JOIN sales_orders so ON so.id = qr.sales_order_id
@@ -301,8 +301,8 @@ const sendQuotationViaEmail = async (req, res, next) => {
                status, total_amount, received_amount, rejection_reason, 
                notes, created_at, profit_percentage, gst_percentage,
                version, parent_id, drawing_no, description, item_unit,
-               project_name, batch_id
-             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+               project_name, batch_id, item_group
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
               item.orderId || null, 
               item.salesOrderItemId || null, 
@@ -321,7 +321,8 @@ const sendQuotationViaEmail = async (req, res, next) => {
               item.description || null,
               item.unit || 'Nos',
               projectName || null,
-              batchId
+              batchId,
+              item.item_group || item.item_group_calc || null
             ]
           );
           resolve(result.insertId);
