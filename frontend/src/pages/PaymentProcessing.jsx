@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { DataTable } from '../components/ui.jsx';
 import { errorToast, successToast } from '../utils/toast';
 import ProcessPaymentModal from '../components/ProcessPaymentModal.jsx';
@@ -24,6 +24,8 @@ const formatDate = (date) => {
 
 const PaymentProcessing = () => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -32,14 +34,44 @@ const PaymentProcessing = () => {
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [emailModalData, setEmailModalData] = useState(null);
 
+  // URL Synchronization
+  useEffect(() => {
+    const path = location.pathname;
+    const segments = path.split('/').filter(Boolean);
+    const id = searchParams.get('id');
+
+    if (id && payments.length > 0) {
+      const row = payments.find(p => p.id === parseInt(id));
+      if (row) {
+        if (segments.includes('record')) {
+          setSelectedInvoice({
+            id: row.id,
+            po_number: row.po_number,
+            vendor_name: row.vendor_name,
+            vendor_id: row.vendor_id,
+            total_amount: row.total_amount,
+            outstanding: row.total_amount,
+            already_paid: 0,
+            created_at: row.created_at
+          });
+          setIsPaymentModalOpen(true);
+          setIsEmailModalOpen(false);
+        } else if (segments.includes('email')) {
+          handleSendEmailClick(row);
+          setIsPaymentModalOpen(false);
+        }
+      }
+    } else if (!path.includes('/record') && !path.includes('/email')) {
+      setIsPaymentModalOpen(false);
+      setIsEmailModalOpen(false);
+      setSelectedInvoice(null);
+      setEmailModalData(null);
+    }
+  }, [location.pathname, searchParams, payments]);
+
   useEffect(() => {
     fetchPendingPayments();
-    
-    if (location.state?.selectedInvoice) {
-      setSelectedInvoice(location.state.selectedInvoice);
-      setIsPaymentModalOpen(true);
-    }
-  }, [location.state]);
+  }, []);
 
   const fetchPendingPayments = async () => {
     try {
