@@ -17,16 +17,21 @@ const listDrawings = async (search = '', onlyShared = false) => {
       d.drawing_no,
       d.file_path,
       d.client_name,
+      d.status as drawing_status,
       d.description as drawing_description,
       d.uploaded_by as uploader_name,
       d.created_at as updated_at,
+      soi.id as id,
       soi.id as sales_order_item_id,
       soi.status as item_status,
       soi.sales_order_id,
-      soi.description as item_description
+      soi.description as item_description,
+      soi.bom_cost,
+      soi.item_group,
+      soi.unit
     FROM customer_drawings d
     LEFT JOIN (
-      SELECT s1.id, s1.drawing_no, s1.status, s1.sales_order_id, s1.description
+      SELECT s1.id, s1.drawing_no, s1.status, s1.sales_order_id, s1.description, s1.bom_cost, s1.item_group, s1.unit
       FROM sales_order_items s1
       INNER JOIN (
         SELECT drawing_no, MAX(id) as max_id
@@ -155,7 +160,7 @@ const createCustomerDrawing = async (data) => {
     );
     const drawingId = result.insertId;
 
-    // 2. Handle Company/Requirement auto-creation so it shows up in "Client Requirements"
+    // 2. Handle Company/Requirement/Contact auto-creation
     const [companies] = await connection.query(
       'SELECT id FROM companies WHERE company_name = ?',
       [clientName]
@@ -170,6 +175,21 @@ const createCustomerDrawing = async (data) => {
         [clientName, clientName.replace(/\s+/g, '_').toUpperCase(), 'ACTIVE', gstin || null, customerType || null]
       );
       companyId = companyResult.insertId;
+    }
+
+    // 2b. Create/Update Primary Contact
+    if (contactPerson || phoneNumber || emailAddress) {
+      const [contacts] = await connection.query(
+        'SELECT id FROM contacts WHERE company_id = ? AND contact_type = "PRIMARY"',
+        [companyId]
+      );
+
+      if (contacts.length === 0) {
+        await connection.execute(
+          'INSERT INTO contacts (company_id, name, email, phone, contact_type, status) VALUES (?, ?, ?, ?, "PRIMARY", "ACTIVE")',
+          [companyId, contactPerson || 'Primary Contact', emailAddress || null, phoneNumber || null]
+        );
+      }
     }
 
     // 3. Create Sales Order Requirement
@@ -226,7 +246,7 @@ const createBatchCustomerDrawings = async (batchData) => {
       );
       const drawingId = result.insertId;
 
-      // 2. Handle Company/Requirement auto-creation
+      // 2. Handle Company/Requirement/Contact auto-creation
       const [companies] = await connection.query(
         'SELECT id FROM companies WHERE company_name = ?',
         [clientName]
@@ -241,6 +261,21 @@ const createBatchCustomerDrawings = async (batchData) => {
           [clientName, clientName.replace(/\s+/g, '_').toUpperCase(), 'ACTIVE', gstin || null, customerType || null]
         );
         companyId = companyResult.insertId;
+      }
+
+      // 2b. Create/Update Primary Contact
+      if (contactPerson || phoneNumber || emailAddress) {
+        const [contacts] = await connection.query(
+          'SELECT id FROM contacts WHERE company_id = ? AND contact_type = "PRIMARY"',
+          [companyId]
+        );
+
+        if (contacts.length === 0) {
+          await connection.execute(
+            'INSERT INTO contacts (company_id, name, email, phone, contact_type, status) VALUES (?, ?, ?, ?, "PRIMARY", "ACTIVE")',
+            [companyId, contactPerson || 'Primary Contact', emailAddress || null, phoneNumber || null]
+          );
+        }
       }
 
       // 3. Create Sales Order Requirement

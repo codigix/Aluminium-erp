@@ -70,15 +70,21 @@ const CustomerDrawing = () => {
     {
       label: 'Contact & Email',
       key: 'contact_person',
-      render: (val, row) => (
-        <div className="flex flex-col">
-          <span className="font-medium text-slate-900">{row.contact_phone || '—'}</span>
-          <span className="text-[10px] text-slate-500">{row.email_address || '—'}</span>
-          {val && val !== row.contact_phone && (
-            <span className="text-[10px] text-indigo-600 italic">{val}</span>
-          )}
-        </div>
-      )
+      render: (val, row) => {
+        const phone = row.contact_phone || row.phone || '—';
+        const email = row.email_address || row.email || '—';
+        const person = val || row.contact_person || '';
+
+        return (
+          <div className="flex flex-col">
+            <span className="font-medium text-slate-900">{phone}</span>
+            <span className="text-[10px] text-slate-500">{email}</span>
+            {person && person !== phone && (
+              <span className="text-[10px] text-indigo-600 italic">{person}</span>
+            )}
+          </div>
+        );
+      }
     },
     {
       label: 'Delivery Date',
@@ -109,16 +115,29 @@ const CustomerDrawing = () => {
               if (firstItem) {
                 // Find corresponding drawing from drawings database if possible, 
                 // or use the item data directly
-                const fullDrawing = drawings.find(d => d.drawing_no === firstItem.drawing_no) || {
-                  id: firstItem.id,
-                  drawing_no: firstItem.drawing_no,
-                  revision: firstItem.revision || '0',
-                  description: firstItem.description || '',
-                  client_name: row.client_name || row.company_name,
-                  qty: firstItem.quantity || 1,
-                  file_path: firstItem.file_path
+                const dbDrawing = drawings.find(d => d.id === firstItem.drawing_id || d.drawing_no === firstItem.drawing_no);
+                
+                const drawingToEdit = {
+                  id: dbDrawing?.id || firstItem.drawing_id || firstItem.id,
+                  drawing_no: dbDrawing?.drawing_no || firstItem.drawing_no,
+                  revision: dbDrawing?.revision || firstItem.revision || '0',
+                  description: dbDrawing?.description || firstItem.description || '',
+                  client_name: dbDrawing?.client_name || row.client_name || row.company_name,
+                  qty: dbDrawing?.qty || firstItem.quantity || 1,
+                  file_path: dbDrawing?.file_path || firstItem.file_path,
+                  // Pass contact info from row if not in dbDrawing
+                  contact_person: dbDrawing?.contact_person || row.contact_person || '',
+                  phone: dbDrawing?.phone || row.contact_phone || '',
+                  email: dbDrawing?.email || row.email_address || '',
+                  customer_type: dbDrawing?.customer_type || row.customer_type || '',
+                  gstin: dbDrawing?.gstin || row.gstin || '',
+                  city: dbDrawing?.city || row.city || '',
+                  state: dbDrawing?.state || row.state || '',
+                  billing_address: dbDrawing?.billing_address || row.billing_address || '',
+                  shipping_address: dbDrawing?.shipping_address || row.shipping_address || '',
+                  remarks: dbDrawing?.remarks || firstItem.remarks || ''
                 };
-                handleEdit(fullDrawing);
+                handleEdit(drawingToEdit);
               }
             }}
             className="p-1.5 text-amber-600 hover:bg-amber-50 rounded transition-all"
@@ -126,20 +145,13 @@ const CustomerDrawing = () => {
           >
             <Edit2 size={15} />
           </button>
-          {drawings.some(d => (d.client_name === (row.client_name || row.company_name)) && (!d.status || d.status !== 'SHARED')) && (
+          {/* Unify Send to Design buttons: Show if there are unshared drawings OR if the requirement status is CREATED */}
+          {(drawings.some(d => (d.client_name === (row.client_name || row.company_name)) && (d.status !== 'SHARED')) || 
+            row.status?.toUpperCase() === 'CREATED') && (
             <button
-              onClick={() => handleShareClientGroupWithDesign(row.client_name || row.company_name)}
+              onClick={() => handleShareClientGroupWithDesign(row.client_name || row.company_name, row)}
               className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded transition-all"
-              title="Send Drawings to Design"
-            >
-              <Send size={15} />
-            </button>
-          )}
-          {row.status?.toUpperCase() === 'CREATED' && (
-            <button
-              onClick={() => handleSendToDesign(row)}
-              className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded transition-all"
-              title="Send Requirement to Design"
+              title="Send to Design"
             >
               <Send size={15} />
             </button>
@@ -386,11 +398,24 @@ const CustomerDrawing = () => {
       const grouped = filtered.reduce((acc, so) => {
         const clientName = so.client_name || so.company_name || 'Unassigned';
         if (!acc[clientName]) {
+          // Find first item with contact info if available
+          const firstDrawingWithContact = so.items?.find(item => item.contact_person || item.phone || item.email);
+          
           acc[clientName] = {
             ...so,
             client_name: clientName,
             drawing_count: 0,
-            original_items: []
+            original_items: [],
+            // Ensure contact info is preserved
+            contact_person: so.contact_person || firstDrawingWithContact?.contact_person,
+            contact_phone: so.contact_phone || firstDrawingWithContact?.phone,
+            email_address: so.email_address || firstDrawingWithContact?.email,
+            customer_type: so.customer_type || firstDrawingWithContact?.customer_type,
+            gstin: so.gstin || firstDrawingWithContact?.gstin,
+            city: so.city || firstDrawingWithContact?.city,
+            state: so.state || firstDrawingWithContact?.state,
+            billing_address: so.billing_address || firstDrawingWithContact?.billing_address,
+            shipping_address: so.shipping_address || firstDrawingWithContact?.shipping_address
           };
         }
 
@@ -877,19 +902,26 @@ const CustomerDrawing = () => {
     }
   };
 
-  const handleShareClientGroupWithDesign = async (clientName) => {
-    const unsharedDrawings = groupedDrawings[clientName].filter(d => !d.status || d.status !== 'SHARED');
+  const handleShareClientGroupWithDesign = async (clientName, requirement = null) => {
+    const unsharedDrawings = groupedDrawings[clientName]?.filter(d => d.status !== 'SHARED') || [];
 
-    if (unsharedDrawings.length === 0) {
-      infoToast('All drawings for this client are already shared.');
+    const isCreatedStatus = requirement?.status?.toUpperCase() === 'CREATED';
+
+    if (unsharedDrawings.length === 0 && !isCreatedStatus) {
+      infoToast('All drawings for this client are already shared and requirement is in progress.');
       return;
     }
 
+    const title = isCreatedStatus ? 'Send Requirement to Design?' : 'Send Drawings to Design?';
+    const text = unsharedDrawings.length > 0 
+      ? `Send all ${unsharedDrawings.length} unshared drawings to Design Department for review?`
+      : `Move this requirement to Design Department for review?`;
+
     const result = await Swal.fire({
-      title: 'Send to Design?',
-      text: `Send all ${unsharedDrawings.length} unshared drawings to Design Department for review?`,
+      title: title,
+      text: text,
       showCancelButton: true,
-      confirmButtonText: 'Yes, send all',
+      confirmButtonText: 'Yes, send',
       confirmButtonColor: '#10b981',
       width: '350px',
       customClass: {
@@ -903,11 +935,29 @@ const CustomerDrawing = () => {
     if (result.isConfirmed) {
       try {
         setLoading(true);
-        await shareDrawingsBulkAPI(unsharedDrawings.map(d => d.id));
-        successToast(`All ${unsharedDrawings.length} drawings for ${clientName} sent to Design Engineer as a single request`);
+        const token = localStorage.getItem('authToken');
+
+        // 1. Share drawings if any unshared exist
+        if (unsharedDrawings.length > 0) {
+          await shareDrawingsBulkAPI(unsharedDrawings.map(d => d.id));
+        }
+
+        // 2. Update Sales Order status if it's still 'CREATED'
+        if (requirement && requirement.id && isCreatedStatus) {
+          const soResponse = await fetch(`${API_BASE}/sales-orders/${requirement.id}/send-to-design`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          });
+          if (!soResponse.ok) throw new Error('Failed to update requirement status');
+        }
+
+        successToast(`Successfully sent to Design Department`);
         fetchDrawings(searchTerm);
         fetchRequirements();
       } catch (error) {
+        console.error(error);
         errorToast(error.message);
       } finally {
         setLoading(false);
@@ -999,37 +1049,6 @@ const CustomerDrawing = () => {
         });
         if (!response.ok) throw new Error('Delete failed');
         successToast('Requirement has been deleted.');
-        fetchRequirements();
-      } catch (error) {
-        errorToast(error.message);
-      }
-    }
-  };
-
-  const handleSendToDesign = async (requirement) => {
-    const result = await Swal.fire({
-      title: 'Send to Design?',
-      text: "Send this requirement to the Design Engineer for approval?",
-      icon: 'question',
-      showCancelButton: true,
-      confirmButtonColor: '#10b981',
-      cancelButtonColor: '#6b7280',
-      confirmButtonText: 'Yes, send it'
-    });
-
-    if (result.isConfirmed) {
-      try {
-        const token = localStorage.getItem('authToken');
-        const response = await fetch(`${API_BASE}/sales-orders/${requirement.id}/send-to-design`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-
-        if (!response.ok) throw new Error('Failed to send to design');
-
-        successToast('Requirement sent to Design Engineer successfully');
         fetchRequirements();
       } catch (error) {
         errorToast(error.message);
