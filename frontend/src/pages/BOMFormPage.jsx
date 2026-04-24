@@ -41,7 +41,7 @@ const RecursiveBOMRow = ({
   setEditingItem,
   onUpdate,
   isReadOnly, 
-  allItems, 
+  childrenMap,
   type: providedType, 
   inheritedLoss = 0, 
   isComponentSection = false 
@@ -55,7 +55,7 @@ const RecursiveBOMRow = ({
                        (item.component_code || item.componentCode || '').toLowerCase().startsWith('con-') ||
                        (item.item_group || item.itemGroup || '').toLowerCase() === 'consumables';
 
-  const children = allItems.filter(child => String(child.parent_id || child.parentId) === String(item.id));
+  const children = childrenMap.get(String(item.id)) || [];
 
   const qty = parseFloat(
     actualType === 'material' 
@@ -212,7 +212,7 @@ const RecursiveBOMRow = ({
             setEditingItem={setEditingItem}
             onUpdate={onUpdate}
             isReadOnly={isReadOnly}
-            allItems={allItems}
+            childrenMap={childrenMap}
             isComponentSection={true}
             inheritedLoss={100 * (1 - cumulativeLossFactor)}
           />
@@ -365,7 +365,7 @@ const RecursiveBOMRow = ({
           setEditingItem={setEditingItem}
           onUpdate={onUpdate}
           isReadOnly={isReadOnly}
-          allItems={allItems}
+          childrenMap={childrenMap}
           inheritedLoss={100 * (1 - cumulativeLossFactor)}
         />
       ))}
@@ -392,6 +392,19 @@ const getDimensionString = (item) => {
 
 const BOMFormPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const isReadOnly = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return params.get('view') === 'true';
+  }, [location.search]);
+
+  const itemId = useMemo(() => {
+    const pathSegments = location.pathname.split('/').filter(Boolean);
+    const lastSegment = pathSegments[pathSegments.length - 1];
+    return (lastSegment && lastSegment !== 'bom-form') ? lastSegment : null;
+  }, [location.pathname]);
+
   const [loading, setLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState(null);
   const selectedItemRef = useRef(null);
@@ -515,6 +528,7 @@ const BOMFormPage = () => {
   };
 
   const drawingOptions = useMemo(() => {
+    if (isReadOnly) return [];
     const drawingMap = new Map();
 
     // Process approved drawings
@@ -538,9 +552,10 @@ const BOMFormPage = () => {
     return Array.from(drawingMap.entries())
       .map(([no, name]) => ({ label: cleanText(name) || '', value: no, subLabel: no }))
       .sort((a, b) => (a.label || '').localeCompare(b.label || ''));
-  }, [approvedDrawings, stockItems]);
+  }, [approvedDrawings, stockItems, isReadOnly]);
 
   const componentOptions = useMemo(() => {
+    if (isReadOnly) return [];
     const options = [];
     const seenCodes = new Set();
     const currentItemCode = selectedItem?.item_code || productForm.itemCode;
@@ -655,20 +670,7 @@ const BOMFormPage = () => {
     });
 
     return options.sort((a, b) => (a.label || '').localeCompare(b.label || ''));
-  }, [stockItems, approvedDrawings, approvedBOMs, showAllDrawings, selectedItem, productForm.itemCode, productForm.drawingNo, productForm.itemGroup]);
-
-  const location = useLocation();
-
-  const isReadOnly = useMemo(() => {
-    const params = new URLSearchParams(location.search);
-    return params.get('view') === 'true';
-  }, [location.search]);
-
-  const itemId = useMemo(() => {
-    const pathSegments = location.pathname.split('/').filter(Boolean);
-    const lastSegment = pathSegments[pathSegments.length - 1];
-    return (lastSegment && lastSegment !== 'bom-form') ? lastSegment : null;
-  }, [location.pathname]);
+  }, [stockItems, approvedDrawings, approvedBOMs, showAllDrawings, selectedItem, productForm.itemCode, productForm.drawingNo, productForm.itemGroup, isReadOnly]);
 
   const fetchDrawingName = useCallback(async (drawingNo) => {
     if (!drawingNo) {
@@ -697,6 +699,19 @@ const BOMFormPage = () => {
       return '';
     }
   }, []);
+
+  const childrenMap = useMemo(() => {
+    const map = new Map();
+    const allItems = [...bomData.materials, ...bomData.components];
+    allItems.forEach(item => {
+      const parentId = String(item.parent_id || item.parentId || '');
+      if (parentId && parentId !== 'null' && parentId !== 'undefined') {
+        if (!map.has(parentId)) map.set(parentId, []);
+        map.get(parentId).push(item);
+      }
+    });
+    return map;
+  }, [bomData.materials, bomData.components]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -867,32 +882,39 @@ const BOMFormPage = () => {
       }
 
       fetchItemGroups();
-
-      // Fetch foundational data in parallel
-      console.log('[fetchData] Fetching foundational data...');
-      const [stockRes, bomsRes, dwgsRes] = await Promise.all([
-        fetch(`${API_BASE}/stock/balance?includeAll=true`, { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch(`${API_BASE}/bom/approved`, { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch(`${API_BASE}/sales-orders/approved-drawings`, { headers: { 'Authorization': `Bearer ${token}` } })
-      ]);
-
+      
       let latestStockItems = [];
-      if (stockRes.ok) {
-        latestStockItems = await stockRes.json();
-        setStockItems(latestStockItems);
-      }
-      
-      if (bomsRes.ok) setApprovedBOMs(await bomsRes.json());
-      
       let currentApprovedDrawings = [];
-      if (dwgsRes.ok) {
-        const drawingsData = await dwgsRes.json();
-        currentApprovedDrawings = drawingsData.flatMap(order => (order.items || []).map(item => ({
-          ...item,
-          company_name: order.company_name,
-          po_number: order.po_number
-        })));
-        setApprovedDrawings(currentApprovedDrawings);
+
+      // Skip foundational data if read-only and we have an ID
+      const effectiveId = (itemId && itemId !== 'bom-form') ? itemId : null;
+      const shouldSkipFoundational = isReadOnly && effectiveId;
+
+      if (!shouldSkipFoundational) {
+        // Fetch foundational data in parallel
+        console.log('[fetchData] Fetching foundational data...');
+        const [stockRes, bomsRes, dwgsRes] = await Promise.all([
+          fetch(`${API_BASE}/stock/balance?includeAll=true`, { headers: { 'Authorization': `Bearer ${token}` } }),
+          fetch(`${API_BASE}/bom/approved`, { headers: { 'Authorization': `Bearer ${token}` } }),
+          fetch(`${API_BASE}/sales-orders/approved-drawings`, { headers: { 'Authorization': `Bearer ${token}` } })
+        ]);
+
+        if (stockRes.ok) {
+          latestStockItems = await stockRes.json();
+          setStockItems(latestStockItems);
+        }
+        
+        if (bomsRes.ok) setApprovedBOMs(await bomsRes.json());
+        
+        if (dwgsRes.ok) {
+          const drawingsData = await dwgsRes.json();
+          currentApprovedDrawings = drawingsData.flatMap(order => (order.items || []).map(item => ({
+            ...item,
+            company_name: order.company_name,
+            po_number: order.po_number
+          })));
+          setApprovedDrawings(currentApprovedDrawings);
+        }
       }
 
       const params = new URLSearchParams(location.search);
@@ -901,8 +923,6 @@ const BOMFormPage = () => {
       const drawingIdFromUrl = params.get('drawing_id') === 'N/A' ? '' : params.get('drawing_id');
       const salesOrderIdFromUrl = params.get('sales_order_id');
       
-      const effectiveId = (itemId && itemId !== 'bom-form') ? itemId : null;
-
       if (effectiveId || itemCodeFromUrl || drawingNoFromUrl) {
         let currentItem = selectedItemRef.current;
 
@@ -964,15 +984,22 @@ const BOMFormPage = () => {
           
           if (data.materials) {
             data.materials = data.materials.map(m => {
-              const s = latestStockItems.find(si => si.material_name === m.material_name);
-              const rate = (!m.rate || parseFloat(m.rate) === 0) ? (s?.selling_rate || s?.valuation_rate || 0) : m.rate;
-              return { ...m, rate, item_code: m.item_code || s?.item_code, length: m.length || s?.length, width: m.width || s?.width, thickness: m.thickness || s?.thickness };
+              const s = latestStockItems.length > 0 ? latestStockItems.find(si => si.material_name === m.material_name) : null;
+              const rate = (!m.rate || parseFloat(m.rate) === 0) ? (m.selling_rate || m.valuation_rate || s?.selling_rate || s?.valuation_rate || 0) : m.rate;
+              return { 
+                ...m, 
+                rate, 
+                item_code: m.item_code || s?.item_code, 
+                length: m.length || s?.length, 
+                width: m.width || s?.width, 
+                thickness: m.thickness || s?.thickness 
+              };
             });
           }
           if (data.components) {
             data.components = data.components.map(c => {
-              const s = latestStockItems.find(si => si.item_code === c.component_code);
-              const rate = (!c.rate || parseFloat(c.rate) === 0) ? (s?.selling_rate || s?.valuation_rate || 0) : c.rate;
+              const s = latestStockItems.length > 0 ? latestStockItems.find(si => si.item_code === c.component_code) : null;
+              const rate = (!c.rate || parseFloat(c.rate) === 0) ? (c.selling_rate || c.valuation_rate || s?.selling_rate || s?.valuation_rate || 0) : c.rate;
               return { ...c, rate, weight_per_unit: c.weight_per_unit || s?.weight_per_unit || 0 };
             });
           }
@@ -981,13 +1008,15 @@ const BOMFormPage = () => {
         }
       }
 
-      // Fetch Workstations & Operations List
-      const [wsRes, opsRes] = await Promise.all([
-        fetch(`${API_BASE}/workstations`, { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch(`${API_BASE}/operations`, { headers: { 'Authorization': `Bearer ${token}` } })
-      ]);
-      if (wsRes.ok) setWorkstations(await wsRes.json());
-      if (opsRes.ok) setOperationsList(await opsRes.json());
+      // Fetch Workstations & Operations List ONLY if not read-only
+      if (!isReadOnly) {
+        const [wsRes, opsRes] = await Promise.all([
+          fetch(`${API_BASE}/workstations`, { headers: { 'Authorization': `Bearer ${token}` } }),
+          fetch(`${API_BASE}/operations`, { headers: { 'Authorization': `Bearer ${token}` } })
+        ]);
+        if (wsRes.ok) setWorkstations(await wsRes.json());
+        if (opsRes.ok) setOperationsList(await opsRes.json());
+      }
 
     } catch (error) {
       console.error('[fetchData] Error:', error);
@@ -2311,7 +2340,7 @@ const BOMFormPage = () => {
                           onRemove={handleDeleteSectionItem}
                           onEdit={(item) => handleStartEditSectionItem('components', item)}
                           isReadOnly={isReadOnly}
-                          allItems={[...bomData.materials, ...bomData.components]}
+                          childrenMap={childrenMap}
                           type="component"
                           isComponentSection={true}
                         />
@@ -2648,7 +2677,7 @@ const BOMFormPage = () => {
                           onRemove={handleDeleteSectionItem}
                           onEdit={(item) => handleStartEditSectionItem('materials', item)}
                           isReadOnly={isReadOnly}
-                          allItems={[...bomData.materials, ...bomData.components]}
+                          childrenMap={childrenMap}
                           type="material"
                         />
                       ))}
