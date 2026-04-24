@@ -114,25 +114,51 @@ const QuotationFormPage = () => {
 
   useEffect(() => {
     if (items.length > 0 && drawings.length > 0) {
-      const itemsWithDrawingIds = items.map(item => {
-        if (!item.drawing_id && item.drawing_no) {
-          const matchedDrawing = drawings.find(d => 
-            String(d.drawing_no).trim().toLowerCase() === String(item.drawing_no).trim().toLowerCase()
-          );
-          if (matchedDrawing) {
-            return { ...item, drawing_id: matchedDrawing.id };
+      const updatedItems = items.map(item => {
+        const matchedDrawing = drawings.find(d => 
+          (item.drawing_id && String(d.id) === String(item.drawing_id)) ||
+          (!item.drawing_id && item.drawing_no && 
+            String(d.drawing_no).trim().toLowerCase() === String(item.drawing_no).trim().toLowerCase() &&
+            (!item.description || String(d.description || '').trim().toLowerCase() === String(item.description).trim().toLowerCase())
+          )
+        );
+
+        if (matchedDrawing) {
+          const latestBOMCost = parseFloat(matchedDrawing.bom_cost || matchedDrawing.rate || matchedDrawing.quotedPrice || 0);
+          
+          let newItem = { ...item };
+          let changed = false;
+
+          // Sync drawing_id if missing
+          if (!item.drawing_id) {
+            newItem.drawing_id = matchedDrawing.id;
+            changed = true;
           }
+
+          // Sync rate and BOM cost if different and NOT locked (historical/approved)
+          if (!isLocked && latestBOMCost > 0 && (parseFloat(item.rate) !== latestBOMCost || parseFloat(item.bom_cost) !== latestBOMCost)) {
+            newItem.rate = latestBOMCost;
+            newItem.bom_cost = latestBOMCost;
+            newItem.total = (parseFloat(item.quantity) || 0) * latestBOMCost;
+            changed = true;
+          }
+
+          return changed ? newItem : item;
         }
         return item;
       });
       
-      // Only update if something changed to avoid infinite loop
-      const hasChanges = itemsWithDrawingIds.some((it, idx) => it.drawing_id !== items[idx].drawing_id);
+      const hasChanges = updatedItems.some((it, idx) => 
+        it.drawing_id !== items[idx].drawing_id || 
+        it.rate !== items[idx].rate ||
+        it.bom_cost !== items[idx].bom_cost
+      );
+
       if (hasChanges) {
-        setItems(itemsWithDrawingIds);
+        setItems(updatedItems);
       }
     }
-  }, [drawings]);
+  }, [drawings, isLocked]);
 
   useEffect(() => {
     if (items.length > 0) {
@@ -430,8 +456,18 @@ const QuotationFormPage = () => {
   };
 
   const calculateSummary = () => {
-    const baseAmount = items.reduce((sum, item) => sum + (parseFloat(item.total) || 0), 0);
-    const gstAmount = items.reduce((sum, item) => {
+    // Filter out Sub-Assemblies from summary to avoid double counting
+    // FG cost already includes SA costs
+    const topLevelItems = items.filter(item => {
+      const group = (item.item_group || '').toUpperCase();
+      const isSA = group.includes('SA') || group.includes('SUB') || group.includes('ASSEMBLY');
+      const isFG = group.includes('FG');
+      // If it's labeled as SA but NOT FG, it's a sub-assembly to be excluded
+      return !(isSA && !isFG);
+    });
+
+    const baseAmount = topLevelItems.reduce((sum, item) => sum + (parseFloat(item.total) || 0), 0);
+    const gstAmount = topLevelItems.reduce((sum, item) => {
       const itemTotal = parseFloat(item.total) || 0;
       const gstPercent = parseFloat(item.gst_percentage) || 18;
       return sum + (itemTotal * gstPercent / 100);
@@ -847,6 +883,7 @@ const QuotationFormPage = () => {
                     <th className="w-12 px-4 py-3 text-xs  text-slate-400  tracking-widest border-b border-slate-100">No.</th>
                     <th className="w-72 px-4 py-3 text-xs  text-slate-400  tracking-widest border-b border-slate-100">Drawing & Description</th>
                     <th className="w-32 px-4 py-3 text-xs  text-slate-400  tracking-widest border-b border-slate-100">Qty</th>
+                    <th className="w-32 px-4 py-3 text-xs  text-slate-400  tracking-widest border-b border-slate-100">BOM Cost (₹)</th>
                     <th className="w-32 px-4 py-3 text-xs  text-slate-400  tracking-widest border-b border-slate-100">Rate (₹)</th>
                     <th className="w-40 px-4 py-3 text-xs  text-slate-400  tracking-widest border-b border-slate-100">Total (₹)</th>
                     {!isLocked && <th className="w-20 px-4 py-3 text-xs  text-slate-400  tracking-widest border-b border-slate-100 text-center">Actions</th>}
@@ -983,6 +1020,11 @@ const QuotationFormPage = () => {
                               className={`w-full px-2 py-1 text-xs border rounded outline-none transition-all ${isLocked ? 'bg-transparent border-transparent text-slate-700 font-medium' : 'bg-white border-slate-200 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500'}`}
                             />
                             <span className="text-xs text-slate-400 font-medium">{item.unit || 'Nos'}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="px-2 py-1 text-xs font-bold text-emerald-600 bg-emerald-50 rounded border border-emerald-100/50">
+                            {formatCurrency(item.bom_cost || 0)}
                           </div>
                         </td>
                         <td className="px-4 py-3">
@@ -1127,7 +1169,7 @@ const QuotationFormPage = () => {
                         
                         <div className="flex items-center gap-2">
                           <p className="text-[11px] font-black text-slate-900">
-                            {formatCurrency(parseFloat(v.received_amount) || parseFloat(v.total_amount) * 1.18)}
+                            {formatCurrency(v.id === selectedVersionId || (selectedVersionId === null && v.version === version) ? summary.totalAmount : (parseFloat(v.received_amount) || parseFloat(v.total_amount) * 1.18))}
                           </p>
                           <button 
                             onClick={(e) => { e.stopPropagation(); handleDeleteVersion(v); }}
