@@ -11,7 +11,7 @@ async function checkColumns() {
     }).promise();
 
     try {
-        const [rows] = await connection.query('DESCRIBE sales_order_items');
+        const [rows] = await connection.query('DESCRIBE quotation_requests');
         console.log(JSON.stringify(rows, null, 2));
     } catch (error) {
         console.error(error);

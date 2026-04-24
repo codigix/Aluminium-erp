@@ -98,11 +98,34 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null) => {
 
     [rows] = await pool.query(query + ' ORDER BY created_at ASC', params);
   }
-  return rows.map(row => ({
-    ...row,
-    qty: row.quantity || row.qty,
-    quantity: row.quantity || row.qty
-  }));
+
+  // Dynamically fetch latest BOM cost for Sub-Assemblies to ensure detail page shows updated rates
+  const updatedRows = [];
+  for (const row of rows) {
+    let rate = row.rate;
+    const compCode = row.component_code || row.componentCode;
+    if (compCode && compCode.startsWith('SA-')) {
+      // Use a separate check to get latest cost without creating circular dependency if possible
+      // Since getLatestBOMCost is already defined, we can use it
+      try {
+        const latest = await getLatestBOMCost(compCode, row.drawing_no);
+        if (latest && latest.bom_cost > 0) {
+          rate = latest.bom_cost;
+        }
+      } catch (err) {
+        console.error(`[getItemComponents] Error fetching latest cost for ${compCode}:`, err.message);
+      }
+    }
+
+    updatedRows.push({
+      ...row,
+      rate,
+      qty: row.quantity || row.qty,
+      quantity: row.quantity || row.qty
+    });
+  }
+
+  return updatedRows;
 };
 
 const getItemOperations = async (itemId, itemCode = null, drawingNo = null) => {
@@ -693,6 +716,39 @@ const createBOMRequest = async (bomData) => {
     // This allows manual submission via "BOM Approval" button in frontend
     
     await connection.commit();
+
+    // 5. Post-Commit: Propagate costs and sync latest versions
+    try {
+      if (finalStatus !== 'Draft') {
+        setImmediate(async () => {
+          try {
+            // Update all matching LATEST versions across all sales orders to keep lists in sync
+            if (safeItemCode) {
+              await pool.execute(`
+                UPDATE sales_order_items 
+                SET bom_cost = ?, updated_at = NOW()
+                WHERE item_code = ? 
+                AND (drawing_no = ? OR (drawing_no IS NULL AND ? IS NULL))
+                AND id IN (
+                  SELECT max_id FROM (
+                    SELECT MAX(id) as max_id 
+                    FROM sales_order_items 
+                    GROUP BY sales_order_id, IFNULL(bom_id, item_code)
+                  ) as t
+                )
+              `, [bom_cost, safeItemCode, drawingNo, drawingNo]);
+            }
+
+            await propagateCostToParents(safeItemCode, drawingNo);
+          } catch (propError) {
+            console.error(`[Cost Propagation Error] Failed for ${safeItemCode}:`, propError.message);
+          }
+        });
+      }
+    } catch (bgError) {
+      console.error('[Background Task Error]:', bgError.message);
+    }
+
     return { success: true, id: targetItemId };
   } catch (error) {
     await connection.rollback();
@@ -880,11 +936,13 @@ const getLatestBOMCost = async (itemCode, drawingNo, bomId) => {
   }
 
   const sql = `
-    SELECT bom_cost, revision_no
+    SELECT bom_cost, revision_no, id
     FROM sales_order_items soi
     WHERE ${whereClause}
     AND bom_cost > 0
-    ORDER BY id DESC
+    ORDER BY 
+      CAST(REGEXP_REPLACE(IFNULL(revision_no, '0'), '[^0-9]', '') AS UNSIGNED) DESC, 
+      id DESC
     LIMIT 1
   `;
 
@@ -892,10 +950,167 @@ const getLatestBOMCost = async (itemCode, drawingNo, bomId) => {
   if (rows.length > 0) {
     return { 
       bom_cost: parseFloat(rows[0].bom_cost) || 0, 
-      revision_no: rows[0].revision_no 
+      revision_no: rows[0].revision_no,
+      id: rows[0].id
     };
   }
-  return { bom_cost: 0, revision_no: null };
+  return { bom_cost: 0, revision_no: null, id: null };
+};
+
+/**
+ * Recalculates the cost of a BOM based on its latest finalized version components
+ */
+const recalculateBOMCost = async (itemId) => {
+  if (!itemId) return 0;
+
+  // 1. Fetch item info and its components, materials, operations, and scrap
+  const [itemRows] = await pool.query('SELECT item_code, drawing_no, quantity FROM sales_order_items WHERE id = ?', [itemId]);
+  if (itemRows.length === 0) return 0;
+  const parentItem = itemRows[0];
+
+  const [materials] = await pool.query('SELECT * FROM sales_order_item_materials WHERE sales_order_item_id = ?', [itemId]);
+  const [components] = await pool.query('SELECT * FROM sales_order_item_components WHERE sales_order_item_id = ?', [itemId]);
+  const [operations] = await pool.query('SELECT * FROM sales_order_item_operations WHERE sales_order_item_id = ?', [itemId]);
+  const [scrap] = await pool.query('SELECT * FROM sales_order_item_scrap WHERE sales_order_item_id = ?', [itemId]);
+
+  // 2. Helper for recursive cost (mimicking frontend logic)
+  const calculateItemCost = async (item, allItems) => {
+    const isMaterial = !!(item.material_name);
+    const qty = parseFloat(isMaterial ? (item.qty_per_pc || 0) : (item.quantity || 0));
+    let rate = parseFloat(item.rate || 0);
+
+    // If it's a sub-assembly component, fetch its LATEST cost instead of using stored rate
+    if (!isMaterial && item.component_code && item.component_code.startsWith('SA-')) {
+      const latest = await getLatestBOMCost(item.component_code, item.drawing_no);
+      if (latest.bom_cost > 0) {
+        rate = latest.bom_cost;
+      }
+    }
+
+    const weightPerUnit = parseFloat(item.weight_per_unit || 0);
+    const scrapPercent = parseFloat(item.scrap_percent || 0);
+
+    let baseItemCost = qty * rate;
+    if (isMaterial && weightPerUnit > 0) {
+      const sP = scrapPercent > 1 ? scrapPercent / 100 : scrapPercent;
+      baseItemCost = qty * weightPerUnit * (1 + sP) * rate;
+    }
+
+    // Find children
+    const children = allItems.filter(child => String(child.parent_id) === String(item.id));
+    let childrenCost = 0;
+    for (const child of children) {
+      childrenCost += await calculateItemCost(child, allItems);
+    }
+
+    const totalBeforeLoss = baseItemCost + childrenCost;
+    const lossPercent = isMaterial ? 0 : parseFloat(item.loss_percent || 0);
+
+    return (lossPercent > 0 && lossPercent < 100)
+      ? totalBeforeLoss / (1 - (lossPercent / 100))
+      : totalBeforeLoss;
+  };
+
+  // 3. Sum up top-level costs
+  let totalComponentsCost = 0;
+  const topComponents = components.filter(c => !c.parent_id);
+  for (const c of topComponents) {
+    totalComponentsCost += await calculateItemCost(c, [...components, ...materials]);
+  }
+
+  let totalMaterialsCost = 0;
+  const topMaterials = materials.filter(m => !m.parent_id);
+  for (const m of topMaterials) {
+    totalMaterialsCost += await calculateItemCost(m, [...components, ...materials]);
+  }
+
+  // 4. Scrap Loss
+  const batchQty = parseFloat(parentItem.quantity || 1);
+  
+  let totalScrapLoss = 0;
+  scrap.forEach(s => {
+    const input = parseFloat(s.input_qty || 0);
+    const loss = parseFloat(s.loss_percent || 0) / 100;
+    const rate = parseFloat(s.rate || 0);
+    totalScrapLoss += (input * loss * rate);
+  });
+  const scrapLossPerUnit = totalScrapLoss / batchQty;
+
+  // 5. Operations Cost
+  let totalOperationsCost = 0;
+  operations.forEach(o => {
+    const hourlyRate = parseFloat(o.hourly_rate || 0);
+    const setupTime = parseFloat(o.setup_time_min || 0);
+    const cycleTime = parseFloat(o.cycle_time_min || 0);
+    totalOperationsCost += ((cycleTime + setupTime) / 60 * hourlyRate);
+  });
+
+  const finalCost = (totalComponentsCost + totalMaterialsCost - scrapLossPerUnit) + totalOperationsCost;
+  
+  console.log(`[recalculateBOMCost] Recalculated cost for item ${itemId} (${parentItem.item_code}): ${finalCost}`);
+    
+    // Update the specific item version
+    await pool.execute('UPDATE sales_order_items SET bom_cost = ?, updated_at = NOW() WHERE id = ?', [finalCost, itemId]);
+
+    // Also update the rate in all component references to this item to ensure future recalculations are correct
+    if (parentItem.item_code) {
+      await pool.execute(`
+        UPDATE sales_order_item_components 
+        SET rate = ? 
+        WHERE component_code = ? 
+        AND (drawing_no = ? OR drawing_no IS NULL OR ? IS NULL)
+      `, [finalCost, parentItem.item_code, parentItem.drawing_no, parentItem.drawing_no]);
+    }
+
+    // Also update all matching LATEST versions across all sales orders to keep lists in sync
+    if (parentItem.item_code) {
+      await pool.execute(`
+        UPDATE sales_order_items 
+        SET bom_cost = ?, updated_at = NOW()
+        WHERE item_code = ? 
+        AND (drawing_no = ? OR (drawing_no IS NULL AND ? IS NULL))
+        AND id IN (
+          SELECT max_id FROM (
+            SELECT MAX(id) as max_id 
+            FROM sales_order_items 
+            GROUP BY sales_order_id, IFNULL(bom_id, item_code)
+          ) as t
+        )
+      `, [finalCost, parentItem.item_code, parentItem.drawing_no, parentItem.drawing_no]);
+    }
+  
+  return finalCost;
+};
+
+/**
+ * Finds and updates all parent BOMs that use this item as a component
+ */
+const propagateCostToParents = async (itemCode, drawingNo) => {
+  console.log(`[Cost Propagation] Checking parents for: ${itemCode} (${drawingNo})`);
+  
+  // Find all latest or active versions of sales_order_items that use this component_code
+  const [parents] = await pool.query(`
+    SELECT DISTINCT soi.id, soi.item_code, soi.drawing_no
+    FROM sales_order_items soi
+    JOIN sales_order_item_components soc ON soi.id = soc.sales_order_item_id
+    WHERE soc.component_code = ?
+    AND (
+      soi.id IN (
+        SELECT MAX(id) FROM sales_order_items GROUP BY sales_order_id, IFNULL(bom_id, item_code)
+      )
+      OR soi.status IN ('DRAFT', 'PENDING')
+    )
+  `, [itemCode]);
+
+  console.log(`[Cost Propagation] Found ${parents.length} parent BOMs to update`);
+
+  for (const parent of parents) {
+    const newCost = await recalculateBOMCost(parent.id);
+    console.log(`[Cost Propagation] Updated parent ${parent.item_code} (ID: ${parent.id}) to new cost: ₹${newCost}`);
+    
+    // Recurse upwards
+    await propagateCostToParents(parent.item_code, parent.drawing_no);
+  }
 };
 
 module.exports = {
@@ -921,5 +1136,7 @@ module.exports = {
   deleteBOM,
   findAnyBOM,
   getBOMHistory,
-  getLatestBOMCost
+  getLatestBOMCost,
+  recalculateBOMCost,
+  propagateCostToParents
 };

@@ -573,7 +573,8 @@ const BOMFormPage = () => {
       if (!seenCodes.has(item.item_code)) {
         // Find if this item has an approved BOM cost, prioritizing those with non-zero cost
         const matchingBOMs = approvedBOMs.filter(b => b.item_code === item.item_code);
-        const bomInfo = matchingBOMs.length > 0 ? matchingBOMs.sort((a, b) => (parseFloat(b.bom_cost) || 0) - (parseFloat(a.bom_cost) || 0))[0] : null;
+        const parseVer = (v) => parseInt((v || '').toString().replace(/[^0-9]/g, '') || '0');
+        const bomInfo = matchingBOMs.length > 0 ? matchingBOMs.sort((a, b) => parseVer(b.version || b.revision_no) - parseVer(a.version || a.revision_no))[0] : null;
         const bomCost = bomInfo ? (parseFloat(bomInfo.bom_cost) || 0) : 0;
         const dims = getDimensionString(item);
 
@@ -626,7 +627,8 @@ const BOMFormPage = () => {
           if (a.item_code === item.item_code && b.item_code !== item.item_code) return -1;
           if (b.item_code === item.item_code && a.item_code !== item.item_code) return 1;
           // Then prioritize cost
-          return (parseFloat(b.bom_cost) || 0) - (parseFloat(a.bom_cost) || 0);
+          const parseVer = (v) => parseInt((v || '').toString().replace(/[^0-9]/g, '') || '0');
+          return parseVer(b.version || b.revision_no) - parseVer(a.version || a.revision_no);
         })[0] : null;
 
         const bomCost = (item.bom_cost && parseFloat(item.bom_cost) > 0) ? parseFloat(item.bom_cost) : (bomInfo ? (parseFloat(bomInfo.bom_cost) || 0) : 0);
@@ -3370,7 +3372,7 @@ const BOMFormPage = () => {
                           </div>
                           <div>
                             <div className="flex items-center gap-2">
-                              <span className="text-sm font-bold text-slate-800">₹{parseFloat(v.total_cost || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                              <span className="text-sm font-bold text-slate-800">₹{parseFloat(isCurrent ? totalBOMCost : (v.total_cost || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                               {isCurrent && (
                                 <span className="px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded text-[9px] font-bold uppercase tracking-wider">Current</span>
                               )}

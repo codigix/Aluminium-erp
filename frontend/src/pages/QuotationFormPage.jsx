@@ -88,8 +88,9 @@ const QuotationFormPage = () => {
       
       const mappedItems = (initialData.items || [])
         .filter(item => {
-          const g = (item.item_group || '').toUpperCase();
-          return g === 'FG' || g === 'FINISHED GOODS' || g === 'FINISHED_GOODS';
+          // If we have a drawing_no or description, we should show it
+          // We only filter out items that have NO identifying info
+          return !!(item.drawing_no || item.description || item.item_code);
         })
         .map(item => {
           const latestRate = parseFloat(item.bom_cost || item.rate || 0);
@@ -492,6 +493,7 @@ const QuotationFormPage = () => {
           unit: item.unit || 'Nos',
           quotedPrice: parseFloat(item.rate) || 0,
           gst_percentage: parseFloat(item.gst_percentage) || 18,
+          item_group: item.item_group || null,
           status: status.toUpperCase() === 'REVISED' ? 'REVISED' : (item.status || 'SENT'),
           profit_percentage: 0
         })),
@@ -868,45 +870,67 @@ const QuotationFormPage = () => {
                                 {(mode === 'received' || isLocked) ? (
                                   <div className="flex flex-col">
                                     <span className="text-sm  text-slate-900">{item.drawing_no || 'Manual Item'}</span>
+                                    {item.item_group && (item.item_group.toUpperCase().includes('SA') || item.item_group.toUpperCase().includes('SUB') || item.item_group.toUpperCase().includes('ASSEMBLY')) && !item.item_group.toUpperCase().includes('FG') && (
+                                      <span className="ml-2 px-1.5 py-0.5 bg-amber-50 text-amber-600 rounded text-[10px] font-bold border border-amber-100 uppercase">
+                                        {item.item_group.toUpperCase().includes('SA') || item.item_group.toUpperCase().includes('SUB') ? 'SA' : 'ASSY'}
+                                      </span>
+                                    )}
                                     {!isLocked && <span className="text-[11px] text-slate-500 whitespace-pre-line">{item.description}</span>}
                                   </div>
                                 ) : (item.isManual || mode === 'revise') ? (
-                                  <input 
-                                    type="text"
-                                    placeholder="Drawing No..."
-                                    value={item.drawing_no}
-                                    onChange={(e) => handleItemChange(item.id, 'drawing_no', e.target.value)}
-                                    className="w-full px-0 py-0 text-sm  text-slate-900 border-none focus:ring-0 placeholder:text-slate-300 bg-transparent"
-                                  />
+                                  <div className="flex items-center gap-2">
+                                    <input 
+                                      type="text"
+                                      placeholder="Drawing No..."
+                                      value={item.drawing_no}
+                                      onChange={(e) => handleItemChange(item.id, 'drawing_no', e.target.value)}
+                                      className="flex-1 px-0 py-0 text-sm  text-slate-900 border-none focus:ring-0 placeholder:text-slate-300 bg-transparent"
+                                    />
+                                    {item.item_group && (item.item_group.toUpperCase().includes('SA') || item.item_group.toUpperCase().includes('SUB') || item.item_group.toUpperCase().includes('ASSEMBLY')) && !item.item_group.toUpperCase().includes('FG') && (
+                                      <span className="px-1.5 py-0.5 bg-amber-50 text-amber-600 rounded text-[10px] font-bold border border-amber-100 uppercase">
+                                        {item.item_group.toUpperCase().includes('SA') || item.item_group.toUpperCase().includes('SUB') ? 'SA' : 'ASSY'}
+                                      </span>
+                                    )}
+                                  </div>
                                 ) : (
-                                  <SearchableSelect
-                                    options={drawings}
-                                    value={item.drawing_id}
-                                    disabled={isLocked}
-                                    onChange={(val) => {
-                                      const drw = drawings.find(d => String(d.id) === String(val));
-                                      const updatedItems = items.map(it => {
-                                        if (it.id === item.id) {
-                                          const newRate = drw?.rate || drw?.quotedPrice || drw?.bom_cost || it.rate || 0;
-                                          return {
-                                            ...it,
-                                            drawing_id: val,
-                                            drawing_no: drw?.drawing_no || '',
-                                            description: drw?.description || '',
-                                            rate: newRate,
-                                            total: (parseFloat(it.quantity) || 0) * (parseFloat(newRate) || 0)
-                                          };
-                                        }
-                                        return it;
-                                      });
-                                      setItems(updatedItems);
-                                    }}
-                                    placeholder="Select Drawing..."
-                                    labelField="drawing_no"
-                                    valueField="id"
-                                    subLabelField="description"
-                                    className="border-none p-0 focus-within:ring-0 shadow-none bg-transparent  text-sm"
-                                  />
+                                  <div className="flex items-center gap-2">
+                                    <div className="flex-1">
+                                      <SearchableSelect
+                                        options={drawings}
+                                        value={item.drawing_id}
+                                        disabled={isLocked}
+                                        onChange={(val) => {
+                                          const drw = drawings.find(d => String(d.id) === String(val));
+                                          const updatedItems = items.map(it => {
+                                            if (it.id === item.id) {
+                                              const newRate = drw?.rate || drw?.quotedPrice || drw?.bom_cost || it.rate || 0;
+                                              return {
+                                                ...it,
+                                                drawing_id: val,
+                                                drawing_no: drw?.drawing_no || '',
+                                                description: drw?.description || '',
+                                                rate: newRate,
+                                                item_group: drw?.item_group || it.item_group, // Preserve item group from drawing
+                                                total: (parseFloat(it.quantity) || 0) * (parseFloat(newRate) || 0)
+                                              };
+                                            }
+                                            return it;
+                                          });
+                                          setItems(updatedItems);
+                                        }}
+                                        placeholder="Select Drawing..."
+                                        labelField="drawing_no"
+                                        valueField="id"
+                                        subLabelField="description"
+                                        className="border-none p-0 focus-within:ring-0 shadow-none bg-transparent  text-sm"
+                                      />
+                                    </div>
+                                    {item.item_group && (item.item_group.toUpperCase().includes('SA') || item.item_group.toUpperCase().includes('SUB') || item.item_group.toUpperCase().includes('ASSEMBLY')) && !item.item_group.toUpperCase().includes('FG') && (
+                                      <span className="px-1.5 py-0.5 bg-amber-50 text-amber-600 rounded text-[10px] font-bold border border-amber-100 uppercase">
+                                        {item.item_group.toUpperCase().includes('SA') || item.item_group.toUpperCase().includes('SUB') ? 'SA' : 'ASSY'}
+                                      </span>
+                                    )}
+                                  </div>
                                 )}
                               </div>
                               {!isLocked && mode !== 'received' && (

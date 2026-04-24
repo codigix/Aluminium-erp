@@ -375,6 +375,34 @@ const ensurePoReceiptItemTable = async () => {
   }
 };
 
+const ensureQuotationRequestColumns = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    const [columns] = await connection.query('SHOW COLUMNS FROM quotation_requests');
+    const existing = new Set(columns.map(column => column.Field));
+    const requiredColumns = [
+      { name: 'item_group', definition: 'VARCHAR(50) NULL' }
+    ];
+
+    const missing = requiredColumns.filter(column => !existing.has(column.name));
+    if (!missing.length) return;
+
+    const alterSql = `ALTER TABLE quotation_requests ${missing
+      .map(column => `ADD COLUMN \`${column.name}\` ${column.definition}`)
+      .join(', ')};`;
+
+    await connection.query(alterSql);
+    console.log('Quotation Request columns synchronized');
+  } catch (error) {
+    if (error.code !== 'ER_NO_SUCH_TABLE') {
+      console.error('Quotation Request column sync failed', error.message);
+    }
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
 const ensureGrnColumns = async () => {
   let connection;
   try {
@@ -2544,6 +2572,7 @@ const bootstrapDatabase = async () => {
   await ensurePoReceiptItemTable();
   await ensurePoReceiptColumns();
   await ensureGrnColumns();
+  await ensureQuotationRequestColumns();
   await ensureGrnItemsTable();
   await ensureGrnExcessApprovalsTable();
   await ensureQCInspectionsTable();

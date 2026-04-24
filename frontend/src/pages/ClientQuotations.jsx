@@ -236,15 +236,15 @@ const ClientQuotations = () => {
           const t = (item.item_type || '').trim().toUpperCase();
           const p = (item.product_type || '').trim().toUpperCase();
           
-          // INCLUDE both FG and Sub-Assemblies (SA)
+          // INCLUDE FG, Sub-Assemblies (SA), and Assemblies
           const isFG = g.includes('FG') || t.includes('FG') || p.includes('FG') || g.includes('FINISHED');
-          const isSA = g.includes('SA') || g.includes('SUB') || t.includes('SA') || t.includes('SUB');
+          const isSA = g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY') || t.includes('SA') || t.includes('SUB') || t.includes('ASSEMBLY');
           
-          // Skip if not FG/SA, rejected, or has no cost
-          if ((!isFG && !isSA) || item.status === 'REJECTED' || !Number(item.bom_cost)) return;
+          // Skip if not FG/SA/ASSEMBLY, rejected, or if it's an FG with no cost (SA/ASSEMBLY can have 0 cost)
+          if ((!isFG && !isSA) || item.status === 'REJECTED' || (isFG && !Number(item.bom_cost))) return;
 
           // Set calc group for UI badge
-          item.item_group_calc = isFG ? 'FG' : 'SUB ASSEMBLY';
+          item.item_group_calc = isFG ? 'FG' : (g.includes('ASSEMBLY') && !g.includes('SUB') ? 'ASSEMBLY' : 'SUB ASSEMBLY');
 
           const identity = `${item.drawing_no || 'NA'}_${item.item_code || 'NA'}`;
           const existing = grouped[clientName].all_items_map[identity];
@@ -285,11 +285,13 @@ const ClientQuotations = () => {
 
           if (item.bom_cost && Number(item.bom_cost) > 0) {
             const g = (item.item_group || item.item_group_calc || '').toUpperCase();
-            const isFG = g === 'FG' || g === 'FINISHED GOODS' || g === 'FINISHED_GOODS';
+            const isFG = g.includes('FG') || g.includes('FINISHED');
             
             // Sub-assemblies default to 0 rate as they are usually included in FG price
             const calculatedPrice = isFG ? Number(item.bom_cost) * (1 + margin / 100) : 0;
             initialPrices[clientName][item.id] = calculatedPrice.toFixed(2);
+          } else {
+            initialPrices[clientName][item.id] = "0.00";
           }
         });
         
@@ -751,6 +753,7 @@ const ClientQuotations = () => {
               rate: itemPrice,
               total: item.design_qty * itemPrice,
               item_group: item.item_group || item.item_group_calc,
+              item_group_calc: item.item_group_calc,
               gst_percentage: gsts[item.id] || 18,
               status: item.status,
               rejection_reason: item.rejection_reason
@@ -905,6 +908,7 @@ const ClientQuotations = () => {
             unit: q.item_unit || q.uom || 'Nos',
             rate: q.unit_rate || (parseFloat(q.total_amount) / (parseFloat(q.item_qty) || 1)),
             gst_percentage: q.gst_percentage || 18,
+            item_group: q.item_group,
             status: q.status
           })),
           notes: firstQuote?.notes || ''
@@ -943,6 +947,7 @@ const ClientQuotations = () => {
             unit: q.item_unit || q.uom || 'Nos',
             rate: q.unit_rate || (parseFloat(q.total_amount) / (parseFloat(q.item_qty) || 1)),
             gst_percentage: q.gst_percentage || 18,
+            item_group: q.item_group,
             status: 'PENDING'
           })),
           notes: firstQuote?.notes || ''
@@ -1356,11 +1361,11 @@ const ClientQuotations = () => {
                                                   <span className="text-xs font-medium text-slate-900">{item.drawing_no || 'N/A'}</span>
                                                   {item.item_group_calc && (
                                                     <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${
-                                                      (item.item_group_calc === 'SA' || item.item_group_calc === 'SUB ASSEMBLY' || item.item_group_calc === 'SUB_ASSEMBLY') 
+                                                      (item.item_group_calc.includes('SA') || item.item_group_calc.includes('SUB') || item.item_group_calc.includes('ASSEMBLY')) 
                                                         ? 'bg-blue-100 text-blue-700 border border-blue-200' 
                                                         : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
                                                     }`}>
-                                                      {item.item_group_calc}
+                                                      {item.item_group_calc.includes('SA') || item.item_group_calc.includes('SUB') ? 'SA' : item.item_group_calc.includes('ASSEMBLY') ? 'ASSY' : item.item_group_calc}
                                                     </span>
                                                   )}
                                                 </div>

@@ -146,6 +146,7 @@ const getQuotationVersionHistory = async (req, res, next) => {
         rate: itemRate,
         total: itemTotal,
         gst_percentage: row.gst_percentage,
+        item_group: row.item_group,
         status: row.status
       });
       
