@@ -162,98 +162,105 @@ const getStockLedger = async (itemCode = null, startDate = null, endDate = null)
 const getStockBalance = async (drawingNo = null, includeAll = false) => {
   let query = `
     SELECT 
-      MIN(id) as id,
-      item_code,
-      MAX(item_description) as item_description,
-      MAX(material_name) as material_name,
-      MAX(material_type) as material_type,
-      MAX(unit) as unit,
-      MAX(valuation_rate) as valuation_rate,
-      MAX(selling_rate) as selling_rate,
-      MAX(no_of_cavity) as no_of_cavity,
-      MAX(weight_per_unit) as weight_per_unit,
-      MAX(weight_uom) as weight_uom,
-      MAX(drawing_no) as drawing_no,
-      MAX(drawing_id) as drawing_id,
-      MAX(revision) as revision,
-      MAX(material_grade) as material_grade,
-      MAX(material_id) as material_id,
-      MAX(shape_id) as shape_id,
-      MAX(length) as length,
-      MAX(width) as width,
-      MAX(thickness) as thickness,
-      MAX(diameter) as diameter,
-      MAX(outer_diameter) as outer_diameter,
-      MAX(density) as density,
-      MAX(warehouse) as warehouse,
-      MAX(last_updated) as last_updated,
-      SUM(current_balance) as current_balance
-    FROM stock_balance
+      MIN(sb.id) as id,
+      sb.item_code,
+      MAX(sb.item_description) as item_description,
+      MAX(sb.material_name) as material_name,
+      MAX(sb.material_type) as material_type,
+      MAX(sb.unit) as unit,
+      MAX(sb.valuation_rate) as valuation_rate,
+      MAX(sb.selling_rate) as selling_rate,
+      MAX(sb.no_of_cavity) as no_of_cavity,
+      MAX(sb.weight_per_unit) as weight_per_unit,
+      MAX(sb.weight_uom) as weight_uom,
+      MAX(sb.drawing_no) as drawing_no,
+      MAX(sb.drawing_id) as drawing_id,
+      MAX(sb.revision) as revision,
+      MAX(sb.material_grade) as material_grade,
+      MAX(sb.material_id) as material_id,
+      MAX(sb.shape_id) as shape_id,
+      MAX(sb.length) as length,
+      MAX(sb.width) as width,
+      MAX(sb.thickness) as thickness,
+      MAX(sb.diameter) as diameter,
+      MAX(sb.outer_diameter) as outer_diameter,
+      MAX(sb.density) as density,
+      MAX(sb.warehouse) as warehouse,
+      MAX(sb.last_updated) as last_updated,
+      SUM(sb.current_balance) as current_balance,
+      COALESCE(MAX(sl.accepted_qty), 0) as accepted_qty,
+      COALESCE(MAX(sl.issued_qty), 0) as issued_qty,
+      COALESCE(MAX(po.po_qty), 0) as po_qty
+    FROM stock_balance sb
+    LEFT JOIN (
+      SELECT 
+        item_code,
+        SUM(qty_in) as accepted_qty,
+        SUM(qty_out) as issued_qty
+      FROM stock_ledger
+      GROUP BY item_code
+    ) sl ON sb.item_code = sl.item_code
+    LEFT JOIN (
+      SELECT 
+        item_code,
+        SUM(quantity) as po_qty
+      FROM purchase_order_items
+      GROUP BY item_code
+    ) po ON sb.item_code = po.item_code
   `;
 
   const params = [];
+  const conditions = [];
   if (drawingNo) {
-    query += ` WHERE drawing_no = ? `;
+    conditions.push(`sb.drawing_no = ?`);
     params.push(drawingNo);
   }
 
   // Filter out FG and Sub Assembly from general view, but show them if drawingNo is specified or includeAll is true
-  if (drawingNo || includeAll) {
-    // No additional type filter
-  } else {
-    query += " WHERE UPPER(material_type) NOT IN ('FG', 'FINISHED GOOD', 'SUB_ASSEMBLY', 'SUB ASSEMBLY') ";
+  if (!(drawingNo || includeAll)) {
+    conditions.push("UPPER(sb.material_type) NOT IN ('FG', 'FINISHED GOOD', 'SUB_ASSEMBLY', 'SUB ASSEMBLY')");
   }
 
-  query += ` GROUP BY item_code ORDER BY last_updated DESC `;
+  if (conditions.length > 0) {
+    query += " WHERE " + conditions.join(" AND ");
+  }
+
+  query += ` GROUP BY sb.item_code ORDER BY last_updated DESC `;
 
   const [balances] = await pool.query(query, params);
 
-  const result = [];
-  for (const balance of balances) {
-    // For consolidated view, we calculate totals from ledger across ALL warehouses
-    const details = await calculateBalanceDetailsFromLedger(balance.item_code, 'ALL');
-    
-    const [poItems] = await pool.query(`
-      SELECT COALESCE(SUM(quantity), 0) as po_qty FROM purchase_order_items WHERE item_code = ?
-    `, [balance.item_code]);
-    
-    const poQty = parseFloat(poItems[0]?.po_qty || 0);
-    
-    result.push({
-      id: balance.id,
-      item_code: balance.item_code,
-      item_description: balance.item_description,
-      material_name: balance.material_name,
-      material_type: balance.material_type,
-      po_qty: poQty,
-      received_qty: details.received_qty,
-      accepted_qty: details.accepted_qty,
-      issued_qty: details.issued_qty,
-      current_balance: parseFloat(balance.current_balance || 0), // Use calculated sum from stock_balance table
-      unit: balance.unit || 'NOS',
-      valuation_rate: balance.valuation_rate,
-      selling_rate: balance.selling_rate,
-      no_of_cavity: balance.no_of_cavity,
-      weight_per_unit: balance.weight_per_unit,
-      weight_uom: balance.weight_uom,
-      drawing_no: balance.drawing_no,
-      drawing_id: balance.drawing_id,
-      revision: balance.revision,
-      material_grade: balance.material_grade,
-      material_id: balance.material_id,
-      shape_id: balance.shape_id,
-      length: balance.length,
-      width: balance.width,
-      thickness: balance.thickness,
-      diameter: balance.diameter,
-      outer_diameter: balance.outer_diameter,
-      density: balance.density,
-      warehouse: balance.warehouse,
-      last_updated: balance.last_updated
-    });
-  }
-
-  return result;
+  return balances.map(balance => ({
+    id: balance.id,
+    item_code: balance.item_code,
+    item_description: balance.item_description,
+    material_name: balance.material_name,
+    material_type: balance.material_type,
+    po_qty: parseFloat(balance.po_qty || 0),
+    received_qty: parseFloat(balance.accepted_qty || 0),
+    accepted_qty: parseFloat(balance.accepted_qty || 0),
+    issued_qty: parseFloat(balance.issued_qty || 0),
+    current_balance: parseFloat(balance.current_balance || 0),
+    unit: balance.unit || 'NOS',
+    valuation_rate: balance.valuation_rate,
+    selling_rate: balance.selling_rate,
+    no_of_cavity: balance.no_of_cavity,
+    weight_per_unit: balance.weight_per_unit,
+    weight_uom: balance.weight_uom,
+    drawing_no: balance.drawing_no,
+    drawing_id: balance.drawing_id,
+    revision: balance.revision,
+    material_grade: balance.material_grade,
+    material_id: balance.material_id,
+    shape_id: balance.shape_id,
+    length: balance.length,
+    width: balance.width,
+    thickness: balance.thickness,
+    diameter: balance.diameter,
+    outer_diameter: balance.outer_diameter,
+    density: balance.density,
+    warehouse: balance.warehouse,
+    last_updated: balance.last_updated
+  }));
 };
 
 const getStockBalanceByItem = async (itemCode) => {

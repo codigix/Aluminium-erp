@@ -7,11 +7,20 @@ const getItemMaterials = async (itemId, itemCode = null, drawingNo = null) => {
   // Use JOIN with items table to get the correct material item_code and name
   if (parsedItemId) {
     [rows] = await pool.query(
-      `SELECT m.*, i.item_code as actual_item_code, i.material_name as actual_item_name
+      `SELECT m.*, i.item_code as actual_item_code, i.material_name as actual_item_name,
+              i.selling_rate, i.valuation_rate, i.material_type,
+              i.length as actual_length, i.width as actual_width, i.thickness as actual_thickness,
+              i.weight_per_unit as actual_weight_per_unit, i.scrap_percent as actual_scrap_percent
        FROM sales_order_item_materials m
        LEFT JOIN (
-         SELECT item_code, material_name FROM stock_balance GROUP BY item_code, material_name
-       ) i ON LOWER(TRIM(m.material_name)) = LOWER(TRIM(i.material_name))
+         SELECT material_name, MIN(item_code) as item_code,
+                MAX(selling_rate) as selling_rate, MAX(valuation_rate) as valuation_rate,
+                MAX(material_type) as material_type,
+                MAX(length) as length, MAX(width) as width, MAX(thickness) as thickness,
+                MAX(weight_per_unit) as weight_per_unit, MAX(scrap_percent) as scrap_percent
+         FROM stock_balance 
+         GROUP BY material_name
+       ) i ON m.material_name = i.material_name
        WHERE m.sales_order_item_id = ? 
        ORDER BY m.created_at ASC`,
       [parsedItemId]
@@ -31,11 +40,20 @@ const getItemMaterials = async (itemId, itemCode = null, drawingNo = null) => {
       }
     }
 
-    let query = `SELECT m.*, i.item_code as actual_item_code, i.material_name as actual_item_name 
+    let query = `SELECT m.*, i.item_code as actual_item_code, i.material_name as actual_item_name,
+                        i.selling_rate, i.valuation_rate, i.material_type,
+                        i.length as actual_length, i.width as actual_width, i.thickness as actual_thickness,
+                        i.weight_per_unit as actual_weight_per_unit, i.scrap_percent as actual_scrap_percent
                  FROM sales_order_item_materials m 
                  LEFT JOIN (
-                   SELECT item_code, material_name FROM stock_balance GROUP BY item_code, material_name
-                 ) i ON LOWER(TRIM(m.material_name)) = LOWER(TRIM(i.material_name)) 
+                   SELECT material_name, MIN(item_code) as item_code,
+                          MAX(selling_rate) as selling_rate, MAX(valuation_rate) as valuation_rate,
+                          MAX(material_type) as material_type,
+                          MAX(length) as length, MAX(width) as width, MAX(thickness) as thickness,
+                          MAX(weight_per_unit) as weight_per_unit, MAX(scrap_percent) as scrap_percent
+                   FROM stock_balance 
+                   GROUP BY material_name
+                 ) i ON m.material_name = i.material_name 
                  WHERE `;
     let params = [];
 
@@ -58,11 +76,17 @@ const getItemMaterials = async (itemId, itemCode = null, drawingNo = null) => {
     item_code: row.actual_item_code || row.item_code,
     material_name: row.actual_item_name || row.material_name,
     qty: row.qty_per_pc || row.qty,
-    weightPerUnit: row.weight_per_unit,
-    scrapPercent: row.scrap_percent,
+    weightPerUnit: row.weight_per_unit || row.actual_weight_per_unit,
+    scrapPercent: row.scrap_percent || row.actual_scrap_percent,
     // Add snake_case aliases
-    weight_per_unit: row.weight_per_unit,
-    scrap_percent: row.scrap_percent
+    weight_per_unit: row.weight_per_unit || row.actual_weight_per_unit,
+    scrap_percent: row.scrap_percent || row.actual_scrap_percent,
+    length: row.length || row.actual_length,
+    width: row.width || row.actual_width,
+    thickness: row.thickness || row.actual_thickness,
+    selling_rate: row.selling_rate,
+    valuation_rate: row.valuation_rate,
+    material_type: row.material_type
   }));
 };
 
@@ -72,7 +96,15 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null) => {
   
   if (parsedItemId) {
     [rows] = await pool.query(
-      'SELECT * FROM sales_order_item_components WHERE sales_order_item_id = ? ORDER BY created_at ASC',
+      `SELECT c.*, i.selling_rate, i.valuation_rate, i.weight_per_unit as actual_weight_per_unit
+       FROM sales_order_item_components c
+       LEFT JOIN (
+         SELECT item_code, MAX(selling_rate) as selling_rate, MAX(valuation_rate) as valuation_rate, MAX(weight_per_unit) as weight_per_unit
+         FROM stock_balance 
+         GROUP BY item_code
+       ) i ON c.component_code = i.item_code
+       WHERE c.sales_order_item_id = ? 
+       ORDER BY c.created_at ASC`,
       [parsedItemId]
     );
   }
@@ -82,50 +114,86 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null) => {
     if (parsedItemId) {
       console.log(`[getItemComponents] Fallback triggered for ID ${parsedItemId}`);
     }
-    let query = 'SELECT * FROM sales_order_item_components WHERE ';
+    let query = `SELECT c.*, i.selling_rate, i.valuation_rate, i.weight_per_unit as actual_weight_per_unit
+                 FROM sales_order_item_components c
+                 LEFT JOIN (
+                   SELECT item_code, MAX(selling_rate) as selling_rate, MAX(valuation_rate) as valuation_rate, MAX(weight_per_unit) as weight_per_unit
+                   FROM stock_balance 
+                   GROUP BY item_code
+                 ) i ON c.component_code = i.item_code
+                 WHERE `;
     let params = [];
 
     if (itemCode && drawingNo) {
-      query += `item_code = ? AND drawing_no = ? AND (sales_order_item_id IS NULL OR EXISTS (SELECT 1 FROM sales_order_items WHERE id = sales_order_item_id AND sales_order_id IS NULL))`;
+      query += `c.item_code = ? AND c.drawing_no = ? AND (c.sales_order_item_id IS NULL OR EXISTS (SELECT 1 FROM sales_order_items WHERE id = c.sales_order_item_id AND sales_order_id IS NULL))`;
       params = [itemCode, drawingNo];
     } else if (itemCode) {
-      query += `item_code = ? AND (sales_order_item_id IS NULL OR EXISTS (SELECT 1 FROM sales_order_items WHERE id = sales_order_item_id AND sales_order_id IS NULL))`;
+      query += `c.item_code = ? AND (c.sales_order_item_id IS NULL OR EXISTS (SELECT 1 FROM sales_order_items WHERE id = c.sales_order_item_id AND sales_order_id IS NULL))`;
       params = [itemCode];
     } else {
-      query += `drawing_no = ? AND (sales_order_item_id IS NULL OR EXISTS (SELECT 1 FROM sales_order_items WHERE id = sales_order_item_id AND sales_order_id IS NULL))`;
+      query += `c.drawing_no = ? AND (c.sales_order_item_id IS NULL OR EXISTS (SELECT 1 FROM sales_order_items WHERE id = c.sales_order_item_id AND sales_order_id IS NULL))`;
       params = [drawingNo];
     }
 
-    [rows] = await pool.query(query + ' ORDER BY created_at ASC', params);
+    [rows] = await pool.query(query + ' ORDER BY c.created_at ASC', params);
   }
 
-  // Dynamically fetch latest BOM cost for Sub-Assemblies to ensure detail page shows updated rates
-  const updatedRows = [];
-  for (const row of rows) {
-    let rate = row.rate;
+  // Dynamically fetch latest BOM cost for Sub-Assemblies in BULK to avoid N+1 problem
+  const saComponents = rows.filter(row => {
     const compCode = row.component_code || row.componentCode;
-    if (compCode && compCode.startsWith('SA-')) {
-      // Use a separate check to get latest cost without creating circular dependency if possible
-      // Since getLatestBOMCost is already defined, we can use it
-      try {
-        const latest = await getLatestBOMCost(compCode, row.drawing_no);
-        if (latest && latest.bom_cost > 0) {
-          rate = latest.bom_cost;
-        }
-      } catch (err) {
-        console.error(`[getItemComponents] Error fetching latest cost for ${compCode}:`, err.message);
-      }
-    }
+    return compCode && compCode.startsWith('SA-');
+  });
 
-    updatedRows.push({
-      ...row,
-      rate,
-      qty: row.quantity || row.qty,
-      quantity: row.quantity || row.qty
-    });
+  if (saComponents.length > 0) {
+    const codes = [...new Set(saComponents.map(c => c.component_code || c.componentCode))];
+    try {
+      // Fetch latest costs for all these components in one query
+      const [latestCosts] = await pool.query(`
+        SELECT item_code, drawing_no, bom_cost
+        FROM sales_order_items
+        WHERE item_code IN (?)
+        AND bom_cost > 0
+        AND id IN (
+          SELECT MAX(id)
+          FROM sales_order_items
+          WHERE item_code IN (?)
+          AND bom_cost > 0
+          GROUP BY item_code, IFNULL(drawing_no, '')
+        )
+      `, [codes, codes]);
+
+      const costMap = new Map();
+      latestCosts.forEach(c => {
+        const key = `${c.item_code}|${c.drawing_no || ''}`;
+        costMap.set(key, parseFloat(c.bom_cost));
+        // Also keep a general fallback for the item code
+        if (!costMap.has(c.item_code)) {
+          costMap.set(c.item_code, parseFloat(c.bom_cost));
+        }
+      });
+
+      // Update rates in rows using the cost map
+      rows.forEach(row => {
+        const compCode = row.component_code || row.componentCode;
+        if (compCode && compCode.startsWith('SA-')) {
+          const key = `${compCode}|${row.drawing_no || ''}`;
+          const latestRate = costMap.get(key) || costMap.get(compCode);
+          if (latestRate !== undefined) {
+            row.rate = latestRate;
+          }
+        }
+      });
+    } catch (err) {
+      console.error('[getItemComponents] Bulk cost fetch error:', err.message);
+    }
   }
 
-  return updatedRows;
+  return rows.map(row => ({
+    ...row,
+    qty: row.quantity || row.qty,
+    quantity: row.quantity || row.qty,
+    weight_per_unit: row.weight_per_unit || row.actual_weight_per_unit
+  }));
 };
 
 const getItemOperations = async (itemId, itemCode = null, drawingNo = null) => {

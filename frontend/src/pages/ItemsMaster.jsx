@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Card, StatusBadge, DataTable, SearchableSelect } from '../components/ui.jsx';
 import { Plus, Search, RefreshCw, Package, Layers, Trash2, Edit2, Copy, AlertTriangle } from 'lucide-react';
@@ -186,7 +186,7 @@ const ItemsMaster = () => {
     }
   }, [location.state]);
 
-  const fetchItemsList = async () => {
+  const fetchItemsList = useCallback(async () => {
     try {
       setItemsLoading(true);
       const token = localStorage.getItem('authToken');
@@ -203,9 +203,9 @@ const ItemsMaster = () => {
     } finally {
       setItemsLoading(false);
     }
-  };
+  }, []);
 
-  const fetchItemGroups = async () => {
+  const fetchItemGroups = useCallback(async () => {
     try {
       setGroupsLoading(true);
       const token = localStorage.getItem('authToken');
@@ -221,9 +221,9 @@ const ItemsMaster = () => {
     } finally {
       setGroupsLoading(false);
     }
-  };
+  }, []);
 
-  const fetchShapes = async () => {
+  const fetchShapes = useCallback(async () => {
     try {
       setShapesLoading(true);
       const token = localStorage.getItem('authToken');
@@ -239,9 +239,9 @@ const ItemsMaster = () => {
     } finally {
       setShapesLoading(false);
     }
-  };
+  }, []);
 
-  const fetchMaterials = async () => {
+  const fetchMaterials = useCallback(async () => {
     try {
       setMaterialsLoading(true);
       const token = localStorage.getItem('authToken');
@@ -257,9 +257,9 @@ const ItemsMaster = () => {
     } finally {
       setMaterialsLoading(false);
     }
-  };
+  }, []);
 
-  const fetchApprovedDrawings = async () => {
+  const fetchApprovedDrawings = useCallback(async () => {
     try {
       const token = localStorage.getItem('authToken');
       const response = await fetch(`${API_BASE}/drawings/approved`, {
@@ -272,9 +272,9 @@ const ItemsMaster = () => {
     } catch (error) {
       console.error('Failed to fetch approved drawings:', error);
     }
-  };
+  }, []);
 
-  const fetchNextItemCode = async (itemName = '', itemGroup = '') => {
+  const fetchNextItemCode = useCallback(async (itemName = '', itemGroup = '') => {
     try {
       const token = localStorage.getItem('authToken');
       const response = await fetch(`${API_BASE}/stock/items/next-code?itemName=${encodeURIComponent(itemName)}&itemGroup=${encodeURIComponent(itemGroup)}`, {
@@ -287,7 +287,7 @@ const ItemsMaster = () => {
     } catch (error) {
       console.error('Failed to fetch next item code:', error);
     }
-  };
+  }, []);
 
   const handleItemNameSelect = (e) => {
     const value = e.target.value;
@@ -399,15 +399,15 @@ const ItemsMaster = () => {
     setEditingItemId(null);
   };
 
-  const handleEditItem = (item) => {
+  const handleEditItem = useCallback((item) => {
     navigate(`/item-master/edit-item/${item.id}`);
-  };
+  }, [navigate]);
 
-  const handleCopyItem = (item) => {
+  const handleCopyItem = useCallback((item) => {
     navigate(`/item-master/copy-item/${item.id}`);
-  };
+  }, [navigate]);
 
-  const handleDeleteItem = async (id) => {
+  const handleDeleteItem = useCallback(async (id) => {
     const result = await Swal.fire({
       title: 'Are you sure?',
       text: "You won't be able to revert this!",
@@ -434,7 +434,7 @@ const ItemsMaster = () => {
         errorToast(error.message);
       }
     }
-  };
+  }, [fetchItemsList]);
 
   const handleGroupSubmit = async (e) => {
     e.preventDefault();
@@ -529,7 +529,7 @@ const ItemsMaster = () => {
     }
   };
 
-  const handleDeleteShape = (id) => {
+  const handleDeleteShape = useCallback((id) => {
     Swal.fire({
       title: 'Are you sure?',
       text: "Delete this shape?",
@@ -553,9 +553,9 @@ const ItemsMaster = () => {
         }
       }
     });
-  };
+  }, [fetchShapes]);
 
-  const handleDeleteMaterial = (id) => {
+  const handleDeleteMaterial = useCallback((id) => {
     Swal.fire({
       title: 'Are you sure?',
       text: "Delete this material?",
@@ -579,9 +579,9 @@ const ItemsMaster = () => {
         }
       }
     });
-  };
+  }, [fetchMaterials]);
 
-  const handleDeleteGroup = (id) => {
+  const handleDeleteGroup = useCallback((id) => {
     Swal.fire({
       title: 'Are you sure?',
       text: "Delete this item group?",
@@ -605,9 +605,9 @@ const ItemsMaster = () => {
         }
       }
     });
-  };
+  }, [fetchItemGroups]);
 
-  const itemColumns = [
+  const itemColumns = useMemo(() => [
     { label: 'Item Code', key: 'item_code', sortable: true, className: ' text-indigo-600' },
     { 
       label: 'Item Name', 
@@ -714,9 +714,9 @@ const ItemsMaster = () => {
         </div>
       )
     }
-  ];
+  ], [shapes, handleCopyItem, handleEditItem, handleDeleteItem]);
 
-  const groupColumns = [
+  const groupColumns = useMemo(() => [
     { label: 'Group Name', key: 'name', sortable: true, className: 'font-medium' },
     { label: 'Type', key: 'group_type', sortable: true, render: (val) => <span className="px-2 py-0.5 bg-blue-50 text-blue-600 border border-blue-100 rounded text-xs">{val || 'OTHER'}</span> },
     { label: 'Status', key: 'status', render: (val) => <StatusBadge status={val || 'ACTIVE'} /> },
@@ -731,9 +731,9 @@ const ItemsMaster = () => {
         </div>
       )
     }
-  ];
+  ], [handleDeleteGroup]);
 
-  const shapeColumns = [
+  const shapeColumns = useMemo(() => [
     { label: 'Shape Name', key: 'name', sortable: true, className: 'font-medium' },
     { label: 'Status', key: 'status', render: (val) => <StatusBadge status={val || 'ACTIVE'} /> },
     { 
@@ -747,9 +747,9 @@ const ItemsMaster = () => {
         </div>
       )
     }
-  ];
+  ], [handleDeleteShape]);
 
-  const materialColumns = [
+  const materialColumns = useMemo(() => [
     { label: 'Material Name', key: 'name', sortable: true, className: 'font-medium' },
     { label: 'Density', key: 'density', sortable: true, render: (val, row) => `${parseFloat(val).toFixed(4)} ${row.density_unit || 'g/cm³'}` },
     { label: 'Status', key: 'status', render: (val) => <StatusBadge status={val || 'ACTIVE'} /> },
@@ -764,7 +764,7 @@ const ItemsMaster = () => {
         </div>
       )
     }
-  ];
+  ], [handleDeleteMaterial]);
 
   const selectedShape = (shapes.find(s => String(s.id) === String(itemFormData.shapeId))?.name || '').trim();
 
@@ -814,6 +814,15 @@ const ItemsMaster = () => {
     itemFormData.density, 
     selectedShape
   ]);
+
+  const filteredItems = useMemo(() => {
+    const term = searchTerm.toLowerCase();
+    return itemsList.filter(item => 
+      item.item_code?.toLowerCase().includes(term) ||
+      item.material_name?.toLowerCase().includes(term) ||
+      item.drawing_no?.toLowerCase().includes(term)
+    );
+  }, [itemsList, searchTerm]);
 
   return (
     <div className=" space-y-2  animate-in fade-in duration-500">
@@ -875,11 +884,7 @@ const ItemsMaster = () => {
           <div className="p-2">
             <DataTable 
               columns={itemColumns}
-              data={itemsList.filter(item => 
-                item.item_code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                item.material_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                item.drawing_no?.toLowerCase().includes(searchTerm.toLowerCase())
-              )}
+              data={filteredItems}
               loading={itemsLoading}
               pageSize={5}
               hideHeader={true}
