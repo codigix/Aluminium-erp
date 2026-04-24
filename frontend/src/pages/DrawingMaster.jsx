@@ -21,7 +21,7 @@ const DrawingMaster = () => {
     const id = searchParams.get('id');
 
     if (isEditPath && id && drawings.length > 0) {
-      const drawing = drawings.find(d => String(d.id) === String(id));
+      const drawing = drawings.find(d => String(d.drawing_master_id) === String(id));
       if (drawing) {
         if (!showEditForm || String(editData.id) !== String(id)) {
           handleEdit(drawing);
@@ -211,7 +211,7 @@ const DrawingMaster = () => {
 
     // Filter drawings to get only those that are pending and get their sales_order_item_id
     const itemsToApprove = drawings
-      .filter(d => selectedIds.includes(d.id))
+      .filter(d => selectedIds.includes(d.drawing_master_id))
       .filter(d => {
         const status = (d.item_status || '').trim().toUpperCase();
         return d.sales_order_item_id && status !== 'APPROVED' && status !== 'REJECTED';
@@ -275,9 +275,9 @@ const DrawingMaster = () => {
     },
     { 
       label: 'Description', 
-      key: 'description',
+      key: 'drawing_description',
       sortable: true,
-      render: (val) => <div className="max-w-xs truncate text-slate-600 font-medium">{val || '—'}</div>
+      render: (val, row) => <div className="max-w-xs truncate text-slate-600 font-medium">{val || row.item_description || '—'}</div>
     },
     { 
       label: 'Client / Ref', 
@@ -384,8 +384,8 @@ const DrawingMaster = () => {
                 // Toggle the DataTable row expansion
                 if (window.toggleDataTableRow) {
                    // Find row index in drawings array
-                   const rowIdx = drawings.findIndex(d => d.id === row.id);
-                   window.toggleDataTableRow(row.id || rowIdx);
+                   const rowIdx = drawings.findIndex(d => d.drawing_master_id === row.drawing_master_id);
+                   window.toggleDataTableRow(row.drawing_master_id || rowIdx);
                 }
               }}
               className={`flex items-center gap-1 p-1.5 px-2 rounded transition-all ${expandedRevisions[row.drawing_no] ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'text-slate-500 hover:bg-slate-50 border border-transparent hover:border-slate-200'}`}
@@ -397,7 +397,7 @@ const DrawingMaster = () => {
           <button 
             onClick={(e) => {
               e.stopPropagation();
-              navigate(`/drawing-master/edit?id=${row.id}`);
+              navigate(`/drawing-master/edit?id=${row.drawing_master_id}`);
             }}
             className="p-2 text-amber-500 hover:bg-amber-50 rounded  transition-all border border-transparent hover:border-amber-100"
             title="Edit Drawing"
@@ -434,7 +434,7 @@ const DrawingMaster = () => {
     }
 
     setEditData({
-      id: drawing.id,
+      id: drawing.drawing_master_id,
       drawing_no: drawing.drawing_no,
       revision_no: drawing.revision || drawing.revision_no || '0',
       description: drawing.description || '',
@@ -454,7 +454,7 @@ const DrawingMaster = () => {
       file_path: drawing.file_path || drawing.drawing_pdf || ''
     });
     if (!location.pathname.includes('/drawing-master/edit')) {
-      navigate(`/drawing-master/edit?id=${drawing.id}`);
+      navigate(`/drawing-master/edit?id=${drawing.drawing_master_id}`);
     }
     setShowEditForm(true);
   };
@@ -533,7 +533,7 @@ const DrawingMaster = () => {
       try {
         setLoading(true);
         const token = localStorage.getItem('authToken');
-        const response = await fetch(`${API_BASE}/drawings/${drawing.id}`, {
+        const response = await fetch(`${API_BASE}/drawings/${drawing.drawing_master_id}`, {
           method: 'DELETE',
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -605,6 +605,7 @@ const DrawingMaster = () => {
               data={drawings}
               loading={loading}
               pageSize={5}
+              rowId="drawing_master_id"
               hideHeader={true}
               hideExpander={true}
               disableRowClickExpansion={true}

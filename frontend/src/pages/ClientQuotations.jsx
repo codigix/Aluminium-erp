@@ -353,8 +353,17 @@ const ClientQuotations = () => {
       });
       
       Object.values(grouped).forEach(group => {
-        group.total_amount = group.quotes.reduce((sum, q) => sum + (parseFloat(q.total_amount) || 0), 0);
-        group.received_amount = group.quotes.reduce((sum, q) => sum + (parseFloat(q.received_amount) || 0), 0);
+        // Filter out Sub-Assemblies from totals to avoid double counting
+        // Same logic as QuotationFormPage.jsx calculateSummary
+        const topLevelQuotes = group.quotes.filter(q => {
+          const g = (q.item_group || '').toUpperCase();
+          const isSA = g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY');
+          const isFG = g.includes('FG');
+          return !(isSA && !isFG);
+        });
+
+        group.total_amount = topLevelQuotes.reduce((sum, q) => sum + (parseFloat(q.total_amount) || 0), 0);
+        group.received_amount = topLevelQuotes.reduce((sum, q) => sum + (parseFloat(q.received_amount) || 0), 0);
         group.status = 'Sent';
       });
       
@@ -481,8 +490,15 @@ const ClientQuotations = () => {
           return diff < 10000; // 10 seconds window for legacy items without batch_id
         });
         
-        group.total_amount = latestQuotes.reduce((sum, q) => sum + (parseFloat(q.total_amount) || 0), 0);
-        group.received_amount = latestQuotes.reduce((sum, q) => sum + (parseFloat(q.received_amount) || 0), 0);
+        const topLevelLatestQuotes = latestQuotes.filter(q => {
+          const g = (q.item_group || '').toUpperCase();
+          const isSA = g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY');
+          const isFG = g.includes('FG');
+          return !(isSA && !isFG);
+        });
+        
+        group.total_amount = topLevelLatestQuotes.reduce((sum, q) => sum + (parseFloat(q.total_amount) || 0), 0);
+        group.received_amount = topLevelLatestQuotes.reduce((sum, q) => sum + (parseFloat(q.received_amount) || 0), 0);
         group.quotes = latestQuotes; // Fix: Only keep latest version items to avoid incorrect drawing/item counts
       });
       

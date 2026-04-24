@@ -133,7 +133,7 @@ const getQuotationVersionHistory = async (req, res, next) => {
       }
       
       const group = versionMap[row.version];
-      const itemRate = parseFloat(row.latest_bom_cost || (row.total_amount / (row.item_qty || 1))) || 0;
+      const itemRate = parseFloat(row.total_amount / (row.item_qty || 1)) || 0;
       const itemTotal = itemRate * (row.item_qty || 0);
 
       group.items.push({
@@ -144,14 +144,22 @@ const getQuotationVersionHistory = async (req, res, next) => {
         quantity: row.item_qty,
         unit: row.item_unit,
         rate: itemRate,
+        bom_cost: parseFloat(row.latest_bom_cost) || 0,
         total: itemTotal,
         gst_percentage: row.gst_percentage,
         item_group: row.item_group,
         status: row.status
       });
       
-      group.total_amount += itemTotal;
-      group.received_amount += itemTotal * (1 + (row.gst_percentage || 18) / 100);
+      // Filter out Sub-Assemblies from totals to avoid double counting
+      const g = (row.item_group || '').toUpperCase();
+      const isSA = g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY');
+      const isFG = g.includes('FG');
+      
+      if (!(isSA && !isFG)) {
+        group.total_amount += itemTotal;
+        group.received_amount += itemTotal * (1 + (row.gst_percentage || 18) / 100);
+      }
     });
 
     res.json(versionGroups);

@@ -12,38 +12,28 @@ const getAllDrawings = async () => {
 const listDrawings = async (search = '', onlyShared = false) => {
   let query = `
     SELECT 
+      d.id,
       d.id as drawing_master_id,
       d.drawing_no,
       d.file_path,
       d.client_name,
+      d.description as drawing_description,
       d.uploaded_by as uploader_name,
-      latest_bom.id as id, -- Use BOM ID as the primary ID for selection
-      latest_bom.bom_cost,
-      latest_bom.item_group,
-      latest_bom.unit,
-      latest_bom.description,
-      latest_bom.item_code,
+      d.created_at as updated_at,
+      soi.id as sales_order_item_id,
       soi.status as item_status,
-      soi.sales_order_id
+      soi.sales_order_id,
+      soi.description as item_description
     FROM customer_drawings d
-    INNER JOIN (
-      SELECT 
-        id,
-        drawing_no, 
-        bom_cost, 
-        item_group,
-        unit,
-        description,
-        item_code
-      FROM sales_order_items 
-      WHERE id IN (
-        SELECT MAX(id) 
-        FROM sales_order_items 
-        WHERE bom_cost > 0
-        GROUP BY drawing_no, item_code
-      )
-    ) latest_bom ON d.drawing_no = latest_bom.drawing_no
-    LEFT JOIN sales_order_items soi ON latest_bom.id = soi.id
+    LEFT JOIN (
+      SELECT s1.id, s1.drawing_no, s1.status, s1.sales_order_id, s1.description
+      FROM sales_order_items s1
+      INNER JOIN (
+        SELECT drawing_no, MAX(id) as max_id
+        FROM sales_order_items
+        GROUP BY drawing_no
+      ) s2 ON s1.id = s2.max_id
+    ) soi ON d.drawing_no = soi.drawing_no
     WHERE 1=1
   `;
   const params = [];
@@ -100,6 +90,10 @@ const updateDrawing = async (id, data) => {
   if (drawingNo !== undefined) { updates.push('drawing_no = ?'); params.push(drawingNo); }
 
   if (updates.length === 0) return;
+
+  if (!id || id === 'undefined') {
+    throw new Error('Drawing ID is required for update');
+  }
 
   query += updates.join(', ') + ' WHERE id = ?';
   params.push(id);

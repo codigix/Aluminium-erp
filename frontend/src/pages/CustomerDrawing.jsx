@@ -68,13 +68,14 @@ const CustomerDrawing = () => {
       )
     },
     {
-      label: 'Contact',
+      label: 'Contact & Email',
       key: 'contact_person',
       render: (val, row) => (
         <div className="flex flex-col">
-          <span className="font-medium text-slate-900">{row.contact_phone || val || '—'}</span>
-          {row.contact_phone && val && val !== row.contact_phone && (
-            <span className="text-xs text-slate-500">{val}</span>
+          <span className="font-medium text-slate-900">{row.contact_phone || '—'}</span>
+          <span className="text-[10px] text-slate-500">{row.email_address || '—'}</span>
+          {val && val !== row.contact_phone && (
+            <span className="text-[10px] text-indigo-600 italic">{val}</span>
           )}
         </div>
       )
@@ -129,7 +130,16 @@ const CustomerDrawing = () => {
             <button
               onClick={() => handleShareClientGroupWithDesign(row.client_name || row.company_name)}
               className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded transition-all"
-              title="Send to Design"
+              title="Send Drawings to Design"
+            >
+              <Send size={15} />
+            </button>
+          )}
+          {row.status?.toUpperCase() === 'CREATED' && (
+            <button
+              onClick={() => handleSendToDesign(row)}
+              className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded transition-all"
+              title="Send Requirement to Design"
             >
               <Send size={15} />
             </button>
