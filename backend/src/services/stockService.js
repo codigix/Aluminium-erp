@@ -188,9 +188,9 @@ const getStockBalance = async (drawingNo = null, includeAll = false) => {
       MAX(sb.warehouse) as warehouse,
       MAX(sb.last_updated) as last_updated,
       SUM(sb.current_balance) as current_balance,
-      COALESCE(sl.accepted_qty, 0) as accepted_qty,
-      COALESCE(sl.issued_qty, 0) as issued_qty,
-      COALESCE(po.po_qty, 0) as po_qty
+      COALESCE(MAX(sl.accepted_qty), 0) as accepted_qty,
+      COALESCE(MAX(sl.issued_qty), 0) as issued_qty,
+      COALESCE(MAX(po.po_qty), 0) as po_qty
     FROM stock_balance sb
     LEFT JOIN (
       SELECT 
