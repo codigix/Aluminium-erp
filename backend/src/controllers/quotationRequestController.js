@@ -96,7 +96,8 @@ const getQuotationVersionHistory = async (req, res, next) => {
               (
                 SELECT bom_cost FROM sales_order_items v2 
                 WHERE ((v2.bom_id = soi.bom_id AND soi.bom_id IS NOT NULL)
-                   OR (v2.item_code = soi.item_code AND v2.drawing_no = soi.drawing_no AND v2.item_code IS NOT NULL AND v2.drawing_no IS NOT NULL))
+                   OR (v2.item_code = soi.item_code AND v2.drawing_no = soi.drawing_no AND v2.item_code IS NOT NULL AND v2.drawing_no IS NOT NULL)
+                   OR (v2.drawing_no = qr.drawing_no AND qr.drawing_no IS NOT NULL))
                    AND v2.bom_cost > 0
                 ORDER BY v2.id DESC LIMIT 1
               ) as latest_bom_cost
@@ -328,8 +329,8 @@ const sendQuotationViaEmail = async (req, res, next) => {
                status, total_amount, received_amount, rejection_reason, 
                notes, created_at, profit_percentage, gst_percentage,
                version, parent_id, drawing_no, description, item_unit,
-               project_name, batch_id, item_group
-             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+               project_name, batch_id, item_group, bom_cost
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
               item.orderId || null, 
               item.salesOrderItemId || null, 
@@ -349,7 +350,8 @@ const sendQuotationViaEmail = async (req, res, next) => {
               item.unit || 'Nos',
               projectName || null,
               batchId,
-              item.item_group || item.item_group_calc || null
+              item.item_group || item.item_group_calc || null,
+              item.bom_cost || 0
             ]
           );
           resolve(result.insertId);

@@ -468,6 +468,7 @@ const BOMFormPage = () => {
   const [previewDrawing, setPreviewDrawing] = useState(null);
   const [bomHistory, setBomHistory] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const hasAutoUpdated = useRef(false);
 
   const fetchBOMHistory = useCallback(async (itemCode, drawingNo, currentItemId = null) => {
     const effectiveId = (currentItemId === 'bom-form' || !currentItemId) ? null : currentItemId;
@@ -486,7 +487,13 @@ const BOMFormPage = () => {
       });
       if (response.ok) {
         const data = await response.json();
-        setBomHistory(data);
+        // Sort history by version ASC
+        const sortedData = (data || []).sort((a, b) => {
+          const vA = parseInt(a.version || 0);
+          const vB = parseInt(b.version || 0);
+          return vA - vB;
+        });
+        setBomHistory(sortedData);
       }
     } catch (error) {
       console.error('Error fetching BOM history:', error);
@@ -1550,7 +1557,7 @@ const BOMFormPage = () => {
     }
   };
 
-  const handleCreateBOM = async (status = 'Active', isNewVersion = false) => {
+  const handleCreateBOM = async (status = 'Active', isNewVersion = false, silent = false) => {
     try {
       const isDraft = status === 'Draft';
 
@@ -1638,7 +1645,50 @@ const BOMFormPage = () => {
 
       const responseData = await response.json();
       const newId = responseData.id;
-      successToast(isDraft ? 'BOM saved as draft' : (isNewVersion ? `BOM Revision V${nextRevision} created successfully` : 'BOM created successfully'));
+      
+      if (!silent) {
+        successToast(isDraft ? 'BOM saved as draft' : (isNewVersion ? `BOM Revision V${nextRevision} created successfully` : 'BOM created successfully'));
+      }
+
+      // Auto-update quotation and refresh history if not a new version
+      if (!isDraft && !isNewVersion && effectiveItemId) {
+        try {
+          await fetch(`${API_BASE}/quotation-requests/update-from-bom`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ salesOrderItemId: effectiveItemId, bomCost: totalBOMCost })
+          });
+        } catch (e) {
+          console.error('Failed to auto-update quotation:', e);
+        }
+        
+        // Refresh history to show updated cost in sidebar
+        fetchBOMHistory(productForm.itemCode, productForm.drawingNo, effectiveItemId);
+
+        // Also update local state for immediate feedback
+        setProductForm(prev => ({ ...prev, bom_cost: totalBOMCost }));
+        setBomHistory(prev => {
+          const newHistory = [...prev];
+          // Find the version we're currently viewing to update its cost in history sidebar
+          const currentViewingId = itemId || effectiveItemId;
+          const idx = newHistory.findIndex(v => String(v.id) === String(currentViewingId));
+          
+          if (idx !== -1) {
+            newHistory[idx] = { ...newHistory[idx], total_cost: totalBOMCost };
+          } else if (newHistory.length > 0) {
+            // Fallback: Update the last one (usually Current) if ID match fails
+            const lastIdx = newHistory.length - 1;
+            newHistory[lastIdx] = { ...newHistory[lastIdx], total_cost: totalBOMCost };
+          }
+          return newHistory;
+        });
+
+        // Refresh all data from server to ensure sync
+        fetchData(false);
+      }
 
       // Instead of resetting and navigating to list, stay on the page in view mode
       if (newId) {
@@ -1848,6 +1898,29 @@ const BOMFormPage = () => {
   const totalBOMCost = materialCostAfterScrap + operationsCost;
   const costPerUnit = totalBOMCost;
   const totalScrapQty = bomData.scrap.reduce((sum, s) => sum + (parseFloat(s.input_qty || s.inputQty || 0) * (parseFloat(s.loss_percent || s.lossPercent || 0) / 100)), 0) / batchQty;
+
+  // Auto-Update logic for FG items when cost mismatch is detected
+  useEffect(() => {
+    const group = (productForm.itemGroup || "").toUpperCase();
+    const isFG = group.includes("FG") || group.includes("FINISHED") || group.includes("GOOD");
+    
+    if (!loading && totalBOMCost > 0 && !hasAutoUpdated.current) {
+      // Robust parsing: remove everything except numbers and decimal point
+      const savedCost = parseFloat(String(productForm.bom_cost || 0).replace(/[^0-9.]/g, ''));
+      const currentCost = parseFloat(totalBOMCost);
+
+      if (isFG && Math.abs(savedCost - currentCost) > 0.01) {
+        console.log(`[AutoUpdate] Syncing cost mismatch. Saved: ${savedCost}, Calculated: ${currentCost}`);
+        hasAutoUpdated.current = true;
+        
+        const timer = setTimeout(() => {
+          handleCreateBOM('Active', false, true); // (status, isNewVersion, silent)
+        }, 100);
+        
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [totalBOMCost, productForm.bom_cost, loading, productForm.itemGroup]);
 
   if (loading && stockItems.length === 0 && bomData.materials.length === 0 && bomData.components.length === 0) return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-2">
@@ -3537,7 +3610,8 @@ const BOMFormPage = () => {
                               <button 
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  handleUpdateQuotation(v.id, v.total_cost);
+                                  const effectiveSOItemId = (itemId && itemId !== 'bom-form') ? itemId : (selectedItem?.id);
+                                  handleUpdateQuotation(effectiveSOItemId, v.total_cost);
                                 }}
                                 className="text-xs bg-emerald-50 text-emerald-700 px-2 py-1 rounded border border-emerald-100 hover:bg-emerald-100 transition-colors flex items-center gap-1"
                                 title="Update linked quotations with this value"

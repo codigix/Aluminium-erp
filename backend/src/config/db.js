@@ -1835,7 +1835,7 @@ const ensureQuotationCommunicationTable = async () => {
       CREATE TABLE IF NOT EXISTS quotation_communications (
         id INT PRIMARY KEY AUTO_INCREMENT,
         quotation_id INT NOT NULL,
-        quotation_type ENUM('CLIENT', 'VENDOR') NOT NULL,
+        quotation_type ENUM('CLIENT', 'VENDOR', 'INTERNAL') NOT NULL,
         sender_type ENUM('SYSTEM', 'CLIENT', 'VENDOR', 'INTERNAL') NOT NULL,
         sender_email VARCHAR(255),
         message TEXT NOT NULL,
@@ -1845,6 +1845,13 @@ const ensureQuotationCommunicationTable = async () => {
         INDEX idx_quotation (quotation_id, quotation_type)
       )
     `);
+
+    // Ensure quotation_type ENUM includes 'INTERNAL'
+    const [qcCols] = await connection.query('SHOW COLUMNS FROM quotation_communications LIKE "quotation_type"');
+    if (qcCols.length > 0 && !qcCols[0].Type.includes("'INTERNAL'")) {
+      await connection.query("ALTER TABLE quotation_communications MODIFY COLUMN quotation_type ENUM('CLIENT', 'VENDOR', 'INTERNAL') NOT NULL");
+      console.log('Updated quotation_communications quotation_type ENUM to include INTERNAL');
+    }
 
     // Add received_pdf_path to quotations if not exists
     const [cols] = await connection.query('SHOW COLUMNS FROM quotations');

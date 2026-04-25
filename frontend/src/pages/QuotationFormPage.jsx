@@ -93,12 +93,18 @@ const QuotationFormPage = () => {
           return !!(item.drawing_no || item.description || item.item_code);
         })
         .map(item => {
-          const latestRate = parseFloat(item.bom_cost || item.rate || 0);
+          const g = (item.item_group || '').toUpperCase();
+          const isSA = (g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY')) && !g.includes('FG');
+          const isFG = !isSA;
+          const drwRate = parseFloat(item.bom_cost || item.rate || 0);
+          const rateVal = isSA ? 0 : drwRate;
+
           return {
             ...item,
             id: item.id || Date.now() + Math.random(),
-            rate: latestRate,
-            total: (parseFloat(item.quantity) || 0) * latestRate,
+            rate: rateVal,
+            bom_cost: drwRate,
+            total: (parseFloat(item.quantity) || 0) * rateVal,
             gst_percentage: item.gst_percentage || 18,
             isManual: !item.drawing_id && !!item.drawing_no
           };
@@ -124,7 +130,10 @@ const QuotationFormPage = () => {
         );
 
         if (matchedDrawing) {
-          const latestBOMCost = parseFloat(matchedDrawing.bom_cost || matchedDrawing.rate || matchedDrawing.quotedPrice || 0);
+          const drwRate = parseFloat(matchedDrawing.bom_cost || matchedDrawing.rate || matchedDrawing.quotedPrice || 0);
+          const g = (item.item_group || matchedDrawing.item_group || '').toUpperCase();
+          const isSA = (g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY')) && !g.includes('FG');
+          const isFG = !isSA;
           
           let newItem = { ...item };
           let changed = false;
@@ -135,12 +144,33 @@ const QuotationFormPage = () => {
             changed = true;
           }
 
-          // Sync rate and BOM cost if different and NOT locked (historical/approved)
-          if (!isLocked && latestBOMCost > 0 && (parseFloat(item.rate) !== latestBOMCost || parseFloat(item.bom_cost) !== latestBOMCost)) {
-            newItem.rate = latestBOMCost;
-            newItem.bom_cost = latestBOMCost;
-            newItem.total = (parseFloat(item.quantity) || 0) * latestBOMCost;
+          // Sync BOM Cost if it differs from Master Drawing (Always keep updated)
+          if (!isLocked && drwRate > 0 && parseFloat(item.bom_cost) !== drwRate) {
+            newItem.bom_cost = drwRate;
             changed = true;
+            
+            // If it's an FG item, also update the Rate to match the new BOM Cost
+            if (isFG) {
+              newItem.rate = drwRate;
+              newItem.total = (parseFloat(item.quantity) || 0) * drwRate;
+            }
+          }
+
+          // Force rate to 0 for SA items, or sync Rate for FG with BOM Cost
+          if (isSA) {
+            if (parseFloat(item.rate) !== 0) {
+              newItem.rate = 0;
+              newItem.total = 0;
+              changed = true;
+            }
+          } else {
+            // For FG, Rate should match BOM Cost
+            const currentBOM = parseFloat(newItem.bom_cost || item.bom_cost || 0);
+            if (parseFloat(item.rate) !== currentBOM) {
+              newItem.rate = currentBOM;
+              newItem.total = (parseFloat(item.quantity) || 0) * currentBOM;
+              changed = true;
+            }
           }
 
           return changed ? newItem : item;
@@ -158,7 +188,7 @@ const QuotationFormPage = () => {
         setItems(updatedItems);
       }
     }
-  }, [drawings, isLocked]);
+  }, [drawings, isLocked, items]);
 
   useEffect(() => {
     if (items.length > 0) {
@@ -243,16 +273,25 @@ const QuotationFormPage = () => {
     
     // Map items from the version
     if (v.items && v.items.length > 0) {
-      setItems(v.items.map(item => ({
-        ...item,
-        id: item.id || Date.now() + Math.random(),
-        total: (parseFloat(item.quantity) || 0) * (parseFloat(item.rate) || 0),
-        gst_percentage: item.gst_percentage || 18,
-        drawing_no: item.drawing_no,
-        description: item.description,
-        bom_id: item.bom_id,
-        revision_no: item.revision_no
-      })));
+      setItems(v.items.map(item => {
+        const g = (item.item_group || '').toUpperCase();
+        const isSA = (g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY')) && !g.includes('FG');
+        const drwRate = parseFloat(item.bom_cost || item.rate || 0);
+        const rateVal = isSA ? 0 : drwRate;
+
+        return {
+          ...item,
+          id: item.id || Date.now() + Math.random(),
+          rate: rateVal,
+          bom_cost: drwRate,
+          total: (parseFloat(item.quantity) || 0) * rateVal,
+          gst_percentage: item.gst_percentage || 18,
+          drawing_no: item.drawing_no,
+          description: item.description,
+          bom_id: item.bom_id,
+          revision_no: item.revision_no
+        };
+      }));
     }
   };
 
@@ -906,108 +945,114 @@ const QuotationFormPage = () => {
                               <div className="flex-1">
                                 {(mode === 'received' || isLocked) ? (
                                   <div className="flex flex-col">
-                                    <span className="text-sm  text-slate-900">{item.drawing_no || 'Manual Item'}</span>
-                                    {item.item_group && (item.item_group.toUpperCase().includes('SA') || item.item_group.toUpperCase().includes('SUB') || item.item_group.toUpperCase().includes('ASSEMBLY')) && !item.item_group.toUpperCase().includes('FG') && (
-                                      <span className="ml-2 px-1.5 py-0.5 bg-amber-50 text-amber-600 rounded text-[10px] font-bold border border-amber-100 uppercase">
-                                        {item.item_group.toUpperCase().includes('SA') || item.item_group.toUpperCase().includes('SUB') ? 'SA' : 'ASSY'}
-                                      </span>
-                                    )}
-                                    {!isLocked && <span className="text-[11px] text-slate-500 whitespace-pre-line">{item.description}</span>}
+                                    <span className="text-sm font-bold text-slate-900 uppercase">{item.description || 'No Description'}</span>
+                                    <div className="flex items-center gap-2 mt-0.5">
+                                      <span className="text-[10px] font-medium text-slate-500">{item.drawing_no || 'Manual Item'}</span>
+                                      {item.item_group && (
+                                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold border uppercase ${
+                                          (item.item_group.toUpperCase().includes('SA') || item.item_group.toUpperCase().includes('SUB') || item.item_group.toUpperCase().includes('ASSEMBLY')) && !item.item_group.toUpperCase().includes('FG')
+                                            ? 'bg-amber-50 text-amber-600 border-amber-100'
+                                            : 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                        }`}>
+                                          {(item.item_group.toUpperCase().includes('SA') || item.item_group.toUpperCase().includes('SUB') || item.item_group.toUpperCase().includes('ASSEMBLY')) && !item.item_group.toUpperCase().includes('FG') 
+                                            ? (item.item_group.toUpperCase().includes('SA') || item.item_group.toUpperCase().includes('SUB') ? 'SA' : 'ASSY')
+                                            : 'FG'}
+                                        </span>
+                                      )}
+                                    </div>
                                   </div>
                                 ) : (item.isManual || mode === 'revise') ? (
-                                  <div className="flex items-center gap-2">
-                                    <input 
-                                      type="text"
-                                      placeholder="Drawing No..."
-                                      value={item.drawing_no}
-                                      onChange={(e) => handleItemChange(item.id, 'drawing_no', e.target.value)}
-                                      className="flex-1 px-0 py-0 text-sm  text-slate-900 border-none focus:ring-0 placeholder:text-slate-300 bg-transparent"
+                                  <div className="flex flex-col">
+                                    <textarea 
+                                      placeholder="Add item description..."
+                                      value={item.description}
+                                      onChange={(e) => handleItemChange(item.id, 'description', e.target.value)}
+                                      rows="1"
+                                      className="w-full px-0 py-0 text-sm font-bold text-slate-900 border-none focus:ring-0 resize-none bg-transparent placeholder:text-slate-300 uppercase"
                                     />
-                                    {item.item_group && (item.item_group.toUpperCase().includes('SA') || item.item_group.toUpperCase().includes('SUB') || item.item_group.toUpperCase().includes('ASSEMBLY')) && !item.item_group.toUpperCase().includes('FG') && (
-                                      <span className="px-1.5 py-0.5 bg-amber-50 text-amber-600 rounded text-[10px] font-bold border border-amber-100 uppercase">
-                                        {item.item_group.toUpperCase().includes('SA') || item.item_group.toUpperCase().includes('SUB') ? 'SA' : 'ASSY'}
-                                      </span>
-                                    )}
+                                    <div className="flex items-center gap-2 mt-0.5">
+                                      <input 
+                                        type="text"
+                                        placeholder="Drawing No..."
+                                        value={item.drawing_no}
+                                        onChange={(e) => handleItemChange(item.id, 'drawing_no', e.target.value)}
+                                        className="flex-1 px-0 py-0 text-[10px] font-medium text-slate-500 border-none focus:ring-0 placeholder:text-slate-300 bg-transparent"
+                                      />
+                                      {item.item_group && (
+                                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold border uppercase ${
+                                          (item.item_group.toUpperCase().includes('SA') || item.item_group.toUpperCase().includes('SUB') || item.item_group.toUpperCase().includes('ASSEMBLY')) && !item.item_group.toUpperCase().includes('FG')
+                                            ? 'bg-amber-50 text-amber-600 border-amber-100'
+                                            : 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                        }`}>
+                                          {(item.item_group.toUpperCase().includes('SA') || item.item_group.toUpperCase().includes('SUB') || item.item_group.toUpperCase().includes('ASSEMBLY')) && !item.item_group.toUpperCase().includes('FG') 
+                                            ? (item.item_group.toUpperCase().includes('SA') || item.item_group.toUpperCase().includes('SUB') ? 'SA' : 'ASSY')
+                                            : 'FG'}
+                                        </span>
+                                      )}
+                                    </div>
                                   </div>
                                 ) : (
-                                  <div className="flex items-center gap-2">
-                                    <div className="flex-1">
-                                      <SearchableSelect
-                                        options={drawings}
-                                        value={item.drawing_id}
-                                        disabled={isLocked}
-                                        onChange={(val) => {
-                                          const drw = drawings.find(d => String(d.id) === String(val));
-                                          const updatedItems = items.map(it => {
-                                            if (it.id === item.id) {
-                                              const newRate = drw?.rate || drw?.quotedPrice || drw?.bom_cost || it.rate || 0;
-                                              return {
-                                                ...it,
-                                                drawing_id: val,
-                                                drawing_no: drw?.drawing_no || '',
-                                                description: drw?.description || '',
-                                                rate: newRate,
-                                                item_group: drw?.item_group || it.item_group, // Preserve item group from drawing
-                                                total: (parseFloat(it.quantity) || 0) * (parseFloat(newRate) || 0)
-                                              };
-                                            }
-                                            return it;
-                                          });
-                                          setItems(updatedItems);
-                                        }}
-                                        placeholder="Select Drawing..."
-                                        labelField="drawing_no"
-                                        valueField="id"
-                                        subLabelField="description"
-                                        className="border-none p-0 focus-within:ring-0 shadow-none bg-transparent  text-sm"
-                                      />
+                                  <div className="flex flex-col">
+                                    <textarea 
+                                      placeholder="Add item description..."
+                                      value={item.description}
+                                      onChange={(e) => handleItemChange(item.id, 'description', e.target.value)}
+                                      rows="1"
+                                      className="w-full px-0 py-0 text-sm font-bold text-slate-900 border-none focus:ring-0 resize-none bg-transparent placeholder:text-slate-300 uppercase"
+                                    />
+                                    <div className="flex items-center gap-2 mt-0.5">
+                                      <div className="flex-1">
+                                        <SearchableSelect
+                                          options={drawings}
+                                          value={item.drawing_id}
+                                          disabled={isLocked}
+                                          onChange={(val) => {
+                                            const drw = drawings.find(d => String(d.id) === String(val));
+                                            const updatedItems = items.map(it => {
+                                              if (it.id === item.id) {
+                                                const g = (drw?.item_group || it.item_group || '').toUpperCase();
+                                                const isSA = (g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY')) && !g.includes('FG');
+                                                const drwRate = parseFloat(drw?.rate || drw?.quotedPrice || drw?.bom_cost || it.rate || 0);
+                                                const newRate = isSA ? 0 : drwRate;
+                                                
+                                                return {
+                                                  ...it,
+                                                  drawing_id: val,
+                                                  drawing_no: drw?.drawing_no || '',
+                                                  description: drw?.description || '',
+                                                  rate: newRate,
+                                                  bom_cost: drwRate,
+                                                  item_group: drw?.item_group || it.item_group,
+                                                  total: (parseFloat(it.quantity) || 0) * (parseFloat(newRate) || 0)
+                                                };
+                                              }
+                                              return it;
+                                            });
+                                            setItems(updatedItems);
+                                          }}
+                                          placeholder="Select Drawing..."
+                                          labelField="drawing_no"
+                                          valueField="id"
+                                          subLabelField="description"
+                                          className="border-none p-0 focus-within:ring-0 shadow-none bg-transparent text-[10px] font-medium text-slate-500 hide-arrow"
+                                        />
+                                      </div>
+                                      {item.item_group && (
+                                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold border uppercase ${
+                                          (item.item_group.toUpperCase().includes('SA') || item.item_group.toUpperCase().includes('SUB') || item.item_group.toUpperCase().includes('ASSEMBLY')) && !item.item_group.toUpperCase().includes('FG')
+                                            ? 'bg-amber-50 text-amber-600 border-amber-100'
+                                            : 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                        }`}>
+                                          {(item.item_group.toUpperCase().includes('SA') || item.item_group.toUpperCase().includes('SUB') || item.item_group.toUpperCase().includes('ASSEMBLY')) && !item.item_group.toUpperCase().includes('FG') 
+                                            ? (item.item_group.toUpperCase().includes('SA') || item.item_group.toUpperCase().includes('SUB') ? 'SA' : 'ASSY')
+                                            : 'FG'}
+                                        </span>
+                                      )}
                                     </div>
-                                    {item.item_group && (item.item_group.toUpperCase().includes('SA') || item.item_group.toUpperCase().includes('SUB') || item.item_group.toUpperCase().includes('ASSEMBLY')) && !item.item_group.toUpperCase().includes('FG') && (
-                                      <span className="px-1.5 py-0.5 bg-amber-50 text-amber-600 rounded text-[10px] font-bold border border-amber-100 uppercase">
-                                        {item.item_group.toUpperCase().includes('SA') || item.item_group.toUpperCase().includes('SUB') ? 'SA' : 'ASSY'}
-                                      </span>
-                                    )}
                                   </div>
                                 )}
                               </div>
-                              {!isLocked && mode !== 'received' && (
-                                <button 
-                                  onClick={() => {
-                                    const updatedItems = items.map(it => {
-                                      if (it.id === item.id) {
-                                        return { 
-                                          ...it, 
-                                          isManual: !it.isManual,
-                                          drawing_id: '',
-                                          drawing_no: '',
-                                          description: '',
-                                          rate: 0,
-                                          total: 0
-                                        };
-                                      }
-                                      return it;
-                                    });
-                                    setItems(updatedItems);
-                                  }}
-                                  title={item.isManual ? "Switch to Master" : "Manual Entry"}
-                                  className={`p-1 rounded  group-hover:opacity-100 transition-opacity ${item.isManual ? 'text-amber-500 bg-amber-50' : 'text-slate-400 bg-slate-50'}`}
-                                >
-                                  <Hash size={12} />
-                                </button>
-                              )}
                             </div>
-                            
-                            {(isLocked || mode === 'received') ? (
-                              <p className="text-[11px] text-slate-500 italic mt-1 whitespace-pre-line">{item.description || 'No description'}</p>
-                            ) : (
-                              <textarea 
-                                placeholder="Add item description..."
-                                value={item.description}
-                                onChange={(e) => handleItemChange(item.id, 'description', e.target.value)}
-                                rows="1"
-                                className="w-full px-0 py-0 text-[11px] text-slate-500 border-none focus:ring-0 resize-none bg-transparent placeholder:text-slate-300"
-                              />
-                            )}
                           </div>
                         </td>
                         <td className="px-4 py-3">
@@ -1037,7 +1082,7 @@ const QuotationFormPage = () => {
                           />
                         </td>
                         <td className="px-4 py-3 text-xs  text-slate-700">
-                          {formatCurrency(item.total)}
+                          {formatCurrency(item.total * (1 + (item.gst_percentage || 18) / 100))}
                         </td>
                         {!isLocked && (
                           <td className="px-4 py-3 text-center">

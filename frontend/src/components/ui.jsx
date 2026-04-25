@@ -94,9 +94,11 @@ export const SearchableSelect = ({
           onFocus={() => !disabled && setIsOpen(true)}
           disabled={disabled}
         />
-        <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 pointer-events-none">
-          {isOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-        </div>
+        {!className.includes('hide-arrow') && (
+          <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 pointer-events-none">
+            {isOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+          </div>
+        )}
       </div>
       
       {isOpen && !disabled && (
@@ -113,10 +115,10 @@ export const SearchableSelect = ({
                     setIsOpen(false);
                   }}
                 >
-                  <div className="flex flex-col">
+                  <div className="flex items-center gap-2">
                     <span className="font-medium">{getLabel(opt)}</span>
                     {getSublabel(opt) && (
-                      <span className="text-[10px] text-slate-400 font-normal whitespace-pre-line">{getSublabel(opt)}</span>
+                      <span className="text-[10px] text-slate-400 font-normal">({getSublabel(opt)})</span>
                     )}
                   </div>
                 </div>

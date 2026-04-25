@@ -397,6 +397,7 @@ const getApprovedDrawings = async () => {
          drawing_no, 
          bom_cost, 
          item_group,
+         item_type,
          unit,
          description,
          item_code
@@ -405,7 +406,7 @@ const getApprovedDrawings = async () => {
          SELECT MAX(id) 
          FROM sales_order_items 
          WHERE bom_cost > 0
-         GROUP BY drawing_no, item_code
+         GROUP BY drawing_no, item_code, item_group, item_type
        )
      ) latest_bom ON d.drawing_no = latest_bom.drawing_no
      WHERE d.status = 'APPROVED' OR d.shared_with_design = 1

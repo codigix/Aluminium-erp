@@ -856,18 +856,18 @@ const getApprovedDrawings = async (companyId = null) => {
               ) as design_qty
        FROM sales_order_items soi
        INNER JOIN (
-         SELECT sales_order_id, drawing_no, item_code, MAX(id) as max_id
+         SELECT sales_order_id, drawing_no, item_code, item_group, item_type, MAX(id) as max_id
          FROM sales_order_items
-         GROUP BY sales_order_id, drawing_no, item_code
+         GROUP BY sales_order_id, drawing_no, item_code, item_group, item_type
        ) latest ON soi.id = latest.max_id
        LEFT JOIN sales_orders so ON soi.sales_order_id = so.id
        LEFT JOIN customer_po_items poi ON so.customer_po_id = poi.customer_po_id 
             AND (TRIM(soi.drawing_no) = TRIM(poi.drawing_no) AND soi.drawing_no IS NOT NULL)
        WHERE soi.sales_order_id = ? 
        AND (
-         TRIM(UPPER(soi.item_group)) IN ('FG', 'FINISHED GOODS', 'FINISHED_GOODS', 'SA', 'SUB ASSEMBLY', 'SUB_ASSEMBLY') 
+         TRIM(UPPER(soi.item_group)) IN ('FG', 'FINISHED GOODS', 'FINISHED_GOODS', 'SA', 'SUB ASSEMBLY', 'SUB_ASSEMBLY', 'ASSEMBLY') 
          OR (
-           TRIM(UPPER(soi.item_type)) IN ('FG', 'FINISHED GOODS', 'FINISHED_GOODS', 'SA', 'SUB ASSEMBLY', 'SUB_ASSEMBLY')
+           TRIM(UPPER(soi.item_type)) IN ('FG', 'FINISHED GOODS', 'FINISHED_GOODS', 'SA', 'SUB ASSEMBLY', 'SUB_ASSEMBLY', 'ASSEMBLY')
          )
        )
        AND (soi.status IS NULL OR TRIM(UPPER(soi.status)) NOT IN ('REJECTED', 'CANCELLED'))`,

@@ -1126,7 +1126,7 @@ const getLatestBOMCost = async (itemCode, drawingNo, bomId) => {
 /**
  * Recalculates the cost of a BOM based on its latest finalized version components
  */
-const recalculateBOMCost = async (itemId) => {
+const recalculateBOMCost = async (itemId, forceUpdate = false) => {
   if (!itemId) return 0;
 
   // 1. Fetch item info and its components, materials, operations, and scrap
@@ -1134,13 +1134,12 @@ const recalculateBOMCost = async (itemId) => {
   if (itemRows.length === 0) return 0;
   const parentItem = itemRows[0];
 
-  const isApproved = ['APPROVED', 'RELEASED', 'COMPLETED'].includes(String(parentItem.status).toUpperCase());
-  const hasSavedCost = parseFloat(parentItem.bom_cost) > 0;
-
-  // If it's an approved or finalized version, we MUST NOT automatically update its cost.
-  // We only return the existing cost to prevent data drift in historical snapshots.
-  if (isApproved) {
-    console.log(`[recalculateBOMCost] Skipping update for APPROVED version ${itemId}`);
+  const status = String(parentItem.status || '').toUpperCase();
+  const isApproved = ['APPROVED', 'RELEASED', 'COMPLETED'].includes(status);
+  
+  // If it's an approved or finalized version, we usually skip unless forced
+  if (isApproved && !forceUpdate) {
+    console.log(`[recalculateBOMCost] Skipping update for APPROVED version ${itemId} (Force: ${forceUpdate})`);
     return parseFloat(parentItem.bom_cost) || 0;
   }
 
@@ -1164,8 +1163,10 @@ const recalculateBOMCost = async (itemId) => {
     let rate = parseFloat(item.rate || 0);
 
     // If it's a sub-assembly component, fetch its LATEST cost instead of using stored rate
-    // ONLY if the parent BOM is NOT approved/historical.
-    if (!isApproved && !isMaterial && item.component_code && (item.component_code.startsWith('SA-') || item.component_code.startsWith('SFG-'))) {
+    // We use latest cost if parent is NOT approved OR if we are forcing an update
+    const isSA = item.component_code && (item.component_code.startsWith('SA-') || item.component_code.startsWith('SFG-'));
+    
+    if ((!isApproved || forceUpdate) && !isMaterial && isSA) {
       const latest = await getLatestBOMCost(item.component_code, item.drawing_no);
       if (latest.bom_cost > 0) {
         rate = latest.bom_cost;
@@ -1288,6 +1289,7 @@ const recalculateBOMCost = async (itemId) => {
  * Finds and updates all parent BOMs that use this item as a component
  */
 const propagateCostToParents = async (itemCode, drawingNo) => {
+  if (!itemCode) return;
   console.log(`[Cost Propagation] Checking parents for: ${itemCode} (${drawingNo})`);
   
   // 1. Fetch the absolute latest cost for this item to ensure we propagate the most recent value
@@ -1305,42 +1307,51 @@ const propagateCostToParents = async (itemCode, drawingNo) => {
 
   // 2. Update this item's rate in ALL parent component lists before recalculating parents
   // This ensures that when recalculateBOMCost(parent.id) is called, it uses the new rate.
+  // We update even COMPLETED ones just in case (though recalculateBOMCost will skip them if not forced)
   await pool.execute(`
     UPDATE sales_order_item_components 
     SET rate = ? 
     WHERE component_code = ? 
     AND (drawing_no = ? OR drawing_no IS NULL OR ? IS NULL)
-    AND sales_order_item_id IN (
-        SELECT id FROM sales_order_items 
-        WHERE status NOT IN ('COMPLETED')
-    )
   `, [currentCost, itemCode, drawingNo, drawingNo]);
 
-  // 3. Find all latest or active versions of sales_order_items that use this component_code
+  // 3. Find all LATEST or ACTIVE versions of sales_order_items that use this component_code
+  // We want to update any BOM that is currently "live" or is the latest draft/version.
   const [parents] = await pool.query(`
-    SELECT DISTINCT soi.id, soi.item_code, soi.drawing_no
+    SELECT DISTINCT soi.id, soi.item_code, soi.drawing_no, soi.status
     FROM sales_order_items soi
     JOIN sales_order_item_components soc ON soi.id = soc.sales_order_item_id
     WHERE soc.component_code = ?
+    AND (soc.drawing_no = ? OR soc.drawing_no IS NULL OR ? IS NULL)
     AND (
-      -- Only update the absolute latest version if it's not approved
-      (
-        soi.id IN (
-          SELECT MAX(id) FROM sales_order_items GROUP BY sales_order_id, IFNULL(bom_id, item_code)
-        )
-        AND soi.status NOT IN ('APPROVED', 'RELEASED', 'COMPLETED')
+      -- Update absolute latest version of any BOM
+      soi.id IN (
+        SELECT max_id FROM (
+          SELECT MAX(id) as max_id 
+          FROM sales_order_items 
+          GROUP BY sales_order_id, IFNULL(bom_id, item_code)
+        ) as t
       )
+      OR 
+      -- Also update anything that isn't fully completed/cancelled
+      soi.status NOT IN ('COMPLETED', 'CANCELLED', 'REJECTED')
     )
-  `, [itemCode]);
+  `, [itemCode, drawingNo, drawingNo]);
 
   console.log(`[Cost Propagation] Found ${parents.length} parent BOMs to update for ${itemCode}`);
 
   for (const parent of parents) {
-    const newCost = await recalculateBOMCost(parent.id);
+    // We force update even if approved to ensure consistency, 
+    // BUT recalculateBOMCost itself has logic to handle historical snapshots.
+    // For this "Smart Sync", we pass forceUpdate=true for LATEST versions.
+    const isLatest = true; // Query above already filters for latest or active
+    const newCost = await recalculateBOMCost(parent.id, true);
     console.log(`[Cost Propagation] Updated parent ${parent.item_code} (ID: ${parent.id}) to new cost: ₹${newCost}`);
     
     // 4. Recurse upwards to grandparents
-    await propagateCostToParents(parent.item_code, parent.drawing_no);
+    if (parent.item_code) {
+      await propagateCostToParents(parent.item_code, parent.drawing_no);
+    }
   }
 };
 

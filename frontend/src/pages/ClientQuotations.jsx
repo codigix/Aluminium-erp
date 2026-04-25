@@ -61,9 +61,11 @@ const ClientQuotations = () => {
   // Communication States
   const [showCommDrawer, setShowCommDrawer] = useState(false);
   const [selectedQuoteForComm, setSelectedQuoteForComm] = useState(null);
+  const [commType, setCommType] = useState('CLIENT'); // 'CLIENT' or 'INTERNAL'
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [unreadCounts, setUnreadCounts] = useState({});
+  const [internalUnreadCounts, setInternalUnreadCounts] = useState({});
   const [sendingMsg, setSendingMsg] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const chatEndRef = useRef(null);
@@ -81,26 +83,41 @@ const ClientQuotations = () => {
   const fetchUnreadCounts = async () => {
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/quotations/communications/unread-counts?type=CLIENT`, {
+      
+      // Fetch Client unread counts
+      const clientResponse = await fetch(`${API_BASE}/quotations/communications/unread-counts?type=CLIENT`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      if (response.ok) {
-        const data = await response.json();
+      if (clientResponse.ok) {
+        const data = await clientResponse.json();
         const counts = {};
         data.forEach(item => {
           counts[item.quotation_id] = item.unread_count;
         });
         setUnreadCounts(counts);
       }
+
+      // Fetch Internal unread counts
+      const internalResponse = await fetch(`${API_BASE}/quotations/communications/unread-counts?type=INTERNAL`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (internalResponse.ok) {
+        const data = await internalResponse.json();
+        const counts = {};
+        data.forEach(item => {
+          counts[item.quotation_id] = item.unread_count;
+        });
+        setInternalUnreadCounts(counts);
+      }
     } catch (error) {
       console.error('Error fetching unread counts:', error);
     }
   };
 
-  const fetchMessages = async (quotationId) => {
+  const fetchMessages = async (quotationId, type = commType) => {
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/quotations/communications?quotationId=${quotationId}&type=CLIENT`, {
+      const response = await fetch(`${API_BASE}/quotations/communications?quotationId=${quotationId}&type=${type}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
@@ -114,12 +131,21 @@ const ClientQuotations = () => {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({ quotationId, type: 'CLIENT' })
+          body: JSON.stringify({ quotationId, type })
         });
         fetchUnreadCounts();
       }
     } catch (error) {
       console.error('Error fetching messages:', error);
+    }
+  };
+
+  const handleCommTypeChange = (newType) => {
+    if (newType === commType) return;
+    setCommType(newType);
+    if (selectedQuoteForComm) {
+      setMessages([]);
+      fetchMessages(selectedQuoteForComm.id, newType);
     }
   };
 
@@ -162,7 +188,7 @@ const ClientQuotations = () => {
         },
         body: JSON.stringify({
           quotationId: selectedQuoteForComm.id,
-          quotationType: 'CLIENT',
+          quotationType: commType,
           message: newMessage,
           recipientEmail: selectedQuoteForComm.clientEmail,
           quoteNumber: `QRT-${String(selectedQuoteForComm.id).padStart(4, '0')}`
@@ -192,8 +218,9 @@ const ClientQuotations = () => {
       clientEmail: firstQuote?.email || ''
     });
     setMessages([]);
+    setCommType('CLIENT');
     setShowCommDrawer(true);
-    fetchMessages(group.id);
+    fetchMessages(group.id, 'CLIENT');
   };
 
   const fetchApprovedOrders = async () => {
@@ -230,7 +257,7 @@ const ClientQuotations = () => {
           initialGst[clientName] = {};
         }
 
-        // Process items and group by identity across ALL orders for this client
+          // Process items and group by identity across ALL orders for this client
         (order.items || []).forEach(item => {
           const g = (item.item_group || '').trim().toUpperCase();
           const t = (item.item_type || '').trim().toUpperCase();
@@ -240,16 +267,13 @@ const ClientQuotations = () => {
           const isSA = g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY') || t.includes('SA') || t.includes('SUB') || t.includes('ASSEMBLY');
           const isFG = (g.includes('FG') || t.includes('FG') || p.includes('FG') || g.includes('FINISHED')) && !isSA;
           
-          // Skip if it's a component of another item in this order
-          if (item.is_component > 0) return;
-
-          // Skip if not FG/SA/ASSEMBLY, rejected, or if it's an FG with no cost (SA/ASSEMBLY can have 0 cost)
+          // Skip if rejected, or if it's an FG with no cost (SA/ASSEMBLY can have 0 cost)
           if ((!isFG && !isSA) || item.status === 'REJECTED' || (isFG && !Number(item.bom_cost))) return;
 
           // Set calc group for UI badge
           item.item_group_calc = isSA ? (g.includes('ASSEMBLY') && !g.includes('SUB') ? 'ASSEMBLY' : 'SUB ASSEMBLY') : 'FG';
 
-          const identity = `${item.drawing_no || 'NA'}_${item.item_code || 'NA'}`;
+          const identity = `${item.drawing_no || 'NA'}_${item.item_code || 'NA'}_${item.item_group_calc}`;
           const existing = grouped[clientName].all_items_map[identity];
           
           const parseVer = (v) => parseFloat(String(v || 0).replace(/[^\d.]/g, '')) || 0;
@@ -1377,8 +1401,8 @@ const ClientQuotations = () => {
                                           <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
                                             <td className="px-4 p-2">
                                               <div className="flex flex-col">
-                                                <div className="flex items-center gap-2">
-                                                  <span className="text-xs font-medium text-slate-900">{item.drawing_no || 'N/A'}</span>
+                                                <div className="flex items-center gap-2 mb-0.5">
+                                                  <span className="text-xs font-bold text-slate-900 uppercase">{item.description || '—'}</span>
                                                   {item.item_group_calc && (
                                                     <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${
                                                       (item.item_group_calc.includes('SA') || item.item_group_calc.includes('SUB') || item.item_group_calc.includes('ASSEMBLY')) 
@@ -1389,7 +1413,7 @@ const ClientQuotations = () => {
                                                     </span>
                                                   )}
                                                 </div>
-                                                <span className="text-xs text-slate-500">{item.description || '—'}</span>
+                                                <span className="text-[10px] font-medium text-slate-500">{item.drawing_no || 'N/A'}</span>
                                                 {item.status === 'REJECTED' && (
                                                   <span className="mt-1 px-1.5 py-0.5 bg-rose-100 text-rose-600 rounded text-xs  w-fit">Rejected</span>
                                                 )}
@@ -1639,11 +1663,43 @@ const ClientQuotations = () => {
                     <div>
                       <h3 className="font-bold text-slate-900">{selectedQuoteForComm?.company_name}</h3>
                       <div className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                        <span className="text-[10px] font-medium text-slate-400 uppercase">Active Channel</span>
+                        <span className={`w-2 h-2 rounded-full ${commType === 'CLIENT' ? 'bg-emerald-500' : 'bg-amber-500'} animate-pulse`} />
+                        <span className="text-[10px] font-medium text-slate-400 uppercase">
+                          {commType === 'CLIENT' ? 'Active Channel (Client)' : 'Internal Requests'}
+                        </span>
                       </div>
                     </div>
                   </div>
+                  
+                  {/* Tab Selector */}
+                  <div className="flex bg-slate-100 p-1 rounded-xl">
+                    <button
+                      onClick={() => handleCommTypeChange('CLIENT')}
+                      className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        commType === 'CLIENT' 
+                          ? 'bg-white text-indigo-600 shadow-sm' 
+                          : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      Client
+                    </button>
+                    <button
+                      onClick={() => handleCommTypeChange('INTERNAL')}
+                      className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all relative ${
+                        commType === 'INTERNAL' 
+                          ? 'bg-white text-indigo-600 shadow-sm' 
+                          : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      Internal
+                      {internalUnreadCounts[selectedQuoteForComm?.id] > 0 && (
+                        <span className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 text-white text-[8px] flex items-center justify-center rounded-full border-2 border-white">
+                          {internalUnreadCounts[selectedQuoteForComm?.id]}
+                        </span>
+                      )}
+                    </button>
+                  </div>
+
                   <button 
                     onClick={() => setShowCommDrawer(false)}
                     className="p-2 hover:bg-slate-100 text-slate-400 hover:text-slate-600 rounded-full transition-all"
@@ -1661,18 +1717,25 @@ const ClientQuotations = () => {
                       </div>
                       <h4 className="text-lg font-bold text-slate-900 mb-2">No conversations yet</h4>
                       <p className="text-sm text-slate-500 max-w-xs leading-relaxed">
-                        Start a conversation with {selectedQuoteForComm?.company_name} regarding this quotation.
+                        {commType === 'CLIENT' 
+                          ? `Start a conversation with ${selectedQuoteForComm?.company_name} regarding this quotation.`
+                          : 'No internal requests or notes found for this quotation.'}
                       </p>
                     </div>
                   ) : (
                     messages.map((msg, idx) => {
                       const isClient = msg.sender_type === 'CLIENT';
+                      const isSystem = msg.sender_type === 'SYSTEM';
+                      const isInternal = msg.sender_type === 'INTERNAL';
+                      
                       return (
                         <div key={idx} className={`flex ${isClient ? 'justify-start' : 'justify-end'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
                           <div className={`max-w-[80%] flex flex-col ${isClient ? 'items-start' : 'items-end'}`}>
                             <div className={`flex items-center gap-2 mb-1.5 ${isClient ? 'flex-row' : 'flex-row-reverse'}`}>
-                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                                {isClient ? 'Client' : 'Our Team'}
+                              <span className={`text-[10px] font-bold uppercase tracking-wider ${
+                                isClient ? 'text-slate-400' : isSystem ? 'text-amber-500' : 'text-indigo-400'
+                              }`}>
+                                {isClient ? 'Client' : isSystem ? 'System Notification' : 'Internal Team'}
                               </span>
                               <span className="text-[10px] text-slate-300">•</span>
                               <span className="text-[10px] text-slate-400">
@@ -1682,11 +1745,13 @@ const ClientQuotations = () => {
                             <div className={`p-4 rounded-2xl shadow-sm ${
                               isClient 
                                 ? 'bg-white text-slate-700 rounded-tl-none border border-slate-100' 
-                                : 'bg-indigo-600 text-white rounded-tr-none'
+                                : isSystem
+                                  ? 'bg-amber-50 text-amber-900 border border-amber-100 rounded-tr-none'
+                                  : 'bg-indigo-600 text-white rounded-tr-none'
                             }`}>
                               <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.message}</p>
                             </div>
-                            {!isClient && (
+                            {!isClient && !isSystem && (
                               <div className="flex items-center gap-1 mt-1.5">
                                 <CheckCheck size={12} className="text-indigo-400" />
                                 <span className="text-[10px] font-medium text-slate-400 uppercase">Sent</span>
