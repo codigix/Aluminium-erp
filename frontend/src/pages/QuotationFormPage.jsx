@@ -119,15 +119,43 @@ const QuotationFormPage = () => {
   }, [initialData]);
 
   useEffect(() => {
-    if (items.length > 0 && drawings.length > 0) {
+    // ONLY sync if we have drawings and items, and we haven't locked the view
+    if (items.length > 0 && drawings.length > 0 && !isLocked) {
       const updatedItems = items.map(item => {
-        const matchedDrawing = drawings.find(d => 
-          (item.drawing_id && String(d.id) === String(item.drawing_id)) ||
-          (!item.drawing_id && item.drawing_no && 
-            String(d.drawing_no).trim().toLowerCase() === String(item.drawing_no).trim().toLowerCase() &&
-            (!item.description || String(d.description || '').trim().toLowerCase() === String(item.description).trim().toLowerCase())
-          )
-        );
+        const itemG = (item.item_group || '').toUpperCase();
+        const itemIsSA = (itemG.includes('SA') || itemG.includes('SUB') || itemG.includes('ASSEMBLY')) && !itemG.includes('FG');
+        
+        const matchedDrawing = drawings.find(d => {
+          const drwG = (d.item_group || '').toUpperCase();
+          const drwIsSA = (drwG.includes('SA') || drwG.includes('SUB') || drwG.includes('ASSEMBLY')) && !drwG.includes('FG');
+
+          // 1. Match by item_code (Highest Priority)
+          if (item.item_code && d.item_code && String(d.item_code).trim().toLowerCase() === String(item.item_code).trim().toLowerCase()) return true;
+
+          // 2. Match by drawing_no AND item_group AND Description (Very Reliable)
+          if (item.drawing_no && String(d.drawing_no).trim().toLowerCase() === String(item.drawing_no).trim().toLowerCase()) {
+            const itemDesc = String(item.description || '').trim().toLowerCase();
+            const drwDesc = String(d.description || '').trim().toLowerCase();
+            
+            // Group must match (SA vs FG)
+            if (itemIsSA === drwIsSA) {
+              // Description match is critical when multiple items share a drawing number
+              const descMatch = !itemDesc || !drwDesc || drwDesc === itemDesc || drwDesc.includes(itemDesc) || itemDesc.includes(drwDesc);
+              if (descMatch) return true;
+            }
+          }
+
+          // 3. Fallback to drawing_id ONLY if group matches and there's only one drawing for that group
+          if (item.drawing_id && String(d.id) === String(item.drawing_id)) {
+            const otherDrawingsWithSameId = drawings.filter(otherD => 
+              String(otherD.id) === String(item.drawing_id) && 
+              ((otherD.item_group || '').toUpperCase().includes('SA') === itemIsSA)
+            );
+            if (otherDrawingsWithSameId.length === 1) return true;
+          }
+
+          return false;
+        });
 
         if (matchedDrawing) {
           const drwRate = parseFloat(matchedDrawing.bom_cost || matchedDrawing.rate || matchedDrawing.quotedPrice || 0);
@@ -144,33 +172,39 @@ const QuotationFormPage = () => {
             changed = true;
           }
 
-          // Sync BOM Cost if it differs from Master Drawing (Always keep updated)
-          if (!isLocked && drwRate > 0 && parseFloat(item.bom_cost) !== drwRate) {
+          // Sync item_code if missing
+          if (!item.item_code && matchedDrawing.item_code) {
+            newItem.item_code = matchedDrawing.item_code;
+            changed = true;
+          }
+
+          // Sync BOM Cost logic
+          const currentBOMCost = parseFloat(item.bom_cost || 0);
+          
+          // STRICTER SYNC: Only sync if current cost is 0 OR if the matched drawing 
+          // is an EXACT ID match. This prevents generic drawing master data 
+          // from overwriting specifically passed item costs.
+          const isExactMatch = (item.drawing_id && String(matchedDrawing.id) === String(item.drawing_id)) ||
+                               (item.item_code && String(matchedDrawing.item_code) === String(item.item_code));
+
+          const costChanged = drwRate > 0 && Math.abs(currentBOMCost - drwRate) > 0.01;
+          
+          if (costChanged && (currentBOMCost === 0 || isExactMatch)) {
             newItem.bom_cost = drwRate;
             changed = true;
             
-            // If it's an FG item, also update the Rate to match the new BOM Cost
-            if (isFG) {
+            // If it's an FG item AND the rate was linked to BOM cost, update Rate too
+            if (isFG && (parseFloat(item.rate || 0) === 0 || Math.abs(parseFloat(item.rate || 0) - currentBOMCost) < 0.01)) {
               newItem.rate = drwRate;
               newItem.total = (parseFloat(item.quantity) || 0) * drwRate;
             }
           }
 
-          // Force rate to 0 for SA items, or sync Rate for FG with BOM Cost
-          if (isSA) {
-            if (parseFloat(item.rate) !== 0) {
-              newItem.rate = 0;
-              newItem.total = 0;
-              changed = true;
-            }
-          } else {
-            // For FG, Rate should match BOM Cost
-            const currentBOM = parseFloat(newItem.bom_cost || item.bom_cost || 0);
-            if (parseFloat(item.rate) !== currentBOM) {
-              newItem.rate = currentBOM;
-              newItem.total = (parseFloat(item.quantity) || 0) * currentBOM;
-              changed = true;
-            }
+          // Force rate to 0 for SA items
+          if (isSA && parseFloat(item.rate || 0) !== 0) {
+            newItem.rate = 0;
+            newItem.total = 0;
+            changed = true;
           }
 
           return changed ? newItem : item;
@@ -180,15 +214,15 @@ const QuotationFormPage = () => {
       
       const hasChanges = updatedItems.some((it, idx) => 
         it.drawing_id !== items[idx].drawing_id || 
-        it.rate !== items[idx].rate ||
-        it.bom_cost !== items[idx].bom_cost
+        Math.abs(parseFloat(it.rate || 0) - parseFloat(items[idx].rate || 0)) > 0.01 ||
+        Math.abs(parseFloat(it.bom_cost || 0) - parseFloat(items[idx].bom_cost || 0)) > 0.01
       );
 
       if (hasChanges) {
         setItems(updatedItems);
       }
     }
-  }, [drawings, isLocked, items]);
+  }, [drawings, isLocked, items.length, mode]);
 
   useEffect(() => {
     if (items.length > 0) {

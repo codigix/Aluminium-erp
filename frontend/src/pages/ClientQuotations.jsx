@@ -798,6 +798,7 @@ const ClientQuotations = () => {
               salesOrderItemId: item.id,
               bom_id: item.bom_id,
               revision_no: item.revision_no,
+              item_code: item.item_code,
               bom_cost: item.bom_cost,
               orderId: item.sales_order_id, // Link to original sales order
               drawing_id: item.drawing_id,
@@ -955,6 +956,7 @@ const ClientQuotations = () => {
           items: latestQuotes.map(q => ({
             id: q.id,
             salesOrderItemId: q.sales_order_item_id,
+            item_code: q.item_code,
             orderId: q.sales_order_id,
             drawing_id: q.drawing_id,
             drawing_no: q.drawing_no,
@@ -962,6 +964,7 @@ const ClientQuotations = () => {
             quantity: q.item_qty,
             unit: q.item_unit || q.uom || 'Nos',
             rate: q.unit_rate || (parseFloat(q.total_amount) / (parseFloat(q.item_qty) || 1)),
+            bom_cost: q.bom_cost || 0,
             gst_percentage: q.gst_percentage || 18,
             item_group: q.item_group,
             status: q.status
@@ -994,6 +997,7 @@ const ClientQuotations = () => {
           items: latestQuotes.map(q => ({
             id: Date.now() + Math.random(),
             salesOrderItemId: q.sales_order_item_id,
+            item_code: q.item_code,
             orderId: q.sales_order_id,
             drawing_id: q.drawing_id,
             drawing_no: q.drawing_no,
@@ -1001,6 +1005,7 @@ const ClientQuotations = () => {
             quantity: q.item_qty,
             unit: q.item_unit || q.uom || 'Nos',
             rate: q.unit_rate || (parseFloat(q.total_amount) / (parseFloat(q.item_qty) || 1)),
+            bom_cost: q.bom_cost || 0,
             gst_percentage: q.gst_percentage || 18,
             item_group: q.item_group,
             status: 'PENDING'
