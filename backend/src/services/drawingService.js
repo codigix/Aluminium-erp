@@ -68,10 +68,12 @@ const listDrawings = async (search = '', onlyShared = false) => {
   query += ` ORDER BY d.created_at DESC`;
   const [rows] = await pool.query(query, params);
   
-  // Ensure each row has a top-level id for DataTable compatibility
+  // Ensure each row has a unique id for DataTable and matching compatibility
   return rows.map(row => ({
     ...row,
-    id: row.drawing_master_id
+    // If we have a sales_order_item_id, use it to make the ID unique for that specific item version
+    // Otherwise fallback to drawing_master_id
+    id: row.sales_order_item_id ? `soi_${row.sales_order_item_id}` : row.drawing_master_id
   }));
 };
 

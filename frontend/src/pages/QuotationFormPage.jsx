@@ -129,7 +129,7 @@ const QuotationFormPage = () => {
           const drwG = (d.item_group || '').toUpperCase();
           const drwIsSA = (drwG.includes('SA') || drwG.includes('SUB') || drwG.includes('ASSEMBLY')) && !drwG.includes('FG');
 
-          // 1. Match by item_code (Highest Priority)
+          // 1. Match by item_code (Highest Priority - Unique identity)
           if (item.item_code && d.item_code && String(d.item_code).trim().toLowerCase() === String(item.item_code).trim().toLowerCase()) return true;
 
           // 2. Match by drawing_no AND item_group AND Description (Very Reliable)
@@ -140,18 +140,23 @@ const QuotationFormPage = () => {
             // Group must match (SA vs FG)
             if (itemIsSA === drwIsSA) {
               // Description match is critical when multiple items share a drawing number
+              // If both have descriptions, they must be reasonably similar
               const descMatch = !itemDesc || !drwDesc || drwDesc === itemDesc || drwDesc.includes(itemDesc) || itemDesc.includes(drwDesc);
+              
+              // If we also have item_code in drawing but NOT in item, 
+              // we should be careful about matching just by drawing_no
               if (descMatch) return true;
             }
           }
 
-          // 3. Fallback to drawing_id ONLY if group matches and there's only one drawing for that group
-          if (item.drawing_id && String(d.id) === String(item.drawing_id)) {
-            const otherDrawingsWithSameId = drawings.filter(otherD => 
-              String(otherD.id) === String(item.drawing_id) && 
-              ((otherD.item_group || '').toUpperCase().includes('SA') === itemIsSA)
+          // 3. Match by drawing_id ONLY if it's the ONLY match for that drawing_no + group
+          // This handles cases where item_code might be missing but we have a direct link
+          if (item.drawing_id && String(d.drawing_master_id) === String(item.drawing_id)) {
+            const otherDrawingsInGroup = drawings.filter(otherD => 
+              String(otherD.drawing_no).trim().toLowerCase() === String(item.drawing_no).trim().toLowerCase() &&
+              (((otherD.item_group || '').toUpperCase().includes('SA') || (otherD.item_group || '').toUpperCase().includes('SUB')) === itemIsSA)
             );
-            if (otherDrawingsWithSameId.length === 1) return true;
+            if (otherDrawingsInGroup.length === 1) return true;
           }
 
           return false;
@@ -166,9 +171,9 @@ const QuotationFormPage = () => {
           let newItem = { ...item };
           let changed = false;
 
-          // Sync drawing_id if missing
-          if (!item.drawing_id) {
-            newItem.drawing_id = matchedDrawing.id;
+          // Sync drawing_id if missing (using drawing_master_id for the link)
+          if (!item.drawing_id && matchedDrawing.drawing_master_id) {
+            newItem.drawing_id = matchedDrawing.drawing_master_id;
             changed = true;
           }
 
@@ -181,19 +186,20 @@ const QuotationFormPage = () => {
           // Sync BOM Cost logic
           const currentBOMCost = parseFloat(item.bom_cost || 0);
           
-          // STRICTER SYNC: Only sync if current cost is 0 OR if the matched drawing 
-          // is an EXACT ID match. This prevents generic drawing master data 
-          // from overwriting specifically passed item costs.
-          const isExactMatch = (item.drawing_id && String(matchedDrawing.id) === String(item.drawing_id)) ||
-                               (item.item_code && String(matchedDrawing.item_code) === String(item.item_code));
+          // STRICTER SYNC: 
+          // 1. Always sync if current cost is 0 and we found a rate
+          // 2. Sync if matched by item_code (specific record)
+          // 3. ONLY sync in 'revise' mode if it's a specific identity match
+          const isItemCodeMatch = item.item_code && d.item_code && String(d.item_code).trim().toLowerCase() === String(item.item_code).trim().toLowerCase();
+          const shouldSync = (currentBOMCost === 0) || isItemCodeMatch;
 
           const costChanged = drwRate > 0 && Math.abs(currentBOMCost - drwRate) > 0.01;
           
-          if (costChanged && (currentBOMCost === 0 || isExactMatch)) {
+          if (costChanged && shouldSync) {
             newItem.bom_cost = drwRate;
             changed = true;
             
-            // If it's an FG item AND the rate was linked to BOM cost, update Rate too
+            // For FG items, if the Rate matches the old BOM cost, update it to the new one
             if (isFG && (parseFloat(item.rate || 0) === 0 || Math.abs(parseFloat(item.rate || 0) - currentBOMCost) < 0.01)) {
               newItem.rate = drwRate;
               newItem.total = (parseFloat(item.quantity) || 0) * drwRate;
@@ -595,7 +601,10 @@ const QuotationFormPage = () => {
           salesOrderItemId: item.salesOrderItemId || null,
           bom_id: item.bom_id || null,
           revision_no: item.revision_no || null,
+          item_code: item.item_code || null,
+          bom_cost: parseFloat(item.bom_cost) || 0,
           orderId: item.orderId || null,
+          drawing_id: item.drawing_id || null,
           drawing_no: item.drawing_no,
           description: item.description,
           quantity: parseFloat(item.quantity) || 0,

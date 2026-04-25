@@ -830,8 +830,8 @@ const getApprovedDrawings = async (companyId = null) => {
               soi.drawing_no, soi.drawing_id, soi.status, soi.created_by, soi.created_at, soi.updated_at,
               (
                 SELECT bom_cost FROM sales_order_items v2 
-                WHERE ((v2.bom_id = soi.bom_id AND soi.bom_id IS NOT NULL)
-                   OR (v2.item_code = soi.item_code AND v2.drawing_no = soi.drawing_no AND v2.item_code IS NOT NULL AND v2.drawing_no IS NOT NULL))
+                WHERE ((v2.bom_id = soi.bom_id AND soi.bom_id IS NOT NULL AND v2.bom_id IS NOT NULL)
+                   OR (LOWER(TRIM(v2.item_code)) = LOWER(TRIM(soi.item_code)) AND LOWER(TRIM(v2.drawing_no)) = LOWER(TRIM(soi.drawing_no)) AND v2.item_code IS NOT NULL AND v2.drawing_no IS NOT NULL))
                    AND v2.bom_cost > 0
                 ORDER BY v2.id DESC LIMIT 1
               ) as bom_cost,
