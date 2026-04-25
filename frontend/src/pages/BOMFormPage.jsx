@@ -470,6 +470,79 @@ const BOMFormPage = () => {
   const [loadingHistory, setLoadingHistory] = useState(false);
   const hasAutoUpdated = useRef(false);
 
+  // Cost Calculations
+  const batchQty = parseFloat(productForm.quantity || 1);
+
+  // Helper for recursive cost calculation
+  const calculateRecursiveCost = useCallback((item, allItems) => {
+    const isMaterial = !!(item.material_name || item.materialName);
+    const itemGroup = (item.item_group || item.itemGroup || '').toLowerCase();
+    const materialType = (item.material_type || item.materialType || '').toLowerCase();
+    const materialName = (item.material_name || item.materialName || '').toLowerCase();
+    
+    const isConsumable = itemGroup.includes('consumable') || 
+                         materialType.includes('consumable') || 
+                         materialName.includes('consumable');
+
+    const qty = parseFloat(isMaterial ? (item.qty_per_pc ?? item.qtyPerPc ?? item.qty ?? item.quantity ?? 0) : (item.quantity ?? item.qty ?? 0));
+    const rate = parseFloat(item.rate ?? 0);
+    const weightPerUnit = (isMaterial || isConsumable) ? parseFloat(item.weight_per_unit ?? item.weightPerUnit ?? 0) : 0;
+    const scrapPercent = (isMaterial || isConsumable) ? parseFloat(item.scrap_percent ?? item.scrapPercent ?? 0) : 0;
+
+    let baseItemCost = qty * rate;
+    if ((isMaterial || isConsumable) && weightPerUnit > 0) {
+      // Total Cost = Qty * WeightPerUnit * (1 + ScrapPercent) * Rate
+      const sP = scrapPercent > 1 ? scrapPercent / 100 : scrapPercent;
+      baseItemCost = qty * weightPerUnit * (1 + sP) * rate;
+    }
+
+    // Find children
+    const children = allItems.filter(child => String(child.parent_id || child.parentId) === String(item.id));
+    const childrenCost = children.reduce((sum, child) => sum + calculateRecursiveCost(child, allItems), 0);
+
+    const totalBeforeLoss = baseItemCost + childrenCost;
+    const lossPercent = isMaterial ? 0 : parseFloat(item.loss_percent || item.lossPercent || 0);
+
+    // Apply loss to both item cost and its children's costs
+    return (lossPercent > 0 && lossPercent < 100)
+      ? totalBeforeLoss / (1 - (lossPercent / 100))
+      : totalBeforeLoss;
+  }, []);
+
+  const componentsCost = useMemo(() => {
+    return bomData.components
+      .filter(c => !c.parent_id && !c.parentId)
+      .reduce((sum, c) => sum + calculateRecursiveCost(c, [...bomData.components, ...bomData.materials]), 0);
+  }, [bomData.components, bomData.materials, calculateRecursiveCost]);
+
+  const rawMaterialsCost = useMemo(() => {
+    return bomData.materials
+      .filter(m => !m.parent_id && !m.parentId)
+      .reduce((sum, m) => sum + calculateRecursiveCost(m, [...bomData.components, ...bomData.materials]), 0);
+  }, [bomData.components, bomData.materials, calculateRecursiveCost]);
+
+  const scrapLoss = bomData.scrap.reduce((sum, s) => {
+    const input = parseFloat(s.input_qty || s.inputQty || 0);
+    const loss = parseFloat(s.loss_percent || s.lossPercent || 0) / 100;
+    const rate = parseFloat(s.rate || 0);
+    return sum + (input * loss * rate);
+  }, 0) / batchQty;
+
+  const materialCostAfterScrap = (componentsCost + rawMaterialsCost) - scrapLoss;
+
+  const operationsCost = bomData.operations.reduce((sum, o) => {
+    const hourlyRate = parseFloat(o.hourly_rate || o.hourlyRate || 0);
+    const setupTime = parseFloat(o.setup_time_min || o.setupTimeMin || 0);
+    const cycleTime = parseFloat(o.cycle_time_min || o.cycleTimeMin || 0);
+    // Cost per unit: Cycle time + (Setup time / Batch Quantity)
+    const setupPerUnit = batchQty > 0 ? (setupTime / batchQty) : 0;
+    return sum + ((cycleTime + setupPerUnit) / 60 * hourlyRate);
+  }, 0);
+
+  const totalBOMCost = materialCostAfterScrap + operationsCost;
+  const costPerUnit = totalBOMCost;
+  const totalScrapQty = bomData.scrap.reduce((sum, s) => sum + (parseFloat(s.input_qty || s.inputQty || 0) * (parseFloat(s.loss_percent || s.lossPercent || 0) / 100)), 0) / batchQty;
+
   const fetchBOMHistory = useCallback(async (itemCode, drawingNo, currentItemId = null) => {
     const effectiveId = (currentItemId === 'bom-form' || !currentItemId) ? null : currentItemId;
     if (!itemCode && !drawingNo && !effectiveId) return;
@@ -1826,91 +1899,19 @@ const BOMFormPage = () => {
     }
   };
 
-  // Cost Calculations
-  const batchQty = parseFloat(productForm.quantity || 1);
-
-  // Helper for recursive cost calculation
-  const calculateRecursiveCost = useCallback((item, allItems) => {
-    const isMaterial = !!(item.material_name || item.materialName);
-    const itemGroup = (item.item_group || item.itemGroup || '').toLowerCase();
-    const materialType = (item.material_type || item.materialType || '').toLowerCase();
-    const materialName = (item.material_name || item.materialName || '').toLowerCase();
-    
-    const isConsumable = itemGroup.includes('consumable') || 
-                         materialType.includes('consumable') || 
-                         materialName.includes('consumable');
-
-    const qty = parseFloat(isMaterial ? (item.qty_per_pc ?? item.qtyPerPc ?? item.qty ?? item.quantity ?? 0) : (item.quantity ?? item.qty ?? 0));
-    const rate = parseFloat(item.rate ?? 0);
-    const weightPerUnit = (isMaterial || isConsumable) ? parseFloat(item.weight_per_unit ?? item.weightPerUnit ?? 0) : 0;
-    const scrapPercent = (isMaterial || isConsumable) ? parseFloat(item.scrap_percent ?? item.scrapPercent ?? 0) : 0;
-
-    let baseItemCost = qty * rate;
-    if ((isMaterial || isConsumable) && weightPerUnit > 0) {
-      // Total Cost = Qty * WeightPerUnit * (1 + ScrapPercent) * Rate
-      const sP = scrapPercent > 1 ? scrapPercent / 100 : scrapPercent;
-      baseItemCost = qty * weightPerUnit * (1 + sP) * rate;
-    }
-
-    // Find children
-    const children = allItems.filter(child => String(child.parent_id || child.parentId) === String(item.id));
-    const childrenCost = children.reduce((sum, child) => sum + calculateRecursiveCost(child, allItems), 0);
-
-    const totalBeforeLoss = baseItemCost + childrenCost;
-    const lossPercent = isMaterial ? 0 : parseFloat(item.loss_percent || item.lossPercent || 0);
-
-    // Apply loss to both item cost and its children's costs
-    return (lossPercent > 0 && lossPercent < 100)
-      ? totalBeforeLoss / (1 - (lossPercent / 100))
-      : totalBeforeLoss;
-  }, []);
-
-  const componentsCost = useMemo(() => {
-    return bomData.components
-      .filter(c => !c.parent_id && !c.parentId)
-      .reduce((sum, c) => sum + calculateRecursiveCost(c, [...bomData.components, ...bomData.materials]), 0);
-  }, [bomData.components, bomData.materials, calculateRecursiveCost]);
-
-  const rawMaterialsCost = useMemo(() => {
-    return bomData.materials
-      .filter(m => !m.parent_id && !m.parentId)
-      .reduce((sum, m) => sum + calculateRecursiveCost(m, [...bomData.components, ...bomData.materials]), 0);
-  }, [bomData.components, bomData.materials, calculateRecursiveCost]);
-
-  const scrapLoss = bomData.scrap.reduce((sum, s) => {
-    const input = parseFloat(s.input_qty || s.inputQty || 0);
-    const loss = parseFloat(s.loss_percent || s.lossPercent || 0) / 100;
-    const rate = parseFloat(s.rate || 0);
-    return sum + (input * loss * rate);
-  }, 0) / batchQty;
-
-  const materialCostAfterScrap = (componentsCost + rawMaterialsCost) - scrapLoss;
-
-  const operationsCost = bomData.operations.reduce((sum, o) => {
-    const hourlyRate = parseFloat(o.hourly_rate || o.hourlyRate || 0);
-    const setupTime = parseFloat(o.setup_time_min || o.setupTimeMin || 0);
-    const cycleTime = parseFloat(o.cycle_time_min || o.cycleTimeMin || 0);
-    // Cost per unit: Cycle time + (Setup time / Batch Quantity)
-    const setupPerUnit = batchQty > 0 ? (setupTime / batchQty) : 0;
-    return sum + ((cycleTime + setupPerUnit) / 60 * hourlyRate);
-  }, 0);
-
-  const totalBOMCost = materialCostAfterScrap + operationsCost;
-  const costPerUnit = totalBOMCost;
-  const totalScrapQty = bomData.scrap.reduce((sum, s) => sum + (parseFloat(s.input_qty || s.inputQty || 0) * (parseFloat(s.loss_percent || s.lossPercent || 0) / 100)), 0) / batchQty;
-
   // Auto-Update logic for FG items when cost mismatch is detected
   useEffect(() => {
     const group = (productForm.itemGroup || "").toUpperCase();
     const isFG = group.includes("FG") || group.includes("FINISHED") || group.includes("GOOD");
     
-    if (!loading && totalBOMCost > 0 && !hasAutoUpdated.current) {
+    // ONLY auto-update if we have an existing BOM (itemId present)
+    if (itemId && itemId !== 'bom-form' && !loading && totalBOMCost > 0 && !hasAutoUpdated.current) {
       // Robust parsing: remove everything except numbers and decimal point
       const savedCost = parseFloat(String(productForm.bom_cost || 0).replace(/[^0-9.]/g, ''));
       const currentCost = parseFloat(totalBOMCost);
 
       if (isFG && Math.abs(savedCost - currentCost) > 0.01) {
-        console.log(`[AutoUpdate] Syncing cost mismatch. Saved: ${savedCost}, Calculated: ${currentCost}`);
+        console.log(`[AutoUpdate] Syncing cost mismatch for ${itemId}. Saved: ${savedCost}, Calculated: ${currentCost}`);
         hasAutoUpdated.current = true;
         
         const timer = setTimeout(() => {
@@ -1920,7 +1921,7 @@ const BOMFormPage = () => {
         return () => clearTimeout(timer);
       }
     }
-  }, [totalBOMCost, productForm.bom_cost, loading, productForm.itemGroup]);
+  }, [totalBOMCost, productForm.bom_cost, loading, productForm.itemGroup, itemId]);
 
   if (loading && stockItems.length === 0 && bomData.materials.length === 0 && bomData.components.length === 0) return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-2">
