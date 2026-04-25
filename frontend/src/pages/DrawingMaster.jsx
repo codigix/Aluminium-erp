@@ -305,9 +305,9 @@ const DrawingMaster = () => {
         const itemStatus = (row.item_status || '').trim().toUpperCase();
         const drawingStatus = (row.drawing_status || '').trim().toUpperCase();
         
-        if (itemStatus === 'APPROVED') {
+        if (itemStatus === 'APPROVED' || drawingStatus === 'APPROVED') {
           return <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-[10px] font-bold border border-emerald-200 uppercase">Approved</span>;
-        } else if (itemStatus === 'REJECTED') {
+        } else if (itemStatus === 'REJECTED' || drawingStatus === 'REJECTED') {
           return <span className="px-2 py-0.5 bg-rose-100 text-rose-700 rounded text-[10px] font-bold border border-rose-200 uppercase">Rejected</span>;
         } else if (row.sales_order_item_id || drawingStatus === 'SHARED') {
           return <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-[10px] font-bold border border-amber-200 uppercase whitespace-nowrap">⏳ Pending</span>;

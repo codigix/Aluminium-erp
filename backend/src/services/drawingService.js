@@ -12,16 +12,27 @@ const getAllDrawings = async () => {
 const listDrawings = async (search = '', onlyShared = false) => {
   let query = `
     SELECT 
-      d.id,
       d.id as drawing_master_id,
       d.drawing_no,
       d.file_path,
       d.client_name,
+      d.status,
       d.status as drawing_status,
       d.description as drawing_description,
       d.uploaded_by as uploader_name,
       d.created_at as updated_at,
-      soi.id as id,
+      d.qty,
+      d.revision,
+      d.remarks,
+      d.contact_person,
+      d.phone,
+      d.email,
+      d.customer_type,
+      d.gstin,
+      d.city,
+      d.state,
+      d.billing_address,
+      d.shipping_address,
       soi.id as sales_order_item_id,
       soi.status as item_status,
       soi.sales_order_id,
@@ -44,7 +55,8 @@ const listDrawings = async (search = '', onlyShared = false) => {
   const params = [];
 
   if (onlyShared) {
-    query += ` AND d.status = 'SHARED'`;
+    // Show drawings that are either explicitly SHARED or have an associated sales order item (meaning they are in progress)
+    query += ` AND (d.status = 'SHARED' OR soi.id IS NOT NULL OR d.status = 'APPROVED')`;
   }
 
   if (search) {
@@ -55,7 +67,12 @@ const listDrawings = async (search = '', onlyShared = false) => {
 
   query += ` ORDER BY d.created_at DESC`;
   const [rows] = await pool.query(query, params);
-  return rows;
+  
+  // Ensure each row has a top-level id for DataTable compatibility
+  return rows.map(row => ({
+    ...row,
+    id: row.drawing_master_id
+  }));
 };
 
 const getDrawingRevisions = async (drawingNo) => {
@@ -189,6 +206,12 @@ const createCustomerDrawing = async (data) => {
           'INSERT INTO contacts (company_id, name, email, phone, contact_type, status) VALUES (?, ?, ?, ?, "PRIMARY", "ACTIVE")',
           [companyId, contactPerson || 'Primary Contact', emailAddress || null, phoneNumber || null]
         );
+      } else {
+        // Update existing contact if new info is provided
+        await connection.execute(
+          'UPDATE contacts SET name = COALESCE(?, name), email = COALESCE(?, email), phone = COALESCE(?, phone) WHERE id = ?',
+          [contactPerson || null, emailAddress || null, phoneNumber || null, contacts[0].id]
+        );
       }
     }
 
@@ -321,10 +344,37 @@ const shareWithDesign = async (id) => {
 const shareDrawingsBulk = async (ids) => {
   if (!ids || ids.length === 0) return;
   const placeholders = ids.map(() => "?").join(",");
-  await pool.execute(
-    `UPDATE customer_drawings SET status = 'SHARED', shared_with_design = 1, shared_at = CURRENT_TIMESTAMP WHERE id IN (${placeholders})`,
-    ids
-  );
+  
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    
+    // 1. Update customer_drawings status
+    await connection.execute(
+      `UPDATE customer_drawings SET status = 'SHARED', shared_with_design = 1, shared_at = CURRENT_TIMESTAMP WHERE id IN (${placeholders})`,
+      ids
+    );
+    
+    // 2. Update linked sales_order_items status to 'SHARED' (or DESIGN_IN_REVIEW)
+    // First find the drawing_nos for these IDs
+    const [drawings] = await connection.query(`SELECT drawing_no FROM customer_drawings WHERE id IN (${placeholders})`, ids);
+    const drawingNos = drawings.map(d => d.drawing_no);
+    
+    if (drawingNos.length > 0) {
+      const dwgPlaceholders = drawingNos.map(() => "?").join(",");
+      await connection.execute(
+        `UPDATE sales_order_items SET status = 'SHARED' WHERE drawing_no IN (${dwgPlaceholders}) AND (status IS NULL OR status = 'PENDING')`,
+        drawingNos
+      );
+    }
+    
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 };
 
 const getApprovedDrawings = async () => {

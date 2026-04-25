@@ -115,10 +115,14 @@ const CustomerDrawing = () => {
               if (firstItem) {
                 // Find corresponding drawing from drawings database if possible, 
                 // or use the item data directly
-                const dbDrawing = drawings.find(d => d.id === firstItem.drawing_id || d.drawing_no === firstItem.drawing_no);
+                const dbDrawing = drawings.find(d => 
+                  (d.drawing_master_id && String(d.drawing_master_id) === String(firstItem.drawing_id)) || 
+                  (d.id && String(d.id) === String(firstItem.drawing_id)) ||
+                  d.drawing_no === firstItem.drawing_no
+                );
                 
                 const drawingToEdit = {
-                  id: dbDrawing?.id || firstItem.drawing_id || firstItem.id,
+                  id: dbDrawing?.drawing_master_id || dbDrawing?.id || firstItem.drawing_id || firstItem.id,
                   drawing_no: dbDrawing?.drawing_no || firstItem.drawing_no,
                   revision: dbDrawing?.revision || firstItem.revision || '0',
                   description: dbDrawing?.description || firstItem.description || '',
@@ -939,11 +943,11 @@ const CustomerDrawing = () => {
 
         // 1. Share drawings if any unshared exist
         if (unsharedDrawings.length > 0) {
-          await shareDrawingsBulkAPI(unsharedDrawings.map(d => d.id));
+          await shareDrawingsBulkAPI(unsharedDrawings.map(d => d.drawing_master_id || d.id));
         }
 
-        // 2. Update Sales Order status if it's still 'CREATED'
-        if (requirement && requirement.id && isCreatedStatus) {
+        // 2. Update Sales Order status
+        if (requirement && requirement.id) {
           const soResponse = await fetch(`${API_BASE}/sales-orders/${requirement.id}/send-to-design`, {
             method: 'POST',
             headers: {
@@ -1321,7 +1325,7 @@ const CustomerDrawing = () => {
                   <div className="flex items-center justify-center border-2 border-dashed border-slate-300 rounded p-2 hover:border-indigo-400 transition-colors bg-white cursor-pointer relative">
                     <input
                       type="file"
-                      accept=".pdf"
+                      accept=".pdf,.stp,.step,.igs,.iges,.dwg,.dxf,.png,.jpg,.jpeg"
                       className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                       onChange={(e) => setEditData({ ...editData, drawing_pdf: e.target.files[0] })}
                     />
@@ -1922,7 +1926,7 @@ const CustomerDrawing = () => {
                             <input
                               type="file"
                               name={`manualDrawings[${index}].file`}
-                              accept=".pdf,.dwg,.step,.stp"
+                              accept=".pdf,.dwg,.dxf,.step,.stp,.igs,.iges,.png,.jpg,.jpeg"
                               className="hidden"
                               onChange={(e) => handleManualFileChange(e, drawing.id)}
                               onBlur={formik.handleBlur}
