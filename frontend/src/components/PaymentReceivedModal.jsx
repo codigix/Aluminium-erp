@@ -425,7 +425,7 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
             <div className="flex items-center justify-between">
               <h3 className=" text-slate-900 text-sm  tracking-wide">Invoice Summary</h3>
             </div>
-            <div className="grid grid-cols-2 gap-5 text-xs">
+            <div className="grid grid-cols-2 gap-2 text-xs">
               <div>
                 <span className="text-slate-500 font-medium">Invoice No</span>
                 <p className=" text-slate-900 mt-1">{invoice.po_number || invoice.so_number || 'N/A'}</p>

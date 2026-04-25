@@ -355,7 +355,7 @@ const generatePaymentVoucherPDF = async (paymentId) => {
     <html>
     <head>
       <style>
-        body { font-family: 'Helvetica', 'Arial', sans-serif; color: #333; line-height: 1.6; margin: 40px; }
+        body { font-family: 'roboto, sans-serif; color: #333; line-height: 1.6; margin: 40px; }
         .header { display: flex; justify-content: space-between; border-bottom: 2px solid #10b981; padding-bottom: 20px; margin-bottom: 30px; }
         .company-info h1 { color: #059669; margin: 0; font-size: 24px; }
         .voucher-title { text-align: right; }

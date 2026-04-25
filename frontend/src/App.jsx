@@ -1839,7 +1839,7 @@ function App() {
             </div>
             <div className="flex-1 overflow-y-auto px-6 py-6">
               <form className="space-y-3" onSubmit={handleCompanySubmit}>
-                <div className="grid md:grid-cols-2 gap-5">
+                <div className="grid md:grid-cols-2 gap-2">
                   <FormControl label="Company Name">
                     <input className={fieldInputClass} value={companyForm.companyName} onChange={e => setCompanyForm(prev => ({ ...prev, companyName: e.target.value }))} required disabled={isReadOnly} />
                   </FormControl>
@@ -1868,7 +1868,7 @@ function App() {
                   </FormControl>
                 </div>
 
-                <div className="grid md:grid-cols-3 gap-5">
+                <div className="grid md:grid-cols-3 gap-2">
                   <FormControl label="Payment Terms">
                     <input className={fieldInputClass} value={companyForm.paymentTerms} onChange={e => setCompanyForm(prev => ({ ...prev, paymentTerms: e.target.value }))} disabled={isReadOnly} />
                   </FormControl>
@@ -1886,7 +1886,7 @@ function App() {
                   </FormControl>
                 </div>
 
-                <div className="grid md:grid-cols-2 gap-5">
+                <div className="grid md:grid-cols-2 gap-2">
                   <div className="space-y-3">
                     <p className="text-[0.65rem]  tracking-[0.35em] text-slate-500 ">Billing Address</p>
                     {['line1', 'line2', 'city', 'state', 'pincode', 'country'].map(field => (

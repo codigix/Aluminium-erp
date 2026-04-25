@@ -736,7 +736,7 @@ const WorkOrderForm = ({ workOrderId: propWorkOrderId, salesOrderId: propSalesOr
                         <div className="relative">
                           <input 
                             type="date"
-                            className={`w-full p-2.5 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none appearance-none transition-all ${isLocked ? 'bg-slate-50 cursor-not-allowed text-slate-500' : ''}`}
+                            className={`w-full p-2 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none appearance-none transition-all ${isLocked ? 'bg-slate-50 cursor-not-allowed text-slate-500' : ''}`}
                             value={formData.startDate}
                             disabled={isLocked}
                             onChange={(e) => setFormData(prev => ({ ...prev, startDate: e.target.value }))}
@@ -753,7 +753,7 @@ const WorkOrderForm = ({ workOrderId: propWorkOrderId, salesOrderId: propSalesOr
                         <div className="relative">
                           <input 
                             type="date"
-                            className={`w-full p-2.5 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none appearance-none transition-all ${isLocked ? 'bg-slate-50 cursor-not-allowed text-slate-500' : ''}`}
+                            className={`w-full p-2 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none appearance-none transition-all ${isLocked ? 'bg-slate-50 cursor-not-allowed text-slate-500' : ''}`}
                             value={formData.endDate}
                             disabled={isLocked}
                             onChange={(e) => setFormData(prev => ({ ...prev, endDate: e.target.value }))}
@@ -1092,7 +1092,7 @@ const WorkOrderForm = ({ workOrderId: propWorkOrderId, salesOrderId: propSalesOr
                   </div>
                   <span className="text-xs   ">Operational Panel</span>
                 </div>
-                <ArrowRight className="w-4 h-4 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all" />
+                <ArrowRight className="w-4 h-4  -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all" />
               </button>
 
               <button className="w-full p-2 bg-white border border-slate-200 text-slate-600 rounded  flex items-center justify-between group hover:bg-slate-50 transition-colors">

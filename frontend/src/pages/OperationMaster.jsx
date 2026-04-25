@@ -456,7 +456,7 @@ const OperationMaster = ({ showForm: propShowForm, setShowForm: propSetShowForm 
             <div className="space-y-1.5">
               <label className="text-xs  text-slate-500">Hourly Rate (Override)</label>
               <div className="relative">
-                <span className="absolute left-4 top-2.5 text-slate-400 text-sm">₹</span>
+                <span className="absolute left-4 top-2 text-slate-400 text-sm">₹</span>
                 <input 
                   type="number" 
                   name="hourly_rate"
@@ -485,7 +485,7 @@ const OperationMaster = ({ showForm: propShowForm, setShowForm: propSetShowForm 
             <button 
               type="button" 
               onClick={() => { setShowForm(false); resetForm(); }}
-              className="p-2.5 border border-slate-200 text-slate-600 rounded  text-xs  hover:bg-slate-50 transition-all"
+              className="p-2 border border-slate-200 text-slate-600 rounded  text-xs  hover:bg-slate-50 transition-all"
             >
               Cancel
             </button>

@@ -421,7 +421,7 @@ const StockLedger = () => {
               value={formData.itemCode}
               onChange={(e) => setFormData({...formData, itemCode: e.target.value})}
               placeholder="e.g. RM-AL-001"
-              className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
+              className="w-full p-2 bg-white border border-slate-200 rounded text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
               required
             />
           </FormControl>
@@ -431,7 +431,7 @@ const StockLedger = () => {
               <select
                 value={formData.transactionType}
                 onChange={(e) => setFormData({...formData, transactionType: e.target.value})}
-                className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all appearance-none cursor-pointer"
+                className="w-full p-2 bg-white border border-slate-200 rounded text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all appearance-none cursor-pointer"
               >
                 <option value="IN">IN (Purchase/Return)</option>
                 <option value="OUT">OUT (Issue/Sale)</option>
@@ -446,7 +446,7 @@ const StockLedger = () => {
                 value={formData.quantity}
                 onChange={(e) => setFormData({...formData, quantity: e.target.value})}
                 placeholder="0.000"
-                className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
+                className="w-full p-2 bg-white border border-slate-200 rounded text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
                 required
               />
             </FormControl>
@@ -459,7 +459,7 @@ const StockLedger = () => {
                 value={formData.refDocType}
                 onChange={(e) => setFormData({...formData, refDocType: e.target.value})}
                 placeholder="e.g. GRN, PO, SO"
-                className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
+                className="w-full p-2 bg-white border border-slate-200 rounded text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
               />
             </FormControl>
             <FormControl label="Ref Doc Number">
@@ -468,7 +468,7 @@ const StockLedger = () => {
                 value={formData.refDocNumber}
                 onChange={(e) => setFormData({...formData, refDocNumber: e.target.value})}
                 placeholder="e.g. GRN-0022"
-                className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
+                className="w-full p-2 bg-white border border-slate-200 rounded text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
               />
             </FormControl>
           </div>
@@ -478,7 +478,7 @@ const StockLedger = () => {
               value={formData.remarks}
               onChange={(e) => setFormData({...formData, remarks: e.target.value})}
               placeholder="Add any additional notes..."
-              className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
+              className="w-full p-2 bg-white border border-slate-200 rounded text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
               rows="3"
             />
           </FormControl>
@@ -487,7 +487,7 @@ const StockLedger = () => {
             <button
               type="button"
               onClick={() => setShowModal(false)}
-              className="p-2.5 bg-white border border-slate-200 text-slate-600 rounded text-xs  hover:bg-slate-50 transition-all active:scale-95"
+              className="p-2 bg-white border border-slate-200 text-slate-600 rounded text-xs  hover:bg-slate-50 transition-all active:scale-95"
             >
               Cancel
             </button>

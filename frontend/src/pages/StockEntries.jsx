@@ -491,7 +491,7 @@ const StockEntries = () => {
                     {entry.item_count}
                   </td>
                   <td className="p-2  text-right">
-                    <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex items-center justify-end gap-2  group-hover:opacity-100 transition-opacity">
                       {entry.status === 'draft' && (
                         <>
                           <button 
@@ -757,14 +757,14 @@ const StockEntries = () => {
             <div className="p-2  border-t border-slate-100 flex items-center justify-end gap-2 bg-slate-50/50">
               <button 
                 onClick={() => navigate('/stock-entries')}
-                className="p-2.5 rounded  border border-slate-200 text-slate-600  text-sm hover:bg-white transition-all"
+                className="p-2 rounded  border border-slate-200 text-slate-600  text-sm hover:bg-white transition-all"
               >
                 Cancel
               </button>
               <div className="flex items-center gap-2 ">
                 <button 
                   onClick={(e) => handleSubmit(e, 'draft')}
-                  className="p-2.5 rounded  border border-indigo-200 text-indigo-600  text-sm hover:bg-indigo-50 transition-all"
+                  className="p-2 rounded  border border-indigo-200 text-indigo-600  text-sm hover:bg-indigo-50 transition-all"
                 >
                   Save as Draft
                 </button>

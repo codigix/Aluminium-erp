@@ -148,7 +148,7 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
         <div className="flex items-center gap-2">
           <button
             onClick={onBack}
-            className="p-2.5 flex items-center justify-center rounded-md bg-white text-slate-600 hover:text-blue-600 hover:bg-blue-50 transition-all border border-slate-200 active:scale-95 shadow-sm"
+            className="p-2 flex items-center justify-center rounded-md bg-white text-slate-600 hover:text-blue-600 hover:bg-blue-50 transition-all border border-slate-200 active:scale-95 shadow-sm"
             title="Back to List"
           >
             <ArrowLeft className="w-5 h-5" />
@@ -179,16 +179,16 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
           {['SUBMITTED', 'Sent ', 'RECEIVED', 'ACKNOWLEDGED'].includes(currentStatus) && (
             <button 
               onClick={handleReceiveMaterial}
-              className="flex items-center gap-2  p-2.5 bg-blue-600 text-white rounded  text-xs  shadow-lg shadow-blue-100 hover:bg-blue-700 transition-all active:scale-95  "
+              className="flex items-center gap-2  p-2 bg-blue-600 text-white rounded  text-xs  shadow-lg shadow-blue-100 hover:bg-blue-700 transition-all active:scale-95  "
             >
               <Package className="w-4 h-4" />
               Receive Material
             </button>
           )}
-          <button className="p-2.5 text-slate-400 hover:text-blue-600 bg-white border border-slate-200 rounded  transition-all  active:scale-95">
+          <button className="p-2 text-slate-400 hover:text-blue-600 bg-white border border-slate-200 rounded  transition-all  active:scale-95">
             <Printer className="w-4 h-4" />
           </button>
-          <button className="p-2.5 text-slate-400 hover:text-blue-600 bg-white border border-slate-200 rounded  transition-all  active:scale-95">
+          <button className="p-2 text-slate-400 hover:text-blue-600 bg-white border border-slate-200 rounded  transition-all  active:scale-95">
             <Download className="w-4 h-4" />
           </button>
         </div>

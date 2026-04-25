@@ -1252,7 +1252,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
                 <button
                   type="button"
                   onClick={() => navigate(activeTab === 'incoming' ? '/incoming-qc' : `/incoming-qc/${activeTab}`)}
-                  className="p-2.5 border border-slate-200 text-slate-600 rounded  text-sm  hover:bg-slate-50 transition-all "
+                  className="p-2 border border-slate-200 text-slate-600 rounded  text-sm  hover:bg-slate-50 transition-all "
                 >
                   Cancel
                 </button>

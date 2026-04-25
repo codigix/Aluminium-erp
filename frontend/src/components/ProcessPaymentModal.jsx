@@ -242,7 +242,7 @@ const ProcessPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
             <span className="text-xs font-semibold text-blue-600 bg-blue-100 px-2.5 py-1 rounded-md">READ ONLY</span>
           </div>
           <div className="border-t border-blue-100 pt-3"></div>
-          <div className="grid grid-cols-2 gap-5 text-xs">
+          <div className="grid grid-cols-2 gap-2 text-xs">
             <div>
               <span className="text-slate-500 text-xs font-medium">Invoice No</span>
               <p className=" text-slate-900 mt-2 text-sm">{invoice.po_number || 'N/A'}</p>
@@ -298,7 +298,7 @@ const ProcessPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
               type="date"
               value={formData.paymentDate}
               onChange={(e) => handleInputChange('paymentDate', e.target.value)}
-              className={`w-full p-2.5 border rounded  text-sm font-semibold focus:outline-none focus:ring-2 transition-all ${errors.paymentDate ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/30 focus:border-blue-500'}`}
+              className={`w-full p-2 border rounded  text-sm font-semibold focus:outline-none focus:ring-2 transition-all ${errors.paymentDate ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/30 focus:border-blue-500'}`}
             />
             {errors.paymentDate && <span className="text-xs text-rose-600 mt-1 block">{errors.paymentDate}</span>}
           </FormControl>
@@ -308,7 +308,7 @@ const ProcessPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
             <select
               value={formData.paymentMode}
               onChange={(e) => handleInputChange('paymentMode', e.target.value)}
-              className={`w-full p-2.5 border rounded  text-sm font-semibold focus:outline-none focus:ring-2 transition-all appearance-none bg-white bg-no-repeat bg-right pr-10 cursor-pointer ${errors.paymentMode ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/30 focus:border-blue-500'}`}
+              className={`w-full p-2 border rounded  text-sm font-semibold focus:outline-none focus:ring-2 transition-all appearance-none bg-white bg-no-repeat bg-right pr-10 cursor-pointer ${errors.paymentMode ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/30 focus:border-blue-500'}`}
               style={{backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23374151' d='M10.293 3.293L6 7.586 1.707 3.293A1 1 0 00.293 4.707l5 5a1 1 0 001.414 0l5-5a1 1 0 10-1.414-1.414z'/%3E%3C/svg%3E")`, backgroundPosition: 'right 0.75rem center'}}
             >
               <option value="">Select Payment Mode</option>
@@ -345,7 +345,7 @@ const ProcessPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                 <select
                   value={formData.upiApp}
                   onChange={(e) => handleInputChange('upiApp', e.target.value)}
-                  className={`w-full p-2.5 border rounded  text-sm font-semibold focus:outline-none focus:ring-2 transition-all appearance-none bg-white bg-no-repeat bg-right pr-10 cursor-pointer ${errors.upiApp ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/30 focus:border-blue-500'}`}
+                  className={`w-full p-2 border rounded  text-sm font-semibold focus:outline-none focus:ring-2 transition-all appearance-none bg-white bg-no-repeat bg-right pr-10 cursor-pointer ${errors.upiApp ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/30 focus:border-blue-500'}`}
                   style={{backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23374151' d='M10.293 3.293L6 7.586 1.707 3.293A1 1 0 00.293 4.707l5 5a1 1 0 001.414 0l5-5a1 1 0 10-1.414-1.414z'/%3E%3C/svg%3E")`, backgroundPosition: 'right 0.75rem center'}}
                 >
                   <option value="">Select UPI App</option>
@@ -360,7 +360,7 @@ const ProcessPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                   type="text"
                   value={formData.upiTransactionId}
                   onChange={(e) => handleInputChange('upiTransactionId', e.target.value)}
-                  className={`w-full p-2.5 border rounded  text-sm font-semibold focus:outline-none focus:ring-2 transition-all ${errors.upiTransactionId ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/30 focus:border-blue-500'}`}
+                  className={`w-full p-2 border rounded  text-sm font-semibold focus:outline-none focus:ring-2 transition-all ${errors.upiTransactionId ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/30 focus:border-blue-500'}`}
                   placeholder="Enter UPI transaction ID"
                 />
                 {errors.upiTransactionId && <span className="text-xs text-rose-600 mt-1 block">{errors.upiTransactionId}</span>}
@@ -376,7 +376,7 @@ const ProcessPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                   type="text"
                   value={formData.chequeNumber}
                   onChange={(e) => handleInputChange('chequeNumber', e.target.value)}
-                  className={`w-full p-2.5 border rounded  text-sm font-semibold focus:outline-none focus:ring-2 transition-all ${errors.chequeNumber ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/30 focus:border-blue-500'}`}
+                  className={`w-full p-2 border rounded  text-sm font-semibold focus:outline-none focus:ring-2 transition-all ${errors.chequeNumber ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/30 focus:border-blue-500'}`}
                   placeholder="Enter cheque number"
                 />
                 {errors.chequeNumber && <span className="text-xs text-rose-600 mt-1 block">{errors.chequeNumber}</span>}
@@ -386,7 +386,7 @@ const ProcessPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                   type="text"
                   value={formData.bankName}
                   onChange={(e) => handleInputChange('bankName', e.target.value)}
-                  className={`w-full p-2.5 border rounded  text-sm font-semibold focus:outline-none focus:ring-2 transition-all ${errors.bankName ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/30 focus:border-blue-500'}`}
+                  className={`w-full p-2 border rounded  text-sm font-semibold focus:outline-none focus:ring-2 transition-all ${errors.bankName ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/30 focus:border-blue-500'}`}
                   placeholder="Enter bank name"
                 />
                 {errors.bankName && <span className="text-xs text-rose-600 mt-1 block">{errors.bankName}</span>}
@@ -396,7 +396,7 @@ const ProcessPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                   type="date"
                   value={formData.chequeDate}
                   onChange={(e) => handleInputChange('chequeDate', e.target.value)}
-                  className={`w-full p-2.5 border rounded  text-sm font-semibold focus:outline-none focus:ring-2 transition-all ${errors.chequeDate ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/30 focus:border-blue-500'}`}
+                  className={`w-full p-2 border rounded  text-sm font-semibold focus:outline-none focus:ring-2 transition-all ${errors.chequeDate ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/30 focus:border-blue-500'}`}
                 />
                 {errors.chequeDate && <span className="text-xs text-rose-600 mt-1 block">{errors.chequeDate}</span>}
               </FormControl>
@@ -410,7 +410,7 @@ const ProcessPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                 <select
                   value={formData.cardType}
                   onChange={(e) => handleInputChange('cardType', e.target.value)}
-                  className={`w-full p-2.5 border rounded  text-sm font-semibold focus:outline-none focus:ring-2 transition-all appearance-none bg-white bg-no-repeat bg-right pr-10 cursor-pointer ${errors.cardType ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/30 focus:border-blue-500'}`}
+                  className={`w-full p-2 border rounded  text-sm font-semibold focus:outline-none focus:ring-2 transition-all appearance-none bg-white bg-no-repeat bg-right pr-10 cursor-pointer ${errors.cardType ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/30 focus:border-blue-500'}`}
                   style={{backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23374151' d='M10.293 3.293L6 7.586 1.707 3.293A1 1 0 00.293 4.707l5 5a1 1 0 001.414 0l5-5a1 1 0 10-1.414-1.414z'/%3E%3C/svg%3E")`, backgroundPosition: 'right 0.75rem center'}}
                 >
                   <option value="">Select Card Type</option>
@@ -426,7 +426,7 @@ const ProcessPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                   maxLength="4"
                   value={formData.last4Digits}
                   onChange={(e) => handleInputChange('last4Digits', e.target.value)}
-                  className={`w-full p-2.5 border rounded  text-sm font-semibold focus:outline-none focus:ring-2 transition-all  ${errors.last4Digits ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/30 focus:border-blue-500'}`}
+                  className={`w-full p-2 border rounded  text-sm font-semibold focus:outline-none focus:ring-2 transition-all  ${errors.last4Digits ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/30 focus:border-blue-500'}`}
                   placeholder="****"
                 />
                 {errors.last4Digits && <span className="text-xs text-rose-600 mt-1 block">{errors.last4Digits}</span>}
@@ -436,7 +436,7 @@ const ProcessPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                   type="text"
                   value={formData.authorizationCode}
                   onChange={(e) => handleInputChange('authorizationCode', e.target.value)}
-                  className={`w-full p-2.5 border rounded  text-sm font-semibold focus:outline-none focus:ring-2 transition-all ${errors.authorizationCode ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/30 focus:border-blue-500'}`}
+                  className={`w-full p-2 border rounded  text-sm font-semibold focus:outline-none focus:ring-2 transition-all ${errors.authorizationCode ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/30 focus:border-blue-500'}`}
                   placeholder="Enter authorization code"
                 />
                 {errors.authorizationCode && <span className="text-xs text-rose-600 mt-1 block">{errors.authorizationCode}</span>}
@@ -451,7 +451,7 @@ const ProcessPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                 type="text"
                 value={formData.transactionRefNo}
                 onChange={(e) => handleInputChange('transactionRefNo', e.target.value)}
-                className={`w-full p-2.5 border rounded  text-sm font-semibold focus:outline-none focus:ring-2 transition-all ${errors.transactionRefNo ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/30 focus:border-blue-500'}`}
+                className={`w-full p-2 border rounded  text-sm font-semibold focus:outline-none focus:ring-2 transition-all ${errors.transactionRefNo ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/30 focus:border-blue-500'}`}
                 placeholder="Enter transaction reference number"
               />
               {errors.transactionRefNo && <span className="text-xs text-rose-600 mt-1 block">{errors.transactionRefNo}</span>}
@@ -463,7 +463,7 @@ const ProcessPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
             <textarea
               value={formData.remarks}
               onChange={(e) => handleInputChange('remarks', e.target.value)}
-              className="w-full p-2.5 border border-slate-300 rounded  text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 resize-none transition-all"
+              className="w-full p-2 border border-slate-300 rounded  text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 resize-none transition-all"
               rows="3"
               placeholder="Additional payment remarks..."
             />

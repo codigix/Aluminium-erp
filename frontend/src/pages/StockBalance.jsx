@@ -423,7 +423,7 @@ const StockBalance = () => {
                 required
                 value={newItem.itemName}
                 onChange={(e) => setNewItem({...newItem, itemName: e.target.value})}
-                className="w-full p-2.5 bg-white border border-slate-200 rounded  text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
+                className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
                 placeholder="e.g. MS Plate 10mm"
               />
             </FormControl>
@@ -432,7 +432,7 @@ const StockBalance = () => {
               <select
                 value={newItem.itemGroup}
                 onChange={(e) => setNewItem({...newItem, itemGroup: e.target.value})}
-                className="w-full p-2.5 bg-white border border-slate-200 rounded  text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all appearance-none cursor-pointer"
+                className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all appearance-none cursor-pointer"
               >
                 <option value="Raw Material">Raw Material</option>
                 <option value="Consumable">Consumable</option>
@@ -447,7 +447,7 @@ const StockBalance = () => {
                 type="text"
                 value={newItem.itemCode}
                 onChange={(e) => setNewItem({...newItem, itemCode: e.target.value})}
-                className="w-full p-2.5 bg-white border border-slate-200 rounded  text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
+                className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
                 placeholder="Leave 'Auto-generated' for default"
               />
             </FormControl>
@@ -457,7 +457,7 @@ const StockBalance = () => {
                 type="text"
                 value={newItem.defaultUom}
                 onChange={(e) => setNewItem({...newItem, defaultUom: e.target.value})}
-                className="w-full p-2.5 bg-white border border-slate-200 rounded  text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
+                className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
                 placeholder="Nos, Kg, Ltr, etc."
               />
             </FormControl>
@@ -468,7 +468,7 @@ const StockBalance = () => {
                 step="0.01"
                 value={newItem.valuationRate}
                 onChange={(e) => setNewItem({...newItem, valuationRate: parseFloat(e.target.value) || 0})}
-                className="w-full p-2.5 bg-white border border-slate-200 rounded  text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
+                className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
               />
             </FormControl>
 
@@ -477,7 +477,7 @@ const StockBalance = () => {
                 type="text"
                 value={newItem.drawingNo}
                 onChange={(e) => setNewItem({...newItem, drawingNo: e.target.value})}
-                className="w-full p-2.5 bg-white border border-slate-200 rounded  text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
+                className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
               />
             </FormControl>
           </div>
@@ -518,7 +518,7 @@ const StockBalance = () => {
                   required
                   value={editingItem.material_name || ''}
                   onChange={(e) => setEditingItem({...editingItem, material_name: e.target.value})}
-                  className="w-full p-2.5 bg-white border border-slate-200 rounded  text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
+                  className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
                 />
               </FormControl>
               
@@ -526,7 +526,7 @@ const StockBalance = () => {
                 <select
                   value={editingItem.material_type || ''}
                   onChange={(e) => setEditingItem({...editingItem, material_type: e.target.value})}
-                  className="w-full p-2.5 bg-white border border-slate-200 rounded  text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all appearance-none cursor-pointer"
+                  className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all appearance-none cursor-pointer"
                 >
                   <option value="Raw Material">Raw Material</option>
                   <option value="Consumable">Consumable</option>
@@ -541,7 +541,7 @@ const StockBalance = () => {
                   type="text"
                   readOnly
                   value={editingItem.item_code || ''}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded  text-xs  text-slate-500 outline-none cursor-not-allowed"
+                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded  text-xs  text-slate-500 outline-none cursor-not-allowed"
                 />
               </FormControl>
 
@@ -550,7 +550,7 @@ const StockBalance = () => {
                   type="text"
                   value={editingItem.unit || ''}
                   onChange={(e) => setEditingItem({...editingItem, unit: e.target.value})}
-                  className="w-full p-2.5 bg-white border border-slate-200 rounded  text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
+                  className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
                 />
               </FormControl>
 
@@ -560,7 +560,7 @@ const StockBalance = () => {
                   step="0.01"
                   value={editingItem.valuation_rate || 0}
                   onChange={(e) => setEditingItem({...editingItem, valuation_rate: parseFloat(e.target.value) || 0})}
-                  className="w-full p-2.5 bg-white border border-slate-200 rounded  text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
+                  className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
                 />
               </FormControl>
 
@@ -569,7 +569,7 @@ const StockBalance = () => {
                   type="text"
                   value={editingItem.drawing_no || ''}
                   onChange={(e) => setEditingItem({...editingItem, drawing_no: e.target.value})}
-                  className="w-full p-2.5 bg-white border border-slate-200 rounded  text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
+                  className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
                 />
               </FormControl>
             </div>

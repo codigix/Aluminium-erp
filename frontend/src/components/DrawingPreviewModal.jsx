@@ -132,7 +132,7 @@ const DrawingPreviewModal = ({ isOpen, onClose, drawing }) => {
                 className="w-full h-full border-0 bg-white"
                 loading="lazy"
               />
-              <div className="absolute inset-0 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-center pb-2">
+              <div className="absolute inset-0 pointer-events-none  group-hover:opacity-100 transition-opacity flex items-end justify-center pb-2">
                  <div className="bg-white/90 backdrop-blur p-1.5 rounded  shadow-lg border border-slate-200 pointer-events-auto">
                     <p className="text-xs  text-slate-500">PDF issue? <a href={previewFile.url} target="_blank" rel="noreferrer" className="text-indigo-600 underline">Open directly</a></p>
                  </div>
@@ -158,7 +158,7 @@ const DrawingPreviewModal = ({ isOpen, onClose, drawing }) => {
             </div>
           )}
 
-          <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+          <div className="absolute top-2 right-2 flex gap-2  group-hover:opacity-100 transition-opacity duration-300">
              <button
                 onClick={onClose}
                 className="p-1.5 bg-white/80 backdrop-blur-md text-slate-600 rounded  hover:bg-white  transition-all"

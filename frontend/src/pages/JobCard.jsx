@@ -1852,7 +1852,7 @@ const JobCard = () => {
                   <div className="flex items-center gap-2">
                     <button
                       onClick={handleStartMachine}
-                      className={`p-2.5 rounded transition-all text-xs flex items-center gap-2 h-[38px] ${machineStatus === 'RUNNING' ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-600 hover:bg-rose-50 hover:text-rose-600'
+                      className={`p-2 rounded transition-all text-xs flex items-center gap-2 h-[38px] ${machineStatus === 'RUNNING' ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-600 hover:bg-rose-50 hover:text-rose-600'
                         }`}
                       title="Start Machine"
                     >
@@ -1861,7 +1861,7 @@ const JobCard = () => {
                     </button>
                     <button
                       onClick={() => setMachineStatus("STOPPED")}
-                      className={`p-2.5 rounded transition-all text-xs flex items-center gap-2 h-[38px] ${machineStatus === 'STOPPED' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600 hover:bg-amber-50 hover:text-amber-600'
+                      className={`p-2 rounded transition-all text-xs flex items-center gap-2 h-[38px] ${machineStatus === 'STOPPED' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600 hover:bg-amber-50 hover:text-amber-600'
                         }`}
                       title="Stop Machine"
                     >
@@ -1870,7 +1870,7 @@ const JobCard = () => {
                     </button>
                     <button
                       onClick={() => setMachineStatus("AVAILABLE")}
-                      className={`p-2.5 rounded transition-all text-xs flex items-center gap-2 h-[38px] ${machineStatus === 'AVAILABLE' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600 hover:bg-emerald-50 hover:text-emerald-600'
+                      className={`p-2 rounded transition-all text-xs flex items-center gap-2 h-[38px] ${machineStatus === 'AVAILABLE' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600 hover:bg-emerald-50 hover:text-emerald-600'
                         }`}
                       title="Complete Production"
                     >
@@ -4315,7 +4315,7 @@ const JobCard = () => {
                       <select
                         value={formData.vendorId}
                         onChange={(e) => setFormData(prev => ({ ...prev, vendorId: e.target.value }))}
-                        className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none appearance-none"
+                        className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none appearance-none"
                       >
                         <option value="">Select Vendor</option>
                         {vendors.map(v => (
@@ -4331,7 +4331,7 @@ const JobCard = () => {
                     <select
                       value={formData.assignedTo}
                       onChange={(e) => setFormData(prev => ({ ...prev, assignedTo: e.target.value }))}
-                      className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none appearance-none"
+                      className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none appearance-none"
                     >
                       <option value="">Select Operator</option>
                       {users.map(user => (
@@ -4349,7 +4349,7 @@ const JobCard = () => {
                         type="number"
                         value={formData.vendorRate}
                         onChange={(e) => setFormData(prev => ({ ...prev, vendorRate: e.target.value }))}
-                        className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                        className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
                       />
                     </FormControl>
                   </div>
@@ -4367,7 +4367,7 @@ const JobCard = () => {
                   <select
                     value={formData.status}
                     onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value }))}
-                    className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none appearance-none"
+                    className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none appearance-none"
                   >
                     <option value="PENDING">PENDING</option>
                     <option value="IN_PROGRESS">IN PROGRESS</option>
@@ -4382,7 +4382,7 @@ const JobCard = () => {
                       type="number"
                       value={formData.plannedQty}
                       onChange={(e) => setFormData(prev => ({ ...prev, plannedQty: e.target.value }))}
-                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded text-xs outline-none"
+                      className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs outline-none"
                     />
                   </FormControl>
                   <FormControl label="Produced Qty">
@@ -4390,7 +4390,7 @@ const JobCard = () => {
                       type="number"
                       value={formData.producedQty}
                       onChange={(e) => setFormData(prev => ({ ...prev, producedQty: e.target.value }))}
-                      className="w-full p-2.5 bg-white border border-indigo-200 ring-1 ring-indigo-50 rounded text-xs text-indigo-700 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="w-full p-2 bg-white border border-indigo-200 ring-1 ring-indigo-50 rounded text-xs text-indigo-700 font-medium outline-none focus:ring-2 focus:ring-indigo-500"
                     />
                   </FormControl>
                   <FormControl label="Accepted Qty">
@@ -4398,7 +4398,7 @@ const JobCard = () => {
                       type="number"
                       value={formData.acceptedQty}
                       onChange={(e) => setFormData(prev => ({ ...prev, acceptedQty: e.target.value }))}
-                      className="w-full p-2.5 bg-white border border-emerald-200 ring-1 ring-emerald-50 rounded text-xs text-emerald-700 font-medium outline-none focus:ring-2 focus:ring-emerald-500"
+                      className="w-full p-2 bg-white border border-emerald-200 ring-1 ring-emerald-50 rounded text-xs text-emerald-700 font-medium outline-none focus:ring-2 focus:ring-emerald-500"
                     />
                   </FormControl>
                 </div>
@@ -4465,7 +4465,7 @@ const JobCard = () => {
                         step="0.01"
                         value={formData.stdTime}
                         onChange={(e) => setFormData(prev => ({ ...prev, stdTime: e.target.value, timeUom: 'Min' }))}
-                        className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                        className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
                       />
                     </FormControl>
                   </div>
@@ -4517,7 +4517,7 @@ const JobCard = () => {
                 <textarea
                   value={formData.remarks}
                   onChange={(e) => setFormData(prev => ({ ...prev, remarks: e.target.value }))}
-                  className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none h-24"
+                  className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none h-24"
                   placeholder="Enter specific instructions for the operator..."
                 />
               </FormControl>

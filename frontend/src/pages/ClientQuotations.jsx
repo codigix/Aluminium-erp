@@ -236,15 +236,18 @@ const ClientQuotations = () => {
           const t = (item.item_type || '').trim().toUpperCase();
           const p = (item.product_type || '').trim().toUpperCase();
           
-          // INCLUDE FG, Sub-Assemblies (SA), and Assemblies
-          const isFG = g.includes('FG') || t.includes('FG') || p.includes('FG') || g.includes('FINISHED');
+          // Refined detection: prioritize SA if it's explicitly labeled as such in group
           const isSA = g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY') || t.includes('SA') || t.includes('SUB') || t.includes('ASSEMBLY');
+          const isFG = (g.includes('FG') || t.includes('FG') || p.includes('FG') || g.includes('FINISHED')) && !isSA;
           
+          // Skip if it's a component of another item in this order
+          if (item.is_component > 0) return;
+
           // Skip if not FG/SA/ASSEMBLY, rejected, or if it's an FG with no cost (SA/ASSEMBLY can have 0 cost)
           if ((!isFG && !isSA) || item.status === 'REJECTED' || (isFG && !Number(item.bom_cost))) return;
 
           // Set calc group for UI badge
-          item.item_group_calc = isFG ? 'FG' : (g.includes('ASSEMBLY') && !g.includes('SUB') ? 'ASSEMBLY' : 'SUB ASSEMBLY');
+          item.item_group_calc = isSA ? (g.includes('ASSEMBLY') && !g.includes('SUB') ? 'ASSEMBLY' : 'SUB ASSEMBLY') : 'FG';
 
           const identity = `${item.drawing_no || 'NA'}_${item.item_code || 'NA'}`;
           const existing = grouped[clientName].all_items_map[identity];
@@ -1175,11 +1178,12 @@ const ClientQuotations = () => {
                                   const items = group.quotes || [];
                                   const fgCount = items.filter(q => {
                                     const g = (q.item_group || q.item_group_calc || '').toUpperCase();
-                                    return g === 'FG' || g === 'FINISHED GOODS' || g === 'FINISHED_GOODS';
+                                    const isSA = g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY');
+                                    return (g === 'FG' || g === 'FINISHED GOODS' || g === 'FINISHED_GOODS' || g.includes('FG')) && !isSA;
                                   }).length;
                                   const saCount = items.filter(q => {
                                     const g = (q.item_group || q.item_group_calc || '').toUpperCase();
-                                    return g === 'SA' || g === 'SUB ASSEMBLY' || g === 'SUB_ASSEMBLY';
+                                    return g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY');
                                   }).length;
                                   
                                   const parts = [];
@@ -1494,16 +1498,24 @@ const ClientQuotations = () => {
 
                                       clientOrders.forEach(order => {
                                         (order.items || []).forEach(item => {
+                                          const g = (item.item_group || item.item_group_calc || '').toUpperCase();
+                                          const isSA = g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY');
+                                          const isFG = (g.includes('FG') || g.includes('FINISHED')) && !isSA;
+
                                           const unitRate = parseFloat(quotePricesMap[group.company_name]?.[item.id]) || 0;
                                           const qty = parseFloat(item.design_qty) || 0;
                                           const profitP = parseFloat(profitMap[group.company_name]?.[item.id]) || 0;
                                           const gstRate = parseFloat(gstMap[group.company_name]?.[item.id]) || 18;
 
                                           const lineTotal = unitRate * qty;
-                                          subTotal += lineTotal;
-                                          totalTax += lineTotal * (gstRate / 100);
-                                          const basePrice = unitRate / (1 + profitP / 100);
-                                          totalProfit += (unitRate - basePrice) * qty;
+                                          
+                                          // Only Finished Goods contribute to the totals
+                                          if (isFG) {
+                                            subTotal += lineTotal;
+                                            totalTax += lineTotal * (gstRate / 100);
+                                            const basePrice = unitRate / (1 + profitP / 100);
+                                            totalProfit += (unitRate - basePrice) * qty;
+                                          }
                                         });
                                       });
 

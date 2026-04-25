@@ -320,7 +320,7 @@ const QCInspections = () => {
       key: 'id',
       className: 'text-right',
       render: (val, row) => (
-        <div className="flex justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="flex justify-center gap-2  group-hover:opacity-100 transition-opacity">
           <button onClick={(e) => { e.stopPropagation(); handleViewQC(row); }} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-colors  bg-white border border-slate-100">
             <Eye className="w-4 h-4" />
           </button>
@@ -417,7 +417,7 @@ const QCInspections = () => {
 
   const StatMiniCard = ({ label, value, icon: Icon, colorClass }) => (
     <div className="bg-white p-2 rounded  border border-slate-200  flex items-center gap-2 transition-all hover: hover:border-indigo-100 group">
-      <div className={`p-2.5 rounded  transition-colors ${colorClass} group-hover:scale-110 duration-300`}>
+      <div className={`p-2 rounded  transition-colors ${colorClass} group-hover:scale-110 duration-300`}>
         <Icon className="w-5 h-5" />
       </div>
       <div>
@@ -643,7 +643,7 @@ const QCInspections = () => {
             <div className="p-2 space-y-2">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="flex items-center gap-2">
-                  <div className="p-2.5 bg-slate-100 rounded  text-slate-500">
+                  <div className="p-2 bg-slate-100 rounded  text-slate-500">
                     <FileText className="w-5 h-5" />
                   </div>
                   <div>
@@ -652,7 +652,7 @@ const QCInspections = () => {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="p-2.5 bg-slate-100 rounded  text-slate-500">
+                  <div className="p-2 bg-slate-100 rounded  text-slate-500">
                     <User className="w-5 h-5" />
                   </div>
                   <div>
@@ -661,7 +661,7 @@ const QCInspections = () => {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="p-2.5 bg-slate-100 rounded  text-slate-500">
+                  <div className="p-2 bg-slate-100 rounded  text-slate-500">
                     <Clock className="w-5 h-5" />
                   </div>
                   <div>

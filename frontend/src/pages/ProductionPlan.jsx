@@ -1932,7 +1932,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
       className: 'text-right',
       render: (val) => (
         <button 
-          className="text-indigo-600 hover:text-indigo-900  opacity-0 group-hover:opacity-100 transition-opacity"
+          className="text-indigo-600 hover:text-indigo-900   group-hover:opacity-100 transition-opacity"
           onClick={() => {/* View logic */}}
         >
           View
@@ -2176,7 +2176,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                       <div className="flex items-center -space-x-2">
                         <div className="p-1 rounded  border-2 border-white bg-indigo-50 flex items-center justify-center text-indigo-600 text-xs    ring-1 ring-indigo-100 relative group/op">
                           {plan.total_ops}
-                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-slate-900 text-white text-[8px]  rounded opacity-0 group-hover/op:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-slate-900 text-white text-[8px]  rounded  group-hover/op:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
                             Total Operations
                           </div>
                         </div>
@@ -2388,7 +2388,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                     <td className="py-4 text-right">
                       <button 
                         onClick={() => setMrItems(prev => prev.filter((_, i) => i !== idx))}
-                        className="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded  transition-all opacity-0 group-hover:opacity-100"
+                        className="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded  transition-all  group-hover:opacity-100"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>

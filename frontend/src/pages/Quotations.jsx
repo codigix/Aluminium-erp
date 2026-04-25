@@ -1511,7 +1511,7 @@ const Quotations = () => {
         <div className="flex items-center gap-2">
           <button
             onClick={() => { fetchQuotations(); fetchRawRfqs(); }}
-            className="p-2.5 text-slate-500 hover:bg-white hover:text-blue-600 rounded  transition-all border border-slate-200  active:scale-95 bg-white"
+            className="p-2 text-slate-500 hover:bg-white hover:text-blue-600 rounded  transition-all border border-slate-200  active:scale-95 bg-white"
           >
             <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
           </button>

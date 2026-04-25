@@ -296,7 +296,7 @@ const BOMApproval = () => {
             <div className="relative bg-white rounded  shadow-2xl max-w-6xl w-full overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-100">
               <div className="p-2 border-b border-slate-100 flex justify-between items-center bg-white">
                 <div className="flex items-center gap-2">
-                  <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded  border border-indigo-100">
+                  <div className="p-2 bg-indigo-50 text-indigo-600 rounded  border border-indigo-100">
                     <Eye size={20} className="drop-shadow-sm" />
                   </div>
                   <div>

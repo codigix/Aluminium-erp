@@ -1979,7 +1979,7 @@ const CustomerDrawing = () => {
                     type="file"
                     name="file"
                     accept=".xlsx,.xls"
-                    className="absolute opacity-0 w-[48%] h-[60px] cursor-pointer"
+                    className="absolute  w-[48%] h-[60px] cursor-pointer"
                     onChange={handleFileChange}
                     onBlur={formik.handleBlur}
                   />
@@ -2001,7 +2001,7 @@ const CustomerDrawing = () => {
                     type="file"
                     name="zipFile"
                     accept=".zip,.rar,.7z"
-                    className="absolute opacity-0 w-[48%] h-[60px] cursor-pointer"
+                    className="absolute  w-[48%] h-[60px] cursor-pointer"
                     onChange={handleZipFileChange}
                   />
                   <div className="text-center">

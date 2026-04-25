@@ -565,7 +565,7 @@ const DrawingMaster = () => {
         <div className="flex items-center gap-2">
            <button 
             onClick={() => fetchDrawings()}
-            className="p-2.5 text-slate-500 hover:bg-slate-50 rounded  transition-all border border-slate-200"
+            className="p-2 text-slate-500 hover:bg-slate-50 rounded  transition-all border border-slate-200"
             title="Refresh"
           >
             <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
@@ -667,7 +667,7 @@ const DrawingMaster = () => {
                                   {rev.drawing_pdf ? (
                                     <button 
                                       onClick={() => handlePreview({ ...rev, drawing_no: row.drawing_no })}
-                                      className="p-1.5 text-indigo-500 hover:bg-indigo-50 rounded  transition-all opacity-0 group-hover:opacity-100"
+                                      className="p-1.5 text-indigo-500 hover:bg-indigo-50 rounded  transition-all  group-hover:opacity-100"
                                       title="Preview Revision"
                                     >
                                       <Eye size={15} />
@@ -748,7 +748,7 @@ const DrawingMaster = () => {
                         <label className="text-xs  text-slate-500  ">Drawing File (Optional Update)</label>
                         <input 
                             type="file"
-                            className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs file:mr-4 file:py-1 file:px-3 file:rounded  file:border-0 file:text-xs file: file:bg-indigo-50 file:text-indigo-600 hover:file:bg-indigo-100 transition-all cursor-pointer"
+                            className="w-full p-2 bg-white border border-slate-200 rounded text-xs file:mr-4 file:py-1 file:px-3 file:rounded  file:border-0 file:text-xs file: file:bg-indigo-50 file:text-indigo-600 hover:file:bg-indigo-100 transition-all cursor-pointer"
                             onChange={(e) => setEditData({...editData, drawing_pdf: e.target.files[0]})}
                             accept=".pdf"
                         />
