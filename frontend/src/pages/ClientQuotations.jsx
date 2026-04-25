@@ -295,8 +295,20 @@ const ClientQuotations = () => {
       // Finalize the grouped data structure
       Object.keys(grouped).forEach(clientName => {
         const client = grouped[clientName];
-        const items = Object.values(client.all_items_map);
+        let items = Object.values(client.all_items_map);
         
+        // Sort items: SA/ASSY first, then FG
+        items.sort((a, b) => {
+          const gA = (a.item_group_calc || '').toUpperCase();
+          const gB = (b.item_group_calc || '').toUpperCase();
+          const isSAA = gA.includes('SA') || gA.includes('SUB') || gA.includes('ASSEMBLY');
+          const isSAB = gB.includes('SA') || gB.includes('SUB') || gB.includes('ASSEMBLY');
+          
+          if (isSAA && !isSAB) return -1;
+          if (!isSAA && isSAB) return 1;
+          return 0;
+        });
+
         // Clear temporary maps and set final items
         // We simulate an 'order' structure to keep compatibility with existing render logic
         client.orders = [{
@@ -1225,7 +1237,27 @@ const ClientQuotations = () => {
                           </td>
                           <td className=" p-2 whitespace-nowrap">
                             {isPending ? (
-                              <span className="text-xs text-slate-400">Pricing Pending</span>
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-xs font-bold text-slate-700">
+                                  {(() => {
+                                    let total = 0;
+                                    group.quotes.forEach(item => {
+                                      const g = (item.item_group || item.item_group_calc || '').toUpperCase();
+                                      const isSA = g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY');
+                                      const isFG = (g.includes('FG') || g.includes('FINISHED')) && !isSA;
+                                      
+                                      if (isFG) {
+                                        const rate = parseFloat(quotePricesMap[group.company_name]?.[item.id]) || 0;
+                                        const qty = parseFloat(item.design_qty) || 0;
+                                        const gst = parseFloat(gstMap[group.company_name]?.[item.id]) || 18;
+                                        total += (rate * qty) * (1 + gst / 100);
+                                      }
+                                    });
+                                    return formatCurrency(total);
+                                  })()}
+                                </span>
+                                <span className="text-[10px] text-slate-400">Estimated Total</span>
+                              </div>
                             ) : (
                               <div className="flex flex-col gap-1">
                                 <div className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-100 rounded  px-2 py-1 w-fit">
