@@ -167,7 +167,7 @@ const ShipmentReports = ({ apiRequest }) => {
 
         {/* World Map / Destination Placeholder */}
         <div className="bg-white rounded  p-8 border border-slate-100 shadow-sm flex flex-col items-center justify-center relative overflow-hidden group">
-          <div className="absolute inset-0 bg-indigo-50/30 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+          <div className="absolute inset-0 bg-indigo-50/30  group-hover:opacity-100 transition-opacity"></div>
           <h2 className="text-md  text-slate-900 mb-6 self-start">Shipments By Destination</h2>
           <div className="relative w-full aspect-video flex items-center justify-center">
              <MapPin className="w-8 h-8 text-indigo-500 absolute top-1/4 left-1/3 animate-bounce" />

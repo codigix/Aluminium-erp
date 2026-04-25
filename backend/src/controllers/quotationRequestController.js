@@ -1,6 +1,7 @@
 const pool = require('../config/db');
 const emailService = require('../utils/emailService');
 const designOrderService = require('../services/designOrderService');
+const bomService = require('../services/bomService');
 
 const getQuotationRequests = async (req, res, next) => {
   try {
@@ -604,6 +605,101 @@ const downloadQuotationPDF = async (req, res, next) => {
   }
 };
 
+const updateQuotationFromBOM = async (req, res, next) => {
+  try {
+    const { salesOrderItemId, bomCost } = req.body;
+
+    if (!salesOrderItemId || bomCost === undefined) {
+      return res.status(400).json({ error: 'salesOrderItemId and bomCost are required' });
+    }
+
+    // 1. Fetch the identity of the BOM item (drawing_no and item_code)
+    const [bomItems] = await pool.query(
+      'SELECT item_code, drawing_no, bom_id FROM sales_order_items WHERE id = ?',
+      [salesOrderItemId]
+    );
+
+    if (bomItems.length === 0) {
+      throw new Error('BOM version not found');
+    }
+
+    const { item_code, drawing_no } = bomItems[0];
+
+    // 2. Trigger the sync and propagation logic
+    // This will update component rates, latest sales_order_item costs, parent BOMs, and quotations
+    await bomService.updateItemCostAndPropagate(item_code, drawing_no, bomCost);
+
+    res.json({ 
+      message: `BOM value ₹${bomCost} has been applied to this item and propagated to all parent assemblies and linked quotations.`
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const requestQuotationUpdateFromBOM = async (req, res, next) => {
+  try {
+    const { salesOrderItemId, bomCost } = req.body;
+
+    if (!salesOrderItemId || bomCost === undefined) {
+      return res.status(400).json({ error: 'salesOrderItemId and bomCost are required' });
+    }
+
+    // 1. Fetch the identity of the BOM item
+    const [bomItems] = await pool.query(
+      'SELECT item_code, drawing_no, description FROM sales_order_items WHERE id = ?',
+      [salesOrderItemId]
+    );
+
+    if (bomItems.length === 0) {
+      throw new Error('BOM version not found');
+    }
+
+    const { item_code, drawing_no, description } = bomItems[0];
+    const requesterName = req.user ? `${req.user.first_name || ''} ${req.user.last_name || ''}`.trim() : 'A user';
+
+    // 2. Find all relevant quotations
+    // We match by:
+    // a) Direct sales_order_item_id link
+    // b) Matching item_code AND drawing_no (for master templates)
+    // c) Matching drawing_no (most common for sub-assemblies being part of a larger FG quotation)
+    const [qrs] = await pool.query(
+      `SELECT qr.id, c.company_name, qr.batch_id
+       FROM quotation_requests qr
+       JOIN companies c ON qr.company_id = c.id
+       LEFT JOIN sales_order_items soi ON qr.sales_order_item_id = soi.id
+       WHERE (qr.sales_order_item_id = ? 
+          OR (LOWER(TRIM(soi.item_code)) = LOWER(TRIM(?)) AND LOWER(TRIM(soi.drawing_no)) = LOWER(TRIM(?)))
+          OR (qr.drawing_no IS NOT NULL AND LOWER(TRIM(qr.drawing_no)) = LOWER(TRIM(?)))
+          OR (qr.drawing_no IS NULL AND qr.description IS NOT NULL AND LOWER(TRIM(qr.description)) = LOWER(TRIM(?))))
+          AND qr.status NOT IN ('COMPLETED', 'REJECTED', 'CANCELLED')`,
+      [salesOrderItemId, item_code, drawing_no, drawing_no, description]
+    );
+
+    if (qrs.length === 0) {
+      return res.status(404).json({ error: 'No active quotations found for this item.' });
+    }
+
+    // 3. Insert communication record for each quotation
+    const message = `${requesterName} has requested a quotation update for "${description || drawing_no || item_code}" with the latest BOM cost: ₹${parseFloat(bomCost).toLocaleString('en-IN')}. Please review and update.`;
+
+    for (const qr of qrs) {
+      await pool.execute(
+        `INSERT INTO quotation_communications 
+         (quotation_id, quotation_type, sender_type, message, created_at, is_read) 
+         VALUES (?, ?, ?, ?, NOW(), 0)`,
+        [qr.id, 'INTERNAL', 'SYSTEM', message]
+      );
+    }
+
+    res.json({ 
+      message: `Request to update ${qrs.length} quotations has been sent to the Sales/Purchase team.`
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getQuotationRequests,
   getQuotationVersionHistory,
@@ -616,5 +712,7 @@ module.exports = {
   sendQuotationViaEmail,
   deleteQuotationRequest,
   batchDeleteQuotationRequests,
-  updateQuotationRates
+  updateQuotationRates,
+  updateQuotationFromBOM,
+  requestQuotationUpdateFromBOM
 };

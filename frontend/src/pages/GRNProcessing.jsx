@@ -627,7 +627,7 @@ const GRNProcessing = () => {
       {/* Header section */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded  border border-indigo-100 ">
+          <div className="p-2 bg-indigo-50 text-indigo-600 rounded  border border-indigo-100 ">
             <ShieldCheck className="w-3 h-3" />
           </div>
           <div>
@@ -935,14 +935,14 @@ const GRNProcessing = () => {
               <button
                 type="button"
                 onClick={() => navigate('/grn')}
-                className="p-2.5 rounded  border border-slate-200 text-slate-700  hover:bg-white transition-all"
+                className="p-2 rounded  border border-slate-200 text-slate-700  hover:bg-white transition-all"
               >
                 Cancel
               </button>
               <button
                 onClick={handleCreateGRN}
                 disabled={submitting || poItems.length === 0}
-                className="p-2.5 rounded  bg-indigo-600 text-white  hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all disabled:opacity-50 active:scale-95"
+                className="p-2 rounded  bg-indigo-600 text-white  hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all disabled:opacity-50 active:scale-95"
               >
                 {submitting ? 'Processing...' : 'Create GRN'}
               </button>
@@ -1026,14 +1026,14 @@ const GRNProcessing = () => {
             <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end gap-2">
               <button
                 onClick={() => handlePrintGRN(selectedGRNForView.id)}
-                className="flex items-center gap-2  p-2.5 rounded  bg-indigo-600 text-white  hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all active:scale-95"
+                className="flex items-center gap-2  p-2 rounded  bg-indigo-600 text-white  hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all active:scale-95"
               >
                 <Printer className="w-4 h-4" />
                 Print GRN
               </button>
               <button
                 onClick={() => navigate('/grn')}
-                className="p-2.5 rounded  border border-slate-200 text-slate-700  hover:bg-white transition-all"
+                className="p-2 rounded  border border-slate-200 text-slate-700  hover:bg-white transition-all"
               >
                 Close
               </button>

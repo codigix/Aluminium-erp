@@ -105,7 +105,7 @@ const DeliveryChallan = () => {
           <script src="https://cdn.tailwindcss.com"></script>
           <style>
             @page { size: A4; margin: 0; }
-            body { margin: 0; padding: 0; -webkit-print-color-adjust: exact; font-family: sans-serif; }
+            body { margin: 0; padding: 0; -webkit-print-color-adjust: exact; font-family: 'Roboto', sans-serif; }
             .print-container { width: 210mm; min-height: 297mm; margin: 0 auto; background: white; }
           </style>
         </head>

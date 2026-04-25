@@ -842,6 +842,12 @@ const getApprovedDrawings = async (companyId = null) => {
                    AND v3.bom_cost > 0
                 ORDER BY v3.id DESC LIMIT 1
               ) as revision_no,
+              (
+                SELECT COUNT(*) 
+                FROM sales_order_item_components 
+                WHERE sales_order_item_id IN (SELECT id FROM sales_order_items WHERE sales_order_id = soi.sales_order_id)
+                AND component_code = soi.item_code
+              ) as is_component,
               COALESCE(NULLIF(soi.item_group, ''), NULLIF(soi.item_type, '')) as item_group_calc,
               COALESCE(
                 poi.quantity, 
@@ -1101,7 +1107,7 @@ const generateSalesOrderPDF = async (salesOrderId) => {
     <html>
     <head>
       <style>
-        body { font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif; padding: 20px; color: #333; }
+        body { font-family: 'roboto', sans-serif; padding: 20px; color: #333; }
         .header { display: flex; justify-content: space-between; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-bottom: 20px; }
         .company-info h1 { margin: 0; color: #1e293b; font-size: 24px; }
         .order-meta { text-align: right; }

@@ -16,6 +16,8 @@ router.post('/batch-send-to-design', authorize(['PO_EDIT']), quotationRequestCon
 router.post('/:id/approve', authorize(['PO_EDIT']), quotationRequestController.approveQuotationRequest);
 router.post('/:id/reject', authorize(['PO_EDIT']), quotationRequestController.rejectQuotationRequest);
 router.put('/batch-update-rates', authorize(['PO_EDIT']), quotationRequestController.updateQuotationRates);
+router.put('/update-from-bom', authorize(['PO_EDIT']), quotationRequestController.updateQuotationFromBOM);
+router.post('/request-update-from-bom', authorize(['PO_VIEW']), quotationRequestController.requestQuotationUpdateFromBOM);
 router.delete('/batch-delete', authorize(['PO_EDIT']), quotationRequestController.batchDeleteQuotationRequests);
 router.delete('/:id', authorize(['PO_EDIT']), quotationRequestController.deleteQuotationRequest);
 

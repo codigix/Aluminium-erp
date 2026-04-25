@@ -868,7 +868,7 @@ const ItemsMaster = () => {
             <div className="flex items-center gap-2">
               <button 
                 onClick={fetchItemsList}
-                className="p-2.5 text-slate-500 hover:bg-slate-50 rounded  transition-all border border-slate-200"
+                className="p-2 text-slate-500 hover:bg-slate-50 rounded  transition-all border border-slate-200"
                 title="Refresh"
               >
                 <RefreshCw size={15} className={itemsLoading ? 'animate-spin' : ''} />

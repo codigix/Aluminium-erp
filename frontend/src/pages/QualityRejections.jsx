@@ -134,7 +134,7 @@ const QualityRejections = () => {
         </div>
         <button 
           onClick={fetchRejections}
-          className="p-2.5 text-slate-500 hover:text-indigo-600 rounded  hover:bg-slate-50 transition-all border border-slate-100 bg-white "
+          className="p-2 text-slate-500 hover:text-indigo-600 rounded  hover:bg-slate-50 transition-all border border-slate-100 bg-white "
         >
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
         </button>

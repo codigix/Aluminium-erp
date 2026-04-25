@@ -346,7 +346,7 @@ const Vendors = () => {
         <div className="flex items-center gap-2">
           <button
             onClick={() => window.location.reload()}
-            className="p-2.5 rounded  border border-slate-200 text-slate-400 hover:bg-white hover:text-indigo-600 hover:border-indigo-200 transition-all shadow-sm"
+            className="p-2 rounded  border border-slate-200 text-slate-400 hover:bg-white hover:text-indigo-600 hover:border-indigo-200 transition-all shadow-sm"
             title="Refresh Data"
           >
             <Download className="w-5 h-5" />

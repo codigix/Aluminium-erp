@@ -1303,7 +1303,7 @@ const CustomerDrawing = () => {
                     <input
                       type="file"
                       accept=".pdf"
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      className="absolute inset-0 w-full h-full  cursor-pointer"
                       onChange={(e) => setEditData({ ...editData, drawing_pdf: e.target.files[0] })}
                     />
                     <div className="text-center">
@@ -1956,7 +1956,7 @@ const CustomerDrawing = () => {
                     type="file"
                     name="file"
                     accept=".xlsx,.xls"
-                    className="absolute opacity-0 w-[48%] h-[60px] cursor-pointer"
+                    className="absolute  w-[48%] h-[60px] cursor-pointer"
                     onChange={handleFileChange}
                     onBlur={formik.handleBlur}
                   />
@@ -1978,7 +1978,7 @@ const CustomerDrawing = () => {
                     type="file"
                     name="zipFile"
                     accept=".zip,.rar,.7z"
-                    className="absolute opacity-0 w-[48%] h-[60px] cursor-pointer"
+                    className="absolute  w-[48%] h-[60px] cursor-pointer"
                     onChange={handleZipFileChange}
                   />
                   <div className="text-center">

@@ -43,7 +43,7 @@ const CompanyMaster = ({
             <button type="button" onClick={onToggleCreatePanel} className="p-2 rounded  border border-slate-200 text-sm  text-slate-600 hover:border-slate-300">
               Discard
             </button>
-            <button type="submit" className="p-2.5 rounded  bg-slate-900 text-white text-sm   hover:bg-slate-800 disabled:opacity-60" disabled={loading}>
+            <button type="submit" className="p-2 rounded  bg-slate-900 text-white text-sm   hover:bg-slate-800 disabled:opacity-60" disabled={loading}>
               {loading ? 'Saving...' : 'Save Company'}
             </button>
           </div>

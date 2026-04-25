@@ -219,7 +219,7 @@ const QualityRejectionEntry = () => {
 
       {/* Success Alert */}
       {successMessage && (
-        <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-2.5 flex items-center gap-2 animate-in fade-in duration-300">
+        <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-2 flex items-center gap-2 animate-in fade-in duration-300">
           <CheckCircle2 className="w-4 h-4 text-emerald-500" />
           <p className="text-emerald-800 text-[11px] font-medium">{successMessage}</p>
         </div>
@@ -227,7 +227,7 @@ const QualityRejectionEntry = () => {
 
       {/* Warning Alert */}
       {pendingRecords.length > 0 && (
-        <div className="bg-amber-50 border border-amber-100 rounded-lg p-2.5 flex gap-2.5">
+        <div className="bg-amber-50 border border-amber-100 rounded-lg p-2 flex gap-2.5">
           <div className="p-1 bg-white rounded-md shadow-sm h-fit">
             <AlertTriangle className="w-4 h-4 text-amber-500" />
           </div>

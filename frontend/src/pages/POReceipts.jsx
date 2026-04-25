@@ -753,7 +753,7 @@ const POReceipts = () => {
           </div>
           <button
             onClick={fetchReceipts}
-            className="p-2.5 text-slate-500 hover:bg-white hover:text-blue-600 rounded  transition-all border border-slate-200  active:scale-95 bg-white"
+            className="p-2 text-slate-500 hover:bg-white hover:text-blue-600 rounded  transition-all border border-slate-200  active:scale-95 bg-white"
           >
             <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
           </button>
@@ -1011,7 +1011,7 @@ const POReceipts = () => {
             <div className="flex items-center justify-between pt-6 border-t border-slate-100">
               <button 
                 onClick={() => handleOpenPdfInNewTab(selectedReceiptForView)}
-                className="flex items-center gap-2  p-2.5 bg-emerald-600 text-white rounded  text-xs  hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 active:scale-95"
+                className="flex items-center gap-2  p-2 bg-emerald-600 text-white rounded  text-xs  hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 active:scale-95"
               >
                 <Printer className="w-4 h-4" />
                 PRINT GRN
@@ -1054,7 +1054,7 @@ const POReceipts = () => {
                     type="text"
                     value={`GRN-${new Date().toISOString().split('T')[0].replace(/-/g, '')}-${String(receipts.length + 1).padStart(4, '0')}`}
                     readOnly
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded text-xs  text-slate-900 outline-none"
+                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs  text-slate-900 outline-none"
                   />
                 </FormControl>
 
@@ -1062,7 +1062,7 @@ const POReceipts = () => {
                   <select
                     value={formData.poId}
                     onChange={(e) => handlePoChange(e.target.value)}
-                    className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs  text-slate-900 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all appearance-none cursor-pointer"
+                    className="w-full p-2 bg-white border border-slate-200 rounded text-xs  text-slate-900 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all appearance-none cursor-pointer"
                   >
                     <option value="">Select PO (Optional)</option>
                     {purchaseOrders.map(po => (
@@ -1078,7 +1078,7 @@ const POReceipts = () => {
                     type="date"
                     value={formData.receiptDate}
                     onChange={(e) => setFormData({...formData, receiptDate: e.target.value})}
-                    className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs  text-slate-900 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all"
+                    className="w-full p-2 bg-white border border-slate-200 rounded text-xs  text-slate-900 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all"
                     required
                   />
                 </FormControl>
@@ -1259,7 +1259,7 @@ const POReceipts = () => {
                           <button
                             type="button"
                             onClick={() => handleRemoveItem(idx)}
-                            className="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded  transition-all opacity-0 group-hover:opacity-100"
+                            className="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded  transition-all  group-hover:opacity-100"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -1304,7 +1304,7 @@ const POReceipts = () => {
               <button
                 type="button"
                 onClick={() => navigate('/po-receipts')}
-                className="p-2.5 bg-white border border-slate-200 text-slate-600 rounded  text-sm  hover:bg-slate-50 transition-all active:scale-95"
+                className="p-2 bg-white border border-slate-200 text-slate-600 rounded  text-sm  hover:bg-slate-50 transition-all active:scale-95"
               >
                 Cancel
               </button>
@@ -1328,7 +1328,7 @@ const POReceipts = () => {
                   type="date"
                   value={editFormData.receiptDate}
                   onChange={(e) => setEditFormData({...editFormData, receiptDate: e.target.value})}
-                  className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs  text-slate-900 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all"
+                  className="w-full p-2 bg-white border border-slate-200 rounded text-xs  text-slate-900 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all"
                   required
                 />
               </FormControl>
@@ -1336,7 +1336,7 @@ const POReceipts = () => {
                 <select
                   value={editFormData.status}
                   onChange={(e) => setEditFormData({...editFormData, status: e.target.value})}
-                  className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs  text-slate-900 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all appearance-none cursor-pointer"
+                  className="w-full p-2 bg-white border border-slate-200 rounded text-xs  text-slate-900 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all appearance-none cursor-pointer"
                   required
                 >
                   <option value="DRAFT">Draft</option>
@@ -1352,7 +1352,7 @@ const POReceipts = () => {
                 type="number"
                 value={editFormData.receivedQuantity}
                 onChange={(e) => setEditFormData({...editFormData, receivedQuantity: e.target.value})}
-                className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs  text-indigo-600 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all"
+                className="w-full p-2 bg-white border border-slate-200 rounded text-xs  text-indigo-600 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all"
               />
             </FormControl>
 
@@ -1360,7 +1360,7 @@ const POReceipts = () => {
               <textarea
                 value={editFormData.notes}
                 onChange={(e) => setEditFormData({...editFormData, notes: e.target.value})}
-                className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs  text-slate-900 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all"
+                className="w-full p-2 bg-white border border-slate-200 rounded text-xs  text-slate-900 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all"
                 rows="3"
               />
             </FormControl>
@@ -1369,13 +1369,13 @@ const POReceipts = () => {
               <button
                 type="button"
                 onClick={() => navigate('/po-receipts')}
-                className="p-2.5 border border-slate-200 rounded text-xs  text-slate-500 hover:bg-slate-50 transition-all active:scale-95"
+                className="p-2 border border-slate-200 rounded text-xs  text-slate-500 hover:bg-slate-50 transition-all active:scale-95"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="p-2.5 bg-blue-600 text-white rounded text-xs  hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95"
+                className="p-2 bg-blue-600 text-white rounded text-xs  hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95"
               >
                 Update Receipt
               </button>

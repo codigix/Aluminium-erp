@@ -93,12 +93,12 @@ const RecursiveBOMRow = ({
           <td className="p-2" style={{ paddingLeft: `${level * 20}px` }}>
             <div className="flex items-center gap-2">
               {level > 0 && <CornerDownRight className="w-3 h-3 text-slate-300" />}
-              <span className="text-xs font-medium text-slate-800">
+              <span className="text-xs  text-slate-800">
                 {item.component_code || item.componentCode || item.material_name || item.materialName}
               </span>
             </div>
           </td>
-          <td className="p-2 text-center text-[10px] text-slate-400">--</td>
+          <td className="p-2 text-center text-xs text-slate-400">--</td>
           <td className="p-2">
             <input
               type="number"
@@ -107,7 +107,7 @@ const RecursiveBOMRow = ({
               onChange={(e) => setEditingItem({ ...editingItem, qty: e.target.value })}
             />
           </td>
-          <td className="p-2 text-center text-[10px] text-slate-400">--</td>
+          <td className="p-2 text-center text-xs text-slate-400">--</td>
           <td className="p-2">
             <input
               type="number"
@@ -116,7 +116,7 @@ const RecursiveBOMRow = ({
               onChange={(e) => setEditingItem({ ...editingItem, rate: e.target.value })}
             />
           </td>
-          <td className="p-2 text-center text-[10px] text-slate-400">--</td>
+          <td className="p-2 text-center text-xs text-slate-400">--</td>
           <td className="p-2 text-right">
             <div className="flex justify-end gap-1">
               <button
@@ -146,11 +146,11 @@ const RecursiveBOMRow = ({
             <div className="flex items-center gap-2 " style={{ paddingLeft: `${level * 20}px` }}>
               {level > 0 && <CornerDownRight className="w-3 h-3 text-slate-300" />}
               <div className="flex flex-col">
-                <span className="text-xs  text-slate-800 font-medium">
+                <span className="text-xs  text-slate-800 ">
                   {item.component_code || item.componentCode || item.material_name || item.materialName}
                 </span>
                 {getDimensionString(item) && (
-                  <span className="text-[10px] text-emerald-600 font-medium">
+                  <span className="text-xs text-emerald-600 ">
                     {getDimensionString(item)}
                   </span>
                 )}
@@ -161,15 +161,15 @@ const RecursiveBOMRow = ({
             </div>
           </td>
           <td className="p-2 text-center">
-            <span className="px-2 py-0.5 rounded-full text-[10px] bg-slate-100 text-slate-600 font-medium">
+            <span className="px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-600 ">
               {isConsumable ? 'Consumable' : 'Assembly'}
             </span>
           </td>
-          <td className="p-2 text-center text-[11px] font-medium text-slate-600">
+          <td className="p-2 text-center text-[11px]  text-slate-600">
             <div className="flex flex-col items-center">
               <span>{qty.toFixed(2)} {item.uom}</span>
               {unitWeight > 0 && (
-                <span className="text-[10px] text-slate-400">({unitWeight.toFixed(3)} Kg)</span>
+                <span className="text-xs text-slate-400">({unitWeight.toFixed(3)} Kg)</span>
               )}
             </div>
           </td>
@@ -177,12 +177,12 @@ const RecursiveBOMRow = ({
             {totalWeight > 0 ? `${(totalWeight / cumulativeLossFactor).toFixed(3)} Kg` : '—'}
           </td>
           <td className="p-2 text-center text-xs text-slate-600">₹{rate.toFixed(2)}</td>
-          <td className="p-2 text-center text-xs text-slate-900 font-medium">
+          <td className="p-2 text-center text-xs text-slate-900 ">
             ₹{netCost.toFixed(2)}
           </td>
           {!isReadOnly && (
             <td className="p-2 text-right">
-              <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-all">
+              <div className="flex justify-end gap-1  group-hover:opacity-100 transition-all">
                 <button
                   onClick={() => onEdit(item)}
                   className="p-1 text-slate-400 hover:text-indigo-600 transition-colors"
@@ -227,7 +227,7 @@ const RecursiveBOMRow = ({
         <td className="p-2" style={{ paddingLeft: `${level * 20}px` }}>
           <div className="flex items-center gap-2">
             {level > 0 && <CornerDownRight className="w-3 h-3 text-slate-300" />}
-            <span className="text-xs font-medium text-slate-800">
+            <span className="text-xs  text-slate-800">
               {item.item_code || item.itemCode || item.material_name || item.materialName}
             </span>
           </div>
@@ -240,7 +240,7 @@ const RecursiveBOMRow = ({
             onChange={(e) => setEditingItem({ ...editingItem, qty: e.target.value })}
           />
         </td>
-        <td className="p-2 text-center text-[10px] text-slate-400">--</td>
+        <td className="p-2 text-center text-xs text-slate-400">--</td>
         <td className="p-2">
           <input
             type="number"
@@ -267,7 +267,7 @@ const RecursiveBOMRow = ({
             placeholder="Operation"
           />
         </td>
-        <td className="p-2 text-center text-[10px] text-slate-400">--</td>
+        <td className="p-2 text-center text-xs text-slate-400">--</td>
         <td className="p-2 text-right">
           <div className="flex justify-end gap-1">
             <button
@@ -301,7 +301,7 @@ const RecursiveBOMRow = ({
                 {actualType === 'material' ? (item.item_code || item.itemCode || item.material_name || item.materialName) : (item.component_code || item.componentCode)}
               </span>
               {actualType === 'material' && getDimensionString(item) && (
-                <span className="text-[10px] text-emerald-600 font-medium">
+                <span className="text-xs text-emerald-600 ">
                   {getDimensionString(item)}
                 </span>
               )}
@@ -311,11 +311,11 @@ const RecursiveBOMRow = ({
             </div>
           </div>
         </td>
-        <td className="p-2 text-center text-[11px] font-medium text-slate-600">
+        <td className="p-2 text-center text-[11px]  text-slate-600">
           <div className="flex flex-col items-center">
             <span>{(qty / cumulativeLossFactor).toFixed(actualType === 'material' ? 4 : 2)} {item.uom}</span>
             {unitWeight > 0 && (
-              <span className="text-[10px] text-slate-400">({unitWeight.toFixed(3)} Kg)</span>
+              <span className="text-xs text-slate-400">({unitWeight.toFixed(3)} Kg)</span>
             )}
           </div>
         </td>
@@ -335,7 +335,7 @@ const RecursiveBOMRow = ({
         </td>
         {!isReadOnly && (
           <td className="p-2  text-right">
-            <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-all">
+            <div className="flex justify-end gap-1  group-hover:opacity-100 transition-all">
               <button
                 onClick={() => onEdit(item)}
                 className="p-1 text-slate-400 hover:text-indigo-600 transition-colors"
@@ -829,7 +829,7 @@ const BOMFormPage = () => {
     
     // Priority 2: Sub-assemblies / SFG
     if (name.includes('sub assembly') || name.includes('sub-assembly') || ig.includes('sub assembly') || 
-        t.includes('sub assembly') || t.includes('sub-assembly') || name.startsWith('sa-')) return 'Sub-Assembly';
+        t.includes('sub assembly') || t.includes('sub-assembly') || name.startsWith('sa-') || name.startsWith('sfg-')) return 'Sub-Assembly';
     if (name.includes('sfg') || name.includes('semi') || ig.includes('sfg') || ig.includes('semi') || 
         t.includes('sfg') || t.includes('semi')) return 'Semi-Finished Goods';
     
@@ -958,7 +958,8 @@ const BOMFormPage = () => {
               description: itemData.drawing_name || itemData.description || prev.description,
               uom: itemData.unit || itemData.uom || prev.uom,
               revision: itemData.revision_no || itemData.revision || prev.revision,
-              quantity: itemData.quantity || prev.quantity
+              quantity: itemData.quantity || prev.quantity,
+              bom_cost: itemData.bom_cost
             }));
           }
         }
@@ -984,23 +985,51 @@ const BOMFormPage = () => {
           
           if (data.materials) {
             data.materials = data.materials.map(m => {
+              // Only override with latest stock rates if it's a new/draft BOM (not read-only with an ID)
+              const isHistorical = isReadOnly && itemId && itemId !== 'bom-form';
               const s = latestStockItems.length > 0 ? latestStockItems.find(si => si.material_name === m.material_name) : null;
-              const rate = (!m.rate || parseFloat(m.rate) === 0) ? (m.selling_rate || m.valuation_rate || s?.selling_rate || s?.valuation_rate || 0) : m.rate;
+              
+              let rate = m.rate;
+              // For historical versions, we MUST trust the saved rate. 
+              // Only fallback for non-historical drafts that have 0 rate.
+              if (!isHistorical && (!m.rate || parseFloat(m.rate) === 0)) {
+                rate = m.selling_rate || m.valuation_rate || s?.selling_rate || s?.valuation_rate || 0;
+              }
+
+              // Use stored weights/dimensions if available, especially for historical integrity
               return { 
                 ...m, 
-                rate, 
+                rate: parseFloat(rate || 0), 
                 item_code: m.item_code || s?.item_code, 
-                length: m.length || s?.length, 
-                width: m.width || s?.width, 
-                thickness: m.thickness || s?.thickness 
+                weight_per_unit: (isHistorical && parseFloat(m.weight_per_unit) > 0) ? m.weight_per_unit : (m.weight_per_unit || s?.weight_per_unit || 0),
+                length: (isHistorical && parseFloat(m.length) > 0) ? m.length : (m.length || s?.length), 
+                width: (isHistorical && parseFloat(m.width) > 0) ? m.width : (m.width || s?.width), 
+                thickness: (isHistorical && parseFloat(m.thickness) > 0) ? m.thickness : (m.thickness || s?.thickness),
+                diameter: (isHistorical && parseFloat(m.diameter) > 0) ? m.diameter : (m.diameter || s?.diameter),
+                outer_diameter: (isHistorical && parseFloat(m.outer_diameter) > 0) ? m.outer_diameter : (m.outer_diameter || s?.outer_diameter)
               };
             });
           }
           if (data.components) {
             data.components = data.components.map(c => {
+              const isHistorical = isReadOnly && itemId && itemId !== 'bom-form';
               const s = latestStockItems.length > 0 ? latestStockItems.find(si => si.item_code === c.component_code) : null;
-              const rate = (!c.rate || parseFloat(c.rate) === 0) ? (c.selling_rate || c.valuation_rate || s?.selling_rate || s?.valuation_rate || 0) : c.rate;
-              return { ...c, rate, weight_per_unit: c.weight_per_unit || s?.weight_per_unit || 0 };
+              
+              let rate = c.rate;
+              if (!isHistorical && (!c.rate || parseFloat(c.rate) === 0)) {
+                rate = c.selling_rate || c.valuation_rate || s?.selling_rate || s?.valuation_rate || 0;
+              }
+
+              return { 
+                ...c, 
+                rate: parseFloat(rate || 0), 
+                weight_per_unit: (isHistorical && parseFloat(c.weight_per_unit) > 0) ? c.weight_per_unit : (c.weight_per_unit || s?.weight_per_unit || 0),
+                length: (isHistorical && parseFloat(c.length) > 0) ? c.length : (c.length || s?.length || 0),
+                width: (isHistorical && parseFloat(c.width) > 0) ? c.width : (c.width || s?.width || 0),
+                thickness: (isHistorical && parseFloat(c.thickness) > 0) ? c.thickness : (c.thickness || s?.thickness || 0),
+                diameter: (isHistorical && parseFloat(c.diameter) > 0) ? c.diameter : (c.diameter || s?.diameter || 0),
+                outer_diameter: (isHistorical && parseFloat(c.outer_diameter) > 0) ? c.outer_diameter : (c.outer_diameter || s?.outer_diameter || 0)
+              };
             });
           }
 
@@ -1048,7 +1077,8 @@ const BOMFormPage = () => {
         drawing_id: (selectedItem.drawing_id && selectedItem.drawing_id !== 'N/A') ? selectedItem.drawing_id : (prev.drawing_id || ''),
         quantity: selectedItem.quantity || prev.quantity,
         uom: selectedItem.unit || selectedItem.uom || prev.uom,
-        revision: selectedItem.revision_no || selectedItem.revision || prev.revision
+        revision: selectedItem.revision_no || selectedItem.revision || prev.revision,
+        bom_cost: selectedItem.bom_cost || 0
       }));
     }
   }, [selectedItem]);
@@ -1167,36 +1197,23 @@ const BOMFormPage = () => {
         payload.loss_percent = payload.lossPercent;
       }
 
-      if (effectiveItemId) {
-        // Direct API update for existing BOMs or SO-linked items
-        const response = await fetch(`${API_BASE}/bom/items/${effectiveItemId}/${section}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-          body: JSON.stringify(payload)
-        });
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.message || `Failed to add ${section}`);
-        }
-        await fetchData(false);
-      } else {
-        // Local state update for new BOMs (especially from drawing/stock source)
-        const newItem = {
-          ...payload,
-          id: `local-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          isLocal: true
+      // Always use local state update for BOM items while editing
+      // to avoid corrupting the original version until the user clicks "Save" or "Save as New Version"
+      const newItem = {
+        ...payload,
+        id: `local-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        isLocal: true
+      };
+      setBomData(prev => {
+        const currentItems = Array.isArray(prev[section]) ? prev[section] : [];
+        return {
+          ...prev,
+          [section]: [...currentItems, newItem]
         };
-        setBomData(prev => {
-          const currentItems = Array.isArray(prev[section]) ? prev[section] : [];
-          return {
-            ...prev,
-            [section]: [...currentItems, newItem]
-          };
-        });
-      }
+      });
 
       setFormState(initialForm);
-      successToast(`${section} added`);
+      successToast(`${section} added to list (click Save to persist)`);
     } catch (error) {
       errorToast(error.message);
     }
@@ -1242,29 +1259,16 @@ const BOMFormPage = () => {
         payload.rate = parseFloat(payload.rate) || 0;
       }
 
-      if (String(editingId).startsWith('local-') || (!itemId || itemId === 'bom-form')) {
-        // Local state update
-        setBomData(prev => ({
-          ...prev,
-          [section]: prev[section].map(item => item.id === editingId ? { ...item, ...payload } : item)
-        }));
-      } else {
-        // Direct API update
-        const response = await fetch(`${API_BASE}/bom/${section}/${editingId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-          body: JSON.stringify(payload)
-        });
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.message || `Failed to update ${section}`);
-        }
-        await fetchData(false);
-      }
+      // Always use local state update for BOM items while editing
+      // to avoid corrupting the original version until the user clicks "Save" or "Save as New Version"
+      setBomData(prev => ({
+        ...prev,
+        [section]: prev[section].map(item => item.id === editingId ? { ...item, ...payload } : item)
+      }));
 
       setEditingSectionItem(null);
       setFormState(initialForm);
-      successToast(`${section} updated successfully`);
+      successToast(`${section} updated in list (click Save to persist)`);
     } catch (error) {
       errorToast(error.message);
     }
@@ -1273,56 +1277,45 @@ const BOMFormPage = () => {
 
   const handleDeleteSectionItem = async (section, id, isLocal = false) => {
     try {
-      if (isLocal || (!itemId || itemId === 'bom-form')) {
-        setBomData(prev => {
-          const idsToDelete = new Set([id]);
+      // Always use local state update for BOM items while editing
+      // to avoid corrupting the original version until the user clicks "Save" or "Save as New Version"
+      setBomData(prev => {
+        const idsToDelete = new Set([id]);
 
-          const findChildren = (parentId) => {
-            (prev.components || []).forEach(c => {
-              if (String(c.parent_id || c.parentId) === String(parentId)) {
-                if (!idsToDelete.has(c.id)) {
-                  idsToDelete.add(c.id);
-                  findChildren(c.id);
-                }
+        const findChildren = (parentId) => {
+          (prev.components || []).forEach(c => {
+            if (String(c.parent_id || c.parentId) === String(parentId)) {
+              if (!idsToDelete.has(c.id)) {
+                idsToDelete.add(c.id);
+                findChildren(c.id);
               }
-            });
-            (prev.materials || []).forEach(m => {
-              if (String(m.parent_id || m.parentId) === String(parentId)) {
-                idsToDelete.add(m.id);
-              }
-            });
-            (prev.scrap || []).forEach(s => {
-              if (String(s.parent_id || s.parentId) === String(parentId)) {
-                idsToDelete.add(s.id);
-              }
-            });
-          };
+            }
+          });
+          (prev.materials || []).forEach(m => {
+            if (String(m.parent_id || m.parentId) === String(parentId)) {
+              idsToDelete.add(m.id);
+            }
+          });
+          (prev.scrap || []).forEach(s => {
+            if (String(s.parent_id || s.parentId) === String(parentId)) {
+              idsToDelete.add(s.id);
+            }
+          });
+        };
 
-          if (section === 'components') {
-            findChildren(id);
-          }
+        if (section === 'components') {
+          findChildren(id);
+        }
 
-          return {
-            ...prev,
-            materials: prev.materials.filter(m => !idsToDelete.has(m.id)),
-            components: prev.components.filter(c => !idsToDelete.has(c.id)),
-            operations: section === 'operations' ? prev.operations.filter(o => o.id !== id) : prev.operations,
-            scrap: section === 'scrap' ? prev.scrap.filter(s => s.id !== id) : prev.scrap
-          };
-        });
-        successToast(`${section} removed`);
-        return;
-      }
-
-      const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/bom/${section}/${id}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
+        return {
+          ...prev,
+          materials: prev.materials.filter(m => !idsToDelete.has(m.id)),
+          components: prev.components.filter(c => !idsToDelete.has(c.id)),
+          operations: section === 'operations' ? prev.operations.filter(o => o.id !== id) : prev.operations,
+          scrap: section === 'scrap' ? prev.scrap.filter(s => s.id !== id) : prev.scrap
+        };
       });
-      if (!response.ok) throw new Error(`Failed to delete ${section}`);
-
-      await fetchData(false);
-      successToast(`${section} removed`);
+      successToast(`${section} removed from list (click Save to persist)`);
     } catch (error) {
       errorToast(error.message);
     }
@@ -1601,6 +1594,7 @@ const BOMFormPage = () => {
 
       const bomPayload = {
         itemId: effectiveItemId,
+        bomId: selectedItem?.bom_id || selectedItem?.bomId || productForm.bomId || productForm.bom_id,
         isNewVersion,
         salesOrderId: salesOrderIdFromUrl || (selectedItem?.source === 'order' ? (selectedItem.sales_order_id || selectedItem.salesOrderId) : null),
         status: status,
@@ -1611,7 +1605,7 @@ const BOMFormPage = () => {
         materials: bomData.materials,
         components: bomData.components.map(c => ({
           ...c,
-          sourceFg: (c.componentCode || '').startsWith('SA-') ? productForm.drawingNo : null
+          sourceFg: ((c.componentCode || '').startsWith('SA-') || (c.componentCode || '').startsWith('SFG-')) ? productForm.drawingNo : null
         })),
         operations: bomData.operations,
         scrap: bomData.scrap,
@@ -1661,6 +1655,123 @@ const BOMFormPage = () => {
         navigate('/bom-creation');
       }
     } catch (error) {
+      errorToast(error.message);
+    }
+  };
+
+  const handleUpdateQuotation = async (salesOrderItemId, bomCost) => {
+    try {
+      const result = await Swal.fire({
+        title: 'Update Quotation?',
+        text: `Do you want to update all linked quotations with the BOM cost of ₹${parseFloat(bomCost).toLocaleString('en-IN', { minimumFractionDigits: 2 })}?`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Yes, Update',
+        cancelButtonText: 'Cancel',
+        confirmButtonColor: '#4f46e5'
+      });
+
+      if (!result.isConfirmed) return;
+
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/quotation-requests/update-from-bom`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ salesOrderItemId, bomCost })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        successToast(data.message || 'Quotation updated successfully');
+      } else if (response.status === 403) {
+        // If forbidden, offer to send a request instead
+        const requestResult = await Swal.fire({
+          title: 'Insufficient Permissions',
+          text: 'You do not have permission to update quotations directly. Would you like to send a request to the Sales team to update the quotation with this price?',
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonText: 'Yes, Send Request',
+          cancelButtonText: 'No, Cancel',
+          confirmButtonColor: '#4f46e5'
+        });
+
+        if (requestResult.isConfirmed) {
+          const requestResponse = await fetch(`${API_BASE}/quotation-requests/request-update-from-bom`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ salesOrderItemId, bomCost })
+          });
+
+          const requestData = await requestResponse.json();
+          if (requestResponse.ok) {
+            successToast(requestData.message || 'Request sent successfully');
+          } else {
+            throw new Error(requestData.error || requestData.message || 'Failed to send request');
+          }
+        }
+      } else {
+        throw new Error(data.message || 'Failed to update quotation');
+      }
+    } catch (error) {
+      console.error('Error updating quotation:', error);
+      errorToast(error.message);
+    }
+  };
+
+  const handleDeleteVersion = async (versionId, versionNo) => {
+    try {
+      const result = await Swal.fire({
+        title: 'Delete Version?',
+        text: `Are you sure you want to permanently delete BOM Version V${versionNo}? This action cannot be undone.`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Yes, Delete',
+        cancelButtonText: 'Cancel',
+        confirmButtonColor: '#ef4444'
+      });
+
+      if (!result.isConfirmed) return;
+
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/bom/items/${versionId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        successToast(`Version V${versionNo} deleted successfully`);
+        
+        // If we were viewing the deleted version, navigate back to creation or another version
+        if (String(itemId) === String(versionId)) {
+          // Find another version to view if available
+          const remainingVersions = bomHistory.filter(v => String(v.id) !== String(versionId));
+          if (remainingVersions.length > 0) {
+            const nextVersion = remainingVersions[remainingVersions.length - 1];
+            navigate(`/bom-form/${nextVersion.id}?view=true`);
+          } else {
+            navigate('/bom-creation');
+          }
+        } else {
+          // Just refresh history and data
+          fetchData(false);
+          const effectiveId = (itemId === 'bom-form' || !itemId) ? null : itemId;
+          fetchBOMHistory(productForm.itemCode, productForm.drawingNo, effectiveId);
+        }
+      } else {
+        const data = await response.json();
+        throw new Error(data.message || 'Failed to delete version');
+      }
+    } catch (error) {
+      console.error('Error deleting version:', error);
       errorToast(error.message);
     }
   };
@@ -1717,8 +1828,8 @@ const BOMFormPage = () => {
   }, [bomData.components, bomData.materials, calculateRecursiveCost]);
 
   const scrapLoss = bomData.scrap.reduce((sum, s) => {
-    const input = parseFloat(s.input_qty || 0);
-    const loss = parseFloat(s.loss_percent || 0) / 100;
+    const input = parseFloat(s.input_qty || s.inputQty || 0);
+    const loss = parseFloat(s.loss_percent || s.lossPercent || 0) / 100;
     const rate = parseFloat(s.rate || 0);
     return sum + (input * loss * rate);
   }, 0) / batchQty;
@@ -1726,16 +1837,17 @@ const BOMFormPage = () => {
   const materialCostAfterScrap = (componentsCost + rawMaterialsCost) - scrapLoss;
 
   const operationsCost = bomData.operations.reduce((sum, o) => {
-    const hourlyRate = parseFloat(o.hourly_rate || 0);
-    const setupTime = parseFloat(o.setup_time_min || 0);
-    const cycleTime = parseFloat(o.cycle_time_min || 0);
-    // Cost per unit: Cycle time + Setup time
-    return sum + ((cycleTime + setupTime) / 60 * hourlyRate);
+    const hourlyRate = parseFloat(o.hourly_rate || o.hourlyRate || 0);
+    const setupTime = parseFloat(o.setup_time_min || o.setupTimeMin || 0);
+    const cycleTime = parseFloat(o.cycle_time_min || o.cycleTimeMin || 0);
+    // Cost per unit: Cycle time + (Setup time / Batch Quantity)
+    const setupPerUnit = batchQty > 0 ? (setupTime / batchQty) : 0;
+    return sum + ((cycleTime + setupPerUnit) / 60 * hourlyRate);
   }, 0);
 
   const totalBOMCost = materialCostAfterScrap + operationsCost;
   const costPerUnit = totalBOMCost;
-  const totalScrapQty = bomData.scrap.reduce((sum, s) => sum + (parseFloat(s.input_qty || 0) * (parseFloat(s.loss_percent || 0) / 100)), 0) / batchQty;
+  const totalScrapQty = bomData.scrap.reduce((sum, s) => sum + (parseFloat(s.input_qty || s.inputQty || 0) * (parseFloat(s.loss_percent || s.lossPercent || 0) / 100)), 0) / batchQty;
 
   if (loading && stockItems.length === 0 && bomData.materials.length === 0 && bomData.components.length === 0) return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-2">
@@ -1746,18 +1858,26 @@ const BOMFormPage = () => {
 
   return (
     <div className="bg-slate-50 min-h-screen">
-      <div className="p-4">
+      <div className="">
         {/* Header Actions */}
         <div className="flex justify-between items-center mb-2">
           <div className="flex items-center gap-2  text-slate-900">
-            <div className="p-2 bg-amber-100 rounded  text-amber-600">
-              <FileText className="w-5 h-5" />
-            </div>
+            
             <div>
               <h1 className="text-xl  flex items-center gap-2">
                 {isReadOnly
-                  ? `Viewing BOM: ${cleanText(productForm.description) || itemId} ${productForm.itemGroup ? `(${productForm.itemGroup})` : ''}`
+                  ? `Viewing BOM V${productForm.revision || '1'}: ${cleanText(productForm.description) || itemId} ${productForm.itemGroup ? `(${productForm.itemGroup})` : ''}`
                   : 'Create BOM'}
+                {productForm.revision && (
+                  <span className={`p-1 rounded text-xs border  ${
+                    selectedItem?.status === 'Approved' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
+                    selectedItem?.status === 'Draft' ? 'bg-amber-50 text-amber-600 border-amber-100' :
+                    selectedItem?.status === 'Rejected' ? 'bg-rose-50 text-rose-600 border-rose-100' :
+                    'bg-blue-50 text-blue-600 border-blue-100'
+                  }`}>
+                    {selectedItem?.status || 'Pending'}
+                  </span>
+                )}
                 {selectedItem?.status === 'DRAFT' && (
                   <span className="px-2 py-1 rounded text-xs bg-amber-100 text-amber-600 border border-amber-200">
                     Draft BOM
@@ -1791,7 +1911,7 @@ const BOMFormPage = () => {
         </div>
 
         {/* SECTION 1: Product Information */}
-        <Card className="p-0 border-slate-200 overflow-hidden  transition-all hover:">
+        <div className="p-0 border-slate-200 overflow-hidden  transition-all hover:">
           <div
             className="bg-white p-2 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition-colors border-b border-slate-100"
             onClick={() => toggleSection('productInfo')}
@@ -1811,11 +1931,11 @@ const BOMFormPage = () => {
           </div>
           {!collapsedSections.productInfo && (
             <div className="p-2 bg-white">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
                 <div className="space-y-1.5">
                   <label className="text-xs  text-slate-500 ml-1">Product Name <span className="text-rose-500">*</span></label>
                   {isReadOnly ? (
-                    <div className="p-2.5 bg-slate-50 border border-slate-200 rounded  text-xs text-slate-900 ">
+                    <div className="p-2 bg-slate-50 border border-slate-200 rounded  text-xs text-slate-900 ">
                       {productForm.description || '—'}
                     </div>
                   ) : (
@@ -1912,7 +2032,7 @@ const BOMFormPage = () => {
                 <div className="space-y-1.5">
                   <label className="text-xs  text-slate-500 ml-1">Item Code <span className="text-rose-500">*</span></label>
                   {isReadOnly ? (
-                    <div className="p-2.5 bg-slate-50 border border-slate-200 rounded  text-xs text-slate-900 ">
+                    <div className="p-2 bg-slate-50 border border-slate-200 rounded  text-xs text-slate-900 ">
                       {productForm.itemCode || '—'}
                     </div>
                   ) : (
@@ -2008,7 +2128,7 @@ const BOMFormPage = () => {
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs  text-slate-500 ml-1">Drawing No</label>
-                  <div className="p-2.5 bg-slate-50 border border-slate-200 rounded text-xs text-slate-900 font-medium">
+                  <div className="p-2 bg-slate-50 border border-slate-200 rounded text-xs text-slate-900 ">
                     {productForm.drawingNo || 'N/A'}
                   </div>
                 </div>
@@ -2016,7 +2136,7 @@ const BOMFormPage = () => {
                   <label className="text-xs  text-slate-500 ml-1">Item Group</label>
                   <select
                     disabled={isReadOnly}
-                    className="w-full p-2.5 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all disabled:bg-slate-50 disabled:text-slate-400"
+                    className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all disabled:bg-slate-50 disabled:text-slate-400"
                     value={productForm.itemGroup}
                     onChange={(e) => {
                       const newGroup = e.target.value;
@@ -2039,7 +2159,7 @@ const BOMFormPage = () => {
                   <div className="relative">
                     <input
                       type="number"
-                      className={`w-full p-2.5 border border-slate-200 rounded  text-xs  transition-all focus:ring-2 focus:ring-blue-500 focus:outline-none ${(['Sub Assembly', 'Assembly'].includes(productForm.itemGroup) || isReadOnly) ? 'bg-slate-50 text-slate-400 cursor-not-allowed' : 'bg-white text-slate-700'}`}
+                      className={`w-full p-2 border border-slate-200 rounded  text-xs  transition-all focus:ring-2 focus:ring-blue-500 focus:outline-none ${(['Sub Assembly', 'Assembly'].includes(productForm.itemGroup) || isReadOnly) ? 'bg-slate-50 text-slate-400 cursor-not-allowed' : 'bg-white text-slate-700'}`}
                       placeholder="Enter quantity"
                       step="0.01"
                       min="0.01"
@@ -2058,7 +2178,7 @@ const BOMFormPage = () => {
                   <label className="text-xs  text-slate-500 ml-1">UOM</label>
                   <select
                     disabled={isReadOnly}
-                    className="w-full p-2.5 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all disabled:bg-slate-50 disabled:text-slate-400"
+                    className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all disabled:bg-slate-50 disabled:text-slate-400"
                     value={productForm.uom}
                     onChange={(e) => setProductForm({ ...productForm, uom: e.target.value })}
                   >
@@ -2072,7 +2192,7 @@ const BOMFormPage = () => {
                   <input
                     type="text"
                     disabled={isReadOnly}
-                    className="w-full p-2.5 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all disabled:bg-slate-50 disabled:text-slate-400"
+                    className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all disabled:bg-slate-50 disabled:text-slate-400"
                     placeholder="e.g. 1.0"
                     value={productForm.revision}
                     onChange={(e) => setProductForm({ ...productForm, revision: e.target.value })}
@@ -2080,50 +2200,23 @@ const BOMFormPage = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-5 mt-5 pt-5 border-t border-slate-100">
+              <div className="grid grid-cols-1 gap-2 mt-3">
                 <div className="md:col-span-3 space-y-1.5">
                   <label className="text-xs  text-slate-500 ml-1">Technical Specifications / Notes</label>
                   <textarea
                     disabled={isReadOnly}
                     rows="2"
-                    className="w-full p-2.5 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all disabled:bg-slate-50 disabled:text-slate-400 resize-none"
+                    className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all disabled:bg-slate-50 disabled:text-slate-400 resize-none"
                     placeholder="Enter any additional technical details or manufacturing notes..."
                     value={productForm.notes}
                     onChange={(e) => setProductForm({ ...productForm, notes: e.target.value })}
                   />
                 </div>
-                <div className="flex flex-col justify-center gap-2">
-                  <label className="flex items-center gap-2 cursor-pointer group p-2 hover:bg-slate-50 rounded  transition-colors">
-                    <div className={`w-10 h-6 rounded  relative transition-colors ${productForm.isActive ? 'bg-emerald-500' : 'bg-slate-300'}`}>
-                      <input
-                        disabled={isReadOnly}
-                        type="checkbox"
-                        className="hidden"
-                        checked={productForm.isActive}
-                        onChange={(e) => setProductForm({ ...productForm, isActive: e.target.checked })}
-                      />
-                      <div className={`absolute top-1 w-4 h-4 bg-white rounded  transition-all ${productForm.isActive ? 'left-5' : 'left-1'}`}></div>
-                    </div>
-                    <span className="text-xs  text-slate-700">Active BOM</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer group p-2 hover:bg-slate-50 rounded  transition-colors">
-                    <div className={`w-10 h-6 rounded  relative transition-colors ${productForm.isDefault ? 'bg-blue-500' : 'bg-slate-300'}`}>
-                      <input
-                        disabled={isReadOnly}
-                        type="checkbox"
-                        className="hidden"
-                        checked={productForm.isDefault}
-                        onChange={(e) => setProductForm({ ...productForm, isDefault: e.target.checked })}
-                      />
-                      <div className={`absolute top-1 w-4 h-4 bg-white rounded  transition-all ${productForm.isDefault ? 'left-5' : 'left-1'}`}></div>
-                    </div>
-                    <span className="text-xs  text-slate-700">Default BOM</span>
-                  </label>
-                </div>
+              
               </div>
             </div>
           )}
-        </Card>
+        </div>
 
         {/* SECTION 2: Components */}
         <Card className="p-0 border-slate-200 overflow-hidden  transition-all hover:">
@@ -2288,7 +2381,7 @@ const BOMFormPage = () => {
                               <label className="text-xs text-slate-500 ml-1">Weight/Unit (Kg)</label>
                               <input 
                                 type="text" 
-                                className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs text-slate-500 outline-none font-medium" 
+                                className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs text-slate-500 outline-none " 
                                 value={componentForm.weightPerUnit ? (parseFloat(componentForm.weightPerUnit) * (1 + parseFloat(componentForm.scrapPercent || 0))).toFixed(3) : ''} 
                                 readOnly 
                                 placeholder="Auto"
@@ -2349,8 +2442,8 @@ const BOMFormPage = () => {
                   </table>
                 </div>
               ) : (
-                <div className="py-12 flex flex-col items-center justify-center border-2 border-dashed border-slate-100 rounded  bg-slate-50/30">
-                  <div className="w-16 h-16 bg-slate-100 rounded  flex items-center justify-center text-slate-300 mb-3">
+                <div className="py-2 flex flex-col items-center justify-center border-2 border-dashed border-slate-100 rounded  bg-slate-50/30">
+                  <div className="w-8 h-8 bg-slate-100 rounded  flex items-center justify-center text-slate-300 mb-3">
                     <Layers className="w-8 h-8" />
                   </div>
                   <p className="text-xs  text-slate-400 ">No components added yet</p>
@@ -2429,7 +2522,7 @@ const BOMFormPage = () => {
                             const group = (item.item_group || "").toLowerCase();
                             
                             // EXCLUDE FG and Sub-assemblies ONLY (Keep Raw Materials, Consumables, PM, etc.)
-                            if (itemCode.startsWith("FG-") || itemCode.startsWith("SA-")) return false;
+                            if (itemCode.startsWith("FG-") || itemCode.startsWith("SA-") || itemCode.startsWith("SFG-")) return false;
                             if (type.includes("finished") || type.includes("assembly")) return false;
                             if (group.includes("finished") || group.includes("assembly")) return false;
 
@@ -2557,7 +2650,7 @@ const BOMFormPage = () => {
                               <label className="text-xs  text-slate-500 ml-1">Weight/Unit (Kg)</label>
                               <input 
                                 type="text" 
-                                className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs text-slate-500 outline-none font-medium" 
+                                className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs text-slate-500 outline-none " 
                                 value={materialForm.weightPerUnit ? (parseFloat(materialForm.weightPerUnit) * (1 + (parseFloat(materialForm.scrapPercent) || 0))).toFixed(3) : ''} 
                                 readOnly 
                                 placeholder="Auto"
@@ -2685,8 +2778,8 @@ const BOMFormPage = () => {
                   </table>
                 </div>
               ) : (
-                <div className="py-12 flex flex-col items-center justify-center border-2 border-dashed border-slate-100 rounded  bg-emerald-50/30">
-                  <div className="w-16 h-16 bg-white rounded  flex items-center justify-center text-emerald-300 mb-3  border border-emerald-50">
+                <div className="py-2 flex flex-col items-center justify-center border-2 border-dashed border-slate-100 rounded  bg-emerald-50/30">
+                  <div className="w-8 h-8 bg-white rounded  flex items-center justify-center text-emerald-300 mb-3  border border-emerald-50">
                     <Package className="w-8 h-8" />
                   </div>
                   <p className="text-xs  text-emerald-400 ">No materials added yet</p>
@@ -2906,8 +2999,9 @@ const BOMFormPage = () => {
                         const cycleTime = parseFloat(o.cycle_time_min || 0);
                         const setupTime = parseFloat(o.setup_time_min || 0);
                         const hourlyRate = parseFloat(o.hourly_rate || 0);
-                        const totalTimeMin = cycleTime + setupTime;
-                        const operationCost = (totalTimeMin / 60) * hourlyRate;
+                        const setupPerUnit = batchQty > 0 ? (setupTime / batchQty) : 0;
+                        const totalTimeMinPerUnit = cycleTime + setupPerUnit;
+                        const operationCost = (totalTimeMinPerUnit / 60) * hourlyRate;
                         
                         return (
                           <tr key={o.id} className="hover:bg-slate-50/80 transition-colors group">
@@ -2937,7 +3031,7 @@ const BOMFormPage = () => {
                             </td>
                             <td className="p-2  text-center whitespace-nowrap">
                               <span className="inline-flex items-center p-1  rounded text-xs   bg-indigo-50 text-indigo-600 border border-indigo-100">
-                                {totalTimeMin.toFixed(1)}m
+                                {totalTimeMinPerUnit.toFixed(1)}m
                               </span>
                             </td>
                             <td className="p-2  text-center whitespace-nowrap">
@@ -2947,7 +3041,7 @@ const BOMFormPage = () => {
                             </td>
                             {!isReadOnly && (
                               <td className="p-2  text-right whitespace-nowrap">
-                                <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                                <div className="flex justify-end gap-1  group-hover:opacity-100 transition-all">
                                   <button
                                     onClick={() => handleStartEditSectionItem('operations', o)}
                                     className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-all"
@@ -2972,9 +3066,9 @@ const BOMFormPage = () => {
                   </table>
                 </div>
               ) : (
-                <div className="py-12 flex flex-col items-center justify-center border-2 border-dashed border-slate-100 rounded  bg-purple-50/30">
-                  <div className="w-16 h-16 bg-white rounded  flex items-center justify-center text-purple-300 mb-3  border border-purple-50">
-                    <Settings className="w-8 h-8" />
+                <div className="py-2 flex flex-col items-center justify-center border-2 border-dashed border-slate-100 rounded  bg-purple-50/30">
+                  <div className="w-8 h-8 bg-white rounded  flex items-center justify-center text-purple-300 mb-3  border border-purple-50">
+                    <Settings className="w-4 h-4" />
                   </div>
                   <p className="text-xs  text-purple-400 ">No operations defined</p>
                 </div>
@@ -3165,7 +3259,7 @@ const BOMFormPage = () => {
                               <td className="p-2  text-right whitespace-nowrap">
                                 <button
                                   onClick={() => handleDeleteSectionItem('scrap', s.id, s.isLocal)}
-                                  className="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded  transition-all opacity-0 group-hover:opacity-100"
+                                  className="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded  transition-all  group-hover:opacity-100"
                                   title="Remove Scrap"
                                 >
                                   <Trash2 className="w-4 h-4" />
@@ -3179,9 +3273,9 @@ const BOMFormPage = () => {
                   </table>
                 </div>
               ) : (
-                <div className="py-12 flex flex-col items-center justify-center border-2 border-dashed border-slate-100 rounded  bg-orange-50/30">
-                  <div className="w-16 h-16 bg-white rounded  flex items-center justify-center text-orange-300 mb-3  border border-orange-50">
-                    <RefreshCw className="w-8 h-8" />
+                <div className="py-2 flex flex-col items-center justify-center border-2 border-dashed border-slate-100 rounded  bg-orange-50/30">
+                  <div className="w-8 h-8 bg-white rounded  flex items-center justify-center text-orange-300 mb-3  border border-orange-50">
+                    <RefreshCw className="w-4 h-4" />
                   </div>
                   <p className="text-xs  text-orange-400 ">No scrap or loss recorded</p>
                 </div>
@@ -3220,7 +3314,7 @@ const BOMFormPage = () => {
                           <span className="text-sm  text-slate-800">{s.item_name || 'N/A'}</span>
                           <span className="text-xs text-slate-500  tracking-tight">{s.item_code || 'N/A'}</span>
                           {stockItem?.drawing_no && stockItem.drawing_no !== 'N/A' && (
-                            <span className="inline-flex items-center gap-1 mt-1 text-xs  text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-md border border-blue-100 w-fit">
+                            <span className="inline-flex items-center gap-1 mt-1 text-xs  text-blue-600 bg-blue-50 p-1 rounded-md border border-blue-100 w-fit">
                               <Search className="w-2.5 h-2.5" />
                               Drg: {stockItem.drawing_no}
                             </span>
@@ -3292,21 +3386,21 @@ const BOMFormPage = () => {
             <div className="text-slate-400">{collapsedSections.costing ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}</div>
           </div>
           {!collapsedSections.costing && (
-            <div className="p-2  space-y-3">
+            <div className=" my-2 space-y-2">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-3">
                 <div className="p-2 bg-blue-50 rounded-md border border-blue-100">
                   <p className="text-xs text-blue-600  mb-1">Material Cost / FG</p>
-                  <p className="text-2xl  text-blue-900">₹{materialCostAfterScrap.toFixed(2)}</p>
+                  <p className="text-xl  text-blue-900">₹{materialCostAfterScrap.toFixed(2)}</p>
                   <p className="text-xs text-blue-400  mt-1">(Materials + Components - Scrap)</p>
                 </div>
                 <div className="p-2 bg-purple-50 rounded-md border border-purple-100">
                   <p className="text-xs text-purple-600  mb-1">Operations Cost / FG</p>
-                  <p className="text-2xl  text-purple-900">₹{operationsCost.toFixed(2)}</p>
+                  <p className="text-xl  text-purple-900">₹{operationsCost.toFixed(2)}</p>
                   <p className="text-xs text-purple-400  mt-1">Based on (Cycle + Setup) / 60 * Rate</p>
                 </div>
                 <div className="p-2 bg-emerald-50 rounded-md border border-emerald-100">
                   <p className="text-xs text-emerald-600  mb-1">Total Cost / FG</p>
-                  <p className="text-2xl  text-emerald-900">₹{totalBOMCost.toFixed(2)}</p>
+                  <p className="text-xl  text-emerald-900">₹{parseFloat(isReadOnly ? (productForm.bom_cost || totalBOMCost) : totalBOMCost).toFixed(2)}</p>
                   <p className="text-xs text-emerald-400  mt-1">Base Quantity: {batchQty}</p>
                 </div>
               </div>
@@ -3355,60 +3449,66 @@ const BOMFormPage = () => {
         {/* BOM Version History */}
         {(itemId && itemId !== 'bom-form') && (
         <Card className="p-0 border-slate-200 overflow-hidden h-full">
-          <div className="bg-white p-2 flex items-center justify-between border-b border-slate-100">
+          <div className="bg-white  flex items-center justify-between border-b border-slate-100">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 bg-indigo-600 rounded flex items-center justify-center text-white text-sm">
                 <History className="w-4 h-4" />
               </div>
               <div>
-                <h4 className="text-sm font-medium text-slate-800">BOM Version History</h4>
-                <p className="text-[10px] text-slate-400">Manage BOM revisions and compare changes</p>
+                <h4 className="text-sm  text-slate-800">BOM Version History</h4>
+                <p className="text-xs text-slate-400">Manage BOM revisions and compare changes</p>
               </div>
             </div>
             <button 
               onClick={() => handleCreateBOM('Active', true)}
-              className="text-[10px] text-indigo-600 font-medium hover:underline flex items-center gap-1"
+              className="text-xs text-indigo-600  hover:underline flex items-center gap-1"
             >
               <Plus className="w-3 h-3" /> Save as New Version
             </button>
           </div>
-          <div className="p-2 overflow-auto max-h-[350px]">
+          <div className=" my-2 overflow-auto max-h-[350px]">
             {loadingHistory ? (
-              <div className="py-12 text-center text-slate-400">
+              <div className="py-2 text-center text-slate-400">
                 <Loader2 className="w-6 h-6 animate-spin mx-auto mb-3" />
-                <p className="text-xs font-medium">Retrieving version history...</p>
+                <p className="text-xs ">Retrieving version history...</p>
               </div>
             ) : bomHistory.length > 0 ? (
               <div className="grid grid-cols-1 gap-2">
                 {bomHistory.map((v, idx) => {
-                  const isCurrent = String(v.id) === String(itemId);
+                  const isViewing = String(v.id) === String(itemId);
+                  const isLatest = idx === bomHistory.length - 1;
                   return (
                     <div 
                       key={v.id || idx}
-                      onClick={() => navigate(`/bom-form/${v.id}${isReadOnly ? '?view=true' : ''}`)}
-                      className={`group relative p-3 rounded-lg border transition-all cursor-pointer ${
-                        isCurrent 
+                      onClick={() => navigate(`/bom-form/${v.id}?view=true`)}
+                      className={`group relative p-2 rounded border transition-all cursor-pointer ${
+                        isViewing 
                           ? 'bg-indigo-50/50 border-indigo-200 ring-1 ring-indigo-100' 
                           : 'bg-white border-slate-100 hover:border-indigo-200 hover:shadow-md hover:shadow-indigo-50'
                       }`}
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                          <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs ${
-                            isCurrent ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'bg-slate-100 text-slate-600 group-hover:bg-indigo-50 group-hover:text-indigo-600'
+                          <div className={`w-4 h-4 p-1 rounded-full flex items-center justify-center font-bold text-xs ${
+                            isViewing ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'bg-slate-100 text-slate-600 group-hover:bg-indigo-50 group-hover:text-indigo-600'
                           }`}>
                             V{v.version || '1'}
                           </div>
                           <div>
                             <div className="flex items-center gap-2">
-                              <span className="text-sm font-bold text-slate-800">₹{parseFloat(isCurrent ? totalBOMCost : (v.total_cost || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                              {isCurrent && (
-                                <span className="px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded text-[9px] font-bold uppercase tracking-wider">Current</span>
+                              <span className="text-sm font-bold text-slate-800">
+                                ₹{parseFloat(v.total_cost || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                              </span>
+                              {isLatest && (
+                                <span className="p-1 bg-emerald-100 text-emerald-700 rounded text-xs font-bold uppercase tracking-wider">Current</span>
+                              )}
+                              {(isViewing && !isLatest) && (
+                                <span className="p-1 bg-amber-100 text-amber-700 rounded text-xs font-bold uppercase tracking-wider">Viewing</span>
                               )}
                             </div>
                             <div className="flex items-center gap-2 mt-0.5">
                               <Clock className="w-3 h-3 text-slate-400" />
-                              <span className="text-[10px] text-slate-500">
+                              <span className="text-xs text-slate-500">
                                 {v.revision_date ? new Date(v.revision_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
                               </span>
                             </div>
@@ -3416,31 +3516,62 @@ const BOMFormPage = () => {
                         </div>
                         
                         <div className="text-right">
-                          <div className="text-[10px] font-medium text-slate-600">{v.changed_by || 'SPTECH'}</div>
-                          <div className="text-[9px] text-slate-400">Technical Design</div>
-                          <div className="mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <span className="text-[10px] text-indigo-600 font-bold flex items-center gap-1">
-                              View Details <ChevronRight className="w-3 h-3" />
-                            </span>
-                          </div>
+                          <div className="text-xs  text-slate-600">{v.changed_by || 'SPTECH'}</div>
+                          <div className="text-xs text-slate-400">Technical Design</div>
+                          
                         </div>
                       </div>
+                      <div className="mt-2 flex flex-col gap-1 items-end">
+                            <div className="flex gap-1">
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteVersion(v.id, v.version || '1');
+                                }}
+                                className="text-xs bg-rose-50 text-rose-700 px-2 py-1 rounded border border-rose-100 hover:bg-rose-100 transition-colors flex items-center gap-1"
+                                title="Permanently delete this version"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                                Delete
+                              </button>
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleUpdateQuotation(v.id, v.total_cost);
+                                }}
+                                className="text-xs bg-emerald-50 text-emerald-700 px-2 py-1 rounded border border-emerald-100 hover:bg-emerald-100 transition-colors flex items-center gap-1"
+                                title="Update linked quotations with this value"
+                              >
+                                <RefreshCw className="w-3 h-3" />
+                                Update Quotation
+                              </button>
+                               <span className="text-xs text-indigo-600 font-bold flex items-center gap-1 group-hover:opacity-100 transition-opacity">
+                              View Details <ChevronRight className="w-3 h-3" />
+                            </span>
+                            </div>
+                           
+                          </div>
                     </div>
                   );
                 })}
               </div>
             ) : (
-              <div className="py-12 text-center">
+              <div className="py-2 text-center">
                 <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-3">
                   <History className="w-6 h-6 text-slate-300" />
                 </div>
-                <p className="text-xs text-slate-400 font-medium">No version history found for this item</p>
-                <p className="text-[10px] text-slate-300 mt-1">This appears to be the initial version.</p>
+                <p className="text-xs text-slate-400 ">No version history found for this item</p>
+                <p className="text-xs text-slate-300 mt-1">This appears to be the initial version.</p>
               </div>
             )}
           </div>
           <div className="p-2 border-t border-slate-50 bg-slate-50/30">
-            <button className="text-[10px] text-indigo-600 font-bold hover:underline">View Full Version History →</button>
+            <button 
+              onClick={() => navigate('/bom-approval')}
+              className="text-xs text-indigo-600 font-bold hover:underline"
+            >
+              View Full Version History →
+            </button>
           </div>
         </Card>
         )}
@@ -3449,26 +3580,26 @@ const BOMFormPage = () => {
 
       {/* Footer Actions */}
       <div className="flex justify-end gap-2 pb-8">
-        <button onClick={() => navigate('/bom-creation')} className="px-8 py-2.5 bg-white border border-slate-200 rounded  text-sm  text-slate-600 hover:bg-slate-50 transition-all">
+        <button onClick={() => navigate('/bom-creation')} className="p-2 bg-white border border-slate-200 rounded  text-sm  text-slate-600 hover:bg-slate-50 transition-all">
           {isReadOnly ? 'Back to List' : 'Cancel'}
         </button>
         {!isReadOnly && (
           <div className="flex gap-2">
             <button 
               onClick={() => handleCreateBOM('Draft')} 
-              className="px-8 py-2.5 bg-white border border-indigo-200 text-indigo-600 rounded  text-sm  hover:bg-indigo-50 transition-all flex items-center gap-2"
+              className="p-2 bg-white border border-indigo-200 text-indigo-600 rounded  text-sm  hover:bg-indigo-50 transition-all flex items-center gap-2"
             >
               <FileText className="w-4 h-4" />
               Save as Draft
             </button>
             <button 
               onClick={() => handleCreateBOM('Active', true)} 
-              className="px-8 py-2.5 bg-indigo-50 border border-indigo-200 text-indigo-700 rounded text-sm hover:bg-indigo-100 transition-all flex items-center gap-2"
+              className="p-2 bg-indigo-50 border border-indigo-200 text-indigo-700 rounded text-sm hover:bg-indigo-100 transition-all flex items-center gap-2"
             >
               <History className="w-4 h-4" />
               Save as New Version
             </button>
-            <button onClick={() => handleCreateBOM('Active')} className="px-8 py-2.5 bg-orange-500 text-white rounded  text-sm  hover:bg-orange-600 shadow-lg shadow-orange-100 transition-all flex items-center gap-2 ">
+            <button onClick={() => handleCreateBOM('Active')} className="p-2 bg-orange-500 text-white rounded  text-sm  hover:bg-orange-600 shadow-lg shadow-orange-100 transition-all flex items-center gap-2 ">
               {itemId && itemId !== 'bom-form' ? 'Update BOM' : 'Create BOM'}
             </button>
           </div>

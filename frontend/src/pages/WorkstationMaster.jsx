@@ -345,7 +345,7 @@ const WorkstationMaster = ({ showForm: propShowForm, setShowForm: propSetShowFor
               <button
                 type="button"
                 onClick={() => { navigate('/workstation-master'); }}
-                className="p-2.5 rounded  border border-slate-200 text-sm  text-slate-600 hover:bg-slate-50 transition-all"
+                className="p-2 rounded  border border-slate-200 text-sm  text-slate-600 hover:bg-slate-50 transition-all"
               >
                 Cancel
               </button>

@@ -37,7 +37,7 @@ const StatMiniCard = ({ title, count, color, icon }) => {
   
   return (
     <div className={`p-2 rounded  border ${colorMap[color]} flex flex-col items-center text-center transition-all hover:`}>
-      <div className="p-2.5 bg-white rounded  mb-2 shadow-sm">{icon}</div>
+      <div className="p-2 bg-white rounded  mb-2 shadow-sm">{icon}</div>
       <p className="text-xs    opacity-80 mb-0.5">{title}</p>
       <p className="text-xl ">{count || 0}</p>
     </div>
@@ -428,7 +428,7 @@ const GRN = () => {
             </div>
 
             <form onSubmit={handleCreateGRN} className="p-6 space-y-5">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 <div>
                   <label className="blocktext-xs   text-slate-500   mb-1.5 ml-1">PO Number *</label>
                   <input

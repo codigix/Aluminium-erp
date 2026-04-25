@@ -90,7 +90,7 @@ const generateQuotationHTML = (clientName, items, totalAmount, notes, clientId, 
       <meta charset="UTF-8">
       <title>Quotation - SP TECHPIONEER</title>
       <style>
-        body { font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif; font-size: 12px; color: #000; line-height: 1.4; padding: 20px; }
+        body { font-family: 'roboto', sans-serif; font-size: 12px; color: #000; line-height: 1.4; padding: 20px; }
         .header-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
         .header-table td { padding: 10px; border: 1px solid #000; }
         .title { font-size: 24px; font-weight: bold; color: #f26522; text-align: center; }

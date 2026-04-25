@@ -315,7 +315,7 @@ const CompanyMaster = ({
           <button
             type="button"
             onClick={() => window.location.reload()}
-            className="p-2.5 rounded  border border-slate-200 text-slate-400 hover:bg-slate-50 hover:text-indigo-600 hover:border-indigo-200 transition-all shadow-sm"
+            className="p-2 rounded  border border-slate-200 text-slate-400 hover:bg-slate-50 hover:text-indigo-600 hover:border-indigo-200 transition-all shadow-sm"
             title="Refresh Data"
           >
             <RotateCcw className="w-5 h-5" />

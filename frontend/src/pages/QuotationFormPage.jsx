@@ -990,7 +990,7 @@ const QuotationFormPage = () => {
                                     setItems(updatedItems);
                                   }}
                                   title={item.isManual ? "Switch to Master" : "Manual Entry"}
-                                  className={`p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity ${item.isManual ? 'text-amber-500 bg-amber-50' : 'text-slate-400 bg-slate-50'}`}
+                                  className={`p-1 rounded  group-hover:opacity-100 transition-opacity ${item.isManual ? 'text-amber-500 bg-amber-50' : 'text-slate-400 bg-slate-50'}`}
                                 >
                                   <Hash size={12} />
                                 </button>
@@ -1133,7 +1133,7 @@ const QuotationFormPage = () => {
                             handleViewPDF(v.id);
                           }
                         }}
-                        className={`w-full p-2.5 rounded-xl border transition-all group ${
+                        className={`w-full p-2 rounded-xl border transition-all group ${
                           isViewable ? 'cursor-pointer hover:shadow-md hover:border-indigo-300 active:scale-[0.98]' : 'cursor-default opacity-80'
                         } ${
                           v.id === selectedVersionId || (selectedVersionId === null && v.version === version)
@@ -1173,7 +1173,7 @@ const QuotationFormPage = () => {
                           </p>
                           <button 
                             onClick={(e) => { e.stopPropagation(); handleDeleteVersion(v); }}
-                            className="p-1 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-md transition-all opacity-0 group-hover:opacity-100"
+                            className="p-1 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-md transition-all  group-hover:opacity-100"
                             title="Delete Version"
                           >
                             <Trash2 size={12} />

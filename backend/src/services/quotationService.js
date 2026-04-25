@@ -561,7 +561,7 @@ const generateQuotationPDF = async (quotationId) => {
     <html>
     <head>
       <style>
-        body { font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif; color: #333; line-height: 1.6; margin: 40px; }
+        body { font-family: 'roboto', sans-serif; color: #333; line-height: 1.6; margin: 40px; }
         .header { display: flex; justify-content: space-between; border-bottom: 2px solid #2563eb; padding-bottom: 20px; margin-bottom: 30px; }
         .company-info h1 { color: #2563eb; margin: 0; font-size: 24px; }
         .quote-title { text-align: right; }
