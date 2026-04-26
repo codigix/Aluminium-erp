@@ -96,8 +96,8 @@ const getQuotationVersionHistory = async (req, res, next) => {
               COALESCE(soi.unit, qr.item_unit) as item_unit,
               (
                 SELECT bom_cost FROM sales_order_items v2 
-                WHERE ((v2.bom_id = soi.bom_id AND soi.bom_id IS NOT NULL)
-                   OR (LOWER(TRIM(v2.item_code)) = LOWER(TRIM(soi.item_code)) AND LOWER(TRIM(v2.drawing_no)) = LOWER(TRIM(soi.drawing_no)) AND v2.item_code IS NOT NULL AND v2.drawing_no IS NOT NULL)
+                WHERE ((v2.bom_id = qr.bom_id AND qr.bom_id IS NOT NULL)
+                   OR (LOWER(TRIM(v2.item_code)) = LOWER(TRIM(qr.item_code)) AND LOWER(TRIM(v2.drawing_no)) = LOWER(TRIM(qr.drawing_no)) AND v2.item_code IS NOT NULL AND qr.drawing_no IS NOT NULL)
                    OR (LOWER(TRIM(v2.drawing_no)) = LOWER(TRIM(qr.drawing_no)) AND qr.drawing_no IS NOT NULL AND LOWER(TRIM(v2.description)) = LOWER(TRIM(qr.description))))
                    AND v2.bom_cost > 0
                 ORDER BY v2.id DESC LIMIT 1

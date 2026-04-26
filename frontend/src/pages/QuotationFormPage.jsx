@@ -94,7 +94,7 @@ const QuotationFormPage = () => {
         })
         .map(item => {
           const g = (item.item_group || '').toUpperCase();
-          const isSA = (g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY')) && !g.includes('FG');
+          const isSA = (g.includes('SA') || g.includes('SUB') || (g.includes('ASSEMBLY') && !g.includes('CONTROL') && !g.includes('PANEL'))) && !g.includes('FG');
           const isFG = !isSA;
           const drwRate = parseFloat(item.bom_cost || item.rate || 0);
           const rateVal = isSA ? 0 : drwRate;
@@ -123,11 +123,11 @@ const QuotationFormPage = () => {
     if (items.length > 0 && drawings.length > 0 && !isLocked) {
       const updatedItems = items.map(item => {
         const itemG = (item.item_group || '').toUpperCase();
-        const itemIsSA = (itemG.includes('SA') || itemG.includes('SUB') || itemG.includes('ASSEMBLY')) && !itemG.includes('FG');
+        const itemIsSA = (itemG.includes('SA') || itemG.includes('SUB') || (itemG.includes('ASSEMBLY') && !itemG.includes('CONTROL') && !itemG.includes('PANEL'))) && !itemG.includes('FG');
         
         const matchedDrawing = drawings.find(d => {
           const drwG = (d.item_group || '').toUpperCase();
-          const drwIsSA = (drwG.includes('SA') || drwG.includes('SUB') || drwG.includes('ASSEMBLY')) && !drwG.includes('FG');
+          const drwIsSA = (drwG.includes('SA') || drwG.includes('SUB') || (drwG.includes('ASSEMBLY') && !drwG.includes('CONTROL') && !drwG.includes('PANEL'))) && !drwG.includes('FG');
 
           // 1. Match by item_code (Highest Priority - Unique identity)
           if (item.item_code && d.item_code && String(d.item_code).trim().toLowerCase() === String(item.item_code).trim().toLowerCase()) return true;
@@ -165,7 +165,7 @@ const QuotationFormPage = () => {
         if (matchedDrawing) {
           const drwRate = parseFloat(matchedDrawing.bom_cost || matchedDrawing.rate || matchedDrawing.quotedPrice || 0);
           const g = (item.item_group || matchedDrawing.item_group || '').toUpperCase();
-          const isSA = (g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY')) && !g.includes('FG');
+          const isSA = (g.includes('SA') || g.includes('SUB') || (g.includes('ASSEMBLY') && !g.includes('CONTROL') && !g.includes('PANEL'))) && !g.includes('FG');
           const isFG = !isSA;
           
           let newItem = { ...item };
