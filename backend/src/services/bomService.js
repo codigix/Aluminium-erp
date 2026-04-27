@@ -95,14 +95,24 @@ const getItemMaterials = async (itemId, itemCode = null, drawingNo = null) => {
 };
 
 const getItemComponents = async (itemId, itemCode = null, drawingNo = null) => {
-  const parsedItemId = (itemId === 'null' || itemId === 'undefined' || !itemId) ? null : itemId;
+  let parsedItemId = (itemId === 'null' || itemId === 'undefined' || !itemId) ? null : itemId;
   let rows = [];
   
   let isHistorical = false;
+  
+  // Handle manual historical override from controllers
+  if (typeof parsedItemId === 'string' && parsedItemId.startsWith('HISTORICAL_')) {
+    isHistorical = true;
+    parsedItemId = parsedItemId.replace('HISTORICAL_', '');
+    if (parsedItemId === 'null' || !parsedItemId) parsedItemId = null;
+  }
+
   if (parsedItemId) {
-    const [itemCheck] = await pool.query('SELECT status, bom_cost FROM sales_order_items WHERE id = ?', [parsedItemId]);
-    if (itemCheck.length > 0) {
-      isHistorical = ['APPROVED', 'RELEASED', 'COMPLETED'].includes(String(itemCheck[0].status).toUpperCase());
+    if (!isHistorical) {
+      const [itemCheck] = await pool.query('SELECT status, bom_cost FROM sales_order_items WHERE id = ?', [parsedItemId]);
+      if (itemCheck.length > 0) {
+        isHistorical = ['APPROVED', 'RELEASED', 'COMPLETED'].includes(String(itemCheck[0].status).toUpperCase());
+      }
     }
 
     [rows] = await pool.query(

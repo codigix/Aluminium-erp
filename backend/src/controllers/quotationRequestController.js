@@ -188,7 +188,7 @@ const getQuotationVersionHistory = async (req, res, next) => {
         quantity: row.item_qty,
         unit: row.item_unit,
         rate: itemRate,
-        bom_cost: parseFloat(row.latest_bom_cost) || 0,
+        bom_cost: parseFloat(row.bom_cost) || parseFloat(row.latest_bom_cost) || 0,
         total: itemTotal,
         gst_percentage: row.gst_percentage,
         item_group: row.item_group,
@@ -206,7 +206,19 @@ const getQuotationVersionHistory = async (req, res, next) => {
 
       if (isFG || isSA || soiIdVer || itemCodeVer || drawingNoVer) {
         try {
-          const components = await bomService.getItemComponents(soiIdVer, itemCodeVer, drawingNoVer);
+          // RULE: For historical versions (V1, V2, etc.) or APPROVED records, we must 
+          // treat the data as a frozen snapshot.
+          // By passing a status-like flag in the itemId parameter (simulating an approved item),
+          // we force bomService to stop overriding with latest costs.
+          const maxVersion = Math.max(...rows.map(r => r.version));
+          const isHistoricalVersion = row.version < maxVersion || row.status?.toUpperCase() === 'APPROVED';
+          
+          const components = await bomService.getItemComponents(
+            isHistoricalVersion ? `HISTORICAL_${soiIdVer}` : soiIdVer, 
+            itemCodeVer, 
+            drawingNoVer
+          );
+          
           itemData.sub_assemblies = components.filter(c => {
             const code = (c.item_code || c.component_code || '').toUpperCase();
             const cg = (c.item_group || '').toUpperCase();

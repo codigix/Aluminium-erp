@@ -144,7 +144,8 @@ const QuotationFormPage = () => {
           return true;
         })
         .map(item => {
-          let drwRate = parseFloat(item.bom_cost || item.rate || 0);
+          let drwRate = parseFloat(item.quotedPrice || item.rate || 0);
+          let bomCost = parseFloat(item.bom_cost || 0);
 
           // Recalculate based on sub-assemblies if they exist - helps catch stale FG costs
           if (item.sub_assemblies && item.sub_assemblies.length > 0) {
@@ -155,8 +156,9 @@ const QuotationFormPage = () => {
             }, 0);
             
             // If the sum of known sub-assemblies is higher than the stored FG cost, trust the sum
-            if (saSum > drwRate) {
-              drwRate = saSum;
+            if (saSum > (bomCost || drwRate)) {
+              bomCost = saSum;
+              if (drwRate === 0) drwRate = saSum;
             }
           }
 
@@ -164,7 +166,7 @@ const QuotationFormPage = () => {
             ...item,
             id: item.id || Date.now() + Math.random(),
             rate: drwRate,
-            bom_cost: drwRate,
+            bom_cost: bomCost || drwRate,
             total: (parseFloat(item.quantity) || 0) * drwRate,
             gst_percentage: item.gst_percentage || 18,
             isManual: !item.drawing_id && !!item.drawing_no,
@@ -382,7 +384,10 @@ const QuotationFormPage = () => {
     
     // Map items from the version
     if (v.items && v.items.length > 0) {
-      const isHistorical = v.version < maxVersion || isCurrentApproved;
+      const maxHistoryVersion = versionHistory.length > 0 
+        ? Math.max(...versionHistory.map(vh => vh.version)) 
+        : version;
+      const isHistorical = v.version < maxHistoryVersion || v.status?.toUpperCase() === 'APPROVED';
       
       setItems(v.items.map(item => {
         // ONLY apply overrides if we are looking at the LATEST version being edited
@@ -392,7 +397,8 @@ const QuotationFormPage = () => {
           (oi.item_code && oi.item_code === item.item_code && oi.drawing_no === item.drawing_no)
         ) : null;
 
-        let drwRate = parseFloat(override?.bom_cost || item.bom_cost || item.rate || 0);
+        let drwRate = parseFloat(override?.quotedPrice || item.quotedPrice || item.rate || 0);
+        let bomCost = parseFloat(override?.bom_cost || item.bom_cost || 0);
 
         // ONLY Recalculate based on sub-assemblies for the LATEST version 
         // helps catch stale FG costs for NEW revisions, but must NOT touch historical records
@@ -414,14 +420,17 @@ const QuotationFormPage = () => {
           salesOrderItemId: item.sales_order_item_id || item.salesOrderItemId,
           drawing_id: item.drawing_id,
           rate: drwRate,
-          bom_cost: drwRate,
+          bom_cost: bomCost || item.bom_cost || drwRate,
           total: (parseFloat(item.quantity) || 0) * drwRate,
           gst_percentage: item.gst_percentage || 18,
           drawing_no: item.drawing_no,
           description: item.description,
           bom_id: item.bom_id,
           revision_no: item.revision_no,
-          sub_assemblies: item.sub_assemblies || []
+          sub_assemblies: (item.sub_assemblies || []).map(sa => ({
+            ...sa,
+            bom_cost: parseFloat(sa.bom_cost || sa.rate || 0)
+          }))
         };
       }));
     }
@@ -1405,7 +1414,7 @@ const QuotationFormPage = () => {
                         
                         <div className="flex items-center gap-2">
                           <p className="text-[11px] font-black text-slate-900">
-                            {formatCurrency(v.id === selectedVersionId || (selectedVersionId === null && v.version === version) ? summary.totalAmount : (parseFloat(v.received_amount) || parseFloat(v.total_amount) * 1.18))}
+                            {formatCurrency(parseFloat(v.received_amount) || parseFloat(v.total_amount) * 1.18)}
                           </p>
                           <button 
                             onClick={(e) => { e.stopPropagation(); handleDeleteVersion(v); }}

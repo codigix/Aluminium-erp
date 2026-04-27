@@ -411,7 +411,8 @@ const ClientQuotations = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/quotation-requests?status=SENT,DRAFT,REVISED,Revised`, {
+      // Fetch more statuses to ensure we can identify the latest version correctly
+      const response = await fetch(`${API_BASE}/quotation-requests?status=SENT,DRAFT,REVISED,Revised,Approved,Accepted,REJECTED,Completed`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!response.ok) throw new Error('Failed to fetch sent quotations');
@@ -420,9 +421,6 @@ const ClientQuotations = () => {
       // 1. Group items by their batch_id to form "Quotation Versions"
       const versionBatches = {};
       data.forEach(quote => {
-        const status = (quote.status || '').toUpperCase();
-        if (!['SENT', 'DRAFT', 'REVISED'].includes(status)) return;
-        
         const bId = quote.batch_id || `legacy_${quote.company_id}_${Math.floor(new Date(quote.created_at).getTime() / 60000)}`;
         if (!versionBatches[bId]) {
           versionBatches[bId] = {
@@ -434,16 +432,20 @@ const ClientQuotations = () => {
         versionBatches[bId].items.push(quote);
       });
 
-      // 2. Consolidate Versions into Quotation Chains
+      // 2. Consolidate Versions into Quotation Chains and pick the FIRST version (Version 1)
       const grouped = {};
       Object.values(versionBatches).forEach(batch => {
         const leadItem = batch.items[0];
-        // The Root ID is the parent_id if it exists, otherwise the lowest ID in the version items
-        const rootId = batch.items.find(it => it.parent_id)?.parent_id || Math.min(...batch.items.map(it => it.id));
+        
+        // Use the root ID (parent_id or own id if root) to group all versions of the same QRT
+        const rootId = leadItem.parent_id || leadItem.id; 
         const chainKey = `chain_${rootId}`;
         
-        if (!grouped[chainKey] || batch.version > (grouped[chainKey].version || 0)) {
-          // Keep the latest version as the representative for this chain
+        const currentVer = parseInt(batch.version || 1);
+        const existingVer = grouped[chainKey] ? parseInt(grouped[chainKey].version || 1) : 999;
+
+        // PRIORITY: Always represent the Quotation by its FIRST version (Version 1) for the Sent tab
+        if (!grouped[chainKey] || currentVer < existingVer) {
           grouped[chainKey] = {
             id: leadItem.id,
             display_id: rootId,
@@ -457,14 +459,28 @@ const ClientQuotations = () => {
             total_amount: 0,
             received_amount: 0,
             quotes: batch.items, 
-            version: batch.version,
-            batch_id: leadItem.batch_id
+            version: currentVer,
+            batch_id: leadItem.batch_id,
+            has_revisions: grouped[chainKey] ? true : (currentVer > 1)
           };
+        } else if (currentVer > 1) {
+          grouped[chainKey].has_revisions = true;
+        }
+
+        // If any version in the chain has a pending BOM cost, make sure the group knows
+        if (batch.items.some(it => it.pending_bom_cost)) {
+          grouped[chainKey].has_pending_bom = true;
         }
       });
       
-      // 3. Final calculations for each chain (based on latest version items)
-      Object.values(grouped).forEach(group => {
+      // 3. Filter chains: In "Sent" tab, show if the representative version is in a sent/draft/revised state
+      const filtered = Object.values(grouped).filter(group => {
+        const s = (group.status || '').toUpperCase();
+        return ['SENT', 'DRAFT', 'REVISED'].includes(s);
+      });
+
+      // 4. Final calculations
+      filtered.forEach(group => {
         const billableQuotes = group.quotes.filter(q => {
           const g = (q.item_group || q.item_group_calc || '').toUpperCase();
           const isSA = (g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY')) && !g.includes('FG');
@@ -477,7 +493,7 @@ const ClientQuotations = () => {
         group.status = group.status || 'Sent';
       });
       
-      setSentQuotations(Object.values(grouped).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)));
+      setSentQuotations(filtered.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)));
     } catch (error) {
       console.error(error);
       errorToast(error.message || 'Failed to fetch sent quotations');

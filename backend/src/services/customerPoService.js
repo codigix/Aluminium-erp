@@ -2,6 +2,7 @@ const path = require('path');
 const mustache = require('mustache');
 const puppeteer = require('puppeteer');
 const pool = require('../config/db');
+const bomService = require('./bomService');
 
 const calculateAmounts = items => {
   let subtotal = 0;
@@ -80,7 +81,7 @@ const createCustomerPo = async payload => {
     const customerPoId = poResult.insertId;
 
     for (const item of items) {
-      await connection.execute(
+      const [itemResult] = await connection.execute(
         `INSERT INTO customer_po_items
           (customer_po_id, item_code, description, hsn_code, drawing_no, revision_no, quantity,
            unit, rate, basic_amount, discount, cgst_percent, cgst_amount, sgst_percent, sgst_amount,
@@ -110,6 +111,27 @@ const createCustomerPo = async payload => {
           item.customerReference || null
         ]
       );
+
+      const poItemId = itemResult.insertId;
+
+      if (item.sub_assemblies && Array.isArray(item.sub_assemblies)) {
+        for (const sa of item.sub_assemblies) {
+          await connection.execute(
+            `INSERT INTO customer_po_item_subassemblies
+              (po_item_id, drawing_no, description, quantity, unit, rate)
+             VALUES (?, ?, ?, ?, ?, ?)`
+            ,
+            [
+              poItemId,
+              sa.drawingNo || null,
+              sa.description || null,
+              sa.quantity || 0,
+              sa.unit || 'NOS',
+              sa.rate || 0
+            ]
+          );
+        }
+      }
     }
 
     await connection.commit();
@@ -163,7 +185,41 @@ const getCustomerPoById = async id => {
      ORDER BY id ASC`,
     [id]
   );
-  return { ...rows[0], items };
+
+  const enrichedItems = await Promise.all(items.map(async (item) => {
+    // 1. Try to fetch stored sub-assemblies first (as a snapshot)
+    const [storedSA] = await pool.query(
+      `SELECT drawing_no as drawingNo, description, quantity, unit, rate 
+       FROM customer_po_item_subassemblies 
+       WHERE po_item_id = ?`,
+      [item.id]
+    );
+
+    if (storedSA.length > 0) {
+      return { ...item, sub_assemblies: storedSA };
+    }
+
+    // 2. Fallback to dynamic BOM fetching for older records
+    const isFG = (item.item_code || '').startsWith('FG-') || 
+                 (item.drawing_no && item.drawing_no !== '—');
+    
+    if (isFG) {
+      const sub_assemblies = await bomService.getItemComponents(null, item.item_code, item.drawing_no);
+      return { 
+        ...item, 
+        sub_assemblies: sub_assemblies.map(sa => ({
+          drawingNo: sa.drawing_no || sa.component_code,
+          description: sa.description,
+          quantity: sa.quantity || sa.qty,
+          unit: sa.unit || sa.uom || 'Nos',
+          rate: sa.rate || sa.selling_rate || 0
+        }))
+      };
+    }
+    return item;
+  }));
+
+  return { ...rows[0], items: enrichedItems };
 };
 
 const updateCustomerPo = async (id, payload) => {
@@ -223,7 +279,7 @@ const updateCustomerPo = async (id, payload) => {
     await connection.execute('DELETE FROM customer_po_items WHERE customer_po_id = ?', [id]);
 
     for (const item of items) {
-      await connection.execute(
+      const [itemResult] = await connection.execute(
         `INSERT INTO customer_po_items
           (customer_po_id, item_code, description, hsn_code, drawing_no, revision_no, quantity,
            unit, rate, basic_amount, discount, cgst_percent, cgst_amount, sgst_percent, sgst_amount,
@@ -253,6 +309,27 @@ const updateCustomerPo = async (id, payload) => {
           item.customerReference || null
         ]
       );
+
+      const poItemId = itemResult.insertId;
+
+      if (item.sub_assemblies && Array.isArray(item.sub_assemblies)) {
+        for (const sa of item.sub_assemblies) {
+          await connection.execute(
+            `INSERT INTO customer_po_item_subassemblies
+              (po_item_id, drawing_no, description, quantity, unit, rate)
+             VALUES (?, ?, ?, ?, ?, ?)`
+            ,
+            [
+              poItemId,
+              sa.drawingNo || null,
+              sa.description || null,
+              sa.quantity || 0,
+              sa.unit || 'NOS',
+              sa.rate || 0
+            ]
+          );
+        }
+      }
     }
 
     await connection.commit();
@@ -442,12 +519,24 @@ const generateCustomerPoPDF = async poId => {
               <tr>
                 <td style="text-align: center; border-right: 1.5px solid #000;">{{index}}</td>
                 <td style="border-right: 1.5px solid #000;">
-                  <div style="font-weight: normal; font-size: 10px;">{{description}}</div>
+                  <div style="font-weight: bold; font-size: 10px;">{{description}}</div>
+                  {{#drawing_no}}<div style="font-size: 8px; color: #666;">DRW: {{drawing_no}}</div>{{/drawing_no}}
                 </td>
                 <td style="text-align: center; border-right: 1.5px solid #000;">{{quantity}}</td>
                 <td style="text-align: right; border-right: 1.5px solid #000;">{{rate}}</td>
                 <td style="text-align: right;">{{basic_amount}}</td>
               </tr>
+              {{#sub_assemblies}}
+              <tr style="background-color: #f9f9f9; font-size: 9px;">
+                <td style="border-right: 1.5px solid #000;"></td>
+                <td style="border-right: 1.5px solid #000; padding-left: 20px;">
+                  <div style="color: #444;">↳ {{description}} ({{drawingNo}}) <span style="font-size: 7px; background: #eee; padding: 1px 3px; border-radius: 2px;">SA</span></div>
+                </td>
+                <td style="text-align: center; border-right: 1.5px solid #000;">{{displayQuantity}}</td>
+                <td style="text-align: right; border-right: 1.5px solid #000;">{{displayRate}}</td>
+                <td style="text-align: right;">{{displayTotal}}</td>
+              </tr>
+              {{/sub_assemblies}}
               {{/items}}
               {{#empty_rows}}
               <tr style="height: 22px;">
@@ -511,7 +600,17 @@ const generateCustomerPoPDF = async poId => {
       index: idx + 1,
       quantity: parseFloat(i.quantity).toFixed(0),
       rate: parseFloat(i.rate).toFixed(0),
-      basic_amount: parseFloat(i.basic_amount).toFixed(0)
+      basic_amount: parseFloat(i.basic_amount).toFixed(0),
+      sub_assemblies: (i.sub_assemblies || []).map(sa => {
+        const saQty = (parseFloat(sa.quantity || 0) * (parseFloat(i.quantity) || 0));
+        const saRate = parseFloat(sa.rate || 0);
+        return {
+          ...sa,
+          displayQuantity: saQty.toFixed(3),
+          displayRate: saRate.toFixed(2),
+          displayTotal: (saQty * saRate).toFixed(2)
+        };
+      })
     })),
     empty_rows: Array.from({ length: Math.max(0, 15 - (po.items || []).length) })
   };
