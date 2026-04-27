@@ -1295,6 +1295,11 @@ const Quotations = () => {
           <div className=" text-slate-900">
             <div className="text-sm  tracking-tight flex items-center gap-2">
               {val}
+              {q.version && (
+                <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded text-[10px] font-medium">
+                  V{q.version}
+                </span>
+              )}
               {q.isRFQOnly && <span className="px-1.5 py-0.5 bg-amber-50 text-amber-600 border border-amber-100 rounded text-xs   ">No Vendor Assigned</span>}
             </div>
             {(q.sales_order_id || q.mr_number) && (

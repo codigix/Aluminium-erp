@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import { Card, StatusBadge, Tabs, Button, DataTable } from '../components/ui.jsx';
 import { 
-  MessageSquare, Send, X, User, ShieldCheck, RotateCw, Save, Check, FileText, CheckCircle, Mail, ClipboardList, Eye, Trash2, Loader2, Upload, Package, ChevronDown, ChevronUp, History, Search, CheckCheck, Plus, GitBranch, Download, Clock
+  MessageSquare, Send, X, User, ShieldCheck, RotateCw, Save, Check, FileText, CheckCircle, Mail, ClipboardList, Eye, Trash2, Loader2, Upload, Package, ChevronDown, ChevronUp, History, Search, CheckCheck, Plus, GitBranch, Download, Clock, ArrowUpRight, Calculator
 } from 'lucide-react';
 import { successToast, errorToast } from '../utils/toast';
 
@@ -371,14 +371,14 @@ const ClientQuotations = () => {
       
       const grouped = {};
       data.forEach(quote => {
-        // ONLY show Version 1 with status SENT in Sent Tab
-        if ((quote.version || 1) !== 1) return;
-        if ((quote.status || '').trim().toUpperCase() !== 'SENT') return;
+        // We show active quotations (Sent/Draft/Revised)
+        if (!['SENT', 'DRAFT', 'REVISED'].includes((quote.status || '').toUpperCase())) return;
 
         const date = new Date(quote.created_at);
         const roundedTime = Math.floor(date.getTime() / 60000) * 60000;
         
-        const groupKey = quote.batch_id || (quote.parent_id ? `parent_${quote.parent_id}` : `batch_${quote.company_id}_${(quote.project_name || 'manual').toLowerCase()}_${roundedTime}`);
+        // Group by parent_id if available to consolidate versions, otherwise by batch or time
+        const groupKey = quote.parent_id ? `parent_${quote.parent_id}` : (quote.batch_id || `batch_${quote.company_id}_${(quote.project_name || 'manual').toLowerCase()}_${roundedTime}`);
         
         if (!grouped[groupKey]) {
           grouped[groupKey] = {
@@ -398,12 +398,23 @@ const ClientQuotations = () => {
           };
         }
         
+        // Update to latest version info if this quote is newer
+        if ((quote.version || 1) > (grouped[groupKey].version || 0)) {
+          grouped[groupKey].id = quote.id;
+          grouped[groupKey].version = quote.version || 1;
+          grouped[groupKey].status = quote.status;
+          grouped[groupKey].reply_pdf = quote.reply_pdf;
+          grouped[groupKey].created_at = quote.created_at;
+        }
+
         grouped[groupKey].quotes.push(quote);
       });
       
       Object.values(grouped).forEach(group => {
-        // Include both FG and Sub-Assemblies in totals if they have prices
-        const billableQuotes = group.quotes.filter(q => {
+        // Only include items from the LATEST version in totals
+        const latestQuotes = group.quotes.filter(q => (q.version || 1) === group.version);
+        
+        const billableQuotes = latestQuotes.filter(q => {
           const g = (q.item_group || q.item_group_calc || '').toUpperCase();
           const isSA = (g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY')) && !g.includes('FG');
           const isFG = (g.includes('FG') || g.includes('FINISHED')) && !isSA;
@@ -412,7 +423,7 @@ const ClientQuotations = () => {
 
         group.total_amount = billableQuotes.reduce((sum, q) => sum + (parseFloat(q.total_amount) || 0), 0);
         group.received_amount = billableQuotes.reduce((sum, q) => sum + (parseFloat(q.received_amount) || 0), 0);
-        group.status = 'Sent';
+        group.status = group.status || 'Sent';
       });
       
       setSentQuotations(Object.values(grouped).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)));
@@ -599,18 +610,29 @@ const ClientQuotations = () => {
       key: 'id',
       render: (val, group) => {
         const isPending = group.type === 'PENDING';
-        return isPending ? (
-          <span className="p-1 bg-amber-50 text-amber-600 rounded text-xs border border-amber-100">
-            NEW PENDING
-          </span>
-        ) : (
+        const hasUpdate = (group.quotes || []).some(q => q.pending_bom_cost);
+
+        return (
           <div className="flex flex-col gap-1">
-            <span className="p-1 bg-indigo-50 text-indigo-600 rounded text-xs border border-indigo-100 w-fit">
-              QRT-{String(val).padStart(4, '0')}
-            </span>
-            {group.version && (
-              <span className="text-[10px] text-slate-500 font-medium ml-1">
-                Version {group.version}
+            {isPending ? (
+              <span className="p-1 bg-amber-50 text-amber-600 rounded text-xs border border-amber-100">
+                NEW PENDING
+              </span>
+            ) : (
+              <div className="flex flex-col gap-1">
+                <span className="p-1 bg-indigo-50 text-indigo-600 rounded text-xs border border-indigo-100 w-fit">
+                  QRT-{String(val).padStart(4, '0')}
+                </span>
+                {group.version && (
+                  <span className="text-[10px] text-slate-500 font-medium ml-1">
+                    Version {group.version}
+                  </span>
+                )}
+              </div>
+            )}
+            {hasUpdate && (
+              <span className="p-1 bg-rose-50 text-rose-600 rounded text-[9px] border border-rose-100 w-fit animate-pulse font-bold">
+                BOM UPDATE REQUESTED
               </span>
             )}
           </div>
@@ -743,6 +765,19 @@ const ClientQuotations = () => {
         
         return (
           <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+            {!isPending && (group.quotes || []).some(q => q.pending_bom_cost) && (
+              <button
+                onClick={() => {
+                  const target = (group.quotes || []).find(q => q.pending_bom_cost);
+                  if (target) handleApplyPendingBOM(group, target);
+                }}
+                className="p-2 bg-rose-50 border border-rose-200 text-rose-600 hover:bg-rose-100 rounded transition-all active:scale-95 animate-pulse"
+                title="Review BOM Update Request"
+              >
+                <Calculator size={15} />
+              </button>
+            )}
+
             {!isPending && group.reply_pdf && (
               <a
                 href={getFileUrl(group.reply_pdf)}
@@ -943,9 +978,26 @@ const ClientQuotations = () => {
                                 <span className="text-[10px] text-slate-400 ml-1 ">{item.item_unit || item.unit || 'Nos'}</span>
                               </td>
                               <td className="px-4 p-2">
-                                <span className="text-xs font-medium text-slate-600">
-                                  {formatCurrency(item.bom_cost || item.latest_bom_cost)}
-                                </span>
+                                <div className="flex flex-col gap-1">
+                                  <span className="text-xs font-medium text-slate-600">
+                                    {formatCurrency(item.bom_cost || item.latest_bom_cost)}
+                                  </span>
+                                  {item.pending_bom_cost && (
+                                    <div className="flex items-center gap-1.5 animate-in slide-in-from-left duration-300">
+                                      <div className="p-1 bg-rose-50 text-rose-600 rounded border border-rose-100 flex items-center gap-1" title="New BOM Update Requested">
+                                        <ArrowUpRight size={10} className={item.pending_bom_cost > (item.bom_cost || item.latest_bom_cost) ? 'text-rose-500' : 'rotate-90 text-emerald-500'} />
+                                        <span className="text-[10px] font-bold">{formatCurrency(item.pending_bom_cost)}</span>
+                                      </div>
+                                      <button
+                                        onClick={() => handleApplyPendingBOM(group, item)}
+                                        className="p-1 bg-rose-600 text-white rounded hover:bg-rose-700 shadow-sm transition-all active:scale-90"
+                                        title="Apply this new BOM cost and REVISE quotation"
+                                      >
+                                        <CheckCheck size={10} />
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
                               </td>
                               {isPending ? (
                                 <>
@@ -1597,6 +1649,83 @@ const ClientQuotations = () => {
         }
       }
     });
+  };
+
+  const handleApplyPendingBOM = async (group, targetItem) => {
+    const result = await Swal.fire({
+      title: 'Apply New BOM Cost?',
+      html: `
+        <div style="text-align: left; font-size: 14px;">
+          <p>You are about to revise this quotation with the new BOM cost for <strong>${targetItem.description || targetItem.item_code}</strong>.</p>
+          <div style="margin-top: 15px; padding: 10px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+              <span>Current BOM Cost:</span>
+              <span style="font-weight: 600; color: #64748b;">${formatCurrency(targetItem.bom_cost || targetItem.latest_bom_cost)}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+              <span>New BOM Cost:</span>
+              <span style="font-weight: 700; color: #e11d48;">${formatCurrency(targetItem.pending_bom_cost)}</span>
+            </div>
+          </div>
+          <p style="margin-top: 15px; color: #64748b;">This will open the quotation revision form with the updated costs.</p>
+        </div>
+      `,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, Revise Quotation',
+      cancelButtonText: 'Cancel',
+      confirmButtonColor: '#6366f1'
+    });
+
+    if (result.isConfirmed) {
+      // Find latest version items
+      const latestVersion = group.version || 1;
+      const quotes = group?.quotes || [];
+      const latestQuotes = quotes.filter(q => (q.version || 1) === latestVersion);
+      const firstQuote = latestQuotes[0] || quotes[0];
+
+      navigate('/quotation-form', {
+        state: {
+          initialData: {
+            id: group.id,
+            clientId: group.company_id,
+            clientName: group.company_name,
+            clientEmail: firstQuote?.client_email || '',
+            phone: firstQuote?.client_phone || '',
+            address: firstQuote?.client_address || '',
+            version: (group.version || 1) + 1,
+            parentId: firstQuote?.parent_id || group.id,
+            batchId: null,
+            projectName: group.project_name || '',
+            mode: 'revise',
+            items: latestQuotes.map(q => {
+              // Apply pending BOM cost if it's the target item
+              const isTarget = q.id === targetItem.id;
+              const newBomCost = isTarget ? targetItem.pending_bom_cost : (q.bom_cost || q.latest_bom_cost);
+              
+              return {
+                id: Date.now() + Math.random(),
+                salesOrderItemId: q.sales_order_item_id,
+                item_code: q.item_code,
+                orderId: q.sales_order_id,
+                drawing_id: q.drawing_id,
+                drawing_no: q.drawing_no,
+                description: q.item_description,
+                quantity: q.item_qty,
+                unit: q.item_unit || q.uom || 'Nos',
+                rate: newBomCost, // Pre-fill with new cost
+                bom_cost: newBomCost,
+                gst_percentage: q.gst_percentage || 18,
+                item_group: q.item_group,
+                status: 'PENDING',
+                sub_assemblies: q.sub_assemblies || []
+              };
+            }),
+            notes: firstQuote?.notes || ''
+          }
+        }
+      });
+    }
   };
 
   const handleDownloadPDF = async (group) => {

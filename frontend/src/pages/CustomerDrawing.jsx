@@ -312,7 +312,7 @@ const CustomerDrawing = () => {
     const result = await Swal.fire({
       title: 'Create Quotation',
       html: `
-        <div style="text-align: left; font-size: 14px;">
+        <div style="text-align: left; font-size: 16px;">
           <p><strong>Client:</strong> ${clientData.company_name}</p>
           <p><strong>Items:</strong> ${selectedApprovedItems.length}</p>
           <p><strong>Total Value:</strong> ₹${calculateQuotationTotal().toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
@@ -928,7 +928,7 @@ const CustomerDrawing = () => {
       render: (val, row) => (val || row.drawing_pdf) ? (
         <button
           onClick={() => handlePreview(row)}
-          className="inline-flex items-center justify-center p-2 bg-indigo-50 text-indigo-600 rounded hover:bg-indigo-600 hover:text-white transition-all active:scale-95 shadow-sm"
+          className="inline-flex items-center justify-center p-2 bg-indigo-50 text-indigo-600 rounded hover:bg-indigo-600 hover:text-white transition-all active:scale-95 "
           title="View Drawing"
         >
           <Eye size={15} />
@@ -1197,11 +1197,11 @@ const CustomerDrawing = () => {
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+    <div className="space-y-2 animate-in fade-in duration-500">
       {/* Header Section */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-rose-50 text-rose-600 rounded-xl shadow-sm">
+          <div className="p-2 bg-rose-50 text-rose-600 rounded ">
             <FileText size={24} />
           </div>
           <div>

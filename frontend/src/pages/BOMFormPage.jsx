@@ -837,16 +837,21 @@ const BOMFormPage = () => {
             setSelectedItem({ ...item, source: orderItem ? 'order' : 'stock' });
           }
         } else if (dwgParam && !itemId && !selectedItem) {
-          // For NEW BOM creation from a drawing, just pre-fill the drawing info
-          // and leave product info (name/code) blank for manual entry
-          // as per user request to only fill drawing name and Id
-
+          // For NEW BOM creation from a drawing, pre-fill drawing info
+          // and also try to find and set the related product/item info
+          
           let dwgName = dwgNameParam || '';
+          let itemCode = '';
+          let matchedItem = null;
 
-          if (!dwgName) {
-            const dwgInfo = approvedDrawings.find(i => i.drawing_no === dwgParam) ||
-              stockItems.find(i => i.drawing_no === dwgParam);
-            dwgName = dwgInfo ? (dwgInfo.material_name || dwgInfo.description || dwgInfo.item_description || '') : '';
+          const dwgInfo = approvedDrawings.find(i => i.drawing_no === dwgParam) ||
+            stockItems.find(i => i.drawing_no === dwgParam);
+          
+          if (dwgInfo) {
+            matchedItem = dwgInfo;
+            dwgName = dwgInfo.material_name || dwgInfo.description || dwgInfo.item_description || '';
+            itemCode = dwgInfo.item_code || '';
+            setSelectedItem({ ...dwgInfo, source: approvedDrawings.find(i => i.drawing_no === dwgParam) ? 'order' : 'stock' });
           }
 
           if (!dwgName) {
@@ -859,7 +864,8 @@ const BOMFormPage = () => {
             ...prev,
             drawingNo: dwgParam,
             drawing_id: dwgIdParam || prev.drawing_id,
-            description: cleanText(dwgName) || prev.description
+            description: cleanText(dwgName) || prev.description,
+            itemCode: itemCode || prev.itemCode
           }));
         }
       }
@@ -1941,7 +1947,9 @@ const BOMFormPage = () => {
               <h1 className="text-xl  flex items-center gap-2">
                 {isReadOnly
                   ? `Viewing BOM V${productForm.revision || '1'}: ${cleanText(productForm.description) || itemId} ${productForm.itemGroup ? `(${productForm.itemGroup})` : ''}`
-                  : 'Create BOM'}
+                  : (productForm.drawingNo && productForm.drawingNo !== 'N/A' 
+                    ? `Create BOM: ${productForm.drawingNo}` 
+                    : 'Create BOM')}
                 {productForm.revision && (
                   <span className={`p-1 rounded text-xs border  ${
                     selectedItem?.status === 'Approved' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
@@ -1966,7 +1974,11 @@ const BOMFormPage = () => {
               <p className="text-xs text-slate-400   ">
                 {selectedItem?.status === 'REJECTED' && selectedItem?.rejection_reason
                   ? `Reason: ${selectedItem.rejection_reason}`
-                  : isReadOnly ? 'Inspecting bill of materials details' : 'Configure bill of materials'}
+                  : isReadOnly 
+                    ? 'Inspecting bill of materials details' 
+                    : (productForm.description 
+                        ? `Drawing: ${productForm.description}${productForm.itemCode ? ` (${productForm.itemCode})` : ''}` 
+                        : 'Configure bill of materials')}
               </p>
             </div>
           </div>

@@ -3,20 +3,22 @@ require('dotenv').config({ path: './backend/.env' });
 
 async function checkSchema() {
     const config = {
-        host: process.env.DB_HOST || '127.0.0.1',
+        host: process.env.DB_HOST || 'localhost',
+        port: parseInt(process.env.DB_PORT) || 3306,
         user: process.env.DB_USER || 'root',
         password: process.env.DB_PASSWORD || '',
-        database: process.env.DB_NAME || 'sales_erp',
-        port: process.env.DB_PORT || 3306
+        database: process.env.DB_NAME || 'sales_erp'
     };
 
+    const connection = await mysql.createConnection(config);
+
     try {
-        const connection = await mysql.createConnection(config);
-        const [rows] = await connection.query('DESC shipment_orders');
-        console.log('Shipment Orders Schema:', JSON.stringify(rows, null, 2));
-        await connection.end();
+        const [rows] = await connection.query('DESCRIBE quotation_requests');
+        console.log(JSON.stringify(rows, null, 2));
     } catch (error) {
         console.error('Error:', error);
+    } finally {
+        await connection.end();
     }
 }
 

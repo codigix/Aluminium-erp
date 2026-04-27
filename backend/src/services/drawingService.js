@@ -364,10 +364,11 @@ const deleteCustomerDrawing = async (id) => {
 
     // 1. Get all sales_order_item_ids linked to this drawing
     const [soItems] = await connection.query(
-      'SELECT id FROM sales_order_items WHERE drawing_id = ?',
+      'SELECT id, sales_order_id FROM sales_order_items WHERE drawing_id = ?',
       [id]
     );
     const soItemIds = soItems.map(item => item.id);
+    const soIds = [...new Set(soItems.map(item => item.sales_order_id).filter(id => id))];
 
     // 2. Delete from tables that don't have ON DELETE CASCADE for sales_order_item_id
     if (soItemIds.length > 0) {
@@ -390,6 +391,24 @@ const deleteCustomerDrawing = async (id) => {
         `DELETE FROM work_orders WHERE sales_order_item_id IN (${placeholders})`,
         soItemIds
       );
+
+      // Delete from BOM tables
+      await connection.query(
+        `DELETE FROM sales_order_item_materials WHERE sales_order_item_id IN (${placeholders})`,
+        soItemIds
+      );
+      await connection.query(
+        `DELETE FROM sales_order_item_components WHERE sales_order_item_id IN (${placeholders})`,
+        soItemIds
+      );
+      await connection.query(
+        `DELETE FROM sales_order_item_operations WHERE sales_order_item_id IN (${placeholders})`,
+        soItemIds
+      );
+      await connection.query(
+        `DELETE FROM sales_order_item_scrap WHERE sales_order_item_id IN (${placeholders})`,
+        soItemIds
+      );
     }
 
     // 3. Delete from quotation_requests by drawing_id directly (in case they aren't linked via sales_order_item_id)
@@ -407,7 +426,21 @@ const deleteCustomerDrawing = async (id) => {
       );
     }
 
-    // 5. Finally delete the drawing itself
+    // 5. Cleanup empty sales orders
+    if (soIds.length > 0) {
+      for (const soId of soIds) {
+        const [remainingItems] = await connection.query(
+          'SELECT id FROM sales_order_items WHERE sales_order_id = ?',
+          [soId]
+        );
+        if (remainingItems.length === 0) {
+          // This will also delete design_orders due to ON DELETE CASCADE
+          await connection.query('DELETE FROM sales_orders WHERE id = ?', [soId]);
+        }
+      }
+    }
+
+    // 6. Finally delete the drawing itself
     const [result] = await connection.execute('DELETE FROM customer_drawings WHERE id = ?', [id]);
     
     await connection.commit();

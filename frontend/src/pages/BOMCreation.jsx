@@ -286,9 +286,123 @@ const BOMCreation = () => {
         if (!response.ok) throw new Error('Failed to delete BOM');
         successToast('BOM has been deleted.');
         fetchOrders();
+        
+        // If modal is open and showing this order, refresh its items
+        if (showBOMDetails && selectedBOMOrder) {
+          handleViewBOMDetails(selectedBOMOrder);
+        }
       }
     } catch (error) {
       errorToast(error.message);
+    }
+  };
+
+  const handleDeleteAllClientBOMs = async (client) => {
+    try {
+      const items = clientData[client.id]?.items || [];
+      const itemsWithBOM = items.filter(i => i.has_bom || i.has_master_bom);
+
+      if (itemsWithBOM.length === 0) {
+        errorToast("No BOMs found to delete for this client.");
+        return;
+      }
+
+      const result = await Swal.fire({
+        title: '<span class="text-base  text-slate-800">Delete All Client BOMs?</span>',
+        html: `<span class="text-xs text-slate-600">Are you sure you want to delete <span class=" font-bold">${itemsWithBOM.length}</span> BOMs for <span class=" text-indigo-600">${client.client_name}</span>? This action <span class=" text-rose-600">cannot be undone</span>.</span>`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#ef4444',
+        cancelButtonColor: '#64748b',
+        confirmButtonText: 'Yes, Delete All',
+        cancelButtonText: 'Cancel',
+        width: '380px',
+        padding: '1rem',
+        customClass: {
+          confirmButton: 'text-[11px]  px-4 py-2 rounded shadow-lg shadow-rose-100  ',
+          cancelButton: 'text-[11px]  px-4 py-2 rounded  '
+        }
+      });
+
+      if (result.isConfirmed) {
+        setLoading(true);
+        const token = localStorage.getItem('authToken');
+        
+        const promises = itemsWithBOM.map(item => 
+          fetch(`${API_BASE}/bom/items/${item.id}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+          })
+        );
+
+        const responses = await Promise.all(promises);
+        const failed = responses.filter(r => !r.ok);
+
+        if (failed.length > 0) {
+          throw new Error(`Failed to delete ${failed.length} BOM(s).`);
+        }
+
+        successToast('All client BOMs have been deleted.');
+        fetchOrders();
+      }
+    } catch (error) {
+      errorToast(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteDrawingBOMs = async (drawingNo, drawingItems, clientName) => {
+    try {
+      const itemsWithBOM = drawingItems.filter(i => i.has_bom || i.has_master_bom);
+
+      if (itemsWithBOM.length === 0) {
+        errorToast("No BOMs found to delete for this drawing.");
+        return;
+      }
+
+      const result = await Swal.fire({
+        title: '<span class="text-base  text-slate-800">Delete Drawing BOMs?</span>',
+        html: `<span class="text-xs text-slate-600">Are you sure you want to delete <span class=" font-bold">${itemsWithBOM.length}</span> BOMs for drawing <span class=" text-indigo-600">${drawingNo}</span>? This action <span class=" text-rose-600">cannot be undone</span>.</span>`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#ef4444',
+        cancelButtonColor: '#64748b',
+        confirmButtonText: 'Yes, Delete Drawing BOMs',
+        cancelButtonText: 'Cancel',
+        width: '380px',
+        padding: '1rem',
+        customClass: {
+          confirmButton: 'text-[11px]  px-4 py-2 rounded shadow-lg shadow-rose-100  ',
+          cancelButton: 'text-[11px]  px-4 py-2 rounded  '
+        }
+      });
+
+      if (result.isConfirmed) {
+        setLoading(true);
+        const token = localStorage.getItem('authToken');
+        
+        const promises = itemsWithBOM.map(item => 
+          fetch(`${API_BASE}/bom/items/${item.id}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+          })
+        );
+
+        const responses = await Promise.all(promises);
+        const failed = responses.filter(r => !r.ok);
+
+        if (failed.length > 0) {
+          throw new Error(`Failed to delete ${failed.length} BOM(s).`);
+        }
+
+        successToast(`BOMs for drawing ${drawingNo} have been deleted.`);
+        fetchOrders();
+      }
+    } catch (error) {
+      errorToast(error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -505,6 +619,13 @@ const BOMCreation = () => {
             >
               <Eye className="w-4 h-4" />
             </button>
+            <button 
+              onClick={(e) => { e.stopPropagation(); handleDeleteAllClientBOMs(row); }}
+              className="p-1.5 rounded border border-slate-200 text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all shadow-sm"
+              title="Delete All Client BOMs"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
             {(row.items?.some(i => {
               const s = (i.sales_order_status || '').toUpperCase();
               return !s.includes('BOM_SUBMITTED') && !s.includes('BOM_APPROVED') && !s.includes('QUOTATION') && !s.includes('PO_');
@@ -613,6 +734,13 @@ const BOMCreation = () => {
                       </svg>
                       Create BOM
                     </Link>
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); handleDeleteDrawingBOMs(dwgNo, dwgItems, client.client_name); }}
+                      className="p-2 rounded border border-slate-200 text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all shadow-sm"
+                      title="Delete Drawing BOMs"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
 
@@ -952,6 +1080,13 @@ const BOMCreation = () => {
                                     <div className="p-1.5 bg-emerald-100 text-emerald-600 rounded-full">
                                       <Check size={14} strokeWidth={3} />
                                     </div>
+                                    <button 
+                                      onClick={() => handleDeleteBOM(item.id)}
+                                      className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-all" 
+                                      title="Delete BOM"
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
                                   </div>
                                 </div>
                               </div>

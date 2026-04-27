@@ -298,7 +298,13 @@ const QuotationFormPage = () => {
     // Map items from the version
     if (v.items && v.items.length > 0) {
       setItems(v.items.map(item => {
-        const drwRate = parseFloat(item.bom_cost || item.rate || 0);
+        // Check if we have an override from initialData (e.g. for BOM update requests)
+        const override = initialData?.items?.find(oi => 
+          (oi.salesOrderItemId && oi.salesOrderItemId === item.sales_order_item_id) ||
+          (oi.item_code && oi.item_code === item.item_code && oi.drawing_no === item.drawing_no)
+        );
+
+        const drwRate = parseFloat(override?.bom_cost || item.bom_cost || item.rate || 0);
 
         return {
           ...item,
@@ -563,13 +569,17 @@ const QuotationFormPage = () => {
       setSaving(true);
       const token = localStorage.getItem('authToken');
       
-      const isRevision = status.toUpperCase() === 'REVISED';
-      // Find the absolute latest version number in history to increment from
-      const latestHistoryVersion = versionHistory.length > 0 
-        ? Math.max(...versionHistory.map(vh => vh.version)) 
-        : (version > 1 ? version : 1);
+      const isNewCreation = mode === 'create' && !initialData?.id && !initialData?.parentId;
       
-      const finalVersion = isRevision ? latestHistoryVersion + 1 : version;
+      // If it's a revision or update to an existing quote, we always increment version
+      const maxHistoryVersion = versionHistory.length > 0 
+        ? Math.max(...versionHistory.map(vh => vh.version)) 
+        : (initialData?.mode === 'revise' ? Math.max(1, (initialData.version || 2) - 1) : (initialData?.version || 0));
+        
+      const finalVersion = isNewCreation ? 1 : (maxHistoryVersion + 1);
+      
+      // Root parent ID should be the first version's ID
+      const finalParentId = isNewCreation ? null : (initialData?.parentId || initialData?.id || parentId);
 
       const quotationData = {
         clientId: selectedClient.id,
@@ -601,7 +611,8 @@ const QuotationFormPage = () => {
         quotation_no: quotationNo,
         date: quotationDate,
         version: finalVersion,
-        parentId: parentId,
+        parentId: finalParentId,
+        clearPendingBomId: initialData?.id || null,
         batch_id: batchId
       };
 
@@ -649,11 +660,9 @@ const QuotationFormPage = () => {
           </div>
           <h1 className="text-lg  text-slate-900 flex items-center gap-2">
             {mode === 'received' ? 'Received Quotation' : (version > 1 ? 'Revise Quotation' : 'Create Quotation')}
-            {version > 1 && (
-              <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full text-xs  border border-indigo-200">
-                V{version}
-              </span>
-            )}
+            <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full text-xs  border border-indigo-200">
+              V{version}
+            </span>
           </h1>
           <p className="text-slate-500 text-[11px]">
             {mode === 'received' ? 'Review and manage incoming customer response' : (version > 1 ? `Revising from previous version history` : 'Professional Quotation Management')}
@@ -833,7 +842,7 @@ const QuotationFormPage = () => {
                 />
               </div>
 
-              <div className="space-y-1 md:col-span-2">
+              <div className="space-y-1 md:col-span-1">
                 <label className="text-xs  text-slate-400   flex items-center gap-1.5">
                   <User size={12} /> Client Name
                 </label>
@@ -860,7 +869,7 @@ const QuotationFormPage = () => {
                 />
               </div>
 
-              <div className="space-y-1 md:col-span-2">
+              <div className="space-y-1 md:col-span-1">
                 <label className="text-xs  text-slate-400   flex items-center gap-1.5">
                   <FileText size={12} /> Project Name
                 </label>
@@ -885,7 +894,7 @@ const QuotationFormPage = () => {
             </div>
 
             {selectedClient && (
-              <div className="mt-4 p-3 bg-slate-50 rounded-xl border border-slate-100 grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="mt-2 p-2 bg-slate-50 rounded border border-slate-100 grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div className="flex items-start gap-2">
                   <div className="p-1 bg-white rounded text-slate-400">
                     <Mail size={14} />
@@ -919,7 +928,7 @@ const QuotationFormPage = () => {
 
           {/* Section 2: Quotation Items */}
           <Card className="overflow-hidden">
-            <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-white">
+            <div className="p-2 border-b border-slate-100 flex items-center justify-between bg-white">
               <div className="flex items-center gap-2">
                 <div className="p-1.5 bg-indigo-50 text-indigo-600 rounded">
                   <Calculator size={16} />
@@ -941,19 +950,19 @@ const QuotationFormPage = () => {
               <table className="w-full text-left border-collapse table-fixed">
                 <thead>
                   <tr className="bg-slate-50/50">
-                    <th className="w-12 px-4 py-3 text-xs  text-slate-400  tracking-widest border-b border-slate-100">No.</th>
-                    <th className="w-72 px-4 py-3 text-xs  text-slate-400  tracking-widest border-b border-slate-100">Drawing & Description</th>
-                    <th className="w-32 px-4 py-3 text-xs  text-slate-400  tracking-widest border-b border-slate-100">Qty</th>
-                    <th className="w-32 px-4 py-3 text-xs  text-slate-400  tracking-widest border-b border-slate-100">BOM Cost (₹)</th>
-                    <th className="w-32 px-4 py-3 text-xs  text-slate-400  tracking-widest border-b border-slate-100">Rate (₹)</th>
-                    <th className="w-40 px-4 py-3 text-xs  text-slate-400  tracking-widest border-b border-slate-100">Total (₹)</th>
-                    {!isLocked && <th className="w-20 px-4 py-3 text-xs  text-slate-400  tracking-widest border-b border-slate-100 text-center">Actions</th>}
+                    <th className="w-12 p-2 text-xs  text-slate-400   border-b border-slate-100">No.</th>
+                    <th className="w-72 p-2 text-xs  text-slate-400   border-b border-slate-100">Drawing & Description</th>
+                    <th className="w-32 p-2 text-xs  text-slate-400   border-b border-slate-100">Qty</th>
+                    <th className="w-32 p-2 text-xs  text-slate-400   border-b border-slate-100">BOM Cost (₹)</th>
+                    <th className="w-32 p-2 text-xs  text-slate-400   border-b border-slate-100">Rate (₹)</th>
+                    <th className="w-40 p-2 text-xs  text-slate-400   border-b border-slate-100">Total (₹)</th>
+                    {!isLocked && <th className="w-20 p-2 text-xs  text-slate-400   border-b border-slate-100 text-center">Actions</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
                   {items.length === 0 ? (
                     <tr>
-                      <td colSpan={isLocked ? "5" : "6"} className="px-4 py-10 text-center text-slate-400 text-xs italic">
+                      <td colSpan={isLocked ? "5" : "6"} className="p-2 text-center text-slate-400 text-xs italic">
                         {isLocked ? "No items in this version." : "No items added yet. Click \"Add Item\" to begin."}
                       </td>
                     </tr>
@@ -964,8 +973,8 @@ const QuotationFormPage = () => {
                       // Parent Item Row
                       rows.push(
                         <tr key={item.id} className="hover:bg-slate-50/30 transition-colors">
-                          <td className="px-4 py-3 text-xs font-medium text-slate-400">{index + 1}</td>
-                          <td className="px-4 py-3 align-top">
+                          <td className="p-2 text-xs font-medium text-slate-400">{index + 1}</td>
+                          <td className="p-2 align-top">
                             <div className="space-y-1">
                               <div className="flex items-center gap-2 group">
                                 <div className="flex-1">
@@ -994,7 +1003,7 @@ const QuotationFormPage = () => {
                                         value={item.description}
                                         onChange={(e) => handleItemChange(item.id, 'description', e.target.value)}
                                         rows="1"
-                                        className="w-full px-0 py-0 text-sm  text-slate-900 border-none focus:ring-0 resize-none bg-transparent placeholder:text-slate-300 "
+                                        className="w-full px-0 py-0 text-xs  text-slate-900 border-none focus:ring-0 resize-none bg-transparent placeholder:text-slate-300 "
                                       />
                                       <div className="flex items-center gap-2 mt-0.5">
                                         <input 
@@ -1024,7 +1033,7 @@ const QuotationFormPage = () => {
                                         value={item.description}
                                         onChange={(e) => handleItemChange(item.id, 'description', e.target.value)}
                                         rows="1"
-                                        className="w-full px-0 py-0 text-sm  text-slate-900 border-none focus:ring-0 resize-none bg-transparent placeholder:text-slate-300 "
+                                        className="w-full px-0 py-0 text-xs  text-slate-900 border-none focus:ring-0 resize-none bg-transparent placeholder:text-slate-300 "
                                       />
                                       <div className="flex items-center gap-2 mt-0.5">
                                         <div className="flex-1">
@@ -1081,7 +1090,7 @@ const QuotationFormPage = () => {
                               </div>
                             </div>
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="p-2">
                             <div className="flex items-center gap-1.5">
                               <input 
                                 type="number"
@@ -1093,12 +1102,12 @@ const QuotationFormPage = () => {
                               <span className="text-xs text-slate-400 font-medium">{item.unit || 'Nos'}</span>
                             </div>
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="p-2">
                             <div className="px-2 py-1 text-xs  text-emerald-600 bg-emerald-50 rounded border border-emerald-100/50">
                               {formatCurrency(item.bom_cost || 0)}
                             </div>
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="p-2">
                             <input 
                               type="number"
                               value={item.rate}
@@ -1107,11 +1116,11 @@ const QuotationFormPage = () => {
                               className={`w-full px-2 py-1 text-xs font-semibold border rounded outline-none transition-all ${isLocked ? 'bg-transparent border-transparent text-slate-700' : 'bg-white border-slate-200 text-indigo-600 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500'}`}
                             />
                           </td>
-                          <td className="px-4 py-3 text-xs  text-slate-700">
+                          <td className="p-2 text-xs  text-slate-700">
                             {formatCurrency(item.total * (1 + (item.gst_percentage || 18) / 100))}
                           </td>
                           {!isLocked && (
-                            <td className="px-4 py-3 text-center">
+                            <td className="p-2 text-center">
                               <button
                                 onClick={() => handleRemoveItem(item.id)}
                                 className="p-1.5 text-rose-500 hover:bg-rose-50 rounded transition-colors"
@@ -1128,9 +1137,9 @@ const QuotationFormPage = () => {
                         item.sub_assemblies.forEach((sa, saIdx) => {
                           rows.push(
                             <tr key={`${item.id}-sa-${sa.id}`} className="bg-slate-50/20">
-                              <td className="px-4 py-2 border-b border-slate-50"></td>
-                              <td className="px-4 py-2 border-b border-slate-50">
-                                <div className="flex items-center gap-2 pl-6">
+                              <td className="p-2 border-b border-slate-50"></td>
+                              <td className="p-2 border-b border-slate-50">
+                                <div className="flex items-center gap-2 pl-3">
                                   <GitBranch size={12} className="text-slate-300 rotate-180" />
                                   <div className="flex flex-col">
                                     <span className="text-[11px] text-slate-600 font-medium">{sa.description}</span>
@@ -1141,19 +1150,19 @@ const QuotationFormPage = () => {
                                   </div>
                                 </div>
                               </td>
-                              <td className="px-4 py-2 border-b border-slate-50 text-[11px] text-slate-500">
+                              <td className="p-2 border-b border-slate-50 text-[11px] text-slate-500">
                                 {(parseFloat(sa.quantity || 0) * (parseFloat(item.quantity) || 0)).toFixed(3)} {sa.unit || 'Nos'}
                               </td>
-                              <td className="px-4 py-2 border-b border-slate-50 text-[11px] text-slate-400 italic">
+                              <td className="p-2 border-b border-slate-50 text-[11px] text-slate-400 italic">
                                 {formatCurrency(sa.bom_cost)}
                               </td>
-                              <td className="px-4 py-2 border-b border-slate-50 text-[11px] text-slate-400 italic">
+                              <td className="p-2 border-b border-slate-50 text-[11px] text-slate-400 italic">
                                 {formatCurrency(sa.rate || sa.bom_cost)}
                               </td>
-                              <td className="px-4 py-2 border-b border-slate-50 text-[11px] text-slate-500">
+                              <td className="p-2 border-b border-slate-50 text-[11px] text-slate-500">
                                 {formatCurrency((parseFloat(sa.rate || sa.bom_cost) || 0) * (parseFloat(sa.quantity || 0) * (parseFloat(item.quantity) || 0)))}
                               </td>
-                              {!isLocked && <td className="px-4 py-2 border-b border-slate-50"></td>}
+                              {!isLocked && <td className="p-2 border-b border-slate-50"></td>}
                             </tr>
                           );
                         });
@@ -1180,7 +1189,7 @@ const QuotationFormPage = () => {
 
             <div className="space-y-3">
               {version > 1 && versionHistory.length > 0 && (
-                <div className="mb-4 p-3 bg-indigo-50/50 rounded-xl border border-indigo-100/50 space-y-2">
+                <div className="mb-4 p-3 bg-indigo-50/50 rounded border border-indigo-100/50 space-y-2">
                   <div className="flex items-center gap-1.5 text-xs  text-indigo-600  ">
                     <AlertCircle size={12} /> Revision Comparison
                   </div>
@@ -1218,7 +1227,7 @@ const QuotationFormPage = () => {
               <div className="pt-3 mt-3 border-t border-slate-100">
                 <div className="flex justify-between items-end">
                   <div>
-                    <p className="text-[9px]  text-slate-400  tracking-widest mb-0.5">Total Amount</p>
+                    <p className="text-[9px]  text-slate-400   mb-0.5">Total Amount</p>
                     <p className="text-xl font-black text-indigo-600 tracking-tight">{formatCurrency(summary.totalAmount)}</p>
                   </div>
                 </div>
@@ -1243,7 +1252,7 @@ const QuotationFormPage = () => {
                             handleViewPDF(v.id);
                           }
                         }}
-                        className={`w-full p-2 rounded-xl border transition-all group ${
+                        className={`w-full p-2 rounded border transition-all group ${
                           isViewable ? 'cursor-pointer hover:shadow-md hover:border-indigo-300 active:scale-[0.98]' : 'cursor-default opacity-80'
                         } ${
                           v.id === selectedVersionId || (selectedVersionId === null && v.version === version)
@@ -1326,17 +1335,17 @@ const QuotationFormPage = () => {
 
             <div className="mt-6 space-y-4">
               <div className="space-y-1.5">
-                <label className="text-[9px]  text-slate-400  tracking-widest block">Notes</label>
+                <label className="text-[9px]  text-slate-400   block">Notes</label>
                 <textarea 
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   readOnly={isLocked}
                   placeholder={isLocked ? "" : "Additional terms..."}
-                  className={`w-full px-3 py-2 border rounded-xl text-xs outline-none transition-all resize-none h-24 ${isLocked ? 'bg-slate-50 border-slate-200 text-slate-600' : 'bg-slate-50/50 border-slate-200 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500'}`}
+                  className={`w-full px-3 py-2 border rounded text-xs outline-none transition-all resize-none h-24 ${isLocked ? 'bg-slate-50 border-slate-200 text-slate-600' : 'bg-slate-50/50 border-slate-200 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500'}`}
                 />
               </div>
 
-              <div className="p-3 bg-amber-50 rounded-xl border border-amber-100">
+              <div className="p-3 bg-amber-50 rounded border border-amber-100">
                 <div className="flex gap-2">
                   <div className="text-amber-600 mt-0.5">
                     <FileText size={14} />

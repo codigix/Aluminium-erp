@@ -102,10 +102,10 @@ const createQuotation = async (payload) => {
     const quoteNumber = await generateQuoteNumber();
 
     const [result] = await connection.execute(
-      `INSERT INTO quotations (quote_number, vendor_id, sales_order_id, mr_id, rfq_id, rfq_group_id, status, valid_until, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO quotations (quote_number, base_quote_number, version, vendor_id, sales_order_id, mr_id, rfq_id, rfq_group_id, status, valid_until, notes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ,
-      [quoteNumber, vendorId, salesOrderId || null, mrId || null, rfq_id || null, rfq_group_id || null, status, validUntil || null, notes || null]
+      [quoteNumber, quoteNumber, 1, vendorId, salesOrderId || null, mrId || null, rfq_id || null, rfq_group_id || null, status, validUntil || null, notes || null]
     );
 
     const quotationId = result.insertId;
@@ -191,8 +191,10 @@ const createQuotation = async (payload) => {
 };
 
 const getQuotations = async (filters = {}) => {
+  const { status, vendorId, latestOnly = true, baseQuoteNumber } = filters;
+  
   let query = `
-    SELECT q.*, 
+    SELECT q.*, v.vendor_name,
            COALESCE(
              so.project_name, 
              (SELECT project_name FROM sales_orders WHERE id = (SELECT sales_order_id FROM production_plans WHERE id = mr.plan_id)),
@@ -201,6 +203,7 @@ const getQuotations = async (filters = {}) => {
            ) as project_name,
            mr.mr_number, r.rfq_number
     FROM quotations q
+    LEFT JOIN vendors v ON v.id = q.vendor_id
     LEFT JOIN sales_orders so ON so.id = q.sales_order_id
     LEFT JOIN material_requests mr ON mr.id = q.mr_id
     LEFT JOIN procurement_rfqs r ON r.id = q.rfq_id
@@ -208,14 +211,21 @@ const getQuotations = async (filters = {}) => {
   `;
   const params = [];
 
-  if (filters.status) {
+  if (status) {
     query += ' AND q.status = ?';
-    params.push(filters.status);
+    params.push(status);
+  } else if (latestOnly) {
+    query += " AND q.status != 'SUPERSEDED'";
   }
 
-  if (filters.vendorId) {
+  if (vendorId) {
     query += ' AND q.vendor_id = ?';
-    params.push(filters.vendorId);
+    params.push(vendorId);
+  }
+
+  if (baseQuoteNumber) {
+    query += ' AND q.base_quote_number = ?';
+    params.push(baseQuoteNumber);
   }
 
   query += ' ORDER BY q.created_at DESC';
@@ -344,50 +354,69 @@ const updateQuotation = async (quotationId, payload) => {
   try {
     await connection.beginTransaction();
 
-    const updateFields = [];
-    const updateParams = [];
+    // 1. Get the current quotation to find base_quote_number and current version
+    const [current] = await connection.query(
+      'SELECT * FROM quotations WHERE id = ?',
+      [quotationId]
+    );
 
-    if (validUntil !== undefined) {
-      updateFields.push('valid_until = ?');
-      updateParams.push(validUntil);
+    if (current.length === 0) {
+      throw new Error('Quotation not found');
     }
 
-    if (notes !== undefined) {
-      updateFields.push('notes = ?');
-      updateParams.push(notes);
-    }
+    const oldQuote = current[0];
+    const newVersion = (oldQuote.version || 1) + 1;
+    const baseQuoteNumber = oldQuote.base_quote_number || oldQuote.quote_number;
+    
+    // New quote number reflects version
+    const newQuoteNumber = `${baseQuoteNumber}-V${newVersion}`;
 
-    if (received_pdf_path !== undefined) {
-      updateFields.push('received_pdf_path = ?');
-      updateParams.push(received_pdf_path);
-    }
+    // 2. Insert new version of quotation
+    const [result] = await connection.execute(
+      `INSERT INTO quotations (
+        quote_number, base_quote_number, version, vendor_id, sales_order_id, 
+        mr_id, rfq_id, rfq_group_id, status, valid_until, notes, received_pdf_path
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        newQuoteNumber,
+        baseQuoteNumber,
+        newVersion,
+        oldQuote.vendor_id,
+        oldQuote.sales_order_id,
+        oldQuote.mr_id,
+        oldQuote.rfq_id,
+        oldQuote.rfq_group_id,
+        status || oldQuote.status,
+        validUntil !== undefined ? validUntil : oldQuote.valid_until,
+        notes !== undefined ? notes : oldQuote.notes,
+        received_pdf_path !== undefined ? received_pdf_path : oldQuote.received_pdf_path
+      ]
+    );
 
-    if (status !== undefined) {
-      updateFields.push('status = ?');
-      updateParams.push(status);
-    }
+    const newQuotationId = result.insertId;
 
-    if (updateFields.length > 0) {
-      updateParams.push(quotationId);
-      await connection.execute(
-        `UPDATE quotations SET ${updateFields.join(', ')} WHERE id = ?`,
-        updateParams
+    // 3. Handle items
+    let finalItems = items;
+    if (!finalItems) {
+      // If items not provided in payload, copy from old version
+      const [oldItems] = await connection.query(
+        'SELECT * FROM quotation_items WHERE quotation_id = ?',
+        [quotationId]
       );
+      finalItems = oldItems;
     }
 
-    if (Array.isArray(items) && items.length > 0) {
-      await connection.execute('DELETE FROM quotation_items WHERE quotation_id = ?', [quotationId]);
+    let totalAmount = 0;
+    let totalTaxAmount = 0;
 
-      let totalAmount = 0;
-      let totalTaxAmount = 0;
-
-      for (const item of items) {
+    if (Array.isArray(finalItems) && finalItems.length > 0) {
+      for (const item of finalItems) {
         const designQty = parseFloat(item.design_qty) || parseFloat(item.quantity) || 0;
         const qty = parseFloat(item.quantity) || designQty || 0;
         const rate = parseFloat(item.unit_rate) || 0;
         const amount = Number((qty * rate).toFixed(2));
-        const cgstPercent = 9;
-        const sgstPercent = 9;
+        const cgstPercent = parseFloat(item.cgst_percent) || 9;
+        const sgstPercent = parseFloat(item.sgst_percent) || 9;
         const cgstAmount = Number(((amount * cgstPercent) / 100).toFixed(2));
         const sgstAmount = Number(((amount * sgstPercent) / 100).toFixed(2));
         const totalItemAmount = Number((amount + cgstAmount + sgstAmount).toFixed(2));
@@ -398,11 +427,13 @@ const updateQuotation = async (quotationId, payload) => {
         const correctedItemCode = await getCorrectItemCode(item, connection);
 
         await connection.execute(
-          `INSERT INTO quotation_items (quotation_id, item_code, description, material_name, material_type, drawing_no, quantity, design_qty, planned_qty, unit, unit_rate, amount, cgst_percent, cgst_amount, sgst_percent, sgst_amount, total_amount)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-          ,
+          `INSERT INTO quotation_items (
+            quotation_id, item_code, description, material_name, material_type, 
+            drawing_no, quantity, design_qty, planned_qty, unit, unit_rate, 
+            amount, cgst_percent, cgst_amount, sgst_percent, sgst_amount, total_amount
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
-            quotationId,
+            newQuotationId,
             correctedItemCode,
             item.description || null,
             item.material_name || null,
@@ -422,17 +453,23 @@ const updateQuotation = async (quotationId, payload) => {
           ]
         );
       }
-
-      const grandTotal = totalAmount + totalTaxAmount;
-
-      await connection.execute(
-        'UPDATE quotations SET total_amount = ?, tax_amount = ?, grand_total = ? WHERE id = ?',
-        [totalAmount, totalTaxAmount, grandTotal, quotationId]
-      );
     }
 
+    const grandTotal = totalAmount + totalTaxAmount;
+
+    await connection.execute(
+      'UPDATE quotations SET total_amount = ?, tax_amount = ?, grand_total = ? WHERE id = ?',
+      [totalAmount, totalTaxAmount, grandTotal, newQuotationId]
+    );
+
+    // Optional: Mark old version as superseded if it was the previous latest
+    await connection.execute(
+      "UPDATE quotations SET status = 'SUPERSEDED' WHERE id = ? AND status != 'SUPERSEDED'",
+      [quotationId]
+    );
+
     await connection.commit();
-    return { id: quotationId };
+    return { id: newQuotationId, quote_number: newQuoteNumber, version: newVersion };
   } catch (error) {
     await connection.rollback();
     throw error;

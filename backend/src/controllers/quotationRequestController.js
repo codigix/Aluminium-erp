@@ -9,7 +9,7 @@ const getQuotationRequests = async (req, res, next) => {
     let query = `
       SELECT *, COALESCE(total_amount / NULLIF(item_qty, 0), 0) as unit_rate FROM (
         SELECT qr.id as qr_id, qr.sales_order_id, qr.company_id, qr.status, qr.total_amount, qr.received_amount, qr.notes, qr.created_at, qr.rejection_reason, qr.reply_pdf,
-               qr.profit_percentage, qr.gst_percentage,
+               qr.profit_percentage, qr.gst_percentage, qr.pending_bom_cost,
                qr.version, qr.parent_id, qr.batch_id,
                COALESCE(qr.project_name, so.project_name, 'Manual Quotation') as project_name, 
                so.bom_id, c.company_name, 
@@ -349,7 +349,7 @@ const rejectQuotationRequest = async (req, res, next) => {
 const sendQuotationViaEmail = async (req, res, next) => {
   const connection = await pool.getConnection();
   try {
-    const { clientId, clientEmail, clientName, items, totalAmount, notes, emailRequired = true, status, projectName } = req.body;
+    const { clientId, clientEmail, clientName, items, totalAmount, notes, emailRequired = true, status, projectName, clearPendingBomId } = req.body;
 
     if (!clientId || !items || items.length === 0) {
       return res.status(400).json({ 
@@ -364,6 +364,13 @@ const sendQuotationViaEmail = async (req, res, next) => {
     }
 
     await connection.beginTransaction();
+
+    if (clearPendingBomId) {
+      await connection.execute(
+        'UPDATE quotation_requests SET pending_bom_cost = NULL WHERE id = ?',
+        [clearPendingBomId]
+      );
+    }
 
     const batchId = req.body.batch_id || `BATCH-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
@@ -712,10 +719,6 @@ const requestQuotationUpdateFromBOM = async (req, res, next) => {
     const requesterName = req.user ? `${req.user.first_name || ''} ${req.user.last_name || ''}`.trim() : 'A user';
 
     // 2. Find all relevant quotations
-    // We match by:
-    // a) Direct sales_order_item_id link
-    // b) Matching item_code AND drawing_no (for master templates)
-    // c) Matching drawing_no (most common for sub-assemblies being part of a larger FG quotation)
     const [qrs] = await pool.query(
       `SELECT qr.id, c.company_name, qr.batch_id
        FROM quotation_requests qr
@@ -723,17 +726,19 @@ const requestQuotationUpdateFromBOM = async (req, res, next) => {
        LEFT JOIN sales_order_items soi ON qr.sales_order_item_id = soi.id
        WHERE (qr.sales_order_item_id = ? 
           OR (LOWER(TRIM(soi.item_code)) = LOWER(TRIM(?)) AND LOWER(TRIM(soi.drawing_no)) = LOWER(TRIM(?)))
+          OR (LOWER(TRIM(qr.item_code)) = LOWER(TRIM(?)) AND LOWER(TRIM(qr.drawing_no)) = LOWER(TRIM(?)))
           OR (qr.drawing_no IS NOT NULL AND LOWER(TRIM(qr.drawing_no)) = LOWER(TRIM(?)))
           OR (qr.drawing_no IS NULL AND qr.description IS NOT NULL AND LOWER(TRIM(qr.description)) = LOWER(TRIM(?))))
           AND qr.status NOT IN ('COMPLETED', 'REJECTED', 'CANCELLED')`,
-      [salesOrderItemId, item_code, drawing_no, drawing_no, description]
+      [salesOrderItemId, item_code, drawing_no, item_code, drawing_no, drawing_no, description]
     );
 
     if (qrs.length === 0) {
+      console.log(`[requestQuotationUpdateFromBOM] No active quotations found for: ${item_code} / ${drawing_no} / ${description}`);
       return res.status(404).json({ error: 'No active quotations found for this item.' });
     }
 
-    // 3. Insert communication record for each quotation
+    // 3. Insert communication record for each quotation AND update pending_bom_cost
     const message = `${requesterName} has requested a quotation update for "${description || drawing_no || item_code}" with the latest BOM cost: ₹${parseFloat(bomCost).toLocaleString('en-IN')}. Please review and update.`;
 
     for (const qr of qrs) {
@@ -742,6 +747,12 @@ const requestQuotationUpdateFromBOM = async (req, res, next) => {
          (quotation_id, quotation_type, sender_type, message, created_at, is_read) 
          VALUES (?, ?, ?, ?, NOW(), 0)`,
         [qr.id, 'INTERNAL', 'SYSTEM', message]
+      );
+
+      // Update the quotation request with the pending cost
+      await pool.execute(
+        'UPDATE quotation_requests SET pending_bom_cost = ? WHERE id = ?',
+        [bomCost, qr.id]
       );
     }
 

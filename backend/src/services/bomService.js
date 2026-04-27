@@ -1012,7 +1012,11 @@ const deleteBOM = async (itemId) => {
   try {
     await connection.beginTransaction();
 
-    // 1. Handle references in other tables - set to NULL so they don't break but aren't linked to a deleted BOM
+    // 1. Get sales_order_id before deletion
+    const [itemRows] = await connection.query('SELECT sales_order_id FROM sales_order_items WHERE id = ?', [itemId]);
+    const salesOrderId = itemRows.length > 0 ? itemRows[0].sales_order_id : null;
+
+    // 2. Handle references in other tables
     await connection.execute('UPDATE quotation_requests SET sales_order_item_id = NULL WHERE sales_order_item_id = ?', [itemId]);
     await connection.execute('UPDATE production_plan_items SET sales_order_item_id = NULL WHERE sales_order_item_id = ?', [itemId]);
     await connection.execute('UPDATE work_orders SET sales_order_item_id = NULL WHERE sales_order_item_id = ?', [itemId]);
@@ -1030,6 +1034,14 @@ const deleteBOM = async (itemId) => {
     await connection.execute('DELETE FROM sales_order_items WHERE id = ?', [itemId]);
 
     await connection.execute('SET FOREIGN_KEY_CHECKS = 1');
+
+    // 4. Cleanup empty sales order
+    if (salesOrderId) {
+      const [remaining] = await connection.query('SELECT id FROM sales_order_items WHERE sales_order_id = ?', [salesOrderId]);
+      if (remaining.length === 0) {
+        await connection.query('DELETE FROM sales_orders WHERE id = ?', [salesOrderId]);
+      }
+    }
 
     await connection.commit();
   } catch (error) {
