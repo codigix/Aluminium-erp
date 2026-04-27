@@ -61,10 +61,12 @@ const getItemMaterials = async (itemId, itemCode = null, drawingNo = null) => {
                    GROUP BY material_name
                  ) i ON m.material_name = i.material_name 
                  WHERE m.sales_order_item_id IN (
-                    SELECT id FROM sales_order_items 
-                    WHERE (item_code = ? OR drawing_no = ?) 
-                    AND sales_order_id IS NULL 
-                    ORDER BY id DESC LIMIT 1
+                    SELECT id FROM (
+                       SELECT id FROM sales_order_items 
+                       WHERE (item_code = ? OR drawing_no = ?) 
+                       AND sales_order_id IS NULL 
+                       ORDER BY id DESC LIMIT 1
+                    ) as t
                  )`;
     let params = [itemCode, drawingNo];
 
@@ -136,10 +138,12 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null) => {
                    GROUP BY item_code
                  ) i ON c.component_code = i.item_code
                  WHERE c.sales_order_item_id IN (
-                    SELECT id FROM sales_order_items 
-                    WHERE (item_code = ? OR drawing_no = ?) 
-                    AND sales_order_id IS NULL 
-                    ORDER BY id DESC LIMIT 1
+                    SELECT id FROM (
+                       SELECT id FROM sales_order_items 
+                       WHERE (item_code = ? OR drawing_no = ?) 
+                       AND sales_order_id IS NULL 
+                       ORDER BY id DESC LIMIT 1
+                    ) as t
                  )`;
     let params = [itemCode, drawingNo];
 
@@ -155,10 +159,12 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null) => {
                    GROUP BY item_code
                  ) i ON c.component_code = i.item_code
                  WHERE c.sales_order_item_id IN (
-                    SELECT id FROM sales_order_items 
-                    WHERE (item_code = ? OR drawing_no = ?) 
-                    AND bom_cost > 0
-                    ORDER BY id DESC LIMIT 1
+                    SELECT id FROM (
+                       SELECT id FROM sales_order_items 
+                       WHERE (item_code = ? OR drawing_no = ?) 
+                       AND bom_cost > 0
+                       ORDER BY id DESC LIMIT 1
+                    ) as t
                  )`;
       [rows] = await pool.query(fallbackQuery + ' ORDER BY c.created_at ASC', params);
     }
@@ -277,10 +283,12 @@ const getItemOperations = async (itemId, itemCode = null, drawingNo = null) => {
     }
     let query = `SELECT * FROM sales_order_item_operations 
                  WHERE sales_order_item_id IN (
-                    SELECT id FROM sales_order_items 
-                    WHERE (item_code = ? OR drawing_no = ?) 
-                    AND sales_order_id IS NULL 
-                    ORDER BY id DESC LIMIT 1
+                    SELECT id FROM (
+                       SELECT id FROM sales_order_items 
+                       WHERE (item_code = ? OR drawing_no = ?) 
+                       AND sales_order_id IS NULL 
+                       ORDER BY id DESC LIMIT 1
+                    ) as t
                  )`;
     let params = [itemCode, drawingNo];
 
@@ -328,10 +336,12 @@ const getItemScrap = async (itemId, itemCode = null, drawingNo = null) => {
     }
     let query = `SELECT * FROM sales_order_item_scrap 
                  WHERE sales_order_item_id IN (
-                    SELECT id FROM sales_order_items 
-                    WHERE (item_code = ? OR drawing_no = ?) 
-                    AND sales_order_id IS NULL 
-                    ORDER BY id DESC LIMIT 1
+                    SELECT id FROM (
+                       SELECT id FROM sales_order_items 
+                       WHERE (item_code = ? OR drawing_no = ?) 
+                       AND sales_order_id IS NULL 
+                       ORDER BY id DESC LIMIT 1
+                    ) as t
                  )`;
     let params = [itemCode, drawingNo];
 
