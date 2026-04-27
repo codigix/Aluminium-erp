@@ -86,14 +86,72 @@ const QuotationFormPage = () => {
       });
       setProjectName(initialData.projectName || '');
       
-          const mappedItems = (initialData.items || [])
+      const allSourceItems = initialData.items || [];
+      const nestedIdentities = new Set();
+      
+      // Build set of nested identities
+      allSourceItems.forEach(item => {
+        if (item.sub_assemblies && item.sub_assemblies.length > 0) {
+          item.sub_assemblies.forEach(sa => {
+            const code = (sa.component_code || sa.componentCode || '').trim().toUpperCase();
+            const drawing = (sa.drawing_no || '').trim().toUpperCase();
+            const desc = (sa.description || sa.item_description || '').trim().toUpperCase();
+            
+            if (code) {
+              nestedIdentities.add(`${drawing}_${code}`);
+              nestedIdentities.add(`_ANY_DRAWING_${code}`);
+            }
+            if (desc) {
+              nestedIdentities.add(`${drawing}_DESC_${desc}`);
+              nestedIdentities.add(`_ANY_DRAWING_DESC_${desc}`);
+            }
+          });
+        }
+      });
+
+      const mappedItems = allSourceItems
         .filter(item => {
-          // If we have a drawing_no or description, we should show it
-          // We only filter out items that have NO identifying info
-          return !!(item.drawing_no || item.description || item.item_code);
+          // 1. Basic filter for identifying info
+          if (!(item.drawing_no || item.description || item.item_code)) return false;
+
+          // 2. Duplicate filter (Hide if it's already a nested child of another item)
+          const g = (item.item_group || '').toUpperCase();
+          const t = (item.item_type || '').trim().toUpperCase();
+          const isFG = (g.includes('FG') || t.includes('FG') || g.includes('FINISHED')) && !g.includes('SA') && !g.includes('SUB');
+          
+          if (!isFG) {
+            const code = (item.item_code || '').trim().toUpperCase();
+            const drawing = (item.drawing_no || '').trim().toUpperCase();
+            const desc = (item.description || '').trim().toUpperCase();
+            
+            const identity = `${drawing}_${code}`;
+            const identityDesc = `${drawing}_DESC_${desc}`;
+            
+            if (nestedIdentities.has(identity) || 
+                nestedIdentities.has(`_ANY_DRAWING_${code}`) ||
+                nestedIdentities.has(identityDesc) ||
+                nestedIdentities.has(`_ANY_DRAWING_DESC_${desc}`)) {
+              return false;
+            }
+          }
+          return true;
         })
         .map(item => {
-          const drwRate = parseFloat(item.bom_cost || item.rate || 0);
+          let drwRate = parseFloat(item.bom_cost || item.rate || 0);
+
+          // Recalculate based on sub-assemblies if they exist - helps catch stale FG costs
+          if (item.sub_assemblies && item.sub_assemblies.length > 0) {
+            const saSum = item.sub_assemblies.reduce((sum, sa) => {
+              const saCost = parseFloat(sa.bom_cost || sa.rate || 0);
+              const saQty = parseFloat(sa.quantity || 0);
+              return sum + (saCost * saQty);
+            }, 0);
+            
+            // If the sum of known sub-assemblies is higher than the stored FG cost, trust the sum
+            if (saSum > drwRate) {
+              drwRate = saSum;
+            }
+          }
 
           return {
             ...item,
@@ -148,7 +206,22 @@ const QuotationFormPage = () => {
         });
 
         if (matchedDrawing) {
-          const drwRate = parseFloat(matchedDrawing.bom_cost || matchedDrawing.rate || matchedDrawing.quotedPrice || 0);
+          let drwRate = parseFloat(matchedDrawing.bom_cost || matchedDrawing.rate || matchedDrawing.quotedPrice || 0);
+          
+          // Recalculate based on sub-assemblies if they exist - helps catch stale FG costs
+          if (matchedDrawing.sub_assemblies && matchedDrawing.sub_assemblies.length > 0) {
+            const saSum = matchedDrawing.sub_assemblies.reduce((sum, sa) => {
+              const saCost = parseFloat(sa.bom_cost || sa.rate || 0);
+              const saQty = parseFloat(sa.quantity || 0);
+              return sum + (saCost * saQty);
+            }, 0);
+            
+            // If the sum of known sub-assemblies is higher than the stored FG cost, trust the sum
+            if (saSum > drwRate) {
+              drwRate = saSum;
+            }
+          }
+
           const g = (item.item_group || matchedDrawing.item_group || '').toUpperCase();
           const isSA = (g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY')) && !g.includes('FG');
           const isFG = !isSA;
@@ -304,7 +377,20 @@ const QuotationFormPage = () => {
           (oi.item_code && oi.item_code === item.item_code && oi.drawing_no === item.drawing_no)
         );
 
-        const drwRate = parseFloat(override?.bom_cost || item.bom_cost || item.rate || 0);
+        let drwRate = parseFloat(override?.bom_cost || item.bom_cost || item.rate || 0);
+
+        // Recalculate based on sub-assemblies if they exist - helps catch stale FG costs
+        if (item.sub_assemblies && item.sub_assemblies.length > 0) {
+          const saSum = item.sub_assemblies.reduce((sum, sa) => {
+            const saCost = parseFloat(sa.bom_cost || sa.rate || 0);
+            const saQty = parseFloat(sa.quantity || 0);
+            return sum + (saCost * saQty);
+          }, 0);
+          
+          if (saSum > drwRate) {
+            drwRate = saSum;
+          }
+        }
 
         return {
           ...item,
@@ -625,18 +711,29 @@ const QuotationFormPage = () => {
         body: JSON.stringify(quotationData)
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to save quotation');
-      }
+      const responseData = await response.json();
+      const newQuotationId = responseData.quotationIds?.[0];
 
       const message = status === 'Draft' 
         ? 'Quotation saved as draft' 
         : finalSendEmail 
           ? 'Quotation sent to client successfully' 
-          : 'Quotation updated successfully';
+          : 'Quotation created successfully';
       successToast(message);
-      navigate('/client-quotations');
+
+      if (finalSendEmail || status === 'Draft') {
+        navigate('/client-quotations');
+      } else if (newQuotationId) {
+        // If we stay on the page, update to reflect the newly created quotation
+        setQuotationNo(`QRT-${String(newQuotationId).padStart(4, '0')}`);
+        setSelectedVersionId(newQuotationId);
+        
+        // Refresh history to lock the view if it was Sent/Approved
+        fetchVersionHistory(finalParentId || newQuotationId);
+        
+        // If it was a create mode, switch to "revision view" or similar state if needed
+        // but fetchVersionHistory will update versionHistory which handles isLocked
+      }
     } catch (error) {
       errorToast(error.message);
     } finally {
@@ -1116,8 +1213,11 @@ const QuotationFormPage = () => {
                               className={`w-full px-2 py-1 text-xs font-semibold border rounded outline-none transition-all ${isLocked ? 'bg-transparent border-transparent text-slate-700' : 'bg-white border-slate-200 text-indigo-600 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500'}`}
                             />
                           </td>
-                          <td className="p-2 text-xs  text-slate-700">
-                            {formatCurrency(item.total * (1 + (item.gst_percentage || 18) / 100))}
+                          <td className="p-2 text-xs text-slate-900">
+                            <div className="flex flex-col items-start">
+                              <span className="font-semibold">{formatCurrency(item.total)}</span>
+                              <span className="text-[10px] text-slate-400 font-normal">Base Amount</span>
+                            </div>
                           </td>
                           {!isLocked && (
                             <td className="p-2 text-center">

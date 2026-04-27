@@ -528,7 +528,7 @@ const BOMFormPage = () => {
     return sum + (input * loss * rate);
   }, 0) / batchQty;
 
-  const materialCostAfterScrap = (componentsCost + rawMaterialsCost) - scrapLoss;
+  const materialCostAfterScrap = ((componentsCost + rawMaterialsCost) / batchQty) - scrapLoss;
 
   const operationsCost = bomData.operations.reduce((sum, o) => {
     const hourlyRate = parseFloat(o.hourly_rate || o.hourlyRate || 0);
