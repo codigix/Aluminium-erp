@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const bomService = require('./bomService');
 
 const generateOrderNo = async () => {
   const date = new Date();
@@ -134,7 +135,58 @@ const getOrderById = async (id) => {
   
   const order = rows[0];
   const [items] = await pool.query('SELECT * FROM order_items WHERE order_id = ?', [id]);
-  order.items = items;
+  
+  const enrichedItems = await Promise.all(items.map(async (item) => {
+    // Try to fetch sub-assemblies if linked to a PO
+    if (order.customer_po_id || (order.source_type === 'DIRECT' && order.quotation_id)) {
+      const poId = order.customer_po_id || order.quotation_id;
+      // Find matching PO item to get its sub-assemblies
+      const [poItems] = await pool.query(
+        `SELECT id FROM customer_po_items 
+         WHERE customer_po_id = ? AND (drawing_no = ? OR item_code = ?)`,
+        [poId, item.drawing_no, item.item_code]
+      );
+
+      if (poItems.length > 0) {
+        const [storedSA] = await pool.query(
+          `SELECT drawing_no as drawingNo, description, quantity, unit, rate 
+           FROM customer_po_item_subassemblies 
+           WHERE po_item_id = ?`,
+          [poItems[0].id]
+        );
+        if (storedSA.length > 0) {
+          return { ...item, sub_assemblies: storedSA };
+        }
+      }
+    }
+
+    // Fallback to dynamic BOM fetching
+    const isFG = (item.item_code || '').startsWith('FG-') || 
+                 (item.drawing_no && item.drawing_no !== '—');
+    
+    if (isFG) {
+      try {
+        const sub_assemblies = await bomService.getItemComponents(null, item.item_code, item.drawing_no);
+        if (sub_assemblies && sub_assemblies.length > 0) {
+          return { 
+            ...item, 
+            sub_assemblies: sub_assemblies.map(sa => ({
+              drawingNo: sa.drawing_no || sa.component_code,
+              description: sa.description,
+              quantity: sa.quantity || sa.qty,
+              unit: sa.unit || sa.uom || 'Nos',
+              rate: sa.rate || sa.selling_rate || 0
+            }))
+          };
+        }
+      } catch (err) {
+        console.error(`Error fetching BOM for order item ${item.id}:`, err.message);
+      }
+    }
+    return item;
+  }));
+
+  order.items = enrichedItems;
   
   return order;
 };

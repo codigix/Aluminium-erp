@@ -162,15 +162,31 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null) => {
     }
 
     if (rows.length === 0) {
-      const [fallbackIdRow] = await pool.query(
-        `SELECT id FROM sales_order_items 
-         WHERE (item_code = ? OR drawing_no = ?) 
-         AND bom_cost > 0
-         ORDER BY id DESC LIMIT 1`,
+      // Try to find an item that actually HAS components first to avoid picking wrong entry for same drawing
+      const [componentIdRow] = await pool.query(
+        `SELECT soi.id 
+         FROM sales_order_items soi
+         WHERE (soi.item_code = ? OR soi.drawing_no = ?) 
+         AND soi.bom_cost > 0
+         AND EXISTS (SELECT 1 FROM sales_order_item_components WHERE sales_order_item_id = soi.id)
+         ORDER BY soi.id DESC LIMIT 1`,
         [itemCode, drawingNo]
       );
 
-      if (fallbackIdRow.length > 0) {
+      let fallbackId = componentIdRow.length > 0 ? componentIdRow[0].id : null;
+
+      if (!fallbackId) {
+        const [looseFallbackRow] = await pool.query(
+          `SELECT id FROM sales_order_items 
+           WHERE (item_code = ? OR drawing_no = ?) 
+           AND bom_cost > 0
+           ORDER BY id DESC LIMIT 1`,
+          [itemCode, drawingNo]
+        );
+        if (looseFallbackRow.length > 0) fallbackId = looseFallbackRow[0].id;
+      }
+
+      if (fallbackId) {
         let fallbackQuery = `SELECT c.*, i.selling_rate as latest_selling_rate, i.valuation_rate as latest_valuation_rate, i.weight_per_unit as latest_weight_per_unit
                    FROM sales_order_item_components c
                    LEFT JOIN (
@@ -179,7 +195,7 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null) => {
                      GROUP BY item_code
                    ) i ON c.component_code = i.item_code
                    WHERE c.sales_order_item_id = ?`;
-        [rows] = await pool.query(fallbackQuery + ' ORDER BY c.created_at ASC', [fallbackIdRow[0].id]);
+        [rows] = await pool.query(fallbackQuery + ' ORDER BY c.created_at ASC', [fallbackId]);
       }
     }
 

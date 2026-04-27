@@ -16,7 +16,8 @@ import {
   FileText,
   Calendar,
   DollarSign,
-  Check
+  Check,
+  GitBranch
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
@@ -310,7 +311,8 @@ const SalesOrders = () => {
               amount: rate * qty,
               cgst_percent: cgst,
               sgst_percent: sgst,
-              igst_percent: igst
+              igst_percent: igst,
+              sub_assemblies: item.sub_assemblies || []
             };
           });
         }
@@ -341,13 +343,22 @@ const SalesOrders = () => {
         totalProfitVal += itemProfit;
 
         return {
-          item_code: item.drawing_no || 'Standard',
+          item_code: item.drawing_no || item.item_code || 'Standard',
           drawing_no: item.drawing_no,
-          description: item.item_description,
+          description: item.item_description || item.description,
           type: item.item_group || 'Standard',
           quantity: qty,
           rate: baseRate,
-          amount: baseRate * qty
+          amount: baseRate * qty,
+          sub_assemblies: (item.sub_assemblies || []).map(sa => ({
+            ...sa,
+            drawingNo: sa.drawing_no || sa.component_code || sa.item_code || '',
+            description: sa.description || `Sub-assembly`,
+            quantity: parseFloat(sa.qty || sa.quantity || 0),
+            unit: sa.uom || sa.unit || 'NOS',
+            rate: parseFloat(sa.rate || sa.bom_cost || 0).toFixed(2),
+            item_group: sa.item_group || 'SA'
+          }))
         };
       });
     }
@@ -1121,20 +1132,62 @@ const SalesOrders = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
-                    {formData.items.map((item, idx) => (
-                      <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="p-2    text-indigo-600">
-                          {item.drawing_no || item.item_code}
-                          <div className="text-xs text-slate-400 font-sans mt-0.5">{item.description}</div>
-                        </td>
-                        <td className="p-2  text-slate-500">{item.type || 'Standard'}</td>
-                        <td className="p-2  text-center">
-                          {item.quantity}
-                        </td>
-                        <td className="p-2  text-right text-slate-600">₹ {(Number(item.rate) || 0).toFixed(2)}</td>
-                        <td className="p-2  text-right  text-emerald-600">₹ {(Number(item.amount) || 0).toFixed(2)}</td>
-                      </tr>
-                    ))}
+                    {formData.items.flatMap((item, idx) => {
+                      const rows = [];
+                      
+                      // Main Item Row
+                      rows.push(
+                        <tr key={`item-${idx}`} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="p-2    text-indigo-600">
+                            {item.drawing_no || item.item_code}
+                            <div className="text-xs text-slate-400 font-sans mt-0.5">{item.description}</div>
+                          </td>
+                          <td className="p-2  text-slate-500">{item.type || 'Standard'}</td>
+                          <td className="p-2  text-center">
+                            {item.quantity}
+                          </td>
+                          <td className="p-2  text-right text-slate-600">₹ {(Number(item.rate) || 0).toFixed(2)}</td>
+                          <td className="p-2  text-right  text-emerald-600">₹ {(Number(item.amount) || 0).toFixed(2)}</td>
+                        </tr>
+                      );
+
+                      // Sub-Assembly Rows
+                      if (item.sub_assemblies && item.sub_assemblies.length > 0) {
+                        item.sub_assemblies.forEach((sa, saIdx) => {
+                          const saQty = (parseFloat(sa.quantity || 0) * (parseFloat(item.quantity) || 0));
+                          const saRate = parseFloat(sa.rate || 0);
+                          const saTotal = saQty * saRate;
+                          
+                          rows.push(
+                            <tr key={`item-${idx}-sa-${saIdx}`} className="bg-slate-50/30">
+                              <td className="p-2 border-b border-slate-100">
+                                <div className="flex items-center gap-2 pl-4">
+                                  <GitBranch size={10} className="text-blue-400 rotate-180" />
+                                  <span className="text-[10px] text-slate-500 font-mono font-bold">{sa.drawingNo || sa.drawing_no}</span>
+                                </div>
+                              </td>
+                              <td className="p-2 border-b border-slate-100">
+                                <div className="flex items-center gap-2 pl-4">
+                                  <span className="text-[10px] text-slate-700 font-medium">{sa.description}</span>
+                                  <span className="px-1 py-0.5 rounded-[2px] text-[8px] font-bold bg-blue-50 text-blue-600 border border-blue-100/50">SA</span>
+                                </div>
+                              </td>
+                              <td className="p-2 border-b border-slate-100 text-center text-[10px] text-slate-600">
+                                {saQty.toFixed(3)}
+                              </td>
+                              <td className="p-2 border-b border-slate-100 text-right text-[10px] text-slate-500">
+                                ₹ {saRate.toFixed(2)}
+                              </td>
+                              <td className="p-2 border-b border-slate-100 text-right pr-2 text-[10px] text-slate-900 font-bold">
+                                ₹ {saTotal.toFixed(2)}
+                              </td>
+                            </tr>
+                          );
+                        });
+                      }
+
+                      return rows;
+                    })}
                   </tbody>
                 </table>
               </div>
