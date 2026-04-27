@@ -151,7 +151,6 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null) => {
       [rows] = await pool.query(query + ' ORDER BY c.created_at ASC', [latestIdRow[0].id]);
     }
 
-    // If still no rows, try latest from ANY sales order (not just master)
     if (rows.length === 0) {
       const [fallbackIdRow] = await pool.query(
         `SELECT id FROM sales_order_items 
@@ -173,14 +172,44 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null) => {
         [rows] = await pool.query(fallbackQuery + ' ORDER BY c.created_at ASC', [fallbackIdRow[0].id]);
       }
     }
+
+    // FINAL FALLBACK: Search standard BOM table if still no rows found
+    if (rows.length === 0 && (itemCode || drawingNo)) {
+      const [bomRows] = await pool.query(
+        `SELECT bi.id as bi_id, bi.component_code, bi.quantity as qty, bi.quantity,
+                i.description, i.uom, i.item_group,
+                i.valuation_rate as latest_valuation_rate, 
+                i.selling_rate as latest_selling_rate,
+                i.weight_per_unit as latest_weight_per_unit,
+                i.length as latest_length, i.width as latest_width, i.thickness as latest_thickness,
+                i.diameter as latest_diameter, i.outer_diameter as latest_outer_diameter,
+                bi.component_code as component_code
+         FROM bom_items bi
+         JOIN bom b ON bi.bom_id = b.id
+         JOIN items i ON bi.component_code = i.item_code
+         WHERE (b.item_code = ? OR (b.drawing_no = ? AND b.drawing_no IS NOT NULL AND b.drawing_no != '—'))
+         AND b.id = (
+           SELECT MAX(id) FROM bom 
+           WHERE (item_code = ? OR (drawing_no = ? AND drawing_no IS NOT NULL AND drawing_no != '—'))
+         )
+         ORDER BY bi.id ASC`,
+        [itemCode, drawingNo, itemCode, drawingNo]
+      );
+      if (bomRows.length > 0) {
+        rows = bomRows;
+      }
+    }
   }
 
   // Dynamically fetch latest BOM cost for Sub-Assemblies in BULK to avoid N+1 problem
   const saComponents = rows.filter(row => {
-    const compCode = row.component_code || row.componentCode;
-    const group = (row.item_group || '').toLowerCase();
-    return (compCode && (compCode.startsWith('SA-') || compCode.startsWith('SFG-'))) || 
-           group.includes('assembly') || group.includes('sfg') || group.includes('semi');
+    const compCode = (row.component_code || row.componentCode || '').toUpperCase();
+    const group = (row.item_group || '').toUpperCase();
+    const desc = (row.description || '').toUpperCase();
+    return (compCode.startsWith('SA-') || compCode.startsWith('SFG-') || 
+           group.includes('SA') || group.includes('SUB') || group.includes('ASSEMBLY') ||
+           desc.includes('ASSEMBLY') || desc.includes('UNIT')) &&
+           !group.includes('FG');
   });
 
   if (saComponents.length > 0) {
@@ -193,13 +222,18 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null) => {
     if (shouldOverride) {
       const codes = [...new Set(saComponents.map(c => c.component_code || c.componentCode))];
       try {
-        // Fetch latest costs for all these components in one query
         const [latestCosts] = await pool.query(`
-          SELECT item_code, drawing_no, bom_cost
-          FROM sales_order_items
-          WHERE item_code IN (?)
-          AND bom_cost > 0
-          AND id IN (
+          SELECT soi.item_code, soi.drawing_no, soi.bom_cost,
+                 (SELECT qr.pending_bom_cost 
+                  FROM quotation_requests qr 
+                  WHERE (qr.sales_order_item_id = soi.id 
+                     OR (qr.item_code = soi.item_code AND qr.drawing_no = soi.drawing_no AND qr.item_code IS NOT NULL))
+                  AND qr.pending_bom_cost IS NOT NULL 
+                  ORDER BY qr.id DESC LIMIT 1) as pending_bom_cost
+          FROM sales_order_items soi
+          WHERE soi.item_code IN (?)
+          AND soi.bom_cost > 0
+          AND soi.id IN (
             SELECT max_id FROM (
                 SELECT MAX(id) as max_id
                 FROM sales_order_items
@@ -211,27 +245,40 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null) => {
         `, [codes, codes]);
 
         const costMap = new Map();
+        const pendingMap = new Map();
+        
         latestCosts.forEach(c => {
           const key = `${c.item_code}|${c.drawing_no || ''}`;
           costMap.set(key, parseFloat(c.bom_cost));
-          // Also keep a general fallback for the item code
+          if (c.pending_bom_cost) {
+            pendingMap.set(key, parseFloat(c.pending_bom_cost));
+          }
           if (!costMap.has(c.item_code)) {
             costMap.set(c.item_code, parseFloat(c.bom_cost));
+            if (c.pending_bom_cost && !pendingMap.has(c.item_code)) {
+              pendingMap.set(c.item_code, parseFloat(c.pending_bom_cost));
+            }
           }
         });
 
-        // Update rates in rows using the cost map
         rows.forEach(row => {
-          const compCode = row.component_code || row.componentCode;
-          const group = (row.item_group || '').toLowerCase();
-          const isSubAssy = (compCode && (compCode.startsWith('SA-') || compCode.startsWith('SFG-'))) || 
-                             group.includes('assembly') || group.includes('sfg') || group.includes('semi');
+          const compCode = (row.component_code || row.componentCode || '').toUpperCase();
+          const group = (row.item_group || '').toUpperCase();
+          const desc = (row.description || '').toUpperCase();
+          const isSubAssy = (compCode.startsWith('SA-') || compCode.startsWith('SFG-') || 
+                             group.includes('SA') || group.includes('SUB') || group.includes('ASSEMBLY') ||
+                             desc.includes('ASSEMBLY') || desc.includes('UNIT')) &&
+                             !group.includes('FG');
           
           if (isSubAssy && compCode) {
             const key = `${compCode}|${row.drawing_no || ''}`;
             const latestRate = costMap.get(key) || costMap.get(compCode);
             if (latestRate !== undefined) {
               row.rate = latestRate;
+            }
+            const pendingRate = pendingMap.get(key) || pendingMap.get(compCode);
+            if (pendingRate !== undefined) {
+              row.pending_bom_cost = pendingRate;
             }
           }
         });
@@ -256,7 +303,8 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null) => {
     bom_cost: (() => {
       const compCode = (row.component_code || row.componentCode || '').toUpperCase();
       const g = (row.item_group || '').toUpperCase();
-      const isSA = (compCode.startsWith('SA-') || compCode.startsWith('SFG-') || g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY')) && !g.includes('FG');
+      const d = (row.description || '').toUpperCase();
+      const isSA = (compCode.startsWith('SA-') || compCode.startsWith('SFG-') || g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY') || d.includes('ASSEMBLY') || d.includes('UNIT')) && !g.includes('FG');
       if (isSA) return parseFloat(row.rate || 0);
       // For materials: weight * valuation_rate
       return (parseFloat(row.weight_per_pc || row.weight_per_unit || 0) * parseFloat(isHistorical ? (row.rate || row.latest_valuation_rate || 0) : (row.latest_valuation_rate || 0)));

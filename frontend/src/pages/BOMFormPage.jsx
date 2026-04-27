@@ -1791,11 +1791,11 @@ const BOMFormPage = () => {
   const handleUpdateQuotation = async (salesOrderItemId, bomCost) => {
     try {
       const result = await Swal.fire({
-        title: 'Update Quotation?',
-        text: `Do you want to update all linked quotations with the BOM cost of ₹${parseFloat(bomCost).toLocaleString('en-IN', { minimumFractionDigits: 2 })}?`,
+        title: 'Request Quotation Update?',
+        text: `Would you like to send a request to the Sales team to update all linked quotations with the latest BOM cost of ₹${parseFloat(bomCost).toLocaleString('en-IN', { minimumFractionDigits: 2 })}?`,
         icon: 'question',
         showCancelButton: true,
-        confirmButtonText: 'Yes, Update',
+        confirmButtonText: 'Yes, Send Request',
         cancelButtonText: 'Cancel',
         confirmButtonColor: '#4f46e5'
       });
@@ -1803,8 +1803,10 @@ const BOMFormPage = () => {
       if (!result.isConfirmed) return;
 
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/quotation-requests/update-from-bom`, {
-        method: 'PUT',
+      
+      // We directly call the request endpoint instead of trying direct update first
+      const response = await fetch(`${API_BASE}/quotation-requests/request-update-from-bom`, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
@@ -1815,41 +1817,12 @@ const BOMFormPage = () => {
       const data = await response.json();
 
       if (response.ok) {
-        successToast(data.message || 'Quotation updated successfully');
-      } else if (response.status === 403) {
-        // If forbidden, offer to send a request instead
-        const requestResult = await Swal.fire({
-          title: 'Insufficient Permissions',
-          text: 'You do not have permission to update quotations directly. Would you like to send a request to the Sales team to update the quotation with this price?',
-          icon: 'warning',
-          showCancelButton: true,
-          confirmButtonText: 'Yes, Send Request',
-          cancelButtonText: 'No, Cancel',
-          confirmButtonColor: '#4f46e5'
-        });
-
-        if (requestResult.isConfirmed) {
-          const requestResponse = await fetch(`${API_BASE}/quotation-requests/request-update-from-bom`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({ salesOrderItemId, bomCost })
-          });
-
-          const requestData = await requestResponse.json();
-          if (requestResponse.ok) {
-            successToast(requestData.message || 'Request sent successfully');
-          } else {
-            throw new Error(requestData.error || requestData.message || 'Failed to send request');
-          }
-        }
+        successToast(data.message || 'Update request sent to Sales team successfully');
       } else {
-        throw new Error(data.message || 'Failed to update quotation');
+        throw new Error(data.error || data.message || 'Failed to send update request');
       }
     } catch (error) {
-      console.error('Error updating quotation:', error);
+      console.error('Error requesting quotation update:', error);
       errorToast(error.message);
     }
   };

@@ -63,8 +63,15 @@ const QuotationFormPage = () => {
   const isLocked = (versionHistory.length > 0 && !isLatest) || isCurrentApproved;
 
   useEffect(() => {
+    if (selectedClient?.company_name) {
+      fetchDrawings(selectedClient.company_name);
+    } else {
+      setDrawings([]);
+    }
+  }, [selectedClient?.company_name]);
+
+  useEffect(() => {
     fetchClients();
-    fetchDrawings();
     
     if (initialData && !hasInitialized.current) {
       hasInitialized.current = true;
@@ -102,7 +109,8 @@ const QuotationFormPage = () => {
             bom_cost: drwRate,
             total: (parseFloat(item.quantity) || 0) * drwRate,
             gst_percentage: item.gst_percentage || 18,
-            isManual: !item.drawing_id && !!item.drawing_no
+            isManual: !item.drawing_id && !!item.drawing_no,
+            sub_assemblies: item.sub_assemblies || []
           };
         });
       
@@ -205,7 +213,8 @@ const QuotationFormPage = () => {
       const hasChanges = updatedItems.some((it, idx) => 
         it.drawing_id !== items[idx].drawing_id || 
         Math.abs(parseFloat(it.rate || 0) - parseFloat(items[idx].rate || 0)) > 0.01 ||
-        Math.abs(parseFloat(it.bom_cost || 0) - parseFloat(items[idx].bom_cost || 0)) > 0.01
+        Math.abs(parseFloat(it.bom_cost || 0) - parseFloat(items[idx].bom_cost || 0)) > 0.01 ||
+        JSON.stringify(it.sub_assemblies || []) !== JSON.stringify(items[idx].sub_assemblies || [])
       );
 
       if (hasChanges) {
@@ -242,10 +251,13 @@ const QuotationFormPage = () => {
     }
   };
 
-  const fetchDrawings = async () => {
+  const fetchDrawings = async (clientName = null) => {
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/drawings`, {
+      const url = clientName 
+        ? `${API_BASE}/drawings?clientName=${encodeURIComponent(clientName)}`
+        : `${API_BASE}/drawings`;
+      const response = await fetch(url, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
@@ -318,7 +330,8 @@ const QuotationFormPage = () => {
           drawing_no: item.drawing_no,
           description: item.description,
           bom_id: item.bom_id,
-          revision_no: item.revision_no
+          revision_no: item.revision_no,
+          sub_assemblies: item.sub_assemblies || []
         };
       }));
     }

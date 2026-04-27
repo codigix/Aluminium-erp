@@ -10,7 +10,7 @@ const getAllDrawings = async () => {
   return rows;
 };
 
-const listDrawings = async (search = '', onlyShared = false) => {
+const listDrawings = async (search = '', onlyShared = false, clientName = null) => {
   let query = `
     SELECT 
       d.id as drawing_master_id,
@@ -62,6 +62,11 @@ const listDrawings = async (search = '', onlyShared = false) => {
     query += ` AND (d.status = 'SHARED' OR soi.id IS NOT NULL OR d.status = 'APPROVED')`;
   }
 
+  if (clientName) {
+    query += ` AND d.client_name = ?`;
+    params.push(clientName);
+  }
+
   if (search) {
     query += ` AND (d.client_name LIKE ? OR d.drawing_no LIKE ? OR d.description LIKE ?)`;
     const searchPattern = `%${search}%`;
@@ -71,18 +76,19 @@ const listDrawings = async (search = '', onlyShared = false) => {
   query += ` ORDER BY d.created_at DESC`;
   const [rows] = await pool.query(query, params);
   
-  // Enrich with sub-assemblies for FG items
+  // Enrich with sub-assemblies for items with BOM structure
   const enrichedRows = await Promise.all(rows.map(async (row) => {
-    const isFG = (row.item_group || '').toUpperCase().includes('FG');
-    // We attempt to fetch components if we have an item ID OR identifying info for fallback
-    if (isFG && (row.sales_order_item_id || row.item_code || row.drawing_no)) {
+    // We attempt to fetch components if we have an item ID OR identifying info for fallback (FG or SA)
+    if (row.sales_order_item_id || row.item_code || row.drawing_no) {
       try {
         const components = await bomService.getItemComponents(row.sales_order_item_id, row.item_code, row.drawing_no);
         const sub_assemblies = components.filter(c => {
           const code = (c.item_code || c.component_code || '').toUpperCase();
           const group = (c.item_group || '').toUpperCase();
+          const desc = (c.description || '').toUpperCase();
           return (code.startsWith('SA-') || code.startsWith('SFG-') || 
-                  group.includes('SA') || group.includes('SUB') || group.includes('ASSEMBLY')) &&
+                  group.includes('SA') || group.includes('SUB') || group.includes('ASSEMBLY') ||
+                  desc.includes('ASSEMBLY') || desc.includes('UNIT')) &&
                  !group.includes('FG');
         });
         return { ...row, sub_assemblies };

@@ -705,6 +705,8 @@ const BOMCreation = () => {
                       </svg>
                     </div>
                     <div>
+                                            <p className="text-xs text-slate-500 font-medium">{drawingName}</p>
+
                       <div className="flex items-center gap-2">
                         <span className="text-xs  text-slate-900">{dwgNo}</span>
                         {dwgStatus === 'DESIGN_APPROVED' ? (
@@ -715,7 +717,6 @@ const BOMCreation = () => {
                           <StatusBadge status={dwgStatus} />
                         )}
                       </div>
-                      <p className="text-xs text-slate-500 font-medium">{drawingName}</p>
                     </div>
                   </div>
                   

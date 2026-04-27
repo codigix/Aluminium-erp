@@ -880,13 +880,16 @@ const getApprovedDrawings = async (companyId = null) => {
     for (const item of order.items) {
       const g = (item.item_group_calc || '').toUpperCase();
       const isFG = (g.includes('FG') || g.includes('FINISHED')) && !g.includes('SA') && !g.includes('SUB');
-      if (isFG) {
+      if (isFG || true) { // Fetch for all to be safe, filtering below handles it
         const components = await bomService.getItemComponents(item.id, item.item_code, item.drawing_no);
         item.sub_assemblies = components.filter(c => {
-          const compCode = c.component_code || c.componentCode || '';
+          const code = (c.item_code || c.component_code || '').toUpperCase();
           const group = (c.item_group || '').toUpperCase();
-          return compCode.startsWith('SA-') || compCode.startsWith('SFG-') || 
-                 group.includes('SA') || group.includes('SUB') || group.includes('ASSEMBLY');
+          const desc = (c.description || '').toUpperCase();
+          return (code.startsWith('SA-') || code.startsWith('SFG-') || 
+                  group.includes('SA') || group.includes('SUB') || group.includes('ASSEMBLY') ||
+                  desc.includes('ASSEMBLY') || desc.includes('UNIT')) &&
+                 !group.includes('FG');
         });
       } else {
         item.sub_assemblies = [];
