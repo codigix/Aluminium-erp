@@ -294,17 +294,22 @@ const BOMCreation = () => {
 
   const handleSendForApproval = async (client) => {
     try {
-      const items = clientData[client.id]?.items || [];
-      const salesOrderIds = [...new Set(items.map(i => i.sales_order_id))].filter(id => id);
+      // Filter items to find eligible sales orders (those not already submitted or further)
+      const eligibleItems = (client.items || []).filter(i => {
+        const s = (i.sales_order_status || '').toUpperCase();
+        return !s.includes('BOM_SUBMITTED') && !s.includes('BOM_APPROVED') && !s.includes('QUOTATION') && !s.includes('PO_');
+      });
+
+      const salesOrderIds = [...new Set(eligibleItems.map(i => i.sales_order_id))].filter(id => id);
 
       if (salesOrderIds.length === 0) {
-        errorToast("No sales orders found for this client.");
+        errorToast("No eligible sales orders found for this client.");
         return;
       }
 
       const result = await Swal.fire({
         title: '<span class="text-base  text-slate-800">Send for Approval?</span>',
-        html: `<span class="text-xs text-slate-600">Are you sure you want to send BOMs for <span class=" text-indigo-600">${client.client_name}</span> for approval?</span>`,
+        html: `<span class="text-xs text-slate-600">Are you sure you want to send BOMs for <span class=" text-indigo-600">${client.client_name}</span> for approval? <br/><small class="text-slate-400">(${salesOrderIds.length} order(s) will be submitted)</small></span>`,
         icon: 'question',
         showCancelButton: true,
         confirmButtonColor: '#10b981',
@@ -500,9 +505,9 @@ const BOMCreation = () => {
             >
               <Eye className="w-4 h-4" />
             </button>
-            {!(row.items?.some(i => {
+            {(row.items?.some(i => {
               const s = (i.sales_order_status || '').toUpperCase();
-              return s.includes('BOM_SUBMITTED') || s.includes('BOM_APPROVED') || s.includes('QUOTATION') || s.includes('PO_');
+              return !s.includes('BOM_SUBMITTED') && !s.includes('BOM_APPROVED') && !s.includes('QUOTATION') && !s.includes('PO_');
             })) && (
               <button 
                 onClick={(e) => { e.stopPropagation(); handleSendForApproval(row); }}

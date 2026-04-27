@@ -147,7 +147,18 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null) => {
                  )`;
     let params = [itemCode, drawingNo];
 
-    [rows] = await pool.query(query + ' ORDER BY c.created_at ASC', params);
+    if (latestIdRow.length > 0) {
+      let query = `SELECT c.*, i.selling_rate as latest_selling_rate, i.valuation_rate as latest_valuation_rate, i.weight_per_unit as latest_weight_per_unit
+                   FROM sales_order_item_components c
+                   LEFT JOIN (
+                     SELECT item_code, MAX(selling_rate) as selling_rate, MAX(valuation_rate) as valuation_rate, MAX(weight_per_unit) as weight_per_unit
+                     FROM stock_balance 
+                     GROUP BY item_code
+                   ) i ON c.component_code = i.item_code
+                   WHERE c.sales_order_item_id = ?`;
+      
+      [rows] = await pool.query(query + ' ORDER BY c.created_at ASC', [latestIdRow[0].id]);
+    }
 
     // If still no rows, try latest from ANY sales order (not just master)
     if (rows.length === 0) {
@@ -345,7 +356,12 @@ const getItemScrap = async (itemId, itemCode = null, drawingNo = null) => {
                  )`;
     let params = [itemCode, drawingNo];
 
-    [rows] = await pool.query(query + ' ORDER BY created_at ASC', params);
+    if (latestIdRow.length > 0) {
+      [rows] = await pool.query(
+        'SELECT * FROM sales_order_item_scrap WHERE sales_order_item_id = ? ORDER BY created_at ASC',
+        [latestIdRow[0].id]
+      );
+    }
   }
   return rows.map(row => ({
     ...row,
