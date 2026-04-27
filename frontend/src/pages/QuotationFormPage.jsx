@@ -382,17 +382,21 @@ const QuotationFormPage = () => {
     
     // Map items from the version
     if (v.items && v.items.length > 0) {
+      const isHistorical = v.version < maxVersion || isCurrentApproved;
+      
       setItems(v.items.map(item => {
-        // Check if we have an override from initialData (e.g. for BOM update requests)
-        const override = initialData?.items?.find(oi => 
+        // ONLY apply overrides if we are looking at the LATEST version being edited
+        // If it's historical, we must trust the stored item data exactly as it was
+        const override = !isHistorical ? initialData?.items?.find(oi => 
           (oi.salesOrderItemId && oi.salesOrderItemId === item.sales_order_item_id) ||
           (oi.item_code && oi.item_code === item.item_code && oi.drawing_no === item.drawing_no)
-        );
+        ) : null;
 
         let drwRate = parseFloat(override?.bom_cost || item.bom_cost || item.rate || 0);
 
-        // Recalculate based on sub-assemblies if they exist - helps catch stale FG costs
-        if (item.sub_assemblies && item.sub_assemblies.length > 0) {
+        // ONLY Recalculate based on sub-assemblies for the LATEST version 
+        // helps catch stale FG costs for NEW revisions, but must NOT touch historical records
+        if (!isHistorical && item.sub_assemblies && item.sub_assemblies.length > 0) {
           const saSum = item.sub_assemblies.reduce((sum, sa) => {
             const saCost = parseFloat(sa.bom_cost || sa.rate || 0);
             const saQty = parseFloat(sa.quantity || 0);

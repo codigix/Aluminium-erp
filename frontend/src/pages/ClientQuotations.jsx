@@ -417,52 +417,55 @@ const ClientQuotations = () => {
       if (!response.ok) throw new Error('Failed to fetch sent quotations');
       const data = await response.json();
       
-      const grouped = {};
+      // 1. Group items by their batch_id to form "Quotation Versions"
+      const versionBatches = {};
       data.forEach(quote => {
-        // We show active quotations (Sent/Draft/Revised)
-        if (!['SENT', 'DRAFT', 'REVISED'].includes((quote.status || '').toUpperCase())) return;
-
-        const date = new Date(quote.created_at);
-        const roundedTime = Math.floor(date.getTime() / 60000) * 60000;
+        const status = (quote.status || '').toUpperCase();
+        if (!['SENT', 'DRAFT', 'REVISED'].includes(status)) return;
         
-        // Group by parent_id if available to consolidate versions, otherwise by batch or time
-        const groupKey = quote.parent_id ? `parent_${quote.parent_id}` : (quote.batch_id || `batch_${quote.company_id}_${(quote.project_name || 'manual').toLowerCase()}_${roundedTime}`);
-        
-        if (!grouped[groupKey]) {
-          grouped[groupKey] = {
-            id: quote.id,
-            uniqueKey: groupKey,
-            company_name: quote.company_name,
-            company_id: quote.company_id,
-            created_at: quote.created_at,
-            status: quote.status, 
-            reply_pdf: quote.reply_pdf,
-            project_name: quote.project_name, 
-            total_amount: 0,
-            received_amount: 0,
-            quotes: [],
+        const bId = quote.batch_id || `legacy_${quote.company_id}_${Math.floor(new Date(quote.created_at).getTime() / 60000)}`;
+        if (!versionBatches[bId]) {
+          versionBatches[bId] = {
             version: quote.version || 1,
-            batch_id: quote.batch_id
+            created_at: quote.created_at,
+            items: []
           };
         }
-        
-        // Update to latest version info if this quote is newer
-        if ((quote.version || 1) > (grouped[groupKey].version || 0)) {
-          grouped[groupKey].id = quote.id;
-          grouped[groupKey].version = quote.version || 1;
-          grouped[groupKey].status = quote.status;
-          grouped[groupKey].reply_pdf = quote.reply_pdf;
-          grouped[groupKey].created_at = quote.created_at;
-        }
+        versionBatches[bId].items.push(quote);
+      });
 
-        grouped[groupKey].quotes.push(quote);
+      // 2. Consolidate Versions into Quotation Chains
+      const grouped = {};
+      Object.values(versionBatches).forEach(batch => {
+        const leadItem = batch.items[0];
+        // The Root ID is the parent_id if it exists, otherwise the lowest ID in the version items
+        const rootId = batch.items.find(it => it.parent_id)?.parent_id || Math.min(...batch.items.map(it => it.id));
+        const chainKey = `chain_${rootId}`;
+        
+        if (!grouped[chainKey] || batch.version > (grouped[chainKey].version || 0)) {
+          // Keep the latest version as the representative for this chain
+          grouped[chainKey] = {
+            id: leadItem.id,
+            display_id: rootId,
+            uniqueKey: chainKey,
+            company_name: leadItem.company_name,
+            company_id: leadItem.company_id,
+            created_at: batch.created_at,
+            status: leadItem.status, 
+            reply_pdf: leadItem.reply_pdf,
+            project_name: leadItem.project_name, 
+            total_amount: 0,
+            received_amount: 0,
+            quotes: batch.items, 
+            version: batch.version,
+            batch_id: leadItem.batch_id
+          };
+        }
       });
       
+      // 3. Final calculations for each chain (based on latest version items)
       Object.values(grouped).forEach(group => {
-        // Only include items from the LATEST version in totals
-        const latestQuotes = group.quotes.filter(q => (q.version || 1) === group.version);
-        
-        const billableQuotes = latestQuotes.filter(q => {
+        const billableQuotes = group.quotes.filter(q => {
           const g = (q.item_group || q.item_group_calc || '').toUpperCase();
           const isSA = (g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY')) && !g.includes('FG');
           const isFG = (g.includes('FG') || g.includes('FINISHED')) && !isSA;
@@ -524,6 +527,7 @@ const ClientQuotations = () => {
         if (!grouped[groupKey]) {
           grouped[groupKey] = {
             id: quote.id,
+            display_id: quote.parent_id || quote.id, // Root ID for stable QRT number display
             uniqueKey: groupKey,
             company_name: quote.company_name,
             company_id: quote.company_id,
@@ -550,7 +554,7 @@ const ClientQuotations = () => {
         const quoteStatus = (quote.status || '').trim().toUpperCase();
 
         if (quoteVersion > currentVersion || (quoteVersion === currentVersion && quoteStatus === 'APPROVED' && currentStatus !== 'APPROVED')) {
-          grouped[groupKey].id = quote.id;
+          grouped[groupKey].id = quote.id; // Keep group.id as LATEST for actions
           grouped[groupKey].status = quote.status;
           grouped[groupKey].version = quote.version;
           grouped[groupKey].created_at = quote.created_at;
@@ -558,6 +562,7 @@ const ClientQuotations = () => {
           grouped[groupKey].reply_pdf = quote.reply_pdf;
           grouped[groupKey].batch_id = quote.batch_id;
           grouped[groupKey].parent_id = quote.parent_id;
+          // Note: display_id stays as original root ID
         }
       });
       
@@ -669,7 +674,7 @@ const ClientQuotations = () => {
             ) : (
               <div className="flex flex-col gap-1">
                 <span className="p-1 bg-indigo-50 text-indigo-600 rounded text-xs border border-indigo-100 w-fit">
-                  QRT-{String(val).padStart(4, '0')}
+                  QRT-{String(group.display_id || val).padStart(4, '0')}
                 </span>
                 {group.version && (
                   <span className="text-[10px] text-slate-500 font-medium ml-1">
