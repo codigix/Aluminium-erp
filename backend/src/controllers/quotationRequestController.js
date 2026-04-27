@@ -150,11 +150,13 @@ const getQuotationVersionHistory = async (req, res, next) => {
 
     for (const row of rows) {
       if (!versionMap[row.version]) {
+        // Initialize version group
         versionMap[row.version] = {
           id: row.id,
           version: row.version,
           status: row.status,
           created_at: row.created_at,
+          // We will sum line totals to get the version grand total
           total_amount: 0,
           received_amount: 0,
           project_name: row.project_name,
@@ -167,8 +169,15 @@ const getQuotationVersionHistory = async (req, res, next) => {
       }
       
       const group = versionMap[row.version];
-      const itemRate = parseFloat(row.total_amount / (row.item_qty || 1)) || 0;
-      const itemTotal = itemRate * (row.item_qty || 0);
+      const lineTotal = parseFloat(row.total_amount) || 0;
+      const lineTotalInclGst = parseFloat(row.received_amount) || 0;
+      
+      // Sum line totals into the version's grand total
+      group.total_amount += lineTotal;
+      group.received_amount += lineTotalInclGst;
+      
+      const itemRate = parseFloat(lineTotal / (row.item_qty || 1)) || 0;
+      const itemTotal = lineTotal;
       
       const itemData = {
         id: row.id,
@@ -191,19 +200,21 @@ const getQuotationVersionHistory = async (req, res, next) => {
       const itemCodeVer = row.item_code || null;
       const drawingNoVer = (row.drawing_no && row.drawing_no !== '—') ? row.drawing_no : null;
       const soiIdVer = row.sales_order_item_id || null;
+      const itemG = (row.item_group || '').toUpperCase();
+      const isFG = itemG.includes('FG') || itemG.includes('FINISHED');
+      const isSA = itemG.includes('SA') || itemG.includes('SUB') || itemG.includes('ASSEMBLY');
 
-      if (soiIdVer || itemCodeVer || drawingNoVer) {
+      if (isFG || isSA || soiIdVer || itemCodeVer || drawingNoVer) {
         try {
-          // This is a bit inefficient (N+1), but for version history of a single quote it's fine
           const components = await bomService.getItemComponents(soiIdVer, itemCodeVer, drawingNoVer);
           itemData.sub_assemblies = components.filter(c => {
             const code = (c.item_code || c.component_code || '').toUpperCase();
-            const group = (c.item_group || '').toUpperCase();
+            const cg = (c.item_group || '').toUpperCase();
             const desc = (c.description || '').toUpperCase();
             return (code.startsWith('SA-') || code.startsWith('SFG-') || 
-                    group.includes('SA') || group.includes('SUB') || group.includes('ASSEMBLY') ||
+                    cg.includes('SA') || cg.includes('SUB') || cg.includes('ASSEMBLY') ||
                     desc.includes('ASSEMBLY') || desc.includes('UNIT')) &&
-                   !group.includes('FG');
+                   !cg.includes('FG');
           });
         } catch (err) {
           console.error(`Error fetching sub-assemblies for QR ${row.id}:`, err);
@@ -211,16 +222,6 @@ const getQuotationVersionHistory = async (req, res, next) => {
       }
 
       group.items.push(itemData);
-      
-      // Include both FG and Sub-Assemblies in totals if they have a price
-      const itemG = (row.item_group || '').toUpperCase();
-      const isSA = itemG.includes('SA') || itemG.includes('SUB') || itemG.includes('ASSEMBLY');
-      // isFG is already declared above
-      
-      if (isFG || isSA || itemTotal > 0) {
-        group.total_amount += itemTotal;
-        group.received_amount += itemTotal * (1 + (row.gst_percentage || 18) / 100);
-      }
     }
 
     res.json(versionGroups);

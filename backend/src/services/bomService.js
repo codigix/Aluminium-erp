@@ -1523,7 +1523,14 @@ const syncQuotationCosts = async (itemId, bomCost) => {
           OR (soi.bom_id = ? AND soi.bom_id IS NOT NULL)
           OR (LOWER(TRIM(soi.item_code)) = LOWER(TRIM(?)) AND LOWER(TRIM(soi.drawing_no)) = LOWER(TRIM(?)))
           OR (LOWER(TRIM(qr.drawing_no)) = LOWER(TRIM(?)) AND qr.drawing_no IS NOT NULL))
-          AND qr.status NOT IN ('COMPLETED', 'REJECTED', 'CANCELLED')`,
+          AND qr.status IN ('Draft', 'PENDING', 'DRAFT')
+          -- ONLY update the LATEST version to preserve historical audit trail
+          AND qr.version = (
+            SELECT MAX(q2.version) 
+            FROM quotation_requests q2 
+            WHERE q2.company_id = qr.company_id 
+            AND IFNULL(q2.project_name, '') = IFNULL(qr.project_name, '')
+          )`,
       [itemId, bom_id, item_code, drawing_no, drawing_no]
     );
 

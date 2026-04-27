@@ -261,9 +261,9 @@ const QuotationFormPage = () => {
           // STRICTER SYNC: 
           // 1. Always sync if current cost is 0 and we found a rate
           // 2. Sync if matched by item_code (specific record)
-          // 3. ONLY sync in 'revise' mode if it's a specific identity match
+          // 3. Sync if we are in 'revise' mode to ensure latest costs are pulled in
           const isItemCodeMatch = item.item_code && matchedDrawing.item_code && String(matchedDrawing.item_code).trim().toLowerCase() === String(item.item_code).trim().toLowerCase();
-          const shouldSync = (currentBOMCost === 0) || isItemCodeMatch;
+          const shouldSync = (currentBOMCost === 0) || isItemCodeMatch || mode === 'revise';
 
           const costChanged = drwRate > 0 && Math.abs(currentBOMCost - drwRate) > 0.01;
           
@@ -1249,33 +1249,33 @@ const QuotationFormPage = () => {
                       if (item.sub_assemblies && item.sub_assemblies.length > 0) {
                         item.sub_assemblies.forEach((sa, saIdx) => {
                           rows.push(
-                            <tr key={`${item.id}-sa-${sa.id}`} className="bg-slate-50/20">
-                              <td className="p-2 border-b border-slate-50"></td>
-                              <td className="p-2 border-b border-slate-50">
+                            <tr key={`${item.id}-sa-${sa.id || saIdx}`} className="bg-slate-50/40">
+                              <td className="p-2 border-b border-slate-100"></td>
+                              <td className="p-2 border-b border-slate-100">
                                 <div className="flex items-center gap-2 pl-3">
-                                  <GitBranch size={12} className="text-slate-300 rotate-180" />
+                                  <GitBranch size={12} className="text-blue-400 rotate-180" />
                                   <div className="flex flex-col">
-                                    <span className="text-[11px] text-slate-600 font-medium">{sa.description}</span>
+                                    <span className="text-[11px] text-slate-700 font-semibold">{sa.description}</span>
                                     <div className="flex items-center gap-2 mt-0.5">
-                                      <span className="text-[9px] text-slate-400 font-mono">{sa.drawing_no}</span>
-                                      <span className="px-1 py-0.5 rounded-[3px] text-[8px] font-bold bg-amber-50 text-amber-600 border border-amber-100/50">SA</span>
+                                      <span className="text-[9px] text-slate-500 font-mono font-bold">{sa.drawing_no}</span>
+                                      <span className="px-1 py-0.5 rounded-[3px] text-[8px] font-bold bg-blue-50 text-blue-600 border border-blue-100/50">SA</span>
                                     </div>
                                   </div>
                                 </div>
                               </td>
-                              <td className="p-2 border-b border-slate-50 text-[11px] text-slate-500">
+                              <td className="p-2 border-b border-slate-100 text-[11px] text-slate-600 font-medium">
                                 {(parseFloat(sa.quantity || 0) * (parseFloat(item.quantity) || 0)).toFixed(3)} {sa.unit || 'Nos'}
                               </td>
-                              <td className="p-2 border-b border-slate-50 text-[11px] text-slate-400 italic">
+                              <td className="p-2 border-b border-slate-100 text-[11px] text-indigo-600 font-bold bg-indigo-50/30">
                                 {formatCurrency(sa.bom_cost)}
                               </td>
-                              <td className="p-2 border-b border-slate-50 text-[11px] text-slate-400 italic">
+                              <td className="p-2 border-b border-slate-100 text-[11px] text-slate-700 font-medium">
                                 {formatCurrency(sa.rate || sa.bom_cost)}
                               </td>
-                              <td className="p-2 border-b border-slate-50 text-[11px] text-slate-500">
+                              <td className="p-2 border-b border-slate-100 text-[11px] text-slate-900 font-bold">
                                 {formatCurrency((parseFloat(sa.rate || sa.bom_cost) || 0) * (parseFloat(sa.quantity || 0) * (parseFloat(item.quantity) || 0)))}
                               </td>
-                              {!isLocked && <td className="p-2 border-b border-slate-50"></td>}
+                              {!isLocked && <td className="p-2 border-b border-slate-100"></td>}
                             </tr>
                           );
                         });
