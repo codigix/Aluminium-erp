@@ -1001,6 +1001,7 @@ const ClientQuotations = () => {
                               <td className="px-4 p-2">
                                 <div className="flex flex-col">
                                   <div className={`flex items-center gap-2 mb-0.5 ${isSA ? 'ml-4' : ''}`}>
+                                    {isSA && <GitBranch size={10} className="text-slate-400 rotate-180" />}
                                     <span className="text-xs  text-slate-900 ">{item.description || item.item_description || '—'}</span>
                                     {displayGroup && (
                                       <span className={`px-1.5 py-0.5 rounded text-[10px]   ${
@@ -1151,8 +1152,10 @@ const ClientQuotations = () => {
                             </tr>
                           );
 
-                          const subRows = (item.sub_assemblies || []).map(sa => (
-                            <tr key={`sa_${sa.id}`} className="bg-slate-50/10 hover:bg-slate-50/30 transition-colors">
+                          // Sub-assembly components logic
+                          // ONLY show nested sub-assemblies for Finished Goods to avoid redundant display
+                          const subRows = (isFG && item.sub_assemblies && item.sub_assemblies.length > 0) ? item.sub_assemblies.map(sa => (
+                            <tr key={`sa_${sa.id || Math.random()}`} className="bg-slate-50/10 hover:bg-slate-50/30 transition-colors">
                               <td className="px-4 p-2 pl-8 border-l-2 border-slate-100">
                                 <div className="flex items-center gap-2">
                                   <GitBranch size={10} className="text-slate-400" />
@@ -1170,9 +1173,26 @@ const ClientQuotations = () => {
                                 </span>
                               </td>
                               <td className="px-4 p-2">
-                                <span className="text-[11px] text-slate-500 italic">
-                                  {formatCurrency(sa.rate || sa.bom_cost || 0)}
-                                </span>
+                                <div className="flex flex-col gap-1">
+                                  <span className="text-[11px] text-slate-500 italic">
+                                    {formatCurrency(sa.rate || sa.bom_cost || 0)}
+                                  </span>
+                                  {sa.pending_bom_cost && (
+                                    <div className="flex items-center gap-1.5 animate-in slide-in-from-left duration-300">
+                                      <div className="p-0.5 bg-rose-50 text-rose-600 rounded border border-rose-100 flex items-center gap-1" title="New BOM Update Requested">
+                                        <ArrowUpRight size={8} className={sa.pending_bom_cost > (sa.rate || sa.bom_cost) ? 'text-rose-500' : 'rotate-90 text-emerald-500'} />
+                                        <span className="text-[9px] font-bold">{formatCurrency(sa.pending_bom_cost)}</span>
+                                      </div>
+                                      <button
+                                        onClick={() => handleApplyPendingBOM(group, sa)}
+                                        className="p-1 bg-rose-600 text-white rounded hover:bg-rose-700 shadow-sm transition-all active:scale-90"
+                                        title="Apply this new BOM cost and REVISE quotation"
+                                      >
+                                        <CheckCheck size={8} />
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
                               </td>
                               {isPending ? (
                                 <td colSpan={4} className="bg-slate-50/5"></td>
@@ -1180,7 +1200,7 @@ const ClientQuotations = () => {
                                 <td colSpan={2} className="bg-slate-50/5"></td>
                               )}
                             </tr>
-                          ));
+                          )) : [];
 
                           return [mainRow, ...subRows];
                         })}
@@ -1759,9 +1779,22 @@ const ClientQuotations = () => {
             projectName: group.project_name || '',
             mode: 'revise',
             items: latestQuotes.map(q => {
-              // Apply pending BOM cost if it's the target item
+              // Apply pending BOM cost if it's the target item (direct match)
+              // OR if the target item is a sub-assembly component of this quote item
               const isTarget = q.id === targetItem.id;
-              const newBomCost = isTarget ? targetItem.pending_bom_cost : (q.bom_cost || q.latest_bom_cost);
+              
+              const targetComp = (q.sub_assemblies || []).find(sa => 
+                (sa.component_code === targetItem.item_code || sa.component_code === targetItem.component_code) &&
+                sa.drawing_no === targetItem.drawing_no
+              );
+
+              const newBomCost = isTarget 
+                ? targetItem.pending_bom_cost 
+                : (targetComp ? (q.bom_cost || q.latest_bom_cost) : (q.bom_cost || q.latest_bom_cost));
+              
+              // Note: If a sub-assembly changed, the PARENT's bom_cost in the revision 
+              // will be recalculated by QuotationFormPage's useEffect because its components list changed.
+              // However, we want to at least mark the sub-assembly itself if it exists in the items list.
               
               return {
                 id: Date.now() + Math.random(),

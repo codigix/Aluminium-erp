@@ -65,19 +65,24 @@ const getQuotationRequests = async (req, res, next) => {
 
     const [rows] = await pool.query(query, params);
     
-    // Enrich with sub-assemblies for FG items in Sent/Draft quotations
+    // Enrich with sub-assemblies for items with BOM structure
     const enrichedRows = await Promise.all(rows.map(async (row) => {
-      const g = (row.item_group || '').toUpperCase();
-      const isFG = g.includes('FG');
-      
-      if (isFG && (row.sales_order_item_id || row.item_code || row.drawing_no)) {
+      // Fetch components for items that might have a BOM (FG or SA)
+      // Use direct identifiers from QR if available as they are more reliable for the specific version
+      const itemCode = row.item_code || null;
+      const drawingNo = (row.drawing_no && row.drawing_no !== '—') ? row.drawing_no : null;
+      const soiId = row.sales_order_item_id || null;
+
+      if (soiId || itemCode || drawingNo) {
         try {
-          const components = await bomService.getItemComponents(row.sales_order_item_id, row.item_code, row.drawing_no);
+          const components = await bomService.getItemComponents(soiId, itemCode, drawingNo);
           const sub_assemblies = components.filter(c => {
             const code = (c.item_code || c.component_code || '').toUpperCase();
             const group = (c.item_group || '').toUpperCase();
+            const desc = (c.description || '').toUpperCase();
             return (code.startsWith('SA-') || code.startsWith('SFG-') || 
-                    group.includes('SA') || group.includes('SUB') || group.includes('ASSEMBLY')) &&
+                    group.includes('SA') || group.includes('SUB') || group.includes('ASSEMBLY') ||
+                    desc.includes('ASSEMBLY') || desc.includes('UNIT')) &&
                    !group.includes('FG');
           });
           return { ...row, sub_assemblies };
@@ -182,19 +187,22 @@ const getQuotationVersionHistory = async (req, res, next) => {
         sub_assemblies: []
       };
 
-      // Enrich with sub-assemblies for FG items if they are missing
-      const g = (row.item_group || '').toUpperCase();
-      const isFG = g.includes('FG');
-      
-      if (isFG && (row.sales_order_item_id || row.item_code || row.drawing_no)) {
+      // Enrich with sub-assemblies for items with BOM structure
+      const itemCodeVer = row.item_code || null;
+      const drawingNoVer = (row.drawing_no && row.drawing_no !== '—') ? row.drawing_no : null;
+      const soiIdVer = row.sales_order_item_id || null;
+
+      if (soiIdVer || itemCodeVer || drawingNoVer) {
         try {
           // This is a bit inefficient (N+1), but for version history of a single quote it's fine
-          const components = await bomService.getItemComponents(row.sales_order_item_id, row.item_code, row.drawing_no);
+          const components = await bomService.getItemComponents(soiIdVer, itemCodeVer, drawingNoVer);
           itemData.sub_assemblies = components.filter(c => {
             const code = (c.item_code || c.component_code || '').toUpperCase();
             const group = (c.item_group || '').toUpperCase();
+            const desc = (c.description || '').toUpperCase();
             return (code.startsWith('SA-') || code.startsWith('SFG-') || 
-                    group.includes('SA') || group.includes('SUB') || group.includes('ASSEMBLY')) &&
+                    group.includes('SA') || group.includes('SUB') || group.includes('ASSEMBLY') ||
+                    desc.includes('ASSEMBLY') || desc.includes('UNIT')) &&
                    !group.includes('FG');
           });
         } catch (err) {
@@ -719,18 +727,21 @@ const requestQuotationUpdateFromBOM = async (req, res, next) => {
     const requesterName = req.user ? `${req.user.first_name || ''} ${req.user.last_name || ''}`.trim() : 'A user';
 
     // 2. Find all relevant quotations
+    // Priority: 
+    // a) Match by sales_order_item_id
+    // b) Match by (item_code AND drawing_no)
+    // c) Match by drawing_no alone (if item_code is missing)
+    // d) Match by description (as last resort)
     const [qrs] = await pool.query(
       `SELECT qr.id, c.company_name, qr.batch_id
        FROM quotation_requests qr
        JOIN companies c ON qr.company_id = c.id
-       LEFT JOIN sales_order_items soi ON qr.sales_order_item_id = soi.id
        WHERE (qr.sales_order_item_id = ? 
-          OR (LOWER(TRIM(soi.item_code)) = LOWER(TRIM(?)) AND LOWER(TRIM(soi.drawing_no)) = LOWER(TRIM(?)))
-          OR (LOWER(TRIM(qr.item_code)) = LOWER(TRIM(?)) AND LOWER(TRIM(qr.drawing_no)) = LOWER(TRIM(?)))
-          OR (qr.drawing_no IS NOT NULL AND LOWER(TRIM(qr.drawing_no)) = LOWER(TRIM(?)))
-          OR (qr.drawing_no IS NULL AND qr.description IS NOT NULL AND LOWER(TRIM(qr.description)) = LOWER(TRIM(?))))
+          OR (qr.item_code IS NOT NULL AND qr.item_code = ? AND qr.drawing_no = ?)
+          OR (qr.item_code IS NULL AND qr.drawing_no = ? AND qr.drawing_no IS NOT NULL)
+          OR (qr.drawing_no IS NULL AND qr.description = ? AND qr.description IS NOT NULL))
           AND qr.status NOT IN ('COMPLETED', 'REJECTED', 'CANCELLED')`,
-      [salesOrderItemId, item_code, drawing_no, item_code, drawing_no, drawing_no, description]
+      [salesOrderItemId, item_code, drawing_no, drawing_no, description]
     );
 
     if (qrs.length === 0) {

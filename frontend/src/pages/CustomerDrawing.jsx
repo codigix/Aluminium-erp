@@ -1201,12 +1201,10 @@ const CustomerDrawing = () => {
       {/* Header Section */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-rose-50 text-rose-600 rounded ">
-            <FileText size={24} />
-          </div>
+          
           <div>
-            <h1 className="text-2xl  text-slate-900 tracking-tight">Customer Drawings</h1>
-            <p className="text-sm text-slate-500 font-medium">Manage customer reference drawings and technical documentation</p>
+            <h1 className="text-xl  text-slate-900 ">Customer Drawings</h1>
+            <p className="text-xs text-slate-500 font-medium">Manage customer reference drawings and technical documentation</p>
           </div>
         </div>
 
