@@ -130,22 +130,13 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null) => {
         }
       }
     }
-    let query = `SELECT c.*, i.selling_rate as latest_selling_rate, i.valuation_rate as latest_valuation_rate, i.weight_per_unit as latest_weight_per_unit
-                 FROM sales_order_item_components c
-                 LEFT JOIN (
-                   SELECT item_code, MAX(selling_rate) as selling_rate, MAX(valuation_rate) as valuation_rate, MAX(weight_per_unit) as weight_per_unit
-                   FROM stock_balance 
-                   GROUP BY item_code
-                 ) i ON c.component_code = i.item_code
-                 WHERE c.sales_order_item_id IN (
-                    SELECT id FROM (
-                       SELECT id FROM sales_order_items 
-                       WHERE (item_code = ? OR drawing_no = ?) 
-                       AND sales_order_id IS NULL 
-                       ORDER BY id DESC LIMIT 1
-                    ) as t
-                 )`;
-    let params = [itemCode, drawingNo];
+    const [latestIdRow] = await pool.query(
+      `SELECT id FROM sales_order_items 
+       WHERE (item_code = ? OR drawing_no = ?) 
+       AND sales_order_id IS NULL 
+       ORDER BY id DESC LIMIT 1`,
+      [itemCode, drawingNo]
+    );
 
     if (latestIdRow.length > 0) {
       let query = `SELECT c.*, i.selling_rate as latest_selling_rate, i.valuation_rate as latest_valuation_rate, i.weight_per_unit as latest_weight_per_unit
@@ -162,22 +153,25 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null) => {
 
     // If still no rows, try latest from ANY sales order (not just master)
     if (rows.length === 0) {
-      let fallbackQuery = `SELECT c.*, i.selling_rate as latest_selling_rate, i.valuation_rate as latest_valuation_rate, i.weight_per_unit as latest_weight_per_unit
-                 FROM sales_order_item_components c
-                 LEFT JOIN (
-                   SELECT item_code, MAX(selling_rate) as selling_rate, MAX(valuation_rate) as valuation_rate, MAX(weight_per_unit) as weight_per_unit
-                   FROM stock_balance 
-                   GROUP BY item_code
-                 ) i ON c.component_code = i.item_code
-                 WHERE c.sales_order_item_id IN (
-                    SELECT id FROM (
-                       SELECT id FROM sales_order_items 
-                       WHERE (item_code = ? OR drawing_no = ?) 
-                       AND bom_cost > 0
-                       ORDER BY id DESC LIMIT 1
-                    ) as t
-                 )`;
-      [rows] = await pool.query(fallbackQuery + ' ORDER BY c.created_at ASC', params);
+      const [fallbackIdRow] = await pool.query(
+        `SELECT id FROM sales_order_items 
+         WHERE (item_code = ? OR drawing_no = ?) 
+         AND bom_cost > 0
+         ORDER BY id DESC LIMIT 1`,
+        [itemCode, drawingNo]
+      );
+
+      if (fallbackIdRow.length > 0) {
+        let fallbackQuery = `SELECT c.*, i.selling_rate as latest_selling_rate, i.valuation_rate as latest_valuation_rate, i.weight_per_unit as latest_weight_per_unit
+                   FROM sales_order_item_components c
+                   LEFT JOIN (
+                     SELECT item_code, MAX(selling_rate) as selling_rate, MAX(valuation_rate) as valuation_rate, MAX(weight_per_unit) as weight_per_unit
+                     FROM stock_balance 
+                     GROUP BY item_code
+                   ) i ON c.component_code = i.item_code
+                   WHERE c.sales_order_item_id = ?`;
+        [rows] = await pool.query(fallbackQuery + ' ORDER BY c.created_at ASC', [fallbackIdRow[0].id]);
+      }
     }
   }
 
@@ -345,16 +339,13 @@ const getItemScrap = async (itemId, itemCode = null, drawingNo = null) => {
         }
       }
     }
-    let query = `SELECT * FROM sales_order_item_scrap 
-                 WHERE sales_order_item_id IN (
-                    SELECT id FROM (
-                       SELECT id FROM sales_order_items 
-                       WHERE (item_code = ? OR drawing_no = ?) 
-                       AND sales_order_id IS NULL 
-                       ORDER BY id DESC LIMIT 1
-                    ) as t
-                 )`;
-    let params = [itemCode, drawingNo];
+    const [latestIdRow] = await pool.query(
+      `SELECT id FROM sales_order_items 
+       WHERE (item_code = ? OR drawing_no = ?) 
+       AND sales_order_id IS NULL 
+       ORDER BY id DESC LIMIT 1`,
+      [itemCode, drawingNo]
+    );
 
     if (latestIdRow.length > 0) {
       [rows] = await pool.query(
