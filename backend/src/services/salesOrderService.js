@@ -826,7 +826,8 @@ const getApprovedDrawings = async (companyId = null) => {
   
   for (const order of rows) {
     const [items] = await pool.query(
-      `SELECT soi.id, soi.sales_order_id, soi.bom_id, soi.item_code, soi.item_type, soi.item_group, 
+      `SELECT * FROM (
+        SELECT soi.id, soi.sales_order_id, soi.bom_id, soi.item_code, soi.item_type, soi.item_group, 
               soi.unit, soi.description, soi.is_active, soi.is_default, soi.quantity, 
               soi.drawing_no, soi.drawing_id, soi.status, soi.created_by, soi.created_at, soi.updated_at,
               (

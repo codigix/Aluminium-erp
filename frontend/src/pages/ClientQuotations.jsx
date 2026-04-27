@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+  import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import { Card, StatusBadge, Tabs, Button, DataTable } from '../components/ui.jsx';
@@ -273,6 +273,10 @@ const ClientQuotations = () => {
 
           // Set calc group for UI badge
           item.item_group_calc = isSA ? (g.includes('ASSEMBLY') && !g.includes('SUB') ? 'ASSEMBLY' : 'SUB ASSEMBLY') : 'FG';
+
+          // Hide sub-assemblies from top-level if they are part of another item (identified by is_component > 0)
+          // Exception: if it's explicitly an FG, show it anyway
+          if (item.is_component > 0 && !isFG) return;
 
           const identity = `${item.drawing_no || 'NA'}_${item.item_code || 'NA'}_${item.item_group_calc}`;
           const existing = grouped[clientName].all_items_map[identity];
