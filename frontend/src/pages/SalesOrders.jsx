@@ -4,6 +4,7 @@ import { Truck } from 'lucide-react';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
 import {
   Eye,
+  Download,
   Pencil,
   Trash2,
   Plus,
@@ -577,6 +578,24 @@ const SalesOrders = () => {
     }
   };
 
+  const handleDownloadInvoice = async (orderId) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/order/${orderId}/pdf`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!response.ok) throw new Error('Failed to generate invoice');
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+      window.open(url, '_blank');
+    } catch (err) {
+      console.error('Error downloading invoice:', err);
+      errorToast('Failed to download invoice');
+    }
+  };
+
   const handleSaveOrder = async () => {
     try {
       const token = localStorage.getItem('authToken');
@@ -819,6 +838,13 @@ const SalesOrders = () => {
             title="View Details"
           >
             <Eye className="w-4 h-4 group-hover:scale-110" />
+          </button>
+          <button
+            onClick={() => handleDownloadInvoice(row.id)}
+            className="p-2 hover:bg-emerald-50 rounded  text-slate-400 hover:text-emerald-600 transition-all border border-transparent hover:border-emerald-100 group shadow-sm"
+            title="Download Invoice"
+          >
+            <Download className="w-4 h-4 group-hover:scale-110" />
           </button>
           <button
             onClick={() => handleEditOrder(row)}

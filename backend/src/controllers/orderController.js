@@ -65,6 +65,16 @@ const getStats = async (req, res, next) => {
   }
 };
 
+const generateOrderPDF = async (req, res, next) => {
+  try {
+    const pdf = await orderService.generateOrderPDF(req.params.id);
+    res.contentType('application/pdf');
+    res.send(pdf);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   listOrders,
   createOrder,
@@ -72,5 +82,6 @@ module.exports = {
   updateOrder,
   deleteOrder,
   getApprovedDrawings,
-  getStats
+  getStats,
+  generateOrderPDF
 };

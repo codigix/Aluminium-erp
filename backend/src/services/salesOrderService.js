@@ -2,6 +2,46 @@ const pool = require('../config/db');
 const designOrderService = require('./designOrderService');
 const bomService = require('./bomService');
 
+const numberToWords = (num) => {
+  const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+  const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+  
+  const convert = (n) => {
+    if (n < 20) return ones[n];
+    if (n < 100) return tens[Math.floor(n / 10)] + (n % 10 !== 0 ? ' ' + ones[n % 10] : '');
+    if (n < 1000) return ones[Math.floor(n / 100)] + ' Hundred' + (n % 100 !== 0 ? ' and ' + convert(n % 100) : '');
+    return '';
+  };
+
+  const formatWords = (n) => {
+    if (n === 0) return 'Zero';
+    let words = '';
+    if (n >= 10000000) {
+      words += convert(Math.floor(n / 10000000)) + ' Crore ';
+      n %= 10000000;
+    }
+    if (n >= 100000) {
+      words += convert(Math.floor(n / 100000)) + ' Lakh ';
+      n %= 100000;
+    }
+    if (n >= 1000) {
+      words += convert(Math.floor(n / 1000)) + ' Thousand ';
+      n %= 1000;
+    }
+    words += convert(n);
+    return words.trim();
+  };
+
+  const amount = Math.floor(num);
+  const paisa = Math.round((num - amount) * 100);
+  
+  let result = 'INR ' + formatWords(amount) + ' Only';
+  if (paisa > 0) {
+    result = 'INR ' + formatWords(amount) + ' and ' + formatWords(paisa) + ' Paisa Only';
+  }
+  return result;
+};
+
 const listSalesOrders = async (includeWithoutPo = true) => {
   let whereClause = "WHERE (so.is_sales_order = 1 OR so.status IN ('BOM_SUBMITTED', 'BOM_Approved', 'CREATED', 'DESIGN_QUERY', 'DESIGN_IN_REVIEW', 'QUOTATION_SENT'))";
   if (!includeWithoutPo) {
@@ -1104,9 +1144,13 @@ const getOrderTimeline = async salesOrderId => {
 
 const generateSalesOrderPDF = async (salesOrderId) => {
   const [orderRows] = await pool.query(
-    `SELECT so.*, c.company_name, c.company_code, cp.po_number, cp.po_date, cp.currency AS po_currency
+    `SELECT so.*, c.company_name, c.company_code, c.gstin, c.pan, c.cin,
+            ba.line1 as billing_line1, ba.line2 as billing_line2, ba.city as billing_city, 
+            ba.state as billing_state, ba.pincode as billing_pincode,
+            cp.po_number, cp.po_date, cp.currency AS po_currency, cp.project_name as cp_project_name
      FROM sales_orders so
      LEFT JOIN companies c ON c.id = so.company_id
+     LEFT JOIN company_addresses ba ON ba.company_id = c.id AND ba.address_type = 'BILLING'
      LEFT JOIN customer_pos cp ON cp.id = so.customer_po_id
      WHERE so.id = ?`,
     [salesOrderId]
@@ -1114,9 +1158,23 @@ const generateSalesOrderPDF = async (salesOrderId) => {
 
   if (!orderRows.length) throw new Error('Sales Order not found');
   const order = orderRows[0];
+  
+  // Format billing address
+  const addrParts = [
+    order.billing_line1,
+    order.billing_line2,
+    order.billing_city,
+    order.billing_state,
+    order.billing_pincode ? `Pincode: ${order.billing_pincode}` : null
+  ].filter(Boolean);
+  order.billing_address = addrParts.join(', ');
 
   const [items] = await pool.query(
-    'SELECT * FROM sales_order_items WHERE sales_order_id = ?',
+    `SELECT soi.*, cpi.hsn_code
+     FROM sales_order_items soi
+     LEFT JOIN customer_po_items cpi ON cpi.customer_po_id = (SELECT customer_po_id FROM sales_orders WHERE id = soi.sales_order_id)
+          AND (cpi.item_code = soi.item_code OR cpi.drawing_no = soi.drawing_no)
+     WHERE soi.sales_order_id = ?`,
     [salesOrderId]
   );
 
@@ -1128,110 +1186,301 @@ const generateSalesOrderPDF = async (salesOrderId) => {
     <html>
     <head>
       <style>
-        body { font-family: 'roboto', sans-serif; padding: 20px; color: #333; }
-        .header { display: flex; justify-content: space-between; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-bottom: 20px; }
-        .company-info h1 { margin: 0; color: #1e293b; font-size: 24px; }
-        .order-meta { text-align: right; }
-        .order-meta p { margin: 2px 0; font-size: 14px; }
-        .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; }
-        .section-title { font-weight: bold; font-size: 12px; text-transform: ; color: #64748b; margin-bottom: 8px; }
-        .info-box { background: #f8fafc; padding: 12px; border-radius: 6px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th { background: #f1f5f9; text-align: left; padding: 10px; font-size: 12px; text-transform: ; color: #475569; }
-        td { padding: 10px; border-bottom: 1px solid #eee; font-size: 13px; }
-        .totals { margin-top: 20px; float: right; width: 250px; }
-        .total-row { display: flex; justify-content: space-between; padding: 5px 0; }
-        .grand-total { font-weight: bold; font-size: 16px; border-top: 2px solid #eee; margin-top: 5px; padding-top: 5px; }
+        @page { size: A4; margin: 10mm; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #000; line-height: 1.3; margin: 0; font-size: 10px; }
+        .invoice-container { border: 1px solid #000; min-height: 270mm; position: relative; }
+        
+        .tax-invoice-label { text-align: center; border-bottom: 1px solid #000; font-weight: bold; font-size: 14px; padding: 5px; }
+        
+        .header-section { display: flex; border-bottom: 1px solid #000; }
+        .header-left { flex: 1.5; padding: 10px; border-right: 1px solid #000; }
+        .header-right { flex: 1; padding: 10px; }
+        
+        .company-name { font-size: 16px; font-weight: bold; margin-bottom: 5px; }
+        .address-text { font-size: 9px; margin-bottom: 2px; }
+        
+        .info-grid { display: grid; grid-template-columns: 1fr 1fr; width: 100%; border-bottom: 1px solid #000; }
+        .info-box { padding: 8px; border-right: 1px solid #000; min-height: 80px; }
+        .info-box:last-child { border-right: none; }
+        .label { font-weight: bold; text-decoration: underline; margin-bottom: 5px; display: block; font-size: 11px; }
+        
+        .meta-table { width: 100%; border-collapse: collapse; }
+        .meta-table td { padding: 4px; border: 1px solid #000; }
+        .meta-label { font-weight: bold; width: 40%; }
+        
+        .items-table { width: 100%; border-collapse: collapse; border-bottom: 1px solid #000; }
+        .items-table th { border: 1px solid #000; padding: 6px; background: #f0f0f0; font-weight: bold; text-align: center; font-size: 9px; }
+        .items-table td { border-left: 1px solid #000; border-right: 1px solid #000; padding: 6px; vertical-align: top; }
+        .items-table tr.item-row { min-height: 30px; }
+        
+        .total-section { display: flex; border-bottom: 1px solid #000; }
+        .words-section { flex: 1.5; padding: 10px; border-right: 1px solid #000; }
+        .calc-section { flex: 1; }
+        
+        .calc-table { width: 100%; border-collapse: collapse; }
+        .calc-table td { padding: 5px; border-bottom: 1px solid #000; text-align: right; }
+        .calc-table td:first-child { text-align: left; font-weight: bold; border-right: 1px solid #000; }
+        .calc-table tr:last-child td { border-bottom: none; font-size: 12px; font-weight: bold; }
+        
+        .tax-summary-table { width: 100%; border-collapse: collapse; border-bottom: 1px solid #000; margin-top: 0; }
+        .tax-summary-table th, .tax-summary-table td { border: 1px solid #000; padding: 4px; text-align: center; }
+        .tax-summary-table th { font-size: 8px; background: #f0f0f0; }
+        
+        .footer-section { display: flex; padding: 20px 10px; border-top: 1px solid #000; position: absolute; bottom: 0; width: 100%; box-sizing: border-box; }
+        .footer-col { flex: 1; text-align: center; }
+        .signature-box { margin-top: 40px; border-top: 1px dashed #000; display: inline-block; min-width: 150px; padding-top: 5px; }
       </style>
     </head>
     <body>
-      <div class="header">
-        <div class="company-info">
-          <h1>SALES ORDER</h1>
-          <p>SPTECH PIONEER ALUMINIUM</p>
+      <div class="invoice-container">
+        <div class="tax-invoice-label">TAX INVOICE</div>
+        
+        <div class="header-section">
+          <div class="header-left">
+            <div class="company-name">SP TECHPIONEER PVT LTD</div>
+            <div class="address-text">PLOT NO.97, SECTOR NO 07, PCNDTA</div>
+            <div class="address-text">BHOSARI, PUNE-411026</div>
+            <div class="address-text">GSTIN/UIN: 27AAPCS1193L1ZQ</div>
+            <div class="address-text">State Name: Maharashtra, Code: 27</div>
+          </div>
+          <div class="header-right">
+            <table class="meta-table">
+              <tr>
+                <td class="meta-label">Invoice No.</td>
+                <td>SO-{{order_id}}</td>
+              </tr>
+              <tr>
+                <td class="meta-label">Dated</td>
+                <td>{{created_at}}</td>
+              </tr>
+              <tr>
+                <td class="meta-label">Buyer's Order No.</td>
+                <td>{{po_number}}</td>
+              </tr>
+              <tr>
+                <td class="meta-label">PO Date</td>
+                <td>{{po_date}}</td>
+              </tr>
+            </table>
+          </div>
         </div>
-        <div class="order-meta">
-          <p><strong>Order #:</strong> SO-{{id}}</p>
-          <p><strong>Date:</strong> {{created_at}}</p>
-          <p><strong>Status:</strong> {{status}}</p>
+        
+        <div class="info-grid">
+          <div class="info-box">
+            <span class="label">Consignee (Ship to)</span>
+            <div style="font-weight: bold; font-size: 11px;">{{company_name}}</div>
+            <div class="address-text">{{billing_address}}</div>
+            <div class="address-text">GSTIN/UIN: {{gstin}}</div>
+            <div class="address-text">State Name: {{billing_state}}</div>
+          </div>
+          <div class="info-box">
+            <span class="label">Buyer (Bill to)</span>
+            <div style="font-weight: bold; font-size: 11px;">{{company_name}}</div>
+            <div class="address-text">{{billing_address}}</div>
+            <div class="address-text">GSTIN/UIN: {{gstin}}</div>
+            <div class="address-text">State Name: {{billing_state}}</div>
+          </div>
         </div>
-      </div>
 
-      <div class="details-grid">
-        <div class="info-box">
-          <div class="section-title">Customer Information</div>
-          <p><strong>{{company_name}}</strong></p>
-          <p>Code: {{company_code}}</p>
-          <p>Project: {{project_name}}</p>
-        </div>
-        <div class="info-box">
-          <div class="section-title">Reference Details</div>
-          <p><strong>Customer PO:</strong> {{po_number}}</p>
-          <p><strong>PO Date:</strong> {{po_date}}</p>
-          <p><strong>Target Dispatch:</strong> {{target_dispatch_date}}</p>
-        </div>
-      </div>
+        <table class="items-table">
+          <thead>
+            <tr>
+              <th style="width: 30px;">Sl No.</th>
+              <th>Description of Goods</th>
+              <th style="width: 70px;">HSN/SAC</th>
+              <th style="width: 60px;">Quantity</th>
+              <th style="width: 80px;">Rate</th>
+              <th style="width: 40px;">per</th>
+              <th style="width: 90px;">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{#items}}
+            <tr class="item-row">
+              <td style="text-align: center;">{{index}}</td>
+              <td>
+                <div style="font-weight: bold;">{{description}}</div>
+                {{#drawing_no}}<div style="font-size: 8px; color: #444;">DRW: {{drawing_no}}</div>{{/drawing_no}}
+              </td>
+              <td style="text-align: center;">{{hsn_code}}</td>
+              <td style="text-align: center;">{{quantity}} {{unit}}</td>
+              <td style="text-align: right;">{{rate}}</td>
+              <td style="text-align: center;">{{unit}}</td>
+              <td style="text-align: right; font-weight: bold;">{{item_amount}}</td>
+            </tr>
+            {{/items}}
+            {{#empty_rows}}
+            <tr style="height: 25px;">
+              <td></td><td></td><td></td><td></td><td></td><td></td><td></td>
+            </tr>
+            {{/empty_rows}}
+          </tbody>
+        </table>
 
-      <table>
-        <thead>
-          <tr>
-            <th>Item Code</th>
-            <th>Description</th>
-            <th>Qty</th>
-            <th>Unit</th>
-            <th>Rate</th>
-            <th>Tax</th>
-            <th>Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          {{#items}}
-          <tr>
-            <td>{{item_code}}</td>
-            <td>{{description}}</td>
-            <td>{{quantity}}</td>
-            <td>{{unit}}</td>
-            <td>{{rate}}</td>
-            <td>{{tax_value}}</td>
-            <td>{{total}}</td>
-          </tr>
-          {{/items}}
-        </tbody>
-      </table>
+        <div class="total-section">
+          <div class="words-section">
+            <div style="font-style: italic; margin-bottom: 10px;">Amount Chargeable (in words)</div>
+            <div style="font-weight: bold; font-size: 11px;">{{net_total_words}}</div>
+          </div>
+          <div class="calc-section">
+            <table class="calc-table">
+              <tr>
+                <td>Total Taxable Value</td>
+                <td>{{subtotal}}</td>
+              </tr>
+              {{#cgst_total}}
+              <tr>
+                <td>Output CGST @ {{cgst_rate}}%</td>
+                <td>{{cgst_total}}</td>
+              </tr>
+              {{/cgst_total}}
+              {{#sgst_total}}
+              <tr>
+                <td>Output SGST @ {{sgst_rate}}%</td>
+                <td>{{sgst_total}}</td>
+              </tr>
+              {{/sgst_total}}
+              <tr>
+                <td>Total</td>
+                <td>₹ {{net_total}}</td>
+              </tr>
+            </table>
+          </div>
+        </div>
 
-      <div class="totals">
-        <div class="total-row grand-total">
-          <span>Total ({{po_currency}}):</span>
-          <span>{{grand_total}}</span>
+        <table class="tax-summary-table">
+          <thead>
+            <tr>
+              <th rowspan="2">HSN/SAC</th>
+              <th rowspan="2">Taxable Value</th>
+              <th colspan="2">Central Tax</th>
+              <th colspan="2">State Tax</th>
+              <th rowspan="2">Total Tax Amount</th>
+            </tr>
+            <tr>
+              <th>Rate</th>
+              <th>Amount</th>
+              <th>Rate</th>
+              <th>Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{#tax_summary}}
+            <tr>
+              <td>{{hsn_code}}</td>
+              <td>{{taxable_value}}</td>
+              <td>{{central_rate}}</td>
+              <td>{{central_amount}}</td>
+              <td>{{state_rate}}</td>
+              <td>{{state_amount}}</td>
+              <td>{{total_tax}}</td>
+            </tr>
+            {{/tax_summary}}
+            <tr style="font-weight: bold; background: #f9f9f9;">
+              <td>Total</td>
+              <td>{{subtotal}}</td>
+              <td></td>
+              <td>{{cgst_total}}</td>
+              <td></td>
+              <td>{{sgst_total}}</td>
+              <td>{{tax_total_summary}}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div style="padding: 10px; font-size: 9px;">
+          <div style="font-weight: bold; text-decoration: underline; margin-bottom: 5px;">Declaration:</div>
+          We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.
+        </div>
+
+        <div class="footer-section">
+          <div class="footer-col">
+            <div style="margin-bottom: 50px;">Customer's Seal and Signature</div>
+            <div class="signature-box">Authorized Signatory</div>
+          </div>
+          <div class="footer-col" style="text-align: right;">
+            <div style="font-weight: bold;">for SP TECHPIONEER PVT LTD</div>
+            <div class="signature-box">Authorized Signatory</div>
+          </div>
         </div>
       </div>
     </body>
     </html>
   `;
 
-  const formatDate = (date) => date ? new Date(date).toLocaleDateString('en-IN') : '—';
-  
-  let totalSum = 0;
-  const formattedItems = items.map(item => {
-    const itemTotal = (parseFloat(item.quantity) * parseFloat(item.rate)) + parseFloat(item.tax_value || 0);
-    totalSum += itemTotal;
+  const formatDate = (date) => date ? new Date(date).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-') : '—';
+  const formatCurrency = (val) => Number(val || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  let totalTaxableValue = 0;
+  let totalCgst = 0;
+  let totalSgst = 0;
+
+  // Group items by HSN for tax summary
+  const taxMap = new Map();
+  const formattedItems = items.map((item, idx) => {
+    const qty = Number(item.quantity || 0);
+    const rate = Number(item.rate || 0);
+    const taxable = qty * rate;
+    const cgst = taxable * (Number(order.cgst_rate || 0) / 100);
+    const sgst = taxable * (Number(order.sgst_rate || 0) / 100);
+    
+    totalTaxableValue += taxable;
+    totalCgst += cgst;
+    totalSgst += sgst;
+
+    const hsn = item.hsn_code || 'N/A';
+    if (!taxMap.has(hsn)) {
+      taxMap.set(hsn, {
+        hsn_code: hsn,
+        taxable_value: 0,
+        central_rate: Number(order.cgst_rate || 0).toFixed(1) + '%',
+        central_amount: 0,
+        state_rate: Number(order.sgst_rate || 0).toFixed(1) + '%',
+        state_amount: 0,
+        total_tax: 0
+      });
+    }
+    const entry = taxMap.get(hsn);
+    entry.taxable_value += taxable;
+    entry.central_amount += cgst;
+    entry.state_amount += sgst;
+    entry.total_tax += (cgst + sgst);
+
     return {
       ...item,
-      quantity: parseFloat(item.quantity).toFixed(2),
-      rate: parseFloat(item.rate).toLocaleString('en-IN', { minimumFractionDigits: 2 }),
-      tax_value: parseFloat(item.tax_value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 }),
-      total: itemTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })
+      index: idx + 1,
+      quantity: qty.toFixed(0),
+      rate: formatCurrency(rate),
+      item_amount: formatCurrency(taxable)
     };
   });
 
+  const taxSummary = Array.from(taxMap.values()).map(t => ({
+    ...t,
+    taxable_value: formatCurrency(t.taxable_value),
+    central_amount: formatCurrency(t.central_amount),
+    state_amount: formatCurrency(t.state_amount),
+    total_tax: formatCurrency(t.total_tax)
+  }));
+
+  const netTotal = totalTaxableValue + totalCgst + totalSgst;
+
   const viewData = {
     ...order,
-    id: String(order.id).padStart(4, '0'),
+    order_id: String(order.id).padStart(4, '0'),
     created_at: formatDate(order.created_at),
     po_date: formatDate(order.po_date),
-    target_dispatch_date: formatDate(order.target_dispatch_date),
+    subtotal: formatCurrency(totalTaxableValue),
+    cgst_total: formatCurrency(totalCgst),
+    sgst_total: formatCurrency(totalSgst),
+    tax_total_summary: formatCurrency(totalCgst + totalSgst),
+    net_total: formatCurrency(netTotal),
+    net_total_words: numberToWords(netTotal),
+    tax_summary: taxSummary,
     items: formattedItems,
-    grand_total: totalSum.toLocaleString('en-IN', { minimumFractionDigits: 2 })
+    empty_rows: Array.from({ length: Math.max(0, 10 - items.length) }),
+    cgst_rate: Number(order.cgst_rate || 0).toFixed(1),
+    sgst_rate: Number(order.sgst_rate || 0).toFixed(1)
   };
 
   const html = mustache.render(htmlTemplate, viewData);
@@ -1248,7 +1497,7 @@ const generateSalesOrderPDF = async (salesOrderId) => {
     return pdf;
   } catch (error) {
     console.error('[PDF Generation] Puppeteer error:', error.message);
-    throw new Error('PDF generation unavailable. Please configure Chrome/Chromium browser.');
+    throw new Error('PDF generation unavailable.');
   }
 };
 

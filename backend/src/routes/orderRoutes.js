@@ -8,5 +8,6 @@ router.post('/', orderController.createOrder);
 router.get('/:id', orderController.getOrderById);
 router.put('/:id', orderController.updateOrder);
 router.delete('/:id', orderController.deleteOrder);
+router.get('/:id/pdf', orderController.generateOrderPDF);
 
 module.exports = router;

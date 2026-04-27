@@ -611,14 +611,14 @@ const generateCustomerPoPDF = async poId => {
             {{#sub_assemblies}}
             <tr class="sub-assembly-row">
               <td></td>
-              <td style="padding-left: 20px;">
-                <span class="sa-branch">↳</span>{{description}} ({{drawingNo}}) <span class="sa-tag">SA</span>
+              <td>
+                <div style="font-weight: bold;">{{description}} ({{drawingNo}})</div>
               </td>
-              <td style="text-align: center; color: #666;">-</td>
-              <td style="text-align: center; color: #666; font-size: 8px;">{{displayQuantity}}</td>
-              <td style="text-align: right; color: #666; font-size: 8px;">{{displayRate}}</td>
-              <td style="text-align: center; color: #666; font-size: 8px;">{{unit}}</td>
-              <td style="text-align: right; color: #666; font-size: 8px;">{{displayTotal}}</td>
+              <td style="text-align: center;">-</td>
+              <td style="text-align: center;">{{displayQuantity}}</td>
+              <td style="text-align: right;">{{displayRate}}</td>
+              <td style="text-align: center;">{{unit}}</td>
+              <td style="text-align: right; font-weight: bold;">{{displayTotal}}</td>
             </tr>
             {{/sub_assemblies}}
             {{/items}}
