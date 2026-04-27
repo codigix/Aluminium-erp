@@ -4,7 +4,12 @@ import Swal from 'sweetalert2'
 import { 
   Building2, ClipboardList, FileText, Package, Palette, PencilLine, Factory, 
   Settings, BarChart3, CheckCircle, Handshake, MessageSquare, ShoppingCart, 
-  Inbox, Book, Scale, TrendingUp, Search, Check, XCircle, Files, RotateCw, LogOut, Truck
+  Inbox, Book, Scale, TrendingUp, Search, Check, XCircle, Files, RotateCw, LogOut, Truck,
+  LayoutDashboard, Users, FileSearch, FileCheck, Layers, Box, ListTree, Settings2, 
+  FileSpreadsheet, PackageSearch, Calendar, Wrench, FileSignature, Cpu, Activity, 
+  FileQuestion, ShoppingBag, ClipboardPlus, ClipboardCheck, Move, BookOpen, Warehouse, 
+  ShieldCheck, LogIn, FileBarChart, Receipt, CreditCard, History, CheckCircle2, Contact2,
+  Menu
 } from 'lucide-react'
 import CompanyMaster from './pages/CompanyMaster'
 import ClientContacts from './pages/ClientContacts'
@@ -72,7 +77,7 @@ import DesignDashboard from "./pages/DesignDashboard";
 import ProductionDashboard from "./pages/ProductionDashboard";
 import ProcurementDashboard from "./pages/ProcurementDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
-import { FormControl, StatusBadge } from "./components/ui.jsx";
+import { FormControl, StatusBadge, Button } from "./components/ui.jsx";
 import './index.css'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
@@ -1037,76 +1042,104 @@ function App() {
     'close': XCircle,
     'files': Files,
     'refresh': RotateCw,
-    'truck': Truck
+    'truck': Truck,
+    'dashboard': LayoutDashboard,
+    'users': Users,
+    'file-search': FileSearch,
+    'file-check': FileCheck,
+    'layers': Layers,
+    'box': Box,
+    'list-tree': ListTree,
+    'settings-2': Settings2,
+    'spreadsheet': FileSpreadsheet,
+    'package-search': PackageSearch,
+    'calendar': Calendar,
+    'wrench': Wrench,
+    'signature': FileSignature,
+    'cpu': Cpu,
+    'activity': Activity,
+    'file-question': FileQuestion,
+    'shopping-bag': ShoppingBag,
+    'clipboard-plus': ClipboardPlus,
+    'clipboard-check': ClipboardCheck,
+    'move': Move,
+    'book-open': BookOpen,
+    'warehouse': Warehouse,
+    'shield-check': ShieldCheck,
+    'log-in': LogIn,
+    'file-bar-chart': FileBarChart,
+    'receipt': Receipt,
+    'credit-card': CreditCard,
+    'history': History,
+    'check-circle': CheckCircle2,
+    'contact': Contact2
   }
 
   const allNavigationItems = [
     { label: 'GENERAL', isGroup: true, groupId: 'general-group' },
-    { label: 'Dashboard', moduleId: 'dashboard', icon: 'chart', indent: true },
+    { label: 'Dashboard', moduleId: 'dashboard', icon: 'dashboard', indent: true },
     { label: 'Company Master', moduleId: 'company-master', icon: 'building', indent: true },
-    { label: 'Client Contacts', moduleId: 'client-contacts', icon: 'handshake', indent: true },
+    { label: 'Client Contacts', moduleId: 'client-contacts', icon: 'users', indent: true },
 
     { label: 'SALES', isGroup: true, groupId: 'sales-group' },
-    { label: 'Client Requirements ', moduleId: 'customer-drawing', icon: 'clipboard', indent: true },
-    { label: 'Client Quotations', moduleId: 'client-quotations', icon: 'clipboard', indent: true },
-    { label: 'Customer PO', moduleId: 'customer-po', icon: 'document', indent: true },
-    { label: 'Sales Order', moduleId: 'sales-order', icon: 'package', indent: true },
+    { label: 'Customer Drawings', moduleId: 'customer-drawing', icon: 'file-search', indent: true },
+    { label: 'Sales Quotations', moduleId: 'client-quotations', icon: 'document', indent: true },
+    { label: 'Customer PO', moduleId: 'customer-po', icon: 'file-check', indent: true },
+    { label: 'Sales Order', moduleId: 'sales-order', icon: 'shopping-bag', indent: true },
 
     { label: 'DESIGN & ENG', isGroup: true, groupId: 'design-group' },
-    { label: 'Drawing Master', moduleId: 'drawing-master', icon: 'pencil', indent: true },
-    // { label: 'Design Orders', moduleId: 'design-orders', icon: 'palette', indent: true },
-    { label: 'Items Master', moduleId: 'item-master', icon: 'package', indent: true },
-    { label: 'BOM Creation', moduleId: 'bom-creation', icon: 'clipboard', indent: true },
-    { label: 'Routing / Operations', moduleId: 'routing-operations', icon: 'settings', indent: true },
-    { label: 'Process Sheet', moduleId: 'process-sheet', icon: 'chart', indent: true },
-    // { label: 'BOM Approval', moduleId: 'bom-approval', icon: 'check', indent: true },
+    { label: 'Drawing Master', moduleId: 'drawing-master', icon: 'layers', indent: true },
+    { label: 'Items Master', moduleId: 'item-master', icon: 'box', indent: true },
+    { label: 'BOM Creation', moduleId: 'bom-creation', icon: 'list-tree', indent: true },
+    { label: 'Routing / Operations', moduleId: 'routing-operations', icon: 'settings-2', indent: true },
+    { label: 'Process Sheet', moduleId: 'process-sheet', icon: 'spreadsheet', indent: true },
 
     { label: 'PRODUCTION', isGroup: true, groupId: 'production-group' },
     { label: 'Project Requests', moduleId: 'project-requests', icon: 'clipboard', indent: true },
-    { label: 'Material Requirements', moduleId: 'material-requirements', icon: 'package', indent: true },
-    { label: 'Production Plan', moduleId: 'production-plan', icon: 'chart', indent: true },
-    { label: 'Work Order', moduleId: 'work-order', icon: 'document', indent: true },
-    { label: 'Job Card', moduleId: 'job-card', icon: 'clipboard', indent: true },
-    { label: 'Challans', moduleId: 'sub-contract-challans', icon: 'truck', indent: true },
-    { label: 'Workstations', moduleId: 'workstation-master', icon: 'factory', indent: true },
-    { label: 'Operations', moduleId: 'operation-master', icon: 'settings', indent: true },
+    { label: 'Material Requirements', moduleId: 'material-requirements', icon: 'package-search', indent: true },
+    { label: 'Production Plan', moduleId: 'production-plan', icon: 'calendar', indent: true },
+    { label: 'Work Order', moduleId: 'work-order', icon: 'wrench', indent: true },
+    { label: 'Job Card', moduleId: 'job-card', icon: 'signature', indent: true },
+    { label: 'Subcontract Challans', moduleId: 'sub-contract-challans', icon: 'truck', indent: true },
+    { label: 'Workstations', moduleId: 'workstation-master', icon: 'cpu', indent: true },
+    { label: 'Operations', moduleId: 'operation-master', icon: 'activity', indent: true },
 
     { label: 'PROCUREMENT', isGroup: true, groupId: 'procurement-group' },
-    { label: 'Quotations (RFQ)', moduleId: 'quotations', icon: 'clipboard', indent: true },
-    { label: 'Purchase Orders', moduleId: 'purchase-orders', icon: 'cart', indent: true },
-    { label: 'Purchase Receipt', moduleId: 'po-receipts', icon: 'inbox', indent: true },
-    { label: 'Suppliers', moduleId: 'suppliers', icon: 'handshake', indent: true, deptCode: 'PROCUREMENT' },
+    { label: 'Purchase RFQs', moduleId: 'quotations', icon: 'file-question', indent: true },
+    { label: 'Purchase Orders', moduleId: 'purchase-orders', icon: 'shopping-bag', indent: true },
+    { label: 'Goods Receipt (PO)', moduleId: 'po-receipts', icon: 'inbox', indent: true },
+    { label: 'Suppliers', moduleId: 'suppliers', icon: 'truck', indent: true, deptCode: 'PROCUREMENT' },
 
     { label: 'INVENTORY', isGroup: true, groupId: 'inventory-group' },
-    { label: 'Material Requests', moduleId: 'po-material-request', icon: 'clipboard', indent: true },
-    { label: 'GRN Management', moduleId: 'grn', icon: 'refresh', indent: true },
-    { label: 'Stock Entries', moduleId: 'stock-entries', icon: 'package', indent: true },
+    { label: 'Material Requests', moduleId: 'po-material-request', icon: 'clipboard-plus', indent: true },
+    { label: 'GRN Management', moduleId: 'grn', icon: 'clipboard-check', indent: true },
+    { label: 'Stock Entries', moduleId: 'stock-entries', icon: 'move', indent: true },
     { label: 'Stock Balance', moduleId: 'stock-balance', icon: 'scale', indent: true },
-    { label: 'Stock Ledger', moduleId: 'stock-ledger', icon: 'book', indent: true },
-    { label: 'Warehouses', moduleId: 'warehouses', icon: 'factory', indent: true },
-    { label: 'Suppliers', moduleId: 'suppliers', icon: 'handshake', indent: true, deptCode: 'INVENTORY' },
+    { label: 'Stock Ledger', moduleId: 'stock-ledger', icon: 'book-open', indent: true },
+    { label: 'Warehouses', moduleId: 'warehouses', icon: 'warehouse', indent: true },
+    { label: 'Suppliers', moduleId: 'suppliers', icon: 'truck', indent: true, deptCode: 'INVENTORY' },
 
     { label: 'QUALITY', isGroup: true, groupId: 'quality-group' },
-    { label: 'Quality & Rejection Entry', moduleId: 'quality-rejection-entry', icon: 'clipboard', indent: true },
-    { label: 'Incoming QC', moduleId: 'incoming-qc', icon: 'inbox', indent: true },
+    { label: 'QC Inspection', moduleId: 'quality-rejection-entry', icon: 'shield-check', indent: true },
+    { label: 'Incoming QC', moduleId: 'incoming-qc', icon: 'log-in', indent: true },
     { label: 'Rejections', moduleId: 'quality-rejections', icon: 'close', indent: true },
-    { label: 'Quality Reports TEST', moduleId: 'quality-reports', icon: 'files', indent: true },
+    { label: 'QC Reports', moduleId: 'quality-reports', icon: 'file-bar-chart', indent: true },
 
     { label: 'ACCOUNTS', isGroup: true, groupId: 'accounts-main-group' },
-    { label: 'Vendor Invoices', moduleId: 'invoice-received', icon: 'files', indent: true },
-    { label: 'Payment Processing', moduleId: 'payment-processing', icon: 'cart', indent: true },
-    { label: 'Payment History', moduleId: 'payment-history', icon: 'book', indent: true },
-    { label: 'Payment Received', moduleId: 'payment-received', icon: 'check', indent: true },
-    { label: 'Customer History', moduleId: 'customer-payment-history', icon: 'book', indent: true },
+    { label: 'Vendor Invoices', moduleId: 'invoice-received', icon: 'receipt', indent: true },
+    { label: 'Payment Processing', moduleId: 'payment-processing', icon: 'credit-card', indent: true },
+    { label: 'Payment History', moduleId: 'payment-history', icon: 'history', indent: true },
+    { label: 'Payment Received', moduleId: 'payment-received', icon: 'check-circle', indent: true },
+    { label: 'Client History', moduleId: 'customer-payment-history', icon: 'contact', indent: true },
 
     { label: 'SHIPMENT', isGroup: true, groupId: 'shipment-group' },
     { label: 'Shipment Orders', moduleId: 'shipment-orders', icon: 'package', indent: true },
-    { label: 'Shipment Planning', moduleId: 'shipment-planning', icon: 'clipboard', indent: true },
+    { label: 'Shipment Planning', moduleId: 'shipment-planning', icon: 'calendar', indent: true },
     { label: 'Dispatch Management', moduleId: 'dispatch-management', icon: 'settings', indent: true },
     { label: 'Delivery Challan', moduleId: 'delivery-challan', icon: 'document', indent: true },
-    { label: 'Tracking', moduleId: 'shipment-tracking', icon: 'search', indent: true },
-    { label: 'Returns', moduleId: 'shipment-returns', icon: 'refresh', indent: true },
-    { label: 'Reports', moduleId: 'shipment-reports', icon: 'files', indent: true }
+    { label: 'Shipment Tracking', moduleId: 'shipment-tracking', icon: 'search', indent: true },
+    { label: 'Shipment Returns', moduleId: 'shipment-returns', icon: 'refresh', indent: true },
+    { label: 'Shipment Reports', moduleId: 'shipment-reports', icon: 'files', indent: true }
   ]
 
   const navigationItems = allowedModules ? allNavigationItems.filter((item, index) => {
@@ -1193,13 +1226,14 @@ function App() {
                     disabled={loginLoading}
                   />
                 </div>
-                <button
+                <Button
                   type="submit"
-                  disabled={loginLoading}
-                  className="w-full p-2  rounded  bg-slate-900 text-white  hover:bg-slate-800 disabled:opacity-60 transition"
+                  variant="dark"
+                  loading={loginLoading}
+                  className="w-full"
                 >
-                  {loginLoading ? 'Signing in...' : 'Sign In'}
-                </button>
+                  Sign In
+                </Button>
               </form>
             ) : (
               <form onSubmit={handleSignup} className="space-y-3 max-h-96 overflow-y-auto">
@@ -1301,13 +1335,14 @@ function App() {
                     />
                   </div>
                 </div>
-                <button
+                <Button
                   type="submit"
-                  disabled={signupLoading}
-                  className="w-full p-2  rounded  bg-slate-900 text-white  hover:bg-slate-800 disabled:opacity-60 transition text-xs"
+                  variant="dark"
+                  loading={signupLoading}
+                  className="w-full"
                 >
-                  {signupLoading ? 'Creating account...' : 'Sign Up'}
-                </button>
+                  Sign Up
+                </Button>
               </form>
             )}
 
@@ -1401,42 +1436,37 @@ function App() {
   return (
     <>
       <div className="flex h-screen overflow-hidden bg-gray-50 text-slate-900">
-        <aside className={`fixed lg:flex inset-y-0 left-0 w-64 bg-white text-slate-900 flex-col transition-transform lg:transition-none z-50 border-r border-slate-200 ${
+        <aside className={`fixed lg:flex inset-y-0 left-0 w-64 bg-white text-slate-600 flex-col transition-all lg:transition-none z-50 border-r border-slate-200/60 shadow-sm ${
           mobileMenuOpen ? 'flex' : 'hidden'
         } lg:translate-x-0 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-            <div className="p-2 border-b flex items-center justify-between">
-              <div className="flex items-center gap-2 flex-1">
-                <div className="h-8 w-8 rounded  bg-white/95 flex items-center justify-center p-1 flex-shrink-0">
-                  <Building2 className="h-4 w-4 text-slate-900" />
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-white sticky top-0 z-10">
+              <div className="flex items-center gap-3.5 flex-1 overflow-hidden">
+                <div className="h-9 w-9 rounded-xl bg-rose-500 flex items-center justify-center shadow-lg shadow-rose-500/20 flex-shrink-0 transition-transform duration-300">
+                  <Building2 className="h-5 w-5 text-white" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-xs  leading-tight">SPTECHPIONEER</p>
-                  <p className="text-xs text-indigo-600 truncate">{user?.department_code || 'ERP'}</p>
+                  <p className="text-sm  text-slate-900 tracking-tight leading-none">ILLUMIUM</p>
+                  <p className="text-[9px] text-rose-500   tracking-[0.15em] mt-1.5 truncate">{user?.department_code || 'ERP System'}</p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setMobileMenuOpen(false)}
-                className="lg:hidden p-1 hover:bg-white/20 rounded transition text-white"
+                className="lg:hidden p-2 hover:bg-slate-100 rounded transition-colors text-slate-400"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <XCircle className="w-5 h-5" />
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto overflow-x-hidden p-2">
+            
+            <div className="flex-1 overflow-y-auto overflow-x-hidden py-6 px-4 space-y-1.5 custom-scrollbar">
               {navigationItems.map((item, index) => {
                 const isActive = item.moduleId ? (activeModule === item.moduleId || (item.moduleId === 'bom-creation' && activeModule === 'bom-form') || (item.moduleId === 'client-quotations' && activeModule === 'quotation-form')) : Boolean(item.active)
                 const isDisabled = item.isGroup || !item.moduleId
                 
                 if (item.isGroup) {
                   return (
-                    <div key={`group-${item.groupId || item.label}-${index}`} className="pt-1">
-                      <div
-                        className="w-full flex items-center justify-between p-2 text-xs  text-slate-500   hover:text-slate-700 transition-colors"
-                      >
-                        <span>{item.label}</span>
-                      </div>
+                    <div key={`group-${item.groupId || item.label}-${index}`} className="pt-5 pb-2 px-3">
+                      <p className="text-[10px]  text-slate-400  tracking-[0.2em]">{item.label}</p>
                     </div>
                   )
                 }
@@ -1451,32 +1481,42 @@ function App() {
                         setMobileMenuOpen(false)
                       }
                     }}
-                    className={`flex items-center gap-2 w-full p-2  text-xs  transition-all duration-150 group ${item.indent ? '' : ''} ${
+                    className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all duration-200 group relative ${
                       isActive 
-                        ? 'bg-indigo-50 text-indigo-700 ' 
+                        ? 'bg-rose-50 text-rose-600 shadow-sm' 
                         : isDisabled 
-                        ? 'text-slate-400 cursor-not-allowed' 
-                        : 'text-slate-700 hover:bg-slate-100'
+                        ? 'text-slate-300 cursor-not-allowed' 
+                        : 'text-slate-500 hover:text-rose-600 hover:bg-rose-50/30'
                     }`}
                     disabled={isDisabled}
                   >
                     {iconMap[item.icon] && (() => {
                       const IconComponent = iconMap[item.icon]
-                      return <IconComponent className="w-4 h-4 flex-shrink-0" />
+                      return (
+                        <IconComponent 
+                          className={`w-[18px] h-[18px] flex-shrink-0 transition-transform duration-200 group-hover:scale-110 ${
+                            isActive ? 'text-rose-600' : 'text-slate-400 group-hover:text-rose-500'
+                          }`} 
+                        />
+                      )
                     })()}
                     <span className="flex-1 text-left truncate">{item.label}</span>
-                    {isActive && <span className="text-indigo-600 text-xs ">●</span>}
+                    {isActive && (
+                      <div className="absolute right-2 w-1.5 h-1.5 rounded-full bg-rose-500" />
+                    )}
                   </button>
                 )
               })}
             </div>
-            <div className="px-3 py-4 border-t border-slate-200 space-y-3">
+
+            <div className="p-4 border-t border-slate-100 bg-slate-50/50">
               <button
                 type="button"
                 onClick={handleLogout}
-                className="w-full p-2 rounded  border border-slate-300 text-slate-700 text-xs  hover:bg-slate-50 transition-colors"
+                className="flex items-center justify-center gap-2 w-full p-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 text-[13px] font-medium hover:bg-rose-50 hover:text-rose-600 hover:border-rose-100 transition-all duration-300"
               >
-                Logout
+                <LogOut className="w-4 h-4" />
+                <span>Logout</span>
               </button>
             </div>
           </aside>
@@ -1489,22 +1529,29 @@ function App() {
         )}
 
         <div className={`flex-1 lg:ml-64 flex flex-col bg-slate-50 min-w-0`}>
-          <div className="sticky top-0 z-10 bg-white border-b border-slate-200 ">
-              <div className="p-2 flex flex-col gap-2 md:flex-row md:items-end md:justify-end">
+          <div className="sticky top-0 z-10 bg-white/80 backdrop-blur-md border-b border-slate-200">
+              <div className="p-3 flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => setMobileMenuOpen(true)}
+                  className="lg:hidden p-2 text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+                >
+                  <Menu className="w-6 h-6" />
+                </button>
                 
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2">
+                <div className="flex items-center gap-4 ml-auto">
+                  <div className="flex items-center gap-3 pr-4 border-r border-slate-200">
                     <div className="text-right">
                       <p className="text-xs text-slate-900 font-medium leading-none">{user?.first_name && user?.last_name ? `${user.first_name} ${user.last_name}` : user?.first_name || user?.username || 'User'}</p>
                       <p className="text-[10px] text-slate-500 mt-0.5">{user?.role_name || user?.department_name || 'User'}</p>
                     </div>
-                    <div className="h-6 w-6 rounded bg-indigo-600 flex items-center justify-center text-white text-[10px] font-bold">
+                    <div className="h-6 w-6 rounded bg-rose-500 flex items-center justify-center text-white text-[10px] ">
                       {(user?.first_name?.[0] || user?.username?.[0] || 'U').toUpperCase()}
                     </div>
                   </div>
                   <button
                     onClick={handleLogout}
-                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all duration-200 group relative"
+                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-all duration-200 group relative"
                     title="Logout"
                   >
                     <LogOut className="w-4 h-4" />
@@ -1999,7 +2046,7 @@ function App() {
                         <div className="flex flex-wrap gap-2 pt-3 border-t border-slate-100">
                           <button
                             type="button"
-                            className="p-2 .5 rounded  border border-indigo-200 text-xs  text-indigo-600 hover:border-indigo-300 disabled:opacity-50"
+                            className="p-2 .5 rounded  border border-rose-200 text-xs  text-rose-600 hover:border-rose-300 disabled:opacity-50"
                             onClick={() => handleEditContact(contact)}
                             disabled={contactFormDisabled}
                           >
@@ -2104,22 +2151,22 @@ function App() {
                     </label>
                   </div>
                   <div className="flex flex-wrap items-center gap-2 pt-2">
-                    <button
+                    <Button
                       type="submit"
-                      className="p-2 rounded  bg-indigo-500 text-white text-xs   hover:bg-indigo-600 disabled:opacity-60"
-                      disabled={contactFormDisabled || contactSaving}
+                      variant="primary"
+                      loading={contactSaving}
+                      disabled={contactFormDisabled}
                     >
-                      {contactSaving ? 'Saving...' : editingContactId ? 'Update Contact' : 'Add Contact'}
-                    </button>
+                      {editingContactId ? 'Update Contact' : 'Add Contact'}
+                    </Button>
                     {editingContactId && (
-                      <button
-                        type="button"
-                        className="p-2  rounded  border border-slate-200 text-xs  text-slate-600 hover:border-slate-300"
+                      <Button
+                        variant="default"
                         onClick={resetContactForm}
                         disabled={contactFormDisabled}
                       >
                         Clear Form
-                      </button>
+                      </Button>
                     )}
                   </div>
                 </form>
@@ -2141,7 +2188,7 @@ function App() {
                 </div>
                 <div className="flex items-center gap-2">
                   {poDetailPdfUrl && (
-                    <a href={poDetailPdfUrl} target="_blank" rel="noreferrer" className="p-2  rounded  bg-indigo-100 text-xs  text-indigo-700 hover:bg-indigo-200">
+                    <a href={poDetailPdfUrl} target="_blank" rel="noreferrer" className="p-2  rounded  bg-rose-100 text-xs  text-rose-700 hover:bg-rose-200">
                       Download PDF
                     </a>
                   )}

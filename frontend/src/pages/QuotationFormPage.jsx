@@ -86,25 +86,21 @@ const QuotationFormPage = () => {
       });
       setProjectName(initialData.projectName || '');
       
-      const mappedItems = (initialData.items || [])
+          const mappedItems = (initialData.items || [])
         .filter(item => {
           // If we have a drawing_no or description, we should show it
           // We only filter out items that have NO identifying info
           return !!(item.drawing_no || item.description || item.item_code);
         })
         .map(item => {
-          const g = (item.item_group || '').toUpperCase();
-          const isSA = (g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY')) && !g.includes('FG');
-          const isFG = !isSA;
           const drwRate = parseFloat(item.bom_cost || item.rate || 0);
-          const rateVal = isSA ? 0 : drwRate;
 
           return {
             ...item,
             id: item.id || Date.now() + Math.random(),
-            rate: rateVal,
+            rate: drwRate,
             bom_cost: drwRate,
-            total: (parseFloat(item.quantity) || 0) * rateVal,
+            total: (parseFloat(item.quantity) || 0) * drwRate,
             gst_percentage: item.gst_percentage || 18,
             isManual: !item.drawing_id && !!item.drawing_no
           };
@@ -129,10 +125,13 @@ const QuotationFormPage = () => {
           const drwG = (d.item_group || '').toUpperCase();
           const drwIsSA = (drwG.includes('SA') || drwG.includes('SUB') || drwG.includes('ASSEMBLY')) && !drwG.includes('FG');
 
-          // 1. Match by item_code (Highest Priority - Unique identity)
+          // 1. Match by drawing_id (Absolute Priority - Direct link)
+          if (item.drawing_id && String(d.drawing_master_id) === String(item.drawing_id)) return true;
+
+          // 2. Match by item_code (High Priority - Unique identity)
           if (item.item_code && d.item_code && String(d.item_code).trim().toLowerCase() === String(item.item_code).trim().toLowerCase()) return true;
 
-          // 2. Match by drawing_no AND item_group AND Description (Very Reliable)
+          // 3. Match by drawing_no AND item_group AND Description (Fallback)
           if (item.drawing_no && String(d.drawing_no).trim().toLowerCase() === String(item.drawing_no).trim().toLowerCase()) {
             const itemDesc = String(item.description || '').trim().toLowerCase();
             const drwDesc = String(d.description || '').trim().toLowerCase();
@@ -140,23 +139,9 @@ const QuotationFormPage = () => {
             // Group must match (SA vs FG)
             if (itemIsSA === drwIsSA) {
               // Description match is critical when multiple items share a drawing number
-              // If both have descriptions, they must be reasonably similar
               const descMatch = !itemDesc || !drwDesc || drwDesc === itemDesc || drwDesc.includes(itemDesc) || itemDesc.includes(drwDesc);
-              
-              // If we also have item_code in drawing but NOT in item, 
-              // we should be careful about matching just by drawing_no
               if (descMatch) return true;
             }
-          }
-
-          // 3. Match by drawing_id ONLY if it's the ONLY match for that drawing_no + group
-          // This handles cases where item_code might be missing but we have a direct link
-          if (item.drawing_id && String(d.drawing_master_id) === String(item.drawing_id)) {
-            const otherDrawingsInGroup = drawings.filter(otherD => 
-              String(otherD.drawing_no).trim().toLowerCase() === String(item.drawing_no).trim().toLowerCase() &&
-              (((otherD.item_group || '').toUpperCase().includes('SA') || (otherD.item_group || '').toUpperCase().includes('SUB')) === itemIsSA)
-            );
-            if (otherDrawingsInGroup.length === 1) return true;
           }
 
           return false;
@@ -183,6 +168,12 @@ const QuotationFormPage = () => {
             changed = true;
           }
 
+          // Sync sub_assemblies if missing or changed
+          if (matchedDrawing.sub_assemblies && JSON.stringify(item.sub_assemblies) !== JSON.stringify(matchedDrawing.sub_assemblies)) {
+            newItem.sub_assemblies = matchedDrawing.sub_assemblies;
+            changed = true;
+          }
+
           // Sync BOM Cost logic
           const currentBOMCost = parseFloat(item.bom_cost || 0);
           
@@ -190,7 +181,7 @@ const QuotationFormPage = () => {
           // 1. Always sync if current cost is 0 and we found a rate
           // 2. Sync if matched by item_code (specific record)
           // 3. ONLY sync in 'revise' mode if it's a specific identity match
-          const isItemCodeMatch = item.item_code && d.item_code && String(d.item_code).trim().toLowerCase() === String(item.item_code).trim().toLowerCase();
+          const isItemCodeMatch = item.item_code && matchedDrawing.item_code && String(matchedDrawing.item_code).trim().toLowerCase() === String(item.item_code).trim().toLowerCase();
           const shouldSync = (currentBOMCost === 0) || isItemCodeMatch;
 
           const costChanged = drwRate > 0 && Math.abs(currentBOMCost - drwRate) > 0.01;
@@ -199,18 +190,11 @@ const QuotationFormPage = () => {
             newItem.bom_cost = drwRate;
             changed = true;
             
-            // For FG items, if the Rate matches the old BOM cost, update it to the new one
-            if (isFG && (parseFloat(item.rate || 0) === 0 || Math.abs(parseFloat(item.rate || 0) - currentBOMCost) < 0.01)) {
+            // Update rate to new BOM cost if it was 0 or matched old cost
+            if (parseFloat(item.rate || 0) === 0 || Math.abs(parseFloat(item.rate || 0) - currentBOMCost) < 0.01) {
               newItem.rate = drwRate;
               newItem.total = (parseFloat(item.quantity) || 0) * drwRate;
             }
-          }
-
-          // Force rate to 0 for SA items
-          if (isSA && parseFloat(item.rate || 0) !== 0) {
-            newItem.rate = 0;
-            newItem.total = 0;
-            changed = true;
           }
 
           return changed ? newItem : item;
@@ -314,17 +298,16 @@ const QuotationFormPage = () => {
     // Map items from the version
     if (v.items && v.items.length > 0) {
       setItems(v.items.map(item => {
-        const g = (item.item_group || '').toUpperCase();
-        const isSA = (g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY')) && !g.includes('FG');
         const drwRate = parseFloat(item.bom_cost || item.rate || 0);
-        const rateVal = isSA ? 0 : drwRate;
 
         return {
           ...item,
           id: item.id || Date.now() + Math.random(),
-          rate: rateVal,
+          salesOrderItemId: item.sales_order_item_id || item.salesOrderItemId,
+          drawing_id: item.drawing_id,
+          rate: drwRate,
           bom_cost: drwRate,
-          total: (parseFloat(item.quantity) || 0) * rateVal,
+          total: (parseFloat(item.quantity) || 0) * drwRate,
           gst_percentage: item.gst_percentage || 18,
           drawing_no: item.drawing_no,
           description: item.description,
@@ -453,7 +436,8 @@ const QuotationFormPage = () => {
       rate: 0,
       total: 0,
       gst_percentage: 18,
-      isManual: false
+      isManual: false,
+      sub_assemblies: []
     };
     setItems([...items, newItem]);
   };
@@ -535,18 +519,13 @@ const QuotationFormPage = () => {
   };
 
   const calculateSummary = () => {
-    // Filter out Sub-Assemblies from summary to avoid double counting
-    // FG cost already includes SA costs
-    const topLevelItems = items.filter(item => {
-      const group = (item.item_group || '').toUpperCase();
-      const isSA = group.includes('SA') || group.includes('SUB') || group.includes('ASSEMBLY');
-      const isFG = group.includes('FG');
-      // If it's labeled as SA but NOT FG, it's a sub-assembly to be excluded
-      return !(isSA && !isFG);
+    // Include all items in summary if they have a rate
+    const billableItems = items.filter(item => {
+      return (parseFloat(item.rate) || 0) > 0 || (item.item_group || '').toUpperCase().includes('FG');
     });
 
-    const baseAmount = topLevelItems.reduce((sum, item) => sum + (parseFloat(item.total) || 0), 0);
-    const gstAmount = topLevelItems.reduce((sum, item) => {
+    const baseAmount = billableItems.reduce((sum, item) => sum + (parseFloat(item.total) || 0), 0);
+    const gstAmount = billableItems.reduce((sum, item) => {
       const itemTotal = parseFloat(item.total) || 0;
       const gstPercent = parseFloat(item.gst_percentage) || 18;
       return sum + (itemTotal * gstPercent / 100);
@@ -588,7 +567,7 @@ const QuotationFormPage = () => {
       // Find the absolute latest version number in history to increment from
       const latestHistoryVersion = versionHistory.length > 0 
         ? Math.max(...versionHistory.map(vh => vh.version)) 
-        : (version > 1 ? version - 1 : 0);
+        : (version > 1 ? version : 1);
       
       const finalVersion = isRevision ? latestHistoryVersion + 1 : version;
 
@@ -684,7 +663,7 @@ const QuotationFormPage = () => {
         <div className="flex items-center gap-2">
           <button
             onClick={() => navigate('/client-quotations')}
-            className="px-3 py-1.5 text-xs font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-all flex items-center gap-2"
+            className="px-3 py-1.5 text-xs font-medium text-slate-600 bg-white border border-slate-200 rounded hover:bg-slate-50 transition-all flex items-center gap-2"
           >
             <X size={14} />
             {isLocked ? 'Close' : 'Cancel'}
@@ -697,7 +676,7 @@ const QuotationFormPage = () => {
                   <button
                     onClick={() => handleSave('Rejected', false)}
                     disabled={saving}
-                    className="px-3 py-1.5 text-xs font-medium text-rose-600 bg-rose-50 border border-rose-100 rounded-lg hover:bg-rose-100 transition-all flex items-center gap-2 disabled:opacity-50"
+                    className="px-3 py-1.5 text-xs font-medium text-rose-600 bg-rose-50 border border-rose-100 rounded hover:bg-rose-100 transition-all flex items-center gap-2 disabled:opacity-50"
                   >
                     {saving ? <Loader2 size={14} className="animate-spin" /> : <X size={14} />}
                     Reject
@@ -705,7 +684,7 @@ const QuotationFormPage = () => {
                   <button
                     onClick={() => handleSave('Approved', false)}
                     disabled={saving}
-                    className="px-3 py-1.5 text-xs font-medium text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-lg hover:bg-emerald-100 transition-all flex items-center gap-2 disabled:opacity-50"
+                    className="px-3 py-1.5 text-xs font-medium text-emerald-600 bg-emerald-50 border border-emerald-100 rounded hover:bg-emerald-100 transition-all flex items-center gap-2 disabled:opacity-50"
                   >
                     {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
                     Approve
@@ -713,7 +692,7 @@ const QuotationFormPage = () => {
                   <button
                     onClick={() => handleSave('Revised', false)}
                     disabled={saving}
-                    className="px-3 py-1.5 text-xs font-medium text-amber-600 bg-amber-50 border border-amber-100 rounded-lg hover:bg-amber-100 transition-all flex items-center gap-2 disabled:opacity-50"
+                    className="px-3 py-1.5 text-xs font-medium text-amber-600 bg-amber-50 border border-amber-100 rounded hover:bg-amber-100 transition-all flex items-center gap-2 disabled:opacity-50"
                   >
                     {saving ? <Loader2 size={14} className="animate-spin" /> : <GitBranch size={14} />}
                     Create Revision
@@ -721,7 +700,7 @@ const QuotationFormPage = () => {
                   <button
                     onClick={() => handleSave('Revised', true)}
                     disabled={saving}
-                    className="px-4 py-1.5 text-xs font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100 flex items-center gap-2 disabled:opacity-50"
+                    className="px-4 py-1.5 text-xs font-medium text-white bg-indigo-600 rounded hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100 flex items-center gap-2 disabled:opacity-50"
                   >
                     {saving ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
                     Send to Client
@@ -730,7 +709,7 @@ const QuotationFormPage = () => {
                     <button
                       onClick={handleDownloadPDF}
                       disabled={loading}
-                      className="px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-100 rounded-lg hover:bg-blue-100 transition-all flex items-center gap-2 disabled:opacity-50"
+                      className="px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-100 rounded hover:bg-blue-100 transition-all flex items-center gap-2 disabled:opacity-50"
                     >
                       {loading ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />}
                       Download PDF
@@ -742,7 +721,7 @@ const QuotationFormPage = () => {
                   <button
                     onClick={() => handleSave('Draft', false)}
                     disabled={saving}
-                    className="px-3 py-1.5 text-xs font-medium text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-lg hover:bg-indigo-100 transition-all flex items-center gap-2 disabled:opacity-50"
+                    className="px-3 py-1.5 text-xs font-medium text-indigo-600 bg-indigo-50 border border-indigo-100 rounded hover:bg-indigo-100 transition-all flex items-center gap-2 disabled:opacity-50"
                   >
                     {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
                     Save as Draft
@@ -750,7 +729,7 @@ const QuotationFormPage = () => {
                   <button
                     onClick={() => handleSave('Revised', false)}
                     disabled={saving}
-                    className="px-3 py-1.5 text-xs font-medium text-amber-600 bg-amber-50 border border-amber-100 rounded-lg hover:bg-amber-100 transition-all flex items-center gap-2 disabled:opacity-50"
+                    className="px-3 py-1.5 text-xs font-medium text-amber-600 bg-amber-50 border border-amber-100 rounded hover:bg-amber-100 transition-all flex items-center gap-2 disabled:opacity-50"
                   >
                     {saving ? <Loader2 size={14} className="animate-spin" /> : <GitBranch size={14} />}
                     Create Revision
@@ -758,7 +737,7 @@ const QuotationFormPage = () => {
                   <button
                     onClick={() => handleSave('Revised', true)}
                     disabled={saving}
-                    className="px-4 py-1.5 text-xs font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100 flex items-center gap-2 disabled:opacity-50"
+                    className="px-4 py-1.5 text-xs font-medium text-white bg-indigo-600 rounded hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100 flex items-center gap-2 disabled:opacity-50"
                   >
                     {saving ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
                     Send to Client
@@ -767,7 +746,7 @@ const QuotationFormPage = () => {
                     <button
                       onClick={handleDownloadPDF}
                       disabled={loading}
-                      className="px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-100 rounded-lg hover:bg-blue-100 transition-all flex items-center gap-2 disabled:opacity-50"
+                      className="px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-100 rounded hover:bg-blue-100 transition-all flex items-center gap-2 disabled:opacity-50"
                     >
                       {loading ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />}
                       Download PDF
@@ -779,7 +758,7 @@ const QuotationFormPage = () => {
                   <button
                     onClick={() => handleSave('Draft')}
                     disabled={saving}
-                    className="px-3 py-1.5 text-xs font-medium text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-lg hover:bg-indigo-100 transition-all flex items-center gap-2 disabled:opacity-50"
+                    className="px-3 py-1.5 text-xs font-medium text-indigo-600 bg-indigo-50 border border-indigo-100 rounded hover:bg-indigo-100 transition-all flex items-center gap-2 disabled:opacity-50"
                   >
                     {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
                     Save as Draft
@@ -787,7 +766,7 @@ const QuotationFormPage = () => {
                   <button
                     onClick={() => handleSave('Sent', false)}
                     disabled={saving}
-                    className="px-3 py-1.5 text-xs font-medium text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-lg hover:bg-emerald-100 transition-all flex items-center gap-2 disabled:opacity-50"
+                    className="px-3 py-1.5 text-xs font-medium text-emerald-600 bg-emerald-50 border border-emerald-100 rounded hover:bg-emerald-100 transition-all flex items-center gap-2 disabled:opacity-50"
                   >
                     {saving ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
                     Create Quotation
@@ -795,7 +774,7 @@ const QuotationFormPage = () => {
                   <button
                     onClick={() => handleSave('Sent', true)}
                     disabled={saving}
-                    className="px-4 py-1.5 text-xs font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100 flex items-center gap-2 disabled:opacity-50"
+                    className="px-4 py-1.5 text-xs font-medium text-white bg-indigo-600 rounded hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100 flex items-center gap-2 disabled:opacity-50"
                   >
                     {saving ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
                     Send to Client
@@ -804,7 +783,7 @@ const QuotationFormPage = () => {
                     <button
                       onClick={handleDownloadPDF}
                       disabled={loading}
-                      className="px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-100 rounded-lg hover:bg-blue-100 transition-all flex items-center gap-2 disabled:opacity-50"
+                      className="px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-100 rounded hover:bg-blue-100 transition-all flex items-center gap-2 disabled:opacity-50"
                     >
                       {loading ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />}
                       Download PDF
@@ -822,7 +801,7 @@ const QuotationFormPage = () => {
         <div className="lg:col-span-2 space-y-4 bg-white ">
           <Card className="p-2">
             <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
-              <div className="p-1.5 bg-blue-50 text-blue-600 rounded-lg">
+              <div className="p-1.5 bg-blue-50 text-blue-600 rounded">
                 <FileText size={16} />
               </div>
               <h2 className="text-sm  text-slate-900">Quotation Details</h2>
@@ -837,7 +816,7 @@ const QuotationFormPage = () => {
                   type="text" 
                   value={quotationNo}
                   readOnly
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono text-slate-600 focus:outline-none"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded text-xs font-mono text-slate-600 focus:outline-none"
                 />
               </div>
               
@@ -850,7 +829,7 @@ const QuotationFormPage = () => {
                   value={quotationDate}
                   onChange={(e) => setQuotationDate(e.target.value)}
                   readOnly={isLocked}
-                  className={`w-full px-3 py-2 border rounded-lg text-xs outline-none transition-all ${isLocked ? 'bg-slate-50 border-slate-200 text-slate-500 cursor-not-allowed' : 'bg-white border-slate-200 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500'}`}
+                  className={`w-full px-3 py-2 border rounded text-xs outline-none transition-all ${isLocked ? 'bg-slate-50 border-slate-200 text-slate-500 cursor-not-allowed' : 'bg-white border-slate-200 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500'}`}
                 />
               </div>
 
@@ -891,7 +870,7 @@ const QuotationFormPage = () => {
                   onChange={(e) => setProjectName(e.target.value)}
                   readOnly={isLocked}
                   placeholder={isLocked ? "" : "Enter project name..."}
-                  className={`w-full px-3 py-2 border rounded-lg text-xs outline-none transition-all ${isLocked ? 'bg-slate-50 border-slate-200 text-slate-500 cursor-not-allowed' : 'bg-white border-slate-200 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500'}`}
+                  className={`w-full px-3 py-2 border rounded text-xs outline-none transition-all ${isLocked ? 'bg-slate-50 border-slate-200 text-slate-500 cursor-not-allowed' : 'bg-white border-slate-200 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500'}`}
                 />
               </div>
 
@@ -942,7 +921,7 @@ const QuotationFormPage = () => {
           <Card className="overflow-hidden">
             <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-white">
               <div className="flex items-center gap-2">
-                <div className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg">
+                <div className="p-1.5 bg-indigo-50 text-indigo-600 rounded">
                   <Calculator size={16} />
                 </div>
                 <h2 className="text-sm  text-slate-900">Quotation Items</h2>
@@ -950,7 +929,7 @@ const QuotationFormPage = () => {
               {!isLocked && (
                 <button
                   onClick={handleAddItem}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-medium hover:bg-indigo-700 transition-all shadow-sm"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white rounded text-xs font-medium hover:bg-indigo-700 transition-all shadow-sm"
                 >
                   <Plus size={14} />
                   Add Item
@@ -979,166 +958,209 @@ const QuotationFormPage = () => {
                       </td>
                     </tr>
                   ) : (
-                    items.map((item, index) => (
-                      <tr key={item.id} className="hover:bg-slate-50/30 transition-colors">
-                        <td className="px-4 py-3 text-xs font-medium text-slate-400">{index + 1}</td>
-                        <td className="px-4 py-3 align-top">
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2 group">
-                              <div className="flex-1">
-                                {(mode === 'received' || isLocked) ? (
-                                  <div className="flex flex-col">
-                                    <span className="text-sm font-bold text-slate-900 uppercase">{item.description || 'No Description'}</span>
-                                    <div className="flex items-center gap-2 mt-0.5">
-                                      <span className="text-[10px] font-medium text-slate-500">{item.drawing_no || 'Manual Item'}</span>
-                                      {item.item_group && (
-                                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold border uppercase ${
-                                          (item.item_group.toUpperCase().includes('SA') || item.item_group.toUpperCase().includes('SUB') || item.item_group.toUpperCase().includes('ASSEMBLY')) && !item.item_group.toUpperCase().includes('FG')
-                                            ? 'bg-amber-50 text-amber-600 border-amber-100'
-                                            : 'bg-emerald-50 text-emerald-700 border-emerald-100'
-                                        }`}>
-                                          {(item.item_group.toUpperCase().includes('SA') || item.item_group.toUpperCase().includes('SUB') || item.item_group.toUpperCase().includes('ASSEMBLY')) && !item.item_group.toUpperCase().includes('FG') 
-                                            ? (item.item_group.toUpperCase().includes('SA') || item.item_group.toUpperCase().includes('SUB') ? 'SA' : 'ASSY')
-                                            : 'FG'}
-                                        </span>
-                                      )}
-                                    </div>
-                                  </div>
-                                ) : (item.isManual || mode === 'revise') ? (
-                                  <div className="flex flex-col">
-                                    <textarea 
-                                      placeholder="Add item description..."
-                                      value={item.description}
-                                      onChange={(e) => handleItemChange(item.id, 'description', e.target.value)}
-                                      rows="1"
-                                      className="w-full px-0 py-0 text-sm font-bold text-slate-900 border-none focus:ring-0 resize-none bg-transparent placeholder:text-slate-300 uppercase"
-                                    />
-                                    <div className="flex items-center gap-2 mt-0.5">
-                                      <input 
-                                        type="text"
-                                        placeholder="Drawing No..."
-                                        value={item.drawing_no}
-                                        onChange={(e) => handleItemChange(item.id, 'drawing_no', e.target.value)}
-                                        className="flex-1 px-0 py-0 text-[10px] font-medium text-slate-500 border-none focus:ring-0 placeholder:text-slate-300 bg-transparent"
-                                      />
-                                      {item.item_group && (
-                                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold border uppercase ${
-                                          (item.item_group.toUpperCase().includes('SA') || item.item_group.toUpperCase().includes('SUB') || item.item_group.toUpperCase().includes('ASSEMBLY')) && !item.item_group.toUpperCase().includes('FG')
-                                            ? 'bg-amber-50 text-amber-600 border-amber-100'
-                                            : 'bg-emerald-50 text-emerald-700 border-emerald-100'
-                                        }`}>
-                                          {(item.item_group.toUpperCase().includes('SA') || item.item_group.toUpperCase().includes('SUB') || item.item_group.toUpperCase().includes('ASSEMBLY')) && !item.item_group.toUpperCase().includes('FG') 
-                                            ? (item.item_group.toUpperCase().includes('SA') || item.item_group.toUpperCase().includes('SUB') ? 'SA' : 'ASSY')
-                                            : 'FG'}
-                                        </span>
-                                      )}
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <div className="flex flex-col">
-                                    <textarea 
-                                      placeholder="Add item description..."
-                                      value={item.description}
-                                      onChange={(e) => handleItemChange(item.id, 'description', e.target.value)}
-                                      rows="1"
-                                      className="w-full px-0 py-0 text-sm font-bold text-slate-900 border-none focus:ring-0 resize-none bg-transparent placeholder:text-slate-300 uppercase"
-                                    />
-                                    <div className="flex items-center gap-2 mt-0.5">
-                                      <div className="flex-1">
-                                        <SearchableSelect
-                                          options={drawings}
-                                          value={item.drawing_id}
-                                          disabled={isLocked}
-                                          onChange={(val) => {
-                                            const drw = drawings.find(d => String(d.id) === String(val));
-                                            const updatedItems = items.map(it => {
-                                              if (it.id === item.id) {
-                                                const g = (drw?.item_group || it.item_group || '').toUpperCase();
-                                                const isSA = (g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY')) && !g.includes('FG');
-                                                const drwRate = parseFloat(drw?.rate || drw?.quotedPrice || drw?.bom_cost || it.rate || 0);
-                                                const newRate = isSA ? 0 : drwRate;
-                                                
-                                                return {
-                                                  ...it,
-                                                  drawing_id: val,
-                                                  drawing_no: drw?.drawing_no || '',
-                                                  description: drw?.description || '',
-                                                  rate: newRate,
-                                                  bom_cost: drwRate,
-                                                  item_group: drw?.item_group || it.item_group,
-                                                  total: (parseFloat(it.quantity) || 0) * (parseFloat(newRate) || 0)
-                                                };
-                                              }
-                                              return it;
-                                            });
-                                            setItems(updatedItems);
-                                          }}
-                                          placeholder="Select Drawing..."
-                                          labelField="drawing_no"
-                                          valueField="id"
-                                          subLabelField="description"
-                                          className="border-none p-0 focus-within:ring-0 shadow-none bg-transparent text-[10px] font-medium text-slate-500 hide-arrow"
-                                        />
+                    items.flatMap((item, index) => {
+                      const rows = [];
+                      
+                      // Parent Item Row
+                      rows.push(
+                        <tr key={item.id} className="hover:bg-slate-50/30 transition-colors">
+                          <td className="px-4 py-3 text-xs font-medium text-slate-400">{index + 1}</td>
+                          <td className="px-4 py-3 align-top">
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2 group">
+                                <div className="flex-1">
+                                  {(mode === 'received' || isLocked) ? (
+                                    <div className="flex flex-col">
+                                      <span className="text-sm  text-slate-900 ">{item.description || 'No Description'}</span>
+                                      <div className="flex items-center gap-2 mt-0.5">
+                                        <span className="text-[10px] font-medium text-slate-500">{item.drawing_no || 'Manual Item'}</span>
+                                        {item.item_group && (
+                                          <span className={`px-1.5 py-0.5 rounded text-[10px]  border  ${
+                                            (item.item_group.toUpperCase().includes('SA') || item.item_group.toUpperCase().includes('SUB') || item.item_group.toUpperCase().includes('ASSEMBLY')) && !item.item_group.toUpperCase().includes('FG')
+                                              ? 'bg-amber-50 text-amber-600 border-amber-100'
+                                              : 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                          }`}>
+                                            {(item.item_group.toUpperCase().includes('SA') || item.item_group.toUpperCase().includes('SUB') || item.item_group.toUpperCase().includes('ASSEMBLY')) && !item.item_group.toUpperCase().includes('FG') 
+                                              ? (item.item_group.toUpperCase().includes('SA') || item.item_group.toUpperCase().includes('SUB') ? 'SA' : 'ASSY')
+                                              : 'FG'}
+                                          </span>
+                                        )}
                                       </div>
-                                      {item.item_group && (
-                                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold border uppercase ${
-                                          (item.item_group.toUpperCase().includes('SA') || item.item_group.toUpperCase().includes('SUB') || item.item_group.toUpperCase().includes('ASSEMBLY')) && !item.item_group.toUpperCase().includes('FG')
-                                            ? 'bg-amber-50 text-amber-600 border-amber-100'
-                                            : 'bg-emerald-50 text-emerald-700 border-emerald-100'
-                                        }`}>
-                                          {(item.item_group.toUpperCase().includes('SA') || item.item_group.toUpperCase().includes('SUB') || item.item_group.toUpperCase().includes('ASSEMBLY')) && !item.item_group.toUpperCase().includes('FG') 
-                                            ? (item.item_group.toUpperCase().includes('SA') || item.item_group.toUpperCase().includes('SUB') ? 'SA' : 'ASSY')
-                                            : 'FG'}
-                                        </span>
-                                      )}
                                     </div>
-                                  </div>
-                                )}
+                                  ) : (item.isManual || mode === 'revise') ? (
+                                    <div className="flex flex-col">
+                                      <textarea 
+                                        placeholder="Add item description..."
+                                        value={item.description}
+                                        onChange={(e) => handleItemChange(item.id, 'description', e.target.value)}
+                                        rows="1"
+                                        className="w-full px-0 py-0 text-sm  text-slate-900 border-none focus:ring-0 resize-none bg-transparent placeholder:text-slate-300 "
+                                      />
+                                      <div className="flex items-center gap-2 mt-0.5">
+                                        <input 
+                                          type="text"
+                                          placeholder="Drawing No..."
+                                          value={item.drawing_no}
+                                          onChange={(e) => handleItemChange(item.id, 'drawing_no', e.target.value)}
+                                          className="flex-1 px-0 py-0 text-[10px] font-medium text-slate-500 border-none focus:ring-0 placeholder:text-slate-300 bg-transparent"
+                                        />
+                                        {item.item_group && (
+                                          <span className={`px-1.5 py-0.5 rounded text-[10px]  border  ${
+                                            (item.item_group.toUpperCase().includes('SA') || item.item_group.toUpperCase().includes('SUB') || item.item_group.toUpperCase().includes('ASSEMBLY')) && !item.item_group.toUpperCase().includes('FG')
+                                              ? 'bg-amber-50 text-amber-600 border-amber-100'
+                                              : 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                          }`}>
+                                            {(item.item_group.toUpperCase().includes('SA') || item.item_group.toUpperCase().includes('SUB') || item.item_group.toUpperCase().includes('ASSEMBLY')) && !item.item_group.toUpperCase().includes('FG') 
+                                              ? (item.item_group.toUpperCase().includes('SA') || item.item_group.toUpperCase().includes('SUB') ? 'SA' : 'ASSY')
+                                              : 'FG'}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="flex flex-col">
+                                      <textarea 
+                                        placeholder="Add item description..."
+                                        value={item.description}
+                                        onChange={(e) => handleItemChange(item.id, 'description', e.target.value)}
+                                        rows="1"
+                                        className="w-full px-0 py-0 text-sm  text-slate-900 border-none focus:ring-0 resize-none bg-transparent placeholder:text-slate-300 "
+                                      />
+                                      <div className="flex items-center gap-2 mt-0.5">
+                                        <div className="flex-1">
+                                          <SearchableSelect
+                                            options={drawings}
+                                            value={item.drawing_id}
+                                            disabled={isLocked}
+                                            onChange={(val) => {
+                                              const drw = drawings.find(d => String(d.id) === String(val));
+                                              const updatedItems = items.map(it => {
+                                                if (it.id === item.id) {
+                                                  const g = (drw?.item_group || it.item_group || '').toUpperCase();
+                                                  const isSA = (g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY')) && !g.includes('FG');
+                                                  const drwRate = parseFloat(drw?.rate || drw?.quotedPrice || drw?.bom_cost || it.rate || 0);
+                                                  
+                                                  return {
+                                                    ...it,
+                                                    drawing_id: val,
+                                                    drawing_no: drw?.drawing_no || '',
+                                                    description: drw?.description || '',
+                                                    rate: drwRate,
+                                                    bom_cost: drwRate,
+                                                    item_group: drw?.item_group || it.item_group,
+                                                    total: (parseFloat(it.quantity) || 0) * drwRate,
+                                                    sub_assemblies: drw?.sub_assemblies || []
+                                                  };
+                                                }
+                                                return it;
+                                              });
+                                              setItems(updatedItems);
+                                            }}
+                                            placeholder="Select Drawing..."
+                                            labelField="drawing_no"
+                                            valueField="id"
+                                            subLabelField="description"
+                                            className="border-none p-0 focus-within:ring-0 shadow-none bg-transparent text-[10px] font-medium text-slate-500 hide-arrow"
+                                          />
+                                        </div>
+                                        {item.item_group && (
+                                          <span className={`px-1.5 py-0.5 rounded text-[10px]  border  ${
+                                            (item.item_group.toUpperCase().includes('SA') || item.item_group.toUpperCase().includes('SUB') || item.item_group.toUpperCase().includes('ASSEMBLY')) && !item.item_group.toUpperCase().includes('FG')
+                                              ? 'bg-amber-50 text-amber-600 border-amber-100'
+                                              : 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                          }`}>
+                                            {(item.item_group.toUpperCase().includes('SA') || item.item_group.toUpperCase().includes('SUB') || item.item_group.toUpperCase().includes('ASSEMBLY')) && !item.item_group.toUpperCase().includes('FG') 
+                                              ? (item.item_group.toUpperCase().includes('SA') || item.item_group.toUpperCase().includes('SUB') ? 'SA' : 'ASSY')
+                                              : 'FG'}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-1.5">
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-1.5">
+                              <input 
+                                type="number"
+                                value={item.quantity}
+                                readOnly={isLocked}
+                                onChange={(e) => handleItemChange(item.id, 'quantity', e.target.value)}
+                                className={`w-full px-2 py-1 text-xs border rounded outline-none transition-all ${isLocked ? 'bg-transparent border-transparent text-slate-700 font-medium' : 'bg-white border-slate-200 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500'}`}
+                              />
+                              <span className="text-xs text-slate-400 font-medium">{item.unit || 'Nos'}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="px-2 py-1 text-xs  text-emerald-600 bg-emerald-50 rounded border border-emerald-100/50">
+                              {formatCurrency(item.bom_cost || 0)}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
                             <input 
                               type="number"
-                              value={item.quantity}
+                              value={item.rate}
                               readOnly={isLocked}
-                              onChange={(e) => handleItemChange(item.id, 'quantity', e.target.value)}
-                              className={`w-full px-2 py-1 text-xs border rounded outline-none transition-all ${isLocked ? 'bg-transparent border-transparent text-slate-700 font-medium' : 'bg-white border-slate-200 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500'}`}
+                              onChange={(e) => handleItemChange(item.id, 'rate', e.target.value)}
+                              className={`w-full px-2 py-1 text-xs font-semibold border rounded outline-none transition-all ${isLocked ? 'bg-transparent border-transparent text-slate-700' : 'bg-white border-slate-200 text-indigo-600 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500'}`}
                             />
-                            <span className="text-xs text-slate-400 font-medium">{item.unit || 'Nos'}</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="px-2 py-1 text-xs font-bold text-emerald-600 bg-emerald-50 rounded border border-emerald-100/50">
-                            {formatCurrency(item.bom_cost || 0)}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <input 
-                            type="number"
-                            value={item.rate}
-                            readOnly={isLocked}
-                            onChange={(e) => handleItemChange(item.id, 'rate', e.target.value)}
-                            className={`w-full px-2 py-1 text-xs font-semibold border rounded outline-none transition-all ${isLocked ? 'bg-transparent border-transparent text-slate-700' : 'bg-white border-slate-200 text-indigo-600 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500'}`}
-                          />
-                        </td>
-                        <td className="px-4 py-3 text-xs  text-slate-700">
-                          {formatCurrency(item.total * (1 + (item.gst_percentage || 18) / 100))}
-                        </td>
-                        {!isLocked && (
-                          <td className="px-4 py-3 text-center">
-                            <button
-                              onClick={() => handleRemoveItem(item.id)}
-                              className="p-1.5 text-rose-500 hover:bg-rose-50 rounded transition-colors"
-                            >
-                              <Trash2 size={14} />
-                            </button>
                           </td>
-                        )}
-                      </tr>
-                    ))
+                          <td className="px-4 py-3 text-xs  text-slate-700">
+                            {formatCurrency(item.total * (1 + (item.gst_percentage || 18) / 100))}
+                          </td>
+                          {!isLocked && (
+                            <td className="px-4 py-3 text-center">
+                              <button
+                                onClick={() => handleRemoveItem(item.id)}
+                                className="p-1.5 text-rose-500 hover:bg-rose-50 rounded transition-colors"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </td>
+                          )}
+                        </tr>
+                      );
+
+                      // Sub-Assembly Rows
+                      if (item.sub_assemblies && item.sub_assemblies.length > 0) {
+                        item.sub_assemblies.forEach((sa, saIdx) => {
+                          rows.push(
+                            <tr key={`${item.id}-sa-${sa.id}`} className="bg-slate-50/20">
+                              <td className="px-4 py-2 border-b border-slate-50"></td>
+                              <td className="px-4 py-2 border-b border-slate-50">
+                                <div className="flex items-center gap-2 pl-6">
+                                  <GitBranch size={12} className="text-slate-300 rotate-180" />
+                                  <div className="flex flex-col">
+                                    <span className="text-[11px] text-slate-600 font-medium">{sa.description}</span>
+                                    <div className="flex items-center gap-2 mt-0.5">
+                                      <span className="text-[9px] text-slate-400 font-mono">{sa.drawing_no}</span>
+                                      <span className="px-1 py-0.5 rounded-[3px] text-[8px] font-bold bg-amber-50 text-amber-600 border border-amber-100/50">SA</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-4 py-2 border-b border-slate-50 text-[11px] text-slate-500">
+                                {(parseFloat(sa.quantity || 0) * (parseFloat(item.quantity) || 0)).toFixed(3)} {sa.unit || 'Nos'}
+                              </td>
+                              <td className="px-4 py-2 border-b border-slate-50 text-[11px] text-slate-400 italic">
+                                {formatCurrency(sa.bom_cost)}
+                              </td>
+                              <td className="px-4 py-2 border-b border-slate-50 text-[11px] text-slate-400 italic">
+                                {formatCurrency(sa.rate || sa.bom_cost)}
+                              </td>
+                              <td className="px-4 py-2 border-b border-slate-50 text-[11px] text-slate-500">
+                                {formatCurrency((parseFloat(sa.rate || sa.bom_cost) || 0) * (parseFloat(sa.quantity || 0) * (parseFloat(item.quantity) || 0)))}
+                              </td>
+                              {!isLocked && <td className="px-4 py-2 border-b border-slate-50"></td>}
+                            </tr>
+                          );
+                        });
+                      }
+
+                      return rows;
+                    })
                   )}
                 </tbody>
               </table>
@@ -1150,7 +1172,7 @@ const QuotationFormPage = () => {
         <div className="space-y-4 bg-white">
           <Card className="p-2 sticky top-4">
             <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
-              <div className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg">
+              <div className="p-1.5 bg-emerald-50 text-emerald-600 rounded">
                 <Calculator size={16} />
               </div>
               <h2 className="text-sm  text-slate-900">Summary</h2>
@@ -1284,14 +1306,14 @@ const QuotationFormPage = () => {
                     <div className="grid grid-cols-2 gap-2 mt-4 pt-4 border-t border-slate-100">
                       <button
                         onClick={() => handleRejectVersion(selectedV)}
-                        className="flex items-center justify-center gap-2 px-3 py-2 bg-rose-50 text-rose-600 rounded-lg text-xs  border border-rose-100 hover:bg-rose-100 transition-all shadow-sm shadow-rose-50"
+                        className="flex items-center justify-center gap-2 px-3 py-2 bg-rose-50 text-rose-600 rounded text-xs  border border-rose-100 hover:bg-rose-100 transition-all shadow-sm shadow-rose-50"
                       >
                         <XCircle size={14} />
                         Reject V{selectedV.version}
                       </button>
                       <button
                         onClick={() => handleApproveVersion(selectedV)}
-                        className="flex items-center justify-center gap-2 px-3 py-2 bg-emerald-50 text-emerald-600 rounded-lg text-xs  border border-emerald-100 hover:bg-emerald-100 transition-all shadow-sm shadow-emerald-50"
+                        className="flex items-center justify-center gap-2 px-3 py-2 bg-emerald-50 text-emerald-600 rounded text-xs  border border-emerald-100 hover:bg-emerald-100 transition-all shadow-sm shadow-emerald-50"
                       >
                         <Check size={14} />
                         Approve V{selectedV.version}

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
-import { Card, DataTable, StatusBadge, Modal, FormControl } from '../components/ui.jsx';
-import { Truck, Package, Eye, Search, Filter, Calendar, User, Building2, ClipboardList, ArrowRight, Download, FileText, CheckCircle } from 'lucide-react';
+import { Card, DataTable, StatusBadge, Modal, FormControl, Tabs, Button } from '../components/ui.jsx';
+import { Truck, Package, Eye, Search, Filter, Calendar, User, Building2, ClipboardList, ArrowRight, Download, FileText, CheckCircle, Send, History } from 'lucide-react';
 import { successToast, errorToast } from '../utils/toast';
 import Swal from 'sweetalert2';
 
@@ -214,32 +214,27 @@ const Challans = () => {
     <div className="space-y-4">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Subcontracting Challans</h1>
+          <h1 className="text-2xl  text-slate-900">Subcontracting Challans</h1>
           <p className="text-slate-500 text-sm">Track outward material movement and vendor receipts</p>
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="flex bg-slate-100 p-1 rounded-lg">
-            <button 
-              onClick={() => handleTabChange('outward')}
-              className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all ${activeTab === 'outward' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
-            >
-              Outward Challans
-            </button>
-            <button 
-              onClick={() => handleTabChange('inward')}
-              className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all ${activeTab === 'inward' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
-            >
-              Inward Receipts
-            </button>
-          </div>
+          <Tabs
+            tabs={[
+              { label: 'Outward Challans', value: 'outward', icon: Send },
+              { label: 'Inward Receipts', value: 'inward', icon: History }
+            ]}
+            activeTab={activeTab}
+            onTabChange={handleTabChange}
+            className="border-none px-0"
+          />
           
           <div className="relative">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input 
               type="text" 
               placeholder="Search..." 
-              className="pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none w-64"
+              className="pl-9 pr-4 py-2 bg-white border border-slate-200 rounded text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none w-64"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -269,7 +264,7 @@ const Challans = () => {
                 <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">
                   {activeTab === 'outward' ? 'Challan Number' : 'Inward Number'}
                 </p>
-                <p className="text-lg font-bold text-slate-900">
+                <p className="text-lg  text-slate-900">
                   {activeTab === 'outward' ? selectedChallan.challan_number : selectedChallan.inward_number}
                 </p>
               </div>
@@ -292,7 +287,7 @@ const Challans = () => {
                 <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">
                   {activeTab === 'outward' ? 'Dispatch Qty' : 'Received Qty'}
                 </p>
-                <p className="text-slate-900 font-bold">
+                <p className="text-slate-900 ">
                   {activeTab === 'outward' ? selectedChallan.dispatch_qty : selectedChallan.total_received_qty} units
                 </p>
               </div>
@@ -309,7 +304,7 @@ const Challans = () => {
             {selectedChallan.notes && (
               <div className="space-y-2">
                 <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Notes / Remarks</p>
-                <div className="bg-amber-50/50 p-3 rounded-lg border border-amber-100 italic text-sm text-slate-600">
+                <div className="bg-amber-50/50 p-3 rounded border border-amber-100 italic text-sm text-slate-600">
                   {selectedChallan.notes}
                 </div>
               </div>
@@ -318,12 +313,12 @@ const Challans = () => {
             <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
               <button 
                 onClick={() => navigate(`/sub-contract-challans/${activeTab}`)}
-                className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors"
+                className="p-2 text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors"
               >
                 Close
               </button>
               <button 
-                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
+                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded text-sm font-medium hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
               >
                 <Download className="w-4 h-4" />
                 Download PDF
@@ -341,7 +336,7 @@ const Challans = () => {
       >
         <div className="space-y-4">
           <div className="flex items-center gap-3 p-3 bg-emerald-50 rounded-xl border border-emerald-100">
-            <div className="p-2 bg-emerald-100 text-emerald-600 rounded-lg">
+            <div className="p-2 bg-emerald-100 text-emerald-600 rounded">
               <Package className="w-5 h-5" />
             </div>
             <div>
@@ -356,7 +351,7 @@ const Challans = () => {
                 type="date"
                 value={inwardFormData.receivedDate}
                 onChange={(e) => setInwardFormData({ ...inwardFormData, receivedDate: e.target.value })}
-                className="w-full p-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                className="w-full p-2 border border-slate-200 rounded text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
               />
             </FormControl>
             <FormControl label="Received Quantity">
@@ -364,7 +359,7 @@ const Challans = () => {
                 type="number"
                 value={inwardFormData.receivedQty}
                 onChange={(e) => setInwardFormData({ ...inwardFormData, receivedQty: e.target.value })}
-                className="w-full p-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                className="w-full p-2 border border-slate-200 rounded text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
               />
             </FormControl>
           </div>
@@ -375,7 +370,7 @@ const Challans = () => {
                 type="number"
                 value={inwardFormData.acceptedQty}
                 onChange={(e) => setInwardFormData({ ...inwardFormData, acceptedQty: e.target.value })}
-                className="w-full p-2 bg-emerald-50 border border-emerald-100 rounded-lg text-sm text-emerald-700 outline-none"
+                className="w-full p-2 bg-emerald-50 border border-emerald-100 rounded text-sm text-emerald-700 outline-none"
               />
             </FormControl>
             <FormControl label="Rejected Qty">
@@ -383,7 +378,7 @@ const Challans = () => {
                 type="number"
                 value={inwardFormData.rejectedQty}
                 onChange={(e) => setInwardFormData({ ...inwardFormData, rejectedQty: e.target.value })}
-                className="w-full p-2 bg-rose-50 border border-rose-100 rounded-lg text-sm text-rose-700 outline-none"
+                className="w-full p-2 bg-rose-50 border border-rose-100 rounded text-sm text-rose-700 outline-none"
               />
             </FormControl>
             <FormControl label="Scrap Qty">
@@ -391,7 +386,7 @@ const Challans = () => {
                 type="number"
                 value={inwardFormData.scrapQty}
                 onChange={(e) => setInwardFormData({ ...inwardFormData, scrapQty: e.target.value })}
-                className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 outline-none"
+                className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-sm text-slate-700 outline-none"
               />
             </FormControl>
           </div>
@@ -402,20 +397,20 @@ const Challans = () => {
               placeholder="Enter any notes or rejection reasons..."
               value={inwardFormData.remarks}
               onChange={(e) => setInwardFormData({ ...inwardFormData, remarks: e.target.value })}
-              className="w-full p-2 border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 resize-none"
+              className="w-full p-2 border border-slate-200 rounded text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 resize-none"
             />
           </FormControl>
 
           <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
             <button
               onClick={() => setIsInwardModalOpen(false)}
-              className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors"
+              className="p-2 text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={handleVendorInward}
-              className="flex items-center gap-2 px-6 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100"
+              className="flex items-center gap-2 px-6 py-2 bg-emerald-600 text-white rounded text-sm font-medium hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100"
             >
               <CheckCircle className="w-4 h-4" />
               Complete Receipt

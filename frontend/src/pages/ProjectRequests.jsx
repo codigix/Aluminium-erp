@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card } from '../components/ui.jsx';
+import { Card, DataTable, StatusBadge } from '../components/ui.jsx';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 const UPLOAD_BASE = import.meta.env.VITE_UPLOAD_URL;
@@ -117,148 +117,162 @@ const ProjectRequests = () => {
     }
   };
 
-  return (
-    <div className="space-y-3 p-4">
-      <div className="flex items-center justify-between">
+  const columns = useMemo(() => [
+    {
+      label: 'SO Code',
+      key: 'id',
+      sortable: true,
+      render: (val) => <span className="text-indigo-600 font-medium">{formatOrderCode(val)}</span>
+    },
+    {
+      label: 'Project / Customer',
+      key: 'project_name',
+      sortable: true,
+      render: (val, row) => (
         <div>
-          <h2 className="text-xl text-slate-900">Project Requests</h2>
-          <p className="text-xs text-slate-500 ">New project requests from Sales department for production start</p>
+          <div className="text-slate-900 font-medium">{val || '—'}</div>
+          <div className="text-[10px] text-slate-500 mt-0.5">{row.company_name}</div>
         </div>
-        <button 
-          onClick={fetchRequests}
-          className="p-2 text-slate-500 hover:bg-slate-100 rounded  transition-colors"
-          title="Refresh"
+      )
+    },
+    {
+      label: 'Item Details',
+      key: 'item_description',
+      sortable: true,
+      render: (val, row) => (
+        <div>
+          <div className="text-slate-900">{val}</div>
+          <div className="text-[10px] text-slate-500 mt-0.5">
+            Code: {row.item_code || '—'} | Qty: <span className="font-medium text-slate-700">{row.item_qty} {row.item_unit}</span>
+          </div>
+        </div>
+      )
+    },
+    {
+      label: 'Drawing No',
+      key: 'drawing_no',
+      sortable: true,
+      render: (val) => (
+        <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded text-[10px] font-medium border border-slate-200">
+          {val || 'N/A'}
+        </span>
+      )
+    },
+    {
+      label: 'Drawings',
+      key: 'drawing_pdf',
+      className: 'text-center',
+      render: (val) => val ? (
+        <a 
+          href={getFileUrl(val)} 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 text-indigo-600 hover:text-indigo-800 font-medium"
         >
-          <svg className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
           </svg>
-        </button>
+          View
+        </a>
+      ) : (
+        <span className="text-slate-400 italic text-[10px]">No Drawing</span>
+      )
+    },
+    {
+      label: 'Status',
+      key: 'status',
+      sortable: true,
+      render: (val) => <StatusBadge status={val} />
+    },
+    {
+      label: 'Target Date',
+      key: 'target_dispatch_date',
+      sortable: true,
+      render: (val) => <span className="text-slate-600 whitespace-nowrap">{formatDate(val)}</span>
+    },
+    {
+      label: 'Priority',
+      key: 'production_priority',
+      sortable: true,
+      render: (val) => (
+        <span className={`text-[10px]    ${priorityColors[val] || priorityColors.NORMAL}`}>
+          {val || 'NORMAL'}
+        </span>
+      )
+    },
+    {
+      label: 'Actions',
+      key: 'actions',
+      className: 'text-right',
+      render: (_, row) => !row.request_accepted ? (
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={() => handleAction(row.id, 'accept')}
+            disabled={actionLoading === row.id}
+            className="px-3 py-1 bg-emerald-600 text-white text-[10px]    rounded hover:bg-emerald-700 disabled:opacity-50 transition-all shadow-sm active:scale-95"
+          >
+            {actionLoading === row.id ? '...' : 'Accept'}
+          </button>
+          <button
+            onClick={() => handleAction(row.id, 'reject')}
+            disabled={actionLoading === row.id}
+            className="px-3 py-1 border border-slate-200 text-slate-600 text-[10px]    rounded hover:bg-slate-50 disabled:opacity-50 transition-all active:scale-95"
+          >
+            Reject
+          </button>
+        </div>
+      ) : (
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={() => navigate('/production-plan', { state: { salesOrderId: row.id } })}
+            className="px-3 py-1 bg-indigo-50 text-indigo-600 text-[10px]    rounded border border-indigo-100 hover:bg-indigo-600 hover:text-white transition-all active:scale-95 shadow-sm"
+          >
+            Plan
+          </button>
+          <button
+            onClick={() => navigate('/work-order-form', { state: { salesOrderId: row.id, salesOrderItemId: row.item_id } })}
+            className="px-3 py-1 bg-emerald-50 text-emerald-600 text-[10px]    rounded border border-emerald-100 hover:bg-emerald-600 hover:text-white transition-all active:scale-95 shadow-sm"
+          >
+            Work Order
+          </button>
+        </div>
+      )
+    }
+  ], [actionLoading, navigate]);
+
+  return (
+    <div className="space-y-4 p-4 min-h-screen bg-slate-50/50">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl  text-slate-900 tracking-tight">Project Requests</h1>
+          <p className="text-sm text-slate-500 mt-1">Review and initiate production for new project requests from Sales</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded shadow-sm">
+            <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+            <span className="text-xs  text-slate-700  ">{requests.length} Requests Pending</span>
+          </div>
+          <button 
+            onClick={fetchRequests}
+            className="p-2.5 bg-white border border-slate-200 text-slate-500 hover:text-indigo-600 hover:border-indigo-100 hover:bg-indigo-50 rounded transition-all shadow-sm active:scale-95"
+            title="Refresh"
+          >
+            <svg className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          </button>
+        </div>
       </div>
 
-      <Card>
-        {isLoading ? (
-          <div className="flex items-center justify-center py-20">
-            <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-900 rounded  animate-spin" />
-          </div>
-        ) : (
-          <div className="overflow-x-auto ">
-            <table className="w-full text-xs">
-              <thead className="bg-white text-slate-500   border-b border-slate-200">
-                <tr>
-                  <th className="p-2 text-left">SO Code</th>
-                  <th className="p-2 text-left">Project / Customer</th>
-                  <th className="p-2 text-left">Item Details</th>
-                  <th className="p-2 text-left">Drawing No</th>
-                  <th className="p-2 text-center">Drawings</th>
-                  <th className="p-2 text-left">Status</th>
-                  <th className="p-2 text-left">Target Date</th>
-                  <th className="p-2 text-left">Priority</th>
-                  <th className="p-2 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 bg-white">
-                {requests.map((req, idx) => {
-                  const statusInfo = statusColors[req.status] || { label: req.status, bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-600' };
-                  return (
-                    <tr key={`${req.id}-${idx}`} className="hover:bg-slate-50 transition-colors">
-                      <td className="p-2   text-indigo-600 ">
-                        {formatOrderCode(req.id)}
-                      </td>
-                      <td className="p-2">
-                        <div className=" text-slate-900">{req.project_name || '—'}</div>
-                        <div className="text-xs text-slate-500 mt-0.5">{req.company_name}</div>
-                      </td>
-                      <td className="p-2">
-                        <div className="text-slate-900">{req.item_description}</div>
-                        <div className="text-xs text-slate-500 mt-0.5">
-                          Code: {req.item_code || '—'} | Qty: <span className="">{req.item_qty} {req.item_unit}</span>
-                        </div>
-                      </td>
-                      <td className="p-2">
-                        <span className="px-2 py-1 bg-slate-100 text-slate-700 rounded text-xs  ">
-                          {req.drawing_no || 'N/A'}
-                        </span>
-                      </td>
-                      <td className="p-2 text-center">
-                        {req.drawing_pdf ? (
-                          <a 
-                            href={getFileUrl(req.drawing_pdf)} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 text-indigo-600 hover:text-indigo-800 "
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                            </svg>
-                            View
-                          </a>
-                        ) : (
-                          <span className="text-slate-400 italic text-xs">No Drawing</span>
-                        )}
-                      </td>
-                      <td className="p-2">
-                        <span className={`px-2 py-1 rounded text-xs   border ${statusInfo.bg} ${statusInfo.border} ${statusInfo.text} whitespace-nowrap`}>
-                          {statusInfo.label}
-                        </span>
-                      </td>
-                      <td className="p-2 text-slate-600 whitespace-nowrap">
-                        {formatDate(req.target_dispatch_date)}
-                      </td>
-                      <td className="p-2">
-                        <span className={`text-xs  ${priorityColors[req.production_priority]}`}>
-                          {req.production_priority || 'NORMAL'}
-                        </span>
-                      </td>
-                      <td className="p-2 text-right">
-                        {!req.request_accepted ? (
-                          <div className="flex justify-center gap-2">
-                            <button
-                              onClick={() => handleAction(req.id, 'accept')}
-                              disabled={actionLoading === req.id}
-                              className="p-2 .5 bg-emerald-600 text-white text-xs  rounded  hover:bg-emerald-700 disabled:opacity-50 transition-colors"
-                            >
-                              {actionLoading === req.id ? '...' : 'Accept'}
-                            </button>
-                            <button
-                              onClick={() => handleAction(req.id, 'reject')}
-                              disabled={actionLoading === req.id}
-                              className="p-2 .5 border border-slate-200 text-slate-600 text-xs  rounded  hover:bg-slate-50 disabled:opacity-50 transition-colors"
-                            >
-                              Reject
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="flex justify-end gap-2">
-                            <button
-                              onClick={() => navigate('/production-plan', { state: { salesOrderId: req.id } })}
-                              className="px-3 py-1.5 bg-indigo-50 text-indigo-600 text-[10px]  rounded border border-indigo-100 hover:bg-indigo-600 hover:text-white transition-all"
-                            >
-                              Production Plan
-                            </button>
-                            <button
-                              onClick={() => navigate('/work-order-form', { state: { salesOrderId: req.id, salesOrderItemId: req.item_id } })}
-                              className="px-3 py-1.5 bg-emerald-50 text-emerald-600 text-[10px]  rounded border border-emerald-100 hover:bg-emerald-600 hover:text-white transition-all"
-                            >
-                              Work Order
-                            </button>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-                {requests.length === 0 && (
-                  <tr>
-                    <td colSpan="8" className="py-20 text-center text-slate-400 italic bg-white">
-                      No pending project requests for Production.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
+      <Card className="border-none shadow-xl bg-white/50 backdrop-blur-sm overflow-hidden">
+        <DataTable
+          columns={columns}
+          data={requests}
+          loading={isLoading}
+          searchPlaceholder="Search by SO Code, Project, or Item..."
+          searchKey="project_name"
+        />
       </Card>
     </div>
   );

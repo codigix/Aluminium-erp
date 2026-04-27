@@ -260,8 +260,8 @@ const BOMCreation = () => {
   const handleDeleteBOM = async (itemId) => {
     try {
       const result = await Swal.fire({
-        title: '<span class="text-base font-bold text-slate-800">Delete BOM?</span>',
-        html: '<span class="text-xs text-slate-600">Are you sure you want to delete this BOM? This action <span class="font-bold text-rose-600">cannot be undone</span>.</span>',
+        title: '<span class="text-base  text-slate-800">Delete BOM?</span>',
+        html: '<span class="text-xs text-slate-600">Are you sure you want to delete this BOM? This action <span class=" text-rose-600">cannot be undone</span>.</span>',
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#ef4444',
@@ -271,8 +271,8 @@ const BOMCreation = () => {
         width: '380px',
         padding: '1rem',
         customClass: {
-          confirmButton: 'text-[11px] font-bold px-4 py-2 rounded shadow-lg shadow-rose-100 uppercase tracking-wider',
-          cancelButton: 'text-[11px] font-bold px-4 py-2 rounded uppercase tracking-wider'
+          confirmButton: 'text-[11px]  px-4 py-2 rounded shadow-lg shadow-rose-100  ',
+          cancelButton: 'text-[11px]  px-4 py-2 rounded  '
         }
       });
 
@@ -303,8 +303,8 @@ const BOMCreation = () => {
       }
 
       const result = await Swal.fire({
-        title: '<span class="text-base font-bold text-slate-800">Send for Approval?</span>',
-        html: `<span class="text-xs text-slate-600">Are you sure you want to send BOMs for <span class="font-bold text-indigo-600">${client.client_name}</span> for approval?</span>`,
+        title: '<span class="text-base  text-slate-800">Send for Approval?</span>',
+        html: `<span class="text-xs text-slate-600">Are you sure you want to send BOMs for <span class=" text-indigo-600">${client.client_name}</span> for approval?</span>`,
         icon: 'question',
         showCancelButton: true,
         confirmButtonColor: '#10b981',
@@ -314,8 +314,8 @@ const BOMCreation = () => {
         width: '380px',
         padding: '1rem',
         customClass: {
-          confirmButton: 'text-[11px] font-bold px-4 py-2 rounded shadow-lg shadow-emerald-100 uppercase tracking-wider',
-          cancelButton: 'text-[11px] font-bold px-4 py-2 rounded uppercase tracking-wider'
+          confirmButton: 'text-[11px]  px-4 py-2 rounded shadow-lg shadow-emerald-100  ',
+          cancelButton: 'text-[11px]  px-4 py-2 rounded  '
         }
       });
 
@@ -582,7 +582,7 @@ const BOMCreation = () => {
                       <div className="flex items-center gap-2">
                         <span className="text-xs  text-slate-900">{dwgNo}</span>
                         {dwgStatus === 'DESIGN_APPROVED' ? (
-                          <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded text-[10px] font-bold border border-emerald-100">
+                          <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded text-[10px]  border border-emerald-100">
                             Design Approved
                           </span>
                         ) : (
@@ -662,7 +662,7 @@ const BOMCreation = () => {
                                       </div>
                                     </td>
                                     <td className="px-4 p-2 text-center">
-                                      <span className="text-[11px] font-bold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
+                                      <span className="text-[11px]  text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
                                         V{latest.version || latest.revision_no || '1'}
                                       </span>
                                     </td>
@@ -672,7 +672,7 @@ const BOMCreation = () => {
                                       </span>
                                     </td>
                                     <td className="px-4 p-2 text-center">
-                                      <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px] font-medium uppercase">
+                                      <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px] font-medium ">
                                         {latest.item_group || '—'}
                                       </span>
                                     </td>
@@ -682,7 +682,7 @@ const BOMCreation = () => {
                                       </span>
                                     </td>
                                     <td className="px-4 p-2 text-center">
-                                      <span className="text-xs font-bold text-indigo-600">
+                                      <span className="text-xs  text-indigo-600">
                                         ₹{parseFloat(latest.bom_cost || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                       </span>
                                     </td>
@@ -784,8 +784,8 @@ const BOMCreation = () => {
           ))}
         </div>
 
-        <Card className=" border border-slate-100 rounded  shadow-sm overflow-hidden">
-          <div className="p-2">
+        
+          
             <DataTable 
               columns={columns}
               data={filteredOrders}
@@ -795,8 +795,7 @@ const BOMCreation = () => {
               searchPlaceholder="Search by client, drawing, or code..."
               emptyMessage="No active clients found."
             />
-          </div>
-        </Card>
+          
       </div>
 
       {showBOMDetails && (
@@ -904,19 +903,19 @@ const BOMCreation = () => {
                                 </div>
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2 mb-1">
-                                    <h4 className="text-xs font-bold text-slate-900 truncate tracking-tight">{item.item_code}</h4>
-                                    <span className="px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded text-[10px] font-bold uppercase tracking-wider">{item.item_group || 'FINISHED_GOOD'}</span>
+                                    <h4 className="text-xs  text-slate-900 truncate tracking-tight">{item.item_code}</h4>
+                                    <span className="px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded text-[10px]   ">{item.item_group || 'FINISHED_GOOD'}</span>
                                   </div>
                                   <div className="flex items-center gap-3 text-[10px] text-slate-500 font-medium">
                                     <button 
                                       onClick={() => item.drawing_no && handlePreviewByNo(item.drawing_no)}
-                                      className="flex items-center gap-1 text-indigo-600 hover:text-indigo-700 transition-colors uppercase"
+                                      className="flex items-center gap-1 text-indigo-600 hover:text-indigo-700 transition-colors "
                                     >
                                       VIEW DRAWING <ExternalLink size={10} />
                                     </button>
                                     <button 
                                       onClick={() => toggleBOMItem(item.id)}
-                                      className="flex items-center gap-1 text-slate-400 hover:text-slate-600 transition-colors uppercase"
+                                      className="flex items-center gap-1 text-slate-400 hover:text-slate-600 transition-colors "
                                     >
                                       {isExpanded ? 'CLOSE BOM' : 'FULL BOM'} <ExternalLink size={10} className={isExpanded ? 'rotate-180' : ''} />
                                     </button>
@@ -925,25 +924,25 @@ const BOMCreation = () => {
                                 
                                 <div className="flex gap-6 text-center">
                                   <div>
-                                    <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">Order Qty</p>
-                                    <p className="text-xs font-bold text-slate-700">{item.quantity} <span className="text-[10px] font-normal text-slate-400">{item.unit || 'Nos'}</span></p>
+                                    <p className="text-[10px] text-slate-400   mb-1">Order Qty</p>
+                                    <p className="text-xs  text-slate-700">{item.quantity} <span className="text-[10px] font-normal text-slate-400">{item.unit || 'Nos'}</span></p>
                                   </div>
                                   <div>
-                                    <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">Material Cost</p>
-                                    <p className="text-xs font-bold text-slate-700">₹{matCost.toLocaleString('en-IN')}</p>
+                                    <p className="text-[10px] text-slate-400   mb-1">Material Cost</p>
+                                    <p className="text-xs  text-slate-700">₹{matCost.toLocaleString('en-IN')}</p>
                                   </div>
                                   <div>
-                                    <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">Labor Cost</p>
-                                    <p className="text-xs font-bold text-slate-700">₹{laborCost.toLocaleString('en-IN')}</p>
+                                    <p className="text-[10px] text-slate-400   mb-1">Labor Cost</p>
+                                    <p className="text-xs  text-slate-700">₹{laborCost.toLocaleString('en-IN')}</p>
                                   </div>
                                   <div className="px-4 py-1 bg-emerald-50/50 rounded border border-emerald-100/50">
-                                    <p className="text-[10px] text-emerald-600/70 uppercase tracking-wider mb-1">Est. Profit</p>
-                                    <p className="text-xs font-bold text-emerald-600">₹{estProfit.toLocaleString('en-IN')}</p>
+                                    <p className="text-[10px] text-emerald-600/70   mb-1">Est. Profit</p>
+                                    <p className="text-xs  text-emerald-600">₹{estProfit.toLocaleString('en-IN')}</p>
                                   </div>
                                   <div className="flex items-center gap-2 pl-4 border-l border-slate-100">
                                     <div>
-                                      <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">Item Total</p>
-                                      <p className="text-sm font-bold text-indigo-600">₹{itemTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+                                      <p className="text-[10px] text-slate-400   mb-1">Item Total</p>
+                                      <p className="text-sm  text-indigo-600">₹{itemTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
                                     </div>
                                     <div className="p-1.5 bg-emerald-100 text-emerald-600 rounded-full">
                                       <Check size={14} strokeWidth={3} />
@@ -956,22 +955,22 @@ const BOMCreation = () => {
                                 <div className="mt-4 pt-4 border-t border-slate-100 animate-in slide-in-from-top-2 duration-300">
                                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                                     {/* Materials */}
-                                    <div className="bg-slate-50/50 p-2 rounded-lg border border-slate-100">
+                                    <div className="bg-slate-50/50 p-2 rounded border border-slate-100">
                                       <div className="flex items-center justify-between mb-3 px-1">
-                                        <h5 className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest flex items-center gap-2">
+                                        <h5 className="text-[10px]  text-indigo-600  tracking-widest flex items-center gap-2">
                                           <div className="w-1 h-3 bg-indigo-600 rounded-full" />
                                           Raw Materials
                                         </h5>
-                                        <span className="text-[10px] font-bold text-slate-400">₹{matCost.toLocaleString('en-IN')}</span>
+                                        <span className="text-[10px]  text-slate-400">₹{matCost.toLocaleString('en-IN')}</span>
                                       </div>
                                       <div className="space-y-1.5">
                                         {item.materials?.length > 0 ? item.materials.map((m, idx) => (
                                           <div key={idx} className="bg-white p-2 rounded border border-slate-100 flex justify-between items-center group hover:border-indigo-200 transition-colors">
                                             <div>
-                                              <p className="text-xs font-bold text-slate-700">{m.material_name}</p>
+                                              <p className="text-xs  text-slate-700">{m.material_name}</p>
                                               <p className="text-[10px] text-slate-400 font-medium">{m.qty_per_pc} @ ₹{parseFloat(m.rate || 0).toLocaleString('en-IN')}</p>
                                             </div>
-                                            <p className="text-xs font-bold text-slate-600">₹{(parseFloat(m.qty_per_pc || 0) * parseFloat(item.quantity) * parseFloat(m.rate || 0)).toLocaleString('en-IN')}</p>
+                                            <p className="text-xs  text-slate-600">₹{(parseFloat(m.qty_per_pc || 0) * parseFloat(item.quantity) * parseFloat(m.rate || 0)).toLocaleString('en-IN')}</p>
                                           </div>
                                         )) : (
                                           <p className="text-[10px] text-slate-400 italic px-1">No materials listed</p>
@@ -980,22 +979,22 @@ const BOMCreation = () => {
                                     </div>
 
                                     {/* Components */}
-                                    <div className="bg-slate-50/50 p-2 rounded-lg border border-slate-100">
+                                    <div className="bg-slate-50/50 p-2 rounded border border-slate-100">
                                       <div className="flex items-center justify-between mb-3 px-1">
-                                        <h5 className="text-[10px] font-bold text-blue-600 uppercase tracking-widest flex items-center gap-2">
+                                        <h5 className="text-[10px]  text-blue-600  tracking-widest flex items-center gap-2">
                                           <div className="w-1 h-3 bg-blue-600 rounded-full" />
                                           Components
                                         </h5>
-                                        <span className="text-[10px] font-bold text-slate-400">₹{compCost.toLocaleString('en-IN')}</span>
+                                        <span className="text-[10px]  text-slate-400">₹{compCost.toLocaleString('en-IN')}</span>
                                       </div>
                                       <div className="space-y-1.5">
                                         {item.components?.length > 0 ? item.components.map((c, idx) => (
                                           <div key={idx} className="bg-white p-2 rounded border border-slate-100 flex justify-between items-center hover:border-blue-200 transition-colors">
                                             <div>
-                                              <p className="text-xs font-bold text-slate-700">{c.description || c.component_code}</p>
+                                              <p className="text-xs  text-slate-700">{c.description || c.component_code}</p>
                                               <p className="text-[10px] text-slate-400 font-medium">{c.quantity} @ ₹{parseFloat(c.rate || 0).toLocaleString('en-IN')}</p>
                                             </div>
-                                            <p className="text-xs font-bold text-slate-600">₹{(parseFloat(c.quantity || 0) * parseFloat(item.quantity) * parseFloat(c.rate || 0)).toLocaleString('en-IN')}</p>
+                                            <p className="text-xs  text-slate-600">₹{(parseFloat(c.quantity || 0) * parseFloat(item.quantity) * parseFloat(c.rate || 0)).toLocaleString('en-IN')}</p>
                                           </div>
                                         )) : (
                                           <p className="text-[10px] text-slate-400 italic px-1">No components listed</p>
@@ -1004,13 +1003,13 @@ const BOMCreation = () => {
                                     </div>
 
                                     {/* Operations */}
-                                    <div className="bg-slate-50/50 p-2 rounded-lg border border-slate-100">
+                                    <div className="bg-slate-50/50 p-2 rounded border border-slate-100">
                                       <div className="flex items-center justify-between mb-3 px-1">
-                                        <h5 className="text-[10px] font-bold text-amber-600 uppercase tracking-widest flex items-center gap-2">
+                                        <h5 className="text-[10px]  text-amber-600  tracking-widest flex items-center gap-2">
                                           <div className="w-1 h-3 bg-amber-600 rounded-full" />
                                           Operations
                                         </h5>
-                                        <span className="text-[10px] font-bold text-slate-400">₹{laborCost.toLocaleString('en-IN')}</span>
+                                        <span className="text-[10px]  text-slate-400">₹{laborCost.toLocaleString('en-IN')}</span>
                                       </div>
                                       <div className="space-y-1.5">
                                         {item.operations?.length > 0 ? item.operations.map((o, idx) => {
@@ -1018,10 +1017,10 @@ const BOMCreation = () => {
                                           return (
                                             <div key={idx} className="bg-white p-2 rounded border border-slate-100 flex justify-between items-center hover:border-amber-200 transition-colors">
                                               <div>
-                                                <p className="text-xs font-bold text-slate-700">{o.operation_name}</p>
+                                                <p className="text-xs  text-slate-700">{o.operation_name}</p>
                                                 <p className="text-[10px] text-slate-400 font-medium">{o.cycle_time_min + o.setup_time_min} MIN @ ₹{parseFloat(o.hourly_rate || 0).toLocaleString('en-IN')}/hr</p>
                                               </div>
-                                              <p className="text-xs font-bold text-slate-600">₹{opCost.toLocaleString('en-IN')}</p>
+                                              <p className="text-xs  text-slate-600">₹{opCost.toLocaleString('en-IN')}</p>
                                             </div>
                                           );
                                         }) : (
@@ -1044,7 +1043,7 @@ const BOMCreation = () => {
               <div className="bg-slate-50 p-3 border-t border-slate-100 flex justify-end">
                 <button 
                   onClick={() => setShowBOMDetails(false)}
-                  className="px-6 py-2 bg-white text-slate-600 border border-slate-200 rounded text-xs font-bold hover:bg-slate-50 transition-all uppercase tracking-widest"
+                  className="px-6 py-2 bg-white text-slate-600 border border-slate-200 rounded text-xs  hover:bg-slate-50 transition-all  tracking-widest"
                 >
                   Close
                 </button>

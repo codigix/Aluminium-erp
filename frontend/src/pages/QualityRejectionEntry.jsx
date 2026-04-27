@@ -199,9 +199,9 @@ const QualityRejectionEntry = () => {
   return (
     <div className="space-y-3 pb-8 text-xs">
       {/* Header */}
-      <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm">
+      <div className="bg-white p-3 rounded border border-slate-200 shadow-sm">
         <div className="flex items-center gap-3 mb-2">
-          <button className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors border border-slate-200">
+          <button className="p-1.5 hover:bg-slate-100 rounded transition-colors border border-slate-200">
             <ChevronLeft className="w-4 h-4 text-slate-600" />
           </button>
           <div>
@@ -219,7 +219,7 @@ const QualityRejectionEntry = () => {
 
       {/* Success Alert */}
       {successMessage && (
-        <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-2 flex items-center gap-2 animate-in fade-in duration-300">
+        <div className="bg-emerald-50 border border-emerald-100 rounded p-2 flex items-center gap-2 animate-in fade-in duration-300">
           <CheckCircle2 className="w-4 h-4 text-emerald-500" />
           <p className="text-emerald-800 text-[11px] font-medium">{successMessage}</p>
         </div>
@@ -227,7 +227,7 @@ const QualityRejectionEntry = () => {
 
       {/* Warning Alert */}
       {pendingRecords.length > 0 && (
-        <div className="bg-amber-50 border border-amber-100 rounded-lg p-2 flex gap-2.5">
+        <div className="bg-amber-50 border border-amber-100 rounded p-2 flex gap-2.5">
           <div className="p-1 bg-white rounded-md shadow-sm h-fit">
             <AlertTriangle className="w-4 h-4 text-amber-500" />
           </div>
@@ -241,7 +241,7 @@ const QualityRejectionEntry = () => {
       )}
 
       {/* TOP Section: Pending Requests */}
-      <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-3 py-2 border-b border-slate-100 bg-slate-50/30 flex items-center justify-between">
           <h3 className="font-semibold text-slate-900 flex items-center gap-2 text-xs">
             <span className="bg-indigo-100 text-indigo-700 w-5 h-5 rounded-full flex items-center justify-center text-[10px]">1</span>
@@ -260,15 +260,15 @@ const QualityRejectionEntry = () => {
           <table className="w-full text-left border-collapse min-w-[800px]">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100">
-                <th className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Job Card ID</th>
-                <th className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Date / Shift</th>
-                <th className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider text-center">Operation</th>
-                <th className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider text-center">Produced Qty</th>
-                <th className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider text-center w-24">Accepted</th>
-                <th className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider text-center w-24">Rejected</th>
-                <th className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider text-center">Reason</th>
-                <th className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider text-center">Status</th>
-                <th className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider text-right">Action</th>
+                <th className="px-3 py-2 text-[10px]  text-slate-500 uppercase tracking-wider">Job Card ID</th>
+                <th className="px-3 py-2 text-[10px]  text-slate-500 uppercase tracking-wider">Date / Shift</th>
+                <th className="px-3 py-2 text-[10px]  text-slate-500 uppercase tracking-wider text-center">Operation</th>
+                <th className="px-3 py-2 text-[10px]  text-slate-500 uppercase tracking-wider text-center">Produced Qty</th>
+                <th className="px-3 py-2 text-[10px]  text-slate-500 uppercase tracking-wider text-center w-24">Accepted</th>
+                <th className="px-3 py-2 text-[10px]  text-slate-500 uppercase tracking-wider text-center w-24">Rejected</th>
+                <th className="px-3 py-2 text-[10px]  text-slate-500 uppercase tracking-wider text-center">Reason</th>
+                <th className="px-3 py-2 text-[10px]  text-slate-500 uppercase tracking-wider text-center">Status</th>
+                <th className="px-3 py-2 text-[10px]  text-slate-500 uppercase tracking-wider text-right">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -278,7 +278,7 @@ const QualityRejectionEntry = () => {
                   <td className="px-3 py-2 text-slate-500 text-[10px]">{record.dateShift}</td>
                   <td className="px-3 py-2 text-slate-600 font-medium text-center">{record.operation}</td>
                   <td className="px-3 py-2 text-center">
-                    <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded-md font-bold text-[11px] border border-slate-200">
+                    <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded-md  text-[11px] border border-slate-200">
                       {record.producedQty}
                     </span>
                   </td>
@@ -318,7 +318,7 @@ const QualityRejectionEntry = () => {
                   <td className="px-3 py-2 text-right">
                     <button 
                       onClick={() => handleInspect(record)}
-                      className="px-3 py-1 bg-emerald-600 text-white rounded-md text-[10px] font-bold hover:bg-emerald-700 transition-all shadow-sm active:scale-95 flex items-center gap-1 ml-auto"
+                      className="px-3 py-1 bg-emerald-600 text-white rounded-md text-[10px]  hover:bg-emerald-700 transition-all shadow-sm active:scale-95 flex items-center gap-1 ml-auto"
                     >
                       <CheckCircle2 className="w-3 h-3" />
                       Quality Approved
@@ -339,7 +339,7 @@ const QualityRejectionEntry = () => {
       </div>
 
       {/* BOTTOM Section: Approved Records */}
-      <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden mt-6">
+      <div className="bg-white rounded border border-slate-200 shadow-sm overflow-hidden mt-6">
         <div className="px-3 py-2 border-b border-slate-100 bg-slate-50/30 flex items-center justify-between">
           <h3 className="font-semibold text-slate-900 flex items-center gap-2 text-xs">
             <span className="bg-emerald-100 text-emerald-700 w-5 h-5 rounded-full flex items-center justify-center text-[10px]">2</span>
@@ -354,14 +354,14 @@ const QualityRejectionEntry = () => {
           <table className="w-full text-left border-collapse min-w-[800px]">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100">
-                <th className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Job Card ID</th>
-                <th className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Date</th>
-                <th className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Operation</th>
-                <th className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider text-center">Produced</th>
-                <th className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider text-center">Accepted</th>
-                <th className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider text-center text-rose-600">Rejected</th>
-                <th className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Reason</th>
-                <th className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider text-center">Status</th>
+                <th className="px-3 py-2 text-[10px]  text-slate-500 uppercase tracking-wider">Job Card ID</th>
+                <th className="px-3 py-2 text-[10px]  text-slate-500 uppercase tracking-wider">Date</th>
+                <th className="px-3 py-2 text-[10px]  text-slate-500 uppercase tracking-wider">Operation</th>
+                <th className="px-3 py-2 text-[10px]  text-slate-500 uppercase tracking-wider text-center">Produced</th>
+                <th className="px-3 py-2 text-[10px]  text-slate-500 uppercase tracking-wider text-center">Accepted</th>
+                <th className="px-3 py-2 text-[10px]  text-slate-500 uppercase tracking-wider text-center text-rose-600">Rejected</th>
+                <th className="px-3 py-2 text-[10px]  text-slate-500 uppercase tracking-wider">Reason</th>
+                <th className="px-3 py-2 text-[10px]  text-slate-500 uppercase tracking-wider text-center">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -370,9 +370,9 @@ const QualityRejectionEntry = () => {
                   <td className="px-3 py-2 font-medium text-slate-700">{record.jobCardNo}</td>
                   <td className="px-3 py-2 text-slate-500">{record.date}</td>
                   <td className="px-3 py-2 text-slate-600 font-medium">{record.operation}</td>
-                  <td className="px-3 py-2 text-center text-slate-600 font-bold">{record.producedQty}</td>
-                  <td className="px-3 py-2 text-center text-emerald-600 font-bold">{record.accepted}</td>
-                  <td className="px-3 py-2 text-center text-rose-600 font-bold">{record.rejected}</td>
+                  <td className="px-3 py-2 text-center text-slate-600 ">{record.producedQty}</td>
+                  <td className="px-3 py-2 text-center text-emerald-600 ">{record.accepted}</td>
+                  <td className="px-3 py-2 text-center text-rose-600 ">{record.rejected}</td>
                   <td className="px-3 py-2 text-slate-500 italic">{record.reason || '—'}</td>
                   <td className="px-3 py-2 text-center">
                     <StatusBadge status={record.status} small />

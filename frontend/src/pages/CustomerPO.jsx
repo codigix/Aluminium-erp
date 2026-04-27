@@ -311,7 +311,7 @@ const CustomerPO = ({
           <div className="p-2 bg-indigo-50 text-indigo-600 rounded ">
             <FileText className="w-4 h-4" />
           </div>
-          <p className="text-xs  text-slate-900 font-bold  tracking-tight">{row.po_number}</p>
+          <p className="text-xs  text-slate-900   tracking-tight">{row.po_number}</p>
         </div>
       )
     },
@@ -319,7 +319,7 @@ const CustomerPO = ({
       label: 'Client & Project',
       render: (_, row) => (
         <div className="flex flex-col">
-          <span className="text-xs font-bold text-slate-900">{row.company_name}</span>
+          <span className="text-xs  text-slate-900">{row.company_name}</span>
           <span className="text-[11px] text-slate-500 italic">
             {row.project_name || 'General Project'}
           </span>
@@ -905,7 +905,7 @@ const CustomerPO = ({
                 <div className="space-y-3">
                   <div className="flex items-center gap-2 text-slate-400">
                     <FileText className="w-4 h-4" />
-                    <span className="text-[10px] uppercase font-bold tracking-wider">Project Information</span>
+                    <span className="text-[10px]   ">Project Information</span>
                   </div>
                   <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
                     <p className="text-sm font-semibold text-slate-900">{viewingPo.project_name || 'General Project'}</p>
@@ -915,20 +915,20 @@ const CustomerPO = ({
                 <div className="space-y-3">
                   <div className="flex items-center gap-2 text-slate-400">
                     <Building2 className="w-4 h-4" />
-                    <span className="text-[10px] uppercase font-bold tracking-wider">Client Details</span>
+                    <span className="text-[10px]   ">Client Details</span>
                   </div>
                   <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
                     <p className="text-sm font-semibold text-slate-900">{viewingPo.company_name}</p>
                     <div className="grid grid-cols-2 gap-4 mt-2">
                       {viewingPo.gstin && (
                         <div>
-                          <p className="text-[10px] text-slate-400 uppercase">GSTIN</p>
+                          <p className="text-[10px] text-slate-400 ">GSTIN</p>
                           <p className="text-xs font-medium text-slate-700">{viewingPo.gstin}</p>
                         </div>
                       )}
                       {viewingPo.pan && (
                         <div>
-                          <p className="text-[10px] text-slate-400 uppercase">PAN</p>
+                          <p className="text-[10px] text-slate-400 ">PAN</p>
                           <p className="text-xs font-medium text-slate-700">{viewingPo.pan}</p>
                         </div>
                       )}
@@ -953,7 +953,7 @@ const CustomerPO = ({
                 </div>
                 <div className="bg-slate-50/50 rounded-xl p-4 border border-slate-100">
                   <p className="text-xs  text-slate-400   mb-1.5">Order Type</p>
-                  <p className="text-sm  text-slate-700 uppercase">{viewingPo.order_type || 'STANDARD'}</p>
+                  <p className="text-sm  text-slate-700 ">{viewingPo.order_type || 'STANDARD'}</p>
                 </div>
               </div>
 

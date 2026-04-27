@@ -29,6 +29,7 @@ const getQuotationRequests = async (req, res, next) => {
                COALESCE(soi.unit, qr.item_unit, 'NOS') as item_unit,
                COALESCE(soi.unit, qr.item_unit, 'NOS') as uom,
                COALESCE(qr.item_group, soi.item_group, 'FG') as item_group,
+               COALESCE(soi.item_code, qr.item_code) as item_code,
                (
                  SELECT bom_cost FROM sales_order_items v2 
                  WHERE ((v2.bom_id = soi.bom_id AND soi.bom_id IS NOT NULL)
@@ -63,7 +64,32 @@ const getQuotationRequests = async (req, res, next) => {
     query += ' ORDER BY created_at DESC';
 
     const [rows] = await pool.query(query, params);
-    res.json(rows);
+    
+    // Enrich with sub-assemblies for FG items in Sent/Draft quotations
+    const enrichedRows = await Promise.all(rows.map(async (row) => {
+      const g = (row.item_group || '').toUpperCase();
+      const isFG = g.includes('FG');
+      
+      if (isFG && (row.sales_order_item_id || row.item_code || row.drawing_no)) {
+        try {
+          const components = await bomService.getItemComponents(row.sales_order_item_id, row.item_code, row.drawing_no);
+          const sub_assemblies = components.filter(c => {
+            const code = (c.item_code || c.component_code || '').toUpperCase();
+            const group = (c.item_group || '').toUpperCase();
+            return (code.startsWith('SA-') || code.startsWith('SFG-') || 
+                    group.includes('SA') || group.includes('SUB') || group.includes('ASSEMBLY')) &&
+                   !group.includes('FG');
+          });
+          return { ...row, sub_assemblies };
+        } catch (err) {
+          console.error(`Error fetching sub-assemblies for QR ${row.id}:`, err);
+          return { ...row, sub_assemblies: [] };
+        }
+      }
+      return { ...row, sub_assemblies: [] };
+    }));
+
+    res.json(enrichedRows);
   } catch (error) {
     next(error);
   }
@@ -93,6 +119,7 @@ const getQuotationVersionHistory = async (req, res, next) => {
               COALESCE(soi.drawing_no, qr.drawing_no) as drawing_no,
               COALESCE(soi.description, qr.description) as item_description,
               COALESCE(soi.unit, qr.item_unit) as item_unit,
+              COALESCE(soi.item_code, qr.item_code) as item_code,
               (
                 SELECT bom_cost FROM sales_order_items v2 
                 WHERE ((v2.bom_id = soi.bom_id AND soi.bom_id IS NOT NULL)
@@ -116,7 +143,7 @@ const getQuotationVersionHistory = async (req, res, next) => {
     const versionGroups = [];
     const versionMap = {};
 
-    rows.forEach(row => {
+    for (const row of rows) {
       if (!versionMap[row.version]) {
         versionMap[row.version] = {
           id: row.id,
@@ -137,10 +164,11 @@ const getQuotationVersionHistory = async (req, res, next) => {
       const group = versionMap[row.version];
       const itemRate = parseFloat(row.total_amount / (row.item_qty || 1)) || 0;
       const itemTotal = itemRate * (row.item_qty || 0);
-
-      group.items.push({
+      
+      const itemData = {
         id: row.id,
         sales_order_item_id: row.sales_order_item_id,
+        item_code: row.item_code,
         drawing_no: row.drawing_no,
         description: row.item_description,
         quantity: row.item_qty,
@@ -150,19 +178,42 @@ const getQuotationVersionHistory = async (req, res, next) => {
         total: itemTotal,
         gst_percentage: row.gst_percentage,
         item_group: row.item_group,
-        status: row.status
-      });
-      
-      // Filter out Sub-Assemblies from totals to avoid double counting
+        status: row.status,
+        sub_assemblies: []
+      };
+
+      // Enrich with sub-assemblies for FG items if they are missing
       const g = (row.item_group || '').toUpperCase();
-      const isSA = g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY');
       const isFG = g.includes('FG');
       
-      if (!(isSA && !isFG)) {
+      if (isFG && (row.sales_order_item_id || row.item_code || row.drawing_no)) {
+        try {
+          // This is a bit inefficient (N+1), but for version history of a single quote it's fine
+          const components = await bomService.getItemComponents(row.sales_order_item_id, row.item_code, row.drawing_no);
+          itemData.sub_assemblies = components.filter(c => {
+            const code = (c.item_code || c.component_code || '').toUpperCase();
+            const group = (c.item_group || '').toUpperCase();
+            return (code.startsWith('SA-') || code.startsWith('SFG-') || 
+                    group.includes('SA') || group.includes('SUB') || group.includes('ASSEMBLY')) &&
+                   !group.includes('FG');
+          });
+        } catch (err) {
+          console.error(`Error fetching sub-assemblies for QR ${row.id}:`, err);
+        }
+      }
+
+      group.items.push(itemData);
+      
+      // Include both FG and Sub-Assemblies in totals if they have a price
+      const itemG = (row.item_group || '').toUpperCase();
+      const isSA = itemG.includes('SA') || itemG.includes('SUB') || itemG.includes('ASSEMBLY');
+      // isFG is already declared above
+      
+      if (isFG || isSA || itemTotal > 0) {
         group.total_amount += itemTotal;
         group.received_amount += itemTotal * (1 + (row.gst_percentage || 18) / 100);
       }
-    });
+    }
 
     res.json(versionGroups);
   } catch (error) {

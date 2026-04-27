@@ -19,7 +19,7 @@ import {
   ListTodo,
   X
 } from 'lucide-react';
-import { Card, StatusBadge, Modal } from '../components/ui.jsx';
+import { Card, StatusBadge, Modal, DataTable } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
@@ -176,6 +176,104 @@ const DispatchManagement = ({ apiRequest }) => {
     (d.company_name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
     (d.so_number || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const columns = [
+    {
+      label: 'Shipment ID',
+      key: 'shipment_code',
+      render: (val, item) => (
+        <span 
+          onClick={() => handleView(item.id || item.shipment_order_id)}
+          className="text-xs text-indigo-600 hover:underline cursor-pointer font-medium"
+        >
+          {val}
+        </span>
+      )
+    },
+    {
+      label: 'Customer',
+      key: 'company_name',
+      className: 'font-semibold text-slate-700'
+    },
+    {
+      label: 'Order No',
+      key: 'so_number',
+      render: (val, item) => (
+        <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded-md">
+          {val || (item.sales_order_id ? `SO-${String(item.sales_order_id).padStart(4, '0')}` : '—')}
+        </span>
+      )
+    },
+    {
+      label: 'Dispatch Date',
+      key: 'planned_dispatch_date',
+      className: 'text-center',
+      render: (val) => val ? new Date(val).toLocaleDateString('en-IN') : '—'
+    },
+    {
+      label: 'Status',
+      key: 'shipment_status',
+      className: 'text-center',
+      render: (val) => <StatusBadge status={val} />
+    },
+    {
+      label: 'Driver',
+      key: 'driver_name',
+      render: (val, item) => (
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 bg-slate-100 rounded flex items-center justify-center text-[10px]  text-slate-500 uppercase">
+            {val ? val.split(' ').map(n => n[0]).join('') : '?'}
+          </div>
+          <div className="flex flex-col">
+            <span className="text-xs font-medium text-slate-700">{val || 'Not Assigned'}</span>
+            <span className="text-[10px] text-slate-400">{item.vehicle_number || '—'}</span>
+          </div>
+        </div>
+      )
+    },
+    {
+      label: 'Actions',
+      key: 'actions',
+      className: 'text-right',
+      render: (_, item) => (
+        <div className="flex items-center justify-end gap-2">
+          <button 
+            onClick={() => handleView(item.id || item.shipment_order_id)}
+            className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-all"
+            title="View Details"
+          >
+            <Eye className="w-4 h-4" />
+          </button>
+          {getActionButton(item)}
+        </div>
+      )
+    }
+  ];
+
+  const itemColumns = [
+    {
+      label: 'Item Details',
+      key: 'description',
+      render: (val, item) => (
+        <div className="flex flex-col">
+          <span className=" text-slate-900 text-xs">{val}</span>
+          <span className="text-xs text-slate-400 tracking-tight">Code: {item.item_code}</span>
+        </div>
+      )
+    },
+    {
+      label: 'Packed Qty',
+      key: 'quantity',
+      className: 'text-center',
+      render: (val) => <span className="text-xs  text-slate-900">{parseFloat(val).toFixed(0)}</span>
+    },
+    {
+      label: 'Weight',
+      key: 'weight',
+      className: 'text-center',
+      render: (val) => <span className="text-xs text-slate-500">{val ? `${val} kg` : '—'}</span>
+    }
+  ];
 
   const getActionButton = (item) => {
     const shipmentId = item.id || item.shipment_order_id;
@@ -344,83 +442,13 @@ const DispatchManagement = ({ apiRequest }) => {
                 </div>
               </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-left">
-                  <thead className="bg-slate-50/50 border-y border-slate-100">
-                    <tr className="text-xs  text-slate-500  ">
-                      <th className=" p-2">Shipment ID</th>
-                      <th className=" p-2">Customer</th>
-                      <th className=" p-2">Order No</th>
-                      <th className=" p-2 text-center">Dispatch Date</th>
-                      <th className=" p-2 text-center">Status</th>
-                      <th className=" p-2">Driver</th>
-                      <th className=" p-2 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50">
-                    {loading ? (
-                      <tr>
-                        <td colSpan="7" className="px-6 py-12 text-center">
-                          <div className="flex flex-col items-center gap-2">
-                            <div className="w-8 h-8 border-2 border-slate-200 border-t-indigo-500 rounded animate-spin" />
-                            <p className="text-xs text-slate-400">Loading shipments...</p>
-                          </div>
-                        </td>
-                      </tr>
-                    ) : filteredDispatches.length === 0 ? (
-                      <tr>
-                        <td colSpan="7" className="px-6 py-20 text-center">
-                          <div className="flex flex-col items-center gap-2 text-slate-300">
-                            <Truck className="w-5 h-5 opacity-20" />
-                            <p className="text-sm font-medium">No shipments found</p>
-                          </div>
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredDispatches.map((item) => (
-                        <tr key={item.id || item.shipment_order_id} className="hover:bg-slate-50/80 transition-all duration-200 group">
-                          <td className=" p-2">
-                            <span className="text-xs  text-indigo-600 group-hover:underline cursor-pointer">{item.shipment_code}</span>
-                          </td>
-                          <td className=" p-2">
-                            <span className="text-xs font-semibold text-slate-700">{item.company_name}</span>
-                          </td>
-                          <td className=" p-2">
-                            <span className="text-xs  text-slate-500 bg-slate-100 px-2 py-1 rounded-md">
-                              {item.so_number || (item.sales_order_id ? `SO-${String(item.sales_order_id).padStart(4, '0')}` : '—')}
-                            </span>
-                          </td>
-                          <td className=" p-2 text-center">
-                            <span className="text-xs text-slate-600">{item.planned_dispatch_date ? new Date(item.planned_dispatch_date).toLocaleDateString('en-IN') : '—'}</span>
-                          </td>
-                          <td className=" p-2 text-center">
-                            <StatusBadge status={item.shipment_status} />
-                          </td>
-                          <td className=" p-2">
-                            <div className="flex items-center gap-2">
-                              <div className="w-3 h-3 rounded bg-slate-100 flex items-center justify-center text-xs  text-slate-500">
-                                {(item.driver_name || 'U').charAt(0)}
-                              </div>
-                              <span className="text-xs text-slate-600">{item.driver_name || 'Unassigned'}</span>
-                            </div>
-                          </td>
-                          <td className=" p-2 text-right">
-                            <div className="flex items-center justify-end gap-2">
-                              {getActionButton(item)}
-                              <button 
-                                onClick={() => handleView(item.id || item.shipment_order_id)}
-                                className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all"
-                              >
-                                <Eye className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+              <DataTable
+                columns={columns}
+                data={filteredDispatches}
+                loading={loading}
+                pageSize={10}
+                emptyMessage="No shipments found"
+              />
             </div>
           </Card>
         </div>
@@ -601,27 +629,11 @@ const DispatchManagement = ({ apiRequest }) => {
                     </h4>
                   </div>
                   <div className="flex-1 overflow-y-auto max-h-[400px]">
-                    <table className="w-full text-left">
-                      <thead className="bg-white sticky top-0 border-b border-slate-50">
-                        <tr className="text-xs  text-slate-400  ">
-                          <th className="px-6 p-2">Item Details</th>
-                          <th className="px-6 p-2 text-right">Qty</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-50">
-                        {selectedItem.items?.map((item, idx) => (
-                          <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                            <td className=" p-2">
-                              <p className="text-xs  text-slate-900 leading-tight">{item.description}</p>
-                              <p className="text-xs text-slate-400 mt-0.5">Code: {item.item_code}</p>
-                            </td>
-                            <td className=" p-2 text-right">
-                              <p className="text-xs  text-indigo-600">{item.quantity} <span className="text-xs text-slate-400">{item.unit}</span></p>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                    <DataTable
+                      columns={itemColumns}
+                      data={selectedItem.items || []}
+                      emptyMessage="No items found."
+                    />
                   </div>
                   {selectedItem.special_instructions && (
                     <div className="p-6 bg-amber-50 border-t border-amber-100 mt-auto">

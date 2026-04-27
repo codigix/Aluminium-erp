@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useFormik } from 'formik';
 import * as Yup from 'yup';
-import { Card, Modal, DataTable, StatusBadge, FormControl } from '../components/ui.jsx';
+import { Card, Modal, DataTable, StatusBadge, FormControl, Tabs, Button } from '../components/ui.jsx';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
 import { Plus, Search, RefreshCw, Filter, FileText, Send, Loader2, Check, X, Package, ChevronDown, ChevronUp, Trash2, Edit2, Eye, History } from 'lucide-react';
 import Swal from 'sweetalert2';
@@ -906,6 +906,142 @@ const CustomerDrawing = () => {
     }
   };
 
+  const clientDrawingColumns = [
+    { label: '#', key: 'id', render: (_, __, idx) => idx + 1, width: '50px' },
+    { label: 'Drawing No', key: 'drawing_no', className: 'font-medium text-slate-900' },
+    { label: 'Description', key: 'description' },
+    { 
+      label: 'Revision', 
+      key: 'revision', 
+      className: 'text-center',
+      render: (val, row) => (
+        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
+          {val || row.revision_no || '0'}
+        </span>
+      )
+    },
+    { label: 'Qty', key: 'qty', className: 'text-center text-indigo-600 font-medium', render: (val) => val || 1 },
+    { 
+      label: 'File', 
+      key: 'file_path', 
+      className: 'text-center',
+      render: (val, row) => (val || row.drawing_pdf) ? (
+        <button
+          onClick={() => handlePreview(row)}
+          className="inline-flex items-center justify-center p-2 bg-indigo-50 text-indigo-600 rounded hover:bg-indigo-600 hover:text-white transition-all active:scale-95 shadow-sm"
+          title="View Drawing"
+        >
+          <Eye size={15} />
+        </button>
+      ) : (
+        <span className="text-slate-300 italic text-xs">No File</span>
+      )
+    },
+    { 
+      label: 'Actions', 
+      key: 'actions', 
+      className: 'text-right',
+      render: (_, row) => (
+        <div className="flex items-center justify-end gap-2">
+          <button
+            onClick={() => handleEdit(row)}
+            className="p-1.5 text-amber-600 hover:bg-amber-50 rounded transition-all"
+            title="Edit"
+          >
+            <Edit2 size={14} />
+          </button>
+          <button
+            onClick={() => handleDelete(row.id)}
+            className="p-1.5 text-rose-600 hover:bg-rose-50 rounded transition-all"
+            title="Delete"
+          >
+            <Trash2 size={14} />
+          </button>
+        </div>
+      )
+    }
+  ];
+
+  const revisionColumns = [
+    { 
+      label: 'Revision', 
+      key: 'revision_no',
+      render: (val) => (
+        <span className="p-1 bg-indigo-100 text-indigo-700 rounded text-xs ">{val || '0'}</span>
+      )
+    },
+    { 
+      label: 'Date', 
+      key: 'created_at',
+      render: (val) => new Date(val).toLocaleDateString('en-IN')
+    },
+    { label: 'Description', key: 'description' },
+    { 
+      label: 'File', 
+      key: 'drawing_pdf',
+      className: 'text-center',
+      render: (val, row) => val ? (
+        <button
+          onClick={() => handlePreview({ ...row, file_path: val })}
+          className="inline-flex items-center justify-center p-1 text-indigo-600 hover:text-indigo-900 hover:bg-indigo-100 rounded transition-colors"
+          title="View Drawing"
+        >
+          <Eye size={16} />
+        </button>
+      ) : <span className="text-slate-400">—</span>
+    },
+    { 
+      label: 'Reference', 
+      key: 'po_number',
+      className: 'text-right',
+      render: (val, row) => (
+        <div>
+          <div className="text-slate-900 text-xs ">{val || '—'}</div>
+          <div className="text-xs text-slate-500">SO-{String(row.sales_order_id).padStart(4, '0')}</div>
+        </div>
+      )
+    }
+  ];
+
+  const approvedItemColumns = [
+    { 
+      label: 'Drawing', 
+      key: 'drawing_no',
+      render: (val, row) => (
+        <div className="flex items-center gap-2 ">
+          {row.drawing_pdf && (
+            <button
+              onClick={() => handlePreview({ ...row, file_path: row.drawing_pdf })}
+              className="p-1 text-emerald-600 hover:bg-emerald-100 rounded transition-colors"
+              title="View Drawing"
+            >
+              <Eye size={14} />
+            </button>
+          )}
+          {val}
+        </div>
+      )
+    },
+    { label: 'Description', key: 'description' },
+    { label: 'Qty', key: 'quantity', className: 'text-center text-slate-900 ' },
+    { label: 'Unit', key: 'unit' },
+    { 
+      label: 'Price', 
+      key: 'price',
+      className: 'text-right',
+      render: (_, row) => (
+        <input
+          type="number"
+          placeholder="0.00"
+          step="0.01"
+          value={quotePrices[row.id] || ''}
+          onChange={(e) => handlePriceChange(row.id, e.target.value)}
+          className="w-24 px-2 py-1 border border-slate-300 rounded text-right outline-none focus:ring-2 focus:ring-emerald-500 text-xs"
+        />
+      )
+    }
+  ];
+
   const handleShareClientGroupWithDesign = async (clientName, requirement = null) => {
     const unsharedDrawings = groupedDrawings[clientName]?.filter(d => d.status !== 'SHARED') || [];
 
@@ -1061,80 +1197,84 @@ const CustomerDrawing = () => {
   };
 
   return (
-    <div className=" space-y-2  animate-in fade-in duration-500">
+    <div className="space-y-6 animate-in fade-in duration-500">
       {/* Header Section */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-rose-50 text-rose-600 rounded-xl shadow-sm">
+            <FileText size={24} />
+          </div>
           <div>
-            <h1 className="text-xl  text-slate-900 ">Customer Drawing Master</h1>
-            <p className="text-xs text-slate-500 ">Manage customer reference drawings and technical documentation</p>
+            <h1 className="text-2xl  text-slate-900 tracking-tight">Customer Drawings</h1>
+            <p className="text-sm text-slate-500 font-medium">Manage customer reference drawings and technical documentation</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
+        <div className="flex items-center gap-3">
+          <Button
+            variant="secondary"
+            onClick={() => { setShowApprovedDrawings(true); fetchApprovedDrawings(); }}
+            icon={Check}
+          >
+            Approved Drawings
+          </Button>
+          <Button
+            variant="primary"
             onClick={() => {
               window.history.pushState({}, '', '/customer-drawing/addclient');
               setShowFormModal(true);
             }}
-            className="flex items-center gap-2 p-2  bg-indigo-600 text-white rounded text-xs  hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95"
+            icon={Plus}
           >
-            <Plus size={15} /> Client Requirement
-          </button>
-          <button
-            onClick={() => { setShowApprovedDrawings(true); fetchApprovedDrawings(); }}
-            className="flex items-center gap-2 p-2  bg-emerald-600 text-white rounded text-xs  hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 active:scale-95"
-          >
-            <Check size={15} /> Approved Drawings
-          </button>
+            Client Requirement
+          </Button>
         </div>
       </div>
 
-      {/* SEARCH SECTION */}
-      <Card className="">
-        <div className=" border-b border-slate-50 flex flex-col md:flex-row md:items-center justify-between gap-2">
-          <form onSubmit={handleSearch} className="relative flex-1 max-w-md group">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" size={15} />
+      {/* SEARCH & FILTER SECTION */}
+      <Card className="p-2 border-slate-100 bg-white">
+        <div className="flex flex-col md:flex-row items-center gap-4">
+          <form onSubmit={handleSearch} className="relative flex-1 group">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-rose-500 transition-colors" size={18} />
             <input
               type="text"
               placeholder="Search drawings, clients..."
-              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+              className="w-full pl-11 pr-4 py-2 bg-slate-50 border border-slate-200 rounded text-sm focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none transition-all"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </form>
           <div className="flex items-center gap-2">
-            <button
+            <Button
+              variant="secondary"
               onClick={() => { setSearchTerm(''); fetchDrawings(''); }}
-              className="p-2  bg-white border border-slate-200 text-slate-600 rounded text-xs  hover:bg-slate-50 transition-all active:scale-95"
             >
               Reset
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="primary"
               onClick={handleSearch}
-              className="px-6 py-2.5 bg-indigo-600 text-white rounded text-xs  hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95"
             >
               Search
-            </button>
+            </Button>
           </div>
         </div>
       </Card>
 
       {/* SECTION 2: CLIENT REQUIREMENTS TABLE */}
-      <Card className="">
-        <div className="border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
-          <h2 className="text-md  text-slate-900 flex items-center gap-2 ">
-            <FileText className="w-5 h-5 text-indigo-600" />
+      <Card className="overflow-hidden">
+        <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-white">
+          <h2 className="text-lg  text-slate-800 flex items-center gap-2">
+            <FileText className="w-5 h-5 text-rose-500" />
             Client Requirements
           </h2>
         </div>
-        <div className="p-2">
+        <div className="p-0">
           <DataTable
             columns={requirementColumns}
             data={requirements}
             loading={reqLoading}
-            pageSize={5}
+            pageSize={10}
           />
         </div>
       </Card>
@@ -1410,58 +1550,13 @@ const CustomerDrawing = () => {
                 </div>
               ) : (
                 <div className="overflow-hidden border border-slate-200 rounded">
-                  <table className="min-w-full divide-y divide-slate-200 bg-white">
-                    <thead className="bg-slate-100">
-                      <tr>
-                        <th className="p-2 text-left text-xs  text-slate-700">Revision</th>
-                        <th className="p-2 text-left text-xs  text-slate-700">Date</th>
-                        <th className="p-2 text-left text-xs  text-slate-700">Description</th>
-                        <th className="p-2 text-left text-xs  text-slate-700">File</th>
-                        <th className="p-2 text-right text-xs  text-slate-700">Reference</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 text-xs">
-                      {revisions.length === 0 ? (
-                        <tr>
-                          <td colSpan="5" className="px-3 py-4 text-center text-slate-500 text-xs">
-                            No revisions found
-                          </td>
-                        </tr>
-                      ) : (
-                        revisions.map((rev, i) => (
-                          <tr key={i} className="hover:bg-indigo-50/30 transition-colors">
-                            <td className="p-2 whitespace-nowrap">
-                              <span className="p-1  bg-indigo-100 text-indigo-700 rounded text-xs ">{rev.revision_no || '0'}</span>
-                            </td>
-                            <td className="p-2 whitespace-nowrap text-slate-600 ">
-                              {new Date(rev.created_at).toLocaleDateString('en-IN')}
-                            </td>
-                            <td className="p-2 text-slate-600">{rev.description || '—'}</td>
-                            <td className="p-2 text-center">
-                              {rev.drawing_pdf ? (
-                                <button
-                                  onClick={() => handlePreview({ ...rev, file_path: rev.drawing_pdf })}
-                                  className="inline-flex items-center justify-center p-1 text-indigo-600 hover:text-indigo-900 hover:bg-indigo-100 rounded transition-colors"
-                                  title="View Drawing"
-                                >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                  </svg>
-                                </button>
-                              ) : (
-                                <span className="text-slate-400">—</span>
-                              )}
-                            </td>
-                            <td className="p-2 whitespace-nowrap text-right">
-                              <div className="text-slate-900 text-xs ">{rev.po_number || '—'}</div>
-                              <div className="text-xs text-slate-500">SO-{String(rev.sales_order_id).padStart(4, '0')}</div>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
+                  <DataTable
+                    columns={revisionColumns}
+                    data={revisions}
+                    pageSize={10}
+                    hideHeader
+                    emptyMessage="No revisions found"
+                  />
                 </div>
               )}
             </div>
@@ -1542,50 +1637,13 @@ const CustomerDrawing = () => {
                       </div>
 
                       <div className="overflow-hidden border border-slate-200 rounded">
-                        <table className="min-w-full divide-y divide-slate-100 text-xs">
-                          <thead className="bg-slate-100">
-                            <tr>
-                              <th className="p-2 text-left  text-slate-700">Drawing</th>
-                              <th className="p-2 text-left  text-slate-700">Description</th>
-                              <th className="p-2 text-center  text-slate-700">Qty</th>
-                              <th className="p-2 text-left  text-slate-700">Unit</th>
-                              <th className="p-2 text-right  text-slate-700">Price</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-100">
-                            {selectedApprovedItems.map((item) => (
-                              <tr key={item.id} className="hover:bg-emerald-50/30 transition-colors">
-                                <td className="p-2 whitespace-nowrap text-slate-900">
-                                  <div className="flex items-center gap-2 ">
-                                    {item.drawing_pdf && (
-                                      <button
-                                        onClick={() => handlePreview({ ...item, file_path: item.drawing_pdf })}
-                                        className="p-1 text-emerald-600 hover:bg-emerald-100 rounded transition-colors"
-                                        title="View Drawing"
-                                      >
-                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                                      </button>
-                                    )}
-                                    {item.drawing_no}
-                                  </div>
-                                </td>
-                                <td className="p-2 text-slate-600">{item.description || '—'}</td>
-                                <td className="p-2 text-center text-slate-900 ">{item.quantity}</td>
-                                <td className="p-2 text-slate-600">{item.unit}</td>
-                                <td className="p-2 text-right">
-                                  <input
-                                    type="number"
-                                    placeholder="0.00"
-                                    step="0.01"
-                                    value={quotePrices[item.id] || ''}
-                                    onChange={(e) => handlePriceChange(item.id, e.target.value)}
-                                    className="w-24 px-2 py-1 border border-slate-300 rounded text-right outline-none focus:ring-2 focus:ring-emerald-500 text-xs"
-                                  />
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                        <DataTable
+                          columns={approvedItemColumns}
+                          data={selectedApprovedItems}
+                          pageSize={100}
+                          hideHeader
+                          emptyMessage="No items selected"
+                        />
                       </div>
 
                       <div className="space-y-2 p-2 bg-slate-50 rounded border border-slate-200">
@@ -1979,7 +2037,7 @@ const CustomerDrawing = () => {
                     type="file"
                     name="file"
                     accept=".xlsx,.xls"
-                    className="absolute  w-[48%] h-[60px] cursor-pointer"
+                    className="absolute  w-[48%] h-[60px] cursor-pointer opacity-0"
                     onChange={handleFileChange}
                     onBlur={formik.handleBlur}
                   />
@@ -2001,7 +2059,7 @@ const CustomerDrawing = () => {
                     type="file"
                     name="zipFile"
                     accept=".zip,.rar,.7z"
-                    className="absolute  w-[48%] h-[60px] cursor-pointer"
+                    className="absolute  w-[48%] h-[60px] cursor-pointer opacity-0"
                     onChange={handleZipFileChange}
                   />
                   <div className="text-center">
@@ -2053,71 +2111,13 @@ const CustomerDrawing = () => {
       >
         {viewingClient && (
           <div className="space-y-4">
-            <div className="border border-slate-200 rounded-lg overflow-hidden">
-              <table className="min-w-full divide-y divide-slate-200">
-                <thead className="bg-slate-50">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">#</th>
-                    <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Drawing No</th>
-                    <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Description</th>
-                    <th className="px-4 py-3 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider">Revision</th>
-                    <th className="px-4 py-3 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider">Qty</th>
-                    <th className="px-4 py-3 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider">File</th>
-                    <th className="px-4 py-3 text-right text-[10px] font-bold text-slate-500 uppercase tracking-wider">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-slate-200">
-                  {viewingClient.drawings.map((drawing, idx) => (
-                    <tr key={drawing.id || idx} className="hover:bg-slate-50 transition-colors">
-                      <td className="px-4 py-3 text-xs text-slate-400">{idx + 1}</td>
-                      <td className="px-4 py-3 text-sm text-slate-900 font-medium">{drawing.drawing_no}</td>
-                      <td className="px-4 py-3 text-sm text-slate-500">{drawing.description || '—'}</td>
-                      <td className="px-4 py-3 text-sm text-center">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
-                          {drawing.revision || drawing.revision_no || '0'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-center text-indigo-600 font-medium">{drawing.qty || 1}</td>
-                      <td className="px-4 py-3 text-center">
-                        {(drawing.file_path || drawing.drawing_pdf) ? (
-                          <button
-                            onClick={() => handlePreview(drawing)}
-                            className="inline-flex items-center justify-center p-2 bg-indigo-50 text-indigo-600 rounded hover:bg-indigo-600 hover:text-white transition-all active:scale-95 shadow-sm"
-                            title="View Drawing"
-                          >
-                            <Eye size={15} />
-                          </button>
-                        ) : (
-                          <span className="text-slate-300 italic text-xs">No File</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => handleEdit(drawing)}
-                            className="p-1.5 text-amber-600 hover:bg-amber-50 rounded transition-all"
-                            title="Edit"
-                          >
-                            <Edit2 size={14} />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(drawing.id)}
-                            className="p-1.5 text-rose-600 hover:bg-rose-50 rounded transition-all"
-                            title="Delete"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                  {viewingClient.drawings.length === 0 && (
-                    <tr>
-                      <td colSpan="7" className="px-4 py-8 text-center text-slate-400 italic">No drawings found for this client</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+            <div className="border border-slate-200 rounded overflow-hidden">
+              <DataTable
+                columns={clientDrawingColumns}
+                data={viewingClient.drawings}
+                pageSize={10}
+                emptyMessage="No drawings found for this client"
+              />
             </div>
 
             <div className="flex justify-end pt-4">

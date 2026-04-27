@@ -144,6 +144,24 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null) => {
     let params = [itemCode, drawingNo];
 
     [rows] = await pool.query(query + ' ORDER BY c.created_at ASC', params);
+
+    // If still no rows, try latest from ANY sales order (not just master)
+    if (rows.length === 0) {
+      let fallbackQuery = `SELECT c.*, i.selling_rate as latest_selling_rate, i.valuation_rate as latest_valuation_rate, i.weight_per_unit as latest_weight_per_unit
+                 FROM sales_order_item_components c
+                 LEFT JOIN (
+                   SELECT item_code, MAX(selling_rate) as selling_rate, MAX(valuation_rate) as valuation_rate, MAX(weight_per_unit) as weight_per_unit
+                   FROM stock_balance 
+                   GROUP BY item_code
+                 ) i ON c.component_code = i.item_code
+                 WHERE c.sales_order_item_id IN (
+                    SELECT id FROM sales_order_items 
+                    WHERE (item_code = ? OR drawing_no = ?) 
+                    AND bom_cost > 0
+                    ORDER BY id DESC LIMIT 1
+                 )`;
+      [rows] = await pool.query(fallbackQuery + ' ORDER BY c.created_at ASC', params);
+    }
   }
 
   // Dynamically fetch latest BOM cost for Sub-Assemblies in BULK to avoid N+1 problem
@@ -223,7 +241,15 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null) => {
     diameter: (isHistorical && parseFloat(row.diameter) > 0) ? row.diameter : (row.diameter || row.latest_diameter || 0),
     outer_diameter: (isHistorical && parseFloat(row.outer_diameter) > 0) ? row.outer_diameter : (row.outer_diameter || row.latest_outer_diameter || 0),
     selling_rate: isHistorical ? (row.rate || row.latest_selling_rate) : row.latest_selling_rate,
-    valuation_rate: isHistorical ? (row.rate || row.latest_valuation_rate) : row.latest_valuation_rate
+    valuation_rate: isHistorical ? (row.rate || row.latest_valuation_rate) : row.latest_valuation_rate,
+    bom_cost: (() => {
+      const compCode = (row.component_code || row.componentCode || '').toUpperCase();
+      const g = (row.item_group || '').toUpperCase();
+      const isSA = (compCode.startsWith('SA-') || compCode.startsWith('SFG-') || g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY')) && !g.includes('FG');
+      if (isSA) return parseFloat(row.rate || 0);
+      // For materials: weight * valuation_rate
+      return (parseFloat(row.weight_per_pc || row.weight_per_unit || 0) * parseFloat(isHistorical ? (row.rate || row.latest_valuation_rate || 0) : (row.latest_valuation_rate || 0)));
+    })()
   }));
 };
 
@@ -949,8 +975,8 @@ const getApprovedBOMs = async () => {
       GROUP BY group_id
     ) latest ON (IFNULL(soi.bom_id, soi.id) = latest.group_id AND soi.id = latest.latest_id)
     WHERE (
-      TRIM(IFNULL(so.status, '')) IN ('CREATED', 'DESIGN_IN_REVIEW', 'DESIGN_Approved', 'BOM_SUBMITTED', 'BOM_Approved', 'PROCUREMENT_IN_PROGRESS', 'IN_PRODUCTION', 'PRODUCTION_COMPLETED', 'MATERIAL_PURCHASE_IN_PROGRESS', 'MATERIAL_READY')
-      OR soi.status IN ('DRAFT', 'PENDING')
+      TRIM(IFNULL(so.status, '')) IN ('CREATED', 'DESIGN_IN_REVIEW', 'DESIGN_Approved', 'BOM_SUBMITTED', 'BOM_Approved', 'PROCUREMENT_IN_PROGRESS', 'IN_PRODUCTION', 'PRODUCTION_COMPLETED', 'MATERIAL_PURCHASE_IN_PROGRESS', 'MATERIAL_READY', 'QUOTATION_SENT', 'QUOTATION_REJECTED', 'QUOTATION_ACCEPTED', 'APPROVED')
+      OR soi.status IN ('DRAFT', 'PENDING', 'Approved')
       OR soi.sales_order_id IS NULL
     )
     AND (

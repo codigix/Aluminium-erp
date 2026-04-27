@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Card, DataTable } from '../components/ui.jsx';
+import { Card, DataTable, Tabs } from '../components/ui.jsx';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
-import { Eye, RotateCw, Clock, History, Check, X, ExternalLink, FileText } from 'lucide-react';
+import { Eye, RotateCw, Clock, History, Check, X, ExternalLink, FileText, Send } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
 
@@ -257,22 +257,15 @@ const BOMApproval = () => {
         </button>
       </div>
 
-      <div className="flex gap-2 bg-slate-100 p-1.5 rounded w-fit">
-        <button
-          onClick={() => setActiveTab('pending')}
-          className={`flex items-center gap-2 px-6 py-2.5 rounded text-xs  transition-all duration-200 ${activeTab === 'pending' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-        >
-          <Clock className="w-4 h-4" />
-          Pending Approval
-        </button>
-        <button
-          onClick={() => setActiveTab('history')}
-          className={`flex items-center gap-2 px-6 py-2.5 rounded text-xs  transition-all duration-200 ${activeTab === 'history' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-        >
-          <History className="w-4 h-4" />
-          Approval History
-        </button>
-      </div>
+      <Tabs
+        tabs={[
+          { label: 'Pending Approval', value: 'pending', icon: Clock },
+          { label: 'Approval History', value: 'history', icon: History }
+        ]}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        className="mb-4"
+      />
 
       <Card className="">
         <div className="p-2">

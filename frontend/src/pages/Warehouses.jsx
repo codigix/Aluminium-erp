@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
-import { Card, Modal, FormControl, DataTable, StatusBadge } from '../components/ui.jsx';
+import { Card, Modal, FormControl, DataTable, StatusBadge, Tabs, Button } from '../components/ui.jsx';
+import { Warehouse, LayoutList, PackageSearch, History } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
 
@@ -382,24 +383,15 @@ const Warehouses = () => {
         )}
       </div>
 
-      <div className="flex gap-1 bg-slate-100 p-1 rounded  w-fit">
-        <button
-          onClick={() => navigate('/warehouses')}
-          className={`p-2  rounded  text-sm  transition-all ${
-            activeTab === 'list' ? 'bg-white text-orange-600 ' : 'text-slate-500 hover:text-slate-700'
-          }`}
-        >
-          Warehouse List
-        </button>
-        <button
-          onClick={() => navigate('/warehouses/allocation')}
-          className={`p-2  rounded  text-sm  transition-all ${
-            activeTab === 'allocation' ? 'bg-white text-orange-600 ' : 'text-slate-500 hover:text-slate-700'
-          }`}
-        >
-          Material Allocation
-        </button>
-      </div>
+      <Tabs
+        tabs={[
+          { label: 'Warehouse List', value: 'list', icon: LayoutList },
+          { label: 'Material Allocation', value: 'allocation', icon: PackageSearch }
+        ]}
+        activeTab={activeTab}
+        onTabChange={(val) => navigate(val === 'list' ? '/warehouses' : '/warehouses/allocation')}
+        className="mb-4"
+      />
 
       {activeTab === 'list' ? (
         <DataTable 

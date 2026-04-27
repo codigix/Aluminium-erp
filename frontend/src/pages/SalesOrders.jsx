@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, DataTable, FormControl, StatusBadge, Badge, SearchableSelect } from '../components/ui.jsx';
+import { Card, DataTable, FormControl, StatusBadge, Badge, SearchableSelect, Tabs, Button } from '../components/ui.jsx';
 import { Truck } from 'lucide-react';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
 import {
@@ -8,6 +8,7 @@ import {
   Trash2,
   Plus,
   Package,
+  RefreshCw,
   ChevronRight,
   ArrowLeft,
   Save,
@@ -833,43 +834,45 @@ const SalesOrders = () => {
     const completedOrders = orders.filter(o => ['COMPLETED', 'FULFILLED', 'DELIVERED'].includes(o.status?.toUpperCase())).length;
 
     return (
-      <div className=" pb-10">
-        <div className=" flex flex-col md:flex-row md:items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-
+      <div className="space-y-6 animate-in fade-in duration-500 pb-10">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-rose-50 text-rose-600 rounded-xl shadow-sm">
+              <Package size={24} />
+            </div>
             <div>
-              <h1 className="text-xl  text-slate-900 ">Sales Orders</h1>
-              <div className="flex items-center gap-2 mt-1">
-                <span className="text-xs font-semibold text-slate-500 flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded bg-indigo-500" />
+              <h1 className="text-2xl  text-slate-900 tracking-tight">Sales Orders</h1>
+              <div className="flex items-center gap-3 mt-1">
+                <span className="text-xs  text-slate-500 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
                   {totalOrders} Total
                 </span>
-                <span className="text-xs font-semibold text-slate-500 flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded bg-amber-500" />
+                <span className="text-xs  text-amber-600 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
                   {pendingOrders} Processing
                 </span>
-                <span className="text-xs font-semibold text-slate-500 flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded bg-emerald-500" />
+                <span className="text-xs  text-emerald-600 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                   {completedOrders} Finalized
                 </span>
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button
+          <div className="flex items-center gap-3">
+            <Button
+              variant="secondary"
               onClick={fetchOrders}
-              className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all border border-slate-100"
+              icon={RefreshCw}
+              className={loading ? 'animate-spin' : ''}
               title="Refresh Data"
-            >
-              <Loader2 className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
-            </button>
-            <button
+            />
+            <Button
+              variant="primary"
               onClick={handleAddOrder}
-              className="flex items-center gap-2 p-2  bg-indigo-600 text-white rounded  hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 active:scale-95 text-xs "
+              icon={Plus}
             >
-              <Plus className="w-3 h-3" />
               Create New Order
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -899,49 +902,52 @@ const SalesOrders = () => {
   const totalAmount = costWithProfit + gstAmount;
 
   return (
-    <div className="space-y-2 pb-20">
-      <div className="flex items-center gap-2 bg-white p-2 rounded  border border-slate-200  sticky top-0 z-10">
-        <button
-          onClick={() => {
-            setViewMode('list');
-            if (window.location.pathname !== '/sales-order') {
-              window.history.pushState({}, '', '/sales-order');
-            }
-          }}
-          className="p-2 hover:bg-slate-100 rounded  transition-colors text-slate-500"
-        >
-          <ArrowLeft className="w-3 h-3" />
-        </button>
-        <div className="flex-1">
-          <div className="flex items-center gap-2">
-            <div className="p-2 bg-indigo-50 rounded ">
-              <FileText className="w-5 h-5 text-indigo-600" />
-            </div>
-            <div>
-              <h1 className="text-xl text-slate-900">{formMode === 'create' ? 'New Sales Order' : formMode === 'edit' ? 'Edit Sales Order' : 'View Sales Order'}</h1>
-              <p className="text-xs text-slate-500">Create and configure sales orders</p>
-            </div>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
+    <div className="space-y-6 pb-20 animate-in fade-in duration-500">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 bg-white border border-slate-200 rounded-xl sticky top-0 z-30 shadow-sm">
+        <div className="flex items-center gap-4">
+          <Button
+            variant="secondary"
             onClick={() => {
               setViewMode('list');
               if (window.location.pathname !== '/sales-order') {
                 window.history.pushState({}, '', '/sales-order');
               }
             }}
-            className="p-2 bg-slate-100 text-slate-600 text-xs rounded  hover:bg-slate-200 transition-colors "
+            icon={ArrowLeft}
+          />
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-rose-50 text-rose-600 rounded">
+              <FileText className="w-6 h-6" />
+            </div>
+            <div>
+              <h1 className="text-xl  text-slate-900 leading-tight">
+                {formMode === 'create' ? 'New Sales Order' : formMode === 'edit' ? 'Edit Sales Order' : 'View Sales Order'}
+              </h1>
+              <p className="text-xs text-slate-500 font-medium">Create and configure sales orders</p>
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setViewMode('list');
+              if (window.location.pathname !== '/sales-order') {
+                window.history.pushState({}, '', '/sales-order');
+              }
+            }}
           >
             Cancel
-          </button>
+          </Button>
           {formMode !== 'view' && (
-            <button
+            <Button
+              variant="primary"
               onClick={handleSaveOrder}
-              className="p-2 bg-indigo-600 text-white rounded  hover:bg-indigo-700 transition-colors  shadow-lg text-xs text-xs"
+              icon={Save}
+              disabled={loading}
             >
-              {formMode === 'create' ? 'Save Sales Order' : 'Update Sales Order'}
-            </button>
+              {loading ? 'Saving...' : (formMode === 'create' ? 'Save Sales Order' : 'Update Sales Order')}
+            </Button>
           )}
         </div>
       </div>

@@ -423,7 +423,7 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
         {invoice && (
           <div className="bg-gradient-to-br from-emerald-50 to-slate-50 border border-emerald-100 rounded  p-5 space-y-3">
             <div className="flex items-center justify-between">
-              <h3 className=" text-slate-900 text-sm  tracking-wide">Invoice Summary</h3>
+              <h3 className=" text-slate-900 text-xs  tracking-wide">Invoice Summary</h3>
             </div>
             <div className="grid grid-cols-2 gap-2 text-xs">
               <div>
@@ -448,7 +448,7 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
 
         {/* Payment Details */}
         <div className="space-y-2">
-          <h3 className=" text-slate-900 text-sm  tracking-wide">Payment Details</h3>
+          <h3 className=" text-slate-900 text-xs  tracking-wide">Payment Details</h3>
           <div className="grid grid-cols-2 gap-2">
             <FormControl label="Payment Amount *">
               <div className="relative">

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react';
 import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
-import { Card, Modal, FormControl, StatusBadge, SearchableSelect } from '../components/ui.jsx';
+import { Card, Modal, FormControl, StatusBadge, SearchableSelect, Tabs, Button } from '../components/ui.jsx';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
 import {
   ClipboardList, Activity, CheckCircle, TrendingUp,
@@ -73,7 +73,7 @@ const TimePicker = ({ value, ampmValue, onTimeChange, onAMPMChange, label, small
               left: '0',
               minWidth: `${coords.width}px`
             }}
-            className="z-[101] bg-white border border-slate-200 rounded-lg shadow-2xl flex overflow-hidden h-64 animate-in fade-in zoom-in-95 duration-200 origin-top"
+            className="z-[101] bg-white border border-slate-200 rounded shadow-2xl flex overflow-hidden h-64 animate-in fade-in zoom-in-95 duration-200 origin-top"
           >
             {/* Hours */}
             <div className="flex-1 overflow-y-auto scrollbar-hide border-r border-slate-50 py-1 bg-white">
@@ -81,7 +81,7 @@ const TimePicker = ({ value, ampmValue, onTimeChange, onAMPMChange, label, small
                 <div
                   key={h}
                   onClick={() => onTimeChange(`${h}:${minute}`)}
-                  className={`px-3 py-2 text-xs text-center cursor-pointer transition-colors ${hour === h ? 'bg-indigo-600 text-white font-bold' : 'text-slate-600 hover:bg-slate-50'
+                  className={`px-3 py-2 text-xs text-center cursor-pointer transition-colors ${hour === h ? 'bg-indigo-600 text-white ' : 'text-slate-600 hover:bg-slate-50'
                     }`}
                 >
                   {h}
@@ -94,7 +94,7 @@ const TimePicker = ({ value, ampmValue, onTimeChange, onAMPMChange, label, small
                 <div
                   key={m}
                   onClick={() => onTimeChange(`${hour}:${m}`)}
-                  className={`px-3 py-2 text-xs text-center cursor-pointer transition-colors ${minute === m ? 'bg-indigo-600 text-white font-bold' : 'text-slate-600 hover:bg-slate-50'
+                  className={`px-3 py-2 text-xs text-center cursor-pointer transition-colors ${minute === m ? 'bg-indigo-600 text-white ' : 'text-slate-600 hover:bg-slate-50'
                     }`}
                 >
                   {m}
@@ -107,7 +107,7 @@ const TimePicker = ({ value, ampmValue, onTimeChange, onAMPMChange, label, small
                 <div
                   key={p}
                   onClick={() => onAMPMChange(p)}
-                  className={`px-3 py-2 text-xs text-center cursor-pointer transition-colors ${displayAMPM === p ? 'bg-indigo-600 text-white font-bold' : 'text-slate-600 hover:bg-slate-50'
+                  className={`px-3 py-2 text-xs text-center cursor-pointer transition-colors ${displayAMPM === p ? 'bg-indigo-600 text-white ' : 'text-slate-600 hover:bg-slate-50'
                     }`}
                 >
                   {p}
@@ -1639,7 +1639,7 @@ const JobCard = () => {
               </div>
               <div className="text-center border-l border-slate-100 pl-8">
                 <p className="text-xs text-indigo-500 mb-1.5 font-medium">Net Time (Per Unit)</p>
-                <p className="text-sm font-bold text-indigo-600">
+                <p className="text-sm  text-indigo-600">
                   {parseFloat(selectedJC.std_time || 0).toFixed(0)} <span className="text-[10px] text-indigo-400 lowercase">{(selectedJC.time_uom || 'Min').toLowerCase()}</span>
                   <span className="text-[9px] text-indigo-300 ml-1">/ unit</span>
                 </p>
@@ -1651,14 +1651,14 @@ const JobCard = () => {
                       selectedJC.status === 'COMPLETED' ? 'bg-emerald-500' :
                         'bg-slate-400'
                     }`}></span>
-                  <p className={`text-sm font-bold tracking-tight ${selectedJC.status === 'IN_PROGRESS' ? 'text-amber-600' :
+                  <p className={`text-sm  tracking-tight ${selectedJC.status === 'IN_PROGRESS' ? 'text-amber-600' :
                       selectedJC.status === 'COMPLETED' ? 'text-emerald-600' :
                         'text-slate-600'
                     }`}>
                     {selectedJC.status === 'IN_PROGRESS' ? 'Running' : selectedJC.status === 'COMPLETED' ? 'Completed' : selectedJC.status}
                   </p>
                 </div>
-                <p className="text-[10px] font-medium text-slate-400 mt-1 uppercase tracking-wider">{selectedJC.operation_name}</p>
+                <p className="text-[10px] font-medium text-slate-400 mt-1  ">{selectedJC.operation_name}</p>
               </div>
             </div>
           </div>
@@ -1887,166 +1887,14 @@ const JobCard = () => {
                   </div>
                 </div>
 
-                <div className="mt-12 overflow-visible">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead className="border-b border-slate-100">
-                      <tr>
-                        <th className="p-2  text-slate-400   text-xs">Day</th>
-                        <th className="p-2  text-slate-400   text-xs">Date / Shift</th>
-                        <th className="p-2  text-slate-400   text-xs">Operator</th>
-                        <th className="p-2  text-slate-400   text-xs text-center">Time Interval</th>
-                        <th className="p-2  text-slate-400   text-xs text-right">Produced Qty</th>
-                        <th className="p-2  text-slate-400   text-xs text-right">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-50">
-                      {logs.timeLogs.length === 0 ? (
-                        <tr>
-                          <td colSpan="6" className="py-12 text-center text-slate-400 italic">No data available</td>
-                        </tr>
-                      ) : (
-                        logs.timeLogs.map((log, index) => {
-                          const isEditing = editingTimeLogId === log.id;
-                          const day = log.day || '-';
-
-                          if (isEditing) {
-                            return (
-                              <tr key={log.id} className="bg-indigo-50/30">
-                                <td className="p-2">
-                                  <input
-                                    type="number"
-                                    value={editTimeLogForm.day}
-                                    className="w-12 px-1 py-1 border rounded text-xs"
-                                    onChange={e => setEditTimeLogForm({ ...editTimeLogForm, day: e.target.value })}
-                                  />
-                                </td>
-                                <td className="p-2">
-                                  <input
-                                    type="date"
-                                    value={editTimeLogForm.logDate}
-                                    className="block w-full px-1 py-1 border rounded text-xs mb-1"
-                                    onChange={e => setEditTimeLogForm({ ...editTimeLogForm, logDate: e.target.value })}
-                                  />
-                                  <select
-                                    value={editTimeLogForm.shift}
-                                    className="w-full px-1 py-1 border rounded text-xs"
-                                    onChange={e => setEditTimeLogForm({ ...editTimeLogForm, shift: e.target.value })}
-                                  >
-                                    <option value="SHIFT_A">A</option>
-                                    <option value="SHIFT_B">B</option>
-                                    <option value="SHIFT_C">C</option>
-                                  </select>
-                                </td>
-                                <td className="p-2">
-                                  <select
-                                    value={editTimeLogForm.operatorId}
-                                    className="w-full px-1 py-1 border rounded text-xs"
-                                    onChange={e => setEditTimeLogForm({ ...editTimeLogForm, operatorId: e.target.value })}
-                                  >
-                                    {users.map(u => <option key={u.id} value={u.id}>{u.username}</option>)}
-                                  </select>
-                                </td>
-                                <td className="p-2">
-                                  <div className="flex items-center gap-1 justify-center min-w-[200px]">
-                                    <div className="flex-1">
-                                      <TimePicker
-                                        small
-                                        value={editTimeLogForm.startTime}
-                                        ampmValue={editTimeLogForm.startAMPM}
-                                        onTimeChange={(newTime) => setEditTimeLogForm({ ...editTimeLogForm, startTime: newTime })}
-                                        onAMPMChange={(newAMPM) => setEditTimeLogForm({ ...editTimeLogForm, startAMPM: newAMPM })}
-                                      />
-                                    </div>
-                                    <ChevronRight className="w-3 h-3 text-slate-300 mx-0.5" />
-                                    <div className="flex-1">
-                                      <TimePicker
-                                        small
-                                        value={editTimeLogForm.endTime}
-                                        ampmValue={editTimeLogForm.endAMPM}
-                                        onTimeChange={(newTime) => setEditTimeLogForm({ ...editTimeLogForm, endTime: newTime })}
-                                        onAMPMChange={(newAMPM) => setEditTimeLogForm({ ...editTimeLogForm, endAMPM: newAMPM })}
-                                      />
-                                    </div>
-                                  </div>
-                                  <div className="text-[10px] text-center text-indigo-500 mt-1 font-medium">
-                                    ⏱ {calculateTotalMins(editTimeLogForm.startTime, editTimeLogForm.startAMPM, editTimeLogForm.endTime, editTimeLogForm.endAMPM)} mins
-                                  </div>
-                                </td>
-                                <td className="p-2">
-                                  <input
-                                    type="number"
-                                    value={editTimeLogForm.producedQty}
-                                    className="w-full px-1 py-1 border rounded text-xs text-right "
-                                    onChange={e => setEditTimeLogForm({ ...editTimeLogForm, producedQty: e.target.value })}
-                                  />
-                                </td>
-                                <td className="p-2 text-right">
-                                  <div className="flex items-center justify-end gap-2">
-                                    <button onClick={() => updateTimeLog(log.id, editTimeLogForm)} className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded transition-colors"><Save className="w-4 h-4" /></button>
-                                    <button onClick={() => setEditingTimeLogId(null)} className="p-1.5 text-rose-600 hover:bg-rose-50 rounded transition-colors"><X className="w-4 h-4" /></button>
-                                  </div>
-                                </td>
-                              </tr>
-                            );
-                          }
-
-                          return (
-                            <tr key={log.id} className="hover:bg-slate-50/50 transition-colors">
-                              <td className="p-2">
-                                <span className="w-7 h-7 bg-slate-100 rounded flex items-center justify-center text-xs  text-slate-500">
-                                  {day}
-                                </span>
-                              </td>
-                              <td className="p-2">
-                                <div className=" text-slate-700">{new Date(log.log_date).toLocaleDateString('en-GB')}</div>
-                                <div className="text-xs text-slate-400   ">{log.shift}</div>
-                              </td>
-                              <td className="p-2">
-                                <div className="flex items-center gap-2">
-                                  <div className="w-3 h-3 bg-slate-100 rounded flex items-center justify-center text-xs  text-slate-600">
-                                    {log.operator_name?.[0]}
-                                  </div>
-                                  <span className="text-slate-600">{log.operator_name}</span>
-                                </div>
-                              </td>
-                              <td className="p-2 text-center">
-                                <div className="text-slate-600">{formatLocalTime(log.start_time)} - {formatLocalTime(log.end_time)}</div>
-                                <div className="text-xs text-indigo-500 ">{calculateISODuration(log.start_time, log.end_time)} mins</div>
-                              </td>
-                              <td className="p-2 text-right  text-indigo-600  ">
-                                {parseFloat(log.produced_qty).toFixed(3)} UNITS
-                              </td>
-                              <td className="p-2 text-right">
-                                <div className="flex items-center justify-end gap-1">
-                                  <button onClick={() => setViewingTimeLog(log)} className="p-1.5 text-slate-400 hover:text-indigo-600 transition-colors"><Eye className="w-3.5 h-3.5" /></button>
-                                  <button onClick={() => handleEditTimeLog(log)} className="p-1.5 text-slate-400 hover:text-amber-600 transition-colors"><Edit2 className="w-3.5 h-3.5" /></button>
-                                  <button onClick={() => deleteTimeLog(log.id)} className="p-1.5 text-slate-400 hover:text-rose-600 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-
-                <div className="mt-6 pt-6 border-t border-slate-50 flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-xs  text-slate-400  ">
-                    <span>Rows per page:</span>
-                    <select className="bg-transparent outline-none cursor-pointer">
-                      <option>10</option>
-                    </select>
-                  </div>
-                  <div className="flex items-center gap-6">
-                    <span className="text-xs  text-slate-400  ">
-                      Page 1 of {Math.ceil(logs.timeLogs.length / 10) || 0} <span className="text-slate-300 ml-1">({logs.timeLogs.length} total)</span>
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <button className="p-1 text-slate-300" disabled><ChevronLeft className="w-4 h-4" /></button>
-                      <button className="px-4 py-1 border border-slate-200 rounded text-xs  text-slate-600   hover:bg-slate-50 transition-colors">Next</button>
-                    </div>
-                  </div>
+                <div className="mt-8 overflow-hidden rounded-xl border border-slate-100 shadow-sm bg-white">
+                  <DataTable
+                    columns={timeLogColumns}
+                    data={logs.timeLogs}
+                    loading={loading}
+                    pageSize={10}
+                    emptyMessage="No time logs recorded for this operation"
+                  />
                 </div>
               </div>
             </div>
@@ -2079,186 +1927,14 @@ const JobCard = () => {
             </div>
           </section>
 
-          <section className="mt-8 overflow-visible bg-white p-6 rounded border border-slate-100 shadow-sm">
-            <div className="overflow-visible">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead className="border-b border-slate-100">
-                  <tr>
-                    <th className="p-2  text-slate-400   text-xs">Day</th>
-                    <th className="p-2  text-slate-400   text-xs">Date / Shift</th>
-                    <th className="p-2  text-slate-400   text-xs">Status</th>
-                    <th className="p-2  text-slate-400   text-xs">Notes</th>
-                    <th className="p-2  text-slate-400   text-xs text-center">Produced</th>
-                    <th className="p-2  text-slate-400   text-xs text-center font-bold text-emerald-600">Accepted</th>
-                    <th className="p-2  text-slate-400   text-xs text-center text-rose-600">Rejected</th>
-                    <th className="p-2  text-slate-400   text-xs text-center">Scrap</th>
-                    <th className="p-2  text-slate-400   text-xs text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                  {logs.qualityLogs.length === 0 ? (
-                    <tr>
-                      <td colSpan="6" className="py-12 text-center text-slate-400 italic">No data available</td>
-                    </tr>
-                  ) : (
-                    logs.qualityLogs.map((log, index) => {
-                      const isEditing = editingQualityLogId === log.id;
-                      const day = log.day || '-';
-
-                      if (isEditing) {
-                        return (
-                          <tr key={log.id} className="bg-emerald-50/30">
-                            <td className="p-2">
-                              <input
-                                type="number"
-                                value={editQualityLogForm.day}
-                                className="w-12 px-1 py-1 border rounded text-xs"
-                                onChange={e => setEditQualityLogForm({ ...editQualityLogForm, day: e.target.value })}
-                              />
-                            </td>
-                            <td className="p-2">
-                              <input
-                                type="date"
-                                value={editQualityLogForm.checkDate}
-                                className="block w-full px-1 py-1 border rounded text-xs mb-1"
-                                onChange={e => setEditQualityLogForm({ ...editQualityLogForm, checkDate: e.target.value })}
-                              />
-                              <select
-                                value={editQualityLogForm.shift}
-                                className="w-full px-1 py-1 border rounded text-xs"
-                                onChange={e => setEditQualityLogForm({ ...editQualityLogForm, shift: e.target.value })}
-                              >
-                                <option value="SHIFT_A">A</option>
-                                <option value="SHIFT_B">B</option>
-                                <option value="SHIFT_C">C</option>
-                              </select>
-                            </td>
-                            <td className="p-2" colSpan="2">
-                              <input
-                                type="text"
-                                placeholder="Notes..."
-                                value={editQualityLogForm.notes || ''}
-                                className="w-full px-1 py-1 border rounded text-xs"
-                                onChange={e => setEditQualityLogForm({ ...editQualityLogForm, notes: e.target.value })}
-                              />
-                            </td>
-                            <td className="p-2">
-                              <input
-                                type="number"
-                                value={editQualityLogForm.acceptedQty}
-                                className="w-full px-1 py-1 border rounded text-xs text-emerald-600  text-center"
-                                onChange={e => setEditQualityLogForm({ ...editQualityLogForm, acceptedQty: e.target.value })}
-                              />
-                            </td>
-                            <td className="p-2">
-                              <input
-                                type="number"
-                                value={editQualityLogForm.rejectedQty}
-                                className="w-full px-1 py-1 border rounded text-xs text-rose-600  text-center"
-                                onChange={e => setEditQualityLogForm({ ...editQualityLogForm, rejectedQty: e.target.value })}
-                              />
-                            </td>
-                            <td className="p-2">
-                              <input
-                                type="number"
-                                value={editQualityLogForm.scrapQty}
-                                className="w-full px-1 py-1 border rounded text-xs text-slate-600  text-center"
-                                onChange={e => setEditQualityLogForm({ ...editQualityLogForm, scrapQty: e.target.value })}
-                              />
-                            </td>
-                            <td className="p-2 text-right">
-                              <div className="flex items-center justify-end gap-2">
-                                <button onClick={() => updateQualityLog(log.id, editQualityLogForm)} className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded transition-colors"><Save className="w-4 h-4" /></button>
-                                <button onClick={() => setEditingQualityLogId(null)} className="p-1.5 text-rose-600 hover:bg-rose-50 rounded transition-colors"><X className="w-4 h-4" /></button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      }
-
-                      return (
-                        <tr key={log.id} className="hover:bg-slate-50/50 transition-colors">
-                          <td className="p-2">
-                            <span className="w-7 h-7 bg-slate-100 rounded flex items-center justify-center text-xs  text-slate-500">
-                              {day}
-                            </span>
-                          </td>
-                          <td className="p-2">
-                            <div className=" text-slate-700">{formatDisplayDate(log.check_date)}</div>
-                            <div className="text-xs text-slate-400   ">{log.shift}</div>
-                          </td>
-                          <td className="p-2">
-                            <div className={`inline-flex items-center px-2 py-0.5 rounded text-xs  border ${log.status?.trim() === 'APPROVED'
-                                ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
-                                : 'bg-amber-50 text-amber-600 border-amber-100'
-                              }`}>
-                              <Clock className="w-2.5 h-2.5 mr-1" />
-                              {log.status?.trim() === 'APPROVED' ? 'APPROVED' : 'Pending Approval'}
-                            </div>
-                          </td>
-                          <td className="p-2">
-                            <div className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs  border ${(log.rejected_qty > 0 || log.scrap_qty > 0)
-                                ? 'bg-rose-50 text-rose-600 border-rose-100'
-                                : 'bg-emerald-50 text-emerald-600 border-emerald-100'
-                              }`}>
-                              <span className="mr-1 opacity-60">
-                                {(log.rejected_qty > 0 || log.scrap_qty > 0) ? 'Rejected' : 'Passed'}
-                              </span>
-                              {log.rejection_reason || log.notes || 'No notes'}
-                            </div>
-                          </td>
-                          <td className="p-2 text-center font-medium text-slate-600">
-                            {parseFloat(log.inspected_qty || 0).toLocaleString()}
-                          </td>
-                          <td className="p-2 text-center font-bold text-emerald-600">
-                            {parseFloat(log.accepted_qty || 0).toLocaleString()}
-                          </td>
-                          <td className="p-2 text-center  text-rose-600">
-                            {parseFloat(log.rejected_qty || 0).toLocaleString()}
-                          </td>
-                          <td className="p-2 text-center  text-slate-600">
-                            {parseFloat(log.scrap_qty || 0).toLocaleString()}
-                          </td>
-                          <td className="p-2 text-right">
-                            <div className="flex items-center justify-end gap-1">
-                              <button onClick={() => setViewingQualityLog(log)} className="p-1.5 text-slate-400 hover:text-indigo-600 transition-colors" title="View"><Eye className="w-3.5 h-3.5" /></button>
-
-                              <button
-                                onClick={() => updateQualityLog(log.id, { status: 'APPROVED' })}
-                                disabled={log.status?.trim() === 'APPROVED'}
-                                className={`p-1.5 rounded transition-colors ${log.status?.trim() === 'APPROVED' ? 'text-emerald-500 cursor-default' : 'text-slate-400 hover:text-emerald-600'
-                                  }`}
-                                title={log.status?.trim() === 'APPROVED' ? 'APPROVED' : 'Verify'}
-                              >
-                                <ShieldCheck className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="mt-6 pt-6 border-t border-slate-50 flex items-center justify-between">
-              <div className="flex items-center gap-2 text-xs  text-slate-400  ">
-                <span>Rows per page:</span>
-                <select className="bg-transparent outline-none cursor-pointer">
-                  <option>10</option>
-                </select>
-              </div>
-              <div className="flex items-center gap-6">
-                <span className="text-xs  text-slate-400  ">
-                  Page 1 of {Math.ceil(logs.qualityLogs.length / 10) || 0} <span className="text-slate-300 ml-1">({logs.qualityLogs.length} total)</span>
-                </span>
-                <div className="flex items-center gap-2">
-                  <button className="p-1 text-slate-300" disabled><ChevronLeft className="w-4 h-4" /></button>
-                  <button className="px-4 py-1 border border-slate-200 rounded text-xs  text-slate-600   hover:bg-slate-50 transition-colors">Next</button>
-                </div>
-              </div>
-            </div>
+          <section className="mt-8 overflow-hidden rounded-xl border border-slate-100 shadow-sm bg-white">
+            <DataTable
+              columns={qualityLogColumns}
+              data={logs.qualityLogs}
+              loading={loading}
+              pageSize={10}
+              emptyMessage="No quality inspection logs found"
+            />
           </section>
 
           {/* 3. Operational Downtime Section */}
@@ -2369,71 +2045,14 @@ const JobCard = () => {
                   </button>
                 </div>
 
-                <div className="mt-12 overflow-visible">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead className="border-b border-slate-100">
-                      <tr>
-                        <th className="p-2  text-slate-400   text-xs">Day</th>
-                        <th className="p-2  text-slate-400   text-xs">Date / Shift</th>
-                        <th className="p-2  text-slate-400   text-xs">Category / Reason</th>
-                        <th className="p-2  text-slate-400   text-xs text-center">Interval</th>
-                        <th className="p-2  text-slate-400   text-xs text-right">Duration</th>
-                        <th className="p-2  text-slate-400   text-xs text-right">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-50">
-                      {logs.downtimeLogs.length === 0 ? (
-                        <tr>
-                          <td colSpan="6" className="py-12 text-center text-slate-400 italic">No data available</td>
-                        </tr>
-                      ) : (
-                        logs.downtimeLogs.map((log, index) => (
-                          <tr key={log.id} className="hover:bg-slate-50/50 transition-colors">
-                            <td className="p-2">
-                              <span className="w-7 h-7 bg-slate-100 rounded flex items-center justify-center text-xs  text-slate-500">
-                                {log.day || '-'}
-                              </span>
-                            </td>
-                            <td className="p-2">
-                              <div className=" text-slate-700">{new Date(log.downtime_date).toLocaleDateString('en-GB')}</div>
-                              <div className="text-xs text-slate-400   ">{log.shift}</div>
-                            </td>
-                            <td className="p-2  text-amber-600  ">{log.downtime_type}</td>
-                            <td className="p-2 text-center">
-                              <div className="text-slate-600">{formatLocalTime(log.start_time)} - {formatLocalTime(log.end_time)}</div>
-                              <div className="text-xs text-amber-500 ">{calculateISODuration(log.start_time, log.end_time)} mins</div>
-                            </td>
-                            <td className="p-2 text-right  text-slate-700">
-                              {calculateISODuration(log.start_time, log.end_time)} Min
-                            </td>
-                            <td className="p-2 text-right">
-                              <button onClick={() => deleteDowntimeLog(log.id)} className="p-1.5 text-slate-400 hover:text-rose-600 transition-colors">
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-
-                <div className="mt-6 pt-6 border-t border-slate-50 flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-xs  text-slate-400  ">
-                    <span>Rows per page:</span>
-                    <select className="bg-transparent outline-none cursor-pointer">
-                      <option>10</option>
-                    </select>
-                  </div>
-                  <div className="flex items-center gap-6">
-                    <span className="text-xs  text-slate-400  ">
-                      Page 1 of {Math.ceil(logs.downtimeLogs.length / 10) || 0} <span className="text-slate-300 ml-1">({logs.downtimeLogs.length} total)</span>
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <button className="p-1 text-slate-300" disabled><ChevronLeft className="w-4 h-4" /></button>
-                      <button className="px-4 py-1 border border-slate-200 rounded text-xs  text-slate-600   hover:bg-slate-50 transition-colors">Next</button>
-                    </div>
-                  </div>
+                <div className="mt-8 overflow-hidden rounded-xl border border-slate-100 shadow-sm bg-white">
+                  <DataTable
+                    columns={downtimeLogColumns}
+                    data={logs.downtimeLogs}
+                    loading={loading}
+                    pageSize={10}
+                    emptyMessage="No downtime recorded for this session"
+                  />
                 </div>
               </div>
             </div>
@@ -2566,140 +2185,14 @@ const JobCard = () => {
 
             <p className="text-xs  text-slate-400 italic px-1">Consolidated daily and shift-wise production metrics</p>
 
-            <div className="bg-white rounded  border border-slate-100 shadow-sm">
-              <div className="p-0">
-                {consolidatedReport.length === 0 ? (
-                  <div className="p-12 text-center">
-                    <p className="text-xs text-slate-400 italic">No data available</p>
-                  </div>
-                ) : (
-                  <div className="w-full overflow-visible">
-                    <table className="w-full text-left text-xs">
-                      <thead className="bg-slate-50 border-b border-slate-100">
-                        <tr>
-                          <th className="p-2  text-slate-700   text-xs">Date</th>
-                          <th className="p-2  text-slate-700   text-xs">Shift</th>
-                          <th className="p-2  text-slate-700   text-xs">Operator</th>
-                          <th className="p-2  text-slate-700   text-xs text-center">Mins</th>
-                          <th className="p-2  text-slate-700   text-xs text-center">Produced</th>
-                          <th className="p-2  text-slate-700   text-xs text-center">Accepted</th>
-                          <th className="p-2  text-slate-700   text-xs text-center">Rejected</th>
-                          <th className="p-2  text-slate-700   text-xs text-center">Scrap</th>
-                          <th className="p-2  text-slate-700   text-xs text-right">Downtime</th>
-                          <th className="p-2  text-slate-700   text-xs text-right">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-50">
-                        {consolidatedReport.map((row, idx) => {
-                          const rowKey = `${row.date}_${row.shift}`;
-                          const isEditing = editingReportKey === rowKey;
-
-                          if (isEditing) {
-                            return (
-                              <tr key={idx} className="bg-indigo-50/30">
-                                <td className="p-2 text-slate-900">{new Date(row.date).toLocaleDateString('en-GB')}</td>
-                                <td className="p-2">
-                                  <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-xs">{row.shift?.replace('SHIFT_', 'Shift ')}</span>
-                                </td>
-                                <td className="p-2 text-slate-600 font-medium">{row.operator || 'N/A'}</td>
-                                <td className="p-2 text-center text-blue-600 font-bold">{row.mins}</td>
-                                <td className="p-2">
-                                  <input
-                                    type="number"
-                                    value={editReportForm.produced}
-                                    onChange={e => setEditReportForm({ ...editReportForm, produced: e.target.value })}
-                                    className="w-full px-1 py-1 border rounded text-xs text-center focus:ring-1 focus:ring-indigo-500 outline-none"
-                                  />
-                                </td>
-                                <td className="p-2">
-                                  <input
-                                    type="number"
-                                    value={editReportForm.accepted}
-                                    onChange={e => setEditReportForm({ ...editReportForm, accepted: e.target.value })}
-                                    className="w-full px-1 py-1 border rounded text-xs text-center border-emerald-200 focus:ring-1 focus:ring-emerald-500 outline-none"
-                                  />
-                                </td>
-                                <td className="p-2">
-                                  <input
-                                    type="number"
-                                    value={editReportForm.rejected}
-                                    onChange={e => setEditReportForm({ ...editReportForm, rejected: e.target.value })}
-                                    className="w-full px-1 py-1 border rounded text-xs text-center border-rose-200 focus:ring-1 focus:ring-rose-500 outline-none"
-                                  />
-                                </td>
-                                <td className="p-2">
-                                  <input
-                                    type="number"
-                                    value={editReportForm.scrap}
-                                    onChange={e => setEditReportForm({ ...editReportForm, scrap: e.target.value })}
-                                    className="w-full px-1 py-1 border rounded text-xs text-center focus:ring-1 focus:ring-indigo-500 outline-none"
-                                  />
-                                </td>
-                                <td className="p-2 text-right font-medium">
-                                  <span className=" text-amber-600">{row.downtime}</span>
-                                  <span className="text-xs text-slate-400 ml-1">min</span>
-                                </td>
-                                <td className="p-2 text-right">
-                                  <div className="flex items-center justify-end gap-2">
-                                    <button onClick={() => handleUpdateReport(row)} className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded transition-all shadow-sm">
-                                      <Save className="w-3.5 h-3.5" />
-                                    </button>
-                                    <button onClick={() => setEditingReportKey(null)} className="p-1.5 text-rose-600 hover:bg-rose-50 rounded transition-all shadow-sm">
-                                      <X className="w-3.5 h-3.5" />
-                                    </button>
-                                  </div>
-                                </td>
-                              </tr>
-                            );
-                          }
-
-                          return (
-                            <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                              <td className="p-2  text-slate-900">{new Date(row.date).toLocaleDateString('en-GB')}</td>
-                              <td className="p-2 ">
-                                <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-xs  ">{row.shift?.replace('SHIFT_', 'Shift ')}</span>
-                              </td>
-                              <td className="p-2  text-slate-600 font-medium">{row.operator || 'N/A'}</td>
-                              <td className="p-2  text-center  text-blue-600 font-bold">{row.mins}</td>
-                              <td className="p-2  text-center  text-slate-900">{row.produced}</td>
-                              <td className="p-2  text-center  text-emerald-600">{row.accepted}</td>
-                              <td className="p-2  text-center  text-rose-500">{row.rejected}</td>
-                              <td className="p-2  text-center  text-slate-400">{row.scrap}</td>
-                              <td className="p-2  text-right font-medium">
-                                <span className=" text-amber-600">{row.downtime}</span>
-                                <span className="text-xs text-slate-400 ml-1">min</span>
-                              </td>
-                              <td className="p-2  text-right">
-                                <button onClick={() => handleEditReport(row)} className="p-1.5 text-slate-300 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-all">
-                                  <Edit2 className="w-3.5 h-3.5" />
-                                </button>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-
-              <div className="p-6 border-t border-slate-50 flex items-center justify-between">
-                <div className="flex items-center gap-2 text-xs  text-slate-400  ">
-                  <span>Rows per page:</span>
-                  <select className="bg-transparent outline-none cursor-pointer">
-                    <option>10</option>
-                  </select>
-                </div>
-                <div className="flex items-center gap-6">
-                  <span className="text-xs  text-slate-400  ">
-                    Page 1 of {Math.ceil(logs.timeLogs.length / 10) || 0} <span className="text-slate-300 ml-1">({logs.timeLogs.length} total)</span>
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <button className="p-1 text-slate-300" disabled><ChevronLeft className="w-4 h-4" /></button>
-                    <button className="px-4 py-1 border border-slate-200 rounded text-xs  text-slate-600   hover:bg-slate-50 transition-colors">Next</button>
-                  </div>
-                </div>
-              </div>
+            <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+              <DataTable
+                columns={consolidatedReportColumns}
+                data={consolidatedReport}
+                loading={loading}
+                pageSize={10}
+                emptyMessage="No consolidated report data available"
+              />
             </div>
           </section>
         </div>
@@ -2954,8 +2447,8 @@ const JobCard = () => {
           title: 'Machine Already in Use',
           html: `
             <div class="text-left space-y-1">
-              <p class="font-bold text-[10px] text-rose-600">🔴 ${ws.workstation_name} busy to ${busyJob.job_card_no}</p>
-              <p class="font-bold text-[10px] text-slate-600">⏱ ${busyStartStr} – ${busyEndStr} • <span class="text-emerald-600">Available after ${busyEndStr}</span></p>
+              <p class=" text-[10px] text-rose-600">🔴 ${ws.workstation_name} busy to ${busyJob.job_card_no}</p>
+              <p class=" text-[10px] text-slate-600">⏱ ${busyStartStr} – ${busyEndStr} • <span class="text-emerald-600">Available after ${busyEndStr}</span></p>
             </div>
           `,
           toast: true,
@@ -2998,7 +2491,7 @@ const JobCard = () => {
             <div class="text-left space-y-2">
               <p class="text-sm text-slate-600">Operator is already assigned to another job during this time.</p>
               <div class="p-2 bg-rose-50 border border-rose-100 rounded">
-                <p class="font-bold text-xs text-rose-600">🔴 Busy with ${busyJob.job_card_no}</p>
+                <p class=" text-xs text-rose-600">🔴 Busy with ${busyJob.job_card_no}</p>
                 <p class="text-[10px] text-rose-500 mt-1">⏱ ${busyStartStr} – ${busyEndStr}</p>
               </div>
               <p class="text-xs font-medium text-emerald-600">✅ Available after ${busyEndStr}</p>
@@ -3061,8 +2554,8 @@ const JobCard = () => {
       title: 'Machine Allocated',
       html: `
         <div class="text-left space-y-1">
-          <p class="font-bold text-[10px] text-emerald-600">🟢 ${ws_name} allocated successfully</p>
-          <p class="font-bold text-[10px] text-slate-600">⏱ ${logData.startTime} ${logData.startAMPM} – ${logData.endTime} ${logData.endAMPM}</p>
+          <p class=" text-[10px] text-emerald-600">🟢 ${ws_name} allocated successfully</p>
+          <p class=" text-[10px] text-slate-600">⏱ ${logData.startTime} ${logData.startAMPM} – ${logData.endTime} ${logData.endAMPM}</p>
         </div>
       `,
       toast: true,
@@ -3627,6 +3120,915 @@ const JobCard = () => {
     }
   };
 
+  // --- DataTable Column Definitions ---
+
+  const timeLogColumns = [
+    {
+      label: 'Day',
+      key: 'day',
+      render: (val, row) => {
+        const isEditing = editingTimeLogId === row.id;
+        if (isEditing) {
+          return (
+            <input
+              type="number"
+              value={editTimeLogForm.day}
+              className="w-12 px-1 py-1 border rounded text-xs"
+              onChange={e => setEditTimeLogForm({ ...editTimeLogForm, day: e.target.value })}
+            />
+          );
+        }
+        return (
+          <span className="w-7 h-7 bg-slate-100 rounded flex items-center justify-center text-xs text-slate-500 ">
+            {val || '-'}
+          </span>
+        );
+      }
+    },
+    {
+      label: 'Date / Shift',
+      key: 'log_date',
+      render: (val, row) => {
+        const isEditing = editingTimeLogId === row.id;
+        if (isEditing) {
+          return (
+            <div className="flex flex-col gap-1">
+              <input
+                type="date"
+                value={editTimeLogForm.logDate}
+                className="block w-full px-1 py-1 border rounded text-xs"
+                onChange={e => setEditTimeLogForm({ ...editTimeLogForm, logDate: e.target.value })}
+              />
+              <select
+                value={editTimeLogForm.shift}
+                className="w-full px-1 py-1 border rounded text-xs"
+                onChange={e => setEditTimeLogForm({ ...editTimeLogForm, shift: e.target.value })}
+              >
+                <option value="SHIFT_A">A</option>
+                <option value="SHIFT_B">B</option>
+                <option value="SHIFT_C">C</option>
+              </select>
+            </div>
+          );
+        }
+        return (
+          <div className="flex flex-col">
+            <span className="text-slate-900 font-medium">{new Date(val).toLocaleDateString('en-GB')}</span>
+            <span className="text-[10px] text-slate-400 ">{row.shift?.replace('SHIFT_', 'Shift ')}</span>
+          </div>
+        );
+      }
+    },
+    {
+      label: 'Operator',
+      key: 'operator_name',
+      render: (val, row) => {
+        const isEditing = editingTimeLogId === row.id;
+        if (isEditing) {
+          return (
+            <select
+              value={editTimeLogForm.operatorId}
+              className="w-full px-1 py-1 border rounded text-xs"
+              onChange={e => setEditTimeLogForm({ ...editTimeLogForm, operatorId: e.target.value })}
+            >
+              {users.map(u => <option key={u.id} value={u.id}>{u.username}</option>)}
+            </select>
+          );
+        }
+        return (
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600 text-[10px] ">
+              {val?.[0]}
+            </div>
+            <span className="text-slate-600 font-medium">{val}</span>
+          </div>
+        );
+      }
+    },
+    {
+      label: 'Time Interval',
+      key: 'time_interval',
+      className: 'text-center',
+      render: (_, row) => {
+        const isEditing = editingTimeLogId === row.id;
+        if (isEditing) {
+          return (
+            <div className="flex flex-col items-center">
+              <div className="flex items-center gap-1 justify-center min-w-[200px]">
+                <div className="flex-1">
+                  <TimePicker
+                    small
+                    value={editTimeLogForm.startTime}
+                    ampmValue={editTimeLogForm.startAMPM}
+                    onTimeChange={(newTime) => setEditTimeLogForm({ ...editTimeLogForm, startTime: newTime })}
+                    onAMPMChange={(newAMPM) => setEditTimeLogForm({ ...editTimeLogForm, startAMPM: newAMPM })}
+                  />
+                </div>
+                <ChevronRight className="w-3 h-3 text-slate-300 mx-0.5" />
+                <div className="flex-1">
+                  <TimePicker
+                    small
+                    value={editTimeLogForm.endTime}
+                    ampmValue={editTimeLogForm.endAMPM}
+                    onTimeChange={(newTime) => setEditTimeLogForm({ ...editTimeLogForm, endTime: newTime })}
+                    onAMPMChange={(newAMPM) => setEditTimeLogForm({ ...editTimeLogForm, endAMPM: newAMPM })}
+                  />
+                </div>
+              </div>
+              <div className="text-[10px] text-center text-indigo-500 mt-1 font-medium">
+                ⏱ {calculateTotalMins(editTimeLogForm.startTime, editTimeLogForm.startAMPM, editTimeLogForm.endTime, editTimeLogForm.endAMPM)} mins
+              </div>
+            </div>
+          );
+        }
+        return (
+          <div className="flex flex-col items-center">
+            <div className="flex items-center gap-2 px-2 py-1 bg-slate-50 rounded-full border border-slate-100">
+              <Clock className="w-3 h-3 text-indigo-500" />
+              <span className="text-slate-700 font-medium tracking-tight">
+                {formatLocalTime(row.start_time)} - {formatLocalTime(row.end_time)}
+              </span>
+            </div>
+            <div className="mt-1 text-[10px] text-slate-400   ">
+              {calculateISODuration(row.start_time, row.end_time)} mins
+            </div>
+          </div>
+        );
+      }
+    },
+    {
+      label: 'Produced Qty',
+      key: 'produced_qty',
+      className: 'text-right',
+      render: (val, row) => {
+        const isEditing = editingTimeLogId === row.id;
+        if (isEditing) {
+          return (
+            <input
+              type="number"
+              value={editTimeLogForm.producedQty}
+              className="w-full px-1 py-1 border rounded text-xs text-right focus:ring-1 focus:ring-indigo-500"
+              onChange={e => setEditTimeLogForm({ ...editTimeLogForm, producedQty: e.target.value })}
+            />
+          );
+        }
+        return (
+          <div className="flex flex-col items-end">
+            <span className="text-sm  text-indigo-600 tracking-tight">{parseFloat(val).toFixed(3)}</span>
+            <span className="text-[10px] text-slate-400   ">UNITS</span>
+          </div>
+        );
+      }
+    },
+    {
+      label: 'Action',
+      key: 'actions',
+      className: 'text-right',
+      render: (_, row) => {
+        const isEditing = editingTimeLogId === row.id;
+        if (isEditing) {
+          return (
+            <div className="flex items-center justify-end gap-2">
+              <button onClick={() => updateTimeLog(row.id, editTimeLogForm)} className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded transition-all shadow-sm">
+                <Save className="w-4 h-4" />
+              </button>
+              <button onClick={() => setEditingTimeLogId(null)} className="p-1.5 text-rose-600 hover:bg-rose-50 rounded transition-all shadow-sm">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          );
+        }
+        return (
+          <div className="flex items-center justify-end gap-1">
+            <button onClick={() => setViewingTimeLog(row)} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-all" title="View Detail">
+              <Eye className="w-3.5 h-3.5" />
+            </button>
+            <button onClick={() => handleEditTimeLog(row)} className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded transition-all" title="Edit Log">
+              <Edit2 className="w-3.5 h-3.5" />
+            </button>
+            <button onClick={() => deleteTimeLog(row.id)} className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-all" title="Delete Log">
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        );
+      }
+    }
+  ];
+
+  const qualityLogColumns = [
+    {
+      label: 'Day',
+      key: 'day',
+      render: (val, row) => {
+        const isEditing = editingQualityLogId === row.id;
+        if (isEditing) {
+          return (
+            <input
+              type="number"
+              value={editQualityLogForm.day}
+              className="w-12 px-1 py-1 border rounded text-xs"
+              onChange={e => setEditQualityLogForm({ ...editQualityLogForm, day: e.target.value })}
+            />
+          );
+        }
+        return (
+          <span className="w-7 h-7 bg-slate-100 rounded flex items-center justify-center text-xs text-slate-500 ">
+            {val || '-'}
+          </span>
+        );
+      }
+    },
+    {
+      label: 'Date / Shift',
+      key: 'check_date',
+      render: (val, row) => {
+        const isEditing = editingQualityLogId === row.id;
+        if (isEditing) {
+          return (
+            <div className="flex flex-col gap-1">
+              <input
+                type="date"
+                value={editQualityLogForm.checkDate}
+                className="block w-full px-1 py-1 border rounded text-xs"
+                onChange={e => setEditQualityLogForm({ ...editQualityLogForm, checkDate: e.target.value })}
+              />
+              <select
+                value={editQualityLogForm.shift}
+                className="w-full px-1 py-1 border rounded text-xs"
+                onChange={e => setEditQualityLogForm({ ...editQualityLogForm, shift: e.target.value })}
+              >
+                <option value="SHIFT_A">A</option>
+                <option value="SHIFT_B">B</option>
+                <option value="SHIFT_C">C</option>
+              </select>
+            </div>
+          );
+        }
+        return (
+          <div className="flex flex-col">
+            <span className="text-slate-900 font-medium">{formatDisplayDate(val)}</span>
+            <span className="text-[10px] text-slate-400 ">{row.shift?.replace('SHIFT_', 'Shift ')}</span>
+          </div>
+        );
+      }
+    },
+    {
+      label: 'Status',
+      key: 'status',
+      render: (val) => (
+        <div className={`inline-flex items-center px-2 py-1 rounded-full text-[10px]  border   ${
+          val?.trim() === 'APPROVED'
+            ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
+            : 'bg-amber-50 text-amber-600 border-amber-100'
+        }`}>
+          <div className={`w-1.5 h-1.5 rounded-full mr-1.5 ${val?.trim() === 'APPROVED' ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'}`} />
+          {val?.trim() === 'APPROVED' ? 'Verified' : 'Pending Verification'}
+        </div>
+      )
+    },
+    {
+      label: 'Notes / Remarks',
+      key: 'notes',
+      render: (val, row) => {
+        const isEditing = editingQualityLogId === row.id;
+        if (isEditing) {
+          return (
+            <input
+              type="text"
+              placeholder="Internal notes..."
+              value={editQualityLogForm.notes || ''}
+              className="w-full px-1 py-1 border rounded text-xs focus:ring-1 focus:ring-indigo-500"
+              onChange={e => setEditQualityLogForm({ ...editQualityLogForm, notes: e.target.value })}
+            />
+          );
+        }
+        return (
+          <div className={`flex flex-col gap-1 max-w-[200px]`}>
+            <div className={`inline-flex items-center px-2 py-0.5 rounded text-[10px]  border w-fit  ${
+              (row.rejected_qty > 0 || row.scrap_qty > 0)
+                ? 'bg-rose-50 text-rose-600 border-rose-100'
+                : 'bg-emerald-50 text-emerald-600 border-emerald-100'
+            }`}>
+              {(row.rejected_qty > 0 || row.scrap_qty > 0) ? 'QC REJECTED' : 'QC PASSED'}
+            </div>
+            <p className="text-[10px] text-slate-400 italic leading-tight truncate" title={val || row.rejection_reason}>
+              {val || row.rejection_reason || 'No observations recorded'}
+            </p>
+          </div>
+        );
+      }
+    },
+    {
+      label: 'Accepted',
+      key: 'accepted_qty',
+      className: 'text-center',
+      render: (val, row) => {
+        const isEditing = editingQualityLogId === row.id;
+        if (isEditing) {
+          return (
+            <input
+              type="number"
+              value={editQualityLogForm.acceptedQty}
+              className="w-full px-1 py-1 border rounded text-xs text-center border-emerald-200 focus:ring-1 focus:ring-emerald-500"
+              onChange={e => setEditQualityLogForm({ ...editQualityLogForm, acceptedQty: e.target.value })}
+            />
+          );
+        }
+        return (
+          <div className="flex flex-col items-center">
+            <span className="text-sm  text-emerald-600">{parseFloat(val).toFixed(2)}</span>
+            <span className="text-[9px] text-slate-300  ">UNITS</span>
+          </div>
+        );
+      }
+    },
+    {
+      label: 'Rejected',
+      key: 'rejected_qty',
+      className: 'text-center  text-rose-600',
+      render: (val, row) => {
+        const isEditing = editingQualityLogId === row.id;
+        if (isEditing) {
+          return (
+            <input
+              type="number"
+              value={editQualityLogForm.rejectedQty}
+              className="w-full px-1 py-1 border rounded text-xs text-center border-rose-200 focus:ring-1 focus:ring-rose-500"
+              onChange={e => setEditQualityLogForm({ ...editQualityLogForm, rejectedQty: e.target.value })}
+            />
+          );
+        }
+        return (
+          <div className="flex flex-col items-center">
+            <span className="text-sm  text-rose-600">{parseFloat(val).toFixed(2)}</span>
+            <span className="text-[9px] text-slate-300  ">REJECT</span>
+          </div>
+        );
+      }
+    },
+    {
+      label: 'Scrap',
+      key: 'scrap_qty',
+      className: 'text-center',
+      render: (val, row) => {
+        const isEditing = editingQualityLogId === row.id;
+        if (isEditing) {
+          return (
+            <input
+              type="number"
+              value={editQualityLogForm.scrapQty}
+              className="w-full px-1 py-1 border rounded text-xs text-center border-slate-200 focus:ring-1 focus:ring-slate-500"
+              onChange={e => setEditQualityLogForm({ ...editQualityLogForm, scrapQty: e.target.value })}
+            />
+          );
+        }
+        return (
+          <div className="flex flex-col items-center">
+            <span className="text-sm  text-slate-500">{parseFloat(val).toFixed(2)}</span>
+            <span className="text-[9px] text-slate-300  ">SCRAP</span>
+          </div>
+        );
+      }
+    },
+    {
+      label: 'Actions',
+      key: 'actions',
+      className: 'text-right',
+      render: (_, row) => {
+        const isEditing = editingQualityLogId === row.id;
+        if (isEditing) {
+          return (
+            <div className="flex items-center justify-end gap-2">
+              <button onClick={() => updateQualityLog(row.id, editQualityLogForm)} className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded transition-all shadow-sm">
+                <Save className="w-4 h-4" />
+              </button>
+              <button onClick={() => setEditingQualityLogId(null)} className="p-1.5 text-rose-600 hover:bg-rose-50 rounded transition-all shadow-sm">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          );
+        }
+        return (
+          <div className="flex items-center justify-end gap-1">
+            <button onClick={() => setViewingQualityLog(row)} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-all">
+              <Eye className="w-3.5 h-3.5" />
+            </button>
+            <button onClick={() => handleEditQualityLog(row)} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-all">
+              <Edit2 className="w-3.5 h-3.5" />
+            </button>
+            <button onClick={() => deleteQualityLog(row.id)} className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-all">
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => updateQualityLog(row.id, { status: 'APPROVED' })}
+              disabled={row.status?.trim() === 'APPROVED'}
+              className={`p-1.5 rounded transition-colors ${row.status?.trim() === 'APPROVED' ? 'text-emerald-500 cursor-default' : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'
+                }`}
+              title={row.status?.trim() === 'APPROVED' ? 'APPROVED' : 'Verify'}
+            >
+              <ShieldCheck className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        );
+      }
+    }
+  ];
+
+  const downtimeLogColumns = [
+    {
+      label: 'Day',
+      key: 'day',
+      render: (val) => (
+        <span className="w-7 h-7 bg-slate-100 rounded flex items-center justify-center text-xs text-slate-500 ">
+          {val || '-'}
+        </span>
+      )
+    },
+    {
+      label: 'Date / Shift',
+      key: 'downtime_date',
+      render: (val, row) => (
+        <div className="flex flex-col">
+          <span className="text-slate-900 font-medium">{new Date(val).toLocaleDateString('en-GB')}</span>
+          <span className="text-[10px] text-slate-400 ">{row.shift?.replace('SHIFT_', 'Shift ')}</span>
+        </div>
+      )
+    },
+    {
+      label: 'Category / Reason',
+      key: 'downtime_type',
+      render: (val) => (
+        <span className="px-2 py-0.5 bg-orange-50 text-orange-600 border border-orange-100 rounded text-[10px]   ">
+          {val}
+        </span>
+      )
+    },
+    {
+      label: 'Interval',
+      key: 'interval',
+      className: 'text-center',
+      render: (_, row) => (
+        <div className="flex flex-col items-center">
+          <div className="flex items-center gap-2 px-2 py-1 bg-slate-50 rounded-full border border-slate-100">
+            <Clock className="w-3 h-3 text-orange-500" />
+            <span className="text-slate-700 font-medium tracking-tight">
+              {formatLocalTime(row.start_time)} - {formatLocalTime(row.end_time)}
+            </span>
+          </div>
+        </div>
+      )
+    },
+    {
+      label: 'Duration',
+      key: 'duration',
+      className: 'text-right',
+      render: (_, row) => (
+        <div className="flex flex-col items-end">
+          <span className="text-sm  text-slate-900 tracking-tight">{calculateISODuration(row.start_time, row.end_time)}</span>
+          <span className="text-[10px] text-slate-400   ">MINUTES</span>
+        </div>
+      )
+    },
+    {
+      label: 'Action',
+      key: 'actions',
+      className: 'text-right',
+      render: (_, row) => (
+        <button onClick={() => deleteDowntimeLog(row.id)} className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-all">
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      )
+    }
+  ];
+
+  const consolidatedReportColumns = [
+    {
+      label: 'Date',
+      key: 'date',
+      render: (val) => (
+        <span className="text-slate-900 font-medium">{new Date(val).toLocaleDateString('en-GB')}</span>
+      )
+    },
+    {
+      label: 'Shift',
+      key: 'shift',
+      render: (val) => (
+        <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px]   ">
+          {val?.replace('SHIFT_', 'Shift ')}
+        </span>
+      )
+    },
+    {
+      label: 'Operator',
+      key: 'operator',
+      render: (val) => (
+        <div className="flex items-center gap-2">
+          <div className="w-5 h-5 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600 text-[9px] ">
+            {val?.[0] || 'N'}
+          </div>
+          <span className="text-slate-600 font-medium">{val || 'N/A'}</span>
+        </div>
+      )
+    },
+    {
+      label: 'Mins',
+      key: 'mins',
+      className: 'text-center  text-indigo-600',
+      render: (val) => val
+    },
+    {
+      label: 'Produced',
+      key: 'produced',
+      className: 'text-center  text-slate-900',
+      render: (val, row) => {
+        const rowKey = `${row.date}_${row.shift}`;
+        if (editingReportKey === rowKey) {
+          return (
+            <input
+              type="number"
+              value={editReportForm.produced}
+              onChange={e => setEditReportForm({ ...editReportForm, produced: e.target.value })}
+              className="w-full px-1 py-1 border rounded text-xs text-center focus:ring-1 focus:ring-indigo-500 outline-none"
+            />
+          );
+        }
+        return val;
+      }
+    },
+    {
+      label: 'Accepted',
+      key: 'accepted',
+      className: 'text-center  text-emerald-600',
+      render: (val, row) => {
+        const rowKey = `${row.date}_${row.shift}`;
+        if (editingReportKey === rowKey) {
+          return (
+            <input
+              type="number"
+              value={editReportForm.accepted}
+              onChange={e => setEditReportForm({ ...editReportForm, accepted: e.target.value })}
+              className="w-full px-1 py-1 border rounded text-xs text-center border-emerald-200 focus:ring-1 focus:ring-emerald-500 outline-none"
+            />
+          );
+        }
+        return val;
+      }
+    },
+    {
+      label: 'Rejected',
+      key: 'rejected',
+      className: 'text-center  text-rose-500',
+      render: (val, row) => {
+        const rowKey = `${row.date}_${row.shift}`;
+        if (editingReportKey === rowKey) {
+          return (
+            <input
+              type="number"
+              value={editReportForm.rejected}
+              onChange={e => setEditReportForm({ ...editReportForm, rejected: e.target.value })}
+              className="w-full px-1 py-1 border rounded text-xs text-center border-rose-200 focus:ring-1 focus:ring-rose-500 outline-none"
+            />
+          );
+        }
+        return val;
+      }
+    },
+    {
+      label: 'Scrap',
+      key: 'scrap',
+      className: 'text-center text-slate-400 font-medium',
+      render: (val, row) => {
+        const rowKey = `${row.date}_${row.shift}`;
+        if (editingReportKey === rowKey) {
+          return (
+            <input
+              type="number"
+              value={editReportForm.scrap}
+              onChange={e => setEditReportForm({ ...editReportForm, scrap: e.target.value })}
+              className="w-full px-1 py-1 border rounded text-xs text-center focus:ring-1 focus:ring-indigo-500 outline-none"
+            />
+          );
+        }
+        return val;
+      }
+    },
+    {
+      label: 'Downtime',
+      key: 'downtime',
+      className: 'text-right',
+      render: (val) => (
+        <div className="flex items-center justify-end gap-1">
+          <span className="text-amber-600 ">{val}</span>
+          <span className="text-[10px] text-slate-300  ">min</span>
+        </div>
+      )
+    },
+    {
+      label: 'Actions',
+      key: 'actions',
+      className: 'text-right',
+      render: (_, row) => {
+        const rowKey = `${row.date}_${row.shift}`;
+        const isEditing = editingReportKey === rowKey;
+        if (isEditing) {
+          return (
+            <div className="flex items-center justify-end gap-2">
+              <button onClick={() => handleUpdateReport(row)} className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded transition-all shadow-sm">
+                <Save className="w-3.5 h-3.5" />
+              </button>
+              <button onClick={() => setEditingReportKey(null)} className="p-1.5 text-rose-600 hover:bg-rose-50 rounded transition-all shadow-sm">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          );
+        }
+        return (
+          <button onClick={() => handleEditReport(row)} className="p-1.5 text-slate-300 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-all">
+            <Edit2 className="w-3.5 h-3.5" />
+          </button>
+        );
+      }
+    }
+  ];
+
+  const jobCardColumns = [
+    {
+      label: 'ID',
+      key: 'job_card_no',
+      sortable: true,
+      render: (val, row) => (
+        <div className="flex flex-col">
+          <div className="flex items-center gap-1.5">
+            {row.sequence_no > 0 && (
+              <span className="flex items-center justify-center w-4 h-4 bg-slate-100 text-slate-500 rounded text-[10px]  border border-slate-200">
+                {row.sequence_no}
+              </span>
+            )}
+            <span className="text-xs  text-indigo-600">
+              {val}
+            </span>
+          </div>
+          <span className="text-[10px] text-slate-400 mt-0.5 font-medium">
+            WO: {row.wo_number}
+          </span>
+        </div>
+      )
+    },
+    {
+      label: 'Project / Client',
+      key: 'client_name',
+      render: (val) => (
+        <span className="text-[10px] text-slate-500   ">{val || "Internal"}</span>
+      )
+    },
+    {
+      label: 'Operation',
+      key: 'operation_name',
+      render: (val) => (
+        <span className="text-xs text-slate-900 ">{val}</span>
+      )
+    },
+    {
+      label: 'Specification',
+      key: 'item_name',
+      render: (val, row) => (
+        <div className="flex flex-col gap-1">
+          <span className={`px-2 py-0.5 rounded text-[10px]   tracking-widest w-fit ${row.source_type === 'SA' ? 'bg-amber-50 text-amber-700 border border-amber-100' : 'bg-indigo-50 text-indigo-700 border border-indigo-100'}`}>
+            {row.source_type === 'SA' ? 'Sub Assembly' : 'Finished Good'}
+          </span>
+          <span className="text-[10px] text-slate-500 font-medium truncate max-w-[150px]" title={val}>
+            {val}
+          </span>
+        </div>
+      )
+    },
+    {
+      label: 'Status',
+      key: 'status',
+      render: (val) => (
+        <span className={`px-2 py-1 rounded-full text-[10px]  border   ${
+          val === 'IN_PROGRESS' ? 'bg-amber-50 text-amber-600 border-amber-100' :
+          val === 'COMPLETED' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
+          'bg-slate-50 text-slate-500 border-slate-100'
+        }`}>
+          {val === 'IN_PROGRESS' ? 'In-Progress' : val?.charAt(0) + val?.slice(1).toLowerCase()}
+        </span>
+      )
+    },
+    {
+      label: 'Execution',
+      key: 'execution_type',
+      render: (_, row) => {
+        const isSubcontract = row.execution_type === 'Outsource' || row.execution_type === 'Subcontract' || row.execution_type === 'Sub-Contract' || row.outward_challan_id;
+        return (
+          <span className={`text-[10px]   ${isSubcontract ? 'text-amber-600' : 'text-blue-600'}`}>
+            {isSubcontract ? 'Subcontract' : 'In-house'}
+          </span>
+        );
+      }
+    },
+    {
+      label: 'Target',
+      key: 'planned_qty',
+      className: 'text-center',
+      render: (val) => <span className="text-xs  text-slate-900">{val || 0}</span>
+    },
+    {
+      label: 'Produced',
+      key: 'produced_qty',
+      className: 'text-center',
+      render: (val) => <span className="text-xs  text-indigo-600">{parseFloat(val || 0).toFixed(2)}</span>
+    },
+    {
+      label: 'Accepted',
+      key: 'accepted_qty',
+      className: 'text-center',
+      render: (val) => <span className="text-xs  text-emerald-600">{parseFloat(val || 0).toFixed(2)}</span>
+    },
+    {
+      label: 'Workstation',
+      key: 'workstation_name',
+      render: (val, row) => {
+        const isSubcontract = row.execution_type === 'Outsource' || row.execution_type === 'Subcontract' || row.execution_type === 'Sub-Contract' || row.outward_challan_id;
+        return (
+          <span className={`text-xs font-medium ${isSubcontract ? 'text-purple-600 ' : 'text-slate-700'}`}>
+            {isSubcontract ? 'Subcontract' : (val || 'N/A')}
+          </span>
+        );
+      }
+    },
+    {
+      label: 'Assignee & Time',
+      key: 'operator_name',
+      render: (val, row) => (
+        <div className="flex flex-col">
+          <div className="flex items-center gap-2">
+            <div className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 text-[10px]">
+              <User size={10} />
+            </div>
+            <span className="text-xs text-slate-600 font-medium">{val || 'Unassigned'}</span>
+          </div>
+          {row.status === 'IN_PROGRESS' && row.latest_log_start_time && !row.latest_log_end_time ? (
+            <div className="flex flex-col gap-0.5 mt-0.5">
+              <span className="text-[10px] text-indigo-500  animate-pulse">
+                LIVE: {formatLocalTime(row.latest_log_start_time)} - NOW
+              </span>
+              {(() => {
+                const start = new Date(row.latest_log_start_time);
+                const now = new Date();
+                const diff = Math.floor((now - start) / 60000);
+                const hrs = Math.floor(diff / 60);
+                const mins = diff % 60;
+                return (
+                  <span className="text-[9px] text-slate-500 font-medium flex items-center gap-1">
+                    <Clock className="w-2 h-2" /> ⏱ {hrs}h {mins}m
+                  </span>
+                );
+              })()}
+            </div>
+          ) : (row.latest_log_start_time && row.latest_log_end_time && (row.outward_challan_id || row.operator_name)) ? (
+            <div className="flex flex-col gap-0.5 mt-0.5">
+              <span className="text-[10px] text-slate-500 font-medium">
+                {formatLocalTime(row.latest_log_start_time)} - {formatLocalTime(row.latest_log_end_time)}
+              </span>
+              {(() => {
+                const diff = calculateISODuration(row.latest_log_start_time, row.latest_log_end_time);
+                const hrs = Math.floor(diff / 60);
+                const mins = diff % 60;
+                return (
+                  <span className="text-[9px] text-slate-500 font-medium flex items-center gap-1">
+                    <Clock className="w-2 h-2" /> ⏱ {hrs}h {mins}m
+                  </span>
+                );
+              })()}
+            </div>
+          ) : (row.start_time && row.end_time && (row.outward_challan_id || row.operator_name)) ? (
+            <div className="flex flex-col gap-0.5 mt-0.5">
+              <span className="text-[10px] text-slate-500 font-medium">
+                {formatLocalTime(row.start_time)} - {formatLocalTime(row.end_time)}
+              </span>
+              {(() => {
+                const diff = calculateISODuration(row.start_time, row.end_time);
+                const hrs = Math.floor(diff / 60);
+                const mins = diff % 60;
+                return (
+                  <span className="text-[9px] text-slate-500 font-medium flex items-center gap-1">
+                    <Clock className="w-2 h-2" /> ⏱ {hrs}h {mins}m
+                  </span>
+                );
+              })()}
+            </div>
+          ) : (
+            <span className="text-[10px] text-slate-400 mt-0.5 italic font-medium">No Time Logged</span>
+          )}
+        </div>
+      )
+    },
+    {
+      label: 'Actions',
+      key: 'actions',
+      className: 'text-right',
+      render: (_, jc) => {
+        const isSubcontract = jc.execution_type === 'Outsource' || jc.execution_type === 'Subcontract' || jc.execution_type === 'Sub-Contract' || jc.outward_challan_id;
+
+        return (
+          <div className="flex items-center justify-end gap-1">
+            {/* View Details - Always Show */}
+            <button
+              onClick={() => navigate(`/job-card/view?id=${jc.id}`)}
+              className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded transition-all"
+              title="View Details"
+            >
+              <Eye className="w-3.5 h-3.5" />
+            </button>
+
+            {/* Log / Record Time - ONLY for In-house */}
+            {!isSubcontract && (
+              <>
+                {jc.status !== 'IN_PROGRESS' && jc.status !== 'COMPLETED' && (
+                  <button
+                    onClick={() => handleUpdateStatus(jc, 'IN_PROGRESS')}
+                    className="p-1.5 text-emerald-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-all"
+                    title="Start"
+                  >
+                    <Zap className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                {jc.status === 'IN_PROGRESS' && (
+                  <button
+                    onClick={() => handleLogProgress(jc)}
+                    className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded transition-all animate-pulse"
+                    title="Log Progress"
+                  >
+                    <Zap className="w-3.5 h-3.5 fill-indigo-600" />
+                  </button>
+                )}
+              </>
+            )}
+
+            {/* Outward / Inward Flow - ONLY for Subcontract */}
+            {isSubcontract && (
+              <>
+                <button
+                  onClick={() => navigate(`/job-card/outward?id=${jc.id}`)}
+                  className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-all"
+                  title="Outward Challan"
+                >
+                  <Truck className="w-3.5 h-3.5" />
+                </button>
+
+                <button
+                  onClick={() => navigate(`/job-card/inward?id=${jc.id}`)}
+                  className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-all"
+                  title="Inward Entry"
+                >
+                  <Package className="w-3.5 h-3.5" />
+                </button>
+              </>
+            )}
+
+            {/* Quick Record - Manage Production Modal */}
+            <button
+              onClick={() => {
+                setSelectedJC(jc);
+                setShowProductionEntry(true);
+                fetchLogs(jc.id);
+              }}
+              className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-all"
+              title="Manage Production"
+            >
+              <Activity className="w-3.5 h-3.5" />
+            </button>
+
+            <button
+              onClick={() => handleDownloadJobCard(jc)}
+              className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-all"
+              title="Print/Download"
+            >
+              <Download className="w-3.5 h-3.5" />
+            </button>
+
+            <button
+              onClick={() => handleEditJobCard(jc)}
+              className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded transition-all"
+              title="Edit"
+            >
+              <Edit2 className="w-3.5 h-3.5" />
+            </button>
+
+            <button
+              onClick={() => handleDeleteJobCard(jc.id)}
+              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-all"
+              title="Delete"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        );
+      }
+    }
+  ];
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] p-4 ">
       {!showProductionEntry ? (
@@ -3740,7 +4142,7 @@ const JobCard = () => {
                         <div className="flex flex-col">
                           <div className="flex items-center gap-1.5">
                             {jc.sequence_no > 0 && (
-                              <span className="flex items-center justify-center w-4 h-4 bg-slate-100 text-slate-500 rounded text-[10px] font-bold border border-slate-200">
+                              <span className="flex items-center justify-center w-4 h-4 bg-slate-100 text-slate-500 rounded text-[10px]  border border-slate-200">
                                 {jc.sequence_no}
                               </span>
                             )}
@@ -3755,7 +4157,7 @@ const JobCard = () => {
                       </td>
                       <td className="p-2">
                         <div className="flex flex-col">
-                          <span className="text-[10px] text-slate-500 mt-0.5 uppercase tracking-wider">{jc.client_name || "Internal"}</span>
+                          <span className="text-[10px] text-slate-500 mt-0.5  ">{jc.client_name || "Internal"}</span>
                         </div>
                       </td>
                       <td className="p-2">
@@ -3765,7 +4167,7 @@ const JobCard = () => {
                       </td>
                       <td className="p-2">
                         <div className="flex flex-col gap-1">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest w-fit ${jc.source_type === 'SA' ? 'bg-amber-50 text-amber-700 border border-amber-100' : 'bg-indigo-50 text-indigo-700 border border-indigo-100'}`}>
+                          <span className={`px-2 py-0.5 rounded text-[10px]   tracking-widest w-fit ${jc.source_type === 'SA' ? 'bg-amber-50 text-amber-700 border border-amber-100' : 'bg-indigo-50 text-indigo-700 border border-indigo-100'}`}>
                             {jc.source_type === 'SA' ? 'Sub Assembly' : 'Finished Good'}
                           </span>
                           <span className="text-[10px] text-slate-500 font-medium truncate max-w-[150px]" title={jc.item_name}>
@@ -3831,7 +4233,7 @@ const JobCard = () => {
                                 <div className="flex flex-col gap-0.5 mt-0.5">
                                   <span className="flex items-center gap-1">
                                     <span className="w-1.5 h-1.5 bg-rose-600 rounded-full"></span>
-                                    <span className="text-[10px] text-rose-700 font-bold">Busy ({m.jobId})</span>
+                                    <span className="text-[10px] text-rose-700 ">Busy ({m.jobId})</span>
                                   </span>
                                   <span className="text-[9px] text-slate-500 flex items-center gap-1">
                                     <Clock className="w-2 h-2" /> Free at {m.endTime}
@@ -4120,25 +4522,15 @@ const JobCard = () => {
             </div>
 
             {/* Tabs */}
-            <div className="flex items-center gap-2 border-b border-slate-200">
-              {[
-                { id: 'timeline', label: 'Operational Timeline', icon: '📅' },
-                { id: 'costing', label: 'Costing Details', icon: '📊' },
-                { id: 'assignment', label: 'Assignment Data', icon: '👤' }
-              ].map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={() => setViewTab(tab.id)}
-                  className={`flex items-center gap-2 p-2 text-xs border-b-2 transition-colors ${viewTab === tab.id
-                      ? 'border-indigo-600 text-indigo-600'
-                      : 'border-transparent text-slate-600 hover:text-slate-900'
-                    }`}
-                >
-                  <span>{tab.icon}</span>
-                  {tab.label}
-                </button>
-              ))}
-            </div>
+            <Tabs
+              tabs={[
+                { id: 'timeline', label: 'Operational Timeline', icon: Calendar },
+                { id: 'costing', label: 'Costing Details', icon: BarChart2 },
+                { id: 'assignment', label: 'Assignment Data', icon: User }
+              ]}
+              activeTab={viewTab}
+              onTabChange={setViewTab}
+            />
 
             {/* Tab Content */}
             <div>
@@ -4205,7 +4597,7 @@ const JobCard = () => {
             <div className="flex justify-between items-center pt-4 border-t border-slate-100">
               <button
                 onClick={() => navigate('/job-card')}
-                className="px-4 py-2 text-sm text-slate-600 hover:text-slate-900 transition-colors"
+                className="p-2 text-xs text-slate-600 hover:text-slate-900 transition-colors"
               >
                 ✕ Terminate View
               </button>
@@ -4237,7 +4629,7 @@ const JobCard = () => {
           {/* Header Info */}
           <div className="flex justify-between items-start border-b border-slate-100 pb-4">
             <div>
-              <h2 className="text-xl font-bold text-slate-800">
+              <h2 className="text-xl  text-slate-800">
                 {operations.find(op => String(op.id) === String(formData.operationId))?.operation_name || 'Select Operation'}
               </h2>
               <p className="text-sm text-slate-500">
@@ -4262,7 +4654,7 @@ const JobCard = () => {
 
                 <div className="flex items-center gap-4 py-2">
                   <span className="text-xs text-slate-500 font-medium">Execution Mode:</span>
-                  <div className="flex bg-slate-100 p-1 rounded-lg">
+                  <div className="flex bg-slate-100 p-1 rounded">
                     <button
                       type="button"
                       onClick={() => setFormData({ ...formData, executionMode: 'In-house' })}
@@ -4417,7 +4809,7 @@ const JobCard = () => {
 
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
-                      <label className="text-[10px] font-medium text-slate-500 uppercase tracking-wider">Start DateTime</label>
+                      <label className="text-[10px] font-medium text-slate-500  ">Start DateTime</label>
                       <div className="flex gap-1.5">
                         <input
                           type="date"
@@ -4437,8 +4829,8 @@ const JobCard = () => {
                     </div>
 
                     <div className="space-y-1 relative">
-                      <label className="text-[10px] font-medium text-slate-500 uppercase tracking-wider">End DateTime</label>
-                      <span className="absolute right-0 top-0 text-[10px] text-indigo-600 font-bold uppercase tracking-widest">Auto Suggest</span>
+                      <label className="text-[10px] font-medium text-slate-500  ">End DateTime</label>
+                      <span className="absolute right-0 top-0 text-[10px] text-indigo-600   tracking-widest">Auto Suggest</span>
                       <div className="flex gap-1.5">
                         <input
                           type="date"
@@ -4471,7 +4863,7 @@ const JobCard = () => {
                   </div>
 
                   {/* Machine Engagement Box */}
-                  <div className="bg-indigo-50/50 border border-indigo-100 rounded-lg p-4 flex items-center justify-between">
+                  <div className="bg-indigo-50/50 border border-indigo-100 rounded p-4 flex items-center justify-between">
                     <div>
                       <span className="text-xs text-slate-500 block mb-1">Machine Engagement:</span>
                       <p className="text-xs font-medium text-slate-700">
@@ -4487,7 +4879,7 @@ const JobCard = () => {
                       </p>
                     </div>
                     <div className="bg-white px-4 py-2 rounded-md border border-indigo-100 shadow-sm">
-                      <span className="text-sm font-bold text-indigo-600">
+                      <span className="text-sm  text-indigo-600">
                         {(() => {
                           const operation = operations.find(o => String(o.id) === String(formData.operationId));
                           let netTime = parseFloat(formData.stdTime || operation?.net_time || operation?.std_time || 0);
@@ -4504,7 +4896,7 @@ const JobCard = () => {
                     </div>
                   </div>
 
-                  <div className="flex gap-2 p-3 bg-blue-50/50 rounded-lg border border-blue-100 mt-4">
+                  <div className="flex gap-2 p-3 bg-blue-50/50 rounded border border-blue-100 mt-4">
                     <Info className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
                     <p className="text-[10px] text-blue-700 leading-relaxed">
                       Scheduled end time is calculated based on standard cycle time. Adjust manually if resource availability differs.

@@ -200,45 +200,44 @@ const ProductionDashboard = ({ apiRequest }) => {
       </div>
 
       {/* Critical Work Orders */}
-      <div className="bg-white rounded  border border-slate-100 shadow-sm overflow-hidden">
-        <div className="p-2 border-b border-slate-50 flex items-center justify-between bg-slate-50/30">
+      <div className="bg-white/50 backdrop-blur-sm rounded-xl border border-slate-100 shadow-xl overflow-hidden">
+        <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-white/50">
           <div>
-            <h3 className="text-xs  text-slate-900 tracking-tight flex items-center gap-2">
+            <h3 className="text-sm  text-slate-900 tracking-tight flex items-center gap-2">
               <Activity className="w-4 h-4 text-indigo-600" />
               PRIORITY WORK ORDERS
             </h3>
-            <p className="text-xs text-slate-500  mt-0.5  ">REAL-TIME PRODUCTION PIPELINE</p>
+            <p className="text-[10px] text-slate-500 font-medium mt-0.5 ">REAL-TIME PRODUCTION PIPELINE</p>
           </div>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-slate-50 bg-slate-50/20">
-                <th className="px-8 py-4 text-xs  text-slate-400  ">WO Code</th>
-                <th className="px-8 py-4 text-xs  text-slate-400  ">Item</th>
-                <th className="px-8 py-4 text-xs  text-slate-400  ">Quantity</th>
-                <th className="px-8 py-4 text-xs  text-slate-400  ">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50">
-              {(stats.priorityOrders || []).map((wo, idx) => (
-                <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="px-8 py-4 text-xs  text-slate-900">{wo.wo_code}</td>
-                  <td className="px-8 py-4 text-xs text-slate-600">{wo.item_name}</td>
-                  <td className="px-8 py-4 text-xs text-slate-600">{wo.quantity} {wo.unit}</td>
-                  <td className="px-8 py-4">
-                    <StatusBadge status={wo.status} />
-                  </td>
-                </tr>
-              ))}
-              {(!stats.priorityOrders || stats.priorityOrders.length === 0) && (
-                <tr>
-                  <td colSpan="4" className="px-8 py-12 text-center text-xs text-slate-400   ">No active work orders found</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          columns={[
+            {
+              label: 'WO Code',
+              key: 'wo_code',
+              render: (val) => <span className="text-indigo-600 font-medium">{val}</span>
+            },
+            {
+              label: 'Item',
+              key: 'item_name',
+              render: (val) => <span className="text-slate-700">{val}</span>
+            },
+            {
+              label: 'Quantity',
+              key: 'quantity',
+              render: (val, row) => <span className="text-slate-900 font-medium">{val} <span className="text-slate-400 font-normal text-[10px]">{row.unit}</span></span>
+            },
+            {
+              label: 'Status',
+              key: 'status',
+              render: (val) => <StatusBadge status={val} />
+            }
+          ]}
+          data={stats.priorityOrders || []}
+          loading={loading}
+          hideSearch={true}
+          hidePagination={true}
+        />
       </div>
     </div>
   );

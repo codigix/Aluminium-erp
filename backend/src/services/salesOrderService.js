@@ -1,5 +1,6 @@
 const pool = require('../config/db');
 const designOrderService = require('./designOrderService');
+const bomService = require('./bomService');
 
 const listSalesOrders = async (includeWithoutPo = true) => {
   let whereClause = "WHERE (so.is_sales_order = 1 OR so.status IN ('BOM_SUBMITTED', 'BOM_Approved', 'CREATED', 'DESIGN_QUERY', 'DESIGN_IN_REVIEW', 'QUOTATION_SENT'))";
@@ -874,6 +875,23 @@ const getApprovedDrawings = async (companyId = null) => {
       [order.id]
     );
     order.items = items;
+    
+    // Fetch sub-assemblies for each item if it's an FG
+    for (const item of order.items) {
+      const g = (item.item_group_calc || '').toUpperCase();
+      const isFG = (g.includes('FG') || g.includes('FINISHED')) && !g.includes('SA') && !g.includes('SUB');
+      if (isFG) {
+        const components = await bomService.getItemComponents(item.id, item.item_code, item.drawing_no);
+        item.sub_assemblies = components.filter(c => {
+          const compCode = c.component_code || c.componentCode || '';
+          const group = (c.item_group || '').toUpperCase();
+          return compCode.startsWith('SA-') || compCode.startsWith('SFG-') || 
+                 group.includes('SA') || group.includes('SUB') || group.includes('ASSEMBLY');
+        });
+      } else {
+        item.sub_assemblies = [];
+      }
+    }
     
     if (order.company_id) {
       const [companyContacts] = await pool.query(

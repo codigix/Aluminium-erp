@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useLocation, useNavigate } from 'react-router-dom';
-import { Card, DataTable, Modal, SearchableSelect, MultiSelect } from '../components/ui.jsx';
+import { Card, DataTable, Modal, SearchableSelect, MultiSelect, Button, Tabs } from '../components/ui.jsx';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
 import { 
   Eye, 
@@ -19,7 +19,9 @@ import {
   Loader2,
   Activity,
   Clock,
-  CheckCircle2
+  CheckCircle2,
+  Send,
+  History
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
@@ -1320,7 +1322,7 @@ const Quotations = () => {
         render: (val, q) => (
           <div className="flex flex-col">
             <span className="text-slate-900 font-medium ">{val ? getVendorName(val) : (q.isRFQOnly ? 'Unassigned' : 'Unknown')}</span>
-            {val && q.is_single_vendor && <span className="text-[10px] uppercase font-bold text-slate-400 mt-0.5 tracking-wider">[Single Vendor]</span>}
+            {val && q.is_single_vendor && <span className="text-[10px]   text-slate-400 mt-0.5 ">[Single Vendor]</span>}
             {val && <span className="text-xs text-slate-400 mt-1 flex items-center gap-1 opacity-70">Vendor ID: #{val}</span>}
             {q.isRFQOnly && <span className="text-xs text-amber-500 italic mt-1 font-medium">Select vendor below</span>}
           </div>
@@ -1531,30 +1533,19 @@ const Quotations = () => {
         </div>
       </div>
 
-      <div className="flex items-center justify-between">
-        <div className="flex gap-2 p-1 bg-slate-50 rounded  w-fit border border-slate-100">
-          <button
-            onClick={() => navigate('/quotations')}
-            className={`p-2 rounded  text-sm  transition ${
-              activeTab === 'sent'
-                ? 'bg-white text-blue-600  border border-slate-100'
-                : 'text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            Sent Requests (RFQ)
-          </button>
-          
-          <button
-            onClick={() => navigate('/quotations/received')}
-            className={`p-2 rounded  text-sm  transition-all ${
-              activeTab === 'received'
-                ? 'bg-white text-blue-600  border border-slate-100'
-                : 'text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            Received Quotes
-          </button>
-        </div>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+        <Tabs
+          tabs={[
+            { label: 'Sent Requests (RFQ)', value: 'sent', icon: Send },
+            { label: 'Received Quotes', value: 'received', icon: History }
+          ]}
+          activeTab={activeTab}
+          onTabChange={(value) => {
+            if (value === 'sent') navigate('/quotations');
+            else navigate('/quotations/received');
+          }}
+          className="border-none px-0"
+        />
 
         {activeTab === 'received' && (
           <div className="flex items-center gap-2">
@@ -1582,18 +1573,15 @@ const Quotations = () => {
                 subLabelField="sub"
               />
             </div>
-            <button
+            <Button
+              variant={selectedQuotes.length >= 2 ? 'primary' : 'default'}
+              size="sm"
               onClick={handleCompare}
               disabled={selectedQuotes.length < 2}
-              className={`flex items-center gap-2  p-2 rounded  text-xs  transition-all ${
-                selectedQuotes.length >= 2
-                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 hover:bg-indigo-700 active:scale-95'
-                  : 'bg-slate-100 text-slate-400 cursor-not-allowed'
-              }`}
+              icon={Activity}
             >
-              <Activity className="w-4 h-4" />
               Compare Quotes {selectedQuotes.length > 0 && `(${selectedQuotes.length})`}
-            </button>
+            </Button>
           </div>
         )}
       </div>
@@ -2025,7 +2013,7 @@ const Quotations = () => {
                                   <div className="text-[10px] text-slate-400">
                                     {Number(item.planned_qty || 0).toFixed(3)}
                                   </div>
-                                  <div className="text-[9px] text-slate-500 font-medium uppercase">
+                                  <div className="text-[9px] text-slate-500 font-medium ">
                                     Design Qty
                                   </div>
                                 </td>
@@ -2035,10 +2023,10 @@ const Quotations = () => {
                                       type="number"
                                       value={item.design_qty || item.quantity || 0}
                                       onChange={(e) => handleRecordItemChange(idx, 'design_qty', parseFloat(e.target.value) || 0)}
-                                      className="w-full px-2 py-1 border border-transparent hover:border-slate-200 focus:border-blue-500 rounded outline-none transition-all text-center font-bold text-indigo-600"
+                                      className="w-full px-2 py-1 border border-transparent hover:border-slate-200 focus:border-blue-500 rounded outline-none transition-all text-center  text-indigo-600"
                                       placeholder="0.000"
                                     />
-                                    <div className="text-[9px] text-slate-400 uppercase">
+                                    <div className="text-[9px] text-slate-400 ">
                                       {item.uom || 'Kg'}
                                     </div>
                                   </div>
@@ -2369,7 +2357,7 @@ const Quotations = () => {
                                 }}
                                 className="w-full p-2 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
                               />
-                              <span className="text-[10px] text-slate-400 mt-0.5 uppercase">{item.uom || 'Kg'}</span>
+                              <span className="text-[10px] text-slate-400 mt-0.5 ">{item.uom || 'Kg'}</span>
                             </div>
                           </>
                         ) : (
@@ -2423,7 +2411,7 @@ const Quotations = () => {
                               <div className="text-[10px] text-slate-400">
                                 {Number(item.planned_qty || 0).toFixed(3)}
                               </div>
-                              <div className="text-[9px] text-slate-400 uppercase">
+                              <div className="text-[9px] text-slate-400 ">
                                 {item.uom || 'Kg'}
                               </div>
                             </div>
@@ -2577,15 +2565,16 @@ const Quotations = () => {
                   <td className="p-2 border text-right sticky left-0 bg-white z-10" colSpan="3">Actions</td>
                   {compareData.map((q, idx) => (
                     <td key={idx} className="p-2 border text-center" colSpan="2">
-                      <button
+                      <Button
+                        variant="success"
+                        size="sm"
                         onClick={() => {
                           handleApproveQuote(q.id);
                           setShowCompareModal(false);
                         }}
-                        className="p-2  bg-emerald-600 text-white rounded  text-xs hover:bg-emerald-700 transition-all "
                       >
                         Approve this Quote
-                      </button>
+                      </Button>
                     </td>
                   ))}
                 </tr>

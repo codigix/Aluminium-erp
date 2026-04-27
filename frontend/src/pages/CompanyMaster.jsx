@@ -9,7 +9,7 @@ import {
   User,
   MapPin,
 } from 'lucide-react'
-import { FormControl, StatusBadge, Modal, DataTable, Card } from '../components/ui.jsx'
+import { FormControl, StatusBadge, Modal, DataTable, Card, Button } from '../components/ui.jsx'
 
 const formatCustomerType = value => {
   if (!value) return '—'
@@ -76,7 +76,7 @@ const CompanyMaster = ({
           <button
             onClick={() => onViewCompany(row)}
             title="View"
-            className="p-1.5 rounded hover:bg-slate-100 text-slate-400 hover:text-indigo-600 transition-colors"
+            className="p-1.5 rounded hover:bg-slate-100 text-slate-400 hover:text-rose-500 transition-colors"
           >
             <Eye className="w-4 h-4" />
           </button>
@@ -111,7 +111,7 @@ const CompanyMaster = ({
           {/* Company Info */}
           <div className="space-y-2">
             <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
-              <Building2 className="w-4 h-4 text-indigo-500" />
+              <Building2 className="w-4 h-4 text-rose-500" />
               <h3 className="text-sm  text-slate-800  ">Company Information</h3>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -143,7 +143,7 @@ const CompanyMaster = ({
           {/* Tax Info */}
           <div className="space-y-2">
             <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
-              <Building2 className="w-4 h-4 text-indigo-500" />
+              <Building2 className="w-4 h-4 text-rose-500" />
               <h3 className="text-sm  text-slate-800  ">Tax Information</h3>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
@@ -181,7 +181,7 @@ const CompanyMaster = ({
           {/* Billing Address */}
           <div className="space-y-2">
             <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
-              <MapPin className="w-4 h-4 text-indigo-500" />
+              <MapPin className="w-4 h-4 text-rose-500" />
               <h3 className="text-sm  text-slate-800  ">Billing Address</h3>
             </div>
             <div className="space-y-2">
@@ -236,7 +236,7 @@ const CompanyMaster = ({
           {/* Contact Person */}
           <div className="space-y-2">
             <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
-              <User className="w-4 h-4 text-indigo-500" />
+              <User className="w-4 h-4 text-rose-500" />
               <h3 className="text-sm  text-slate-800  ">Contact Person</h3>
             </div>
             <FormControl label="Contact Person Name">
@@ -271,30 +271,20 @@ const CompanyMaster = ({
           </div>
 
           <div className="flex items-center justify-end gap-2 pt-6 border-t border-slate-100">
-            <button
-              type="button"
+            <Button
+              variant="default"
               onClick={onToggleCreatePanel}
-              className="px-6 py-2.5 rounded  border border-slate-200 text-slate-600 text-xs  hover:bg-slate-50 transition-all"
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
-              disabled={loading}
-              className="px-10 py-2.5 rounded  bg-indigo-600 text-white text-xs  hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all disabled:opacity-50 flex items-center gap-2"
+              variant="primary"
+              loading={loading}
+              icon={Plus}
             >
-              {loading ? (
-                <>
-                  <RotateCcw className="w-3.5 h-3.5 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <Plus className="w-4 h-4" />
-                  Save Company
-                </>
-              )}
-            </button>
+              Save Company
+            </Button>
           </div>
         </form>
       </Modal>
@@ -303,7 +293,7 @@ const CompanyMaster = ({
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <div className="p-2 bg-indigo-600 text-white rounded shadow-lg shadow-indigo-100">
+            <div className="p-2 bg-rose-500 text-white rounded shadow-lg shadow-rose-100">
               <Building2 className="w-3 h-3" />
             </div>
             <h2 className="text-xl  text-slate-900 ">Company Master</h2>
@@ -312,23 +302,20 @@ const CompanyMaster = ({
         </div>
         
         <div className="flex items-center gap-2">
-          <button
-            type="button"
+          <Button
+            variant="default"
             onClick={() => window.location.reload()}
-            className="p-2 rounded  border border-slate-200 text-slate-400 hover:bg-slate-50 hover:text-indigo-600 hover:border-indigo-200 transition-all shadow-sm"
             title="Refresh Data"
-          >
-            <RotateCcw className="w-5 h-5" />
-          </button>
+            icon={RotateCcw}
+          />
           
-          <button
-            type="button"
+          <Button
+            variant="primary"
             onClick={onToggleCreatePanel}
-            className="flex items-center gap-2 px-6 py-2.5 rounded  bg-indigo-600 text-white text-sm  hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all active:scale-95"
+            icon={Plus}
           >
-            <Plus className="w-5 h-5" />
-            <span>New Company</span>
-          </button>
+            New Company
+          </Button>
         </div>
       </div>
 
