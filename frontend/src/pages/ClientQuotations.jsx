@@ -432,20 +432,16 @@ const ClientQuotations = () => {
         versionBatches[bId].items.push(quote);
       });
 
-      // 2. Consolidate Versions into Quotation Chains and pick the FIRST version (Version 1)
+      // 2. Consolidate Versions into Quotation Chains
       const grouped = {};
       Object.values(versionBatches).forEach(batch => {
         const leadItem = batch.items[0];
-        
-        // Use the root ID (parent_id or own id if root) to group all versions of the same QRT
         const rootId = leadItem.parent_id || leadItem.id; 
         const chainKey = `chain_${rootId}`;
         
         const currentVer = parseInt(batch.version || 1);
-        const existingVer = grouped[chainKey] ? parseInt(grouped[chainKey].version || 1) : 999;
 
-        // PRIORITY: Always represent the Quotation by its FIRST version (Version 1) for the Sent tab
-        if (!grouped[chainKey] || currentVer < existingVer) {
+        if (!grouped[chainKey]) {
           grouped[chainKey] = {
             id: leadItem.id,
             display_id: rootId,
@@ -461,19 +457,31 @@ const ClientQuotations = () => {
             quotes: batch.items, 
             version: currentVer,
             batch_id: leadItem.batch_id,
-            has_revisions: grouped[chainKey] ? true : (currentVer > 1)
+            has_revisions: (currentVer > 1),
+            all_batches: [batch]
           };
-        } else if (currentVer > 1) {
+        } else {
+          grouped[chainKey].all_batches.push(batch);
           grouped[chainKey].has_revisions = true;
+          
+          // Update to latest version info if this batch is newer
+          if (currentVer > grouped[chainKey].version) {
+            grouped[chainKey].id = leadItem.id;
+            grouped[chainKey].status = leadItem.status;
+            grouped[chainKey].version = currentVer;
+            grouped[chainKey].created_at = batch.created_at;
+            grouped[chainKey].quotes = batch.items;
+            grouped[chainKey].batch_id = leadItem.batch_id;
+            grouped[chainKey].reply_pdf = leadItem.reply_pdf;
+          }
         }
 
-        // If any version in the chain has a pending BOM cost, make sure the group knows
         if (batch.items.some(it => it.pending_bom_cost)) {
           grouped[chainKey].has_pending_bom = true;
         }
       });
       
-      // 3. Filter chains: In "Sent" tab, show if the representative version is in a sent/draft/revised state
+      // 3. Filter chains: keep if the latest version is in a relevant state
       const filtered = Object.values(grouped).filter(group => {
         const s = (group.status || '').toUpperCase();
         return ['SENT', 'DRAFT', 'REVISED'].includes(s);
@@ -537,13 +545,13 @@ const ClientQuotations = () => {
       
       const grouped = {};
       data.forEach(quote => {
-        // Group by project name and company to consolidate all versions into ONE row
-        const groupKey = `received_${quote.company_id}_${(quote.project_name || 'manual').toLowerCase()}`;
+        const rootId = quote.parent_id || quote.id;
+        const groupKey = `received_${quote.company_id}_${rootId}`;
         
         if (!grouped[groupKey]) {
           grouped[groupKey] = {
             id: quote.id,
-            display_id: quote.parent_id || quote.id, // Root ID for stable QRT number display
+            display_id: rootId,
             uniqueKey: groupKey,
             company_name: quote.company_name,
             company_id: quote.company_id,
@@ -562,15 +570,13 @@ const ClientQuotations = () => {
         
         grouped[groupKey].quotes.push(quote);
 
-        // Update top-level group details if this quote is a newer version
-        // OR if it's the same version but we prefer "Approved" status over others
         const currentVersion = grouped[groupKey].version || 0;
         const quoteVersion = quote.version || 1;
         const currentStatus = (grouped[groupKey].status || '').trim().toUpperCase();
         const quoteStatus = (quote.status || '').trim().toUpperCase();
 
         if (quoteVersion > currentVersion || (quoteVersion === currentVersion && quoteStatus === 'APPROVED' && currentStatus !== 'APPROVED')) {
-          grouped[groupKey].id = quote.id; // Keep group.id as LATEST for actions
+          grouped[groupKey].id = quote.id;
           grouped[groupKey].status = quote.status;
           grouped[groupKey].version = quote.version;
           grouped[groupKey].created_at = quote.created_at;
@@ -578,7 +584,6 @@ const ClientQuotations = () => {
           grouped[groupKey].reply_pdf = quote.reply_pdf;
           grouped[groupKey].batch_id = quote.batch_id;
           grouped[groupKey].parent_id = quote.parent_id;
-          // Note: display_id stays as original root ID
         }
       });
       
@@ -1729,23 +1734,29 @@ const ClientQuotations = () => {
           batchId: null, // New version = new batch
           projectName: group.project_name || '',
           mode: 'revise',
-          items: latestQuotes.map(q => ({
-            id: Date.now() + Math.random(),
-            salesOrderItemId: q.sales_order_item_id,
-            item_code: q.item_code,
-            orderId: q.sales_order_id,
-            drawing_id: q.drawing_id,
-            drawing_no: q.drawing_no,
-            description: q.item_description,
-            quantity: q.item_qty,
-            unit: q.item_unit || q.uom || 'Nos',
-            rate: q.unit_rate || (parseFloat(q.total_amount) / (parseFloat(q.item_qty) || 1)),
-            bom_cost: q.bom_cost || 0,
-            gst_percentage: q.gst_percentage || 18,
-            item_group: q.item_group,
-            status: 'PENDING',
-            sub_assemblies: q.sub_assemblies || []
-          })),
+          items: latestQuotes.map(q => {
+            const bCost = q.bom_cost || 0;
+            // Favor BOM cost for revisions to ensure Rate == BOM Cost consistency
+            const rRate = bCost || q.unit_rate || (parseFloat(q.total_amount) / (parseFloat(q.item_qty) || 1));
+
+            return {
+              id: Date.now() + Math.random(),
+              salesOrderItemId: q.sales_order_item_id,
+              item_code: q.item_code,
+              orderId: q.sales_order_id,
+              drawing_id: q.drawing_id,
+              drawing_no: q.drawing_no,
+              description: q.item_description,
+              quantity: q.item_qty,
+              unit: q.item_unit || q.uom || 'Nos',
+              rate: rRate,
+              bom_cost: bCost || rRate,
+              gst_percentage: q.gst_percentage || 18,
+              item_group: q.item_group,
+              status: 'PENDING',
+              sub_assemblies: q.sub_assemblies || []
+            };
+          }),
           notes: firstQuote?.notes || ''
         }
       }
@@ -1811,11 +1822,7 @@ const ClientQuotations = () => {
 
               const newBomCost = isTarget 
                 ? targetItem.pending_bom_cost 
-                : (targetComp ? (q.bom_cost || q.latest_bom_cost) : (q.bom_cost || q.latest_bom_cost));
-              
-              // Note: If a sub-assembly changed, the PARENT's bom_cost in the revision 
-              // will be recalculated by QuotationFormPage's useEffect because its components list changed.
-              // However, we want to at least mark the sub-assembly itself if it exists in the items list.
+                : (q.bom_cost || q.latest_bom_cost || 0);
               
               return {
                 id: Date.now() + Math.random(),
@@ -1827,7 +1834,7 @@ const ClientQuotations = () => {
                 description: q.item_description,
                 quantity: q.item_qty,
                 unit: q.item_unit || q.uom || 'Nos',
-                rate: newBomCost, // Pre-fill with new cost
+                rate: newBomCost, // Match rate with new BOM cost
                 bom_cost: newBomCost,
                 gst_percentage: q.gst_percentage || 18,
                 item_group: q.item_group,

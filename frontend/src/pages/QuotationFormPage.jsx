@@ -47,10 +47,11 @@ const QuotationFormPage = () => {
   const hasInitialized = useRef(false);
 
   // Locking logic: Only the latest version can be edited, and only if it's NOT approved.
-  const maxVersion = versionHistory.length > 0 
-    ? Math.max(...versionHistory.map(vh => vh.version)) 
-    : version;
-  const isLatest = version === maxVersion;
+  const maxVersion = Math.max(
+    version,
+    ...(versionHistory.map(vh => vh.version) || [0])
+  );
+  const isLatest = version >= maxVersion;
   
   // Find if the absolute latest version is already approved
   const latestInHistory = versionHistory.find(vh => vh.version === maxVersion);
@@ -144,8 +145,13 @@ const QuotationFormPage = () => {
           return true;
         })
         .map(item => {
-          let drwRate = parseFloat(item.quotedPrice || item.rate || 0);
           let bomCost = parseFloat(item.bom_cost || 0);
+          let drwRate = parseFloat(item.quotedPrice || item.rate || bomCost || 0);
+
+          // Force sync for revisions and new quotes to ensure Rate == BOM Cost
+          if (bomCost > 0) {
+            drwRate = bomCost;
+          }
 
           // Recalculate based on sub-assemblies if they exist - helps catch stale FG costs
           if (item.sub_assemblies && item.sub_assemblies.length > 0) {
@@ -158,7 +164,7 @@ const QuotationFormPage = () => {
             // If the sum of known sub-assemblies is higher than the stored FG cost, trust the sum
             if (saSum > (bomCost || drwRate)) {
               bomCost = saSum;
-              if (drwRate === 0) drwRate = saSum;
+              drwRate = saSum;
             }
           }
 
@@ -183,8 +189,9 @@ const QuotationFormPage = () => {
   }, [initialData]);
 
   useEffect(() => {
-    // ONLY sync if we have drawings and items, and we haven't locked the view
-    if (items.length > 0 && drawings.length > 0 && !isLocked) {
+    // ONLY sync if we have drawings and items, we haven't locked the view, 
+    // AND we are not looking at a specific historical version
+    if (items.length > 0 && drawings.length > 0 && !isLocked && !selectedVersionId) {
       const updatedItems = items.map(item => {
         const itemG = (item.item_group || '').toUpperCase();
         const itemIsSA = (itemG.includes('SA') || itemG.includes('SUB') || itemG.includes('ASSEMBLY')) && !itemG.includes('FG');
@@ -251,21 +258,27 @@ const QuotationFormPage = () => {
             changed = true;
           }
 
-          // Sync sub_assemblies if missing or changed
-          if (matchedDrawing.sub_assemblies && JSON.stringify(item.sub_assemblies) !== JSON.stringify(matchedDrawing.sub_assemblies)) {
+          // Sync sub_assemblies if missing or if we are in create mode
+          const hasSAs = item.sub_assemblies && item.sub_assemblies.length > 0;
+          const saChanged = matchedDrawing.sub_assemblies && JSON.stringify(item.sub_assemblies) !== JSON.stringify(matchedDrawing.sub_assemblies);
+          
+          if (matchedDrawing.sub_assemblies && (!hasSAs || (mode === 'create' && saChanged))) {
             newItem.sub_assemblies = matchedDrawing.sub_assemblies;
             changed = true;
           }
 
           // Sync BOM Cost logic
           const currentBOMCost = parseFloat(item.bom_cost || 0);
+          const currentRate = parseFloat(item.rate || 0);
+          const rateMatchesCost = Math.abs(currentRate - currentBOMCost) < 0.01;
           
           // STRICTER SYNC: 
           // 1. Always sync if current cost is 0 and we found a rate
-          // 2. Sync if matched by item_code (specific record)
-          // 3. Sync if we are in 'revise' mode to ensure latest costs are pulled in
+          // 2. If NOT in revise mode, sync if matched by item_code (specific record)
+          // 3. If in revise mode, ONLY sync if the current rate doesn't match the current cost 
+          //    (implies it hasn't been manually adjusted/frozen or synced yet)
           const isItemCodeMatch = item.item_code && matchedDrawing.item_code && String(matchedDrawing.item_code).trim().toLowerCase() === String(item.item_code).trim().toLowerCase();
-          const shouldSync = (currentBOMCost === 0) || isItemCodeMatch || mode === 'revise';
+          const shouldSync = (currentBOMCost === 0) || (mode !== 'revise' && isItemCodeMatch) || (mode === 'revise' && !rateMatchesCost);
 
           const costChanged = drwRate > 0 && Math.abs(currentBOMCost - drwRate) > 0.01;
           
@@ -273,8 +286,8 @@ const QuotationFormPage = () => {
             newItem.bom_cost = drwRate;
             changed = true;
             
-            // Update rate to new BOM cost if it was 0 or matched old cost
-            if (parseFloat(item.rate || 0) === 0 || Math.abs(parseFloat(item.rate || 0) - currentBOMCost) < 0.01) {
+            // Update rate to new BOM cost if it was 0, matched old cost, OR we are in revise mode (if they were already synced)
+            if (currentRate === 0 || rateMatchesCost || mode === 'revise') {
               newItem.rate = drwRate;
               newItem.total = (parseFloat(item.quantity) || 0) * drwRate;
             }
@@ -296,7 +309,7 @@ const QuotationFormPage = () => {
         setItems(updatedItems);
       }
     }
-  }, [drawings, isLocked, items.length, mode]);
+  }, [drawings, isLocked, items.length, mode, version, selectedVersionId]);
 
   useEffect(() => {
     if (items.length > 0) {
@@ -362,7 +375,7 @@ const QuotationFormPage = () => {
         if (sortedHistory.length > 0 && currentMode !== 'create') {
           // Newest is the last item in ASC sort
           const latest = sortedHistory[sortedHistory.length - 1];
-          loadVersionData(latest);
+          loadVersionData(latest, currentMode === 'revise');
         }
       }
     } catch (error) {
@@ -372,36 +385,48 @@ const QuotationFormPage = () => {
     }
   };
 
-  const loadVersionData = (v) => {
+  const loadVersionData = (v, forceNextVersion = false) => {
     // This allows switching between versions dynamically in the form
-    setVersion(v.version);
-    setSelectedVersionId(v.id);
+    // If forceNextVersion is true (usually on initial load in revise mode), 
+    // we want to show the NEXT version number we are about to create.
+    const targetVersion = forceNextVersion ? (initialData?.version || v.version + 1) : v.version;
+    setVersion(targetVersion);
+    setSelectedVersionId(forceNextVersion ? null : v.id);
     setBatchId(v.batch_id || null);
     setQuotationNo(`QRT-${String(v.id).padStart(4, '0')}`);
     setQuotationDate(v.created_at.split('T')[0]);
     setProjectName(v.project_name || '');
     setNotes(v.notes || '');
     
+    const maxHistoryVersion = versionHistory.length > 0 
+      ? Math.max(...versionHistory.map(vh => vh.version)) 
+      : version;
+    
+    // RULE: Any existing saved version with these statuses is considered "historical" (frozen)
+    const s = (v.status || '').toUpperCase();
+    const isSnapshot = v.version < maxHistoryVersion || ['APPROVED', 'REVISED', 'SENT', 'COMPLETED', 'REJECTED'].includes(s);
+    
+    // If we are preparing a NEW version (forceNextVersion), the items are NOT historical (they are editable templates)
+    const isHistorical = isSnapshot && !forceNextVersion;
+    
     // Map items from the version
     if (v.items && v.items.length > 0) {
-      const maxHistoryVersion = versionHistory.length > 0 
-        ? Math.max(...versionHistory.map(vh => vh.version)) 
-        : version;
-      const isHistorical = v.version < maxHistoryVersion || v.status?.toUpperCase() === 'APPROVED';
-      
       setItems(v.items.map(item => {
-        // ONLY apply overrides if we are looking at the LATEST version being edited
-        // If it's historical, we must trust the stored item data exactly as it was
-        const override = !isHistorical ? initialData?.items?.find(oi => 
-          (oi.salesOrderItemId && oi.salesOrderItemId === item.sales_order_item_id) ||
+        // Apply overrides if we are looking at the LATEST editable version OR if we are preparing a NEW version (forceNextVersion)
+        const override = (!isSnapshot || forceNextVersion) ? initialData?.items?.find(oi => 
+          (oi.salesOrderItemId && String(oi.salesOrderItemId) === String(item.sales_order_item_id)) ||
           (oi.item_code && oi.item_code === item.item_code && oi.drawing_no === item.drawing_no)
         ) : null;
 
-        let drwRate = parseFloat(override?.quotedPrice || item.quotedPrice || item.rate || 0);
         let bomCost = parseFloat(override?.bom_cost || item.bom_cost || 0);
+        let drwRate = parseFloat(override?.quotedPrice || item.quotedPrice || item.rate || bomCost || 0);
 
-        // ONLY Recalculate based on sub-assemblies for the LATEST version 
-        // helps catch stale FG costs for NEW revisions, but must NOT touch historical records
+        // Always ensure Rate matches BOM Cost for the version currently being edited/prepared
+        if (!isHistorical && bomCost > 0) {
+          drwRate = bomCost;
+        }
+
+        // ONLY Recalculate based on sub-assemblies for non-historical versions
         if (!isHistorical && item.sub_assemblies && item.sub_assemblies.length > 0) {
           const saSum = item.sub_assemblies.reduce((sum, sa) => {
             const saCost = parseFloat(sa.bom_cost || sa.rate || 0);
@@ -409,8 +434,9 @@ const QuotationFormPage = () => {
             return sum + (saCost * saQty);
           }, 0);
           
-          if (saSum > drwRate) {
+          if (saSum > (drwRate || bomCost)) {
             drwRate = saSum;
+            bomCost = saSum;
           }
         }
 
@@ -429,7 +455,8 @@ const QuotationFormPage = () => {
           revision_no: item.revision_no,
           sub_assemblies: (item.sub_assemblies || []).map(sa => ({
             ...sa,
-            bom_cost: parseFloat(sa.bom_cost || sa.rate || 0)
+            bom_cost: parseFloat(sa.bom_cost || sa.rate || 0),
+            rate: parseFloat(sa.rate || sa.bom_cost || 0)
           }))
         };
       }));
@@ -693,6 +720,10 @@ const QuotationFormPage = () => {
       // Root parent ID should be the first version's ID
       const finalParentId = isNewCreation ? null : (initialData?.parentId || initialData?.id || parentId);
 
+      // Each saved version MUST have its own unique batch_id for component snapshots
+      // If we are creating a NEW version, reset batchId to null so backend generates a new one
+      const finalBatchId = (finalVersion > (initialData?.version || 0)) ? null : batchId;
+
       const quotationData = {
         clientId: selectedClient.id,
         clientName: selectedClient.company_name,
@@ -714,7 +745,16 @@ const QuotationFormPage = () => {
           gst_percentage: parseFloat(item.gst_percentage) || 18,
           item_group: item.item_group || null,
           status: status.toUpperCase() === 'REVISED' ? 'REVISED' : (item.status || 'SENT'),
-          profit_percentage: 0
+          profit_percentage: 0,
+          sub_assemblies: (item.sub_assemblies || []).map(sa => ({
+            item_code: sa.item_code || sa.component_code,
+            drawing_no: sa.drawing_no,
+            description: sa.description,
+            quantity: sa.quantity,
+            bom_cost: parseFloat(sa.bom_cost) || 0,
+            rate: parseFloat(sa.rate || sa.bom_cost) || 0,
+            unit: sa.unit || 'Nos'
+          }))
         })),
         totalAmount: summary.totalAmount,
         notes: notes,
@@ -725,7 +765,7 @@ const QuotationFormPage = () => {
         version: finalVersion,
         parentId: finalParentId,
         clearPendingBomId: initialData?.id || null,
-        batch_id: batchId
+        batch_id: finalBatchId
       };
 
       const response = await fetch(`${API_BASE}/quotation-requests/send`, {
@@ -1374,7 +1414,7 @@ const QuotationFormPage = () => {
                         key={v.id} 
                         onClick={() => {
                           if (isViewable) {
-                            loadVersionData(v);
+                            loadVersionData(v, false);
                             handleViewPDF(v.id);
                           }
                         }}

@@ -8,7 +8,8 @@ const getItemMaterials = async (itemId, itemCode = null, drawingNo = null) => {
   if (parsedItemId) {
     const [itemCheck] = await pool.query('SELECT status, bom_cost FROM sales_order_items WHERE id = ?', [parsedItemId]);
     if (itemCheck.length > 0) {
-      isHistorical = ['APPROVED', 'RELEASED', 'COMPLETED'].includes(String(itemCheck[0].status).toUpperCase());
+      const s = String(itemCheck[0].status).toUpperCase();
+      isHistorical = ['APPROVED', 'RELEASED', 'COMPLETED', 'REVISED', 'SENT'].includes(s);
     }
 
     [rows] = await pool.query(
@@ -94,11 +95,11 @@ const getItemMaterials = async (itemId, itemCode = null, drawingNo = null) => {
   }));
 };
 
-const getItemComponents = async (itemId, itemCode = null, drawingNo = null) => {
+const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refBatchId = null, refDate = null) => {
   let parsedItemId = (itemId === 'null' || itemId === 'undefined' || !itemId) ? null : itemId;
   let rows = [];
   
-  let isHistorical = false;
+  let isHistorical = !!refBatchId;
   
   // Handle manual historical override from controllers
   if (typeof parsedItemId === 'string' && parsedItemId.startsWith('HISTORICAL_')) {
@@ -108,11 +109,40 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null) => {
   }
 
   if (parsedItemId) {
+    isHistorical = true;
+  }
+
+  // PRIORITY 0: If we have a batch ID, try to fetch components from the quotation snapshot first
+  // This is the most accurate way to get frozen costs for ANY saved quotation version (even Drafts)
+  if (refBatchId) {
+    const [batchRows] = await pool.query(
+      `SELECT id, drawing_no, description, item_unit as unit, item_qty as quantity,
+              item_group, bom_cost, received_amount as rate, item_code,
+              1 as is_cost_frozen
+       FROM quotation_requests 
+       WHERE batch_id = ? AND status = 'COMPONENT'
+       AND (rejection_reason = ? OR drawing_no = ? OR ? IS NULL)`,
+      [refBatchId, drawingNo, drawingNo, drawingNo]
+    );
+    if (batchRows.length > 0) {
+      // IF WE FOUND SNAPSHOT DATA, RETURN IT IMMEDIATELY
+      // This is a frozen snapshot, we MUST NOT fall back to other queries or latest costs
+      return batchRows.map(row => ({
+        ...row,
+        qty: row.quantity || row.qty,
+        quantity: row.quantity || row.qty,
+        rate: parseFloat(row.rate || 0),
+        bom_cost: parseFloat(row.bom_cost || 0),
+        is_cost_frozen: true
+      }));
+    }
+  }
+
+  if (rows.length === 0 && parsedItemId) {
     if (!isHistorical) {
-      const [itemCheck] = await pool.query('SELECT status, bom_cost FROM sales_order_items WHERE id = ?', [parsedItemId]);
-      if (itemCheck.length > 0) {
-        isHistorical = ['APPROVED', 'RELEASED', 'COMPLETED'].includes(String(itemCheck[0].status).toUpperCase());
-      }
+      // We used to auto-detect history here based on SO item status, 
+      // but that breaks new revisions (V6 Draft) that reference approved SO items.
+      // Now we strictly follow the 'HISTORICAL_' prefix from the controller.
     }
 
     [rows] = await pool.query(
@@ -229,7 +259,7 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null) => {
 
   // Dynamically fetch latest BOM cost for Sub-Assemblies in BULK to avoid N+1 problem
   const saComponents = rows.filter(row => {
-    const compCode = (row.component_code || row.componentCode || '').toUpperCase();
+    const compCode = (row.item_code || row.component_code || row.componentCode || '').toUpperCase();
     const group = (row.item_group || '').toUpperCase();
     const desc = (row.description || '').toUpperCase();
     return (compCode.startsWith('SA-') || compCode.startsWith('SFG-') || 
@@ -243,36 +273,76 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null) => {
     // RULE: For specific historical revisions of Sales Order items (parsedItemId exists AND has a status like 'APPROVED'),
     // we should TRUST the stored rates in the components table as a snapshot.
     // For "Master" templates (no sales_order_id) or "New/Draft" items, we should use LATEST rates.
-    let shouldOverride = !isHistorical;
+    // If it's a historical quotation snapshot, we MUST NOT override the stored rates UNLESS we find a batch-specific cost.
+    let shouldOverride = false;
 
+    // ONLY override for NON-historical (latest/new calculations)
     if (shouldOverride) {
       const codes = [...new Set(saComponents.map(c => c.component_code || c.componentCode))];
       try {
-        const [latestCosts] = await pool.query(`
-          SELECT soi.item_code, soi.drawing_no, soi.bom_cost,
-                 (SELECT qr.pending_bom_cost 
-                  FROM quotation_requests qr 
-                  WHERE (qr.sales_order_item_id = soi.id 
-                     OR (qr.item_code = soi.item_code AND qr.drawing_no = soi.drawing_no AND qr.item_code IS NOT NULL))
-                  AND qr.pending_bom_cost IS NOT NULL 
-                  ORDER BY qr.id DESC LIMIT 1) as pending_bom_cost
-          FROM sales_order_items soi
-          WHERE soi.item_code IN (?)
-          AND soi.bom_cost > 0
-          AND soi.id IN (
-            SELECT max_id FROM (
-                SELECT MAX(id) as max_id
-                FROM sales_order_items
-                WHERE item_code IN (?)
-                AND bom_cost > 0
-                GROUP BY item_code, IFNULL(drawing_no, '')
-            ) as t
-          )
-        `, [codes, codes]);
+        // PRIORITY 1: Fetch costs from the SAME BATCH if refBatchId is provided
+        // This ensures Quotation Versions show exactly what was calculated/saved for that specific revision
+        let batchCosts = [];
+        if (refBatchId) {
+          [batchCosts] = await pool.query(`
+            SELECT item_code, drawing_no, bom_cost, quotedPrice as rate, pending_bom_cost
+            FROM quotation_requests 
+            WHERE batch_id = ? AND item_code IN (?)
+          `, [refBatchId, codes]);
+        }
+
+        // PRIORITY 2: Fetch HISTORICAL costs active at refDate (if provided)
+        let historicalCosts = [];
+        if (refDate) {
+          [historicalCosts] = await pool.query(`
+            SELECT soi.item_code, soi.drawing_no, soi.bom_cost
+            FROM sales_order_items soi
+            WHERE soi.item_code IN (?)
+            AND soi.bom_cost > 0
+            AND soi.created_at <= ?
+            AND soi.id IN (
+              SELECT max_id FROM (
+                  SELECT MAX(id) as max_id
+                  FROM sales_order_items
+                  WHERE item_code IN (?)
+                  AND bom_cost > 0
+                  AND created_at <= ?
+                  GROUP BY item_code, IFNULL(drawing_no, '')
+              ) as t
+            )
+          `, [codes, refDate, codes, refDate]);
+        }
+
+        // PRIORITY 3: Fetch LATEST costs from sales_order_items (for new creations)
+        let latestCosts = [];
+        if (!refDate) {
+          [latestCosts] = await pool.query(`
+            SELECT soi.item_code, soi.drawing_no, soi.bom_cost,
+                   (SELECT qr.pending_bom_cost 
+                    FROM quotation_requests qr 
+                    WHERE (qr.sales_order_item_id = soi.id 
+                       OR (qr.item_code = soi.item_code AND qr.drawing_no = soi.drawing_no AND qr.item_code IS NOT NULL))
+                    AND qr.pending_bom_cost IS NOT NULL 
+                    ORDER BY qr.id DESC LIMIT 1) as pending_bom_cost
+            FROM sales_order_items soi
+            WHERE soi.item_code IN (?)
+            AND soi.bom_cost > 0
+            AND soi.id IN (
+              SELECT max_id FROM (
+                  SELECT MAX(id) as max_id
+                  FROM sales_order_items
+                  WHERE item_code IN (?)
+                  AND bom_cost > 0
+                  GROUP BY item_code, IFNULL(drawing_no, '')
+              ) as t
+            )
+          `, [codes, codes]);
+        }
 
         const costMap = new Map();
         const pendingMap = new Map();
         
+        // Apply latest costs first (as baseline)
         latestCosts.forEach(c => {
           const key = `${c.item_code}|${c.drawing_no || ''}`;
           costMap.set(key, parseFloat(c.bom_cost));
@@ -281,9 +351,30 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null) => {
           }
           if (!costMap.has(c.item_code)) {
             costMap.set(c.item_code, parseFloat(c.bom_cost));
-            if (c.pending_bom_cost && !pendingMap.has(c.item_code)) {
-              pendingMap.set(c.item_code, parseFloat(c.pending_bom_cost));
-            }
+          }
+        });
+
+        // OVERRIDE with historical costs active at refDate
+        historicalCosts.forEach(c => {
+          const key = `${c.item_code}|${c.drawing_no || ''}`;
+          const hCost = parseFloat(c.bom_cost || 0);
+          if (hCost > 0) {
+            costMap.set(key, hCost);
+            costMap.set(c.item_code, hCost);
+          }
+        });
+
+        // OVERRIDE with batch-specific costs (Highest Priority)
+        batchCosts.forEach(c => {
+          const key = `${c.item_code}|${c.drawing_no || ''}`;
+          const bCost = parseFloat(c.bom_cost || c.rate || 0);
+          if (bCost > 0) {
+            costMap.set(key, bCost);
+            costMap.set(c.item_code, bCost);
+          }
+          if (c.pending_bom_cost) {
+            pendingMap.set(key, parseFloat(c.pending_bom_cost));
+            pendingMap.set(c.item_code, parseFloat(c.pending_bom_cost));
           }
         });
 
@@ -298,9 +389,11 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null) => {
           
           if (isSubAssy && compCode) {
             const key = `${compCode}|${row.drawing_no || ''}`;
-            const latestRate = costMap.get(key) || costMap.get(compCode);
-            if (latestRate !== undefined) {
-              row.rate = latestRate;
+            const targetRate = costMap.get(key) || costMap.get(compCode);
+            if (targetRate !== undefined) {
+              row.rate = targetRate;
+              row.bom_cost = targetRate; 
+              row.is_cost_frozen = true; // Mark as explicitly frozen from history/batch
             }
             const pendingRate = pendingMap.get(key) || pendingMap.get(compCode);
             if (pendingRate !== undefined) {
@@ -324,16 +417,20 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null) => {
     thickness: (isHistorical && parseFloat(row.thickness) > 0) ? row.thickness : (row.thickness || row.latest_thickness || 0),
     diameter: (isHistorical && parseFloat(row.diameter) > 0) ? row.diameter : (row.diameter || row.latest_diameter || 0),
     outer_diameter: (isHistorical && parseFloat(row.outer_diameter) > 0) ? row.outer_diameter : (row.outer_diameter || row.latest_outer_diameter || 0),
-    selling_rate: isHistorical ? (row.rate || row.latest_selling_rate) : row.latest_selling_rate,
-    valuation_rate: isHistorical ? (row.rate || row.latest_valuation_rate) : row.latest_valuation_rate,
+    rate: (isHistorical || row.is_cost_frozen) ? (parseFloat(row.rate) || 0) : (parseFloat(row.latest_selling_rate) || parseFloat(row.rate) || 0),
+    selling_rate: (isHistorical || row.is_cost_frozen) ? (parseFloat(row.rate) || 0) : (parseFloat(row.latest_selling_rate) || parseFloat(row.rate) || 0),
+    valuation_rate: (isHistorical || row.is_cost_frozen) ? (parseFloat(row.rate) || 0) : (parseFloat(row.latest_valuation_rate) || parseFloat(row.rate) || 0),
     bom_cost: (() => {
-      const compCode = (row.component_code || row.componentCode || '').toUpperCase();
+      const compCode = (row.item_code || row.component_code || row.componentCode || '').toUpperCase();
       const g = (row.item_group || '').toUpperCase();
       const d = (row.description || '').toUpperCase();
       const isSA = (compCode.startsWith('SA-') || compCode.startsWith('SFG-') || g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY') || d.includes('ASSEMBLY') || d.includes('UNIT')) && !g.includes('FG');
+      
       if (isSA) return parseFloat(row.rate || 0);
+      
       // For materials: weight * valuation_rate
-      return (parseFloat(row.weight_per_pc || row.weight_per_unit || 0) * parseFloat(isHistorical ? (row.rate || row.latest_valuation_rate || 0) : (row.latest_valuation_rate || 0)));
+      const vRate = (isHistorical || row.is_cost_frozen) ? (parseFloat(row.rate) || 0) : (parseFloat(row.latest_valuation_rate) || 0);
+      return (parseFloat(row.weight_per_pc || row.weight_per_unit || 0) * vRate);
     })()
   }));
 };

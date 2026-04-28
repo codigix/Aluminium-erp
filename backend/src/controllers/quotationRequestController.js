@@ -75,7 +75,13 @@ const getQuotationRequests = async (req, res, next) => {
 
       if (soiId || itemCode || drawingNo) {
         try {
-          const components = await bomService.getItemComponents(soiId, itemCode, drawingNo);
+          const components = await bomService.getItemComponents(
+            `HISTORICAL_${soiId}`, 
+            itemCode, 
+            drawingNo, 
+            row.batch_id, 
+            row.created_at
+          );
           const sub_assemblies = components.filter(c => {
             const code = (c.item_code || c.component_code || '').toUpperCase();
             const group = (c.item_group || '').toUpperCase();
@@ -138,10 +144,11 @@ const getQuotationVersionHistory = async (req, res, next) => {
        LEFT JOIN sales_order_items soi ON soi.id = qr.sales_order_item_id
        WHERE qr.id = ? OR qr.parent_id = ? 
           OR qr.parent_id IN (SELECT id FROM quotation_requests WHERE id = ? OR parent_id = ?)
+          OR qr.id IN (SELECT parent_id FROM quotation_requests WHERE id = ?)
           OR (qr.batch_id IS NOT NULL AND qr.batch_id = ?)
-          OR (qr.company_id = ? AND qr.project_name = ? AND ABS(TIMESTAMPDIFF(SECOND, qr.created_at, ?)) < 10)
+          OR (qr.company_id = ? AND qr.project_name = ? AND ABS(TIMESTAMPDIFF(SECOND, qr.created_at, ?)) < 60)
        ORDER BY qr.version ASC, qr.id ASC`,
-      [rootId, rootId, rootId, rootId, targetQuote.batch_id, targetQuote.company_id, targetQuote.project_name, targetQuote.created_at]
+      [rootId, rootId, rootId, rootId, id, targetQuote.batch_id, targetQuote.company_id, targetQuote.project_name, targetQuote.created_at]
     );
 
     // Group items by version
@@ -210,13 +217,17 @@ const getQuotationVersionHistory = async (req, res, next) => {
           // treat the data as a frozen snapshot.
           // By passing a status-like flag in the itemId parameter (simulating an approved item),
           // we force bomService to stop overriding with latest costs.
-          const maxVersion = Math.max(...rows.map(r => r.version));
-          const isHistoricalVersion = row.version < maxVersion || row.status?.toUpperCase() === 'APPROVED';
+          const s = (row.status || '').toUpperCase();
+          // Any version that exists in the database is a snapshot of that version's data.
+          // We only want "live" calculation for new versions not yet in the DB.
+          const isHistoricalVersion = true; 
           
           const components = await bomService.getItemComponents(
             isHistoricalVersion ? `HISTORICAL_${soiIdVer}` : soiIdVer, 
             itemCodeVer, 
-            drawingNoVer
+            drawingNoVer,
+            row.batch_id,
+            row.created_at
           );
           
           itemData.sub_assemblies = components.filter(c => {
@@ -395,8 +406,11 @@ const sendQuotationViaEmail = async (req, res, next) => {
 
     const batchId = req.body.batch_id || `BATCH-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
-    const quotationPromises = items.map(item => {
-      return new Promise(async (resolve, reject) => {
+    const quotationPromises = [];
+    
+    for (const item of items) {
+      // 1. Save Parent Item
+      const parentPromise = new Promise(async (resolve, reject) => {
         try {
           const lineTotal = (item.quotedPrice || 0) * (item.quantity || 1);
           const gstRate = parseFloat(item.gst_percentage) || 18;
@@ -408,8 +422,8 @@ const sendQuotationViaEmail = async (req, res, next) => {
                status, total_amount, received_amount, rejection_reason, 
                notes, created_at, profit_percentage, gst_percentage,
                version, parent_id, drawing_no, description, item_unit,
-               project_name, batch_id, item_group, bom_cost
-             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+               project_name, batch_id, item_group, bom_cost, item_code
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
               item.orderId || null, 
               item.salesOrderItemId || null, 
@@ -430,7 +444,8 @@ const sendQuotationViaEmail = async (req, res, next) => {
               projectName || null,
               batchId,
               item.item_group || item.item_group_calc || null,
-              item.bom_cost || 0
+              item.bom_cost || 0,
+              item.item_code || null
             ]
           );
           resolve(result.insertId);
@@ -438,9 +453,54 @@ const sendQuotationViaEmail = async (req, res, next) => {
           reject(error);
         }
       });
-    });
+      quotationPromises.push(parentPromise);
 
-    const quotationIds = await Promise.all(quotationPromises);
+      // 2. Save Sub-Assemblies (Components) as Cost Snapshots
+      // We use status = 'COMPONENT' and total_amount = 0 so they don't show up in lists or totals,
+      // but their costs are frozen in this batch for historical accuracy.
+      if (item.sub_assemblies && Array.isArray(item.sub_assemblies)) {
+        for (const sa of item.sub_assemblies) {
+          const saPromise = new Promise(async (resolve, reject) => {
+            try {
+              await connection.execute(
+                `INSERT INTO quotation_requests (
+                   company_id, status, total_amount, received_amount, 
+                   created_at, version, parent_id, drawing_no, description, 
+                   item_unit, item_qty, batch_id, item_group, bom_cost, 
+                   project_name, item_code, rejection_reason
+                 ) VALUES (?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [
+                  clientId,
+                  'COMPONENT',
+                  0, // Don't affect totals
+                  sa.rate || sa.bom_cost || 0, // Store rate in received_amount for components
+                  req.body.version || 1,
+                  req.body.parentId || null,
+                  sa.drawing_no || null,
+                  sa.description || null,
+                  sa.unit || 'Nos',
+                  sa.quantity || 0,
+                  batchId,
+                  'SUB ASSEMBLY',
+                  sa.bom_cost || 0,
+                  projectName || null,
+                  sa.item_code || sa.component_code || null,
+                  item.drawing_no || null // Store parent drawing number to link them
+                ]
+              );
+              resolve(null);
+            } catch (error) {
+              console.error('[Quotation Controller] Error saving component snapshot:', error.message);
+              resolve(null); // Non-critical for parent save
+            }
+          });
+          quotationPromises.push(saPromise);
+        }
+      }
+    }
+
+    const allResults = await Promise.all(quotationPromises);
+    const quotationIds = allResults.filter(id => id !== null);
 
     const uniqueOrderIds = [...new Set(items.map(i => i.orderId))].filter(Boolean);
 
@@ -745,7 +805,8 @@ const requestQuotationUpdateFromBOM = async (req, res, next) => {
     // b) Match by (item_code AND drawing_no)
     // c) Match by drawing_no alone (if item_code is missing)
     // d) Match by description (as last resort)
-    const [qrs] = await pool.query(
+    // e) Match if it's a SUB-COMPONENT of a parent that is in a quotation
+    let [qrs] = await pool.query(
       `SELECT qr.id, c.company_name, qr.batch_id
        FROM quotation_requests qr
        JOIN companies c ON qr.company_id = c.id
@@ -756,6 +817,25 @@ const requestQuotationUpdateFromBOM = async (req, res, next) => {
           AND qr.status NOT IN ('COMPLETED', 'REJECTED', 'CANCELLED')`,
       [salesOrderItemId, item_code, drawing_no, drawing_no, description]
     );
+
+    // 2.1 IF NO QUOTATIONS FOUND, check if it's a sub-assembly component of an active FG quotation
+    if (qrs.length === 0) {
+      console.log(`[requestQuotationUpdateFromBOM] No direct quotations for ${item_code}. Checking parents...`);
+      const [parentQrs] = await pool.query(
+        `SELECT DISTINCT qr.id, c.company_name, qr.batch_id, qr.description as parent_desc
+         FROM quotation_requests qr
+         JOIN companies c ON qr.company_id = c.id
+         JOIN sales_order_item_components sic ON sic.sales_order_item_id = qr.sales_order_item_id
+         WHERE (sic.component_code = ? OR sic.drawing_no = ?)
+         AND qr.status NOT IN ('COMPLETED', 'REJECTED', 'CANCELLED')`,
+        [item_code, drawing_no]
+      );
+      
+      if (parentQrs.length > 0) {
+        console.log(`[requestQuotationUpdateFromBOM] Found ${parentQrs.length} parent quotations to notify.`);
+        qrs = parentQrs;
+      }
+    }
 
     if (qrs.length === 0) {
       console.log(`[requestQuotationUpdateFromBOM] No active quotations found for: ${item_code} / ${drawing_no} / ${description}`);

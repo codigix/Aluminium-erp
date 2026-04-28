@@ -1660,14 +1660,19 @@ const BOMFormPage = () => {
       // Determine version number
       let nextRevision = productForm.revision;
       if (isNewVersion) {
-        // Find highest version in history or current revision
-        const currentRev = parseInt(productForm.revision || 0);
-        const maxHistoryVersion = bomHistory.reduce((max, item) => {
-          const v = parseInt(item.version || 0);
-          return v > max ? v : max;
-        }, 0);
-        const maxVersion = Math.max(currentRev, maxHistoryVersion);
-        nextRevision = (maxVersion + 1).toString();
+        // If there is no history at all, the "new version" should still be V1
+        if (bomHistory.length === 0) {
+          nextRevision = '1';
+        } else {
+          // Find highest version in history or current revision
+          const currentRev = parseInt(productForm.revision || 0);
+          const maxHistoryVersion = bomHistory.reduce((max, item) => {
+            const v = parseInt(item.version || 0);
+            return v > max ? v : max;
+          }, 0);
+          const maxVersion = Math.max(currentRev, maxHistoryVersion);
+          nextRevision = (maxVersion + 1).toString();
+        }
       }
 
       const effectiveItemId = (itemId && itemId !== 'bom-form') 
@@ -1729,8 +1734,9 @@ const BOMFormPage = () => {
         successToast(isDraft ? 'BOM saved as draft' : (isNewVersion ? `BOM Revision V${nextRevision} created successfully` : 'BOM created successfully'));
       }
 
-      // Auto-update quotation and refresh history if not a new version
-      if (!isDraft && !isNewVersion && effectiveItemId) {
+      // Auto-update quotation and refresh history
+      const targetUpdateId = isNewVersion ? newId : effectiveItemId;
+      if (!isDraft && targetUpdateId) {
         try {
           await fetch(`${API_BASE}/quotation-requests/update-from-bom`, {
             method: 'PUT',
@@ -1738,35 +1744,45 @@ const BOMFormPage = () => {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${token}`
             },
-            body: JSON.stringify({ salesOrderItemId: effectiveItemId, bomCost: totalBOMCost })
+            body: JSON.stringify({ salesOrderItemId: targetUpdateId, bomCost: totalBOMCost })
           });
         } catch (e) {
           console.error('Failed to auto-update quotation:', e);
         }
         
         // Refresh history to show updated cost in sidebar
-        fetchBOMHistory(productForm.itemCode, productForm.drawingNo, effectiveItemId);
+        fetchBOMHistory(productForm.itemCode, productForm.drawingNo, targetUpdateId);
 
         // Also update local state for immediate feedback
         setProductForm(prev => ({ ...prev, bom_cost: totalBOMCost }));
-        setBomHistory(prev => {
-          const newHistory = [...prev];
-          // Find the version we're currently viewing to update its cost in history sidebar
-          const currentViewingId = itemId || effectiveItemId;
-          const idx = newHistory.findIndex(v => String(v.id) === String(currentViewingId));
-          
-          if (idx !== -1) {
-            newHistory[idx] = { ...newHistory[idx], total_cost: totalBOMCost };
-          } else if (newHistory.length > 0) {
-            // Fallback: Update the last one (usually Current) if ID match fails
-            const lastIdx = newHistory.length - 1;
-            newHistory[lastIdx] = { ...newHistory[lastIdx], total_cost: totalBOMCost };
-          }
-          return newHistory;
-        });
+        
+        if (!isNewVersion) {
+          setBomHistory(prev => {
+            const newHistory = [...prev];
+            // Find the version we're currently viewing to update its cost in history sidebar
+            const currentViewingId = itemId || effectiveItemId;
+            const idx = newHistory.findIndex(v => String(v.id) === String(currentViewingId));
+            
+            if (idx !== -1) {
+              newHistory[idx] = { ...newHistory[idx], total_cost: totalBOMCost };
+            } else if (newHistory.length > 0) {
+              // Fallback: Update the last one (usually Current) if ID match fails
+              const lastIdx = newHistory.length - 1;
+              newHistory[lastIdx] = { ...newHistory[lastIdx], total_cost: totalBOMCost };
+            }
+            return newHistory;
+          });
+        }
 
         // Refresh all data from server to ensure sync
         fetchData(false);
+
+        // Auto-trigger Quotation Update Request for FG items (Auto-click simulation)
+        const groupG = (productForm.itemGroup || "").toUpperCase();
+        const isFGItem = groupG.includes("FG") || groupG.includes("FINISHED") || groupG.includes("GOOD");
+        if (isFGItem) {
+          handleUpdateQuotation(targetUpdateId, totalBOMCost, true);
+        }
       }
 
       // Instead of resetting and navigating to list, stay on the page in view mode
@@ -1788,19 +1804,21 @@ const BOMFormPage = () => {
     }
   };
 
-  const handleUpdateQuotation = async (salesOrderItemId, bomCost) => {
+  const handleUpdateQuotation = async (salesOrderItemId, bomCost, skipConfirm = false) => {
     try {
-      const result = await Swal.fire({
-        title: 'Request Quotation Update?',
-        text: `Would you like to send a request to the Sales team to update all linked quotations with the latest BOM cost of ₹${parseFloat(bomCost).toLocaleString('en-IN', { minimumFractionDigits: 2 })}?`,
-        icon: 'question',
-        showCancelButton: true,
-        confirmButtonText: 'Yes, Send Request',
-        cancelButtonText: 'Cancel',
-        confirmButtonColor: '#4f46e5'
-      });
+      if (!skipConfirm) {
+        const result = await Swal.fire({
+          title: 'Request Quotation Update?',
+          text: `Would you like to send a request to the Sales team to update all linked quotations with the latest BOM cost of ₹${parseFloat(bomCost).toLocaleString('en-IN', { minimumFractionDigits: 2 })}?`,
+          icon: 'question',
+          showCancelButton: true,
+          confirmButtonText: 'Yes, Send Request',
+          cancelButtonText: 'Cancel',
+          confirmButtonColor: '#4f46e5'
+        });
 
-      if (!result.isConfirmed) return;
+        if (!result.isConfirmed) return;
+      }
 
       const token = localStorage.getItem('authToken');
       
