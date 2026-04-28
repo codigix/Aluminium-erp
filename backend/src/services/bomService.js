@@ -121,8 +121,8 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
               1 as is_cost_frozen
        FROM quotation_requests 
        WHERE batch_id = ? AND status = 'COMPONENT'
-       AND (rejection_reason = ? OR drawing_no = ? OR ? IS NULL)`,
-      [refBatchId, drawingNo, drawingNo, drawingNo]
+       AND (rejection_reason = ? OR ? IS NULL)`,
+      [refBatchId, drawingNo, drawingNo]
     );
     if (batchRows.length > 0) {
       // IF WE FOUND SNAPSHOT DATA, RETURN IT IMMEDIATELY
@@ -270,13 +270,10 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
 
   if (saComponents.length > 0) {
     // Determine if we should even override the rates.
-    // RULE: For specific historical revisions of Sales Order items (parsedItemId exists AND has a status like 'APPROVED'),
-    // we should TRUST the stored rates in the components table as a snapshot.
-    // For "Master" templates (no sales_order_id) or "New/Draft" items, we should use LATEST rates.
-    // If it's a historical quotation snapshot, we MUST NOT override the stored rates UNLESS we find a batch-specific cost.
-    let shouldOverride = false;
+    // RULE: For non-historical items (New/Draft), or when we have a specific batch/date snapshot,
+    // we should override the template/master rates.
+    let shouldOverride = !isHistorical || !!refBatchId || !!refDate;
 
-    // ONLY override for NON-historical (latest/new calculations)
     if (shouldOverride) {
       const codes = [...new Set(saComponents.map(c => c.component_code || c.componentCode))];
       try {
@@ -1668,9 +1665,9 @@ const syncQuotationCosts = async (itemId, bomCost) => {
 
       await pool.execute(
         `UPDATE quotation_requests 
-         SET total_amount = ?, received_amount = ?, sales_order_item_id = ?, updated_at = NOW() 
+         SET bom_cost = ?, total_amount = ?, received_amount = ?, sales_order_item_id = ?, updated_at = NOW() 
          WHERE id = ?`,
-        [newTotalBase, newTotalInclGst, itemId, qr.id]
+        [bomCost, newTotalBase, newTotalInclGst, itemId, qr.id]
       );
     }
     

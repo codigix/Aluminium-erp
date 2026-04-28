@@ -47,12 +47,11 @@ const listDrawings = async (search = '', onlyShared = false, clientName = null) 
       SELECT s1.id, s1.drawing_no, s1.status, s1.sales_order_id, s1.description, s1.bom_cost, s1.item_group, s1.unit, s1.drawing_id, s1.item_code
       FROM sales_order_items s1
       INNER JOIN (
-        SELECT drawing_id, MAX(id) as max_id
+        SELECT COALESCE(drawing_id, drawing_no) as identifier, item_code, item_group, MAX(id) as max_id
         FROM sales_order_items
-        WHERE drawing_id IS NOT NULL
-        GROUP BY drawing_id
+        GROUP BY identifier, item_code, item_group
       ) s2 ON s1.id = s2.max_id
-    ) soi ON d.id = soi.drawing_id
+    ) soi ON (d.id = soi.drawing_id OR d.drawing_no = soi.drawing_no)
     WHERE 1=1
   `;
   const params = [];
@@ -73,7 +72,7 @@ const listDrawings = async (search = '', onlyShared = false, clientName = null) 
     params.push(searchPattern, searchPattern, searchPattern);
   }
 
-  query += ` ORDER BY d.created_at DESC`;
+  query += ` ORDER BY d.created_at DESC, (soi.item_group LIKE '%FG%' OR soi.item_group LIKE '%FINISHED%') DESC, (soi.bom_cost > 0) DESC, soi.id DESC`;
   const [rows] = await pool.query(query, params);
   
   // Enrich with sub-assemblies for items with BOM structure

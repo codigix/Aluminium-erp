@@ -137,7 +137,7 @@ const getQuotationVersionHistory = async (req, res, next) => {
                    OR (LOWER(TRIM(v2.item_code)) = LOWER(TRIM(soi.item_code)) AND LOWER(TRIM(v2.drawing_no)) = LOWER(TRIM(soi.drawing_no)) AND v2.item_code IS NOT NULL AND v2.drawing_no IS NOT NULL)
                    OR (LOWER(TRIM(v2.drawing_no)) = LOWER(TRIM(qr.drawing_no)) AND qr.drawing_no IS NOT NULL AND LOWER(TRIM(v2.description)) = LOWER(TRIM(qr.description))))
                    AND v2.bom_cost > 0
-                ORDER BY v2.id DESC LIMIT 1
+                ORDER BY (v2.item_group = soi.item_group) DESC, v2.id DESC LIMIT 1
               ) as latest_bom_cost
        FROM quotation_requests qr
        JOIN companies c ON qr.company_id = c.id
@@ -151,23 +151,23 @@ const getQuotationVersionHistory = async (req, res, next) => {
       [rootId, rootId, rootId, rootId, id, targetQuote.batch_id, targetQuote.company_id, targetQuote.project_name, targetQuote.created_at]
     );
 
-    // Group items by version
+    // Separate main items from component snapshots for each version
     const versionGroups = [];
     const versionMap = {};
 
+    // 1. Group rows by version and filter out 'COMPONENT' snapshots for top-level list
     for (const row of rows) {
       if (!versionMap[row.version]) {
-        // Initialize version group
         versionMap[row.version] = {
           id: row.id,
           version: row.version,
           status: row.status,
           created_at: row.created_at,
-          // We will sum line totals to get the version grand total
           total_amount: 0,
           received_amount: 0,
           project_name: row.project_name,
           notes: row.notes,
+          batch_id: row.batch_id,
           company_id: row.company_id,
           company_name: row.company_name,
           items: []
@@ -176,15 +176,18 @@ const getQuotationVersionHistory = async (req, res, next) => {
       }
       
       const group = versionMap[row.version];
+      const s = (row.status || '').toUpperCase();
+
+      // SNAPSHOT DATA: If status is 'COMPONENT', it belongs to an item's sub_assemblies array, NOT the main list
+      if (s === 'COMPONENT') continue;
+
       const lineTotal = parseFloat(row.total_amount) || 0;
       const lineTotalInclGst = parseFloat(row.received_amount) || 0;
       
-      // Sum line totals into the version's grand total
       group.total_amount += lineTotal;
       group.received_amount += lineTotalInclGst;
       
       const itemRate = parseFloat(lineTotal / (row.item_qty || 1)) || 0;
-      const itemTotal = lineTotal;
       
       const itemData = {
         id: row.id,
@@ -195,52 +198,70 @@ const getQuotationVersionHistory = async (req, res, next) => {
         quantity: row.item_qty,
         unit: row.item_unit,
         rate: itemRate,
-        bom_cost: parseFloat(row.bom_cost) || parseFloat(row.latest_bom_cost) || 0,
-        total: itemTotal,
+        bom_cost: parseFloat(row.bom_cost) || 0,
+        latest_bom_cost: parseFloat(row.latest_bom_cost) || 0,
+        total: lineTotal,
         gst_percentage: row.gst_percentage,
         item_group: row.item_group,
         status: row.status,
-        sub_assemblies: []
+        sub_assemblies: [],
+        materials: [],
+        operations: [],
+        scrap: []
       };
 
-      // Enrich with sub-assemblies for items with BOM structure
-      const itemCodeVer = row.item_code || null;
-      const drawingNoVer = (row.drawing_no && row.drawing_no !== '—') ? row.drawing_no : null;
-      const soiIdVer = row.sales_order_item_id || null;
-      const itemG = (row.item_group || '').toUpperCase();
-      const isFG = itemG.includes('FG') || itemG.includes('FINISHED');
-      const isSA = itemG.includes('SA') || itemG.includes('SUB') || itemG.includes('ASSEMBLY');
+      // 2. ENRICH: Find component snapshots in the SAME VERSION and SAME BATCH for this item
+      const snapshots = rows.filter(r => 
+        r.version === row.version && 
+        r.batch_id === row.batch_id && 
+        (r.status || '').toUpperCase() === 'COMPONENT' &&
+        (r.rejection_reason === row.drawing_no || r.rejection_reason === row.item_description)
+      );
 
-      if (isFG || isSA || soiIdVer || itemCodeVer || drawingNoVer) {
+      if (snapshots.length > 0) {
+        itemData.sub_assemblies = snapshots.map(sn => ({
+          item_code: sn.item_code,
+          drawing_no: sn.drawing_no,
+          description: sn.description,
+          quantity: sn.item_qty,
+          unit: sn.item_unit,
+          bom_cost: parseFloat(sn.bom_cost) || 0,
+          rate: parseFloat(sn.received_amount) || parseFloat(sn.bom_cost) || 0,
+          is_snapshot: true
+        }));
+        
+        // Even if we have snapshots, we might need materials/ops for the full breakdown calculation in frontend
         try {
-          // RULE: For historical versions (V1, V2, etc.) or APPROVED records, we must 
-          // treat the data as a frozen snapshot.
-          // By passing a status-like flag in the itemId parameter (simulating an approved item),
-          // we force bomService to stop overriding with latest costs.
-          const s = (row.status || '').toUpperCase();
-          // Any version that exists in the database is a snapshot of that version's data.
-          // We only want "live" calculation for new versions not yet in the DB.
-          const isHistoricalVersion = true; 
-          
-          const components = await bomService.getItemComponents(
-            isHistoricalVersion ? `HISTORICAL_${soiIdVer}` : soiIdVer, 
-            itemCodeVer, 
-            drawingNoVer,
-            row.batch_id,
-            row.created_at
-          );
+          const [materials, operations, scrap] = await Promise.all([
+            bomService.getItemMaterials(`HISTORICAL_${row.sales_order_item_id}`, row.item_code, row.drawing_no),
+            bomService.getItemOperations(`HISTORICAL_${row.sales_order_item_id}`, row.item_code, row.drawing_no),
+            bomService.getItemScrap(`HISTORICAL_${row.sales_order_item_id}`, row.item_code, row.drawing_no)
+          ]);
+          itemData.materials = materials;
+          itemData.operations = operations;
+          itemData.scrap = scrap;
+        } catch (e) { /* ignore */ }
+      } else {
+        // FALLBACK: If no snapshot found in DB, try live lookup
+        try {
+          const [materials, components, operations, scrap] = await Promise.all([
+            bomService.getItemMaterials(`HISTORICAL_${row.sales_order_item_id}`, row.item_code, row.drawing_no),
+            bomService.getItemComponents(`HISTORICAL_${row.sales_order_item_id}`, row.item_code, row.drawing_no, row.batch_id, row.created_at),
+            bomService.getItemOperations(`HISTORICAL_${row.sales_order_item_id}`, row.item_code, row.drawing_no),
+            bomService.getItemScrap(`HISTORICAL_${row.sales_order_item_id}`, row.item_code, row.drawing_no)
+          ]);
           
           itemData.sub_assemblies = components.filter(c => {
             const code = (c.item_code || c.component_code || '').toUpperCase();
-            const cg = (c.item_group || '').toUpperCase();
-            const desc = (c.description || '').toUpperCase();
-            return (code.startsWith('SA-') || code.startsWith('SFG-') || 
-                    cg.includes('SA') || cg.includes('SUB') || cg.includes('ASSEMBLY') ||
-                    desc.includes('ASSEMBLY') || desc.includes('UNIT')) &&
-                   !cg.includes('FG');
+            const group = (c.item_group || '').toUpperCase();
+            return (code.startsWith('SA-') || group.includes('SA') || group.includes('SUB') || group.includes('ASSEMBLY')) && !group.includes('FG');
           });
+
+          itemData.materials = materials;
+          itemData.operations = operations;
+          itemData.scrap = scrap;
         } catch (err) {
-          console.error(`Error fetching sub-assemblies for QR ${row.id}:`, err);
+          console.error(`Fallback component fetch failed for QR ${row.id}:`, err.message);
         }
       }
 
@@ -772,6 +793,93 @@ const updateQuotationFromBOM = async (req, res, next) => {
 
     res.json({ 
       message: `BOM value ₹${bomCost} has been applied to this item and propagated to all parent assemblies and linked quotations.`
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getQuotationVersionDetails = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    
+    // 1. Fetch the main record and its related items in the same batch/version
+    const [quotes] = await pool.query(
+      `SELECT qr.*, c.company_name, 
+              COALESCE(soi.drawing_no, qr.drawing_no) as drawing_no,
+              COALESCE(soi.description, qr.description) as item_description,
+              COALESCE(soi.unit, qr.item_unit) as item_unit,
+              COALESCE(soi.item_code, qr.item_code) as item_code
+       FROM quotation_requests qr 
+       JOIN companies c ON qr.company_id = c.id 
+       LEFT JOIN sales_order_items soi ON soi.id = qr.sales_order_item_id
+       WHERE qr.id = ?`,
+      [id]
+    );
+
+    if (quotes.length === 0) {
+      return res.status(404).json({ error: 'Quotation not found' });
+    }
+
+    const mainQuote = quotes[0];
+    const { batch_id, version } = mainQuote;
+
+    // 2. Fetch all related rows for this specific snapshot
+    const [rows] = await pool.query(
+      `SELECT qr.*, 
+              COALESCE(soi.drawing_no, qr.drawing_no) as drawing_no,
+              COALESCE(soi.description, qr.description) as item_description,
+              COALESCE(soi.unit, qr.item_unit) as item_unit,
+              COALESCE(soi.item_code, qr.item_code) as item_code
+       FROM quotation_requests qr
+       LEFT JOIN sales_order_items soi ON soi.id = qr.sales_order_item_id
+       WHERE qr.batch_id = ? AND qr.version = ?`,
+      [batch_id, version]
+    );
+
+    // 3. Structure the data exactly like the frontend expects for a form
+    const items = rows.filter(r => (r.status || '').toUpperCase() !== 'COMPONENT').map(row => {
+      const itemData = {
+        id: row.id,
+        salesOrderItemId: row.sales_order_item_id,
+        item_code: row.item_code,
+        drawing_no: row.drawing_no,
+        description: row.item_description,
+        quantity: row.item_qty,
+        unit: row.item_unit,
+        rate: parseFloat(row.total_amount / (row.item_qty || 1)) || 0,
+        bom_cost: parseFloat(row.bom_cost) || 0,
+        total: parseFloat(row.total_amount) || 0,
+        gst_percentage: row.gst_percentage,
+        item_group: row.item_group,
+        status: row.status,
+        sub_assemblies: []
+      };
+
+      // Enrich with components
+      const snapshots = rows.filter(r => 
+        (r.status || '').toUpperCase() === 'COMPONENT' &&
+        (r.rejection_reason === row.drawing_no || r.rejection_reason === row.item_description)
+      );
+
+      itemData.sub_assemblies = snapshots.map(sn => ({
+        id: sn.id,
+        item_code: sn.item_code,
+        drawing_no: sn.drawing_no,
+        description: sn.description,
+        quantity: sn.item_qty,
+        unit: sn.item_unit,
+        bom_cost: parseFloat(sn.bom_cost) || 0,
+        rate: parseFloat(sn.received_amount) || parseFloat(sn.bom_cost) || 0,
+        is_snapshot: true
+      }));
+
+      return itemData;
+    });
+
+    res.json({
+      ...mainQuote,
+      items
     });
   } catch (error) {
     next(error);

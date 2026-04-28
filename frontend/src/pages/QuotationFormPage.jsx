@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   Plus, Trash2, Save, X, Send, 
   FileText, Calendar, User, Hash, 
-  ChevronLeft, Loader2, Calculator,
+  ChevronLeft, Loader2, Calculator, RefreshCw,
   Building2, Mail, Phone, MapPin,
   GitBranch, Clock, AlertCircle, ArrowUpRight,
   Check, XCircle
@@ -44,6 +44,7 @@ const QuotationFormPage = () => {
   const [mode, setMode] = useState('create'); // 'create', 'revise', or 'received'
   const [selectedVersionId, setSelectedVersionId] = useState(null);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [refreshingDrawings, setRefreshingDrawings] = useState(false);
   const hasInitialized = useRef(false);
 
   // Locking logic: Only the latest version can be edited, and only if it's NOT approved.
@@ -53,15 +54,20 @@ const QuotationFormPage = () => {
   );
   const isLatest = version >= maxVersion;
   
-  // Find if the absolute latest version is already approved
-  const latestInHistory = versionHistory.find(vh => vh.version === maxVersion);
+  // STRICT GUARD: Determine if the current view is a historical snapshot that must be frozen
+  // A version is historical if a specific ID is selected that is NOT the absolute latest in history
+  const latestInHistory = versionHistory.length > 0 ? versionHistory[versionHistory.length - 1] : null;
   const isLatestApproved = latestInHistory?.status?.toUpperCase() === 'APPROVED';
+  const isHistoricalView = !!selectedVersionId && latestInHistory && selectedVersionId !== latestInHistory.id;
 
   const currentVersionData = versionHistory.find(v => v.version === version);
-  const isCurrentApproved = currentVersionData?.status?.toUpperCase() === 'APPROVED';
-  
-  // Old versions are always read-only, and the latest is locked if already approved
-  const isLocked = (versionHistory.length > 0 && !isLatest) || isCurrentApproved;
+  const currentStatus = (currentVersionData?.status || 'Draft').toUpperCase();
+  const isSnapshotStatus = ['APPROVED', 'REVISED', 'SENT', 'COMPLETED', 'REJECTED'].includes(currentStatus);
+  const isCurrentApproved = currentStatus === 'APPROVED';
+
+  // Old versions are always read-only. The latest is locked if it has a snapshot status (Sent, Approved, etc.),
+  // EXCEPT when in 'received' mode where we need to see action buttons for a 'SENT' quotation.
+  const isLocked = isHistoricalView || (isSnapshotStatus && mode !== 'received');
 
   useEffect(() => {
     if (selectedClient?.company_name) {
@@ -189,9 +195,19 @@ const QuotationFormPage = () => {
   }, [initialData]);
 
   useEffect(() => {
-    // ONLY sync if we have drawings and items, we haven't locked the view, 
-    // AND we are not looking at a specific historical version
-    if (items.length > 0 && drawings.length > 0 && !isLocked && !selectedVersionId) {
+    // STRICT GUARD: ONLY sync if:
+    // 1. We have drawings and items
+    // 2. We are NOT viewing a historical snapshot
+    // 3. The current status is NOT a snapshot status (must be Draft or new Revision)
+    // 4. We are NOT in 'received' mode
+    const canSync = items.length > 0 && 
+                    drawings.length > 0 && 
+                    !isHistoricalView &&
+                    !isSnapshotStatus && 
+                    mode !== 'received' &&
+                    !isLocked;
+
+    if (canSync) {
       const updatedItems = items.map(item => {
         const itemG = (item.item_group || '').toUpperCase();
         const itemIsSA = (itemG.includes('SA') || itemG.includes('SUB') || itemG.includes('ASSEMBLY')) && !itemG.includes('FG');
@@ -233,7 +249,8 @@ const QuotationFormPage = () => {
               return sum + (saCost * saQty);
             }, 0);
             
-            // If the sum of known sub-assemblies is higher than the stored FG cost, trust the sum
+            // If the sum of known sub-assemblies is higher than the stored FG cost, trust the sum.
+            // BUT: if drwRate (from Master) is higher, it likely includes materials/operations, so we trust it.
             if (saSum > drwRate) {
               drwRate = saSum;
             }
@@ -258,11 +275,11 @@ const QuotationFormPage = () => {
             changed = true;
           }
 
-          // Sync sub_assemblies if missing or if we are in create mode
+          // Sync sub_assemblies if missing or if the master has different data
           const hasSAs = item.sub_assemblies && item.sub_assemblies.length > 0;
           const saChanged = matchedDrawing.sub_assemblies && JSON.stringify(item.sub_assemblies) !== JSON.stringify(matchedDrawing.sub_assemblies);
           
-          if (matchedDrawing.sub_assemblies && (!hasSAs || (mode === 'create' && saChanged))) {
+          if (matchedDrawing.sub_assemblies && (!hasSAs || saChanged)) {
             newItem.sub_assemblies = matchedDrawing.sub_assemblies;
             changed = true;
           }
@@ -272,22 +289,22 @@ const QuotationFormPage = () => {
           const currentRate = parseFloat(item.rate || 0);
           const rateMatchesCost = Math.abs(currentRate - currentBOMCost) < 0.01;
           
-          // STRICTER SYNC: 
-          // 1. Always sync if current cost is 0 and we found a rate
-          // 2. If NOT in revise mode, sync if matched by item_code (specific record)
-          // 3. If in revise mode, ONLY sync if the current rate doesn't match the current cost 
-          //    (implies it hasn't been manually adjusted/frozen or synced yet)
+          // SYNC LOGIC: 
+          // 1. Always sync if current cost is 0 and we found a rate in Master
+          // 2. Sync if the Master cost is different and we have a solid link (item_code OR drawing_no)
+          //    (This ensures revisions pick up the latest Master costs)
           const isItemCodeMatch = item.item_code && matchedDrawing.item_code && String(matchedDrawing.item_code).trim().toLowerCase() === String(item.item_code).trim().toLowerCase();
-          const shouldSync = (currentBOMCost === 0) || (mode !== 'revise' && isItemCodeMatch) || (mode === 'revise' && !rateMatchesCost);
+          const isDrawingNoMatch = item.drawing_no && matchedDrawing.drawing_no && String(matchedDrawing.drawing_no).trim().toLowerCase() === String(item.drawing_no).trim().toLowerCase();
+          const shouldSync = (currentBOMCost === 0) || isItemCodeMatch || isDrawingNoMatch;
 
           const costChanged = drwRate > 0 && Math.abs(currentBOMCost - drwRate) > 0.01;
           
-          if (costChanged && shouldSync) {
+          if (costChanged && (shouldSync || saChanged)) {
             newItem.bom_cost = drwRate;
             changed = true;
             
-            // Update rate to new BOM cost if it was 0, matched old cost, OR we are in revise mode (if they were already synced)
-            if (currentRate === 0 || rateMatchesCost || mode === 'revise') {
+            // Update rate to new BOM cost if it was 0, matched old cost, OR we are in a mode that allows auto-update
+            if (currentRate === 0 || rateMatchesCost || mode === 'revise' || mode === 'create') {
               newItem.rate = drwRate;
               newItem.total = (parseFloat(item.quantity) || 0) * drwRate;
             }
@@ -309,7 +326,14 @@ const QuotationFormPage = () => {
         setItems(updatedItems);
       }
     }
-  }, [drawings, isLocked, items.length, mode, version, selectedVersionId]);
+  }, [
+    drawings, 
+    isLocked, 
+    items.map(i => `${i.id}-${i.drawing_id}-${i.drawing_no}-${i.item_code}`).join('|'), 
+    mode, 
+    version, 
+    selectedVersionId
+  ]);
 
   useEffect(() => {
     if (items.length > 0) {
@@ -341,6 +365,7 @@ const QuotationFormPage = () => {
 
   const fetchDrawings = async (clientName = null) => {
     try {
+      setRefreshingDrawings(true);
       const token = localStorage.getItem('authToken');
       const url = clientName 
         ? `${API_BASE}/drawings?clientName=${encodeURIComponent(clientName)}`
@@ -354,6 +379,8 @@ const QuotationFormPage = () => {
       }
     } catch (error) {
       console.error('Error fetching drawings:', error);
+    } finally {
+      setRefreshingDrawings(false);
     }
   };
 
@@ -411,32 +438,66 @@ const QuotationFormPage = () => {
     
     // Map items from the version
     if (v.items && v.items.length > 0) {
-      setItems(v.items.map(item => {
-        // Apply overrides if we are looking at the LATEST editable version OR if we are preparing a NEW version (forceNextVersion)
-        const override = (!isSnapshot || forceNextVersion) ? initialData?.items?.find(oi => 
+      // Deep clone to ensure no shared references with historical state
+      const itemsSnapshot = JSON.parse(JSON.stringify(v.items));
+      
+      setItems(itemsSnapshot.map(item => {
+        // Map saved sub-assemblies first to ensure they are available for cost logic
+        const savedSubAssemblies = (item.sub_assemblies || []).map(sa => ({
+          ...sa,
+          bom_cost: parseFloat(sa.bom_cost || sa.rate || 0),
+          rate: parseFloat(sa.rate || sa.bom_cost || 0)
+        }));
+
+        // Apply overrides ONLY if we are preparing a NEW version (forceNextVersion)
+        const override = forceNextVersion ? initialData?.items?.find(oi => 
           (oi.salesOrderItemId && String(oi.salesOrderItemId) === String(item.sales_order_item_id)) ||
           (oi.item_code && oi.item_code === item.item_code && oi.drawing_no === item.drawing_no)
         ) : null;
 
-        let bomCost = parseFloat(override?.bom_cost || item.bom_cost || 0);
+        // For NEW revisions or DRAFTS, we prefer latest master cost if available, otherwise trust the base record
+        const latestBOMCost = parseFloat(item.latest_bom_cost || 0);
+        const storedBOMCost = parseFloat(item.bom_cost || 0);
+        
+        // If it's a draft/new version and master has a newer/different cost, consider it for sync
+        let bomCost = (forceNextVersion || s === 'DRAFT') && latestBOMCost > 0 
+          ? latestBOMCost 
+          : storedBOMCost;
+
         let drwRate = parseFloat(override?.quotedPrice || item.quotedPrice || item.rate || bomCost || 0);
 
-        // Always ensure Rate matches BOM Cost for the version currently being edited/prepared
-        if (!isHistorical && bomCost > 0) {
+        // If we synced to latest BOM cost, we should also update the rate if they were previously matching
+        if (bomCost !== storedBOMCost && Math.abs(parseFloat(item.rate || 0) - storedBOMCost) < 0.01) {
           drwRate = bomCost;
         }
 
-        // ONLY Recalculate based on sub-assemblies for non-historical versions
-        if (!isHistorical && item.sub_assemblies && item.sub_assemblies.length > 0) {
-          const saSum = item.sub_assemblies.reduce((sum, sa) => {
+        // For NEW revisions, we might want to recalculate based on updated sub-assemblies, materials and operations
+        // For HISTORICAL versions (Sent, Approved, etc.), we MUST NOT recalculate - we trust the snapshot exactly
+        if (!isHistorical) {
+          const saSum = savedSubAssemblies.reduce((sum, sa) => {
             const saCost = parseFloat(sa.bom_cost || sa.rate || 0);
             const saQty = parseFloat(sa.quantity || 0);
             return sum + (saCost * saQty);
           }, 0);
+
+          const materialSum = (item.materials || []).reduce((sum, m) => {
+            const mCost = parseFloat(m.rate || 0);
+            const mQty = parseFloat(m.qty_per_pc || m.quantity || 0);
+            const weight = parseFloat(m.weight_per_unit || 0);
+            return sum + (mQty * weight * mCost);
+          }, 0);
+
+          const operationSum = (item.operations || []).reduce((sum, o) => {
+            const rate = parseFloat(o.hourly_rate || 0);
+            const time = (parseFloat(o.cycle_time_min || 0) + (parseFloat(o.setup_time_min || 0) / (parseFloat(item.quantity) || 1)));
+            return sum + (time / 60 * rate);
+          }, 0);
+
+          const calculatedTotal = saSum + materialSum + operationSum;
           
-          if (saSum > (drwRate || bomCost)) {
-            drwRate = saSum;
-            bomCost = saSum;
+          if (calculatedTotal > (drwRate || bomCost)) {
+            drwRate = calculatedTotal;
+            bomCost = calculatedTotal;
           }
         }
 
@@ -453,11 +514,7 @@ const QuotationFormPage = () => {
           description: item.description,
           bom_id: item.bom_id,
           revision_no: item.revision_no,
-          sub_assemblies: (item.sub_assemblies || []).map(sa => ({
-            ...sa,
-            bom_cost: parseFloat(sa.bom_cost || sa.rate || 0),
-            rate: parseFloat(sa.rate || sa.bom_cost || 0)
-          }))
+          sub_assemblies: savedSubAssemblies
         };
       }));
     }
@@ -1097,6 +1154,14 @@ const QuotationFormPage = () => {
                   <Calculator size={16} />
                 </div>
                 <h2 className="text-sm  text-slate-900">Quotation Items</h2>
+                <button 
+                  onClick={() => fetchDrawings(selectedClient?.company_name)}
+                  disabled={refreshingDrawings || !selectedClient}
+                  className="p-1 text-slate-400 hover:text-indigo-600 transition-colors disabled:opacity-30"
+                  title="Refresh costs from Master"
+                >
+                  <RefreshCw size={14} className={refreshingDrawings ? 'animate-spin' : ''} />
+                </button>
               </div>
               {!isLocked && (
                 <button
@@ -1408,67 +1473,56 @@ const QuotationFormPage = () => {
                 </div>
                 <div className="space-y-2">
                   {versionHistory.map((v) => {
-                    const isViewable = v.status?.toUpperCase() === 'APPROVED' || v.status?.toUpperCase() === 'REVISED';
+                    const isSnapshot = ['APPROVED', 'REVISED', 'SENT', 'COMPLETED', 'REJECTED'].includes(v.status?.toUpperCase());
+                    const isViewable = isSnapshot || v.version < (currentVersionData?.version || version);
                     return (
                       <div 
                         key={v.id} 
                         onClick={() => {
                           if (isViewable) {
                             loadVersionData(v, false);
-                            handleViewPDF(v.id);
                           }
                         }}
                         className={`w-full p-2 rounded border transition-all group ${
                           isViewable ? 'cursor-pointer hover:shadow-md hover:border-indigo-300 active:scale-[0.98]' : 'cursor-default opacity-80'
                         } ${
-                          v.id === selectedVersionId || (selectedVersionId === null && v.version === version)
-                            ? 'bg-indigo-50 border-indigo-200 ring-1 ring-indigo-100 shadow-sm' 
-                            : 'bg-white border-slate-100'
+                          v.id === selectedVersionId ? 'bg-indigo-50 border-indigo-200 ring-1 ring-indigo-100' : 'bg-white border-slate-100'
                         }`}
                       >
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-2.5">
-                          <div className={`w-2 h-2 rounded-full shadow-sm ${
-                            v.status?.toUpperCase() === 'APPROVED' ? 'bg-emerald-500 ring-2 ring-emerald-100' : 
-                            v.status?.toUpperCase() === 'REJECTED' ? 'bg-rose-500 ring-2 ring-rose-100' :
-                            (v.id === selectedVersionId || (selectedVersionId === null && v.version === version)) ? 'bg-indigo-500 ring-2 ring-indigo-100' : 'bg-slate-300'
-                          }`} />
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <p className={`text-[11px]  ${(v.id === selectedVersionId || (selectedVersionId === null && v.version === version)) ? 'text-indigo-700' : 'text-slate-700'}`}>
-                                Version {v.version}
-                              </p>
-                              <span className={`text-[8px] px-1.5 py-0.5 rounded-full  border tracking-tighter ${
-                                v.status?.toUpperCase() === 'APPROVED' ? 'bg-emerald-50 border-emerald-100 text-emerald-600' :
-                                v.status?.toUpperCase() === 'REJECTED' ? 'bg-rose-50 border-rose-100 text-rose-600' :
-                                'bg-slate-50 border-slate-100 text-slate-500'
-                              }`}>
-                                {v.status}
-                              </span>
-                            </div>
-                            <p className="text-[9px] text-slate-400 flex items-center gap-1 mt-0.5">
-                              <Calendar size={10} /> {new Date(v.created_at).toLocaleDateString()}
-                            </p>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <div className="flex items-center gap-2">
+                            <div className={`w-1.5 h-1.5 rounded-full ${v.id === selectedVersionId ? 'bg-indigo-500 animate-pulse' : 'bg-slate-300'}`} />
+                            <span className={`text-[11px] font-bold ${v.id === selectedVersionId ? 'text-indigo-700' : 'text-slate-700'}`}>
+                              Version {v.version}
+                            </span>
+                            <StatusBadge status={v.status} size="xs" />
                           </div>
+                          <span className="text-[10px] font-bold text-slate-900">{formatCurrency(parseFloat(v.received_amount) || parseFloat(v.total_amount) * 1.18)}</span>
                         </div>
-                        
-                        <div className="flex items-center gap-2">
-                          <p className="text-[11px] font-black text-slate-900">
-                            {formatCurrency(parseFloat(v.received_amount) || parseFloat(v.total_amount) * 1.18)}
-                          </p>
-                          <button 
-                            onClick={(e) => { e.stopPropagation(); handleDeleteVersion(v); }}
-                            className="p-1 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-md transition-all  group-hover:opacity-100"
-                            title="Delete Version"
-                          >
-                            <Trash2 size={12} />
-                          </button>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5 text-[9px] text-slate-400">
+                            <Calendar size={10} />
+                            {new Date(v.created_at).toLocaleDateString('en-GB')}
+                          </div>
+                          {isViewable && (
+                            <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleViewPDF(v.id);
+                                }}
+                                className="p-1 text-indigo-600 hover:bg-indigo-50 rounded"
+                                title="View PDF"
+                              >
+                                <FileText size={10} />
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
 
                 {/* Actions for Selected Version */}
                 {(() => {
