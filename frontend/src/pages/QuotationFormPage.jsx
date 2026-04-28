@@ -57,7 +57,7 @@ const QuotationFormPage = () => {
   // STRICT GUARD: Determine if the current view is a historical snapshot that must be frozen
   // A version is historical if a specific ID is selected that is NOT the absolute latest in history
   const latestInHistory = versionHistory.length > 0 ? versionHistory[versionHistory.length - 1] : null;
-  const isLatestApproved = latestInHistory?.status?.toUpperCase() === 'APPROVED';
+  const isLatestApproved = versionHistory.some(vh => vh.status?.toUpperCase() === 'APPROVED');
   const isHistoricalView = !!selectedVersionId && latestInHistory && selectedVersionId !== latestInHistory.id;
 
   const currentVersionData = versionHistory.find(v => v.version === version);
@@ -67,7 +67,8 @@ const QuotationFormPage = () => {
 
   // Old versions are always read-only. The latest is locked if it has a snapshot status (Sent, Approved, etc.),
   // EXCEPT when in 'received' mode where we need to see action buttons for a 'SENT' quotation.
-  const isLocked = isHistoricalView || (isSnapshotStatus && mode !== 'received');
+  // ALSO: If the chain already has an APPROVED version, the whole UI should be locked for editing.
+  const isLocked = isHistoricalView || isLatestApproved || (isSnapshotStatus && (mode !== 'received' || currentStatus !== 'SENT'));
 
   useEffect(() => {
     if (selectedClient?.company_name) {
@@ -956,16 +957,6 @@ const QuotationFormPage = () => {
                     {saving ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
                     Send to Client
                   </button>
-                  {(selectedVersionId || initialData?.id) && (
-                    <button
-                      onClick={handleDownloadPDF}
-                      disabled={loading}
-                      className="px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-100 rounded hover:bg-blue-100 transition-all flex items-center gap-2 disabled:opacity-50"
-                    >
-                      {loading ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />}
-                      Download PDF
-                    </button>
-                  )}
                 </>
               ) : mode === 'revise' ? (
                 <>
@@ -993,16 +984,6 @@ const QuotationFormPage = () => {
                     {saving ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
                     Send to Client
                   </button>
-                  {(selectedVersionId || initialData?.id) && (
-                    <button
-                      onClick={handleDownloadPDF}
-                      disabled={loading}
-                      className="px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-100 rounded hover:bg-blue-100 transition-all flex items-center gap-2 disabled:opacity-50"
-                    >
-                      {loading ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />}
-                      Download PDF
-                    </button>
-                  )}
                 </>
               ) : (
                 <>
@@ -1030,19 +1011,20 @@ const QuotationFormPage = () => {
                     {saving ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
                     Send to Client
                   </button>
-                  {(selectedVersionId || initialData?.id) && (
-                    <button
-                      onClick={handleDownloadPDF}
-                      disabled={loading}
-                      className="px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-100 rounded hover:bg-blue-100 transition-all flex items-center gap-2 disabled:opacity-50"
-                    >
-                      {loading ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />}
-                      Download PDF
-                    </button>
-                  )}
                 </>
               )}
             </>
+          )}
+
+          {(selectedVersionId || initialData?.id) && (
+            <button
+              onClick={handleDownloadPDF}
+              disabled={loading}
+              className="px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-100 rounded hover:bg-blue-100 transition-all flex items-center gap-2 disabled:opacity-50"
+            >
+              {loading ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />}
+              Download PDF
+            </button>
           )}
         </div>
       </div>

@@ -590,7 +590,8 @@ const ClientQuotations = () => {
       // Filter groups: keep those where the LATEST version has a "Received" type status
       const filteredGroups = Object.values(grouped).filter(group => {
         const s = (group.status || '').trim().toUpperCase();
-        return s === 'APPROVED' || s === 'ACCEPTED' || s === 'REVISED' || s === 'COMPLETED';
+        // Show only APPROVED quotations in the Received tab
+        return s === 'APPROVED';
       });
 
       filteredGroups.forEach(group => {
