@@ -714,7 +714,7 @@ const downloadQuotationPDF = async (req, res, next) => {
     const representative = quotes[0];
     
     // 2. Fetch all quotations in this batch (same client, same approx timestamp)
-    // We use a 10-second window to match the frontend grouping logic
+    // We exclude COMPONENT rows as they are snapshots for sub-assemblies
     const [batchQuotes] = await pool.query(
       `SELECT qr.*, 
               COALESCE(soi.drawing_no, qr.drawing_no) as effective_drawing_no, 
@@ -722,18 +722,35 @@ const downloadQuotationPDF = async (req, res, next) => {
        FROM quotation_requests qr
        LEFT JOIN sales_order_items soi ON qr.sales_order_item_id = soi.id
        WHERE qr.company_id = ? 
-       AND ABS(TIMESTAMPDIFF(SECOND, qr.created_at, ?)) <= 10`,
+       AND ABS(TIMESTAMPDIFF(SECOND, qr.created_at, ?)) <= 10
+       AND qr.status != 'COMPONENT'`,
       [representative.company_id, representative.created_at]
     );
 
-    const items = batchQuotes.map(q => ({
-      drawing_no: q.effective_drawing_no || '—',
-      description: q.effective_description || '',
-      quantity: q.item_qty || 1,
-      quotedPrice: (parseFloat(q.total_amount) / (q.item_qty || 1)) || 0,
-      profit_percentage: q.profit_percentage || 0,
-      gst_percentage: q.gst_percentage || 18,
-      status: q.status
+    const items = await Promise.all(batchQuotes.map(async q => {
+      // Fetch component snapshots for this item
+      const [components] = await pool.query(
+        'SELECT * FROM quotation_requests WHERE status = ? AND rejection_reason = ?',
+        ['COMPONENT', String(q.id)]
+      );
+
+      return {
+        id: q.id,
+        drawing_no: q.effective_drawing_no || '—',
+        description: q.effective_description || '',
+        quantity: q.item_qty || 1,
+        quotedPrice: (parseFloat(q.total_amount) / (q.item_qty || 1)) || 0,
+        profit_percentage: q.profit_percentage || 0,
+        gst_percentage: q.gst_percentage || 18,
+        status: q.status,
+        sub_assemblies: components.map(sa => ({
+          drawing_no: sa.drawing_no,
+          description: sa.description,
+          quantity: sa.item_qty,
+          unit: sa.item_unit,
+          rate: parseFloat(sa.received_amount) || parseFloat(sa.bom_cost) || 0
+        }))
+      };
     }));
 
     const totalAmount = batchQuotes.reduce((sum, q) => {

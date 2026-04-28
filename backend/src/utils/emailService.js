@@ -65,7 +65,7 @@ const generateQuotationHTML = (clientName, items, totalAmount, notes, clientId, 
         '<span style="color: #dc2626; font-weight: bold;">REJECTED</span>' : 
         `₹${lineTotalWithTax.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
       
-      return `
+      const mainItemRow = `
       <tr>
         <td style="padding: 10px; border: 1px solid #000; text-align: center;">${idx + 1}</td>
         <td style="padding: 10px; border: 1px solid #000;">
@@ -80,6 +80,28 @@ const generateQuotationHTML = (clientName, items, totalAmount, notes, clientId, 
         <td style="padding: 10px; border: 1px solid #000; text-align: right; font-weight: bold;">${totalLineStr}</td>
       </tr>
     `;
+
+      const subAssembliesHTML = (item.sub_assemblies || []).map(sa => {
+        const saQty = (parseFloat(sa.quantity || 0) * (parseFloat(item.quantity) || 1));
+        const saRate = parseFloat(sa.rate || sa.bom_cost || 0);
+        const saTotal = saQty * saRate;
+        
+        return `
+        <tr class="sub-assembly-row">
+          <td style="padding: 8px; border: 1px solid #000; text-align: center;"></td>
+          <td style="padding: 8px; border: 1px solid #000; padding-left: 20px;">
+            <div style="font-weight: bold;">${sa.description || 'Sub-assembly'} (${sa.drawing_no || sa.item_code || '—'})</div>
+          </td>
+          <td style="padding: 8px; border: 1px solid #000; text-align: center;">${saQty.toFixed(3)}</td>
+          <td style="padding: 8px; border: 1px solid #000; text-align: center;">-</td>
+          <td style="padding: 8px; border: 1px solid #000; text-align: right;">₹${saRate.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+          <td style="padding: 8px; border: 1px solid #000; text-align: center;">-</td>
+          <td style="padding: 8px; border: 1px solid #000; text-align: center;">-</td>
+        </tr>
+        `;
+      }).join('');
+
+      return mainItemRow + subAssembliesHTML;
     })
     .join('');
 
