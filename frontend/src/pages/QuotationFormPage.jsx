@@ -402,7 +402,7 @@ const QuotationFormPage = () => {
         if (sortedHistory.length > 0 && currentMode !== 'create') {
           // Newest is the last item in ASC sort
           const latest = sortedHistory[sortedHistory.length - 1];
-          loadVersionData(latest, currentMode === 'revise');
+          await loadVersionData(latest, currentMode === 'revise');
         }
       }
     } catch (error) {
@@ -412,111 +412,133 @@ const QuotationFormPage = () => {
     }
   };
 
-  const loadVersionData = (v, forceNextVersion = false) => {
-    // This allows switching between versions dynamically in the form
-    // If forceNextVersion is true (usually on initial load in revise mode), 
-    // we want to show the NEXT version number we are about to create.
-    const targetVersion = forceNextVersion ? (initialData?.version || v.version + 1) : v.version;
-    setVersion(targetVersion);
-    setSelectedVersionId(forceNextVersion ? null : v.id);
-    setBatchId(v.batch_id || null);
-    setQuotationNo(`QRT-${String(v.id).padStart(4, '0')}`);
-    setQuotationDate(v.created_at.split('T')[0]);
-    setProjectName(v.project_name || '');
-    setNotes(v.notes || '');
-    
-    const maxHistoryVersion = versionHistory.length > 0 
-      ? Math.max(...versionHistory.map(vh => vh.version)) 
-      : version;
-    
-    // RULE: Any existing saved version with these statuses is considered "historical" (frozen)
-    const s = (v.status || '').toUpperCase();
-    const isSnapshot = v.version < maxHistoryVersion || ['APPROVED', 'REVISED', 'SENT', 'COMPLETED', 'REJECTED'].includes(s);
-    
-    // If we are preparing a NEW version (forceNextVersion), the items are NOT historical (they are editable templates)
-    const isHistorical = isSnapshot && !forceNextVersion;
-    
-    // Map items from the version
-    if (v.items && v.items.length > 0) {
-      // Deep clone to ensure no shared references with historical state
-      const itemsSnapshot = JSON.parse(JSON.stringify(v.items));
+  const loadVersionData = async (v, forceNextVersion = false) => {
+    try {
+      setLoading(true);
+      let versionData = v;
       
-      setItems(itemsSnapshot.map(item => {
-        // Map saved sub-assemblies first to ensure they are available for cost logic
-        const savedSubAssemblies = (item.sub_assemblies || []).map(sa => ({
-          ...sa,
-          bom_cost: parseFloat(sa.bom_cost || sa.rate || 0),
-          rate: parseFloat(sa.rate || sa.bom_cost || 0)
-        }));
+      // If we're loading an existing version (not preparing a new revision), 
+      // fetch full details from the new API to ensure sub-assemblies are correct
+      if (!forceNextVersion && v.id) {
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE}/quotation-requests/version-details/${v.id}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          versionData = await response.json();
+        }
+      }
 
-        // Apply overrides ONLY if we are preparing a NEW version (forceNextVersion)
-        const override = forceNextVersion ? initialData?.items?.find(oi => 
-          (oi.salesOrderItemId && String(oi.salesOrderItemId) === String(item.sales_order_item_id)) ||
-          (oi.item_code && oi.item_code === item.item_code && oi.drawing_no === item.drawing_no)
-        ) : null;
-
-        // For NEW revisions or DRAFTS, we prefer latest master cost if available, otherwise trust the base record
-        const latestBOMCost = parseFloat(item.latest_bom_cost || 0);
-        const storedBOMCost = parseFloat(item.bom_cost || 0);
+      // This allows switching between versions dynamically in the form
+      // If forceNextVersion is true (usually on initial load in revise mode), 
+      // we want to show the NEXT version number we are about to create.
+      const targetVersion = forceNextVersion ? (initialData?.version || versionData.version + 1) : versionData.version;
+      setVersion(targetVersion);
+      setSelectedVersionId(forceNextVersion ? null : versionData.id);
+      setBatchId(versionData.batch_id || null);
+      setQuotationNo(`QRT-${String(versionData.id).padStart(4, '0')}`);
+      setQuotationDate(versionData.created_at.split('T')[0]);
+      setProjectName(versionData.project_name || '');
+      setNotes(versionData.notes || '');
+      
+      const maxHistoryVersion = versionHistory.length > 0 
+        ? Math.max(...versionHistory.map(vh => vh.version)) 
+        : version;
+      
+      // RULE: Any existing saved version with these statuses is considered "historical" (frozen)
+      const s = (versionData.status || '').toUpperCase();
+      const isSnapshot = versionData.version < maxHistoryVersion || ['APPROVED', 'REVISED', 'SENT', 'COMPLETED', 'REJECTED'].includes(s);
+      
+      // If we are preparing a NEW version (forceNextVersion), the items are NOT historical (they are editable templates)
+      const isHistorical = isSnapshot && !forceNextVersion;
+      
+      // Map items from the version
+      if (versionData.items && versionData.items.length > 0) {
+        // Deep clone to ensure no shared references with historical state
+        const itemsSnapshot = JSON.parse(JSON.stringify(versionData.items));
         
-        // If it's a draft/new version and master has a newer/different cost, consider it for sync
-        let bomCost = (forceNextVersion || s === 'DRAFT') && latestBOMCost > 0 
-          ? latestBOMCost 
-          : storedBOMCost;
+        setItems(itemsSnapshot.map(item => {
+          // Map saved sub-assemblies first to ensure they are available for cost logic
+          const savedSubAssemblies = (item.sub_assemblies || []).map(sa => ({
+            ...sa,
+            bom_cost: parseFloat(sa.bom_cost || sa.rate || 0),
+            rate: parseFloat(sa.rate || sa.bom_cost || 0)
+          }));
 
-        let drwRate = parseFloat(override?.quotedPrice || item.quotedPrice || item.rate || bomCost || 0);
+          // Apply overrides ONLY if we are preparing a NEW version (forceNextVersion)
+          const override = forceNextVersion ? initialData?.items?.find(oi => 
+            (oi.salesOrderItemId && String(oi.salesOrderItemId) === String(item.sales_order_item_id)) ||
+            (oi.item_code && oi.item_code === item.item_code && oi.drawing_no === item.drawing_no)
+          ) : null;
 
-        // If we synced to latest BOM cost, we should also update the rate if they were previously matching
-        if (bomCost !== storedBOMCost && Math.abs(parseFloat(item.rate || 0) - storedBOMCost) < 0.01) {
-          drwRate = bomCost;
-        }
-
-        // For NEW revisions, we might want to recalculate based on updated sub-assemblies, materials and operations
-        // For HISTORICAL versions (Sent, Approved, etc.), we MUST NOT recalculate - we trust the snapshot exactly
-        if (!isHistorical) {
-          const saSum = savedSubAssemblies.reduce((sum, sa) => {
-            const saCost = parseFloat(sa.bom_cost || sa.rate || 0);
-            const saQty = parseFloat(sa.quantity || 0);
-            return sum + (saCost * saQty);
-          }, 0);
-
-          const materialSum = (item.materials || []).reduce((sum, m) => {
-            const mCost = parseFloat(m.rate || 0);
-            const mQty = parseFloat(m.qty_per_pc || m.quantity || 0);
-            const weight = parseFloat(m.weight_per_unit || 0);
-            return sum + (mQty * weight * mCost);
-          }, 0);
-
-          const operationSum = (item.operations || []).reduce((sum, o) => {
-            const rate = parseFloat(o.hourly_rate || 0);
-            const time = (parseFloat(o.cycle_time_min || 0) + (parseFloat(o.setup_time_min || 0) / (parseFloat(item.quantity) || 1)));
-            return sum + (time / 60 * rate);
-          }, 0);
-
-          const calculatedTotal = saSum + materialSum + operationSum;
+          // For NEW revisions or DRAFTS, we prefer latest master cost if available, otherwise trust the base record
+          const latestBOMCost = parseFloat(item.latest_bom_cost || 0);
+          const storedBOMCost = parseFloat(item.bom_cost || 0);
           
-          if (calculatedTotal > (drwRate || bomCost)) {
-            drwRate = calculatedTotal;
-            bomCost = calculatedTotal;
-          }
-        }
+          // If it's a draft/new version and master has a newer/different cost, consider it for sync
+          let bomCost = (forceNextVersion || s === 'DRAFT') && latestBOMCost > 0 
+            ? latestBOMCost 
+            : storedBOMCost;
 
-        return {
-          ...item,
-          id: item.id || Date.now() + Math.random(),
-          salesOrderItemId: item.sales_order_item_id || item.salesOrderItemId,
-          drawing_id: item.drawing_id,
-          rate: drwRate,
-          bom_cost: bomCost || item.bom_cost || drwRate,
-          total: (parseFloat(item.quantity) || 0) * drwRate,
-          gst_percentage: item.gst_percentage || 18,
-          drawing_no: item.drawing_no,
-          description: item.description,
-          bom_id: item.bom_id,
-          revision_no: item.revision_no,
-          sub_assemblies: savedSubAssemblies
-        };
-      }));
+          let drwRate = parseFloat(override?.quotedPrice || item.quotedPrice || item.rate || bomCost || 0);
+
+          // If we synced to latest BOM cost, we should also update the rate if they were previously matching
+          if (bomCost !== storedBOMCost && Math.abs(parseFloat(item.rate || 0) - storedBOMCost) < 0.01) {
+            drwRate = bomCost;
+          }
+
+          // For NEW revisions, we might want to recalculate based on updated sub-assemblies, materials and operations
+          // For HISTORICAL versions (Sent, Approved, etc.), we MUST NOT recalculate - we trust the snapshot exactly
+          if (!isHistorical) {
+            const saSum = savedSubAssemblies.reduce((sum, sa) => {
+              const saCost = parseFloat(sa.bom_cost || sa.rate || 0);
+              const saQty = parseFloat(sa.quantity || 0);
+              return sum + (saCost * saQty);
+            }, 0);
+
+            const materialSum = (item.materials || []).reduce((sum, m) => {
+              const mCost = parseFloat(m.rate || 0);
+              const mQty = parseFloat(m.qty_per_pc || m.quantity || 0);
+              const weight = parseFloat(m.weight_per_unit || 0);
+              return sum + (mQty * weight * mCost);
+            }, 0);
+
+            const operationSum = (item.operations || []).reduce((sum, o) => {
+              const rate = parseFloat(o.hourly_rate || 0);
+              const time = (parseFloat(o.cycle_time_min || 0) + (parseFloat(o.setup_time_min || 0) / (parseFloat(item.quantity) || 1)));
+              return sum + (time / 60 * rate);
+            }, 0);
+
+            const calculatedTotal = saSum + materialSum + operationSum;
+            
+            if (calculatedTotal > (drwRate || bomCost)) {
+              drwRate = calculatedTotal;
+              bomCost = calculatedTotal;
+            }
+          }
+
+          return {
+            ...item,
+            id: item.id || Date.now() + Math.random(),
+            salesOrderItemId: item.sales_order_item_id || item.salesOrderItemId,
+            drawing_id: item.drawing_id,
+            rate: drwRate,
+            bom_cost: bomCost || item.bom_cost || drwRate,
+            total: (parseFloat(item.quantity) || 0) * drwRate,
+            gst_percentage: item.gst_percentage || 18,
+            drawing_no: item.drawing_no,
+            description: item.description,
+            bom_id: item.bom_id,
+            revision_no: item.revision_no,
+            sub_assemblies: savedSubAssemblies
+          };
+        }));
+      }
+    } catch (err) {
+      console.error('Error loading version data:', err);
+      errorToast('Failed to load version details');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -610,7 +632,7 @@ const QuotationFormPage = () => {
           if (newHistory.length === 0) {
             navigate('/client-quotations');
           } else if (selectedVersionId === v.id) {
-            loadVersionData(newHistory[0]);
+            await loadVersionData(newHistory[0]);
           }
         } else {
           throw new Error('Failed to delete version');
@@ -1478,9 +1500,9 @@ const QuotationFormPage = () => {
                     return (
                       <div 
                         key={v.id} 
-                        onClick={() => {
+                        onClick={async () => {
                           if (isViewable) {
-                            loadVersionData(v, false);
+                            await loadVersionData(v, false);
                           }
                         }}
                         className={`w-full p-2 rounded border transition-all group ${
