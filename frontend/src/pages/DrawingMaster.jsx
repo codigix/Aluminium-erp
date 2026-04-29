@@ -267,6 +267,76 @@ const DrawingMaster = () => {
     }
   };
 
+  const handleRejectGroup = async () => {
+    const selectedIds = Array.from(selectedRows);
+    if (selectedIds.length === 0) return;
+
+    const itemsToReject = drawings
+      .filter(d => selectedIds.includes(d.drawing_master_id))
+      .filter(d => {
+        const status = (d.item_status || '').trim().toUpperCase();
+        return d.sales_order_item_id && status !== 'APPROVED' && status !== 'REJECTED';
+      })
+      .map(d => d.sales_order_item_id);
+
+    if (itemsToReject.length === 0) {
+      errorToast('No pending items selected for rejection');
+      return;
+    }
+
+    const { value: reason } = await Swal.fire({
+      title: '<span class="text-base text-slate-800">Reject Selected Drawings?</span>',
+      input: 'textarea',
+      inputLabel: 'Reason for rejection',
+      inputPlaceholder: 'Enter rejection reason...',
+      inputAttributes: {
+        'aria-label': 'Enter rejection reason'
+      },
+      showCancelButton: true,
+      confirmButtonColor: '#ef4444',
+      confirmButtonText: 'Yes, Reject All',
+      cancelButtonText: 'Cancel',
+      width: '400px',
+      padding: '1.25rem',
+      inputValidator: (value) => {
+        if (!value) {
+          return 'You need to provide a reason for rejection!';
+        }
+      },
+      customClass: {
+        confirmButton: 'text-[10px] px-4 py-2 rounded shadow-lg shadow-rose-100',
+        cancelButton: 'text-[10px] px-4 py-2 rounded',
+        title: 'mt-2',
+        input: 'text-xs'
+      }
+    });
+
+    if (!reason) return;
+
+    try {
+      setBulkOperationLoading(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/sales-orders/bulk/items/status`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ itemIds: itemsToReject, status: 'Rejected', reason })
+      });
+
+      if (!response.ok) throw new Error('Failed to reject drawings');
+
+      successToast(`${itemsToReject.length} drawings rejected successfully`);
+      setSelectedRows(new Set());
+      fetchDrawings(searchTerm);
+    } catch (error) {
+      errorToast(error.message);
+    } finally {
+      setBulkOperationLoading(false);
+    }
+  };
+
   const columns = [
     { 
       label: 'Drawing No', 
@@ -585,15 +655,25 @@ const DrawingMaster = () => {
                 onKeyDown={(e) => e.key === 'Enter' && fetchDrawings(searchTerm)}
               />
             </div>
-            {selectedRows.size > 0 && drawings.some(d => selectedRows.has(d.id) && (d.item_status || '').trim().toUpperCase() !== 'APPROVED' && (d.item_status || '').trim().toUpperCase() !== 'REJECTED') && (
-              <button
-                onClick={handleApproveGroup}
-                disabled={bulkOperationLoading}
-                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded text-xs  hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-50 disabled:opacity-50 border-none ml-2"
-              >
-                {bulkOperationLoading ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} />}
-                Approve Selective ({drawings.filter(d => selectedRows.has(d.id) && (d.item_status || '').trim().toUpperCase() !== 'APPROVED' && (d.item_status || '').trim().toUpperCase() !== 'REJECTED').length})
-              </button>
+            {selectedRows.size > 0 && drawings.some(d => selectedRows.has(d.drawing_master_id) && (d.item_status || '').trim().toUpperCase() !== 'APPROVED' && (d.item_status || '').trim().toUpperCase() !== 'REJECTED') && (
+              <div className="flex items-center gap-2 ml-2">
+                <button
+                  onClick={handleApproveGroup}
+                  disabled={bulkOperationLoading}
+                  className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded text-xs  hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-50 disabled:opacity-50 border-none"
+                >
+                  {bulkOperationLoading ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} />}
+                  Approve Selective ({drawings.filter(d => selectedRows.has(d.drawing_master_id) && (d.item_status || '').trim().toUpperCase() !== 'APPROVED' && (d.item_status || '').trim().toUpperCase() !== 'REJECTED').length})
+                </button>
+                <button
+                  onClick={handleRejectGroup}
+                  disabled={bulkOperationLoading}
+                  className="flex items-center gap-2 px-4 py-2 bg-rose-600 text-white rounded text-xs  hover:bg-rose-700 transition-all shadow-lg shadow-rose-50 disabled:opacity-50 border-none"
+                >
+                  {bulkOperationLoading ? <RefreshCw size={14} className="animate-spin" /> : <X size={14} />}
+                  Reject Selective ({drawings.filter(d => selectedRows.has(d.drawing_master_id) && (d.item_status || '').trim().toUpperCase() !== 'APPROVED' && (d.item_status || '').trim().toUpperCase() !== 'REJECTED').length})
+                </button>
+              </div>
            )}
           </div>
           <div className="p-2">

@@ -53,6 +53,7 @@ const listSalesOrders = async (includeWithoutPo = true) => {
             COALESCE(so.project_name, cp.project_name) as project_name,
             so.target_dispatch_date as delivery_date, c.company_name, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path,
             COALESCE(ct.email, "") as email_address, COALESCE(ct.phone, "") as contact_phone,
+            COALESCE(ct.name, "") as contact_person,
             (SELECT GROUP_CONCAT(DISTINCT drawing_no SEPARATOR ', ') FROM sales_order_items WHERE sales_order_id = so.id) as drawing_no,
             (SELECT reason FROM design_rejections WHERE sales_order_id = so.id ORDER BY created_at DESC LIMIT 1) as rejection_reason,
             (SELECT COUNT(*) FROM sales_order_items WHERE sales_order_id = so.id AND UPPER(TRIM(status)) = 'APPROVED') as approved_items_count,
@@ -89,7 +90,8 @@ const getSalesOrderById = async (id) => {
     `SELECT so.*, 
             COALESCE(so.project_name, cp.project_name) as project_name,
             so.target_dispatch_date as delivery_date, c.company_name, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path,
-            COALESCE(ct.email, "") as email_address, COALESCE(ct.phone, "") as contact_phone
+            COALESCE(ct.email, "") as email_address, COALESCE(ct.phone, "") as contact_phone,
+            COALESCE(ct.name, "") as contact_person
      FROM sales_orders so
      LEFT JOIN companies c ON c.id = so.company_id
      LEFT JOIN customer_pos cp ON cp.id = so.customer_po_id
@@ -145,11 +147,17 @@ const getIncomingOrders = async (departmentCode, includeAccepted = false) => {
             soi.item_id, soi.item_code, soi.drawing_no, soi.description AS item_description, soi.quantity AS item_qty, soi.unit AS item_unit, soi.item_status, soi.item_rejection_reason,
             cd.drawing_name,
             sb.material_type as item_group,
+            COALESCE(ct.email, "") as email_address, COALESCE(ct.phone, "") as contact_phone, COALESCE(ct.name, "") as contact_person,
             (SELECT reason FROM design_rejections WHERE sales_order_id = so.id ORDER BY created_at DESC LIMIT 1) as rejection_reason
      FROM sales_orders so
      LEFT JOIN companies c ON c.id = so.company_id
      LEFT JOIN customer_pos cp ON cp.id = so.customer_po_id
      LEFT JOIN departments d ON d.code = so.current_department
+     LEFT JOIN (
+       SELECT company_id, email, phone, name, 
+              ROW_NUMBER() OVER (PARTITION BY company_id ORDER BY contact_type = 'PRIMARY' DESC, id ASC) as rn
+       FROM contacts
+     ) ct ON ct.company_id = c.id AND ct.rn = 1
      LEFT JOIN (
        SELECT sales_order_id, id as item_id, item_code, drawing_no, description, quantity, quantity as design_qty, unit, status as item_status, rejection_reason as item_rejection_reason
        FROM sales_order_items

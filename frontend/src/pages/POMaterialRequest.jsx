@@ -267,10 +267,10 @@ const POMaterialRequest = () => {
         confirmButtonColor: '#10b981'
       });
 
-      fetchRequests();
+      await fetchRequests();
       if (mr.id) {
-        fetchRfqs(mr.id);
-        handleViewRequest(mr.id); // Refresh the selected request to update status and hide button
+        await fetchRfqs(mr.id);
+        await handleViewRequest(mr.id); // Refresh the selected request to update status and hide button
       }
 
     } catch (error) {

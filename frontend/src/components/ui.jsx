@@ -831,7 +831,7 @@ export const DataTable = ({
                       )}
                       {columns.map((col, colIdx) => (
                         <td key={colIdx} className={`p-2 whitespace-nowrap text-xs text-slate-600 group-hover:text-slate-900 transition-colors ${col.className || ''}`}>
-                          {col.render ? col.render(row[col.key], row) : (row[col.key] || '—')}
+                          {col.render ? col.render(row[col.key], row, (currentPage - 1) * pageSize + rowIdx) : (row[col.key] || '—')}
                         </td>
                       ))}
                     </tr>

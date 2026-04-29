@@ -15,6 +15,9 @@ const CustomerDrawing = () => {
   const [showFormModal, setShowFormModal] = useState(false);
   const [reqLoading, setReqLoading] = useState(false);
   const [companies, setCompanies] = useState([]);
+  const [formMode, setFormMode] = useState('add'); // 'add' or 'edit'
+  const [editingRequirementId, setEditingRequirementId] = useState(null);
+  const [editingRequirementData, setEditingRequirementData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [uploadMode, setUploadMode] = useState('bulk'); // 'bulk' or 'manual'
@@ -54,6 +57,14 @@ const CustomerDrawing = () => {
   const [saveLoading, setSaveLoading] = useState(false);
 
   const requirementColumns = [
+    {
+      label: 'Project Name',
+      key: 'project_name',
+      sortable: true,
+      render: (val) => (
+        <span className="font-medium text-slate-900">{val || '—'}</span>
+      )
+    },
     {
       label: 'Client Name',
       key: 'client_name',
@@ -110,42 +121,15 @@ const CustomerDrawing = () => {
           </button>
           <button
             onClick={() => {
-              // Map requirement item to drawing structure for editing
-              const firstItem = row.original_items?.[0];
-              if (firstItem) {
-                // Find corresponding drawing from drawings database if possible, 
-                // or use the item data directly
-                const dbDrawing = drawings.find(d => 
-                  (d.drawing_master_id && String(d.drawing_master_id) === String(firstItem.drawing_id)) || 
-                  (d.id && String(d.id) === String(firstItem.drawing_id)) ||
-                  d.drawing_no === firstItem.drawing_no
-                );
-                
-                const drawingToEdit = {
-                  id: dbDrawing?.drawing_master_id || dbDrawing?.id || firstItem.drawing_id || firstItem.id,
-                  drawing_no: dbDrawing?.drawing_no || firstItem.drawing_no,
-                  revision: dbDrawing?.revision || firstItem.revision || '0',
-                  description: dbDrawing?.description || firstItem.description || '',
-                  client_name: dbDrawing?.client_name || row.client_name || row.company_name,
-                  qty: dbDrawing?.qty || firstItem.quantity || 1,
-                  file_path: dbDrawing?.file_path || firstItem.file_path,
-                  // Pass contact info from row if not in dbDrawing
-                  contact_person: dbDrawing?.contact_person || row.contact_person || '',
-                  phone: dbDrawing?.phone || row.contact_phone || '',
-                  email: dbDrawing?.email || row.email_address || '',
-                  customer_type: dbDrawing?.customer_type || row.customer_type || '',
-                  gstin: dbDrawing?.gstin || row.gstin || '',
-                  city: dbDrawing?.city || row.city || '',
-                  state: dbDrawing?.state || row.state || '',
-                  billing_address: dbDrawing?.billing_address || row.billing_address || '',
-                  shipping_address: dbDrawing?.shipping_address || row.shipping_address || '',
-                  remarks: dbDrawing?.remarks || firstItem.remarks || ''
-                };
-                handleEdit(drawingToEdit);
-              }
+              setFormMode('edit');
+              setEditingRequirementId(row.id);
+              setEditingRequirementData(row);
+              setUploadMode('manual');
+              setShowFormModal(true);
+              window.history.pushState({ type: 'edit-requirement', data: row }, '', '/customer-drawing/edit-client');
             }}
             className="p-1.5 text-amber-600 hover:bg-amber-50 rounded transition-all"
-            title="Edit Drawing"
+            title="Edit Client & Drawings"
           >
             <Edit2 size={15} />
           </button>
@@ -408,6 +392,7 @@ const CustomerDrawing = () => {
           acc[clientName] = {
             ...so,
             client_name: clientName,
+            project_name: so.project_name,
             drawing_count: 0,
             original_items: [],
             // Ensure contact info is preserved
@@ -451,23 +436,72 @@ const CustomerDrawing = () => {
 
     // Initial check on mount or path change
     const path = window.location.pathname;
+    const historyState = window.history.state;
+
     if (path === '/customer-drawing') {
       setShowFormModal(false);
       setShowEditModal(false);
       setShowClientDrawingsModal(false);
     } else if (path.includes('/customer-drawing/addclient')) {
       setShowFormModal(true);
+    } else if (path.includes('/customer-drawing/edit-client')) {
+      if (historyState?.type === 'edit-requirement') {
+        setFormMode('edit');
+        setEditingRequirementId(historyState.data.id);
+        setEditingRequirementData(historyState.data);
+      } else if (historyState?.type === 'edit-drawing') {
+        setEditData(historyState.data);
+        setModalMode(historyState.mode || 'edit');
+        setShowEditModal(true);
+      }
+      setShowFormModal(path.includes('/customer-drawing/edit-client'));
+    } else if (path.includes('/customer-drawing/view-draw')) {
+      if (historyState?.type === 'view-client-drawings') {
+        setViewingClient(historyState.data);
+      }
+      setShowClientDrawingsModal(true);
     }
 
     // Handle browser Back/Forward buttons
-    const handlePopState = () => {
+    const handlePopState = (event) => {
       const currentPath = window.location.pathname;
+      const state = event.state;
+
       if (currentPath === '/customer-drawing') {
         setShowFormModal(false);
         setShowEditModal(false);
         setShowClientDrawingsModal(false);
+        setFormMode('add');
+        setEditingRequirementId(null);
+        setEditingRequirementData(null);
       } else if (currentPath.includes('/customer-drawing/addclient')) {
+        setFormMode('add');
+        setEditingRequirementId(null);
+        setEditingRequirementData(null);
         setShowFormModal(true);
+        setShowEditModal(false);
+        setShowClientDrawingsModal(false);
+      } else if (currentPath.includes('/customer-drawing/edit-client')) {
+        if (state?.type === 'edit-requirement') {
+          setFormMode('edit');
+          setEditingRequirementId(state.data.id);
+          setEditingRequirementData(state.data);
+          setShowFormModal(true);
+          setShowEditModal(false);
+        } else if (state?.type === 'edit-drawing') {
+          setEditData(state.data);
+          setModalMode(state.mode || 'edit');
+          setShowEditModal(true);
+          setShowFormModal(false);
+        }
+        setShowClientDrawingsModal(false);
+      } else if (currentPath.includes('/customer-drawing/view-draw')) {
+        if (state?.type === 'view-client-drawings') {
+          setViewingClient(state.data);
+        }
+        setShowClientDrawingsModal(true);
+        setShowFormModal(false);
+        setShowEditModal(false);
       }
     };
 
@@ -486,6 +520,60 @@ const CustomerDrawing = () => {
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    if (showFormModal && formMode === 'edit' && editingRequirementData) {
+      const row = editingRequirementData;
+      const company = companies.find(c => c.company_name === (row.client_name || row.company_name));
+      
+      const manualDrawings = (row.original_items || []).map(item => ({
+        id: item.id || Date.now() + Math.random(),
+        drawing_no: item.drawing_no || '',
+        revision: item.revision || item.revision_no || '',
+        qty: item.quantity || item.qty || 1,
+        description: item.description || '',
+        remarks: item.remarks || '',
+        file: null,
+        file_path: item.file_path || item.drawing_pdf
+      }));
+
+      formik.setValues({
+        client_name: row.client_name || row.company_name || '',
+        project_name: row.project_name || '',
+        contact_person: row.contact_person || company?.contact_person || '',
+        phone_number: row.contact_phone || row.phone || company?.contact_mobile || company?.phone || '',
+        email_address: row.email_address || row.email || company?.contact_email || company?.email || '',
+        customer_type: row.customer_type || company?.customer_type || '',
+        gstin: row.gstin || company?.gstin || '',
+        city: row.city || company?.addresses?.find(a => a.address_type === 'BILLING')?.city || '',
+        state: row.state || company?.addresses?.find(a => a.address_type === 'BILLING')?.state || '',
+        billing_address: row.billing_address || (company ? (company.addresses?.find(a => a.address_type === 'BILLING') ? `${company.addresses.find(a => a.address_type === 'BILLING').line1}, ${company.addresses.find(a => a.address_type === 'BILLING').city}` : '') : ''),
+        shipping_address: row.shipping_address || '',
+        uploadMode: row.excel_path ? 'bulk' : 'manual',
+        file: row.excel_path ? { name: row.excel_path.split('/').pop() } : null,
+        zipFile: row.zip_path ? { name: row.zip_path.split('/').pop() } : null,
+        manualDrawings: manualDrawings.length > 0 ? manualDrawings : [
+          { id: Date.now(), drawing_no: '', revision: '', qty: 1, description: '', file: null, remarks: '' }
+        ]
+      });
+      setClientLocked(true);
+      if (row.excel_path) {
+        setUploadMode('bulk');
+      } else {
+        setUploadMode('manual');
+      }
+    }
+  }, [showFormModal, formMode, editingRequirementData, companies]);
+
+  // Keep viewingClient drawings in sync with the main drawings list
+  useEffect(() => {
+    if (viewingClient && groupedDrawings[viewingClient.name]) {
+      setViewingClient(prev => ({
+        ...prev,
+        drawings: groupedDrawings[viewingClient.name]
+      }));
+    }
+  }, [groupedDrawings]);
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -527,12 +615,13 @@ const CustomerDrawing = () => {
       shippingAddressLine = shippingAddress ? `${shippingAddress.line1}${shippingAddress.line2 ? ', ' + shippingAddress.line2 : ''}, ${shippingAddress.city}, ${shippingAddress.state} ${shippingAddress.pincode}` : '';
     }
 
-    setEditData({
+    const newEditData = {
       id: drawing.id,
       drawing_no: drawing.drawing_no,
       revision_no: drawing.revision || drawing.revision_no || '0',
       description: drawing.description || '',
       client_name: drawing.client_name,
+      project_name: drawing.project_name || '',
       contact_person: drawing.contact_person || (company ? company.contact_person : ''),
       phone: drawing.phone || (company ? company.contact_mobile : ''),
       email: drawing.email || (company ? company.contact_email : ''),
@@ -546,13 +635,15 @@ const CustomerDrawing = () => {
       remarks: drawing.remarks || '',
       drawing_pdf: null,
       file_path: drawing.file_path || drawing.drawing_pdf || ''
-    });
+    };
+    
+    setEditData(newEditData);
     setModalMode(mode);
     setShowEditModal(true);
 
     // Update URL behavior
     const targetUrl = mode === 'view' ? '/customer-drawing/view-draw' : '/customer-drawing/edit-client';
-    window.history.pushState({}, '', targetUrl);
+    window.history.pushState({ type: 'edit-drawing', data: newEditData, mode }, '', targetUrl);
   };
 
   const handlePreview = (drawing) => {
@@ -571,6 +662,7 @@ const CustomerDrawing = () => {
       formData.append('revisionNo', editData.revision_no);
       formData.append('description', editData.description);
       formData.append('clientName', editData.client_name);
+      formData.append('projectName', editData.project_name || '');
       formData.append('contactPerson', editData.contact_person);
       formData.append('phoneNumber', editData.phone);
       formData.append('emailAddress', editData.email);
@@ -615,6 +707,7 @@ const CustomerDrawing = () => {
   // Formik validation schema
   const validationSchema = Yup.object().shape({
     client_name: Yup.string().required('Client Name is required'),
+    project_name: Yup.string().required('Project Name is required'),
     contact_person: Yup.string().required('Contact Person is required'),
     phone_number: Yup.string()
       .matches(/^[0-9]{10}$/, 'Phone number must be exactly 10 digits')
@@ -647,6 +740,7 @@ const CustomerDrawing = () => {
   const formik = useFormik({
     initialValues: {
       client_name: '',
+      project_name: '',
       contact_person: '',
       phone_number: '',
       email_address: '',
@@ -680,20 +774,77 @@ const CustomerDrawing = () => {
           }
         } else {
           let successCount = 0;
-          for (const drawing of values.manualDrawings) {
-            if (!drawing.drawing_no || !drawing.file) continue;
-            await saveSingleDrawing({ ...values, ...drawing }, false);
-            successCount++;
-          }
+          
+          if (formMode === 'edit') {
+            // Update existing requirement logic
+            for (const drawing of values.manualDrawings) {
+              if (!drawing.drawing_no) continue;
+              
+              // If it has a file, it might be a new drawing added during edit OR an update with new file
+              // If it has id and no file, it's just updating metadata
+              if (drawing.id && !String(drawing.id).includes('.')) {
+                // Update existing drawing metadata
+                const token = localStorage.getItem('authToken');
+                const formData = new FormData();
+                formData.append('drawingNo', drawing.drawing_no);
+                formData.append('projectName', values.project_name || '');
+                formData.append('clientName', values.client_name || '');
+                formData.append('contactPerson', values.contact_person || '');
+                formData.append('phoneNumber', values.phone_number || '');
+                formData.append('emailAddress', values.email_address || '');
+                formData.append('customerType', values.customer_type || '');
+                formData.append('gstin', values.gstin || '');
+                formData.append('city', values.city || '');
+                formData.append('state', values.state || '');
+                formData.append('billingAddress', values.billing_address || '');
+                formData.append('shippingAddress', values.shipping_address || '');
+                formData.append('revisionNo', drawing.revision || '');
+                formData.append('qty', drawing.qty || 1);
+                formData.append('description', drawing.description || '');
+                formData.append('remarks', drawing.remarks || '');
+                if (drawing.file) {
+                  formData.append('drawing_pdf', drawing.file);
+                }
 
-          if (successCount > 0) {
-            successToast(`${successCount} drawings added successfully`);
-            formik.setFieldValue('manualDrawings', [{ id: Date.now(), drawing_no: '', revision: '', qty: 1, description: '', file: null, remarks: '' }]);
-            setClientLocked(true);
+                await fetch(`${API_BASE}/drawings/${drawing.id}`, {
+                  method: 'PATCH',
+                  headers: { 'Authorization': `Bearer ${token}` },
+                  body: formData
+                });
+              } else {
+                // Add new drawing to existing requirement
+                await saveSingleDrawing({ ...values, ...drawing }, false);
+              }
+              successCount++;
+            }
+            successToast(`Requirement updated successfully`);
           } else {
-            warningToast('No drawings were added. Please fill in Drawing # and select a file for at least one row.');
+            for (const drawing of values.manualDrawings) {
+              if (!drawing.drawing_no || !drawing.file) continue;
+              await saveSingleDrawing({ ...values, ...drawing }, false);
+              successCount++;
+            }
+
+            if (successCount > 0) {
+              successToast(`${successCount} drawings added successfully`);
+              formik.setFieldValue('manualDrawings', [{ id: Date.now(), drawing_no: '', revision: '', qty: 1, description: '', file: null, remarks: '' }]);
+              setClientLocked(true);
+            } else {
+              warningToast('No drawings were added. Please fill in Drawing # and select a file for at least one row.');
+            }
           }
         }
+        
+        if (formMode === 'edit') {
+           setShowFormModal(false);
+           setFormMode('add');
+           setEditingRequirementId(null);
+           setEditingRequirementData(null);
+           if (window.location.pathname !== '/customer-drawing') {
+            window.history.pushState({}, '', '/customer-drawing');
+          }
+        }
+
         fetchDrawings(searchTerm);
         fetchRequirements();
       } catch (error) {
@@ -812,6 +963,7 @@ const CustomerDrawing = () => {
       const token = localStorage.getItem('authToken');
       const formData = new FormData();
       formData.append('clientName', drawingData.client_name);
+      formData.append('projectName', drawingData.project_name || '');
       formData.append('contactPerson', drawingData.contact_person || '');
       formData.append('phoneNumber', drawingData.phone_number || '');
       formData.append('emailAddress', drawingData.email_address || '');
@@ -907,9 +1059,10 @@ const CustomerDrawing = () => {
   };
 
   const clientDrawingColumns = [
-    { label: '#', key: 'id', render: (_, __, idx) => idx + 1, width: '50px' },
+    { label: '#', key: 'id', render: (_, __, rowIdx) => rowIdx + 1, width: '50px' },
     { label: 'Drawing No', key: 'drawing_no', className: 'font-medium text-slate-900' },
-    { label: 'Description', key: 'description' },
+    { label: 'Project Name', key: 'project_name' },
+    { label: 'Description', key: 'drawing_description' },
     { 
       label: 'Revision', 
       key: 'revision', 
@@ -1157,14 +1310,15 @@ const CustomerDrawing = () => {
   };
 
   const handleViewClientDrawings = (clientName) => {
-    setViewingClient({
+    const viewData = {
       name: clientName,
       drawings: groupedDrawings[clientName] || []
-    });
+    };
+    setViewingClient(viewData);
     setShowClientDrawingsModal(true);
 
     // Update URL behavior
-    window.history.pushState({}, '', '/customer-drawing/view-draw');
+    window.history.pushState({ type: 'view-client-drawings', data: viewData }, '', '/customer-drawing/view-draw');
   };
 
   const handleDeleteRequirement = async (id) => {
@@ -1219,6 +1373,11 @@ const CustomerDrawing = () => {
           <Button
             variant="primary"
             onClick={() => {
+              setFormMode('add');
+              setEditingRequirementId(null);
+              setEditingRequirementData(null);
+              formik.resetForm();
+              setClientLocked(false);
               window.history.pushState({}, '', '/customer-drawing/addclient');
               setShowFormModal(true);
             }}
@@ -1683,11 +1842,16 @@ const CustomerDrawing = () => {
         isOpen={showFormModal}
         onClose={() => {
           setShowFormModal(false);
+          setFormMode('add');
+          setEditingRequirementId(null);
+          setEditingRequirementData(null);
+          formik.resetForm();
+          setClientLocked(false);
           if (location.pathname !== '/customer-drawing') {
             window.history.pushState({}, '', '/customer-drawing');
           }
         }}
-        title="Add Client Requirement"
+        title={formMode === 'edit' ? 'Update Client Requirement' : 'Add Client Requirement'}
       >
         <form onSubmit={formik.handleSubmit} className="space-y-2">
           <div className="flex justify-between items-center bg-slate-50 p-2 rounded  border border-slate-200">
@@ -1716,6 +1880,23 @@ const CustomerDrawing = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 bg-white p-2 rounded  border border-slate-200">
+            {/* Project Name */}
+            <div>
+              <label className="block text-xs  text-slate-700 mb-1">Project Name *</label>
+              <input
+                type="text"
+                name="project_name"
+                placeholder="Project Name"
+                className={`w-full p-2 .5 border rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${formik.touched.project_name && formik.errors.project_name ? 'border-red-500' : 'border-slate-300'}`}
+                value={formik.values.project_name}
+                onChange={formik.handleChange}
+                onBlur={formik.handleBlur}
+              />
+              {formik.touched.project_name && formik.errors.project_name && (
+                <div className="text-red-500 text-[10px] mt-0.5">{formik.errors.project_name}</div>
+              )}
+            </div>
+
             {/* Client Selection */}
             <div className="lg:col-span-1">
               <label className="block text-xs  text-slate-700 mb-1">Client Name *</label>
@@ -1971,6 +2152,7 @@ const CustomerDrawing = () => {
                             type="number"
                             name={`manualDrawings[${index}].qty`}
                             min="1"
+                            step="0.01"
                             className="w-full px-2 py-1 border border-slate-300 rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500 text-center"
                             value={drawing.qty}
                             onChange={formik.handleChange}
@@ -1978,23 +2160,37 @@ const CustomerDrawing = () => {
                           />
                         </td>
                         <td className="px-2 py-2">
-                          <div className="relative">
-                            <input
-                              type="file"
-                              name={`manualDrawings[${index}].file`}
-                              accept=".pdf,.dwg,.dxf,.step,.stp,.igs,.iges,.png,.jpg,.jpeg"
-                              className="hidden"
-                              onChange={(e) => handleManualFileChange(e, drawing.id)}
-                              onBlur={formik.handleBlur}
-                              id={`file-${drawing.id}`}
-                            />
-                            <label
-                              htmlFor={`file-${drawing.id}`}
-                              className={`flex items-center gap-1 px-2 py-1 border border-dashed rounded text-xs  cursor-pointer transition-colors ${drawing.file ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : (formik.touched.manualDrawings?.[index]?.file && formik.errors.manualDrawings?.[index]?.file ? 'border-red-500 bg-red-50' : 'border-slate-300 bg-slate-50 text-slate-600 hover:border-indigo-400')}`}
-                            >
-                              <Plus className="w-3 h-3" />
-                              <span className="truncate max-w-[60px]">{drawing.file ? drawing.file.name : 'Choose'}</span>
-                            </label>
+                          <div className="flex flex-col gap-1">
+                            <div className="relative">
+                              <input
+                                type="file"
+                                name={`manualDrawings[${index}].file`}
+                                accept=".pdf,.dwg,.dxf,.step,.stp,.igs,.iges,.png,.jpg,.jpeg"
+                                className="hidden"
+                                onChange={(e) => handleManualFileChange(e, drawing.id)}
+                                onBlur={formik.handleBlur}
+                                id={`file-${drawing.id}`}
+                              />
+                              <label
+                                htmlFor={`file-${drawing.id}`}
+                                className={`flex items-center gap-1 px-2 py-1 border border-dashed rounded text-xs  cursor-pointer transition-colors ${drawing.file ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : (formik.touched.manualDrawings?.[index]?.file && formik.errors.manualDrawings?.[index]?.file ? 'border-red-500 bg-red-50' : 'border-slate-300 bg-slate-50 text-slate-600 hover:border-indigo-400')}`}
+                              >
+                                <Plus className="w-3 h-3" />
+                                <span className="truncate max-w-[60px]">{drawing.file ? drawing.file.name : 'Choose'}</span>
+                              </label>
+                            </div>
+                            {formMode === 'edit' && drawing.file_path && !drawing.file && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setPreviewDrawing({ ...drawing, drawing_pdf: drawing.file_path });
+                                  setShowPreviewModal(true);
+                                }}
+                                className="text-[10px] text-indigo-600 hover:underline text-left flex items-center gap-1"
+                              >
+                                <Eye size={10} /> View Current
+                              </button>
+                            )}
                           </div>
                         </td>
                         <td className="px-2 py-2">
@@ -2077,10 +2273,13 @@ const CustomerDrawing = () => {
                 setShowFormModal(false);
                 formik.resetForm();
                 setClientLocked(false);
+                setFormMode('add');
+                setEditingRequirementId(null);
+                setEditingRequirementData(null);
               }}
               className="px-4 py-2 text-xs text-slate-600 hover:bg-slate-100 rounded transition-colors"
             >
-              Clear Form
+              {formMode === 'edit' ? 'Cancel' : 'Clear Form'}
             </button>
             <button
               type="submit"
@@ -2089,7 +2288,7 @@ const CustomerDrawing = () => {
             >
               {loading && <Loader2 className="w-3 h-3 animate-spin" />}
               <Send className="w-3 h-3" />
-              {uploadMode === 'bulk' ? 'Upload Excel' : 'Add Requirements'}
+              {formMode === 'edit' ? (loading ? 'Updating...' : 'Update Requirement') : (uploadMode === 'bulk' ? 'Upload Excel' : 'Add Requirements')}
             </button>
           </div>
         </form>

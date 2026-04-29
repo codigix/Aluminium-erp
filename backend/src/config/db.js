@@ -751,6 +751,7 @@ const ensureCustomerDrawingTable = async () => {
     await connection.query(`
       CREATE TABLE IF NOT EXISTS customer_drawings (
         id INT AUTO_INCREMENT PRIMARY KEY,
+        project_name VARCHAR(255) NULL,
         client_name VARCHAR(255),
         drawing_no VARCHAR(120) NOT NULL,
         revision VARCHAR(50),
@@ -763,10 +764,19 @@ const ensureCustomerDrawingTable = async () => {
         purpose VARCHAR(50) DEFAULT 'Reference Only',
         uploaded_by VARCHAR(120),
         status ENUM('PENDING', 'SHARED') DEFAULT 'PENDING',
+        excel_path VARCHAR(255) NULL,
+        zip_path VARCHAR(255) NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
     
+    // Add project_name column if it doesn't exist
+    const [projectCols] = await connection.query("SHOW COLUMNS FROM customer_drawings LIKE 'project_name'");
+    if (projectCols.length === 0) {
+      await connection.query("ALTER TABLE customer_drawings ADD COLUMN project_name VARCHAR(255) NULL AFTER id");
+      console.log('Added project_name column to customer_drawings');
+    }
+
     // Add client_name column if it doesn't exist
     const [cols] = await connection.query("SHOW COLUMNS FROM customer_drawings LIKE 'client_name'");
     if (cols.length === 0) {
@@ -832,6 +842,18 @@ const ensureCustomerDrawingTable = async () => {
     if (shippingAddressCols.length === 0) {
       await connection.query("ALTER TABLE customer_drawings ADD COLUMN shipping_address TEXT NULL");
       console.log('Added shipping_address column to customer_drawings');
+    }
+
+    const [excelPathCols] = await connection.query("SHOW COLUMNS FROM customer_drawings LIKE 'excel_path'");
+    if (excelPathCols.length === 0) {
+      await connection.query("ALTER TABLE customer_drawings ADD COLUMN excel_path VARCHAR(255) NULL");
+      console.log('Added excel_path column to customer_drawings');
+    }
+
+    const [zipPathCols] = await connection.query("SHOW COLUMNS FROM customer_drawings LIKE 'zip_path'");
+    if (zipPathCols.length === 0) {
+      await connection.query("ALTER TABLE customer_drawings ADD COLUMN zip_path VARCHAR(255) NULL");
+      console.log('Added zip_path column to customer_drawings');
     }
 
     console.log('Customer drawings table synchronized');
@@ -2096,6 +2118,24 @@ const ensureSalesOrderColumns = async () => {
       await connection.query('ALTER TABLE sales_orders ADD COLUMN is_sales_order TINYINT(1) DEFAULT 0');
       // Set existing ones to 1 as they were created as sales orders before this split
       await connection.query('UPDATE sales_orders SET is_sales_order = 1');
+    }
+
+    const requiredColumns = [
+      { name: 'billing_address', definition: 'TEXT NULL' },
+      { name: 'shipping_address', definition: 'TEXT NULL' },
+      { name: 'city', definition: 'VARCHAR(100) NULL' },
+      { name: 'state', definition: 'VARCHAR(100) NULL' },
+      { name: 'gstin', definition: 'VARCHAR(20) NULL' },
+      { name: 'customer_type', definition: 'VARCHAR(100) NULL' },
+      { name: 'excel_path', definition: 'VARCHAR(255) NULL' },
+      { name: 'zip_path', definition: 'VARCHAR(255) NULL' }
+    ];
+
+    for (const col of requiredColumns) {
+      if (!existingColumns.has(col.name)) {
+        console.log(`[ensureSalesOrderColumns] Adding ${col.name} column...`);
+        await connection.query(`ALTER TABLE sales_orders ADD COLUMN \`${col.name}\` ${col.definition}`);
+      }
     }
   } catch (error) {
     if (error.code !== 'ER_NO_SUCH_TABLE') {

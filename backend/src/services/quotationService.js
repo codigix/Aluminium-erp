@@ -232,7 +232,10 @@ const getQuotations = async (filters = {}) => {
 
   const [quotations] = await pool.query(query, params);
 
-  const [items] = await pool.query('SELECT * FROM quotation_items');
+  if (quotations.length === 0) return [];
+
+  const quotationIds = quotations.map(q => q.id);
+  const [items] = await pool.query('SELECT * FROM quotation_items WHERE quotation_id IN (?)', [quotationIds]);
 
   return quotations.map(q => ({
     ...q,
@@ -386,7 +389,7 @@ const updateQuotation = async (quotationId, payload) => {
         oldQuote.mr_id,
         oldQuote.rfq_id,
         oldQuote.rfq_group_id,
-        status || oldQuote.status,
+        status || 'RECEIVED',
         validUntil !== undefined ? validUntil : oldQuote.valid_until,
         notes !== undefined ? notes : oldQuote.notes,
         received_pdf_path !== undefined ? received_pdf_path : oldQuote.received_pdf_path
