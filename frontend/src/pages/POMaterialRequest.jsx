@@ -268,7 +268,10 @@ const POMaterialRequest = () => {
       });
 
       fetchRequests();
-      if (mr.id) fetchRfqs(mr.id);
+      if (mr.id) {
+        fetchRfqs(mr.id);
+        handleViewRequest(mr.id); // Refresh the selected request to update status and hide button
+      }
 
     } catch (error) {
       console.error('Error initiating RFQ:', error);
