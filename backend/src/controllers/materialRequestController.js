@@ -7,7 +7,8 @@ const materialRequestController = {
       const [rows] = await pool.query(`
         SELECT mr.*, CONCAT(u.first_name, ' ', u.last_name) as requester_name,
         COALESCE(
-          (SELECT project_name FROM sales_orders WHERE id = (SELECT sales_order_id FROM production_plans WHERE id = mr.plan_id)),
+          (SELECT so.project_name FROM sales_orders so JOIN production_plans pp ON so.id = pp.sales_order_id WHERE pp.id = mr.plan_id),
+          (SELECT so2.project_name FROM sales_orders so2 WHERE mr.notes LIKE CONCAT('%', so2.project_name, '%') LIMIT 1),
           mr.purpose,
           'General Procurement'
         ) as project_name,
