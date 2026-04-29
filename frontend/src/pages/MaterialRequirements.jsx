@@ -152,7 +152,7 @@ const MaterialRequirements = () => {
       key: 'required_qty',
       sortable: true,
       className: 'text-center',
-      render: (val, row) => `${val.toFixed(2)} ${row.uom}`
+      render: (val, row) => `${parseFloat(val || 0).toFixed(2)} ${row.uom}`
     },
     {
       label: 'Stock Available',
@@ -161,7 +161,7 @@ const MaterialRequirements = () => {
       className: 'text-center',
       render: (val, row) => (
         <span className=" text-slate-700">
-          {val.toFixed(2)} {row.uom}
+          {parseFloat(val || 0).toFixed(2)} {row.uom}
         </span>
       )
     },
@@ -171,7 +171,7 @@ const MaterialRequirements = () => {
       sortable: true,
       className: 'text-center',
       render: (val, row) => val > 0 ? (
-        <span className="text-rose-600 ">{val.toFixed(2)} {row.uom}</span>
+        <span className="text-rose-600 ">{parseFloat(val || 0).toFixed(2)} {row.uom}</span>
       ) : (
         <span className="text-emerald-600">—</span>
       )

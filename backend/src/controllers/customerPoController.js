@@ -46,7 +46,8 @@ const createCustomerPo = async (req, res, next) => {
         revisionNo: item.revisionNo || null,
         purchaseReqNo: item.purchaseReqNo || null,
         customerReference: item.customerReference || null,
-        discount: Number(item.discount) || 0
+        discount: Number(item.discount) || 0,
+        sub_assemblies: item.sub_assemblies || []
       }))
       .filter(item => item.description);
 
@@ -211,7 +212,8 @@ const updateCustomerPo = async (req, res, next) => {
       revisionNo: item.revisionNo || null,
       purchaseReqNo: item.purchaseReqNo || null,
       customerReference: item.customerReference || null,
-      discount: Number(item.discount) || 0
+      discount: Number(item.discount) || 0,
+      sub_assemblies: item.sub_assemblies || []
     }));
 
     const payload = {

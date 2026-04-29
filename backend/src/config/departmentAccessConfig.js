@@ -34,7 +34,9 @@ const DEPARTMENT_ACCESS_RULES = {
       'ORDER_VIEW', 'ORDER_CREATE', 'ORDER_EDIT',
       'COMPANY_VIEW',
       'DASHBOARD_VIEW',
-      'STATUS_CHANGE'
+      'STATUS_CHANGE',
+      'BOM_VIEW',
+      'PROD_VIEW'
     ]
   },
 

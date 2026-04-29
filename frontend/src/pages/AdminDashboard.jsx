@@ -145,7 +145,7 @@ const AdminDashboard = () => {
 
       {/* KPI Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard title="Total Revenue" count={`₹${(stats.totalRevenue / 100000).toFixed(1)}L`} subtitle="Total so far" color="bg-indigo-500" icon={IndianRupee} trend={0} />
+        <StatCard title="Total Revenue" count={`₹${(parseFloat(stats?.totalRevenue || 0) / 100000).toFixed(1)}L`} subtitle="Total so far" color="bg-indigo-500" icon={IndianRupee} trend={0} />
         <StatCard title="Fulfillment Rate" count="0%" subtitle="Order accuracy" color="bg-emerald-500" icon={CheckCircle} trend={0} />
         <StatCard title="Active Jobs" count={stats.productionOrders || 0} subtitle="Manufacturing floor" color="bg-amber-500" icon={Factory} />
         <StatCard title="Total Users" count={stats.totalUsers || 0} subtitle="Active system users" color="bg-blue-500" icon={Users} />

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ChevronUp, ChevronDown, ChevronsUpDown, X, Search, FileText, ChevronRight, ChevronLeft, Loader2, Check, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { ChevronUp, ChevronDown, ChevronsUpDown, X, Search, FileText, ChevronRight, ChevronLeft, Loader2, Check, ChevronsLeft, ChevronsRight, Home, User, Settings, Info } from 'lucide-react';
 
 export const Card = ({ id, title, subtitle, action, children, className = '' }) => (
   <div id={id} className={className}>
@@ -80,7 +80,7 @@ export const SearchableSelect = ({
       <div className="relative">
         <input
           type="text"
-          className={`w-full p-2 border border-slate-200 rounded text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 ${disabled ? 'bg-slate-50 text-slate-500 cursor-not-allowed' : 'bg-white'} ${className}`}
+          className={`w-full p-2 border border-slate-200 rounded text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-rose-500 ${disabled ? 'bg-slate-50 text-slate-500 cursor-not-allowed' : 'bg-white'} ${className}`}
           placeholder={placeholder}
           value={searchTerm}
           onChange={(e) => {
@@ -180,7 +180,7 @@ export const MultiSelect = ({ options, value = [], onChange, placeholder, labelF
           selectedValues.map(val => {
             const opt = options.find(o => String(o[valueField]) === val);
             return (
-              <span key={val} className="bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-md flex items-center gap-1 ">
+              <span key={val} className="bg-rose-50 text-rose-600 px-2 py-0.5 rounded-md flex items-center gap-1 ">
                 {opt ? opt[labelField] : val}
                 <X 
                   className="w-3 h-3 cursor-pointer hover:text-indigo-800" 
@@ -255,6 +255,96 @@ export const FormControl = ({ label, children }) => (
   </label>
 )
 
+export const Button = ({ 
+  children, 
+  variant = 'default', 
+  size = 'md', 
+  className = '', 
+  disabled = false, 
+  type = 'button',
+  onClick,
+  icon: Icon,
+  loading = false,
+  ...props 
+}) => {
+  const variants = {
+    default: 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 shadow-sm',
+    primary: 'bg-rose-600 text-white border-rose-700 hover:bg-rose-700 shadow-md shadow-rose-100',
+    secondary: 'bg-sky-500 text-white border-sky-600 hover:bg-sky-600 shadow-md shadow-sky-100',
+    success: 'bg-emerald-500 text-white border-emerald-600 hover:bg-emerald-600 shadow-md shadow-emerald-100',
+    danger: 'bg-rose-500 text-white border-rose-600 hover:bg-rose-600 shadow-md shadow-rose-100',
+    warning: 'bg-amber-500 text-white border-amber-600 hover:bg-amber-600 shadow-md shadow-amber-100',
+    info: 'bg-blue-500 text-white border-blue-600 hover:bg-blue-600 shadow-md shadow-blue-100',
+    light: 'bg-slate-50 text-slate-600 border-slate-100 hover:bg-slate-100 shadow-sm',
+    dark: 'bg-slate-700 text-white border-slate-800 hover:bg-slate-800 shadow-md shadow-slate-200'
+  };
+
+  const sizes = {
+    xs: 'px-2 py-1 text-[10px]',
+    sm: 'px-3 py-1.5 text-xs',
+    md: 'p-2 text-xs',
+    lg: 'px-6 py-3 text-base'
+  };
+
+  return (
+    <button
+      type={type}
+      onClick={onClick}
+      disabled={disabled || loading}
+      className={`
+        inline-flex items-center justify-center gap-2 
+        rounded border    
+        transition-all duration-200 active:scale-[0.98] 
+        disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100
+        ${variants[variant] || variants.default} 
+        ${sizes[size] || sizes.md} 
+        ${className}
+      `}
+      {...props}
+    >
+      {loading ? (
+        <Loader2 className="w-4 h-4 animate-spin" />
+      ) : Icon ? (
+        <Icon className={size === 'xs' ? 'w-3 h-3' : 'w-4 h-4'} />
+      ) : null}
+      {children}
+    </button>
+  );
+};
+
+export const Tabs = ({ tabs = [], activeTab, onTabChange, className = '' }) => {
+  return (
+    <div className={`border-b border-slate-100 flex items-center gap-8 px-4 ${className}`}>
+      {tabs.map((tab) => {
+        const isActive = tab.value === activeTab || tab.id === activeTab || tab.label === activeTab;
+        const Icon = tab.icon;
+
+        return (
+          <button
+            key={tab.value || tab.id || tab.label}
+            onClick={() => onTabChange?.(tab.value || tab.id || tab.label)}
+            className={`
+              flex items-center gap-2 py-4 px-1 border-b-2 transition-all duration-200 group
+              ${isActive 
+                ? 'border-rose-500 text-rose-500' 
+                : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-200'}
+            `}
+          >
+            {Icon && (
+              <Icon 
+                className={`w-4 h-4 transition-colors ${isActive ? 'text-rose-500' : 'text-slate-400 group-hover:text-slate-600'}`} 
+              />
+            )}
+            <span className={`text-sm font-medium ${isActive ? '' : ''}`}>
+              {tab.label}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+};
+
 export const StatusBadge = ({ status }) => {
   const normalized = (status || 'ACTIVE').trim().toUpperCase()
   
@@ -262,54 +352,66 @@ export const StatusBadge = ({ status }) => {
     switch (s) {
       case 'DRAFT':
       case 'CREATED':
-        return 'bg-slate-50 border-slate-200 text-slate-600'
+        // Default style: White background, black text, border
+        return 'bg-white border-slate-200 text-slate-700 shadow-sm'
+      
       case 'APPROVED':
       case 'DESIGN_APPROVED':
       case 'BOM_APPROVED':
       case 'MASTER':
-        return 'bg-blue-50 border-blue-200 text-blue-600'
+      case 'PO_CREATED':
+      case 'ORDERED':
+      case 'SENT':
+        // Primary style: Indigo/Blue-ish
+        return 'bg-rose-600 border-rose-700 text-white shadow-sm'
+      
       case 'PROCESSING':
       case 'DESIGN_IN_REVIEW':
       case 'IN_DESIGN':
       case 'IN_PROGRESS':
       case 'RELEASED':
-      case 'PO_CREATED':
-      case 'ORDERED':
       case 'DISPATCHED':
-      case 'IN_TRANSIT':
-      case 'RETURN_INITIATED':
-      case 'RETURN_IN_TRANSIT':
-        return 'bg-indigo-50 border-indigo-200 text-indigo-600'
+        // Info style: Blue
+        return 'bg-blue-500 border-blue-600 text-white shadow-sm'
+      
       case 'FULFILLED':
       case 'ACTIVE':
       case 'COMPLETED':
       case 'PRODUCTION_COMPLETED':
       case 'DELIVERED':
       case 'RETURN_COMPLETED':
-        return 'bg-emerald-50 border-emerald-200 text-emerald-600'
       case 'READY_FOR_SHIPMENT':
       case 'QC_APPROVED':
       case 'READY_TO_DISPATCH':
-        return 'bg-emerald-50 border-emerald-200 text-emerald-600'
+        // Success style: Green
+        return 'bg-emerald-500 border-emerald-600 text-white shadow-sm'
+      
       case 'DESIGN_QUERY':
       case 'INACTIVE':
       case 'REJECTED':
       case 'QC_REJECTED':
       case 'BLOCKED':
       case 'CANCELLED':
-        return 'bg-rose-50 border-rose-200 text-rose-600'
+        // Danger style: Red
+        return 'bg-rose-500 border-rose-600 text-white shadow-sm'
+      
       case 'RFQ_REQUESTED':
       case 'ON_HOLD':
       case 'OUT_FOR_DELIVERY':
       case 'RETURN_PICKUP_ASSIGNED':
       case 'REVISED':
-        return 'bg-amber-50 border-amber-200 text-amber-600'
-      case 'SENT':
-        return 'bg-indigo-50 border-indigo-200 text-indigo-600'
+      case 'IN_TRANSIT':
+      case 'RETURN_IN_TRANSIT':
+        // Warning style: Orange/Yellow
+        return 'bg-amber-500 border-amber-600 text-white shadow-sm'
+      
       case 'RETURN_RECEIVED':
-        return 'bg-purple-50 border-purple-200 text-purple-600'
+        // Secondary style: Sky/Cyan
+        return 'bg-sky-500 border-sky-600 text-white shadow-sm'
+      
       default:
-        return 'bg-slate-50 border-slate-200 text-slate-600'
+        // Dark style
+        return 'bg-slate-700 border-slate-800 text-white shadow-sm'
     }
   }
 
@@ -318,7 +420,7 @@ export const StatusBadge = ({ status }) => {
   }
 
   return (
-    <span className={`px-2.5 py-1 rounded text-xs  border   ${getStatusStyles(normalized)}`}>
+    <span className={`p-1 rounded text-xs    border flex-shrink-0 text-center min-w-fit inline-flex items-center justify-center transition-all duration-200 ${getStatusStyles(normalized)}`}>
       {formatStatus(normalized)}
     </span>
   )
@@ -326,16 +428,17 @@ export const StatusBadge = ({ status }) => {
 
 export const Badge = ({ children, variant = 'default', className = '' }) => {
   const variants = {
-    default: 'bg-slate-100 text-slate-600 border-slate-200',
-    success: 'bg-emerald-50 text-emerald-600 border-emerald-200',
-    warning: 'bg-amber-50 text-amber-600 border-amber-200',
-    danger: 'bg-rose-50 text-rose-600 border-rose-200',
-    info: 'bg-blue-50 text-blue-600 border-blue-200',
-    indigo: 'bg-indigo-50 text-indigo-600 border-indigo-200'
+    default: 'bg-white text-slate-700 border-slate-200 shadow-sm',
+    success: 'bg-emerald-500 text-white border-emerald-600 shadow-sm',
+    warning: 'bg-amber-500 text-white border-amber-600 shadow-sm',
+    danger: 'bg-rose-500 text-white border-rose-600 shadow-sm',
+    info: 'bg-blue-500 text-white border-blue-600 shadow-sm',
+    indigo: 'bg-rose-600 text-white border-rose-700 shadow-sm',
+    sky: 'bg-sky-500 text-white border-sky-600 shadow-sm'
   };
 
   return (
-    <span className={`p-1  rounded text-xs   border ${variants[variant] || variants.default} ${className}`}>
+    <span className={`px-2 py-1 rounded-md text-[10px]   tracking-wide border ${variants[variant] || variants.default} ${className}`}>
       {children}
     </span>
   );
@@ -423,68 +526,91 @@ export const Pagination = ({ currentPage, totalPages, onPageChange, totalItems, 
       </div>
       
       <div className="flex items-center gap-1">
-        <button
+        <Button
+          variant="default"
+          size="xs"
           onClick={() => onPageChange(1)}
           disabled={currentPage === 1}
-          className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-400"
           title="First Page"
-        >
-          <ChevronsLeft size={15} />
-        </button>
-        <button
+          icon={ChevronsLeft}
+          className="!border-none !shadow-none hover:!bg-rose-50"
+        />
+        <Button
+          variant="default"
+          size="xs"
           onClick={() => onPageChange(currentPage - 1)}
           disabled={currentPage === 1}
-          className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-400"
           title="Previous Page"
-        >
-          <ChevronLeft size={15} />
-        </button>
+          icon={ChevronLeft}
+          className="!border-none !shadow-none hover:!bg-rose-50"
+        />
 
         <div className="flex items-center gap-1 mx-2">
           {getPageNumbers().map(page => (
-            <button
+            <Button
               key={page}
+              variant={currentPage === page ? 'primary' : 'default'}
+              size="xs"
               onClick={() => onPageChange(page)}
-              className={`min-w-[32px] h-8 flex items-center justify-center rounded  text-xs  transition-all ${
-                currentPage === page 
-                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' 
-                  : 'text-slate-500 hover:bg-indigo-50 hover:text-indigo-600'
-              }`}
+              className={`min-w-[32px] !rounded-md ${currentPage === page ? '' : '!border-none !shadow-none hover:!bg-rose-50'}`}
             >
               {page}
-            </button>
+            </Button>
           ))}
         </div>
 
-        <button
+        <Button
+          variant="default"
+          size="xs"
           onClick={() => onPageChange(currentPage + 1)}
           disabled={currentPage === totalPages}
-          className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-400"
           title="Next Page"
-        >
-          <ChevronRight size={15} />
-        </button>
-        <button
+          icon={ChevronRight}
+          className="!border-none !shadow-none hover:!bg-rose-50"
+        />
+        <Button
+          variant="default"
+          size="xs"
           onClick={() => onPageChange(totalPages)}
           disabled={currentPage === totalPages}
-          className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-400"
           title="Last Page"
-        >
-          <ChevronsRight size={15} />
-        </button>
+          icon={ChevronsRight}
+          className="!border-none !shadow-none hover:!bg-rose-50"
+        />
       </div>
     </div>
   );
 };
 
-export const DataTable = ({ columns, data, loading, loadingMessage = "Loading...", emptyMessage = "No data found", searchPlaceholder = "Search...", actions, onRowClick, renderExpanded, className = '', hideHeader = false, hideExpander = false, pageSize: initialPageSize = 10, disableRowClickExpansion = false, selectable = false, selectedRows = new Set(), onSelectionChange }) => {
+export const DataTable = ({ 
+  columns, 
+  data, 
+  loading, 
+  loadingMessage = "Loading...", 
+  emptyMessage = "No data found", 
+  searchPlaceholder = "Search...", 
+  actions, 
+  onRowClick, 
+  renderExpanded, 
+  className = '', 
+  hideHeader = false, 
+  hideExpander = false, 
+  pageSize: initialPageSize = 25, 
+  disableRowClickExpansion = false, 
+  selectable = false, 
+  selectedRows = new Set(), 
+  onSelectionChange,
+  rowId: rowIdProp = 'id',
+  expandedRows: expandedRowsProp,
+  onExpandedChange
+}) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState(null);
-  const [expandedRows, setExpandedRows] = useState(new Set());
+  const [internalExpandedRows, setInternalExpandedRows] = useState(new Set());
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(initialPageSize);
 
-  const isDark = className.includes('bg-[#1e293b]') || className.includes('bg-slate-900') || className.includes('bg-[#0f172a]');
+  const expandedRows = expandedRowsProp || internalExpandedRows;
 
   const toggleRow = (id) => {
     const newExpandedRows = new Set(expandedRows);
@@ -493,23 +619,13 @@ export const DataTable = ({ columns, data, loading, loadingMessage = "Loading...
     } else {
       newExpandedRows.add(id);
     }
-    setExpandedRows(newExpandedRows);
-  };
-
-  const toggleRowExternal = (id) => {
-    toggleRow(id);
-  };
-
-  useEffect(() => {
-    if (window) {
-      window.toggleDataTableRow = toggleRowExternal;
+    
+    if (onExpandedChange) {
+      onExpandedChange(newExpandedRows);
+    } else {
+      setInternalExpandedRows(newExpandedRows);
     }
-    return () => {
-      if (window) {
-        delete window.toggleDataTableRow;
-      }
-    };
-  }, [expandedRows]);
+  };
 
   const handleSort = (key) => {
     let direction = 'ascending';
@@ -539,11 +655,13 @@ export const DataTable = ({ columns, data, loading, loadingMessage = "Loading...
     return sortedData.filter(item => {
       if (hideHeader) return true;
       const searchLower = String(searchTerm || '').toLowerCase();
-      return Object.values(item).some(val => 
-        String(val).toLowerCase().includes(searchLower)
-      );
+      // Only search in columns that are defined
+      return columns.some(col => {
+        const val = item[col.key];
+        return String(val || '').toLowerCase().includes(searchLower);
+      });
     });
-  }, [sortedData, searchTerm, hideHeader]);
+  }, [sortedData, searchTerm, hideHeader, columns]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -558,7 +676,7 @@ export const DataTable = ({ columns, data, loading, loadingMessage = "Loading...
   const handleSelectAll = (e) => {
     if (onSelectionChange) {
       if (e.target.checked) {
-        onSelectionChange(new Set(paginatedData.map((row, idx) => row.id || (currentPage - 1) * pageSize + idx)));
+        onSelectionChange(new Set(paginatedData.map((row, idx) => row[rowIdProp] || row.id || (currentPage - 1) * pageSize + idx)));
       } else {
         onSelectionChange(new Set());
       }
@@ -578,49 +696,69 @@ export const DataTable = ({ columns, data, loading, loadingMessage = "Loading...
   };
 
   return (
-    <div className={`flex flex-col h-full rounded    overflow-hidden ${isDark ? 'border-slate-800' : 'border-slate-100 '} ${className}`}>
+    <div className={`flex flex-col h-full ${className}`}>
       {!hideHeader && (
-        <div className={`border-b flex flex-wrap gap-2 items-center justify-between ${isDark ? 'border-slate-800 bg-slate-900/50' : 'border-slate-50 bg-slate-50/30'}`}>
-          <div className="flex-1 min-w-[280px] relative group">
-            <input 
-              type="text" 
-              placeholder={searchPlaceholder}
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className={`w-full pl-10 pr-4 py-2 border rounded  text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all placeholder:text-slate-400 ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'}`}
-            />
-            <Search className="w-3 h-3 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
+        <div className="flex flex-wrap my-3 gap-4 items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-slate-500">Show</span>
+            <select 
+              value={pageSize} 
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setCurrentPage(1);
+              }}
+              className="border border-slate-200 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500/20 bg-white text-slate-900"
+            >
+              {[10, 25, 50, 100].map(size => (
+                <option key={size} value={size}>{size}</option>
+              ))}
+            </select>
+            <span className="text-sm text-slate-500">entries</span>
           </div>
-          {actions}
+
+          <div className="flex items-center gap-4">
+            <div className="relative group min-w-[200px] md:min-w-[250px]">
+              <input 
+                type="text" 
+                placeholder={searchPlaceholder}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded text-sm focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none transition-all placeholder:text-slate-400 bg-white text-slate-900 shadow-sm"
+              />
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-rose-500 transition-colors" />
+            </div>
+            {actions}
+          </div>
         </div>
       )}
 
-      <div className="overflow-x-auto custom-scrollbar relative mt-3">
-        <table className="w-full text-left bg-white  text-sm border-collapse">
-          <thead className={`${isDark ? 'bg-white text-slate-400' : 'bg-slate-50/50 text-slate-500'} text-xs    `}>
+      <div className="overflow-x-auto custom-scrollbar bg-white relative max-h-[calc(100vh-320px)] min-h-[300px]">
+        <table className="w-full text-left bg-white text-sm border-collapse">
+          <thead className="sticky top-0 z-20 bg-white border-b border-slate-200 shadow-[0_2px_4px_rgba(0,0,0,0.02)]">
             <tr>
               {selectable && (
-                <th className={`p-2 border-b w-8 ${isDark ? 'border-slate-800' : 'border-slate-100'}`}>
+                <th className="p-4 border-b border-slate-200 w-10">
                   <input
                     type="checkbox"
-                    className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                    className="rounded border-slate-300 text-rose-600 focus:ring-rose-500"
                     onChange={handleSelectAll}
-                    checked={paginatedData.length > 0 && paginatedData.every((row, idx) => selectedRows.has(row.id || (currentPage - 1) * pageSize + idx))}
+                    checked={paginatedData.length > 0 && paginatedData.every((row, idx) => selectedRows.has(row[rowIdProp] || row.id || (currentPage - 1) * pageSize + idx))}
                   />
                 </th>
               )}
-              {renderExpanded && !hideExpander && <th className={`p-2 border-b w-10 ${isDark ? 'border-slate-800' : 'border-slate-100'}`}></th>}
+              {renderExpanded && !hideExpander && <th className="p-4 border-b border-slate-200 w-10"></th>}
               {columns.map((col, idx) => (
                 <th 
                   key={idx} 
-                  className={`p-2 border-b ${isDark ? 'border-slate-800' : 'border-slate-100'} ${col.sortable ? 'cursor-pointer hover:bg-slate-100/50 transition-colors' : ''} ${col.className || ''}`}
+                  className={`px-4 py-3 border-b border-slate-200 bg-slate-50 text-slate-600 text-xs    ${col.sortable ? 'cursor-pointer hover:bg-slate-100 transition-colors' : ''} ${col.className || ''}`}
                   onClick={() => col.sortable && handleSort(col.key)}
+                  style={{ width: col.width }}
                 >
-                  <div className="flex items-center gap-2 ">
+                  <div className="flex items-center gap-2">
                     {col.label}
                     {col.sortable && (
-                      <span className="text-slate-300">
-                        {sortConfig?.key === col.key ? (sortConfig.direction === 'ascending' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />) : <ChevronsUpDown className="w-3 h-3" />}
+                      <span className="text-slate-300 group-hover:text-slate-500">
+                        {sortConfig?.key === col.key ? (sortConfig.direction === 'ascending' ? <ChevronUp className="w-3 h-3 text-rose-500" /> : <ChevronDown className="w-3 h-3 text-rose-500" />) : <ChevronsUpDown className="w-3 h-3" />}
                       </span>
                     )}
                   </div>
@@ -628,45 +766,48 @@ export const DataTable = ({ columns, data, loading, loadingMessage = "Loading...
               ))}
             </tr>
           </thead>
-          <tbody className={`divide-y ${isDark ? 'divide-slate-800' : 'divide-slate-50'}`}>
+          <tbody className="divide-y bg-white divide-slate-100">
             {loading ? (
               <tr>
-                <td colSpan={columns.length + (renderExpanded && !hideExpander ? 1 : 0) + (selectable ? 1 : 0)} className="p-2 text-center">
-                  <div className="flex flex-col items-center gap-2">
-                    <Loader2 className="w-3 h-3 text-indigo-600 animate-spin" />
-                    <span className="text-slate-400  animate-pulse">{loadingMessage}</span>
+                <td colSpan={columns.length + (renderExpanded && !hideExpander ? 1 : 0) + (selectable ? 1 : 0)} className="p-12 text-center">
+                  <div className="flex flex-col items-center gap-3">
+                    <Loader2 className="w-8 h-8 text-rose-600 animate-spin" />
+                    <span className="text-slate-500 text-sm font-medium animate-pulse">{loadingMessage}</span>
                   </div>
                 </td>
               </tr>
             ) : paginatedData.length === 0 ? (
               <tr>
-                <td colSpan={columns.length + (renderExpanded && !hideExpander ? 1 : 0) + (selectable ? 1 : 0)} className="p-2 text-center">
-                  <div className="flex flex-col items-center gap-2">
-                    <FileText className="w-3 h-3 text-slate-200" />
-                    <span className="text-slate-400 ">{emptyMessage}</span>
+                <td colSpan={columns.length + (renderExpanded && !hideExpander ? 1 : 0) + (selectable ? 1 : 0)} className="p-16 text-center">
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="p-4 bg-slate-50 rounded-full">
+                      <FileText className="w-8 h-8 text-slate-300" />
+                    </div>
+                    <p className="text-slate-500 font-medium">{emptyMessage}</p>
+                    <p className="text-slate-400 text-xs mt-1">Try adjusting your search or filters</p>
                   </div>
                 </td>
               </tr>
             ) : (
               paginatedData.map((row, rowIdx) => {
-                const isExpanded = expandedRows.has(row.id || rowIdx);
-                const rowId = row.id || (currentPage - 1) * pageSize + rowIdx;
+                const rowId = row[rowIdProp] || row.id || (currentPage - 1) * pageSize + rowIdx;
+                const isExpanded = expandedRows.has(rowId);
                 const isSelected = selectedRows.has(rowId);
                 
                 return (
-                  <React.Fragment key={row.id || rowIdx}>
+                  <React.Fragment key={rowId}>
                     <tr 
-                      className={`group transition-all duration-200 ${onRowClick ? 'cursor-pointer hover:bg-indigo-50/30' : (isDark ? 'hover:bg-white' : 'hover:bg-slate-50/50')} ${isExpanded || isSelected ? (isDark ? 'bg-indigo-900/20' : 'bg-indigo-50/20') : ''}`}
-                      onClick={() => {
-                        if (renderExpanded && !disableRowClickExpansion) toggleRow(row.id || rowIdx);
-                        if (onRowClick) onRowClick(row);
+                      className={`group transition-all duration-150 ${onRowClick ? 'cursor-pointer hover:bg-slate-50/80' : 'hover:bg-slate-50/50'} ${isExpanded || isSelected ? 'bg-rose-50/30' : ''}`}
+                      onClick={(e) => {
+                        if (renderExpanded && !disableRowClickExpansion) toggleRow(rowId);
+                        if (onRowClick) onRowClick(row, e);
                       }}
                     >
                       {selectable && (
-                        <td className="p-2 w-8">
+                        <td className="p-2 w-10">
                           <input
                             type="checkbox"
-                            className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                            className="rounded border-slate-300 text-rose-600 focus:ring-rose-500"
                             checked={isSelected}
                             onChange={(e) => {
                               e.stopPropagation();
@@ -677,20 +818,27 @@ export const DataTable = ({ columns, data, loading, loadingMessage = "Loading...
                         </td>
                       )}
                       {renderExpanded && !hideExpander && (
-                        <td className="p-2 text-slate-400">
-                          <ChevronRight className={`w-3 h-3 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} />
+                        <td 
+                          className="p-4 text-slate-400 cursor-pointer hover:text-rose-500 transition-colors"
+                          data-expander="true"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleRow(rowId);
+                          }}
+                        >
+                          <ChevronRight className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? 'rotate-90 text-rose-500' : ''}`} />
                         </td>
                       )}
                       {columns.map((col, colIdx) => (
-                        <td key={colIdx} className={`p-2 transition-colors text-xs ${isDark ? 'text-slate-300 group-hover:text-white' : 'text-slate-600 group-hover:text-slate-900'} ${col.className || ''}`}>
+                        <td key={colIdx} className={`p-2 whitespace-nowrap text-xs text-slate-600 group-hover:text-slate-900 transition-colors ${col.className || ''}`}>
                           {col.render ? col.render(row[col.key], row) : (row[col.key] || '—')}
                         </td>
                       ))}
                     </tr>
                     {isExpanded && renderExpanded && (
                       <tr>
-                        <td colSpan={columns.length + (hideExpander ? 0 : 1) + (selectable ? 1 : 0)} className={`p-2 border-b ${isDark ? 'border-slate-800' : 'border-slate-100'}`}>
-                          <div className=" animate-in slide-in-from-top-2 duration-200">
+                        <td colSpan={columns.length + (hideExpander ? 0 : 1) + (selectable ? 1 : 0)} className="p-2 bg-slate-50/30 border-y border-slate-100 shadow-inner">
+                          <div className="animate-in slide-in-from-top-2 duration-300 overflow-hidden">
                             {renderExpanded(row)}
                           </div>
                         </td>
@@ -705,14 +853,20 @@ export const DataTable = ({ columns, data, loading, loadingMessage = "Loading...
       </div>
 
       {!loading && filteredData.length > 0 && (
-        <Pagination 
-          currentPage={currentPage}
-          totalPages={totalPages}
-          onPageChange={setCurrentPage}
-          totalItems={filteredData.length}
-          pageSize={pageSize}
-        />
+        <div className="p-4 border-t border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4 bg-white">
+          <div className="text-sm text-slate-500">
+            Showing <span className="font-semibold text-slate-700">{Math.min(filteredData.length, (currentPage - 1) * pageSize + 1)}</span> to <span className="font-semibold text-slate-700">{Math.min(filteredData.length, currentPage * pageSize)}</span> of <span className="font-semibold text-slate-700">{filteredData.length}</span> entries
+          </div>
+          <Pagination 
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+            totalItems={filteredData.length}
+            pageSize={pageSize}
+          />
+        </div>
       )}
     </div>
   );
 };
+

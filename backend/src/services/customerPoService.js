@@ -2,6 +2,7 @@ const path = require('path');
 const mustache = require('mustache');
 const puppeteer = require('puppeteer');
 const pool = require('../config/db');
+const bomService = require('./bomService');
 
 const calculateAmounts = items => {
   let subtotal = 0;
@@ -19,6 +20,46 @@ const calculateAmounts = items => {
     item.igstAmount = igstAmount;
   }
   return { subtotal, taxTotal, netTotal: subtotal + taxTotal };
+};
+
+const numberToWords = (num) => {
+  const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+  const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+  
+  const convert = (n) => {
+    if (n < 20) return ones[n];
+    if (n < 100) return tens[Math.floor(n / 10)] + (n % 10 !== 0 ? ' ' + ones[n % 10] : '');
+    if (n < 1000) return ones[Math.floor(n / 100)] + ' Hundred' + (n % 100 !== 0 ? ' and ' + convert(n % 100) : '');
+    return '';
+  };
+
+  const formatWords = (n) => {
+    if (n === 0) return 'Zero';
+    let words = '';
+    if (n >= 10000000) {
+      words += convert(Math.floor(n / 10000000)) + ' Crore ';
+      n %= 10000000;
+    }
+    if (n >= 100000) {
+      words += convert(Math.floor(n / 100000)) + ' Lakh ';
+      n %= 100000;
+    }
+    if (n >= 1000) {
+      words += convert(Math.floor(n / 1000)) + ' Thousand ';
+      n %= 1000;
+    }
+    words += convert(n);
+    return words.trim();
+  };
+
+  const amount = Math.floor(num);
+  const paisa = Math.round((num - amount) * 100);
+  
+  let result = 'INR ' + formatWords(amount) + ' Only';
+  if (paisa > 0) {
+    result = 'INR ' + formatWords(amount) + ' and ' + formatWords(paisa) + ' Paisa Only';
+  }
+  return result;
 };
 
 const createCustomerPo = async payload => {
@@ -80,7 +121,7 @@ const createCustomerPo = async payload => {
     const customerPoId = poResult.insertId;
 
     for (const item of items) {
-      await connection.execute(
+      const [itemResult] = await connection.execute(
         `INSERT INTO customer_po_items
           (customer_po_id, item_code, description, hsn_code, drawing_no, revision_no, quantity,
            unit, rate, basic_amount, discount, cgst_percent, cgst_amount, sgst_percent, sgst_amount,
@@ -110,6 +151,27 @@ const createCustomerPo = async payload => {
           item.customerReference || null
         ]
       );
+
+      const poItemId = itemResult.insertId;
+
+      if (item.sub_assemblies && Array.isArray(item.sub_assemblies)) {
+        for (const sa of item.sub_assemblies) {
+          await connection.execute(
+            `INSERT INTO customer_po_item_subassemblies
+              (po_item_id, drawing_no, description, quantity, unit, rate)
+             VALUES (?, ?, ?, ?, ?, ?)`
+            ,
+            [
+              poItemId,
+              sa.drawingNo || null,
+              sa.description || null,
+              sa.quantity || 0,
+              sa.unit || 'NOS',
+              sa.rate || 0
+            ]
+          );
+        }
+      }
     }
 
     await connection.commit();
@@ -147,23 +209,74 @@ const listCustomerPos = async (filters = {}) => {
 
 const getCustomerPoById = async id => {
   const [rows] = await pool.query(
-    `SELECT cp.*, c.company_name, c.customer_type, c.gstin, c.cin, c.pan
+    `SELECT cp.*, c.company_name, c.customer_type, c.gstin, c.cin, c.pan,
+            ba.line1 as billing_address_line1, ba.line2 as billing_address_line2, 
+            ba.city as billing_city, ba.state as billing_state, ba.pincode as billing_pincode
      FROM customer_pos cp
      JOIN companies c ON c.id = cp.company_id
+     LEFT JOIN company_addresses ba ON ba.company_id = c.id AND ba.address_type = 'BILLING'
      WHERE cp.id = ?`,
     [id]
   );
   if (!rows.length) {
     return null;
   }
+  
+  // Format billing address string
+  const po = rows[0];
+  const addrParts = [
+    po.billing_address_line1,
+    po.billing_address_line2,
+    po.billing_city,
+    po.billing_state,
+    po.billing_pincode ? `Pincode: ${po.billing_pincode}` : null
+  ].filter(Boolean);
+  po.billing_address = addrParts.join(', ');
+  po.billing_state_code = ''; // Fallback since state_code is missing in schema
+
   const [items] = await pool.query(
-    `SELECT id, item_code, drawing_no, description, quantity, unit, rate, basic_amount, discount, cgst_percent, sgst_percent, igst_percent, delivery_date
+    `SELECT id, item_code, drawing_no, description, quantity, unit, rate, basic_amount, discount, 
+            cgst_percent, sgst_percent, igst_percent, cgst_amount, sgst_amount, igst_amount, hsn_code, delivery_date
      FROM customer_po_items
      WHERE customer_po_id = ?
      ORDER BY id ASC`,
     [id]
   );
-  return { ...rows[0], items };
+
+  const enrichedItems = await Promise.all(items.map(async (item) => {
+    // 1. Try to fetch stored sub-assemblies first (as a snapshot)
+    const [storedSA] = await pool.query(
+      `SELECT drawing_no as drawingNo, description, quantity, unit, rate 
+       FROM customer_po_item_subassemblies 
+       WHERE po_item_id = ?`,
+      [item.id]
+    );
+
+    if (storedSA.length > 0) {
+      return { ...item, sub_assemblies: storedSA };
+    }
+
+    // 2. Fallback to dynamic BOM fetching for older records
+    const isFG = (item.item_code || '').startsWith('FG-') || 
+                 (item.drawing_no && item.drawing_no !== '—');
+    
+    if (isFG) {
+      const sub_assemblies = await bomService.getItemComponents(null, item.item_code, item.drawing_no);
+      return { 
+        ...item, 
+        sub_assemblies: sub_assemblies.map(sa => ({
+          drawingNo: sa.drawing_no || sa.component_code,
+          description: sa.description,
+          quantity: sa.quantity || sa.qty,
+          unit: sa.unit || sa.uom || 'Nos',
+          rate: sa.rate || sa.selling_rate || 0
+        }))
+      };
+    }
+    return item;
+  }));
+
+  return { ...rows[0], items: enrichedItems };
 };
 
 const updateCustomerPo = async (id, payload) => {
@@ -223,7 +336,7 @@ const updateCustomerPo = async (id, payload) => {
     await connection.execute('DELETE FROM customer_po_items WHERE customer_po_id = ?', [id]);
 
     for (const item of items) {
-      await connection.execute(
+      const [itemResult] = await connection.execute(
         `INSERT INTO customer_po_items
           (customer_po_id, item_code, description, hsn_code, drawing_no, revision_no, quantity,
            unit, rate, basic_amount, discount, cgst_percent, cgst_amount, sgst_percent, sgst_amount,
@@ -253,6 +366,27 @@ const updateCustomerPo = async (id, payload) => {
           item.customerReference || null
         ]
       );
+
+      const poItemId = itemResult.insertId;
+
+      if (item.sub_assemblies && Array.isArray(item.sub_assemblies)) {
+        for (const sa of item.sub_assemblies) {
+          await connection.execute(
+            `INSERT INTO customer_po_item_subassemblies
+              (po_item_id, drawing_no, description, quantity, unit, rate)
+             VALUES (?, ?, ?, ?, ?, ?)`
+            ,
+            [
+              poItemId,
+              sa.drawingNo || null,
+              sa.description || null,
+              sa.quantity || 0,
+              sa.unit || 'NOS',
+              sa.rate || 0
+            ]
+          );
+        }
+      }
     }
 
     await connection.commit();
@@ -348,172 +482,318 @@ const generateCustomerPoPDF = async poId => {
   if (!po) throw new Error('Customer PO not found');
 
   const htmlTemplate = `
+    <!DOCTYPE html>
     <html>
     <head>
       <style>
-        body { font-family: 'roboto', sans-serif; color: #333; line-height: 1.4; margin: 20px; font-size: 11px; }
-        .main-container { border: 1.5px solid #000; padding: 0; }
-        .header-title { text-align: center; border-bottom: 1.5px solid #000; padding: 10px; font-size: 18px; font-weight: bold; text-transform: ; }
-        .company-name { text-align: center; border-bottom: 1.5px solid #000; padding: 5px; font-size: 22px; font-weight: bold; color: #666; }
+        @page { size: A4; margin: 10mm; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #000; line-height: 1.3; margin: 0; font-size: 10px; }
+        .invoice-container { border: 1px solid #000; min-height: 270mm; position: relative; }
         
-        .info-section { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1.5px solid #000; }
-        .info-box { padding: 8px; border-right: 1.5px solid #000; }
+        .header-section { display: flex; border-bottom: 1px solid #000; }
+        .header-left { flex: 1.5; padding: 10px; border-right: 1px solid #000; }
+        .header-right { flex: 1; padding: 10px; }
+        
+        .tax-invoice-label { text-align: center; border-bottom: 1px solid #000; font-weight: bold; font-size: 14px; padding: 5px; }
+        
+        .company-name { font-size: 16px; font-weight: bold; margin-bottom: 5px; }
+        .address-text { font-size: 9px; margin-bottom: 2px; }
+        
+        .info-grid { display: grid; grid-template-columns: 1fr 1fr; width: 100%; border-bottom: 1px solid #000; }
+        .info-box { padding: 8px; border-right: 1px solid #000; min-height: 80px; }
         .info-box:last-child { border-right: none; }
-        .label { font-weight: bold; margin-bottom: 4px; display: block; }
+        .label { font-weight: bold; text-decoration: underline; margin-bottom: 5px; display: block; font-size: 11px; }
         
-        .po-details { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1.5px solid #000; }
-        .po-box { padding: 8px; border-right: 1.5px solid #000; }
-        .po-box:last-child { border-right: none; }
+        .meta-table { width: 100%; border-collapse: collapse; }
+        .meta-table td { padding: 4px; border: 1px solid #000; }
+        .meta-label { font-weight: bold; width: 40%; }
+        
+        .items-table { width: 100%; border-collapse: collapse; border-bottom: 1px solid #000; }
+        .items-table th { border: 1px solid #000; padding: 6px; background: #f0f0f0; font-weight: bold; text-align: center; font-size: 9px; }
+        .items-table td { border-left: 1px solid #000; border-right: 1px solid #000; padding: 6px; vertical-align: top; }
+        .items-table tr.item-row { min-height: 30px; }
+        .items-table tr.sub-assembly-row td { background: #fafafa; padding-top: 2px; padding-bottom: 2px; border-top: none; border-bottom: none; }
+        
+        .total-section { display: flex; border-bottom: 1px solid #000; }
+        .words-section { flex: 1.5; padding: 10px; border-right: 1px solid #000; }
+        .calc-section { flex: 1; }
+        
+        .calc-table { width: 100%; border-collapse: collapse; }
+        .calc-table td { padding: 5px; border-bottom: 1px solid #000; text-align: right; }
+        .calc-table td:first-child { text-align: left; font-weight: bold; border-right: 1px solid #000; }
+        .calc-table tr:last-child td { border-bottom: none; font-size: 12px; font-weight: bold; }
+        
+        .tax-summary-table { width: 100%; border-collapse: collapse; border-bottom: 1px solid #000; margin-top: 0; }
+        .tax-summary-table th, .tax-summary-table td { border: 1px solid #000; padding: 4px; text-align: center; }
+        .tax-summary-table th { font-size: 8px; background: #f0f0f0; }
+        
+        .footer-section { display: flex; padding: 20px 10px; border-top: 1px solid #000; position: absolute; bottom: 0; width: 100%; box-sizing: border-box; }
+        .footer-col { flex: 1; text-align: center; }
+        .signature-box { margin-top: 40px; border-top: 1px dashed #000; display: inline-block; min-width: 150px; padding-top: 5px; }
 
-        table { width: 100%; border-collapse: collapse; }
-        th { border-bottom: 1.5px solid #000; border-right: 1.5px solid #000; padding: 6px; background: #fff; font-weight: bold; text-align: center; }
-        td { border-bottom: 1px solid #ccc; border-right: 1.5px solid #000; padding: 6px; vertical-align: top; }
-        th:last-child, td:last-child { border-right: none; }
-        
-        .item-table { border-bottom: 1.5px solid #000; min-height: 300px; }
-        
-        .summary-section { display: grid; grid-template-columns: 1fr 240px; border-bottom: 1.5px solid #000; }
-        .notes-box { padding: 10px; border-right: 1.5px solid #000; position: relative; }
-        .totals-box { }
-        .total-row { display: grid; grid-template-columns: 1fr 100px; border-bottom: 1px solid #000; }
-        .total-row:last-child { border-bottom: none; font-weight: bold; font-size: 13px; }
-        .total-label { padding: 8px; text-align: right; border-right: 1px solid #000; font-weight: bold; }
-        .total-value { padding: 8px; text-align: right; }
-
-        .footer-company { padding: 40px 20px 20px; text-align: right; font-weight: bold; font-size: 12px; }
+        .sa-branch { color: #666; margin-right: 5px; font-family: monospace; }
+        .sa-tag { font-size: 7px; background: #eee; padding: 1px 3px; border-radius: 2px; color: #444; border: 0.5px solid #ccc; font-weight: bold; }
       </style>
     </head>
     <body>
-      <div class="main-container">
-        <div class="header-title">Purchase Order</div>
-        <div class="company-name">S. P. INDUSTRIES</div>
+      <div class="invoice-container">
+        <div class="tax-invoice-label">TAX INVOICE</div>
         
-        <div class="info-section">
-          <div class="info-box" style="min-height: 100px;">
-            <span class="label">TO</span>
-            <div style="font-weight: bold; font-size: 13px; margin-bottom: 5px;">{{company_name}}</div>
-            {{#billing_address}}<div style="font-size: 10px; max-width: 250px;">{{billing_address}}</div>{{/billing_address}}
+        <div class="header-section">
+          <div class="header-left">
+            <div class="company-name">SP TECHPIONEER PVT LTD</div>
+            <div class="address-text">PLOT NO.97, SECTOR NO 07, PCNDTA</div>
+            <div class="address-text">BHOSARI, PUNE-411026</div>
+            <div class="address-text">GSTIN/UIN: 27AAPCS1193L1ZQ</div>
+            <div class="address-text">State Name: Maharashtra, Code: 27</div>
+          </div>
+          <div class="header-right">
+            <table class="meta-table">
+              <tr>
+                <td class="meta-label">Invoice No.</td>
+                <td>{{po_number}}</td>
+              </tr>
+              <tr>
+                <td class="meta-label">Dated</td>
+                <td>{{po_date}}</td>
+              </tr>
+              <tr>
+                <td class="meta-label">Reference No.</td>
+                <td>{{quotation_ref}}</td>
+              </tr>
+            </table>
+          </div>
+        </div>
+        
+        <div class="info-grid">
+          <div class="info-box">
+            <span class="label">Consignee (Ship to)</span>
+            <div style="font-weight: bold; font-size: 11px;">{{company_name}}</div>
+            <div class="address-text">{{billing_address}}</div>
+            <div class="address-text">GSTIN/UIN: {{gstin}}</div>
+            <div class="address-text">State Name: {{billing_state}}, Code: {{billing_state_code}}</div>
           </div>
           <div class="info-box">
-            <span class="label">From</span>
-            <div style="font-weight: bold;">SP INDUSTRIES PVT.LTD.</div>
-            <div style="font-size: 9px;">PLOT NO. 97, SECT. 7, PCNTDA,</div>
-            <div style="font-size: 9px;">Bhosari, Pune - 411 026,</div>
-            <div style="font-size: 10px; margin-top: 5px;">Supplier Code - {{supplier_code}}</div>
-            <div style="font-size: 10px;">Indend No - {{indent_no}}</div>
-            <div style="font-size: 10px;">Quotation Ref - {{quotation_ref}}</div>
+            <span class="label">Buyer (Bill to)</span>
+            <div style="font-weight: bold; font-size: 11px;">{{company_name}}</div>
+            <div class="address-text">{{billing_address}}</div>
+            <div class="address-text">GSTIN/UIN: {{gstin}}</div>
+            <div class="address-text">State Name: {{billing_state}}, Code: {{billing_state_code}}</div>
           </div>
         </div>
 
-        <div class="po-details" style="grid-template-columns: 1.2fr 0.8fr;">
-          <div class="po-box" style="border-right: 1.5px solid #000;">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <span class="label" style="margin: 0;">PO No</span>
-              <div style="font-weight: bold; font-size: 12px;">{{po_number}}</div>
-            </div>
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 5px;">
-              <span class="label" style="margin: 0; opacity: 0;">Date</span>
-              <div style="font-weight: bold;">{{po_date}}</div>
-            </div>
-          </div>
-          <div class="po-box" style="border-right: none;">
-            <!-- Placeholder for alignment as per JPEG -->
-          </div>
-        </div>
+        <table class="items-table">
+          <thead>
+            <tr>
+              <th style="width: 30px;">Sl No.</th>
+              <th>Description of Goods</th>
+              <th style="width: 70px;">HSN/SAC</th>
+              <th style="width: 60px;">Quantity</th>
+              <th style="width: 80px;">Rate</th>
+              <th style="width: 40px;">per</th>
+              <th style="width: 90px;">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{#items}}
+            <tr class="item-row">
+              <td style="text-align: center;">{{index}}</td>
+              <td>
+                <div style="font-weight: bold;">{{description}}</div>
+                {{#drawing_no}}<div style="font-size: 8px; color: #444;">DRW: {{drawing_no}}</div>{{/drawing_no}}
+              </td>
+              <td style="text-align: center;">{{hsn_code}}</td>
+              <td style="text-align: center;">{{quantity}} {{unit}}</td>
+              <td style="text-align: right;">{{rate}}</td>
+              <td style="text-align: center;">{{unit}}</td>
+              <td style="text-align: right; font-weight: bold;">{{basic_amount}}</td>
+            </tr>
+            {{#sub_assemblies}}
+            <tr class="sub-assembly-row">
+              <td></td>
+              <td>
+                <div style="font-weight: bold;">{{description}} ({{drawingNo}})</div>
+              </td>
+              <td style="text-align: center;">-</td>
+              <td style="text-align: center;">{{displayQuantity}}</td>
+              <td style="text-align: right;">{{displayRate}}</td>
+              <td style="text-align: center;">{{unit}}</td>
+              <td style="text-align: right; font-weight: bold;">{{displayTotal}}</td>
+            </tr>
+            {{/sub_assemblies}}
+            {{/items}}
+            {{#empty_rows}}
+            <tr style="height: 25px;">
+              <td></td><td></td><td></td><td></td><td></td><td></td><td></td>
+            </tr>
+            {{/empty_rows}}
+          </tbody>
+        </table>
 
-        <div style="padding: 8px; border-bottom: 1.5px solid #000; font-style: italic;">
-          Dear sir,<br>
-          We hereby ask you to delivery the following goods in accordance with our terms of delivery
-        </div>
-
-        <div class="item-table">
-          <table>
-            <thead>
+        <div class="total-section">
+          <div class="words-section">
+            <div style="font-style: italic; margin-bottom: 10px;">Amount Chargeable (in words)</div>
+            <div style="font-weight: bold; font-size: 11px;">{{net_total_words}}</div>
+          </div>
+          <div class="calc-section">
+            <table class="calc-table">
               <tr>
-                <th style="width: 50px;">SR NO</th>
-                <th>Description</th>
-                <th style="width: 60px;">Qty</th>
-                <th style="width: 80px;">Rate</th>
-                <th style="width: 100px;">Amount</th>
+                <td>Total Taxable Value</td>
+                <td>{{subtotal}}</td>
               </tr>
-            </thead>
-            <tbody>
-              {{#items}}
+              {{#cgst_total}}
               <tr>
-                <td style="text-align: center; border-right: 1.5px solid #000;">{{index}}</td>
-                <td style="border-right: 1.5px solid #000;">
-                  <div style="font-weight: normal; font-size: 10px;">{{description}}</div>
-                </td>
-                <td style="text-align: center; border-right: 1.5px solid #000;">{{quantity}}</td>
-                <td style="text-align: right; border-right: 1.5px solid #000;">{{rate}}</td>
-                <td style="text-align: right;">{{basic_amount}}</td>
+                <td>Output CGST @ 9%</td>
+                <td>{{cgst_total}}</td>
               </tr>
-              {{/items}}
-              {{#empty_rows}}
-              <tr style="height: 22px;">
-                <td style="border-right: 1.5px solid #000;"></td>
-                <td style="border-right: 1.5px solid #000;"></td>
-                <td style="border-right: 1.5px solid #000;"></td>
-                <td style="border-right: 1.5px solid #000;"></td>
-                <td></td>
+              {{/cgst_total}}
+              {{#sgst_total}}
+              <tr>
+                <td>Output SGST @ 9%</td>
+                <td>{{sgst_total}}</td>
               </tr>
-              {{/empty_rows}}
-            </tbody>
-          </table>
-        </div>
-
-        <div class="summary-section">
-          <div class="notes-box">
-            {{#remarks}}
-            <span class="label" style="text-decoration: underline;">Remarks:</span>
-            <div style="font-size: 10px; margin-top: 5px;">{{remarks}}</div>
-            {{/remarks}}
-          </div>
-          <div class="totals-box">
-            <div class="total-row">
-              <div class="total-label">Taxable Amt</div>
-              <div class="total-value">{{subtotal}}</div>
-            </div>
-            <div class="total-row">
-              <div class="total-label">CGST 9%</div>
-              <div class="total-value">{{cgst_total}}</div>
-            </div>
-            <div class="total-row">
-              <div class="total-label">SGST 9%</div>
-              <div class="total-value">{{sgst_total}}</div>
-            </div>
-            <div class="total-row">
-              <div class="total-label" style="font-size: 14px;">Total</div>
-              <div class="total-value" style="font-size: 14px;">{{net_total}}</div>
-            </div>
+              {{/sgst_total}}
+              {{#igst_total}}
+              <tr>
+                <td>Output IGST @ 18%</td>
+                <td>{{igst_total}}</td>
+              </tr>
+              {{/igst_total}}
+              <tr>
+                <td>Total</td>
+                <td>₹ {{net_total}}</td>
+              </tr>
+            </table>
           </div>
         </div>
 
-        <div class="footer-company">
-          SP INDUSTRIES
+        <table class="tax-summary-table">
+          <thead>
+            <tr>
+              <th rowspan="2">HSN/SAC</th>
+              <th rowspan="2">Taxable Value</th>
+              <th colspan="2">Central Tax</th>
+              <th colspan="2">State Tax</th>
+              <th rowspan="2">Total Tax Amount</th>
+            </tr>
+            <tr>
+              <th>Rate</th>
+              <th>Amount</th>
+              <th>Rate</th>
+              <th>Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{#tax_summary}}
+            <tr>
+              <td>{{hsn_code}}</td>
+              <td>{{taxable_value}}</td>
+              <td>{{central_rate}}</td>
+              <td>{{central_amount}}</td>
+              <td>{{state_rate}}</td>
+              <td>{{state_amount}}</td>
+              <td>{{total_tax}}</td>
+            </tr>
+            {{/tax_summary}}
+            <tr style="font-weight: bold; background: #f9f9f9;">
+              <td>Total</td>
+              <td>{{subtotal}}</td>
+              <td></td>
+              <td>{{cgst_total}}</td>
+              <td></td>
+              <td>{{sgst_total}}</td>
+              <td>{{tax_total_summary}}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div style="padding: 10px; font-size: 9px;">
+          <div style="font-weight: bold; text-decoration: underline; margin-bottom: 5px;">Declaration:</div>
+          We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.
+        </div>
+
+        <div class="footer-section">
+          <div class="footer-col">
+            <div style="margin-bottom: 50px;">Customer's Seal and Signature</div>
+            <div class="signature-box">Authorized Signatory</div>
+          </div>
+          <div class="footer-col" style="text-align: right;">
+            <div style="font-weight: bold;">for SP TECHPIONEER PVT LTD</div>
+            <div class="signature-box">Authorized Signatory</div>
+          </div>
         </div>
       </div>
     </body>
     </html>
   `;
 
-  const formatDate = (date) => date ? new Date(date).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '.') : '—';
+  const formatDate = (date) => date ? new Date(date).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-') : '—';
+  const formatCurrency = (val) => Number(val || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  // Group items by HSN for tax summary
+  const taxMap = new Map();
+  po.items.forEach(item => {
+    const hsn = item.hsn_code || 'N/A';
+    if (!taxMap.has(hsn)) {
+      const cgstRate = Number(item.cgst_percent || 0);
+      const sgstRate = Number(item.sgst_percent || 0);
+      const igstRate = Number(item.igst_percent || 0);
+      
+      taxMap.set(hsn, {
+        hsn_code: hsn,
+        taxable_value: 0,
+        central_rate: (cgstRate || igstRate / 2 || 0).toFixed(1) + '%',
+        central_amount: 0,
+        state_rate: (sgstRate || igstRate / 2 || 0).toFixed(1) + '%',
+        state_amount: 0,
+        total_tax: 0
+      });
+    }
+    const entry = taxMap.get(hsn);
+    entry.taxable_value += Number(item.basic_amount);
+    entry.central_amount += Number(item.cgst_amount || item.igst_amount / 2 || 0);
+    entry.state_amount += Number(item.sgst_amount || item.igst_amount / 2 || 0);
+    entry.total_tax += Number(item.cgst_amount || 0) + Number(item.sgst_amount || 0) + Number(item.igst_amount || 0);
+  });
+
+  const taxSummary = Array.from(taxMap.values()).map(t => ({
+    ...t,
+    taxable_value: formatCurrency(t.taxable_value),
+    central_amount: formatCurrency(t.central_amount),
+    state_amount: formatCurrency(t.state_amount),
+    total_tax: formatCurrency(t.total_tax)
+  }));
 
   const viewData = {
     ...po,
     po_date: formatDate(po.po_date),
-    subtotal: parseFloat(po.subtotal || 0).toFixed(0),
-    cgst_total: parseFloat(po.tax_total / 2 || 0).toFixed(2),
-    sgst_total: parseFloat(po.tax_total / 2 || 0).toFixed(2),
-    net_total: Math.round(po.net_total || 0),
+    subtotal: formatCurrency(po.subtotal),
+    tax_total_summary: formatCurrency(po.tax_total),
+    cgst_total: formatCurrency(po.items.reduce((sum, i) => sum + Number(i.cgst_amount || 0), 0)),
+    sgst_total: formatCurrency(po.items.reduce((sum, i) => sum + Number(i.sgst_amount || 0), 0)),
+    igst_total: formatCurrency(po.items.reduce((sum, i) => sum + Number(i.igst_amount || 0), 0)),
+    net_total: formatCurrency(po.net_total),
+    net_total_words: numberToWords(po.net_total),
+    tax_summary: taxSummary,
     items: (po.items || []).map((i, idx) => ({
       ...i,
       index: idx + 1,
-      quantity: parseFloat(i.quantity).toFixed(0),
-      rate: parseFloat(i.rate).toFixed(0),
-      basic_amount: parseFloat(i.basic_amount).toFixed(0)
+      quantity: Number(i.quantity).toFixed(0),
+      rate: formatCurrency(i.rate),
+      basic_amount: formatCurrency(i.basic_amount),
+      sub_assemblies: (i.sub_assemblies || []).map(sa => {
+        const saQty = (parseFloat(sa.quantity || 0) * (parseFloat(i.quantity) || 0));
+        const saRate = parseFloat(sa.rate || 0);
+        return {
+          ...sa,
+          displayQuantity: saQty.toFixed(3),
+          displayRate: formatCurrency(saRate),
+          displayTotal: formatCurrency(saQty * saRate),
+          unit: sa.unit || 'NOS'
+        };
+      })
     })),
-    empty_rows: Array.from({ length: Math.max(0, 15 - (po.items || []).length) })
+    empty_rows: Array.from({ length: Math.max(0, 10 - (po.items || []).length) })
   };
 
   const html = mustache.render(htmlTemplate, viewData);
@@ -526,8 +806,7 @@ const generateCustomerPoPDF = async poId => {
   await page.setContent(html, { waitUntil: 'networkidle0' });
   const pdf = await page.pdf({ 
     format: 'A4', 
-    printBackground: true,
-    margin: { top: '10mm', right: '10mm', bottom: '10mm', left: '10mm' }
+    printBackground: true
   });
   await browser.close();
 

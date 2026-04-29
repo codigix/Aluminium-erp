@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Card } from '../components/ui.jsx';
+import { Card, Tabs } from '../components/ui.jsx';
 import { 
   Plus, 
   Eye, 
@@ -251,32 +251,15 @@ const VendorManagement = () => {
 
   return (
     <div className="space-y-2">
-      <div className="flex gap-2 border-b border-slate-200">
-        <button
-          onClick={() => setActiveTab('vendors')}
-          className={`flex items-center gap-2 p-2 text-xs transition-all relative ${activeTab === 'vendors' ? 'text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
-        >
-          <Users size={15} />
-          Vendors
-          {activeTab === 'vendors' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-indigo-600 rounded-t-full" />}
-        </button>
-        <button
-          onClick={() => setActiveTab('quotations')}
-          className={`flex items-center gap-2 p-2 text-xs transition-all relative ${activeTab === 'quotations' ? 'text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
-        >
-          <FileText size={15} />
-          Quotations (RFQ)
-          {activeTab === 'quotations' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-indigo-600 rounded-t-full" />}
-        </button>
-        <button
-          onClick={() => setActiveTab('purchase-orders')}
-          className={`flex items-center gap-2 p-2 text-xs transition-all relative ${activeTab === 'purchase-orders' ? 'text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
-        >
-          <ShoppingCart size={15} />
-          Purchase Orders
-          {activeTab === 'purchase-orders' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-indigo-600 rounded-t-full" />}
-        </button>
-      </div>
+      <Tabs
+        tabs={[
+          { label: 'Vendors', value: 'vendors', icon: Users },
+          { label: 'Quotations (RFQ)', value: 'quotations', icon: FileText },
+          { label: 'Purchase Orders', value: 'purchase-orders', icon: ShoppingCart }
+        ]}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+      />
 
       <div className="animate-in fade-in duration-300">
         {activeTab === 'vendors' && <Vendors onAddVendor={handleAddVendor} />}

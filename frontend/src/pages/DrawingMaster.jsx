@@ -35,6 +35,7 @@ const DrawingMaster = () => {
   // Expanded Revisions State
   const [expandedRevisions, setExpandedRevisions] = useState({});
   const [revisionsLoading, setRevisionsLoading] = useState({});
+  const [drawingExpandedRows, setDrawingExpandedRows] = useState(new Set());
   
   // Edit Modal State
   const [showEditForm, setShowEditForm] = useState(false);
@@ -164,7 +165,7 @@ const DrawingMaster = () => {
 
   const handleRejectItem = async (itemId) => {
     const { value: reason } = await Swal.fire({
-      title: '<span class="text-base font-bold text-slate-800">Reject Drawing</span>',
+      title: '<span class="text-base  text-slate-800">Reject Drawing</span>',
       input: 'textarea',
       inputPlaceholder: 'Enter reason for rejection here...',
       showCancelButton: true,
@@ -174,8 +175,8 @@ const DrawingMaster = () => {
       width: '400px',
       padding: '1.25rem',
       customClass: {
-        confirmButton: 'text-[11px] font-bold px-4 py-2 rounded shadow-lg shadow-rose-100 uppercase tracking-wider',
-        cancelButton: 'text-[11px] font-bold px-4 py-2 rounded uppercase tracking-wider',
+        confirmButton: 'text-[11px]  px-4 py-2 rounded shadow-lg shadow-rose-100  ',
+        cancelButton: 'text-[11px]  px-4 py-2 rounded  ',
         input: 'text-xs'
       }
     });
@@ -224,7 +225,7 @@ const DrawingMaster = () => {
     }
 
     const result = await Swal.fire({
-        title: '<span class="text-base font-bold text-slate-800">Approve Selected Drawings?</span>',
+        title: '<span class="text-base  text-slate-800">Approve Selected Drawings?</span>',
         html: `<p class="text-xs text-slate-500">You are about to approve <b>${itemsToApprove.length}</b> drawings. They will be sent to BOM creation.</p>`,
         icon: 'question',
         showCancelButton: true,
@@ -234,8 +235,8 @@ const DrawingMaster = () => {
         width: '350px',
         padding: '1.25rem',
         customClass: {
-          confirmButton: 'text-[10px] font-bold px-4 py-2 rounded shadow-lg shadow-emerald-100 uppercase tracking-wider',
-          cancelButton: 'text-[10px] font-bold px-4 py-2 rounded uppercase tracking-wider',
+          confirmButton: 'text-[10px]  px-4 py-2 rounded shadow-lg shadow-emerald-100  ',
+          cancelButton: 'text-[10px]  px-4 py-2 rounded  ',
           title: 'mt-2'
         }
     });
@@ -284,7 +285,7 @@ const DrawingMaster = () => {
       key: 'client_name',
       render: (val, row) => (
         <div className="flex flex-col">
-          <span className="text-slate-900 text-sm">{val}</span>
+          <span className="text-slate-900 text-xs">{val}</span>
           <span className="text-xs text-slate-500   ">SO-{String(row.sales_order_id || 0).padStart(4, '0')}</span>
         </div>
       )
@@ -306,11 +307,11 @@ const DrawingMaster = () => {
         const drawingStatus = (row.drawing_status || '').trim().toUpperCase();
         
         if (itemStatus === 'APPROVED' || drawingStatus === 'APPROVED') {
-          return <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-[10px] font-bold border border-emerald-200 uppercase">Approved</span>;
+          return <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-[10px]  border border-emerald-200 ">Approved</span>;
         } else if (itemStatus === 'REJECTED' || drawingStatus === 'REJECTED') {
-          return <span className="px-2 py-0.5 bg-rose-100 text-rose-700 rounded text-[10px] font-bold border border-rose-200 uppercase">Rejected</span>;
+          return <span className="px-2 py-0.5 bg-rose-100 text-rose-700 rounded text-[10px]  border border-rose-200 ">Rejected</span>;
         } else if (row.sales_order_item_id || drawingStatus === 'SHARED') {
-          return <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-[10px] font-bold border border-amber-200 uppercase whitespace-nowrap">⏳ Pending</span>;
+          return <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-[10px]  border border-amber-200  whitespace-nowrap">⏳ Pending</span>;
         }
         return <span className="text-slate-300">—</span>;
       }
@@ -372,29 +373,23 @@ const DrawingMaster = () => {
               onClick={(e) => {
                 e.stopPropagation();
                 const drawingNo = row.drawing_no;
-                const isExpanded = !!expandedRevisions[drawingNo];
-                if (isExpanded) {
-                  setExpandedRevisions(prev => {
-                    const next = { ...prev };
-                    delete next[drawingNo];
-                    return next;
-                  });
+                const rowId = row.drawing_master_id;
+                
+                // Toggle expansion state
+                const newExpanded = new Set(drawingExpandedRows);
+                if (newExpanded.has(rowId)) {
+                  newExpanded.delete(rowId);
                 } else {
+                  newExpanded.add(rowId);
                   fetchRevisionsIfNeeded(drawingNo);
                 }
-                
-                // Toggle the DataTable row expansion
-                if (window.toggleDataTableRow) {
-                   // Find row index in drawings array
-                   const rowIdx = drawings.findIndex(d => d.drawing_master_id === row.drawing_master_id);
-                   window.toggleDataTableRow(row.drawing_master_id || rowIdx);
-                }
+                setDrawingExpandedRows(newExpanded);
               }}
-              className={`flex items-center gap-1 p-1.5 px-2 rounded transition-all ${expandedRevisions[row.drawing_no] ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'text-slate-500 hover:bg-slate-50 border border-transparent hover:border-slate-200'}`}
+              className={`flex items-center gap-1 p-1.5 px-2 rounded transition-all ${drawingExpandedRows.has(row.drawing_master_id) ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'text-slate-500 hover:bg-slate-50 border border-transparent hover:border-slate-200'}`}
               title="Revision History"
             >
               <History size={14} />
-              {expandedRevisions[row.drawing_no] ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+              {drawingExpandedRows.has(row.drawing_master_id) ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
             </button>
           <button 
             onClick={(e) => {
@@ -517,7 +512,7 @@ const DrawingMaster = () => {
   const handleDelete = async (drawing) => {
     const result = await Swal.fire({
       title: 'Delete Drawing?',
-      text: `Are you sure you want to delete drawing: ${drawing.drawing_no}? This will delete all revision history.`,
+      text: `Are you sure you want to delete drawing: ${drawing.drawing_no}? This will delete all revision history, associated BOMs, and production records.`,
       icon: 'warning',
       showCancelButton: true,
       confirmButtonColor: '#ef4444',
@@ -594,7 +589,7 @@ const DrawingMaster = () => {
               <button
                 onClick={handleApproveGroup}
                 disabled={bulkOperationLoading}
-                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded text-xs font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-50 disabled:opacity-50 border-none ml-2"
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded text-xs  hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-50 disabled:opacity-50 border-none ml-2"
               >
                 {bulkOperationLoading ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} />}
                 Approve Selective ({drawings.filter(d => selectedRows.has(d.id) && (d.item_status || '').trim().toUpperCase() !== 'APPROVED' && (d.item_status || '').trim().toUpperCase() !== 'REJECTED').length})
@@ -614,6 +609,8 @@ const DrawingMaster = () => {
               selectable={true}
               selectedRows={selectedRows}
               onSelectionChange={setSelectedRows}
+              expandedRows={drawingExpandedRows}
+              onExpandedChange={setDrawingExpandedRows}
               renderExpanded={(row) => {
                 const revisions = expandedRevisions[row.drawing_no] || [];
                 const isRevLoading = revisionsLoading[row.drawing_no];

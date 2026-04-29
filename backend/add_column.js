@@ -1,28 +1,32 @@
-const mysql = require('mysql2/promise');
-require('dotenv').config();
+const mysql = require('mysql2');
+require('dotenv').config({ path: '.env' });
 
-async function run() {
-  const config = {
-    host: process.env.DB_HOST || 'localhost',
-    user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || '',
-    database: process.env.DB_NAME || 'sales_erp',
-    port: parseInt(process.env.DB_PORT || '3306')
-  };
+async function addColumn() {
+    const config = {
+        host: process.env.DB_HOST || 'localhost',
+        port: parseInt(process.env.DB_PORT) || 3306,
+        user: process.env.DB_USER || 'root',
+        password: process.env.DB_PASSWORD || '',
+        database: process.env.DB_NAME || 'sales_erp'
+    };
 
-  const connection = await mysql.createConnection(config);
-  try {
-    await connection.query(`ALTER TABLE production_plan_operations ADD COLUMN item_type VARCHAR(50) DEFAULT 'FG' AFTER source_item;`);
-    console.log('Column item_type added successfully to production_plan_operations');
-  } catch (error) {
-    if (error.code === 'ER_DUP_COLUMN_NAME') {
-      console.log('Column vendor_invoice already exists');
-    } else {
-      console.error('Error adding column:', error);
+    let connection;
+    try {
+        const pool = mysql.createPool(config).promise();
+        console.log('Connected to DB via pool');
+        
+        const [columns] = await pool.query('SHOW COLUMNS FROM quotation_requests LIKE "pending_bom_cost"');
+        if (columns.length === 0) {
+            console.log('Adding column pending_bom_cost...');
+            await pool.query('ALTER TABLE quotation_requests ADD COLUMN pending_bom_cost DECIMAL(15, 2) DEFAULT NULL');
+            console.log('Column added successfully');
+        } else {
+            console.log('Column pending_bom_cost already exists');
+        }
+        await pool.end();
+    } catch (error) {
+        console.error('Error:', error);
     }
-  } finally {
-    await connection.end();
-  }
 }
 
-run();
+addColumn();

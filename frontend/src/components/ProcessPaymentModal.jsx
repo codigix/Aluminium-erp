@@ -238,7 +238,7 @@ const ProcessPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
         {/* Invoice Summary Section */}
         <div className="bg-gradient-to-br from-blue-50 to-slate-50 border border-blue-100 rounded  p-5 space-y-3">
           <div className="flex items-center justify-between">
-            <h3 className=" text-slate-900 text-sm  tracking-wide">Invoice Summary</h3>
+            <h3 className=" text-slate-900 text-xs  tracking-wide">Invoice Summary</h3>
             <span className="text-xs font-semibold text-blue-600 bg-blue-100 px-2.5 py-1 rounded-md">READ ONLY</span>
           </div>
           <div className="border-t border-blue-100 pt-3"></div>
@@ -272,7 +272,7 @@ const ProcessPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
 
         {/* Payment Entry Form */}
         <div className="space-y-2">
-          <h3 className=" text-slate-900 text-sm  tracking-wide">Payment Details</h3>
+          <h3 className=" text-slate-900 text-xs  tracking-wide">Payment Details</h3>
           <div className="border-b border-slate-200"></div>
 
           {/* Payment Amount */}

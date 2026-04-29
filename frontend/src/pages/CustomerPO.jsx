@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react'
 import {
   Loader2, ChevronRight, Eye, Plus, Trash2, X, Download,
   Search, RefreshCw, Filter, FileText, Calendar, Building2,
-  DollarSign, Package, CheckCircle2, Clock, AlertCircle
+  DollarSign, Package, CheckCircle2, Clock, AlertCircle, GitBranch
 } from 'lucide-react'
 import { Card, DataTable } from '../components/ui.jsx'
 
@@ -89,44 +89,82 @@ const CustomerPO = ({
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  const handleQuotationSelect = (quoteId) => {
+  const handleQuotationSelect = async (quoteId) => {
     setSelectedQuoteId(quoteId);
     if (!quoteId) return;
 
-    const quote = quotationRequests.find(q => q.id === parseInt(quoteId));
-    if (quote) {
-      // Find all items in the same version batch
-      const relatedItems = quotationRequests.filter(q => {
-        // Group items that belong to the SAME version of the SAME quotation revision set
-        if (quote.batch_id && q.batch_id) {
-          return q.batch_id === quote.batch_id;
+    try {
+      setPoFormLoading(true);
+      // Fetch full details including sub-assemblies from the version history endpoint
+      const versions = await apiRequest(`/quotation-requests/versions/${quoteId}`);
+      
+      // The version history endpoint returns an array of version groups. 
+      // We need the specific version that matches our selected quoteId.
+      let quote = null;
+      for (const vGroup of versions) {
+        const match = vGroup.items?.find(it => it.id === parseInt(quoteId));
+        if (match) {
+          quote = vGroup;
+          break;
         }
+      }
 
-        // Fallback to legacy grouping
-        return q.company_id === quote.company_id &&
-          q.sales_order_id === quote.sales_order_id &&
-          q.version === quote.version;
-      });
+      if (!quote) {
+        // Fallback to searching the main list if not found in history
+        const basicQuote = quotationRequests.find(q => q.id === parseInt(quoteId));
+        if (!basicQuote) {
+          showToast('Quotation details not found');
+          return;
+        }
+        quote = basicQuote;
+      }
 
-      // Map items from the batch. We include them if they are part of the latest batch,
-      // as usually only the "Approved" one was clicked but we want the whole set.
-      const items = relatedItems
-        .map(item => {
-          const qty = parseFloat(item.item_qty) || 0;
-          const totalAmount = parseFloat(item.total_amount) || 0;
-          const unitRate = qty > 0 ? (totalAmount / qty) : totalAmount;
-
-          return {
-            drawingNo: item.drawing_no !== '—' ? item.drawing_no : '',
-            description: item.item_description,
-            quantity: qty,
-            unit: item.item_unit || 'NOS',
-            rate: unitRate.toFixed(2),
-            cgstPercent: (item.gst_percentage || 18) / 2,
-            sgstPercent: (item.gst_percentage || 18) / 2,
-            igstPercent: 0
-          };
+      // If we have a version group, it already contains the items.
+      // If we have a basic quote, we might need to find its siblings if it's part of a batch.
+      let relatedItems = [];
+      if (quote.items) {
+        relatedItems = quote.items;
+      } else {
+        relatedItems = quotationRequests.filter(q => {
+          if (quote.batch_id && q.batch_id) {
+            return q.batch_id === quote.batch_id;
+          }
+          return q.company_id === quote.company_id &&
+            q.sales_order_id === quote.sales_order_id &&
+            q.version === quote.version;
         });
+      }
+
+      const items = [];
+      relatedItems.forEach(item => {
+        // Handle different property names between list view and version details
+        const qty = parseFloat(item.item_qty || item.quantity) || 0;
+        const totalAmount = parseFloat(item.total_amount || item.total) || 0;
+        const unitRate = qty > 0 ? (totalAmount / qty) : totalAmount;
+        const gst = item.gst_percentage || 18;
+
+        // Add the main FG item with its sub-assemblies nested
+        items.push({
+          drawingNo: (item.drawing_no || item.drawingNo || '') !== '—' ? (item.drawing_no || item.drawingNo || '') : '',
+          description: item.item_description || item.description,
+          quantity: qty,
+          unit: item.item_unit || item.unit || 'NOS',
+          rate: unitRate.toFixed(2),
+          cgstPercent: gst / 2,
+          sgstPercent: gst / 2,
+          igstPercent: 0,
+          item_group: item.item_group,
+          sub_assemblies: (item.sub_assemblies || []).map(sa => ({
+            ...sa,
+            drawingNo: sa.drawing_no || sa.component_code || sa.item_code || '',
+            description: sa.description || `Sub-assembly`,
+            quantity: parseFloat(sa.qty || sa.quantity || 0),
+            unit: sa.uom || sa.unit || 'NOS',
+            rate: parseFloat(sa.rate || sa.bom_cost || 0).toFixed(2),
+            item_group: sa.item_group || 'SA'
+          }))
+        });
+      });
 
       setPoForm(prev => ({
         ...prev,
@@ -135,7 +173,12 @@ const CustomerPO = ({
         items: items.length > 0 ? items : prev.items
       }));
 
-      showToast(`Loaded ${items.length} items from quotation QRT-${String(quote.id).padStart(4, '0')} (Version ${quote.version || 1})`);
+      showToast(`Loaded ${items.length} items from quotation QRT-${String(quoteId).padStart(4, '0')}`);
+    } catch (error) {
+      console.error('Error fetching quotation details:', error);
+      showToast('Failed to fetch full quotation details');
+    } finally {
+      setPoFormLoading(false);
     }
   };
 
@@ -311,7 +354,7 @@ const CustomerPO = ({
           <div className="p-2 bg-indigo-50 text-indigo-600 rounded ">
             <FileText className="w-4 h-4" />
           </div>
-          <p className="text-xs  text-slate-900 font-bold  tracking-tight">{row.po_number}</p>
+          <p className="text-xs  text-slate-900   tracking-tight">{row.po_number}</p>
         </div>
       )
     },
@@ -319,7 +362,7 @@ const CustomerPO = ({
       label: 'Client & Project',
       render: (_, row) => (
         <div className="flex flex-col">
-          <span className="text-xs font-bold text-slate-900">{row.company_name}</span>
+          <span className="text-xs  text-slate-900">{row.company_name}</span>
           <span className="text-[11px] text-slate-500 italic">
             {row.project_name || 'General Project'}
           </span>
@@ -677,13 +720,16 @@ const CustomerPO = ({
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {poForm.items.map((item, index) => {
+                        {poForm.items.flatMap((item, index) => {
                           const subtotal = (parseFloat(item.quantity) || 0) * (parseFloat(item.rate) || 0);
                           const tax = subtotal * ((parseFloat(item.cgstPercent) || 0) + (parseFloat(item.sgstPercent) || 0) + (parseFloat(item.igstPercent) || 0)) / 100;
                           const total = subtotal + tax;
 
-                          return (
-                            <tr key={index} className="group hover:bg-indigo-50/30 transition-all">
+                          const rows = [];
+
+                          // Main FG Row
+                          rows.push(
+                            <tr key={`item-${index}`} className="group hover:bg-indigo-50/30 transition-all">
                               <td className="p-2">
                                 <input
                                   required
@@ -773,6 +819,50 @@ const CustomerPO = ({
                               </td>
                             </tr>
                           );
+
+                          // Sub-Assembly Rows
+                          if (item.sub_assemblies && item.sub_assemblies.length > 0) {
+                            item.sub_assemblies.forEach((sa, saIdx) => {
+                              const saQty = (parseFloat(sa.quantity || 0) * (parseFloat(item.quantity) || 0));
+                              const saRate = parseFloat(sa.rate || 0);
+                              const saTotal = saQty * saRate;
+                              
+                              rows.push(
+                                <tr key={`item-${index}-sa-${saIdx}`} className="bg-slate-50/40">
+                                  <td className="p-2 border-b border-slate-100">
+                                    <div className="flex items-center gap-2 pl-3">
+                                      <GitBranch size={12} className="text-blue-400 rotate-180" />
+                                      <span className="text-[9px] text-slate-500 font-mono font-bold">{sa.drawingNo}</span>
+                                    </div>
+                                  </td>
+                                  <td className="p-2 border-b border-slate-100">
+                                    <div className="flex flex-col pl-3">
+                                      <span className="text-[11px] text-slate-700 font-semibold">{sa.description}</span>
+                                      <div className="flex items-center gap-2 mt-0.5">
+                                        <span className="px-1 py-0.5 rounded-[3px] text-[8px] font-bold bg-blue-50 text-blue-600 border border-blue-100/50">SA</span>
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="p-2 border-b border-slate-100 text-center text-[11px] text-slate-600 font-medium">
+                                    {saQty.toFixed(3)}
+                                  </td>
+                                  <td className="p-2 border-b border-slate-100 text-center text-[11px] text-slate-400 font-medium">
+                                    {sa.unit || 'Nos'}
+                                  </td>
+                                  <td className="p-2 border-b border-slate-100 text-center text-[11px] text-slate-700 font-medium">
+                                    {formatCurrency(saRate)}
+                                  </td>
+                                  <td colSpan="3" className="p-2 border-b border-slate-100"></td>
+                                  <td className="p-2 border-b border-slate-100 text-right pr-6 text-[11px] text-slate-900 font-bold">
+                                    {formatCurrency(saTotal)}
+                                  </td>
+                                  <td className="p-2 border-b border-slate-100"></td>
+                                </tr>
+                              );
+                            });
+                          }
+
+                          return rows;
                         })}
                       </tbody>
                       <tfoot className="bg-slate-50/50">
@@ -905,7 +995,7 @@ const CustomerPO = ({
                 <div className="space-y-3">
                   <div className="flex items-center gap-2 text-slate-400">
                     <FileText className="w-4 h-4" />
-                    <span className="text-[10px] uppercase font-bold tracking-wider">Project Information</span>
+                    <span className="text-[10px]   ">Project Information</span>
                   </div>
                   <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
                     <p className="text-sm font-semibold text-slate-900">{viewingPo.project_name || 'General Project'}</p>
@@ -915,20 +1005,20 @@ const CustomerPO = ({
                 <div className="space-y-3">
                   <div className="flex items-center gap-2 text-slate-400">
                     <Building2 className="w-4 h-4" />
-                    <span className="text-[10px] uppercase font-bold tracking-wider">Client Details</span>
+                    <span className="text-[10px]   ">Client Details</span>
                   </div>
                   <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
                     <p className="text-sm font-semibold text-slate-900">{viewingPo.company_name}</p>
                     <div className="grid grid-cols-2 gap-4 mt-2">
                       {viewingPo.gstin && (
                         <div>
-                          <p className="text-[10px] text-slate-400 uppercase">GSTIN</p>
+                          <p className="text-[10px] text-slate-400 ">GSTIN</p>
                           <p className="text-xs font-medium text-slate-700">{viewingPo.gstin}</p>
                         </div>
                       )}
                       {viewingPo.pan && (
                         <div>
-                          <p className="text-[10px] text-slate-400 uppercase">PAN</p>
+                          <p className="text-[10px] text-slate-400 ">PAN</p>
                           <p className="text-xs font-medium text-slate-700">{viewingPo.pan}</p>
                         </div>
                       )}
@@ -953,7 +1043,7 @@ const CustomerPO = ({
                 </div>
                 <div className="bg-slate-50/50 rounded-xl p-4 border border-slate-100">
                   <p className="text-xs  text-slate-400   mb-1.5">Order Type</p>
-                  <p className="text-sm  text-slate-700 uppercase">{viewingPo.order_type || 'STANDARD'}</p>
+                  <p className="text-sm  text-slate-700 ">{viewingPo.order_type || 'STANDARD'}</p>
                 </div>
               </div>
 
@@ -978,25 +1068,67 @@ const CustomerPO = ({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {viewingPo.items?.map((item, idx) => (
-                        <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                          <td className="px-4 py-3">
-                            <span className="text-xs  text-slate-900">{item.drawing_no || '—'}</span>
-                          </td>
-                          <td className="px-4 py-3">
-                            <p className="text-xs  text-slate-600">{item.description || '—'}</p>
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            <span className="text-xs  text-slate-900">{item.quantity} {item.unit}</span>
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            <span className="text-xs  text-slate-600">{formatCurrency(item.rate)}</span>
-                          </td>
-                          <td className="px-4 py-3 text-right pr-8">
-                            <span className="text-xs  text-slate-900">{formatCurrency(item.basic_amount)}</span>
-                          </td>
-                        </tr>
-                      ))}
+                      {viewingPo.items?.flatMap((item, idx) => {
+                        const rows = [];
+                        
+                        // Main Item Row
+                        rows.push(
+                          <tr key={`view-item-${idx}`} className="hover:bg-slate-50/50 transition-colors">
+                            <td className="px-4 py-3">
+                              <span className="text-xs  text-slate-900">{item.drawing_no || '—'}</span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <p className="text-xs  text-slate-600">{item.description || '—'}</p>
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              <span className="text-xs  text-slate-900">{item.quantity} {item.unit}</span>
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <span className="text-xs  text-slate-600">{formatCurrency(item.rate)}</span>
+                            </td>
+                            <td className="px-4 py-3 text-right pr-8">
+                              <span className="text-xs  text-slate-900">{formatCurrency(item.basic_amount)}</span>
+                            </td>
+                          </tr>
+                        );
+
+                        // Sub-Assembly Rows
+                        if (item.sub_assemblies && item.sub_assemblies.length > 0) {
+                          item.sub_assemblies.forEach((sa, saIdx) => {
+                            const saQty = (parseFloat(sa.quantity || 0) * (parseFloat(item.quantity) || 0));
+                            const saRate = parseFloat(sa.rate || 0);
+                            const saTotal = saQty * saRate;
+
+                            rows.push(
+                              <tr key={`view-item-${idx}-sa-${saIdx}`} className="bg-slate-50/30">
+                                <td className="px-4 py-2 border-b border-slate-100">
+                                  <div className="flex items-center gap-2 pl-4">
+                                    <GitBranch size={10} className="text-blue-400 rotate-180" />
+                                    <span className="text-[10px] text-slate-500 font-mono font-bold">{sa.drawingNo}</span>
+                                  </div>
+                                </td>
+                                <td className="px-4 py-2 border-b border-slate-100">
+                                  <div className="flex items-center gap-2 pl-4">
+                                    <span className="text-[10px] text-slate-700 font-medium">{sa.description}</span>
+                                    <span className="px-1 py-0.5 rounded-[2px] text-[8px] font-bold bg-blue-50 text-blue-600 border border-blue-100/50">SA</span>
+                                  </div>
+                                </td>
+                                <td className="px-4 py-2 border-b border-slate-100 text-center text-[10px] text-slate-600">
+                                  {saQty.toFixed(3)} {sa.unit}
+                                </td>
+                                <td className="px-4 py-2 border-b border-slate-100 text-right text-[10px] text-slate-500">
+                                  {formatCurrency(saRate)}
+                                </td>
+                                <td className="px-4 py-2 border-b border-slate-100 text-right pr-8 text-[10px] text-slate-900 font-bold">
+                                  {formatCurrency(saTotal)}
+                                </td>
+                              </tr>
+                            );
+                          });
+                        }
+
+                        return rows;
+                      })}
                     </tbody>
                   </table>
                 </div>

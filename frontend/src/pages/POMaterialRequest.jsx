@@ -1096,7 +1096,7 @@ const POMaterialRequest = () => {
                           </td>
                           <td className="px-6 py-5 text-center">
                             <div className="flex flex-col items-center">
-                              <p className={`text-sm ${(parseFloat(item.total_stock || 0) + 0.0001) >= parseFloat(item.quantity || 0) ? 'text-slate-500' : 'text-slate-400 font-bold text-rose-500'}`}>
+                              <p className={`text-sm ${(parseFloat(item.total_stock || 0) + 0.0001) >= parseFloat(item.quantity || 0) ? 'text-slate-500' : 'text-slate-400  text-rose-500'}`}>
                                 {isWeightBased(item.uom) 
                                   ? Number(item.total_stock || 0).toFixed(3) 
                                   : Number(item.total_stock || 0).toFixed(0)} {item.uom}
@@ -1119,7 +1119,7 @@ const POMaterialRequest = () => {
                               <span className={`px-2.5 py-1 rounded  text-xs   border  ${
                                 (parseFloat(item.total_stock || 0) + 0.0001) >= parseFloat(item.quantity || 0) 
                                   ? 'bg-emerald-50 text-emerald-600 border-emerald-100' 
-                                  : 'bg-rose-50 text-rose-600 border-rose-100 font-bold'
+                                  : 'bg-rose-50 text-rose-600 border-rose-100 '
                               }`}>
                                 {(parseFloat(item.total_stock || 0) + 0.0001) >= parseFloat(item.quantity || 0) ? 'in stock' : 'out of stock'}
                               </span>
@@ -1158,10 +1158,10 @@ const POMaterialRequest = () => {
                     </div>
                   ) : (
                     rfqs.map((rfq, ridx) => (
-                        <div key={ridx} className="p-3 border border-slate-100 rounded-lg  hover:bg-slate-50 transition-all shadow-sm">
+                        <div key={ridx} className="p-3 border border-slate-100 rounded  hover:bg-slate-50 transition-all shadow-sm">
                           <div className="flex justify-between items-start mb-3">
                             <div>
-                              <p className="text-xs font-bold  text-slate-900">{rfq.rfq_number}</p>
+                              <p className="text-xs   text-slate-900">{rfq.rfq_number}</p>
                               <p className="text-[10px] text-slate-400 mt-0.5 uppercase tracking-wider">{formatDate(rfq.created_at)}</p>
                             </div>
                             <StatusBadge status={rfq.status} />
@@ -1185,7 +1185,7 @@ const POMaterialRequest = () => {
                                   </div>
                                   <div className="flex flex-col items-end shrink-0">
                                     <div className="flex flex-col items-end">
-                                      <span className="font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">
+                                      <span className=" text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">
                                         {Number(it.quantity || 0).toFixed(3)} {it.uom}
                                       </span>
                                       <span className="text-[9px] text-slate-400 mt-0.5 uppercase tracking-tighter">Required</span>
@@ -1207,11 +1207,11 @@ const POMaterialRequest = () => {
                           
                           {rfq.quotations && rfq.quotations.length > 0 ? (
                             <div className="space-y-2">
-                              <p className="text-[10px] font-bold  text-slate-400 uppercase tracking-widest">RECEIVED QUOTES</p>
+                              <p className="text-[10px]   text-slate-400 uppercase tracking-widest">RECEIVED QUOTES</p>
                               {rfq.quotations.map((q, qidx) => (
                                 <div key={qidx} className="flex justify-between items-center bg-slate-50/50 p-1.5 rounded border border-slate-100/50">
                                   <span className="text-xs  text-slate-600 truncate max-w-[120px]">{q.vendor_name}</span>
-                                  <span className="text-xs font-bold   text-indigo-600">{q.quote_number}</span>
+                                  <span className="text-xs    text-indigo-600">{q.quote_number}</span>
                                 </div>
                               ))}
                             </div>
@@ -1225,7 +1225,7 @@ const POMaterialRequest = () => {
                           <div className="mt-4 flex gap-2">
                             <button 
                               onClick={() => navigate(`/quotations?rfq=${rfq.id}`)}
-                              className="flex-1 py-2 bg-indigo-600 text-white rounded-lg text-xs font-semibold  hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100 active:scale-95"
+                              className="flex-1 py-2 bg-indigo-600 text-white rounded text-xs font-semibold  hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100 active:scale-95"
                             >
                               View/Process Quotes
                             </button>

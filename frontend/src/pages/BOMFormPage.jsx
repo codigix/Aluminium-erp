@@ -1,6 +1,6 @@
  import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Card, SearchableSelect } from '../components/ui.jsx';
+import { Card, SearchableSelect, Button } from '../components/ui.jsx';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
 import { 
   Eye, 
@@ -119,20 +119,20 @@ const RecursiveBOMRow = ({
           <td className="p-2 text-center text-xs text-slate-400">--</td>
           <td className="p-2 text-right">
             <div className="flex justify-end gap-1">
-              <button
+              <Button
+                variant="success"
+                size="xs"
                 onClick={onUpdate}
-                className="p-1.5 bg-emerald-500 text-white rounded hover:bg-emerald-600"
                 title="Save"
-              >
-                <Check className="w-3.5 h-3.5" />
-              </button>
-              <button
+                icon={Check}
+              />
+              <Button
+                variant="default"
+                size="xs"
                 onClick={() => setEditingItem(null)}
-                className="p-1.5 bg-slate-200 text-slate-600 rounded hover:bg-slate-300"
                 title="Cancel"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
+                icon={X}
+              />
             </div>
           </td>
         </tr>
@@ -528,7 +528,7 @@ const BOMFormPage = () => {
     return sum + (input * loss * rate);
   }, 0) / batchQty;
 
-  const materialCostAfterScrap = (componentsCost + rawMaterialsCost) - scrapLoss;
+  const materialCostAfterScrap = ((componentsCost + rawMaterialsCost) / batchQty) - scrapLoss;
 
   const operationsCost = bomData.operations.reduce((sum, o) => {
     const hourlyRate = parseFloat(o.hourly_rate || o.hourlyRate || 0);
@@ -837,16 +837,21 @@ const BOMFormPage = () => {
             setSelectedItem({ ...item, source: orderItem ? 'order' : 'stock' });
           }
         } else if (dwgParam && !itemId && !selectedItem) {
-          // For NEW BOM creation from a drawing, just pre-fill the drawing info
-          // and leave product info (name/code) blank for manual entry
-          // as per user request to only fill drawing name and Id
-
+          // For NEW BOM creation from a drawing, pre-fill drawing info
+          // and also try to find and set the related product/item info
+          
           let dwgName = dwgNameParam || '';
+          let itemCode = '';
+          let matchedItem = null;
 
-          if (!dwgName) {
-            const dwgInfo = approvedDrawings.find(i => i.drawing_no === dwgParam) ||
-              stockItems.find(i => i.drawing_no === dwgParam);
-            dwgName = dwgInfo ? (dwgInfo.material_name || dwgInfo.description || dwgInfo.item_description || '') : '';
+          const dwgInfo = approvedDrawings.find(i => i.drawing_no === dwgParam) ||
+            stockItems.find(i => i.drawing_no === dwgParam);
+          
+          if (dwgInfo) {
+            matchedItem = dwgInfo;
+            dwgName = dwgInfo.material_name || dwgInfo.description || dwgInfo.item_description || '';
+            itemCode = dwgInfo.item_code || '';
+            setSelectedItem({ ...dwgInfo, source: approvedDrawings.find(i => i.drawing_no === dwgParam) ? 'order' : 'stock' });
           }
 
           if (!dwgName) {
@@ -859,7 +864,8 @@ const BOMFormPage = () => {
             ...prev,
             drawingNo: dwgParam,
             drawing_id: dwgIdParam || prev.drawing_id,
-            description: cleanText(dwgName) || prev.description
+            description: cleanText(dwgName) || prev.description,
+            itemCode: itemCode || prev.itemCode
           }));
         }
       }
@@ -1654,14 +1660,19 @@ const BOMFormPage = () => {
       // Determine version number
       let nextRevision = productForm.revision;
       if (isNewVersion) {
-        // Find highest version in history or current revision
-        const currentRev = parseInt(productForm.revision || 0);
-        const maxHistoryVersion = bomHistory.reduce((max, item) => {
-          const v = parseInt(item.version || 0);
-          return v > max ? v : max;
-        }, 0);
-        const maxVersion = Math.max(currentRev, maxHistoryVersion);
-        nextRevision = (maxVersion + 1).toString();
+        // If there is no history at all, the "new version" should still be V1
+        if (bomHistory.length === 0) {
+          nextRevision = '1';
+        } else {
+          // Find highest version in history or current revision
+          const currentRev = parseInt(productForm.revision || 0);
+          const maxHistoryVersion = bomHistory.reduce((max, item) => {
+            const v = parseInt(item.version || 0);
+            return v > max ? v : max;
+          }, 0);
+          const maxVersion = Math.max(currentRev, maxHistoryVersion);
+          nextRevision = (maxVersion + 1).toString();
+        }
       }
 
       const effectiveItemId = (itemId && itemId !== 'bom-form') 
@@ -1723,8 +1734,9 @@ const BOMFormPage = () => {
         successToast(isDraft ? 'BOM saved as draft' : (isNewVersion ? `BOM Revision V${nextRevision} created successfully` : 'BOM created successfully'));
       }
 
-      // Auto-update quotation and refresh history if not a new version
-      if (!isDraft && !isNewVersion && effectiveItemId) {
+      // Auto-update quotation and refresh history
+      const targetUpdateId = isNewVersion ? newId : effectiveItemId;
+      if (!isDraft && targetUpdateId) {
         try {
           await fetch(`${API_BASE}/quotation-requests/update-from-bom`, {
             method: 'PUT',
@@ -1732,35 +1744,45 @@ const BOMFormPage = () => {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${token}`
             },
-            body: JSON.stringify({ salesOrderItemId: effectiveItemId, bomCost: totalBOMCost })
+            body: JSON.stringify({ salesOrderItemId: targetUpdateId, bomCost: totalBOMCost })
           });
         } catch (e) {
           console.error('Failed to auto-update quotation:', e);
         }
         
         // Refresh history to show updated cost in sidebar
-        fetchBOMHistory(productForm.itemCode, productForm.drawingNo, effectiveItemId);
+        fetchBOMHistory(productForm.itemCode, productForm.drawingNo, targetUpdateId);
 
         // Also update local state for immediate feedback
         setProductForm(prev => ({ ...prev, bom_cost: totalBOMCost }));
-        setBomHistory(prev => {
-          const newHistory = [...prev];
-          // Find the version we're currently viewing to update its cost in history sidebar
-          const currentViewingId = itemId || effectiveItemId;
-          const idx = newHistory.findIndex(v => String(v.id) === String(currentViewingId));
-          
-          if (idx !== -1) {
-            newHistory[idx] = { ...newHistory[idx], total_cost: totalBOMCost };
-          } else if (newHistory.length > 0) {
-            // Fallback: Update the last one (usually Current) if ID match fails
-            const lastIdx = newHistory.length - 1;
-            newHistory[lastIdx] = { ...newHistory[lastIdx], total_cost: totalBOMCost };
-          }
-          return newHistory;
-        });
+        
+        if (!isNewVersion) {
+          setBomHistory(prev => {
+            const newHistory = [...prev];
+            // Find the version we're currently viewing to update its cost in history sidebar
+            const currentViewingId = itemId || effectiveItemId;
+            const idx = newHistory.findIndex(v => String(v.id) === String(currentViewingId));
+            
+            if (idx !== -1) {
+              newHistory[idx] = { ...newHistory[idx], total_cost: totalBOMCost };
+            } else if (newHistory.length > 0) {
+              // Fallback: Update the last one (usually Current) if ID match fails
+              const lastIdx = newHistory.length - 1;
+              newHistory[lastIdx] = { ...newHistory[lastIdx], total_cost: totalBOMCost };
+            }
+            return newHistory;
+          });
+        }
 
         // Refresh all data from server to ensure sync
         fetchData(false);
+
+        // Auto-trigger Quotation Update Request for FG items (Auto-click simulation)
+        const groupG = (productForm.itemGroup || "").toUpperCase();
+        const isFGItem = groupG.includes("FG") || groupG.includes("FINISHED") || groupG.includes("GOOD");
+        if (isFGItem) {
+          handleUpdateQuotation(targetUpdateId, totalBOMCost, true);
+        }
       }
 
       // Instead of resetting and navigating to list, stay on the page in view mode
@@ -1782,23 +1804,27 @@ const BOMFormPage = () => {
     }
   };
 
-  const handleUpdateQuotation = async (salesOrderItemId, bomCost) => {
+  const handleUpdateQuotation = async (salesOrderItemId, bomCost, skipConfirm = false) => {
     try {
-      const result = await Swal.fire({
-        title: 'Update Quotation?',
-        text: `Do you want to update all linked quotations with the BOM cost of ₹${parseFloat(bomCost).toLocaleString('en-IN', { minimumFractionDigits: 2 })}?`,
-        icon: 'question',
-        showCancelButton: true,
-        confirmButtonText: 'Yes, Update',
-        cancelButtonText: 'Cancel',
-        confirmButtonColor: '#4f46e5'
-      });
+      if (!skipConfirm) {
+        const result = await Swal.fire({
+          title: 'Request Quotation Update?',
+          text: `Would you like to send a request to the Sales team to update all linked quotations with the latest BOM cost of ₹${parseFloat(bomCost).toLocaleString('en-IN', { minimumFractionDigits: 2 })}?`,
+          icon: 'question',
+          showCancelButton: true,
+          confirmButtonText: 'Yes, Send Request',
+          cancelButtonText: 'Cancel',
+          confirmButtonColor: '#4f46e5'
+        });
 
-      if (!result.isConfirmed) return;
+        if (!result.isConfirmed) return;
+      }
 
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/quotation-requests/update-from-bom`, {
-        method: 'PUT',
+      
+      // We directly call the request endpoint instead of trying direct update first
+      const response = await fetch(`${API_BASE}/quotation-requests/request-update-from-bom`, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
@@ -1809,41 +1835,12 @@ const BOMFormPage = () => {
       const data = await response.json();
 
       if (response.ok) {
-        successToast(data.message || 'Quotation updated successfully');
-      } else if (response.status === 403) {
-        // If forbidden, offer to send a request instead
-        const requestResult = await Swal.fire({
-          title: 'Insufficient Permissions',
-          text: 'You do not have permission to update quotations directly. Would you like to send a request to the Sales team to update the quotation with this price?',
-          icon: 'warning',
-          showCancelButton: true,
-          confirmButtonText: 'Yes, Send Request',
-          cancelButtonText: 'No, Cancel',
-          confirmButtonColor: '#4f46e5'
-        });
-
-        if (requestResult.isConfirmed) {
-          const requestResponse = await fetch(`${API_BASE}/quotation-requests/request-update-from-bom`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({ salesOrderItemId, bomCost })
-          });
-
-          const requestData = await requestResponse.json();
-          if (requestResponse.ok) {
-            successToast(requestData.message || 'Request sent successfully');
-          } else {
-            throw new Error(requestData.error || requestData.message || 'Failed to send request');
-          }
-        }
+        successToast(data.message || 'Update request sent to Sales team successfully');
       } else {
-        throw new Error(data.message || 'Failed to update quotation');
+        throw new Error(data.error || data.message || 'Failed to send update request');
       }
     } catch (error) {
-      console.error('Error updating quotation:', error);
+      console.error('Error requesting quotation update:', error);
       errorToast(error.message);
     }
   };
@@ -1941,7 +1938,9 @@ const BOMFormPage = () => {
               <h1 className="text-xl  flex items-center gap-2">
                 {isReadOnly
                   ? `Viewing BOM V${productForm.revision || '1'}: ${cleanText(productForm.description) || itemId} ${productForm.itemGroup ? `(${productForm.itemGroup})` : ''}`
-                  : 'Create BOM'}
+                  : (productForm.drawingNo && productForm.drawingNo !== 'N/A' 
+                    ? `Create BOM: ${productForm.drawingNo}` 
+                    : 'Create BOM')}
                 {productForm.revision && (
                   <span className={`p-1 rounded text-xs border  ${
                     selectedItem?.status === 'Approved' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
@@ -1966,7 +1965,11 @@ const BOMFormPage = () => {
               <p className="text-xs text-slate-400   ">
                 {selectedItem?.status === 'REJECTED' && selectedItem?.rejection_reason
                   ? `Reason: ${selectedItem.rejection_reason}`
-                  : isReadOnly ? 'Inspecting bill of materials details' : 'Configure bill of materials'}
+                  : isReadOnly 
+                    ? 'Inspecting bill of materials details' 
+                    : (productForm.description 
+                        ? `Drawing: ${productForm.description}${productForm.itemCode ? ` (${productForm.itemCode})` : ''}` 
+                        : 'Configure bill of materials')}
               </p>
             </div>
           </div>
@@ -3563,21 +3566,21 @@ const BOMFormPage = () => {
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                          <div className={`w-4 h-4 p-1 rounded-full flex items-center justify-center font-bold text-xs ${
+                          <div className={`w-4 h-4 p-1 rounded-full flex items-center justify-center  text-xs ${
                             isViewing ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'bg-slate-100 text-slate-600 group-hover:bg-indigo-50 group-hover:text-indigo-600'
                           }`}>
                             V{v.version || '1'}
                           </div>
                           <div>
                             <div className="flex items-center gap-2">
-                              <span className="text-sm font-bold text-slate-800">
+                              <span className="text-sm  text-slate-800">
                                 ₹{parseFloat(v.total_cost || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                               </span>
                               {isLatest && (
-                                <span className="p-1 bg-emerald-100 text-emerald-700 rounded text-xs font-bold uppercase tracking-wider">Current</span>
+                                <span className="p-1 bg-emerald-100 text-emerald-700 rounded text-xs   ">Current</span>
                               )}
                               {(isViewing && !isLatest) && (
-                                <span className="p-1 bg-amber-100 text-amber-700 rounded text-xs font-bold uppercase tracking-wider">Viewing</span>
+                                <span className="p-1 bg-amber-100 text-amber-700 rounded text-xs   ">Viewing</span>
                               )}
                             </div>
                             <div className="flex items-center gap-2 mt-0.5">
@@ -3620,7 +3623,7 @@ const BOMFormPage = () => {
                                 <RefreshCw className="w-3 h-3" />
                                 Update Quotation
                               </button>
-                               <span className="text-xs text-indigo-600 font-bold flex items-center gap-1 group-hover:opacity-100 transition-opacity">
+                               <span className="text-xs text-indigo-600  flex items-center gap-1 group-hover:opacity-100 transition-opacity">
                               View Details <ChevronRight className="w-3 h-3" />
                             </span>
                             </div>
@@ -3643,7 +3646,7 @@ const BOMFormPage = () => {
           <div className="p-2 border-t border-slate-50 bg-slate-50/30">
             <button 
               onClick={() => navigate('/bom-approval')}
-              className="text-xs text-indigo-600 font-bold hover:underline"
+              className="text-xs text-indigo-600  hover:underline"
             >
               View Full Version History →
             </button>
@@ -3655,28 +3658,34 @@ const BOMFormPage = () => {
 
       {/* Footer Actions */}
       <div className="flex justify-end gap-2 pb-8">
-        <button onClick={() => navigate('/bom-creation')} className="p-2 bg-white border border-slate-200 rounded  text-sm  text-slate-600 hover:bg-slate-50 transition-all">
+        <Button 
+          variant="default"
+          onClick={() => navigate('/bom-creation')}
+        >
           {isReadOnly ? 'Back to List' : 'Cancel'}
-        </button>
+        </Button>
         {!isReadOnly && (
           <div className="flex gap-2">
-            <button 
+            <Button 
+              variant="light"
               onClick={() => handleCreateBOM('Draft')} 
-              className="p-2 bg-white border border-indigo-200 text-indigo-600 rounded  text-sm  hover:bg-indigo-50 transition-all flex items-center gap-2"
+              icon={FileText}
             >
-              <FileText className="w-4 h-4" />
               Save as Draft
-            </button>
-            <button 
+            </Button>
+            <Button 
+              variant="secondary"
               onClick={() => handleCreateBOM('Active', true)} 
-              className="p-2 bg-indigo-50 border border-indigo-200 text-indigo-700 rounded text-sm hover:bg-indigo-100 transition-all flex items-center gap-2"
+              icon={History}
             >
-              <History className="w-4 h-4" />
               Save as New Version
-            </button>
-            <button onClick={() => handleCreateBOM('Active')} className="p-2 bg-orange-500 text-white rounded  text-sm  hover:bg-orange-600 shadow-lg shadow-orange-100 transition-all flex items-center gap-2 ">
+            </Button>
+            <Button 
+              variant="primary"
+              onClick={() => handleCreateBOM('Active')}
+            >
               {itemId && itemId !== 'bom-form' ? 'Update BOM' : 'Create BOM'}
-            </button>
+            </Button>
           </div>
         )}
       </div>

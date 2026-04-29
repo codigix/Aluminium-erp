@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const bomService = require('./bomService');
 
 const getAllDrawings = async () => {
   const [rows] = await pool.query(
@@ -9,7 +10,7 @@ const getAllDrawings = async () => {
   return rows;
 };
 
-const listDrawings = async (search = '', onlyShared = false) => {
+const listDrawings = async (search = '', onlyShared = false, clientName = null) => {
   let query = `
     SELECT 
       d.id as drawing_master_id,
@@ -39,17 +40,18 @@ const listDrawings = async (search = '', onlyShared = false) => {
       soi.description as item_description,
       soi.bom_cost,
       soi.item_group,
-      soi.unit
+      soi.unit,
+      soi.item_code
     FROM customer_drawings d
     LEFT JOIN (
-      SELECT s1.id, s1.drawing_no, s1.status, s1.sales_order_id, s1.description, s1.bom_cost, s1.item_group, s1.unit
+      SELECT s1.id, s1.drawing_no, s1.status, s1.sales_order_id, s1.description, s1.bom_cost, s1.item_group, s1.unit, s1.drawing_id, s1.item_code
       FROM sales_order_items s1
       INNER JOIN (
-        SELECT drawing_no, MAX(id) as max_id
+        SELECT COALESCE(drawing_id, drawing_no) as identifier, item_code, item_group, MAX(id) as max_id
         FROM sales_order_items
-        GROUP BY drawing_no
+        GROUP BY identifier, item_code, item_group
       ) s2 ON s1.id = s2.max_id
-    ) soi ON d.drawing_no = soi.drawing_no
+    ) soi ON (d.id = soi.drawing_id OR d.drawing_no = soi.drawing_no)
     WHERE 1=1
   `;
   const params = [];
@@ -59,17 +61,46 @@ const listDrawings = async (search = '', onlyShared = false) => {
     query += ` AND (d.status = 'SHARED' OR soi.id IS NOT NULL OR d.status = 'APPROVED')`;
   }
 
+  if (clientName) {
+    query += ` AND d.client_name = ?`;
+    params.push(clientName);
+  }
+
   if (search) {
     query += ` AND (d.client_name LIKE ? OR d.drawing_no LIKE ? OR d.description LIKE ?)`;
     const searchPattern = `%${search}%`;
     params.push(searchPattern, searchPattern, searchPattern);
   }
 
-  query += ` ORDER BY d.created_at DESC`;
+  query += ` ORDER BY d.created_at DESC, (soi.item_group LIKE '%FG%' OR soi.item_group LIKE '%FINISHED%') DESC, (soi.bom_cost > 0) DESC, soi.id DESC`;
   const [rows] = await pool.query(query, params);
   
+  // Enrich with sub-assemblies for items with BOM structure
+  const enrichedRows = await Promise.all(rows.map(async (row) => {
+    // We attempt to fetch components if we have an item ID OR identifying info for fallback (FG or SA)
+    if (row.sales_order_item_id || row.item_code || row.drawing_no) {
+      try {
+        const components = await bomService.getItemComponents(row.sales_order_item_id, row.item_code, row.drawing_no);
+        const sub_assemblies = components.filter(c => {
+          const code = (c.item_code || c.component_code || '').toUpperCase();
+          const group = (c.item_group || '').toUpperCase();
+          const desc = (c.description || '').toUpperCase();
+          return (code.startsWith('SA-') || code.startsWith('SFG-') || 
+                  group.includes('SA') || group.includes('SUB') || group.includes('ASSEMBLY') ||
+                  desc.includes('ASSEMBLY') || desc.includes('UNIT')) &&
+                 !group.includes('FG');
+        });
+        return { ...row, sub_assemblies };
+      } catch (err) {
+        console.error(`Error fetching components for item ${row.sales_order_item_id}:`, err);
+        return { ...row, sub_assemblies: [] };
+      }
+    }
+    return { ...row, sub_assemblies: [] };
+  }));
+
   // Ensure each row has a unique id for DataTable and matching compatibility
-  return rows.map(row => ({
+  return enrichedRows.map(row => ({
     ...row,
     // If we have a sales_order_item_id, use it to make the ID unique for that specific item version
     // Otherwise fallback to drawing_master_id
@@ -332,8 +363,100 @@ const createBatchCustomerDrawings = async (batchData) => {
 };
 
 const deleteCustomerDrawing = async (id) => {
-  const [result] = await pool.execute('DELETE FROM customer_drawings WHERE id = ?', [id]);
-  return result.affectedRows > 0;
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // 1. Get all sales_order_item_ids linked to this drawing
+    const [soItems] = await connection.query(
+      'SELECT id, sales_order_id FROM sales_order_items WHERE drawing_id = ?',
+      [id]
+    );
+    const soItemIds = soItems.map(item => item.id);
+    const soIds = [...new Set(soItems.map(item => item.sales_order_id).filter(id => id))];
+
+    // 2. Delete from tables that don't have ON DELETE CASCADE for sales_order_item_id
+    if (soItemIds.length > 0) {
+      const placeholders = soItemIds.map(() => '?').join(',');
+      
+      // Delete from quotation_requests
+      await connection.query(
+        `DELETE FROM quotation_requests WHERE sales_order_item_id IN (${placeholders})`,
+        soItemIds
+      );
+
+      // Delete from production_plan_items
+      await connection.query(
+        `DELETE FROM production_plan_items WHERE sales_order_item_id IN (${placeholders})`,
+        soItemIds
+      );
+
+      // Delete from work_orders
+      await connection.query(
+        `DELETE FROM work_orders WHERE sales_order_item_id IN (${placeholders})`,
+        soItemIds
+      );
+
+      // Delete from BOM tables
+      await connection.query(
+        `DELETE FROM sales_order_item_materials WHERE sales_order_item_id IN (${placeholders})`,
+        soItemIds
+      );
+      await connection.query(
+        `DELETE FROM sales_order_item_components WHERE sales_order_item_id IN (${placeholders})`,
+        soItemIds
+      );
+      await connection.query(
+        `DELETE FROM sales_order_item_operations WHERE sales_order_item_id IN (${placeholders})`,
+        soItemIds
+      );
+      await connection.query(
+        `DELETE FROM sales_order_item_scrap WHERE sales_order_item_id IN (${placeholders})`,
+        soItemIds
+      );
+    }
+
+    // 3. Delete from quotation_requests by drawing_id directly (in case they aren't linked via sales_order_item_id)
+    await connection.query(
+      'DELETE FROM quotation_requests WHERE drawing_id = ?',
+      [id]
+    );
+
+    // 4. Delete sales_order_items (This will cascade to sales_order_item_materials, operations, components, scrap)
+    if (soItemIds.length > 0) {
+      const placeholders = soItemIds.map(() => '?').join(',');
+      await connection.query(
+        `DELETE FROM sales_order_items WHERE id IN (${placeholders})`,
+        soItemIds
+      );
+    }
+
+    // 5. Cleanup empty sales orders
+    if (soIds.length > 0) {
+      for (const soId of soIds) {
+        const [remainingItems] = await connection.query(
+          'SELECT id FROM sales_order_items WHERE sales_order_id = ?',
+          [soId]
+        );
+        if (remainingItems.length === 0) {
+          // This will also delete design_orders due to ON DELETE CASCADE
+          await connection.query('DELETE FROM sales_orders WHERE id = ?', [soId]);
+        }
+      }
+    }
+
+    // 6. Finally delete the drawing itself
+    const [result] = await connection.execute('DELETE FROM customer_drawings WHERE id = ?', [id]);
+    
+    await connection.commit();
+    return result.affectedRows > 0;
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error in deleteCustomerDrawing:', error);
+    throw error;
+  } finally {
+    connection.release();
+  }
 };
 
 const shareWithDesign = async (id) => {
@@ -414,7 +537,30 @@ const getApprovedDrawings = async () => {
      WHERE d.status = 'APPROVED' OR d.shared_with_design = 1
      ORDER BY d.created_at DESC`
   );
-  return rows;
+
+  // Enrich with sub-assemblies for FG items
+  const enrichedRows = await Promise.all(rows.map(async (row) => {
+    const isFG = (row.item_group || '').toUpperCase().includes('FG');
+    if (isFG && row.id) {
+      try {
+        const components = await bomService.getItemComponents(row.id);
+        const sub_assemblies = components.filter(c => {
+          const code = (c.item_code || '').toUpperCase();
+          const group = (c.item_group || '').toUpperCase();
+          return (code.startsWith('SA-') || code.startsWith('SFG-') || 
+                  group.includes('SA') || group.includes('SUB') || group.includes('ASSEMBLY')) &&
+                 !group.includes('FG');
+        });
+        return { ...row, sub_assemblies };
+      } catch (err) {
+        console.error(`Error fetching components for item ${row.id}:`, err);
+        return { ...row, sub_assemblies: [] };
+      }
+    }
+    return { ...row, sub_assemblies: [] };
+  }));
+
+  return enrichedRows;
 };
 
 module.exports = {

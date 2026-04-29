@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, StatusBadge, Modal } from '../components/ui.jsx';
+import { Card, StatusBadge, Modal, Tabs, Button } from '../components/ui.jsx';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
 import { getFileUrl } from '../utils/url';
-import { Plus, Search, RefreshCw, Filter, FileText, Send, Eye, LayoutList, LayoutGrid } from 'lucide-react';
+import { Plus, Search, RefreshCw, Filter, FileText, Send, Eye, LayoutList, LayoutGrid, History } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast, infoToast } from '../utils/toast';
 
@@ -226,6 +226,174 @@ const DesignOrders = () => {
   const toggleActivePo = (po) => {
     setExpandedActivePo(prev => ({ ...prev, [po]: !prev[po] }));
   };
+
+  const designReviewColumns = [
+    { label: '#', key: 'id', render: (_, __, idx) => idx + 1, width: '50px' },
+    { 
+      label: 'Drawing', 
+      key: 'drawing_no',
+      render: (val, row) => (
+        <div className="flex flex-col">
+          <span className="font-medium text-slate-900">{val || '—'}</span>
+          <span className="text-[10px] text-slate-500">{row.item_code || '—'}</span>
+        </div>
+      )
+    },
+    { label: 'Description', key: 'item_description', render: (val, row) => val || row.description || '—' },
+    { label: 'Qty', key: 'quantity', className: 'text-indigo-600 font-medium', render: (val, row) => val || row.item_qty || 1 },
+    { 
+      label: 'Status', 
+      key: 'status',
+      render: (val, row) => (
+        <div className="flex flex-col gap-1">
+          <StatusBadge status={val || row.item_status} />
+          {(val === 'REJECTED' || row.item_status === 'REJECTED') && (
+            <span className="text-[10px] text-rose-500 italic">
+              {row.rejection_reason || row.item_rejection_reason || 'No reason'}
+            </span>
+          )}
+        </div>
+      )
+    },
+    { 
+      label: 'Actions', 
+      key: 'actions', 
+      className: 'text-right',
+      render: (_, row) => (
+        <div className="flex items-center justify-end gap-2">
+          {(!row.item_status || row.item_status === 'PENDING') ? (
+            <>
+              <button 
+                onClick={() => handleApproveItem(row.id || row.item_id)}
+                disabled={bulkOperationLoading}
+                className="px-3 py-1 bg-emerald-50 text-emerald-600 rounded-md hover:bg-emerald-600 hover:text-white transition-all border border-emerald-100 text-[10px]   disabled:opacity-50"
+              >
+                Approve
+              </button>
+              <button 
+                onClick={() => handleRejectItem(row.id || row.item_id)}
+                disabled={bulkOperationLoading}
+                className="px-3 py-1 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-all text-[10px]   border border-slate-100 hover:border-rose-200 disabled:opacity-50"
+              >
+                Reject
+              </button>
+            </>
+          ) : (
+            <div className="flex items-center gap-1 text-[10px]  text-slate-400 ">
+              <Check className="w-3 h-3" />
+              Processed
+            </div>
+          )}
+        </div>
+      )
+    }
+  ];
+
+  const technicalDetailsColumns = [
+    { label: 'Item Code', key: 'item_code' },
+    { 
+      label: 'Drawing No', 
+      key: 'drawing_no',
+      render: (val, row) => (
+        editingItem?.id === row.id ? (
+          <input 
+            type="text" 
+            className="w-24 px-2 py-1 border border-slate-300 rounded text-xs focus:ring-1 focus:ring-indigo-500"
+            value={editItemData.drawing_no}
+            onChange={(e) => setEditItemData({...editItemData, drawing_no: e.target.value})}
+          />
+        ) : <span className="text-slate-900 font-medium">{val || '—'}</span>
+      )
+    },
+    { 
+      label: 'Rev', 
+      key: 'revision_no',
+      width: '80px',
+      render: (val, row) => (
+        editingItem?.id === row.id ? (
+          <input 
+            type="text" 
+            className="w-12 px-2 py-1 border border-slate-300 rounded text-xs text-center focus:ring-1 focus:ring-indigo-500"
+            value={editItemData.revision_no}
+            onChange={(e) => setEditItemData({...editItemData, revision_no: e.target.value})}
+          />
+        ) : <span className="text-slate-600">{val || '—'}</span>
+      )
+    },
+    { label: 'Description', key: 'description' },
+    { 
+      label: 'Qty', 
+      key: 'quantity', 
+      className: 'text-center',
+      render: (val, row) => (
+        <span className="text-indigo-600 font-medium">
+          {parseFloat(val).toFixed(3)} {row.unit}
+        </span>
+      )
+    },
+    { 
+      label: 'PDF / Actions', 
+      key: 'actions', 
+      className: 'text-right',
+      render: (_, row) => (
+        editingItem?.id === row.id ? (
+          <div className="flex flex-col gap-2 items-end">
+            <input 
+              type="file" 
+              accept=".pdf"
+              className="text-[10px]"
+              onChange={(e) => setEditItemData({...editItemData, drawing_pdf: e.target.files[0]})}
+            />
+            <div className="flex gap-1">
+              <button 
+                onClick={() => handleSaveItem(row.id)}
+                disabled={itemSaveLoading}
+                className="p-1 bg-emerald-500 text-white rounded hover:bg-emerald-600 transition-colors"
+                title="Save"
+              >
+                <Check className="w-3.5 h-3.5" />
+              </button>
+              <button 
+                onClick={() => setEditingItem(null)}
+                className="p-1 bg-slate-200 text-slate-600 rounded hover:bg-slate-300 transition-colors"
+                title="Cancel"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center justify-end gap-1">
+            <button 
+              onClick={() => openAddMaterialModal(row)}
+              className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-all"
+              title="Add Material"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+            {row.drawing_pdf ? (
+              <button 
+                onClick={() => handlePreview(row)}
+                className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
+                title="View Drawing"
+              >
+                <Eye className="w-4 h-4" />
+              </button>
+            ) : (
+              <span className="text-slate-300 text-[10px] italic">No PDF</span>
+            )}
+            <button 
+              onClick={() => handleEditItem(row)}
+              className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded transition-all"
+              title="Edit Drawing Info"
+            >
+              <Edit2 className="w-4 h-4" />
+            </button>
+          </div>
+        )
+      )
+    }
+  ];
 
   const groupedIncoming = incomingOrders.reduce((acc, order) => {
     const poKey = order.po_number || (order.customer_po_id ? `PO-${order.customer_po_id}` : 'NO-PO');
@@ -618,30 +786,14 @@ const DesignOrders = () => {
               </div>
             </div>
 
-            <div className="flex items-center p-1 bg-slate-100 rounded  border border-slate-200/60 ">
-              <button
-                onClick={() => navigate('/design-orders/incoming')}
-                className={`flex items-center gap-2 p-2 rounded  text-xs  transition-all duration-300 ${
-                  activeTab === 'incoming' 
-                    ? 'bg-white text-indigo-600  ring-1 ring-slate-200/50' 
-                    : 'text-slate-500 hover:text-slate-700 hover:bg-white/50'
-                }`}
-              >
-                <div className={`w-1.5 h-1.5 rounded ${activeTab === 'incoming' ? 'bg-indigo-500 animate-pulse' : 'bg-slate-300'}`} />
-                Incoming Requests
-              </button>
-              <button
-                onClick={() => navigate('/design-orders/progress')}
-                className={`flex items-center gap-2 p-2 rounded  text-xs  transition-all duration-300 ${
-                  activeTab === 'progress' 
-                    ? 'bg-white text-indigo-600  ring-1 ring-slate-200/50' 
-                    : 'text-slate-500 hover:text-slate-700 hover:bg-white/50'
-                }`}
-              >
-                <div className={`w-1.5 h-1.5 rounded ${activeTab === 'progress' ? 'bg-indigo-500 animate-pulse' : 'bg-slate-300'}`} />
-                In Progress
-              </button>
-            </div>
+            <Tabs
+              tabs={[
+                { label: 'Incoming Requests', value: 'incoming', icon: FileText },
+                { label: 'In Progress', value: 'progress', icon: History }
+              ]}
+              activeTab={activeTab}
+              onTabChange={(value) => navigate(`/design-orders/${value}`)}
+            />
           </div>
 
           {/* INFO BANNER */}

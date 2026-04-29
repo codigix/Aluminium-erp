@@ -8,7 +8,8 @@ const getItemMaterials = async (itemId, itemCode = null, drawingNo = null) => {
   if (parsedItemId) {
     const [itemCheck] = await pool.query('SELECT status, bom_cost FROM sales_order_items WHERE id = ?', [parsedItemId]);
     if (itemCheck.length > 0) {
-      isHistorical = ['APPROVED', 'RELEASED', 'COMPLETED'].includes(String(itemCheck[0].status).toUpperCase());
+      const s = String(itemCheck[0].status).toUpperCase();
+      isHistorical = ['APPROVED', 'RELEASED', 'COMPLETED', 'REVISED', 'SENT'].includes(s);
     }
 
     [rows] = await pool.query(
@@ -61,10 +62,12 @@ const getItemMaterials = async (itemId, itemCode = null, drawingNo = null) => {
                    GROUP BY material_name
                  ) i ON m.material_name = i.material_name 
                  WHERE m.sales_order_item_id IN (
-                    SELECT id FROM sales_order_items 
-                    WHERE (item_code = ? OR drawing_no = ?) 
-                    AND sales_order_id IS NULL 
-                    ORDER BY id DESC LIMIT 1
+                    SELECT id FROM (
+                       SELECT id FROM sales_order_items 
+                       WHERE (item_code = ? OR drawing_no = ?) 
+                       AND sales_order_id IS NULL 
+                       ORDER BY id DESC LIMIT 1
+                    ) as t
                  )`;
     let params = [itemCode, drawingNo];
 
@@ -92,15 +95,54 @@ const getItemMaterials = async (itemId, itemCode = null, drawingNo = null) => {
   }));
 };
 
-const getItemComponents = async (itemId, itemCode = null, drawingNo = null) => {
-  const parsedItemId = (itemId === 'null' || itemId === 'undefined' || !itemId) ? null : itemId;
+const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refBatchId = null, refDate = null) => {
+  let parsedItemId = (itemId === 'null' || itemId === 'undefined' || !itemId) ? null : itemId;
   let rows = [];
   
-  let isHistorical = false;
+  let isHistorical = !!refBatchId;
+  
+  // Handle manual historical override from controllers
+  if (typeof parsedItemId === 'string' && parsedItemId.startsWith('HISTORICAL_')) {
+    isHistorical = true;
+    parsedItemId = parsedItemId.replace('HISTORICAL_', '');
+    if (parsedItemId === 'null' || !parsedItemId) parsedItemId = null;
+  }
+
   if (parsedItemId) {
-    const [itemCheck] = await pool.query('SELECT status, bom_cost FROM sales_order_items WHERE id = ?', [parsedItemId]);
-    if (itemCheck.length > 0) {
-      isHistorical = ['APPROVED', 'RELEASED', 'COMPLETED'].includes(String(itemCheck[0].status).toUpperCase());
+    isHistorical = true;
+  }
+
+  // PRIORITY 0: If we have a batch ID, try to fetch components from the quotation snapshot first
+  // This is the most accurate way to get frozen costs for ANY saved quotation version (even Drafts)
+  if (refBatchId) {
+    const [batchRows] = await pool.query(
+      `SELECT id, drawing_no, description, item_unit as unit, item_qty as quantity,
+              item_group, bom_cost, received_amount as rate, item_code,
+              1 as is_cost_frozen
+       FROM quotation_requests 
+       WHERE batch_id = ? AND status = 'COMPONENT'
+       AND (rejection_reason = ? OR ? IS NULL)`,
+      [refBatchId, drawingNo, drawingNo]
+    );
+    if (batchRows.length > 0) {
+      // IF WE FOUND SNAPSHOT DATA, RETURN IT IMMEDIATELY
+      // This is a frozen snapshot, we MUST NOT fall back to other queries or latest costs
+      return batchRows.map(row => ({
+        ...row,
+        qty: row.quantity || row.qty,
+        quantity: row.quantity || row.qty,
+        rate: parseFloat(row.rate || 0),
+        bom_cost: parseFloat(row.bom_cost || 0),
+        is_cost_frozen: true
+      }));
+    }
+  }
+
+  if (rows.length === 0 && parsedItemId) {
+    if (!isHistorical) {
+      // We used to auto-detect history here based on SO item status, 
+      // but that breaks new revisions (V6 Draft) that reference approved SO items.
+      // Now we strictly follow the 'HISTORICAL_' prefix from the controller.
     }
 
     [rows] = await pool.query(
@@ -128,81 +170,231 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null) => {
         }
       }
     }
-    let query = `SELECT c.*, i.selling_rate as latest_selling_rate, i.valuation_rate as latest_valuation_rate, i.weight_per_unit as latest_weight_per_unit
-                 FROM sales_order_item_components c
-                 LEFT JOIN (
-                   SELECT item_code, MAX(selling_rate) as selling_rate, MAX(valuation_rate) as valuation_rate, MAX(weight_per_unit) as weight_per_unit
-                   FROM stock_balance 
-                   GROUP BY item_code
-                 ) i ON c.component_code = i.item_code
-                 WHERE c.sales_order_item_id IN (
-                    SELECT id FROM sales_order_items 
-                    WHERE (item_code = ? OR drawing_no = ?) 
-                    AND sales_order_id IS NULL 
-                    ORDER BY id DESC LIMIT 1
-                 )`;
-    let params = [itemCode, drawingNo];
+    const [latestIdRow] = await pool.query(
+      `SELECT id FROM sales_order_items 
+       WHERE (item_code = ? OR drawing_no = ?) 
+       AND sales_order_id IS NULL 
+       ORDER BY id DESC LIMIT 1`,
+      [itemCode, drawingNo]
+    );
 
-    [rows] = await pool.query(query + ' ORDER BY c.created_at ASC', params);
+    if (latestIdRow.length > 0) {
+      let query = `SELECT c.*, i.selling_rate as latest_selling_rate, i.valuation_rate as latest_valuation_rate, i.weight_per_unit as latest_weight_per_unit
+                   FROM sales_order_item_components c
+                   LEFT JOIN (
+                     SELECT item_code, MAX(selling_rate) as selling_rate, MAX(valuation_rate) as valuation_rate, MAX(weight_per_unit) as weight_per_unit
+                     FROM stock_balance 
+                     GROUP BY item_code
+                   ) i ON c.component_code = i.item_code
+                   WHERE c.sales_order_item_id = ?`;
+      
+      [rows] = await pool.query(query + ' ORDER BY c.created_at ASC', [latestIdRow[0].id]);
+    }
+
+    if (rows.length === 0) {
+      // Try to find an item that actually HAS components first to avoid picking wrong entry for same drawing
+      const [componentIdRow] = await pool.query(
+        `SELECT soi.id 
+         FROM sales_order_items soi
+         WHERE (soi.item_code = ? OR soi.drawing_no = ?) 
+         AND soi.bom_cost > 0
+         AND EXISTS (SELECT 1 FROM sales_order_item_components WHERE sales_order_item_id = soi.id)
+         ORDER BY soi.id DESC LIMIT 1`,
+        [itemCode, drawingNo]
+      );
+
+      let fallbackId = componentIdRow.length > 0 ? componentIdRow[0].id : null;
+
+      if (!fallbackId) {
+        const [looseFallbackRow] = await pool.query(
+          `SELECT id FROM sales_order_items 
+           WHERE (item_code = ? OR drawing_no = ?) 
+           AND bom_cost > 0
+           ORDER BY id DESC LIMIT 1`,
+          [itemCode, drawingNo]
+        );
+        if (looseFallbackRow.length > 0) fallbackId = looseFallbackRow[0].id;
+      }
+
+      if (fallbackId) {
+        let fallbackQuery = `SELECT c.*, i.selling_rate as latest_selling_rate, i.valuation_rate as latest_valuation_rate, i.weight_per_unit as latest_weight_per_unit
+                   FROM sales_order_item_components c
+                   LEFT JOIN (
+                     SELECT item_code, MAX(selling_rate) as selling_rate, MAX(valuation_rate) as valuation_rate, MAX(weight_per_unit) as weight_per_unit
+                     FROM stock_balance 
+                     GROUP BY item_code
+                   ) i ON c.component_code = i.item_code
+                   WHERE c.sales_order_item_id = ?`;
+        [rows] = await pool.query(fallbackQuery + ' ORDER BY c.created_at ASC', [fallbackId]);
+      }
+    }
+
+    // FINAL FALLBACK: Search standard BOM table if still no rows found
+    if (rows.length === 0 && (itemCode || drawingNo)) {
+      const [bomRows] = await pool.query(
+        `SELECT bi.id as bi_id, bi.component_code, bi.quantity as qty, bi.quantity,
+                i.description, i.uom, i.item_group,
+                i.valuation_rate as latest_valuation_rate, 
+                i.selling_rate as latest_selling_rate,
+                i.weight_per_unit as latest_weight_per_unit,
+                i.length as latest_length, i.width as latest_width, i.thickness as latest_thickness,
+                i.diameter as latest_diameter, i.outer_diameter as latest_outer_diameter,
+                bi.component_code as component_code
+         FROM bom_items bi
+         JOIN bom b ON bi.bom_id = b.id
+         JOIN items i ON bi.component_code = i.item_code
+         WHERE (b.item_code = ? OR (b.drawing_no = ? AND b.drawing_no IS NOT NULL AND b.drawing_no != '—'))
+         AND b.id = (
+           SELECT MAX(id) FROM bom 
+           WHERE (item_code = ? OR (drawing_no = ? AND drawing_no IS NOT NULL AND drawing_no != '—'))
+         )
+         ORDER BY bi.id ASC`,
+        [itemCode, drawingNo, itemCode, drawingNo]
+      );
+      if (bomRows.length > 0) {
+        rows = bomRows;
+      }
+    }
   }
 
   // Dynamically fetch latest BOM cost for Sub-Assemblies in BULK to avoid N+1 problem
   const saComponents = rows.filter(row => {
-    const compCode = row.component_code || row.componentCode;
-    const group = (row.item_group || '').toLowerCase();
-    return (compCode && (compCode.startsWith('SA-') || compCode.startsWith('SFG-'))) || 
-           group.includes('assembly') || group.includes('sfg') || group.includes('semi');
+    const compCode = (row.item_code || row.component_code || row.componentCode || '').toUpperCase();
+    const group = (row.item_group || '').toUpperCase();
+    const desc = (row.description || '').toUpperCase();
+    return (compCode.startsWith('SA-') || compCode.startsWith('SFG-') || 
+           group.includes('SA') || group.includes('SUB') || group.includes('ASSEMBLY') ||
+           desc.includes('ASSEMBLY') || desc.includes('UNIT')) &&
+           !group.includes('FG');
   });
 
   if (saComponents.length > 0) {
     // Determine if we should even override the rates.
-    // RULE: For specific historical revisions of Sales Order items (parsedItemId exists AND has a status like 'APPROVED'),
-    // we should TRUST the stored rates in the components table as a snapshot.
-    // For "Master" templates (no sales_order_id) or "New/Draft" items, we should use LATEST rates.
-    let shouldOverride = !isHistorical;
+    // RULE: For non-historical items (New/Draft), or when we have a specific batch/date snapshot,
+    // we should override the template/master rates.
+    let shouldOverride = !isHistorical || !!refBatchId || !!refDate;
 
     if (shouldOverride) {
       const codes = [...new Set(saComponents.map(c => c.component_code || c.componentCode))];
       try {
-        // Fetch latest costs for all these components in one query
-        const [latestCosts] = await pool.query(`
-          SELECT item_code, drawing_no, bom_cost
-          FROM sales_order_items
-          WHERE item_code IN (?)
-          AND bom_cost > 0
-          AND id IN (
-            SELECT max_id FROM (
-                SELECT MAX(id) as max_id
-                FROM sales_order_items
-                WHERE item_code IN (?)
-                AND bom_cost > 0
-                GROUP BY item_code, IFNULL(drawing_no, '')
-            ) as t
-          )
-        `, [codes, codes]);
+        // PRIORITY 1: Fetch costs from the SAME BATCH if refBatchId is provided
+        // This ensures Quotation Versions show exactly what was calculated/saved for that specific revision
+        let batchCosts = [];
+        if (refBatchId) {
+          [batchCosts] = await pool.query(`
+            SELECT item_code, drawing_no, bom_cost, quotedPrice as rate, pending_bom_cost
+            FROM quotation_requests 
+            WHERE batch_id = ? AND item_code IN (?)
+          `, [refBatchId, codes]);
+        }
+
+        // PRIORITY 2: Fetch HISTORICAL costs active at refDate (if provided)
+        let historicalCosts = [];
+        if (refDate) {
+          [historicalCosts] = await pool.query(`
+            SELECT soi.item_code, soi.drawing_no, soi.bom_cost
+            FROM sales_order_items soi
+            WHERE soi.item_code IN (?)
+            AND soi.bom_cost > 0
+            AND soi.created_at <= ?
+            AND soi.id IN (
+              SELECT max_id FROM (
+                  SELECT MAX(id) as max_id
+                  FROM sales_order_items
+                  WHERE item_code IN (?)
+                  AND bom_cost > 0
+                  AND created_at <= ?
+                  GROUP BY item_code, IFNULL(drawing_no, '')
+              ) as t
+            )
+          `, [codes, refDate, codes, refDate]);
+        }
+
+        // PRIORITY 3: Fetch LATEST costs from sales_order_items (for new creations)
+        let latestCosts = [];
+        if (!refDate) {
+          [latestCosts] = await pool.query(`
+            SELECT soi.item_code, soi.drawing_no, soi.bom_cost,
+                   (SELECT qr.pending_bom_cost 
+                    FROM quotation_requests qr 
+                    WHERE (qr.sales_order_item_id = soi.id 
+                       OR (qr.item_code = soi.item_code AND qr.drawing_no = soi.drawing_no AND qr.item_code IS NOT NULL))
+                    AND qr.pending_bom_cost IS NOT NULL 
+                    ORDER BY qr.id DESC LIMIT 1) as pending_bom_cost
+            FROM sales_order_items soi
+            WHERE soi.item_code IN (?)
+            AND soi.bom_cost > 0
+            AND soi.id IN (
+              SELECT max_id FROM (
+                  SELECT MAX(id) as max_id
+                  FROM sales_order_items
+                  WHERE item_code IN (?)
+                  AND bom_cost > 0
+                  GROUP BY item_code, IFNULL(drawing_no, '')
+              ) as t
+            )
+          `, [codes, codes]);
+        }
 
         const costMap = new Map();
+        const pendingMap = new Map();
+        
+        // Apply latest costs first (as baseline)
         latestCosts.forEach(c => {
           const key = `${c.item_code}|${c.drawing_no || ''}`;
           costMap.set(key, parseFloat(c.bom_cost));
-          // Also keep a general fallback for the item code
+          if (c.pending_bom_cost) {
+            pendingMap.set(key, parseFloat(c.pending_bom_cost));
+          }
           if (!costMap.has(c.item_code)) {
             costMap.set(c.item_code, parseFloat(c.bom_cost));
           }
         });
 
-        // Update rates in rows using the cost map
+        // OVERRIDE with historical costs active at refDate
+        historicalCosts.forEach(c => {
+          const key = `${c.item_code}|${c.drawing_no || ''}`;
+          const hCost = parseFloat(c.bom_cost || 0);
+          if (hCost > 0) {
+            costMap.set(key, hCost);
+            costMap.set(c.item_code, hCost);
+          }
+        });
+
+        // OVERRIDE with batch-specific costs (Highest Priority)
+        batchCosts.forEach(c => {
+          const key = `${c.item_code}|${c.drawing_no || ''}`;
+          const bCost = parseFloat(c.bom_cost || c.rate || 0);
+          if (bCost > 0) {
+            costMap.set(key, bCost);
+            costMap.set(c.item_code, bCost);
+          }
+          if (c.pending_bom_cost) {
+            pendingMap.set(key, parseFloat(c.pending_bom_cost));
+            pendingMap.set(c.item_code, parseFloat(c.pending_bom_cost));
+          }
+        });
+
         rows.forEach(row => {
-          const compCode = row.component_code || row.componentCode;
-          const group = (row.item_group || '').toLowerCase();
-          const isSubAssy = (compCode && (compCode.startsWith('SA-') || compCode.startsWith('SFG-'))) || 
-                             group.includes('assembly') || group.includes('sfg') || group.includes('semi');
+          const compCode = (row.component_code || row.componentCode || '').toUpperCase();
+          const group = (row.item_group || '').toUpperCase();
+          const desc = (row.description || '').toUpperCase();
+          const isSubAssy = (compCode.startsWith('SA-') || compCode.startsWith('SFG-') || 
+                             group.includes('SA') || group.includes('SUB') || group.includes('ASSEMBLY') ||
+                             desc.includes('ASSEMBLY') || desc.includes('UNIT')) &&
+                             !group.includes('FG');
           
           if (isSubAssy && compCode) {
             const key = `${compCode}|${row.drawing_no || ''}`;
-            const latestRate = costMap.get(key) || costMap.get(compCode);
-            if (latestRate !== undefined) {
-              row.rate = latestRate;
+            const targetRate = costMap.get(key) || costMap.get(compCode);
+            if (targetRate !== undefined) {
+              row.rate = targetRate;
+              row.bom_cost = targetRate; 
+              row.is_cost_frozen = true; // Mark as explicitly frozen from history/batch
+            }
+            const pendingRate = pendingMap.get(key) || pendingMap.get(compCode);
+            if (pendingRate !== undefined) {
+              row.pending_bom_cost = pendingRate;
             }
           }
         });
@@ -222,8 +414,21 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null) => {
     thickness: (isHistorical && parseFloat(row.thickness) > 0) ? row.thickness : (row.thickness || row.latest_thickness || 0),
     diameter: (isHistorical && parseFloat(row.diameter) > 0) ? row.diameter : (row.diameter || row.latest_diameter || 0),
     outer_diameter: (isHistorical && parseFloat(row.outer_diameter) > 0) ? row.outer_diameter : (row.outer_diameter || row.latest_outer_diameter || 0),
-    selling_rate: isHistorical ? (row.rate || row.latest_selling_rate) : row.latest_selling_rate,
-    valuation_rate: isHistorical ? (row.rate || row.latest_valuation_rate) : row.latest_valuation_rate
+    rate: (isHistorical || row.is_cost_frozen) ? (parseFloat(row.rate) || 0) : (parseFloat(row.latest_selling_rate) || parseFloat(row.rate) || 0),
+    selling_rate: (isHistorical || row.is_cost_frozen) ? (parseFloat(row.rate) || 0) : (parseFloat(row.latest_selling_rate) || parseFloat(row.rate) || 0),
+    valuation_rate: (isHistorical || row.is_cost_frozen) ? (parseFloat(row.rate) || 0) : (parseFloat(row.latest_valuation_rate) || parseFloat(row.rate) || 0),
+    bom_cost: (() => {
+      const compCode = (row.item_code || row.component_code || row.componentCode || '').toUpperCase();
+      const g = (row.item_group || '').toUpperCase();
+      const d = (row.description || '').toUpperCase();
+      const isSA = (compCode.startsWith('SA-') || compCode.startsWith('SFG-') || g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY') || d.includes('ASSEMBLY') || d.includes('UNIT')) && !g.includes('FG');
+      
+      if (isSA) return parseFloat(row.rate || 0);
+      
+      // For materials: weight * valuation_rate
+      const vRate = (isHistorical || row.is_cost_frozen) ? (parseFloat(row.rate) || 0) : (parseFloat(row.latest_valuation_rate) || 0);
+      return (parseFloat(row.weight_per_pc || row.weight_per_unit || 0) * vRate);
+    })()
   }));
 };
 
@@ -251,10 +456,12 @@ const getItemOperations = async (itemId, itemCode = null, drawingNo = null) => {
     }
     let query = `SELECT * FROM sales_order_item_operations 
                  WHERE sales_order_item_id IN (
-                    SELECT id FROM sales_order_items 
-                    WHERE (item_code = ? OR drawing_no = ?) 
-                    AND sales_order_id IS NULL 
-                    ORDER BY id DESC LIMIT 1
+                    SELECT id FROM (
+                       SELECT id FROM sales_order_items 
+                       WHERE (item_code = ? OR drawing_no = ?) 
+                       AND sales_order_id IS NULL 
+                       ORDER BY id DESC LIMIT 1
+                    ) as t
                  )`;
     let params = [itemCode, drawingNo];
 
@@ -300,16 +507,20 @@ const getItemScrap = async (itemId, itemCode = null, drawingNo = null) => {
         }
       }
     }
-    let query = `SELECT * FROM sales_order_item_scrap 
-                 WHERE sales_order_item_id IN (
-                    SELECT id FROM sales_order_items 
-                    WHERE (item_code = ? OR drawing_no = ?) 
-                    AND sales_order_id IS NULL 
-                    ORDER BY id DESC LIMIT 1
-                 )`;
-    let params = [itemCode, drawingNo];
+    const [latestIdRow] = await pool.query(
+      `SELECT id FROM sales_order_items 
+       WHERE (item_code = ? OR drawing_no = ?) 
+       AND sales_order_id IS NULL 
+       ORDER BY id DESC LIMIT 1`,
+      [itemCode, drawingNo]
+    );
 
-    [rows] = await pool.query(query + ' ORDER BY created_at ASC', params);
+    if (latestIdRow.length > 0) {
+      [rows] = await pool.query(
+        'SELECT * FROM sales_order_item_scrap WHERE sales_order_item_id = ? ORDER BY created_at ASC',
+        [latestIdRow[0].id]
+      );
+    }
   }
   return rows.map(row => ({
     ...row,
@@ -949,8 +1160,8 @@ const getApprovedBOMs = async () => {
       GROUP BY group_id
     ) latest ON (IFNULL(soi.bom_id, soi.id) = latest.group_id AND soi.id = latest.latest_id)
     WHERE (
-      TRIM(IFNULL(so.status, '')) IN ('CREATED', 'DESIGN_IN_REVIEW', 'DESIGN_Approved', 'BOM_SUBMITTED', 'BOM_Approved', 'PROCUREMENT_IN_PROGRESS', 'IN_PRODUCTION', 'PRODUCTION_COMPLETED', 'MATERIAL_PURCHASE_IN_PROGRESS', 'MATERIAL_READY')
-      OR soi.status IN ('DRAFT', 'PENDING')
+      TRIM(IFNULL(so.status, '')) IN ('CREATED', 'DESIGN_IN_REVIEW', 'DESIGN_Approved', 'BOM_SUBMITTED', 'BOM_Approved', 'PROCUREMENT_IN_PROGRESS', 'IN_PRODUCTION', 'PRODUCTION_COMPLETED', 'MATERIAL_PURCHASE_IN_PROGRESS', 'MATERIAL_READY', 'QUOTATION_SENT', 'QUOTATION_REJECTED', 'QUOTATION_ACCEPTED', 'APPROVED')
+      OR soi.status IN ('DRAFT', 'PENDING', 'Approved')
       OR soi.sales_order_id IS NULL
     )
     AND (
@@ -969,7 +1180,11 @@ const deleteBOM = async (itemId) => {
   try {
     await connection.beginTransaction();
 
-    // 1. Handle references in other tables - set to NULL so they don't break but aren't linked to a deleted BOM
+    // 1. Get sales_order_id before deletion
+    const [itemRows] = await connection.query('SELECT sales_order_id FROM sales_order_items WHERE id = ?', [itemId]);
+    const salesOrderId = itemRows.length > 0 ? itemRows[0].sales_order_id : null;
+
+    // 2. Handle references in other tables
     await connection.execute('UPDATE quotation_requests SET sales_order_item_id = NULL WHERE sales_order_item_id = ?', [itemId]);
     await connection.execute('UPDATE production_plan_items SET sales_order_item_id = NULL WHERE sales_order_item_id = ?', [itemId]);
     await connection.execute('UPDATE work_orders SET sales_order_item_id = NULL WHERE sales_order_item_id = ?', [itemId]);
@@ -987,6 +1202,14 @@ const deleteBOM = async (itemId) => {
     await connection.execute('DELETE FROM sales_order_items WHERE id = ?', [itemId]);
 
     await connection.execute('SET FOREIGN_KEY_CHECKS = 1');
+
+    // 4. Cleanup empty sales order
+    if (salesOrderId) {
+      const [remaining] = await connection.query('SELECT id FROM sales_order_items WHERE sales_order_id = ?', [salesOrderId]);
+      if (remaining.length === 0) {
+        await connection.query('DELETE FROM sales_orders WHERE id = ?', [salesOrderId]);
+      }
+    }
 
     await connection.commit();
   } catch (error) {
@@ -1420,7 +1643,14 @@ const syncQuotationCosts = async (itemId, bomCost) => {
           OR (soi.bom_id = ? AND soi.bom_id IS NOT NULL)
           OR (LOWER(TRIM(soi.item_code)) = LOWER(TRIM(?)) AND LOWER(TRIM(soi.drawing_no)) = LOWER(TRIM(?)))
           OR (LOWER(TRIM(qr.drawing_no)) = LOWER(TRIM(?)) AND qr.drawing_no IS NOT NULL))
-          AND qr.status NOT IN ('COMPLETED', 'REJECTED', 'CANCELLED')`,
+          AND qr.status IN ('Draft', 'PENDING', 'DRAFT')
+          -- ONLY update the LATEST version to preserve historical audit trail
+          AND qr.version = (
+            SELECT MAX(q2.version) 
+            FROM quotation_requests q2 
+            WHERE q2.company_id = qr.company_id 
+            AND IFNULL(q2.project_name, '') = IFNULL(qr.project_name, '')
+          )`,
       [itemId, bom_id, item_code, drawing_no, drawing_no]
     );
 
@@ -1435,9 +1665,9 @@ const syncQuotationCosts = async (itemId, bomCost) => {
 
       await pool.execute(
         `UPDATE quotation_requests 
-         SET total_amount = ?, received_amount = ?, sales_order_item_id = ?, updated_at = NOW() 
+         SET bom_cost = ?, total_amount = ?, received_amount = ?, sales_order_item_id = ?, updated_at = NOW() 
          WHERE id = ?`,
-        [newTotalBase, newTotalInclGst, itemId, qr.id]
+        [bomCost, newTotalBase, newTotalInclGst, itemId, qr.id]
       );
     }
     

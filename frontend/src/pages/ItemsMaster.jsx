@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Card, StatusBadge, DataTable, SearchableSelect } from '../components/ui.jsx';
+import { Card, StatusBadge, DataTable, SearchableSelect, Tabs, Button, FormControl } from '../components/ui.jsx';
 import { Plus, Search, RefreshCw, Package, Layers, Trash2, Edit2, Copy, AlertTriangle } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast, infoToast } from '../utils/toast';
@@ -679,13 +679,13 @@ const ItemsMaster = () => {
                 <span className={`text-sm font-semibold ${isLow ? 'text-amber-700' : 'text-slate-700'}`}>
                   {balance.toLocaleString('en-IN', { minimumFractionDigits: row.weight_per_unit > 0 ? 3 : 2 })}
                 </span>
-                <span className="px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded text-[10px] font-medium uppercase tracking-wider">
+                <span className="px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded text-[10px] font-medium  ">
                   {uom}
                 </span>
               </div>
             </div>
             {isLow && (
-              <div className="flex items-center gap-1 text-[9px] text-amber-600 font-bold mt-0.5 ml-3.5">
+              <div className="flex items-center gap-1 text-[9px] text-amber-600  mt-0.5 ml-3.5">
                 <AlertTriangle size={10} />
                 <span>LOW STOCK</span>
               </div>
@@ -827,87 +827,82 @@ const ItemsMaster = () => {
   return (
     <div className=" space-y-2  animate-in fade-in duration-500">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          
-          <div>
-            <h1 className="text-xl  text-slate-900 ">Items Master</h1>
-            <p className="text-xs text-slate-500 ">Manage your products, materials, and categories</p>
-          </div>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl  text-slate-900 tracking-tight">Items Master</h1>
+          <p className="text-sm text-slate-500">Manage your products, materials, and categories</p>
         </div>
         
-        <div className="flex items-center gap-2 bg-slate-100 p-1 rounded ">
-          <button 
-            onClick={() => navigate('/item-master')}
-            className={`flex items-center gap-2 p-2 rounded  text-xs  transition-all ${activeTab === 'items' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-          >
-            <Package size={15} /> Items List
-          </button>
-          <button 
-            onClick={() => navigate('/item-master/groups')}
-            className={`flex items-center gap-2 p-2 rounded  text-xs  transition-all ${activeTab === 'groups' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-          >
-            <Layers size={15} /> Item Groups
-          </button>
-        </div>
+        <Tabs
+          tabs={[
+            { id: 'items', label: 'Items List', icon: Package },
+            { id: 'groups', label: 'Item Groups', icon: Layers }
+          ]}
+          activeTab={activeTab}
+          onTabChange={(id) => navigate(id === 'items' ? '/item-master' : '/item-master/groups')}
+        />
       </div>
 
       {activeTab === 'items' && !showItemForm && (
-        <Card className="">
-          <div className=" border-b border-slate-50 flex flex-col md:flex-row md:items-center justify-between gap-2">
-            <div className="relative flex-1 max-w-md group">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" size={15} />
+        <Card className="overflow-hidden">
+          <div className="p-4 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white">
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
               <input 
                 type="text"
                 placeholder="Search items by code, name, or drawing..."
-                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+                className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded text-sm focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none transition-all"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
             <div className="flex items-center gap-2">
-              <button 
+              <Button 
+                variant="secondary"
                 onClick={fetchItemsList}
-                className="p-2 text-slate-500 hover:bg-slate-50 rounded  transition-all border border-slate-200"
                 title="Refresh"
-              >
-                <RefreshCw size={15} className={itemsLoading ? 'animate-spin' : ''} />
-              </button>
-              <button 
+                icon={RefreshCw}
+                className={itemsLoading ? 'animate-spin' : ''}
+              />
+              <Button 
+                variant="primary"
                 onClick={() => navigate('/item-master/add-items')}
-                className="flex items-center gap-2 p-2  bg-indigo-600 text-white rounded text-xs  hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95"
+                icon={Plus}
               >
-                <Plus size={15} /> Add New Item
-              </button>
+                Add New Item
+              </Button>
             </div>
           </div>
-          <div className="p-2">
+          <div className="p-0">
             <DataTable 
               columns={itemColumns}
               data={filteredItems}
               loading={itemsLoading}
-              pageSize={5}
-              hideHeader={true}
+              pageSize={10}
+              hideHeader={false}
             />
           </div>
         </Card>
       )}
 
       {activeTab === 'items' && showItemForm && (
-        <Card className=" animate-in slide-in-from-bottom-4 duration-500">
-          <div className="p-2 border-b border-slate-50 flex items-center justify-between bg-slate-50/50">
-            <div className="flex items-center gap-2">
-              <div className="p-2 bg-indigo-100 text-indigo-600 rounded ">
-                <Plus size={20} />
+        <Card className="animate-in slide-in-from-bottom-4 duration-500">
+          <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-white">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-rose-50 text-rose-600 rounded">
+                <Package size={20} />
               </div>
-              <h2 className="text-md  text-slate-900">{isEditingItem ? 'Edit Item' : 'Add New Item'}</h2>
+              <div>
+                <h2 className="text-lg  text-slate-900">{isEditingItem ? 'Edit Item' : 'Add New Item'}</h2>
+                <p className="text-xs text-slate-500">Define item specifications and valuation</p>
+              </div>
             </div>
-            <button 
+            <Button 
+              variant="secondary"
               onClick={() => navigate('/item-master')}
-              className="p-2 text-slate-500 hover:bg-slate-100 rounded text-xs  transition-all"
             >
               Cancel
-            </button>
+            </Button>
           </div>
           <form onSubmit={handleItemSubmit} className="p-2 space-y-2">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
@@ -1043,7 +1038,7 @@ const ItemsMaster = () => {
                       </div>
 
                       {selectedShape && (
-                        <div className="md:col-span-3 p-4 bg-indigo-50/50 rounded-lg border border-indigo-100 space-y-3">
+                        <div className="md:col-span-3 p-4 bg-indigo-50/50 rounded border border-indigo-100 space-y-3">
                           <div className="flex items-center gap-2 text-indigo-700 font-medium text-sm">
                             <div className="w-1.5 h-1.5 rounded-full bg-indigo-500"></div>
                             {selectedShape} Dimensions (All in mm)
@@ -1052,15 +1047,15 @@ const ItemsMaster = () => {
                             {selectedShape.toLowerCase() === 'plate' && (
                               <>
                                 <div className="space-y-1.5">
-                                  <label className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">Length (mm) *</label>
+                                  <label className="text-[10px]   font-semibold text-slate-400">Length (mm) *</label>
                                   <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.length} onChange={(e) => setItemFormData({...itemFormData, length: e.target.value})} required />
                                 </div>
                                 <div className="space-y-1.5">
-                                  <label className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">Width (mm) *</label>
+                                  <label className="text-[10px]   font-semibold text-slate-400">Width (mm) *</label>
                                   <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.width} onChange={(e) => setItemFormData({...itemFormData, width: e.target.value})} required />
                                 </div>
                                 <div className="space-y-1.5">
-                                  <label className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">Thickness (mm) *</label>
+                                  <label className="text-[10px]   font-semibold text-slate-400">Thickness (mm) *</label>
                                   <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.thickness} onChange={(e) => setItemFormData({...itemFormData, thickness: e.target.value})} required />
                                 </div>
                               </>
@@ -1068,11 +1063,11 @@ const ItemsMaster = () => {
                             {selectedShape.toLowerCase() === 'round' && (
                               <>
                                 <div className="space-y-1.5">
-                                  <label className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">Diameter (mm) *</label>
+                                  <label className="text-[10px]   font-semibold text-slate-400">Diameter (mm) *</label>
                                   <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.diameter} onChange={(e) => setItemFormData({...itemFormData, diameter: e.target.value})} required />
                                 </div>
                                 <div className="space-y-1.5">
-                                  <label className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">Length (mm) *</label>
+                                  <label className="text-[10px]   font-semibold text-slate-400">Length (mm) *</label>
                                   <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.length} onChange={(e) => setItemFormData({...itemFormData, length: e.target.value})} required />
                                 </div>
                               </>
@@ -1080,15 +1075,15 @@ const ItemsMaster = () => {
                             {selectedShape.toLowerCase() === 'pipe' && (
                               <>
                                 <div className="space-y-1.5">
-                                  <label className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">Outer Diameter (mm) *</label>
+                                  <label className="text-[10px]   font-semibold text-slate-400">Outer Diameter (mm) *</label>
                                   <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.outerDiameter} onChange={(e) => setItemFormData({...itemFormData, outerDiameter: e.target.value})} required />
                                 </div>
                                 <div className="space-y-1.5">
-                                  <label className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">Thickness (mm) *</label>
+                                  <label className="text-[10px]   font-semibold text-slate-400">Thickness (mm) *</label>
                                   <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.thickness} onChange={(e) => setItemFormData({...itemFormData, thickness: e.target.value})} required />
                                 </div>
                                 <div className="space-y-1.5">
-                                  <label className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">Length (mm) *</label>
+                                  <label className="text-[10px]   font-semibold text-slate-400">Length (mm) *</label>
                                   <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.length} onChange={(e) => setItemFormData({...itemFormData, length: e.target.value})} required />
                                 </div>
                               </>
@@ -1175,56 +1170,45 @@ const ItemsMaster = () => {
       )}
 
       {activeTab === 'groups' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-2 animate-in fade-in duration-500">
-          <Card className="lg:col-span-1 bg-white rounded shadow-sm border border-slate-100 h-fit sticky top-2">
-            <div className="p-0">
-              <button 
-                onClick={() => setActiveForm('group')}
-                className={`w-full flex items-center gap-3 p-3 text-sm transition-all border-b border-slate-50 ${activeForm === 'group' ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-slate-600 hover:bg-slate-50'}`}
-              >
-                <div className={`p-1.5 rounded ${activeForm === 'group' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
-                  <Plus size={14} />
-                </div>
-                Add New Group
-              </button>
-              <button 
-                onClick={() => setActiveForm('shape')}
-                className={`w-full flex items-center gap-3 p-3 text-sm transition-all border-b border-slate-50 ${activeForm === 'shape' ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-slate-600 hover:bg-slate-50'}`}
-              >
-                <div className={`p-1.5 rounded ${activeForm === 'shape' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
-                  <Plus size={14} />
-                </div>
-                Add Shape Master
-              </button>
-              <button 
-                onClick={() => setActiveForm('material')}
-                className={`w-full flex items-center gap-3 p-3 text-sm transition-all border-b border-slate-50 ${activeForm === 'material' ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-slate-600 hover:bg-slate-50'}`}
-              >
-                <div className={`p-1.5 rounded ${activeForm === 'material' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
-                  <Plus size={14} />
-                </div>
-                Add Material Master
-              </button>
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 animate-in fade-in duration-500">
+          <Card className="lg:col-span-1 bg-white h-fit sticky top-2 p-0 overflow-hidden">
+            <div className="flex flex-col">
+              {[
+                { id: 'group', label: 'Item Groups', icon: Layers },
+                { id: 'shape', label: 'Shape Master', icon: Plus },
+                { id: 'material', label: 'Material Master', icon: Plus }
+              ].map((item) => (
+                <button 
+                  key={item.id}
+                  onClick={() => setActiveForm(item.id)}
+                  className={`w-full flex items-center gap-3 p-4 text-sm transition-all border-b border-slate-50 last:border-0 ${
+                    activeForm === item.id 
+                      ? 'bg-rose-50 text-rose-700  border-r-2 border-r-rose-500' 
+                      : 'text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  <item.icon size={18} className={activeForm === item.id ? 'text-rose-600' : 'text-slate-400'} />
+                  {item.label}
+                </button>
+              ))}
             </div>
 
-            <div className="p-3">
+            <div className="p-4 bg-slate-50/50">
               {activeForm === 'group' && (
-                <form onSubmit={handleGroupSubmit} className="space-y-3">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-slate-500">Group Name *</label>
+                <form onSubmit={handleGroupSubmit} className="space-y-4">
+                  <FormControl label="Group Name" required>
                     <input 
                       type="text"
-                      className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                      className="w-full p-2 bg-white border border-slate-200 rounded text-sm focus:ring-2 focus:ring-rose-500 outline-none transition-all"
                       placeholder="e.g. Raw Material"
                       value={groupFormData.name}
                       onChange={(e) => setGroupFormData({...groupFormData, name: e.target.value})}
                       required
                     />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-slate-500">Group Type *</label>
+                  </FormControl>
+                  <FormControl label="Group Type" required>
                     <select 
-                      className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                      className="w-full p-2 bg-white border border-slate-200 rounded text-sm focus:ring-2 focus:ring-rose-500 outline-none transition-all"
                       value={groupFormData.group_type}
                       onChange={(e) => setGroupFormData({...groupFormData, group_type: e.target.value})}
                       required
@@ -1239,89 +1223,86 @@ const ItemsMaster = () => {
                       <option value="SCRAP">SCRAP</option>
                       <option value="OTHER">OTHER</option>
                     </select>
-                  </div>
+                  </FormControl>
                   <div className="flex gap-2 pt-2">
-                    <button 
+                    <Button 
+                      variant="primary"
                       type="submit" 
                       disabled={isSubmittingGroup}
-                      className="flex-1 p-2 bg-indigo-600 text-white rounded text-xs font-medium hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 disabled:opacity-50"
+                      className="flex-1"
                     >
-                      {isSubmittingGroup ? 'Saving...' : (isEditingGroup ? 'Update Group' : 'Save Group')}
-                    </button>
+                      {isSubmittingGroup ? 'Saving...' : (isEditingGroup ? 'Update' : 'Save Group')}
+                    </Button>
                     {isEditingGroup && (
-                      <button 
-                        type="button"
+                      <Button 
+                        variant="secondary"
                         onClick={() => { setIsEditingGroup(false); setGroupFormData({ name: '', group_type: '', status: 'ACTIVE' }); }}
-                        className="px-3 p-2 bg-white border border-slate-200 text-slate-500 rounded text-xs hover:bg-slate-50 transition-all"
                       >
                         Cancel
-                      </button>
+                      </Button>
                     )}
                   </div>
                 </form>
               )}
 
               {activeForm === 'shape' && (
-                <form onSubmit={handleShapeSubmit} className="space-y-3">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-slate-500">Shape Name *</label>
+                <form onSubmit={handleShapeSubmit} className="space-y-4">
+                  <FormControl label="Shape Name" required>
                     <input 
                       type="text"
-                      className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                      placeholder="e.g. Round"
+                      className="w-full p-2 bg-white border border-slate-200 rounded text-sm focus:ring-2 focus:ring-rose-500 outline-none transition-all"
+                      placeholder="e.g. Plate, Round"
                       value={shapeFormData.name}
                       onChange={(e) => setShapeFormData({...shapeFormData, name: e.target.value})}
                       required
                     />
-                  </div>
+                  </FormControl>
                   <div className="flex gap-2 pt-2">
-                    <button 
+                    <Button 
+                      variant="primary"
                       type="submit" 
                       disabled={isSubmittingShape}
-                      className="flex-1 p-2 bg-indigo-600 text-white rounded text-xs font-medium hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 disabled:opacity-50"
+                      className="flex-1"
                     >
-                      {isSubmittingShape ? 'Saving...' : (isEditingShape ? 'Update Shape' : 'Save Shape')}
-                    </button>
+                      {isSubmittingShape ? 'Saving...' : (isEditingShape ? 'Update' : 'Save Shape')}
+                    </Button>
                     {isEditingShape && (
-                      <button 
-                        type="button"
+                      <Button 
+                        variant="secondary"
                         onClick={() => { setIsEditingShape(false); setShapeFormData({ name: '', status: 'ACTIVE' }); }}
-                        className="px-3 p-2 bg-white border border-slate-200 text-slate-500 rounded text-xs hover:bg-slate-50 transition-all"
                       >
                         Cancel
-                      </button>
+                      </Button>
                     )}
                   </div>
                 </form>
               )}
 
               {activeForm === 'material' && (
-                <form onSubmit={handleMaterialSubmit} className="space-y-3">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-slate-500">Material Name *</label>
+                <form onSubmit={handleMaterialSubmit} className="space-y-4">
+                  <FormControl label="Material Name" required>
                     <input 
                       type="text"
-                      className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                      className="w-full p-2 bg-white border border-slate-200 rounded text-sm focus:ring-2 focus:ring-rose-500 outline-none transition-all"
                       placeholder="e.g. Aluminum 6063"
                       value={materialFormData.name}
                       onChange={(e) => setMaterialFormData({...materialFormData, name: e.target.value})}
                       required
                     />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-slate-500">Density *</label>
+                  </FormControl>
+                  <FormControl label="Density" required>
                     <div className="flex gap-2">
                       <input 
                         type="number"
                         step="0.0001"
-                        className="flex-1 p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                        className="flex-1 p-2 bg-white border border-slate-200 rounded text-sm focus:ring-2 focus:ring-rose-500 outline-none transition-all"
                         placeholder="e.g. 2.7"
                         value={materialFormData.density}
                         onChange={(e) => setMaterialFormData({...materialFormData, density: e.target.value})}
                         required
                       />
                       <select
-                        className="w-24 p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                        className="w-28 p-2 bg-white border border-slate-200 rounded text-sm focus:ring-2 focus:ring-rose-500 outline-none transition-all"
                         value={materialFormData.density_unit}
                         onChange={(e) => setMaterialFormData({...materialFormData, density_unit: e.target.value})}
                         required
@@ -1330,23 +1311,23 @@ const ItemsMaster = () => {
                         <option value="g/mL">g/mL</option>
                       </select>
                     </div>
-                  </div>
+                  </FormControl>
                   <div className="flex gap-2 pt-2">
-                    <button 
+                    <Button 
+                      variant="primary"
                       type="submit" 
                       disabled={isSubmittingMaterial}
-                      className="flex-1 p-2 bg-indigo-600 text-white rounded text-xs font-medium hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 disabled:opacity-50"
+                      className="flex-1"
                     >
-                      {isSubmittingMaterial ? 'Saving...' : (isEditingMaterial ? 'Update Material' : 'Save Material')}
-                    </button>
+                      {isSubmittingMaterial ? 'Saving...' : (isEditingMaterial ? 'Update' : 'Save Material')}
+                    </Button>
                     {isEditingMaterial && (
-                      <button 
-                        type="button"
+                      <Button 
+                        variant="secondary"
                         onClick={() => { setIsEditingMaterial(false); setMaterialFormData({ name: '', density: '', density_unit: 'g/cm³', status: 'ACTIVE' }); }}
-                        className="px-3 p-2 bg-white border border-slate-200 text-slate-500 rounded text-xs hover:bg-slate-50 transition-all"
                       >
                         Cancel
-                      </button>
+                      </Button>
                     )}
                   </div>
                 </form>
@@ -1354,45 +1335,24 @@ const ItemsMaster = () => {
             </div>
           </Card>
 
-          <Card className="lg:col-span-2">
-            {activeForm === 'group' && (
-              <div>
-                <div className="p-3 border-b border-slate-50 flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
-                    <Layers size={14} className="text-indigo-500" /> Existing Groups
-                  </h3>
-                </div>
-                <div className="p-2">
-                  <DataTable columns={groupColumns} data={itemGroups} loading={groupsLoading} pageSize={5} />
-                </div>
-              </div>
-            )}
-
-            {activeForm === 'shape' && (
-              <div>
-                <div className="p-3 border-b border-slate-50 flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
-                    <Layers size={14} className="text-indigo-500" /> Existing Shapes
-                  </h3>
-                </div>
-                <div className="p-2">
-                  <DataTable columns={shapeColumns} data={shapes} loading={shapesLoading} pageSize={5} />
-                </div>
-              </div>
-            )}
-
-            {activeForm === 'material' && (
-              <div>
-                <div className="p-3 border-b border-slate-50 flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
-                    <Layers size={14} className="text-indigo-500" /> Existing Materials
-                  </h3>
-                </div>
-                <div className="p-2">
-                  <DataTable columns={materialColumns} data={materials} loading={materialsLoading} pageSize={5} />
-                </div>
-              </div>
-            )}
+          <Card className="lg:col-span-3">
+            <div className="p-4 border-b border-slate-100 bg-white">
+              <h3 className="text-lg  text-slate-800 flex items-center gap-2">
+                <Layers size={20} className="text-rose-500" /> 
+                {activeForm === 'group' ? 'Item Groups' : activeForm === 'shape' ? 'Shapes' : 'Materials'}
+              </h3>
+            </div>
+            <div className="p-0">
+              {activeForm === 'group' && (
+                <DataTable columns={groupColumns} data={itemGroups} loading={groupsLoading} pageSize={10} />
+              )}
+              {activeForm === 'shape' && (
+                <DataTable columns={shapeColumns} data={shapes} loading={shapesLoading} pageSize={10} />
+              )}
+              {activeForm === 'material' && (
+                <DataTable columns={materialColumns} data={materials} loading={materialsLoading} pageSize={10} />
+              )}
+            </div>
           </Card>
         </div>
       )}

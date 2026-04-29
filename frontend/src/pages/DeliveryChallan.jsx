@@ -330,6 +330,31 @@ const DeliveryChallan = () => {
     }
   ];
 
+  const itemColumns = [
+    {
+      label: 'Item Details',
+      key: 'description',
+      render: (val, item) => (
+        <div className="flex flex-col">
+          <span className=" text-slate-900 text-xs">{val}</span>
+          <span className="text-xs text-slate-400 tracking-tight">Code: {item.item_code}</span>
+        </div>
+      )
+    },
+    {
+      label: 'Quantity',
+      key: 'quantity',
+      className: 'text-center',
+      render: (val) => parseFloat(val).toFixed(0)
+    },
+    {
+      label: 'Unit',
+      key: 'unit',
+      className: 'text-center text-slate-400',
+      render: () => 'PCS'
+    }
+  ];
+
   return (
     <div className="p-2 space-y-2 bg-white/50 min-h-screen">
       {/* Header Section */}
@@ -470,39 +495,18 @@ const DeliveryChallan = () => {
               </div>
             </div>
 
-            {/* Items Table */}
-            <div className="bg-white rounded  border border-slate-100 overflow-hidden shadow-sm">
-              <div className="bg-slate-50  p-2 border-b border-slate-100 flex items-center gap-2">
+            <div className="bg-white rounded border border-slate-100 overflow-hidden shadow-sm">
+              <div className="bg-slate-50 p-2 border-b border-slate-100 flex items-center gap-2">
                 <div className="w-3 h-3 bg-indigo-100 text-indigo-600 rounded flex items-center justify-center">
                   <CheckCircle className="w-3.5 h-3.5" />
                 </div>
-                <h4 className="text-xs  text-slate-900  ">Verified Items List</h4>
+                <h4 className="text-xs text-slate-900">Verified Items List</h4>
               </div>
-              <table className="w-full text-left">
-                <thead className="bg-slate-50/50">
-                  <tr className="text-xs  text-slate-500   border-b border-slate-100">
-                    <th className=" p-2">Item Details</th>
-                    <th className=" p-2 text-center">Quantity</th>
-                    <th className=" p-2 text-center">Unit</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                  {selectedChallan.items?.map((item, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                      <td className=" p-2">
-                        <div className="flex flex-col">
-                          <span className=" text-slate-900 text-xs">{item.description}</span>
-                          <span className="text-xs text-slate-400 tracking-tight">Code: {item.item_code}</span>
-                        </div>
-                      </td>
-                      <td className=" p-2 text-center  text-slate-700 text-xs">
-                        {parseFloat(item.quantity).toFixed(0)}
-                      </td>
-                      <td className=" p-2 text-center text-xs  text-slate-400 ">PCS</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <DataTable
+                columns={itemColumns}
+                data={selectedChallan.items || []}
+                emptyMessage="No items found in this challan."
+              />
             </div>
             
             {/* Remarks Section */}

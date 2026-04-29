@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Card, Modal, FormControl, StatusBadge, SearchableSelect } from '../components/ui.jsx';
+import { Card, Modal, FormControl, StatusBadge, SearchableSelect, Tabs, Button, DataTable } from '../components/ui.jsx';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
 import { 
   Eye, BarChart2, Settings, Send, Edit2, FileText, Trash2, 
   Search, Filter, Plus, Zap, CheckCircle2, FileJson, 
-  MoreVertical, Activity, Layers, Target, Clock, AlertCircle, X
+  MoreVertical, Activity, Layers, Target, Clock, AlertCircle, X,
+  ArrowLeft, Save, RefreshCw
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
@@ -1065,7 +1066,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
       <div className="bg-slate-50/50 p-4 border-t border-slate-100 shadow-inner">
         <div className="flex items-center gap-2 mb-3">
           <Activity className="w-4 h-4 text-indigo-500" />
-          <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Manufacturing Operations</h4>
+          <h4 className="text-xs  text-slate-700  ">Manufacturing Operations</h4>
         </div>
         <div className="grid grid-cols-1 gap-2">
           {filteredOps.map((op, i) => {
@@ -1078,11 +1079,11 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
             return (
               <div key={i} className="flex items-center justify-between bg-white p-3 rounded border border-slate-200 shadow-sm hover:border-indigo-200 transition-colors">
                 <div className="flex items-center gap-3">
-                  <div className="w-6 h-6 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center text-[10px] font-bold">
+                  <div className="w-6 h-6 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center text-[10px] ">
                     {i + 1}
                   </div>
                   <div>
-                    <div className="text-xs font-bold text-slate-800">{op.operation_name}</div>
+                    <div className="text-xs  text-slate-800">{op.operation_name}</div>
                     <div className="flex items-center gap-3 mt-1 text-[10px] text-slate-500 font-medium">
                       <span className="flex items-center gap-1">
                         <Settings className="w-3 h-3" /> {op.workstation || 'N/A'}
@@ -1095,16 +1096,16 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                 </div>
                 <div className="flex items-center gap-6">
                   <div className="text-right">
-                    <div className="text-[10px] text-slate-400 uppercase tracking-tighter">Cycle / Setup</div>
+                    <div className="text-[10px] text-slate-400  tracking-tighter">Cycle / Setup</div>
                     <div className="text-xs font-medium text-slate-700">{cycleTime}m / {setupTime}m</div>
                   </div>
                   <div className="text-right">
-                    <div className="text-[10px] text-slate-400 uppercase tracking-tighter">Rate / Hr</div>
+                    <div className="text-[10px] text-slate-400  tracking-tighter">Rate / Hr</div>
                     <div className="text-xs font-medium text-slate-700">₹{hourlyRate.toFixed(2)}</div>
                   </div>
                   <div className="text-right min-w-[80px]">
-                    <div className="text-[10px] text-slate-400 uppercase tracking-tighter">Total Cost</div>
-                    <div className="text-xs font-bold text-emerald-600">₹{totalCost.toFixed(2)}</div>
+                    <div className="text-[10px] text-slate-400  tracking-tighter">Total Cost</div>
+                    <div className="text-xs  text-emerald-600">₹{totalCost.toFixed(2)}</div>
                   </div>
                 </div>
               </div>
@@ -1127,35 +1128,49 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
     const totalMaterialCount = materialsToDisplay.length;
     
     return (
-      <div className="flex flex-col">
+      <div className="space-y-6 animate-in fade-in duration-500 pb-20">
         {/* Header Section */}
-        <div className="flex items-center justify-between z-30 ">
-          <div className="flex items-center gap-2">
-            <button onClick={() => navigate('/production-plan')} className="p-2 hover:bg-slate-100 rounded  transition-colors">
-              <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
-            </button>
-            <div>
-              <div className="flex items-center gap-2 ">
-                <span className="text-xs  text-slate-400">PP /</span>
-                <h1 className="text-xl  text-slate-900 leading-tight">{isViewing ? `VIEW PLAN: ${newPlan.planCode}` : 'New Production Plan'}</h1>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 bg-white border border-slate-200 rounded-xl sticky top-0 z-30 shadow-sm">
+          <div className="flex items-center gap-4">
+            <Button
+              variant="secondary"
+              onClick={() => navigate('/production-plan')}
+              icon={ArrowLeft}
+            />
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-rose-50 text-rose-600 rounded">
+                <Layers className="w-6 h-6" />
               </div>
-              <span className="p-1  bg-slate-100 text-slate-600 text-xs   rounded tracking-wider">{isViewing ? newPlan.operationalStatus : 'draft'}</span>
+              <div>
+                <h1 className="text-xl  text-slate-900 leading-tight">
+                  {isViewing ? `Plan: ${newPlan.planCode}` : 'New Production Plan'}
+                </h1>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className={`px-2 py-0.5 text-[10px]  rounded-full border   ${
+                    newPlan.operationalStatus === 'Draft' ? 'bg-amber-50 text-amber-600 border-amber-200' : 'bg-emerald-50 text-emerald-600 border-emerald-200'
+                  }`}>
+                    {isViewing ? newPlan.operationalStatus : 'Draft'}
+                  </span>
+                  <span className="text-xs text-slate-400 font-medium">Production Strategy</span>
+                </div>
+              </div>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button 
+          <div className="flex items-center gap-3">
+            <Button 
+              variant="secondary"
               onClick={() => navigate('/production-plan')}
-              className="p-2 text-slate-600 hover:text-slate-900 text-xs  transition-colors"
             >
-              {isViewing ? 'Close' : 'Discard Changes'}
-            </button>
+              {isViewing ? 'Close' : 'Discard'}
+            </Button>
             {!isViewing && (
-              <button 
+              <Button 
+                variant="primary"
                 onClick={handleSubmit}
-                className="p-2 bg-slate-900 text-white rounded hover:bg-slate-800 text-xs  shadow-lg shadow-slate-200 transition-all"
+                icon={Save}
               >
-                Save Strategic Plan
-              </button>
+                Save Strategy
+              </Button>
             )}
           </div>
         </div>
@@ -1359,7 +1374,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                           <td className="p-2  text-center">
                             <button 
                               onClick={() => toggleRow(rowId)}
-                              className={`flex items-center gap-1 mx-auto px-2 py-1 rounded transition-all text-[10px] font-bold uppercase tracking-wider ${isExpanded ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100 border border-indigo-100'}`}
+                              className={`flex items-center gap-1 mx-auto px-2 py-1 rounded transition-all text-[10px]    ${isExpanded ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100 border border-indigo-100'}`}
                             >
                               <Activity className="w-3 h-3" />
                               {isExpanded ? 'Hide Ops' : 'Operations'}
@@ -1481,7 +1496,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                           <td className="p-2  text-center">
                             <button 
                               onClick={() => toggleRow(rowId)}
-                              className={`flex items-center gap-1 mx-auto px-2 py-1 rounded transition-all text-[10px] font-bold uppercase tracking-wider ${isExpanded ? 'bg-rose-600 text-white shadow-md shadow-rose-200' : 'bg-rose-50 text-rose-600 hover:bg-rose-100 border border-rose-100'}`}
+                              className={`flex items-center gap-1 mx-auto px-2 py-1 rounded transition-all text-[10px]    ${isExpanded ? 'bg-rose-600 text-white shadow-md shadow-rose-200' : 'bg-rose-50 text-rose-600 hover:bg-rose-100 border border-rose-100'}`}
                             >
                               <Activity className="w-3 h-3" />
                               {isExpanded ? 'Hide Ops' : 'Operations'}
@@ -1892,356 +1907,220 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
     }
   };
 
-  const columns = [
-    {
-      label: 'Plan Code',
-      key: 'plan_code',
-      sortable: true,
-      render: (val) => <span className=" text-slate-900">{val}</span>
-    },
-    {
-      label: 'Plan Date',
-      key: 'plan_date',
-      sortable: true,
-      render: (val) => new Date(val).toLocaleDateString()
-    },
-    {
-      label: 'Period',
-      key: 'id',
-      render: (_, row) => (
-        <span className="text-slate-600">
-          {row.start_date ? new Date(row.start_date).toLocaleDateString() : 'N/A'} - 
-          {row.end_date ? new Date(row.end_date).toLocaleDateString() : 'N/A'}
-        </span>
-      )
-    },
-    {
-      label: 'Status',
-      key: 'status',
-      sortable: true,
-      render: (val) => <StatusBadge status={val} />
-    },
-    {
-      label: 'Created By',
-      key: 'creator_name',
-      sortable: true
-    },
-    {
-      label: 'Actions',
-      key: 'id',
-      className: 'text-right',
-      render: (val) => (
-        <button 
-          className="text-indigo-600 hover:text-indigo-900   group-hover:opacity-100 transition-opacity"
-          onClick={() => {/* View logic */}}
-        >
-          View
-        </button>
-      )
-    }
-  ];
-
   const filteredPlans = plans.filter(plan => 
     plan.plan_code?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     plan.order_no?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     plan.project_name?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const columns = [
+    {
+      label: 'Plan ID',
+      key: 'plan_code',
+      sortable: true,
+      render: (val, row) => (
+        <div className="flex items-start gap-2">
+          <div className="p-1 bg-slate-900 text-white rounded flex items-center justify-center shadow-sm">
+            <Layers className="w-3 h-3" />
+          </div>
+          <div>
+            <div className="text-xs  text-slate-800 tracking-tight">{val}</div>
+            <div className="text-[10px] text-slate-400 font-medium">
+              {row.company_name || (row.item_code ? `${row.item_code} - ${row.item_description}` : (row.project_name || 'Global Manufacturing'))}
+            </div>
+          </div>
+        </div>
+      )
+    },
+    {
+      label: 'Origin & Status',
+      key: 'order_no',
+      render: (val, row) => (
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-1.5">
+            <div className="p-0.5 bg-indigo-50 text-indigo-600 rounded">
+              <Layers className="w-2.5 h-2.5" />
+            </div>
+            <span className="text-[10px]  text-slate-600">{val || 'N/A'}</span>
+          </div>
+          <div className="flex gap-1">
+            <span className={`px-1.5 py-0.5 rounded text-[10px]  border flex items-center gap-1
+              ${row.status === 'Draft' ? 'bg-amber-50 text-amber-600 border-amber-100' : 
+                row.status === 'Completed' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 
+                'bg-indigo-50 text-indigo-600 border-indigo-100'}`}
+            >
+              <span className={`w-1 h-1 rounded-full ${row.status === 'Draft' ? 'bg-amber-400' : row.status === 'Completed' ? 'bg-emerald-400' : 'bg-indigo-400'}`} />
+              {row.status}
+            </span>
+            {row.mr_status && (
+              <span className={`px-1.5 py-0.5 rounded text-[10px]  border flex items-center gap-1
+                ${row.mr_status === 'COMPLETED' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 
+                  row.mr_status === 'DRAFT' ? 'bg-slate-50 text-slate-600 border-slate-100' : 
+                  'bg-indigo-50 text-indigo-600 border-indigo-100'}`}
+              >
+                 {row.mr_status === 'COMPLETED' ? '✅ FULFILLED' : `MR: ${row.mr_status}`}
+              </span>
+            )}
+          </div>
+        </div>
+      )
+    },
+    {
+      label: 'Timeline',
+      key: 'start_date',
+      render: (val, row) => (
+        <div className="flex items-center gap-2">
+          <div className="p-1 rounded border border-slate-100 bg-white text-slate-400">
+            <Clock className="w-3 h-3" />
+          </div>
+          <div>
+            <div className="text-[10px]  text-slate-600">
+              {val ? new Date(val).toLocaleDateString() : '-'}
+            </div>
+            <div className="text-[10px] text-slate-400">
+              {row.wo_count > 0 ? `${row.wo_count} Active Work Orders` : 'No work orders'}
+            </div>
+          </div>
+        </div>
+      )
+    },
+    {
+      label: 'Production Progress',
+      key: 'progress',
+      render: (_, row) => {
+        const total = row.total_ops || 0;
+        const woCount = row.wo_count || 0;
+        const status = (row.status || '').toUpperCase();
+        
+        let progress = 0;
+        if (total > 0) progress = Math.round((row.completed_ops / total) * 100);
+        else if (woCount > 0) progress = 80;
+        else if (status === 'COMPLETED') progress = 50;
+
+        return (
+          <div className="w-40">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[10px] text-slate-400 ">{progress}% Complete</span>
+              <span className="text-[10px]  text-slate-900 bg-slate-100 px-1.5 py-0.5 rounded">
+                {row.completed_ops}/{row.total_ops} OPS
+              </span>
+            </div>
+            <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-indigo-500 rounded-full transition-all duration-500" 
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+          </div>
+        );
+      }
+    },
+    {
+      label: 'Operations',
+      key: 'total_ops',
+      render: (val) => (
+        <div className="p-1 w-8 h-8 rounded-full border-2 border-white bg-indigo-50 flex items-center justify-center text-indigo-600 text-[10px]  ring-1 ring-indigo-100 shadow-sm">
+          {val}
+        </div>
+      )
+    },
+    {
+      label: 'Actions',
+      key: 'actions',
+      className: 'text-right',
+      render: (_, row) => (
+        <div className="flex items-center justify-end gap-1">
+          <button onClick={() => handleViewPlan(row.id)} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-all" title="View Details">
+            <Eye className="w-3.5 h-3.5" />
+          </button>
+          <button onClick={() => handleOpenConfig(row)} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-all" title="Settings">
+            <Settings className="w-3.5 h-3.5" />
+          </button>
+          <button onClick={() => handleTransmitMR(row.id)} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-all" title="Transmit">
+            <Send className="w-3.5 h-3.5" />
+          </button>
+          <button onClick={() => handleEditPlan(row.id)} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-all" title="Edit Strategy">
+            <Edit2 className="w-3.5 h-3.5" />
+          </button>
+          <button onClick={() => handleDeletePlan(row.id)} className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-all" title="Delete">
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )
+    }
+  ];
+
   if (isCreating) {
     return renderCreateForm();
   }
 
   return (
-    <div className=" min-w-0">
+    <div className="space-y-6 animate-in fade-in duration-500 pb-10">
       {/* Header Section */}
-      <div className="flex items-center justify-between mb-8">
-        <div className="flex items-center gap-2">
-          <div className="w-5 h-5 bg-slate-900 text-white rounded  flex items-center justify-center shadow-lg shadow-slate-200">
-            <Layers className="w-3 h-3" />
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-rose-50 text-rose-600 rounded-xl shadow-sm">
+            <Layers size={24} />
           </div>
           <div>
-            <h1 className="text-xl  text-slate-900  flex items-center gap-2 ">
-              Production <span className="text-indigo-600">Intelligence</span>
-            </h1>
-            <div className="flex items-center gap-2  text-xs text-slate-400 ">
-              <Activity className="w-3 h-3 text-indigo-500" />
-              <span>Planning & Strategy Center</span>
-              <span className="w-1 h-1 bg-slate-300 rounded " />
-              <Clock className="w-3 h-3" />
-              <span>{new Date().toLocaleTimeString()}</span>
-            </div>
+            <h1 className="text-2xl  text-slate-900 tracking-tight">Production Plans</h1>
+            <p className="text-sm text-slate-500 font-medium">Manage manufacturing strategies and resource allocation</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button 
-            onClick={() => {/* Reset logic if needed */}}
-            className="flex items-center gap-2  p-2  text-rose-600 hover:bg-rose-50 rounded  text-xs  transition-all"
-          >
-            <Trash2 className="w-4 h-4" />
-            Reset System
-          </button>
-          <button 
+        <div className="flex items-center gap-3">
+          <Button
+            variant="secondary"
+            onClick={fetchPlans}
+            icon={RefreshCw}
+            className={loading ? 'animate-spin' : ''}
+          />
+          <Button
+            variant="primary"
             onClick={handleCreateNew}
-            className="flex items-center gap-2  p-2  bg-slate-900 text-white rounded  hover:bg-slate-800 transition-all text-xs  shadow-xl shadow-slate-200"
+            icon={Plus}
           >
-            <Plus className="w-4 h-4" />
-            New Strategic Plan
-          </button>
+            New Production Plan
+          </Button>
         </div>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-2 ">
-        {[
-          { label: 'Active Strategies', value: plans.filter(p => p.status !== 'Draft').length, icon: Layers, color: 'indigo', sub: 'Total registered plans' },
-          { label: 'Execution Phase', value: '0', icon: Zap, color: 'blue', sub: 'Plans in active production' },
-          { label: 'Optimization Complete', value: '0', icon: CheckCircle2, color: 'emerald', sub: 'Successfully closed plans' },
-          { label: 'Draft Formulation', value: plans.filter(p => p.status === 'Draft').length, icon: FileText, color: 'slate', sub: 'Pending validation' }
-        ].map((stat, i) => (
-          <Card key={i} className="relative overflow-hidden group hover:shadow-xl transition-all duration-300 border-none bg-white  ring-1 ring-slate-100">
-            <div className="p-2">
-              <div className="flex items-center justify-between mb-4">
-                <div className={`w-5 h-5 rounded  bg-${stat.color}-50 text-${stat.color}-600 flex items-center justify-center transition-transform group-hover:scale-110 duration-300`}>
-                  <stat.icon className="w-3 h-3" />
-                </div>
-                <div className="text-right">
-                  <div className="text-xl  text-slate-900">{stat.value}</div>
-                </div>
-              </div>
-              <div>
-                <div className="text-xs  text-slate-500   mb-1">{stat.label}</div>
-                <div className="text-xs text-slate-400 ">{stat.sub}</div>
-              </div>
-            </div>
-            <div className={`absolute bottom-0 left-0 right-0 h-1 bg-${stat.color}-500/10 group-hover:bg-${stat.color}-500 transition-colors`} />
-          </Card>
-        ))}
-      </div>
+      {/* SEARCH & FILTER SECTION */}
+      <Card className="p-2 border-slate-100 bg-white">
+        <div className="flex flex-col md:flex-row items-center gap-4">
+          <div className="relative flex-1 group">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-rose-500 transition-colors" size={18} />
+            <input 
+              type="text" 
+              placeholder="Search by plan code, customer or project..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-11 pr-4 py-2 bg-slate-50 border border-slate-200 rounded text-sm focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none transition-all"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+             <Button variant="secondary" icon={Filter}>Filter</Button>
+          </div>
+        </div>
+      </Card>
 
       {/* Content Section */}
-      <Card className="border-none  ring-1 ring-slate-100 bg-white rounded  overflow-hidden">
-        <div className="p-2">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-2">
-              <div className="w-5 h-5 bg-indigo-50 text-indigo-600 rounded  flex items-center justify-center">
-                <BarChart2 className="w-5 h-5" />
-              </div>
-              <div>
-                <h2 className="text-xs  text-slate-800 tracking-tight ">Strategy Pipeline</h2>
-                <p className="text-xs  text-slate-400 ">Manage and monitor manufacturing execution</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input 
-                  type="text" 
-                  placeholder="SEARCH STRATEGIES..." 
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 pr-4 py-2 bg-slate-50 border border-slate-100 rounded text-xs    text-slate-600 focus:ring-2 focus:ring-indigo-500/20 outline-none w-64 transition-all"
-                />
-              </div>
-              <button className="p-2 bg-slate-50 text-slate-400 hover:text-slate-600 rounded  border border-slate-100 transition-all">
-                <Filter className="w-4 h-4" />
-              </button>
-            </div>
+      <Card className="overflow-hidden border-none shadow-xl bg-white/50 backdrop-blur-sm">
+        <DataTable
+          columns={columns}
+          data={filteredPlans}
+          loading={loading}
+          searchPlaceholder="Search strategic formulations..."
+          searchKey="plan_code"
+        />
+        
+        {/* Summary Footer */}
+        <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between bg-white/30">
+          <div className="text-[10px] text-slate-400   flex items-center gap-2 ">
+            Showing {filteredPlans.length} of {plans.length} strategic formulations
           </div>
-
-          <div className="overflow-x-auto custom-scrollbar">
-            <table className="w-full">
-              <thead>
-                <tr className="text-left border-b border-slate-50">
-                  <th className="p-2 text-xs   text-slate-400  ">Plan ID</th>
-                  <th className="p-2 text-xs   text-slate-400  ">Origin & Status</th>
-                  <th className="p-2 text-xs   text-slate-400  ">Timeline</th>
-                  <th className="p-2 text-xs   text-slate-400  ">Production Progress</th>
-                  <th className="p-2 text-xs   text-slate-400  ">Operations</th>
-                  <th className="p-2 text-xs   text-slate-400  ">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {loading ? (
-                  <tr>
-                    <td colSpan="6" className="px-2 text-center text-slate-400 text-xs italic ">Loading strategic intelligence...</td>
-                  </tr>
-                ) : filteredPlans.length === 0 ? (
-                  <tr>
-                    <td colSpan="6" className="p-2 text-center text-slate-400 text-xs italic ">No plans matching search criteria</td>
-                  </tr>
-                ) : filteredPlans.map((plan) => (
-                  <tr key={plan.id} className="group hover:bg-slate-50/50 transition-all duration-200">
-                    <td className="p-2">
-                      <div className="flex items-start gap-2">
-                        <div className="p-1 bg-slate-900 text-white rounded  flex items-center justify-center  shadow-slate-200">
-                          <Layers className="w-3 h-3" />
-                        </div>
-                        <div>
-                          <div className="text-xs   text-slate-800 tracking-tight">{plan.plan_code}</div>
-                          <div className="text-xs text-slate-400 ">
-                            {plan.company_name || (plan.item_code ? `${plan.item_code} - ${plan.item_description}` : (plan.project_name || 'Global Manufacturing'))}
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="p-2">
-                      <div className="flex flex-col gap-1">
-                        <div className="flex items-center gap-2 ">
-                          <div className="p-1 bg-indigo-50 text-indigo-600 rounded flex items-center justify-center">
-                            <Layers className="w-2.5 h-2.5" />
-                          </div>
-                          <span className="text-xs  text-slate-600">{plan.order_no || 'N/A'}</span>
-                        </div>
-                        <div className="flex gap-1">
-                          <span className={`p-1  rounded  text-xs    border flex items-center gap-1
-                            ${plan.status === 'Draft' ? 'bg-amber-50 text-amber-600 border-amber-100' : 
-                              plan.status === 'Completed' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 
-                              'bg-indigo-50 text-indigo-600 border-indigo-100'}`}
-                          >
-                            <span className={`w-1 h-1 rounded  ${plan.status === 'Draft' ? 'bg-amber-400' : plan.status === 'Completed' ? 'bg-emerald-400' : 'bg-indigo-400'}`} />
-                            {plan.status}
-                          </span>
-                          {plan.mr_status && (
-                            <span className={`p-1 rounded text-xs   border flex items-center gap-1
-                              ${plan.mr_status === 'COMPLETED' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 
-                                plan.mr_status === 'DRAFT' ? 'bg-slate-50 text-slate-600 border-slate-100' : 
-                                'bg-indigo-50 text-indigo-600 border-indigo-100'}`}
-                            >
-                               {plan.mr_status === 'COMPLETED' ? '✅ FULFILLED' : `MR: ${plan.mr_status}`}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="p-2">
-                      <div className="flex items-center gap-2  group/time">
-                        <div className="p-1 rounded  border border-slate-100 bg-white flex items-center justify-center text-slate-400 group-hover/time:border-indigo-100 group-hover/time:text-indigo-500 transition-colors">
-                          <Clock className="w-3 h-3" />
-                        </div>
-                        <div>
-                          <div className="text-xs  text-slate-600  ">
-                            {plan.start_date ? new Date(plan.start_date).toLocaleDateString() : '-'}
-                          </div>
-                          <div className="text-xs text-slate-400 ">
-                            {plan.wo_count > 0 ? `${plan.wo_count} Active Work Orders` : 'No work orders'}
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="p-2">
-                      <div className="w-40">
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span className="text-xs  text-slate-400  ">
-                            {(() => {
-                              const total = plan.total_ops || 0;
-                              const woCount = plan.wo_count || 0;
-                              const status = (plan.status || '').toUpperCase();
-                              
-                              if (total > 0) return 100;
-                              if (woCount > 0) return 80;
-                              if (status === 'COMPLETED') return 50;
-                              return 0;
-                            })()}% Complete
-                          </span>
-                          <span className="text-xs  text-slate-900 bg-slate-100 p-1 rounded  ">
-                            {plan.completed_ops}/{plan.total_ops} OPS
-                          </span>
-                        </div>
-                        <div className="h-1.5 w-full bg-slate-100 rounded  overflow-hidden p-0.5">
-                          <div 
-                            className="h-full bg-indigo-500 rounded  transition-all duration-500" 
-                            style={{ 
-                              width: `${(() => {
-                                const total = plan.total_ops || 0;
-                                const woCount = plan.wo_count || 0;
-                                const status = (plan.status || '').toUpperCase();
-                                
-                                if (total > 0) return 100;
-                                if (woCount > 0) return 80;
-                                if (status === 'COMPLETED') return 50;
-                                return 0;
-                              })()}%` 
-                            }}
-                          />
-                        </div>
-                        <div className="flex items-center gap-1.5 mt-1.5">
-                          <Clock className="w-3 h-3 text-indigo-400" />
-                          <span className="text-xs text-indigo-600   ">
-                            {plan.wo_count > 0 ? `${plan.wo_count} Linked Orders` : 'No work orders'}
-                          </span>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="p-2">
-                      <div className="flex items-center -space-x-2">
-                        <div className="p-1 rounded  border-2 border-white bg-indigo-50 flex items-center justify-center text-indigo-600 text-xs    ring-1 ring-indigo-100 relative group/op">
-                          {plan.total_ops}
-                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-slate-900 text-white text-[8px]  rounded  group-hover/op:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-                            Total Operations
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="p-2">
-                      <div className="flex items-center justify-end gap-1 transition-all duration-200">
-                        <button 
-                          onClick={() => handleViewPlan(plan.id)}
-                          className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all" 
-                          title="View Details"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        <button className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all" title="Analytics">
-                          <BarChart2 className="w-4 h-4" />
-                        </button>
-                        <button 
-                          onClick={() => handleOpenConfig(plan)}
-                          className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all" 
-                          title="Settings"
-                        >
-                          <Settings className="w-4 h-4" />
-                        </button>
-                        <button 
-                          onClick={() => handleTransmitMR(plan.id)}
-                          className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all" 
-                          title="Transmit"
-                        >
-                          <Send className="w-4 h-4" />
-                        </button>
-                        <button 
-                          onClick={() => handleEditPlan(plan.id)}
-                          className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all" 
-                          title="Edit Strategy"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all" title="Documents">
-                          <FileText className="w-4 h-4" />
-                        </button>
-                        <button 
-                          onClick={() => handleDeletePlan(plan.id)}
-                          className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded  transition-all" 
-                          title="Archive Strategy"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Footer Section */}
-          <div className="mt-8 pt-6 border-t border-slate-50 flex items-center justify-between">
-            <div className="text-xs  text-slate-400   flex items-center gap-2 ">
-              Showing {filteredPlans.length} of {plans.length} strategic formulations
-            </div>
-            <div className="flex items-center gap-2 ">
-              <div className="w-2 h-2 bg-emerald-500 rounded  animate-pulse" />
-              <span className="text-xs  text-slate-900  ">Neural Link Active</span>
-            </div>
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+            <span className="text-[10px]  text-slate-900  ">Neural Link Active</span>
           </div>
         </div>
       </Card>
@@ -2285,22 +2164,16 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
             </div>
           </div>
 
-          {/* Tabs and Items Count */}
-          <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-            <div className="flex gap-6">
-              <button className="flex items-center gap-2 pb-2 border-b-2 border-rose-500 text-rose-600">
-                <span className="text-xs ">Pending Request</span>
-                <span className="px-1.5 py-0.5 bg-rose-50 rounded text-xs ">
-                  {mrItems.filter(item => !item.is_fulfilled && parseFloat(item.inventory || 0) < parseFloat(item.quantity)).length}
-                </span>
-              </button>
-              <button className="flex items-center gap-2 pb-2 text-slate-400 hover:text-slate-600">
-                <span className="text-xs ">Complete Request</span>
-                <span className="px-1.5 py-0.5 bg-slate-50 rounded text-xs ">
-                  {mrItems.filter(item => item.is_fulfilled || (parseFloat(item.inventory || 0) + 0.0001) >= parseFloat(item.quantity)).length}
-                </span>
-              </button>
-            </div>
+          <div className="flex items-center justify-between border-b border-slate-100 pb-0">
+            <Tabs
+              tabs={[
+                { id: 'pending', label: 'Pending Request', value: 'pending', icon: Clock },
+                { id: 'complete', label: 'Complete Request', value: 'complete', icon: CheckCircle2 }
+              ]}
+              activeTab={activeTab === 'Pending Request' || activeTab === 'pending' ? 'pending' : 'complete'}
+              onTabChange={(val) => setActiveTab(val)}
+              className="border-none px-0"
+            />
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-2">
                 <div className="w-1.5 h-6 bg-indigo-500 rounded" />
@@ -2525,7 +2398,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
             </div>
             <div>
               <h2 className="text-lg text-slate-800 tracking-tight ">Configure Work Order</h2>
-              <div className="flex items-center gap-1 text-xs text-indigo-500   tracking-wider">
+              <div className="flex items-center gap-1 text-xs text-indigo-500   ">
                 <Activity className="w-3 h-3" />
                 Strategy Implementation Phase
               </div>
@@ -2538,19 +2411,19 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
           {/* Header Info Cards */}
           <div className="grid grid-cols-4 gap-4">
             <div className="p-3 bg-slate-50/50 rounded-xl border border-slate-100">
-              <label className="text-xs text-slate-400   tracking-wider block mb-1">Item Code</label>
+              <label className="text-xs text-slate-400    block mb-1">Item Code</label>
               <div className="text-sm  text-slate-800 truncate">{selectedPlanConfig?.item_code || '---'}</div>
             </div>
             <div className="p-3 bg-slate-50/50 rounded-xl border border-slate-100">
-              <label className="text-xs text-slate-400   tracking-wider block mb-1">BOM Reference</label>
+              <label className="text-xs text-slate-400    block mb-1">BOM Reference</label>
               <div className="text-sm  text-slate-800 truncate">{selectedPlanConfig?.bom_no || '---'}</div>
             </div>
             <div className="p-3 bg-slate-50/50 rounded-xl border border-slate-100">
-              <label className="text-xs text-slate-400   tracking-wider block mb-1">Target Qty</label>
+              <label className="text-xs text-slate-400    block mb-1">Target Qty</label>
               <div className="text-sm  text-slate-800">{selectedPlanConfig?.target_qty || 0} Units</div>
             </div>
             <div className="p-3 bg-slate-50/50 rounded-xl border border-slate-100">
-              <label className="text-xs text-slate-400   tracking-wider block mb-1">Priority</label>
+              <label className="text-xs text-slate-400    block mb-1">Priority</label>
               <div className="flex items-center gap-1.5">
                 <div className="w-1.5 h-1.5 bg-amber-500 rounded-full" />
                 <span className="text-xs  text-amber-600 ">Medium</span>
@@ -2563,14 +2436,14 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
             <div className="flex items-center gap-8 border-b border-slate-100">
               <button 
                 onClick={() => setActiveConfigTab('ops')}
-                className={`pb-3 text-xs   tracking-wider transition-all relative ${activeConfigTab === 'ops' ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
+                className={`pb-3 text-xs    transition-all relative ${activeConfigTab === 'ops' ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
               >
                 Operational Sequence ({selectedPlanConfig?.operations?.length || 0})
                 {activeConfigTab === 'ops' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 rounded-full" />}
               </button>
               <button 
                 onClick={() => setActiveConfigTab('mats')}
-                className={`pb-3 text-xs   tracking-wider transition-all relative ${activeConfigTab === 'mats' ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
+                className={`pb-3 text-xs    transition-all relative ${activeConfigTab === 'mats' ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
               >
                 Resource Allocation ({selectedPlanConfig?.materials?.length || 0})
                 {activeConfigTab === 'mats' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 rounded-full" />}
@@ -2582,12 +2455,12 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                 <table className="w-full text-left text-xs">
                   <thead className="sticky top-0 bg-white z-10 border-b border-slate-100">
                     <tr>
-                      <th className="py-3 px-2  text-slate-400  tracking-wider">Item / Operation</th>
-                      <th className="py-3 px-2  text-slate-400  tracking-wider">Workstation</th>
-                      <th className="py-3 px-2  text-slate-400  tracking-wider">Process Type</th>
-                      <th className="py-3 px-2  text-slate-400  tracking-wider text-right">Net Time (M/U)</th>
-                      <th className="py-3 px-2  text-slate-400  tracking-wider text-right">Rate/Hr</th>
-                      <th className="py-3 px-2  text-slate-400  tracking-wider text-right text-emerald-600">Total Cost</th>
+                      <th className="py-3 px-2  text-slate-400  ">Item / Operation</th>
+                      <th className="py-3 px-2  text-slate-400  ">Workstation</th>
+                      <th className="py-3 px-2  text-slate-400  ">Process Type</th>
+                      <th className="py-3 px-2  text-slate-400   text-right">Net Time (M/U)</th>
+                      <th className="py-3 px-2  text-slate-400   text-right">Rate/Hr</th>
+                      <th className="py-3 px-2  text-slate-400   text-right text-emerald-600">Total Cost</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50 font-medium">
@@ -2610,7 +2483,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                           </td>
                           <td className="py-4 px-2 text-slate-500">{op.workstation || 'Unassigned'}</td>
                           <td className="py-4 px-2 text-slate-500">
-                            <span className={`px-2 py-0.5 rounded-full text-xs   tracking-wider ${
+                            <span className={`px-2 py-0.5 rounded-full text-xs    ${
                               (op.process_type || op.operation_type || 'In-House') === 'Sub-Contract' 
                                 ? 'bg-amber-50 text-amber-600 border border-amber-100' 
                                 : 'bg-indigo-50 text-indigo-600 border border-indigo-100'
@@ -2634,10 +2507,10 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                 <table className="w-full text-left text-xs">
                   <thead className="sticky top-0 bg-white z-10 border-b border-slate-100">
                     <tr>
-                      <th className="py-3 px-2  text-slate-400  tracking-wider">Component</th>
-                      <th className="py-3 px-2  text-slate-400  tracking-wider text-right">Required</th>
-                      <th className="py-3 px-2  text-slate-400  tracking-wider text-right">Available</th>
-                      <th className="py-3 px-2  text-slate-400  tracking-wider text-center">Status</th>
+                      <th className="py-3 px-2  text-slate-400  ">Component</th>
+                      <th className="py-3 px-2  text-slate-400   text-right">Required</th>
+                      <th className="py-3 px-2  text-slate-400   text-right">Available</th>
+                      <th className="py-3 px-2  text-slate-400   text-center">Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50 font-medium">
@@ -2672,13 +2545,13 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
           <div className="flex items-center justify-between pt-6 border-t border-slate-100">
             <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-full border border-emerald-100 shadow-sm">
               <CheckCircle2 className="w-3.5 h-3.5" />
-              <span className="text-xs   tracking-wider">All Stocks Verified</span>
+              <span className="text-xs   ">All Stocks Verified</span>
             </div>
             
             <div className="flex items-center gap-3">
               <button 
                 onClick={() => setConfigModalOpen(false)}
-                className="p-2 text-xs  text-slate-400 hover:text-slate-600 transition-colors  tracking-wider"
+                className="p-2 text-xs  text-slate-400 hover:text-slate-600 transition-colors  "
               >
                 Discard
               </button>

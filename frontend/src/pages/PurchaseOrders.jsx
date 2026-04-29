@@ -1,6 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Card, DataTable, SearchableSelect } from '../components/ui.jsx';
+import { 
+  Plus, Search, RefreshCw, Package, Clock, CheckCircle2, 
+  AlertCircle, Truck, FileText, LayoutGrid, List, Filter
+} from 'lucide-react';
+import { Card, DataTable, SearchableSelect, Button, Tabs } from '../components/ui.jsx';
 import PurchaseOrderDetail from './PurchaseOrderDetail.jsx';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
@@ -1024,55 +1028,52 @@ const PurchaseOrders = () => {
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-6 animate-in fade-in duration-500">
       {/* Page Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="p-2 bg-indigo-600 rounded text-white shadow-indigo-200 shadow-xl">
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-            </svg>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-rose-50 text-rose-600 rounded-xl shadow-sm">
+            <Package size={24} />
           </div>
           <div>
-            <div className="flex items-center gap-2 text-xs text-slate-400   ">
-              <span>Buying</span>
-              <svg className="w-2 h-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M9 5l7 7-7 7" /></svg>
-              <span>Procurement</span>
-            </div>
-            <h1 className="text-xl  text-slate-900 ">Purchase Orders</h1>
-            <p className="text-xs text-slate-500 font-medium">Manage procurement cycles and supplier orders</p>
+            <h1 className="text-2xl  text-slate-900 tracking-tight">Purchase Orders</h1>
+            <p className="text-sm text-slate-500 font-medium">Manage procurement cycles and supplier orders</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex bg-slate-100 p-1 rounded  border border-slate-200">
+        <div className="flex items-center gap-3">
+          <div className="flex bg-slate-100 p-1 rounded border border-slate-200">
             <button 
               onClick={() => setViewMode('kanban')}
-              className={`flex items-center gap-2 px-4 py-2 rounded  text-xs  transition-all ${viewMode === 'kanban' ? 'bg-white text-slate-900  border border-slate-200/50' : 'text-slate-400 hover:text-slate-600'}`}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs  transition-all ${
+                viewMode === 'kanban' ? 'bg-white text-slate-900 shadow-sm border border-slate-200' : 'text-slate-500 hover:text-slate-700'
+              }`}
             >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg>
+              <LayoutGrid size={14} />
               KANBAN
             </button>
             <button 
               onClick={() => setViewMode('list')}
-              className={`flex items-center gap-2 px-4 py-2 rounded  text-xs  transition-all ${viewMode === 'list' ? 'bg-white text-slate-900  border border-slate-200/50' : 'text-slate-400 hover:text-slate-600'}`}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs  transition-all ${
+                viewMode === 'list' ? 'bg-white text-slate-900 shadow-sm border border-slate-200' : 'text-slate-500 hover:text-slate-700'
+              }`}
             >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
+              <List size={14} />
               LIST
             </button>
           </div>
-          <button
+          <Button
+            variant="secondary"
             onClick={() => fetchPOs()}
-            className="p-2 text-slate-500 hover:bg-white hover:text-blue-600 rounded  transition-all border border-slate-200  active:scale-95 bg-white"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-          </button>
-          <button
+            icon={RefreshCw}
+            className={loading ? 'animate-spin' : ''}
+          />
+          <Button
+            variant="primary"
             onClick={() => navigate('/purchase-orders/manual-add')}
-            className="flex items-center gap-2 p-2  bg-blue-600 text-white rounded text-xs  hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95"
+            icon={Plus}
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" /></svg>
             Create Order
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -1105,49 +1106,35 @@ const PurchaseOrders = () => {
       )}
 
       {/* Search & Filter Bar */}
-      <div className="flex items-center gap-2">
-        <div className="relative flex-1">
-          <input 
-            type="text" 
-            placeholder="Search PO # or supplier..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-11 pr-4 py-2.5 bg-white border border-slate-200 rounded text-xs focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all "
-          />
-          <svg className="w-5 h-5 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+      <Card className="p-2 border-slate-100 bg-white">
+        <div className="flex flex-col md:flex-row items-center gap-4">
+          <div className="relative flex-1 group">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-rose-500 transition-colors" size={18} />
+            <input 
+              type="text" 
+              placeholder="Search by PO # or supplier..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-11 pr-4 py-2 bg-slate-50 border border-slate-200 rounded text-sm focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none transition-all"
+            />
+          </div>
+
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0 no-scrollbar">
+            <Tabs
+              tabs={[
+                { id: 'ALL', label: 'All', icon: List },
+                { id: 'PO_REQUEST', label: 'Requests', icon: Clock },
+                { id: 'DRAFT', label: 'Draft', icon: FileText },
+                { id: 'SENT', label: 'Sent', icon: Truck },
+                { id: 'RECEIVED', label: 'Received', icon: CheckCircle2 },
+                { id: 'FULFILLED', label: 'Fulfilled', icon: Package }
+              ]}
+              activeTab={statusFilter}
+              onTabChange={setStatusFilter}
+            />
+          </div>
         </div>
-
-        <button
-          onClick={() => fetchPOs()}
-          className="p-2 text-slate-500 hover:bg-white hover:text-blue-600 rounded  transition-all border border-slate-200  active:scale-95 bg-slate-50/50"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-        </button>
-
-        <div className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded  ">
-          <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
-          <span className="text-xs text-slate-400   ">Status:</span>
-          <select 
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="text-sm  text-blue-600 outline-none bg-transparent cursor-pointer"
-          >
-            <option value="ALL">All Orders</option>
-            <option value="PO_REQUEST">Requests</option>
-            <option value="DRAFT">Draft</option>
-            <option value="ORDERED">Ordered</option>
-            <option value="SENT">Sent</option>
-            <option value="ACKNOWLEDGED">Acknowledged</option>
-            <option value="RECEIVED">Received</option>
-            <option value="FULFILLED">Fulfilled</option>
-            <option value="CLOSED">Closed</option>
-          </select>
-        </div>
-
-        <button className="p-2 bg-emerald-500 text-white rounded  hover:bg-emerald-600 shadow-lg shadow-emerald-200 transition-all active:scale-95">
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
-        </button>
-      </div>
+      </Card>
 
       {/* Main Table Section */}
       <div className="bg-white rounded border border-slate-200  overflow-hidden">

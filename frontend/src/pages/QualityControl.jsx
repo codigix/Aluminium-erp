@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Card } from '../components/ui.jsx';
+import { Card, Tabs, StatusBadge, Button, DataTable } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
@@ -20,7 +20,9 @@ import {
   User,
   Inbox,
   ArrowUpRight,
-  Loader2
+  Loader2,
+  FileText,
+  History
 } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
@@ -271,30 +273,15 @@ const QualityControl = () => {
   return (
     <div className="space-y-3">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
-        <div className="flex bg-slate-100 p-1 rounded  w-fit border border-slate-200">
-          <button
-            onClick={() => setActiveTab('grn')}
-            className={`flex items-center gap-2  p-2 rounded  text-xs  transition-all ${
-              activeTab === 'grn'
-                ? 'bg-white text-indigo-600 '
-                : 'text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            <Archive className="w-4 h-4" />
-            GRN Processing
-          </button>
-          <button
-            onClick={() => setActiveTab('qc')}
-            className={`flex items-center gap-2  p-2 rounded  text-xs  transition-all ${
-              activeTab === 'qc'
-                ? 'bg-white text-indigo-600 '
-                : 'text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            <Shield className="w-4 h-4" />
-            QC Inspections
-          </button>
-        </div>
+        <Tabs
+          tabs={[
+            { label: 'GRN Processing', value: 'grn', icon: Archive },
+            { label: 'QC Inspections', value: 'qc', icon: Shield }
+          ]}
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          className="border-none px-0"
+        />
 
         <button
           onClick={() => activeTab === 'grn' ? setShowGRNModal(true) : setShowQCModal(true)}
