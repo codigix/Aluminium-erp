@@ -259,6 +259,29 @@ const deleteCustomerPo = async (req, res, next) => {
   }
 };
 
+const sendCustomerPoEmail = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { to, subject, message, attachPDF } = req.body;
+
+    let attachments = [];
+    if (attachPDF) {
+      const pdfBuffer = await customerPoService.generateCustomerPoPDF(id);
+      attachments.push({
+        filename: `CustomerPO-${id}.pdf`,
+        content: pdfBuffer
+      });
+    }
+
+    const emailService = require('../services/emailService');
+    const result = await emailService.sendEmail(to, subject, message, attachments);
+
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   createCustomerPo,
   parseCustomerPoPdf,
@@ -266,5 +289,6 @@ module.exports = {
   getCustomerPo,
   generateCustomerPoPdf,
   updateCustomerPo,
-  deleteCustomerPo
+  deleteCustomerPo,
+  sendCustomerPoEmail
 };

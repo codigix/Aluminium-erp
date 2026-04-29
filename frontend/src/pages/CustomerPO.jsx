@@ -1,10 +1,11 @@
 import React, { useState, useMemo } from 'react'
 import {
-  Loader2, ChevronRight, Eye, Plus, Trash2, X, Download,
+  Loader2, ChevronRight, Eye, Plus, Trash2, X, Download, Pencil, Send,
   Search, RefreshCw, Filter, FileText, Calendar, Building2,
   DollarSign, Package, CheckCircle2, Clock, AlertCircle, GitBranch
 } from 'lucide-react'
 import { Card, DataTable } from '../components/ui.jsx'
+import SendEmailModal from '../components/SendEmailModal'
 
 const poStatusColors = {
   DRAFT: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200', icon: Clock },
@@ -26,12 +27,14 @@ const CustomerPO = ({
   quotationRequestsLoading
 }) => {
   const [showPoForm, setShowPoForm] = useState(false)
+  const [formMode, setFormMode] = useState('CREATE') // CREATE, VIEW, EDIT
+  const [editingPoId, setEditingPoId] = useState(null)
   const [poFormLoading, setPoFormLoading] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('ALL')
   const [selectedQuoteId, setSelectedQuoteId] = useState('')
-  const [viewingPo, setViewingPo] = useState(null)
-  const [loadingPoDetails, setLoadingPoDetails] = useState(false)
+  const [showEmailModal, setShowEmailModal] = useState(false)
+  const [emailPoData, setEmailPoData] = useState(null)
 
   const [poForm, setPoForm] = useState({
     companyId: '',
@@ -229,6 +232,8 @@ const CustomerPO = ({
 
   const closePoForm = () => {
     setShowPoForm(false)
+    setFormMode('CREATE')
+    setEditingPoId(null)
     if (window.location.pathname !== '/customer-po') {
       window.history.pushState({}, '', '/customer-po');
     }
@@ -259,6 +264,52 @@ const CustomerPO = ({
     })
   }
 
+  const openPoInMode = async (mode, poId = null) => {
+    setFormMode(mode);
+    if (poId) {
+      setEditingPoId(poId);
+      setPoFormLoading(true);
+      setShowPoForm(true);
+      try {
+        const data = await apiRequest(`/customer-pos/${poId}`);
+        // Map data to poForm structure
+        setPoForm({
+          companyId: data.company_id,
+          projectName: data.project_name || '',
+          poNumber: data.po_number,
+          poDate: data.po_date ? new Date(data.po_date).toISOString().split('T')[0] : '',
+          poVersion: data.po_version || '1.0',
+          orderType: data.order_type || 'STANDARD',
+          currency: data.currency || 'INR',
+          paymentTerms: data.payment_terms || '',
+          creditDays: data.credit_days || '',
+          remarks: data.remarks || '',
+          items: data.items.map(item => ({
+            drawingNo: item.drawing_no || '',
+            description: item.description || '',
+            quantity: item.quantity || '',
+            unit: item.unit || 'NOS',
+            rate: item.rate || '',
+            cgstPercent: item.cgst_percent || 0,
+            sgstPercent: item.sgst_percent || 0,
+            igstPercent: item.igst_percent || 0,
+            sub_assemblies: item.sub_assemblies || []
+          }))
+        });
+      } catch (error) {
+        showToast(error.message || 'Failed to fetch PO details');
+        closePoForm();
+      } finally {
+        setPoFormLoading(false);
+      }
+    } else {
+      setShowPoForm(true);
+      if (window.location.pathname !== '/customer-po/new-po') {
+        window.history.pushState({}, '', '/customer-po/new-po');
+      }
+    }
+  };
+
   const handlePoSubmit = async (e) => {
     e.preventDefault()
     if (!poForm.companyId) {
@@ -282,11 +333,14 @@ const CustomerPO = ({
         remarks: poForm.remarks
       }
 
-      await apiRequest('/customer-pos', {
-        method: 'POST',
+      const url = formMode === 'EDIT' ? `/customer-pos/${editingPoId}` : '/customer-pos';
+      const method = formMode === 'EDIT' ? 'PUT' : 'POST';
+
+      await apiRequest(url, {
+        method: method,
         body: payload
       })
-      showToast('Customer PO created successfully')
+      showToast(`Customer PO ${formMode === 'EDIT' ? 'updated' : 'created'} successfully`)
       closePoForm()
       if (onRefresh) onRefresh()
     } catch (error) {
@@ -295,18 +349,6 @@ const CustomerPO = ({
       setPoFormLoading(false)
     }
   }
-
-  const fetchPoDetails = async (poId) => {
-    setLoadingPoDetails(true);
-    try {
-      const data = await apiRequest(`/customer-pos/${poId}`);
-      setViewingPo(data);
-    } catch (error) {
-      showToast(error.message || 'Failed to fetch PO details');
-    } finally {
-      setLoadingPoDetails(false);
-    }
-  };
 
   const handleDownloadPdf = async (poId, poNumber) => {
     try {
@@ -343,6 +385,39 @@ const CustomerPO = ({
     } catch (error) {
       console.error('Delete PO error:', error);
       showToast(error.message || 'Failed to delete Customer PO');
+    }
+  };
+
+  const handleOpenEmailModal = (row) => {
+    const company = companies.find(c => String(c.id) === String(row.company_id));
+    const clientName = row.company_name || company?.company_name || 'Client';
+    
+    // Fallback chain for email address
+    const primaryContact = company?.contacts?.find(c => c.contact_type === 'PRIMARY') || company?.contacts?.[0];
+    const recipientEmail = row.company_email || primaryContact?.email || company?.email || '';
+
+    setEmailPoData({
+      id: row.id,
+      poNumber: row.po_number,
+      to: recipientEmail,
+      subject: `Purchase Order: ${row.po_number}`,
+      message: `Dear ${clientName},\n\nPlease find attached our Purchase Order ${row.po_number}.\n\nRegards,\nSPTECHPIONEER Procurement Team`,
+      attachmentName: `PurchaseOrder_${row.po_number}.pdf`
+    });
+    setShowEmailModal(true);
+  };
+
+  const handleSendEmail = async (emailData) => {
+    try {
+      await apiRequest(`/customer-pos/${emailPoData.id}/send-email`, {
+        method: 'POST',
+        body: emailData
+      });
+      showToast('Email sent successfully');
+      setShowEmailModal(false);
+    } catch (error) {
+      showToast(error.message || 'Failed to send email');
+      throw error;
     }
   };
 
@@ -398,14 +473,28 @@ const CustomerPO = ({
             className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all border border-transparent hover:border-indigo-100  hover:"
             title="View PDF"
           >
-            <FileText className="w-4 h-4" />
+            <Download className="w-4 h-4" />
           </button>
           <button
-            onClick={() => fetchPoDetails(row.id)}
+            onClick={() => openPoInMode('VIEW', row.id)}
             className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all border border-transparent hover:border-indigo-100  hover:"
             title="View Details"
           >
             <Eye className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => openPoInMode('EDIT', row.id)}
+            className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded  transition-all border border-transparent hover:border-amber-100"
+            title="Edit PO"
+          >
+            <Pencil className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => handleOpenEmailModal(row)}
+            className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded  transition-all border border-transparent hover:border-blue-100"
+            title="Send Email"
+          >
+            <Send className="w-4 h-4" />
           </button>
           <button
             onClick={() => handleDeletePo(row.id)}
@@ -438,10 +527,7 @@ const CustomerPO = ({
             <RefreshCw className="w-5 h-5" />
           </button>
           <button
-            onClick={() => {
-              setShowPoForm(true);
-              window.history.pushState({}, '', '/customer-po/new-po');
-            }}
+            onClick={() => openPoInMode('CREATE')}
             className="flex items-center gap-2 bg-indigo-600 text-white p-2  rounded text-xs  hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 active:scale-95"
           >
             <Plus className="w-4 h-4 stroke-[3]" />
@@ -532,15 +618,31 @@ const CustomerPO = ({
             {/* Modal Header */}
             <div className="p-2  border-b border-slate-100 flex items-center justify-between bg-white/80 backdrop-blur-md sticky top-0 z-10">
               <div>
-                <h2 className="text-xl  text-slate-900 ">New Customer Purchase Order</h2>
-                <p className="text-xs text-slate-500    mt-1">Manual Data Entry Workflow</p>
+                <h2 className="text-xl  text-slate-900 ">
+                  {formMode === 'VIEW' ? 'View Details' : formMode === 'EDIT' ? 'Update' : 'New'} Customer Purchase Order
+                </h2>
+                <p className="text-xs text-slate-500    mt-1">
+                  {formMode === 'VIEW' ? 'Reference only' : 'Manual Data Entry Workflow'}
+                </p>
               </div>
-              <button
-                onClick={closePoForm}
-                className="p-2 rounded hover:bg-slate-100 transition-all text-slate-400 hover:text-slate-900 active:scale-90 bg-slate-50"
-              >
-                <X className="w-3 h-3" />
-              </button>
+              <div className="flex items-center gap-2">
+                {formMode === 'VIEW' && (
+                  <button
+                    onClick={() => setFormMode('EDIT')}
+                    className="p-2 rounded hover:bg-amber-100 transition-all text-amber-600 active:scale-90 bg-amber-50 border border-amber-100 flex items-center gap-2 text-xs font-bold"
+                    title="Switch to Edit Mode"
+                  >
+                    <Pencil className="w-3 h-3" />
+                    Edit
+                  </button>
+                )}
+                <button
+                  onClick={closePoForm}
+                  className="p-2 rounded hover:bg-slate-100 transition-all text-slate-400 hover:text-slate-900 active:scale-90 bg-slate-50 border border-slate-200"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
             </div>
 
             <div className="flex-1 overflow-y-auto p-2 space-y-2 custom-scrollbar">
@@ -555,59 +657,62 @@ const CustomerPO = ({
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="space-y-2">
-                      <label className="text-xs  text-slate-400   ml-1">Quotation No (Fetch Details)</label>
-                      <select
-                        value={selectedQuoteId}
-                        onChange={(e) => handleQuotationSelect(e.target.value)}
-                        className="w-full bg-slate-50 border-2 border-slate-100 rounded p-2 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all  text-slate-700 appearance-none"
-                      >
-                        <option value="">Manual Entry (No Quotation)</option>
-                        {(() => {
-                          const batches = [];
-                          const processedIds = new Set();
+                    {formMode === 'CREATE' && (
+                      <div className="space-y-2">
+                        <label className="text-xs  text-slate-400   ml-1">Quotation No (Fetch Details)</label>
+                        <select
+                          value={selectedQuoteId}
+                          onChange={(e) => handleQuotationSelect(e.target.value)}
+                          className="w-full bg-slate-50 border-2 border-slate-100 rounded p-2 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all  text-slate-700 appearance-none"
+                        >
+                          <option value="">Manual Entry (No Quotation)</option>
+                          {(() => {
+                            const batches = [];
+                            const processedIds = new Set();
 
-                          // First, filter only approved items
-                          const approvedItems = quotationRequests.filter(q => q.status?.trim().toUpperCase() === 'APPROVED');
+                            // First, filter only approved items
+                            const approvedItems = quotationRequests.filter(q => q.status?.trim().toUpperCase() === 'APPROVED');
 
-                          approvedItems.forEach(q => {
-                            if (processedIds.has(q.id)) return;
+                            approvedItems.forEach(q => {
+                              if (processedIds.has(q.id)) return;
 
-                            // Group items that belong to the SAME version of the SAME quotation revision set
-                            const batchItems = approvedItems.filter(t =>
-                              t.company_id === q.company_id &&
-                              t.sales_order_id === q.sales_order_id &&
-                              t.version === q.version
-                            );
+                              // Group items that belong to the SAME version of the SAME quotation revision set
+                              const batchItems = approvedItems.filter(t =>
+                                t.company_id === q.company_id &&
+                                t.sales_order_id === q.sales_order_id &&
+                                t.version === q.version
+                              );
 
-                            // Use the smallest ID as representative for the dropdown value
-                            const representative = batchItems.reduce((min, cur) => cur.id < min.id ? cur : min, batchItems[0]);
+                              // Use the smallest ID as representative for the dropdown value
+                              const representative = batchItems.reduce((min, cur) => cur.id < min.id ? cur : min, batchItems[0]);
 
-                            // Double check: don't add duplicate batches (same SO + same version)
-                            const isAlreadyAdded = batches.some(b =>
-                              b.sales_order_id === representative.sales_order_id &&
-                              b.version === representative.version
-                            );
+                              // Double check: don't add duplicate batches (same SO + same version)
+                              const isAlreadyAdded = batches.some(b =>
+                                b.sales_order_id === representative.sales_order_id &&
+                                b.version === representative.version
+                              );
 
-                            if (!isAlreadyAdded) {
-                              batches.push(representative);
-                            }
+                              if (!isAlreadyAdded) {
+                                batches.push(representative);
+                              }
 
-                            batchItems.forEach(item => processedIds.add(item.id));
-                          });
+                              batchItems.forEach(item => processedIds.add(item.id));
+                            });
 
-                          return batches.map(q => (
-                            <option key={q.id} value={q.id}>
-                              QRT-{String(q.id).padStart(4, '0')} - {q.company_name} ({q.project_name || 'No Project'}) {q.version > 1 ? `(V${q.version})` : ''}
-                            </option>
-                          ));
-                        })()}
-                      </select>
-                    </div>
+                            return batches.map(q => (
+                              <option key={q.id} value={q.id}>
+                                QRT-{String(q.id).padStart(4, '0')} - {q.company_name} ({q.project_name || 'No Project'}) {q.version > 1 ? `(V${q.version})` : ''}
+                              </option>
+                            ));
+                          })()}
+                        </select>
+                      </div>
+                    )}
                     <div className="space-y-2">
                       <label className="text-xs  text-slate-400   ml-1">Project Name</label>
                       <input
                         type="text"
+                        disabled={formMode === 'VIEW'}
                         value={poForm.projectName}
                         onChange={(e) => setPoForm(prev => ({ ...prev, projectName: e.target.value }))}
                         placeholder="Project name..."
@@ -618,6 +723,7 @@ const CustomerPO = ({
                       <label className="text-xs  text-slate-400   ml-1">Company / Client *</label>
                       <select
                         required
+                        disabled={formMode === 'VIEW'}
                         value={poForm.companyId}
                         onChange={(e) => setPoForm(prev => ({ ...prev, companyId: e.target.value }))}
                         className="w-full bg-slate-50 border-2 border-slate-100 rounded p-2 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all  text-slate-700 appearance-none"
@@ -633,6 +739,7 @@ const CustomerPO = ({
                       <input
                         required
                         type="text"
+                        disabled={formMode === 'VIEW'}
                         value={poForm.poNumber}
                         onChange={(e) => setPoForm(prev => ({ ...prev, poNumber: e.target.value }))}
                         placeholder="e.g. PO/2026/001"
@@ -644,6 +751,7 @@ const CustomerPO = ({
                       <input
                         required
                         type="date"
+                        disabled={formMode === 'VIEW'}
                         value={poForm.poDate}
                         onChange={(e) => setPoForm(prev => ({ ...prev, poDate: e.target.value }))}
                         className="w-full bg-slate-50 border-2 border-slate-100 rounded p-2 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all  text-slate-700"
@@ -653,6 +761,7 @@ const CustomerPO = ({
                       <label className="text-xs  text-slate-400   ml-1">Payment Terms</label>
                       <input
                         type="text"
+                        disabled={formMode === 'VIEW'}
                         value={poForm.paymentTerms}
                         onChange={(e) => setPoForm(prev => ({ ...prev, paymentTerms: e.target.value }))}
                         placeholder="e.g. 30 Days Net"
@@ -663,6 +772,7 @@ const CustomerPO = ({
                       <label className="text-xs  text-slate-400   ml-1">Credit Days</label>
                       <input
                         type="number"
+                        disabled={formMode === 'VIEW'}
                         value={poForm.creditDays}
                         onChange={(e) => setPoForm(prev => ({ ...prev, creditDays: e.target.value }))}
                         placeholder="e.g. 30"
@@ -672,6 +782,7 @@ const CustomerPO = ({
                     <div className="space-y-2">
                       <label className="text-xs  text-slate-400   ml-1">Currency</label>
                       <select
+                        disabled={formMode === 'VIEW'}
                         value={poForm.currency}
                         onChange={(e) => setPoForm(prev => ({ ...prev, currency: e.target.value }))}
                         className="w-full bg-slate-50 border-2 border-slate-100 rounded p-2 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all  text-slate-700 appearance-none"
@@ -693,14 +804,16 @@ const CustomerPO = ({
                       </div>
                       <h3 className="text-sm  text-slate-800  ">Purchase Items</h3>
                     </div>
-                    <button
-                      type="button"
-                      onClick={handleAddItem}
-                      className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded  text-xs    hover:bg-indigo-100 transition-all active:scale-95 "
-                    >
-                      <Plus className="w-3.5 h-3.5 stroke-[3]" />
-                      Add Line Item
-                    </button>
+                    {formMode !== 'VIEW' && (
+                      <button
+                        type="button"
+                        onClick={handleAddItem}
+                        className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded  text-xs    hover:bg-indigo-100 transition-all active:scale-95 "
+                      >
+                        <Plus className="w-3.5 h-3.5 stroke-[3]" />
+                        Add Line Item
+                      </button>
+                    )}
                   </div>
 
                   <div className="overflow-x-auto rounded border-2 border-slate-100 bg-white ">
@@ -734,6 +847,7 @@ const CustomerPO = ({
                                 <input
                                   required
                                   type="text"
+                                  disabled={formMode === 'VIEW'}
                                   value={item.drawingNo}
                                   onChange={(e) => handleItemChange(index, 'drawingNo', e.target.value)}
                                   placeholder="DRW-101"
@@ -744,6 +858,7 @@ const CustomerPO = ({
                                 <input
                                   required
                                   type="text"
+                                  disabled={formMode === 'VIEW'}
                                   value={item.description}
                                   onChange={(e) => handleItemChange(index, 'description', e.target.value)}
                                   placeholder="Item description..."
@@ -754,6 +869,7 @@ const CustomerPO = ({
                                 <input
                                   required
                                   type="number"
+                                  disabled={formMode === 'VIEW'}
                                   value={item.quantity}
                                   onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
                                   className="w-full bg-slate-50 border border-slate-200 rounded  p-2 text-xs  text-center focus:border-indigo-500 focus:bg-white outline-none transition-all  text-slate-800"
@@ -763,6 +879,7 @@ const CustomerPO = ({
                                 <input
                                   required
                                   type="text"
+                                  disabled={formMode === 'VIEW'}
                                   value={item.unit}
                                   onChange={(e) => handleItemChange(index, 'unit', e.target.value)}
                                   className="w-full bg-slate-50 border border-slate-200 rounded  p-2 text-xs  text-center focus:border-indigo-500 focus:bg-white outline-none transition-all  text-slate-600 "
@@ -772,6 +889,7 @@ const CustomerPO = ({
                                 <input
                                   required
                                   type="number"
+                                  disabled={formMode === 'VIEW'}
                                   value={item.rate}
                                   onChange={(e) => handleItemChange(index, 'rate', e.target.value)}
                                   className="w-full bg-indigo-50 border border-indigo-100 rounded  p-2 text-xs  text-center focus:border-indigo-500 focus:bg-white outline-none transition-all  text-indigo-600 placeholder:text-indigo-200"
@@ -781,6 +899,7 @@ const CustomerPO = ({
                               <td className="p-2">
                                 <input
                                   type="number"
+                                  disabled={formMode === 'VIEW'}
                                   value={item.cgstPercent}
                                   onChange={(e) => handleItemChange(index, 'cgstPercent', e.target.value)}
                                   className="w-full bg-slate-50 border border-slate-200 rounded  p-2 text-xs  text-center focus:border-indigo-500 focus:bg-white outline-none transition-all  text-slate-600"
@@ -789,6 +908,7 @@ const CustomerPO = ({
                               <td className="p-2">
                                 <input
                                   type="number"
+                                  disabled={formMode === 'VIEW'}
                                   value={item.sgstPercent}
                                   onChange={(e) => handleItemChange(index, 'sgstPercent', e.target.value)}
                                   className="w-full bg-slate-50 border border-slate-200 rounded  p-2 text-xs  text-center focus:border-indigo-500 focus:bg-white outline-none transition-all  text-slate-600"
@@ -797,6 +917,7 @@ const CustomerPO = ({
                               <td className="p-2">
                                 <input
                                   type="number"
+                                  disabled={formMode === 'VIEW'}
                                   value={item.igstPercent}
                                   onChange={(e) => handleItemChange(index, 'igstPercent', e.target.value)}
                                   className="w-full bg-slate-50 border border-slate-200 rounded  p-2 text-xs  text-center focus:border-indigo-500 focus:bg-white outline-none transition-all  text-slate-600"
@@ -806,7 +927,7 @@ const CustomerPO = ({
                                 <span className="text-xs   text-slate-900">{formatCurrency(total)}</span>
                               </td>
                               <td className="p-2 text-center">
-                                {poForm.items.length > 1 && (
+                                {formMode !== 'VIEW' && poForm.items.length > 1 && (
                                   <button
                                     type="button"
                                     onClick={() => handleRemoveItem(index)}
@@ -893,6 +1014,7 @@ const CustomerPO = ({
                   </div>
                   <textarea
                     value={poForm.remarks}
+                    disabled={formMode === 'VIEW'}
                     onChange={(e) => setPoForm(prev => ({ ...prev, remarks: e.target.value }))}
                     rows="4"
                     className="w-full bg-slate-50 border-2 border-slate-100 rounded  p-2 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-700 "
@@ -913,267 +1035,41 @@ const CustomerPO = ({
                   onClick={closePoForm}
                   className="flex-1 md:flex-none p-2  rounded text-xs    text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-all active:scale-95"
                 >
-                  Cancel
+                  {formMode === 'VIEW' ? 'Close' : 'Cancel'}
                 </button>
-                <button
-                  form="po-manual-form"
-                  type="submit"
-                  disabled={poFormLoading}
-                  className="flex-1 md:flex-none bg-indigo-600 text-white p-2  rounded text-xs    hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-200 active:scale-95 disabled:opacity-50 disabled:active:scale-100 flex items-center justify-center gap-2"
-                >
-                  {poFormLoading ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin stroke-[3]" />
-                      Processing...
-                    </>
-                  ) : (
-                    'Confirm & Create PO'
-                  )}
-                </button>
+                {formMode !== 'VIEW' && (
+                  <button
+                    form="po-manual-form"
+                    type="submit"
+                    disabled={poFormLoading}
+                    className="flex-1 md:flex-none bg-indigo-600 text-white p-2  rounded text-xs    hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-200 active:scale-95 disabled:opacity-50 disabled:active:scale-100 flex items-center justify-center gap-2"
+                  >
+                    {poFormLoading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin stroke-[3]" />
+                        Processing...
+                      </>
+                    ) : (
+                      formMode === 'EDIT' ? 'Update Purchase Order' : 'Confirm & Create PO'
+                    )}
+                  </button>
+                )}
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* PO Details Modal */}
-      {viewingPo && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-2">
-          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setViewingPo(null)} />
-          <div className="relative w-full max-w-5xl bg-white shadow-2xl rounded  flex flex-col max-h-[92vh] overflow-hidden animate-in fade-in zoom-in duration-300 border border-white/20">
-            {/* Modal Header */}
-            <div className="p-4  border-b border-slate-100 flex items-center justify-between bg-white/80 backdrop-blur-md sticky top-0 z-10">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-indigo-50 text-indigo-600 rounded ">
-                  <FileText className="w-3 h-3" />
-                </div>
-                <div>
-                  <h2 className="text-xl  text-slate-900  flex items-center gap-3">
-                    {viewingPo.po_number || 'N/A'}
-                    <span className={`px-2.5 py-1 rounded-md text-xs    border ${poStatusColors[viewingPo.status || 'DRAFT'].bg} ${poStatusColors[viewingPo.status || 'DRAFT'].text} ${poStatusColors[viewingPo.status || 'DRAFT'].border}`}>
-                      {viewingPo.status || 'DRAFT'}
-                    </span>
-                  </h2>
-                  <div className="flex flex-col gap-1 mt-1.5">
-                    <p className="text-xs text-slate-500 flex items-center gap-2">
-                      <Building2 className="w-3.5 h-3.5 text-indigo-500" />
-                      <span className="font-semibold text-slate-700">{viewingPo.company_name || 'N/A'}</span>
-                      {viewingPo.project_name && (
-                        <>
-                          <span className="w-1 h-1 bg-slate-300 rounded" />
-                          <span className="italic text-indigo-600">{viewingPo.project_name}</span>
-                        </>
-                      )}
-                    </p>
-                    <p className="text-[10px] text-slate-400 flex items-center gap-2">
-                      <Calendar className="w-3 h-3 text-slate-400" />
-                      {viewingPo.po_date ? new Date(viewingPo.po_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => handleDownloadPdf(viewingPo.id, viewingPo.po_number)}
-                  className="flex items-center gap-2 px-4 py-2 bg-slate-50 text-slate-700 rounded  text-xs    hover:bg-slate-100 transition-all active:scale-95 border border-slate-200 "
-                >
-                  <Download className="w-4 h-4" />
-                  Download PDF
-                </button>
-                <button
-                  onClick={() => setViewingPo(null)}
-                  className="p-2 rounded hover:bg-slate-100 transition-all text-slate-400 hover:text-slate-900 active:scale-90 bg-slate-50 border border-slate-200"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
-              {/* Project & Client Info */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2 text-slate-400">
-                    <FileText className="w-4 h-4" />
-                    <span className="text-[10px]   ">Project Information</span>
-                  </div>
-                  <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
-                    <p className="text-sm font-semibold text-slate-900">{viewingPo.project_name || 'General Project'}</p>
-                    <p className="text-xs text-slate-500 mt-1">Reference PO: {viewingPo.po_number}</p>
-                  </div>
-                </div>
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2 text-slate-400">
-                    <Building2 className="w-4 h-4" />
-                    <span className="text-[10px]   ">Client Details</span>
-                  </div>
-                  <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
-                    <p className="text-sm font-semibold text-slate-900">{viewingPo.company_name}</p>
-                    <div className="grid grid-cols-2 gap-4 mt-2">
-                      {viewingPo.gstin && (
-                        <div>
-                          <p className="text-[10px] text-slate-400 ">GSTIN</p>
-                          <p className="text-xs font-medium text-slate-700">{viewingPo.gstin}</p>
-                        </div>
-                      )}
-                      {viewingPo.pan && (
-                        <div>
-                          <p className="text-[10px] text-slate-400 ">PAN</p>
-                          <p className="text-xs font-medium text-slate-700">{viewingPo.pan}</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Summary Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="bg-slate-50/50 rounded-xl p-4 border border-slate-100">
-                  <p className="text-xs  text-slate-400   mb-1.5">Currency</p>
-                  <p className="text-sm  text-slate-700">{viewingPo.currency || 'INR'}</p>
-                </div>
-                <div className="bg-slate-50/50 rounded-xl p-4 border border-slate-100">
-                  <p className="text-xs  text-slate-400   mb-1.5">Payment Terms</p>
-                  <p className="text-sm  text-slate-700">{viewingPo.payment_terms || '—'}</p>
-                </div>
-                <div className="bg-slate-50/50 rounded-xl p-4 border border-slate-100">
-                  <p className="text-xs  text-slate-400   mb-1.5">Credit Days</p>
-                  <p className="text-sm  text-slate-700">{viewingPo.credit_days || '—'} Days</p>
-                </div>
-                <div className="bg-slate-50/50 rounded-xl p-4 border border-slate-100">
-                  <p className="text-xs  text-slate-400   mb-1.5">Order Type</p>
-                  <p className="text-sm  text-slate-700 ">{viewingPo.order_type || 'STANDARD'}</p>
-                </div>
-              </div>
-
-              {/* Items Table */}
-              <div className="space-y-4">
-                <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
-                  <div className="p-2 bg-indigo-50 text-indigo-600 rounded ">
-                    <Package className="w-5 h-5" />
-                  </div>
-                  <h3 className="text-sm  text-slate-800  ">Order Items</h3>
-                </div>
-
-                <div className="overflow-hidden rounded border border-slate-200 bg-white ">
-                  <table className="w-full border-collapse">
-                    <thead>
-                      <tr className="bg-slate-50/80 border-b border-slate-200">
-                        <th className="px-4 py-3 text-xs  text-slate-400   text-left">Drawing No</th>
-                        <th className="px-4 py-3 text-xs  text-slate-400   text-left">Description</th>
-                        <th className="px-4 py-3 text-xs  text-slate-400   text-center">Qty</th>
-                        <th className="px-4 py-3 text-xs  text-slate-400   text-right">Rate</th>
-                        <th className="px-4 py-3 text-xs  text-slate-400   text-right pr-8">Total</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {viewingPo.items?.flatMap((item, idx) => {
-                        const rows = [];
-                        
-                        // Main Item Row
-                        rows.push(
-                          <tr key={`view-item-${idx}`} className="hover:bg-slate-50/50 transition-colors">
-                            <td className="px-4 py-3">
-                              <span className="text-xs  text-slate-900">{item.drawing_no || '—'}</span>
-                            </td>
-                            <td className="px-4 py-3">
-                              <p className="text-xs  text-slate-600">{item.description || '—'}</p>
-                            </td>
-                            <td className="px-4 py-3 text-center">
-                              <span className="text-xs  text-slate-900">{item.quantity} {item.unit}</span>
-                            </td>
-                            <td className="px-4 py-3 text-right">
-                              <span className="text-xs  text-slate-600">{formatCurrency(item.rate)}</span>
-                            </td>
-                            <td className="px-4 py-3 text-right pr-8">
-                              <span className="text-xs  text-slate-900">{formatCurrency(item.basic_amount)}</span>
-                            </td>
-                          </tr>
-                        );
-
-                        // Sub-Assembly Rows
-                        if (item.sub_assemblies && item.sub_assemblies.length > 0) {
-                          item.sub_assemblies.forEach((sa, saIdx) => {
-                            const saQty = (parseFloat(sa.quantity || 0) * (parseFloat(item.quantity) || 0));
-                            const saRate = parseFloat(sa.rate || 0);
-                            const saTotal = saQty * saRate;
-
-                            rows.push(
-                              <tr key={`view-item-${idx}-sa-${saIdx}`} className="bg-slate-50/30">
-                                <td className="px-4 py-2 border-b border-slate-100">
-                                  <div className="flex items-center gap-2 pl-4">
-                                    <GitBranch size={10} className="text-blue-400 rotate-180" />
-                                    <span className="text-[10px] text-slate-500 font-mono font-bold">{sa.drawingNo}</span>
-                                  </div>
-                                </td>
-                                <td className="px-4 py-2 border-b border-slate-100">
-                                  <div className="flex items-center gap-2 pl-4">
-                                    <span className="text-[10px] text-slate-700 font-medium">{sa.description}</span>
-                                    <span className="px-1 py-0.5 rounded-[2px] text-[8px] font-bold bg-blue-50 text-blue-600 border border-blue-100/50">SA</span>
-                                  </div>
-                                </td>
-                                <td className="px-4 py-2 border-b border-slate-100 text-center text-[10px] text-slate-600">
-                                  {saQty.toFixed(3)} {sa.unit}
-                                </td>
-                                <td className="px-4 py-2 border-b border-slate-100 text-right text-[10px] text-slate-500">
-                                  {formatCurrency(saRate)}
-                                </td>
-                                <td className="px-4 py-2 border-b border-slate-100 text-right pr-8 text-[10px] text-slate-900 font-bold">
-                                  {formatCurrency(saTotal)}
-                                </td>
-                              </tr>
-                            );
-                          });
-                        }
-
-                        return rows;
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* Financial Summary */}
-              <div className="flex justify-end pt-6">
-                <div className="w-full max-w-sm bg-slate-50/80 rounded-2xl p-6 space-y-4 border border-slate-200/50 ">
-                  <div className="flex justify-between items-center text-xs  text-slate-500  ">
-                    <span>Sub Total</span>
-                    <span className="text-slate-900">{formatCurrency(viewingPo.subtotal)}</span>
-                  </div>
-                  <div className="flex justify-between items-center text-xs  text-slate-500  ">
-                    <span>Tax Amount</span>
-                    <span className="text-slate-900">{formatCurrency(viewingPo.tax_total)}</span>
-                  </div>
-                  <div className="pt-4 border-t border-slate-200 flex justify-between items-center">
-                    <span className="text-xs  text-slate-900">Net Amount</span>
-                    <span className="text-xl  text-indigo-600 ">{formatCurrency(viewingPo.net_total)}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Remarks */}
-              {viewingPo.remarks && (
-                <div className="space-y-3">
-                  <h4 className="text-xs  text-slate-400   ml-1">Remarks / Notes</h4>
-                  <div className="bg-slate-50 rounded p-4 border border-slate-200/50 text-sm text-slate-600 italic">
-                    {viewingPo.remarks}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Loading Overlay */}
-      {loadingPoDetails && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/20 backdrop-blur-[2px]">
-          <div className="bg-white p-2 rounded shadow-2xl flex flex-col items-center gap-2">
-            <Loader2 className="w-5 h-5 text-indigo-600 animate-spin" />
-            <p className="text-xs  text-slate-900  ">Loading Details...</p>
-          </div>
-        </div>
+      {showEmailModal && emailPoData && (
+        <SendEmailModal
+          isOpen={showEmailModal}
+          onClose={() => setShowEmailModal(false)}
+          data={emailPoData}
+          onSend={handleSendEmail}
+          title="Send PO to Client"
+          subTitle={`${emailPoData.poNumber}`}
+          attachmentName={emailPoData.attachmentName}
+        />
       )}
     </div>
   )
