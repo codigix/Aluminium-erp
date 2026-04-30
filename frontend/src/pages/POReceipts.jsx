@@ -24,7 +24,8 @@ import {
   Download,
   Printer,
   History,
-  AlertCircle
+  AlertCircle,
+  Building2
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
@@ -391,6 +392,8 @@ const POReceipts = () => {
             poId,
             vendorName: selectedPO.vendor_name,
             vendorId: selectedPO.vendor_id,
+            project_name: detailedPO.project_name,
+            company_name: detailedPO.company_name,
             items,
             receivedQuantity: items.reduce((sum, item) => sum + parseFloat(item.received_qty || 0), 0),
             totalValuation: items.reduce((sum, item) => sum + parseFloat(item.amount || 0), 0)
@@ -585,16 +588,6 @@ const POReceipts = () => {
         <span className="text-xs  text-slate-600 bg-slate-50 px-2 py-1 rounded border border-slate-100  ">#{val || 'Direct'}</span>
       )
     },
-    {
-      key: 'project_name',
-      label: 'Project Name',
-      sortable: true,
-      render: (val) => (
-        <span className="text-xs font-medium text-slate-700 truncate max-w-[150px] block">
-          {val || '—'}
-        </span>
-      )
-    },
     { 
       key: 'vendor_name', 
       label: 'Supplier', 
@@ -605,6 +598,40 @@ const POReceipts = () => {
           <span className="text-xs text-slate-500    mt-0.5 er">Active Vendor</span>
         </div>
       )
+    },
+    {
+      key: 'project_name',
+      label: 'Project / Customer',
+      sortable: true,
+      render: (val, row) => {
+        if (!val) return '—';
+        // Intelligent split: break at " for " (case insensitive) to keep drawing numbers on top line
+        const parts = val.split(/\s+for\s+/i);
+        return (
+          <div className="flex flex-col py-1 min-w-[300px] max-w-[420px]">
+            <div className="flex flex-col">
+              <span className="text-slate-900 font-bold text-[13px] leading-tight break-words">
+                {parts[0]}
+              </span>
+              {parts.length > 1 && (
+                <span className="text-[11px] text-slate-600 font-medium leading-relaxed mt-0.5 break-words">
+                  for {parts.slice(1).join(' for ')}
+                </span>
+              )}
+            </div>
+            {row.company_name && (
+              <div className="flex items-center gap-2 mt-2 pt-1.5 border-t border-slate-100/80">
+                <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-600 text-[9px] font-bold rounded border border-indigo-100 shrink-0 uppercase tracking-wider">
+                  Client
+                </span>
+                <span className="text-[11px] text-slate-500 font-medium italic truncate" title={row.company_name}>
+                  {row.company_name}
+                </span>
+              </div>
+            )}
+          </div>
+        );
+      }
     },
     {
       key: 'receipt_date',
@@ -942,9 +969,32 @@ const POReceipts = () => {
                   <div className="p-2 bg-blue-50 rounded ">
                     <Warehouse className="w-5 h-5 text-blue-600" />
                   </div>
-                  <span className="text-xs  text-slate-900  ">{selectedReceiptForView.vendor_name}</span>
+                  <div className="flex flex-col">
+                    <span className="text-xs  text-slate-900  ">{selectedReceiptForView.vendor_name}</span>
+                    <span className="text-[10px] text-slate-400">Supplier ID: #{selectedReceiptForView.vendor_id}</span>
+                  </div>
                 </div>
               </div>
+
+              {selectedReceiptForView.project_name && (
+                <div className="p-2 bg-white border border-slate-200 rounded   space-y-3 hover:border-emerald-100 transition-colors">
+                  <div className="flex items-center gap-2  text-emerald-500">
+                    <Package className="w-4 h-4" />
+                    <span className="text-xs  text-slate-400  ">Project / Customer</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="p-2 bg-emerald-50 rounded ">
+                      <Building2 className="w-5 h-5 text-emerald-600" />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-xs  text-slate-900 font-medium ">{selectedReceiptForView.project_name}</span>
+                      {selectedReceiptForView.company_name && (
+                        <span className="text-[10px] text-slate-400">{selectedReceiptForView.company_name}</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Received Items Table */}
@@ -1102,6 +1152,18 @@ const POReceipts = () => {
                         <p className="text-xs text-slate-500   ">Selected Supplier</p>
                         <p className="text-xs  text-slate-900 mt-0.5">{formData.vendorName}</p>
                       </div>
+                      {formData.project_name && (
+                        <div>
+                          <p className="text-xs text-slate-500   ">Project</p>
+                          <p className="text-xs  text-slate-900 mt-0.5 font-medium">{formData.project_name}</p>
+                        </div>
+                      )}
+                      {formData.company_name && (
+                        <div>
+                          <p className="text-xs text-slate-500   ">Customer</p>
+                          <p className="text-xs  text-slate-900 mt-0.5">{formData.company_name}</p>
+                        </div>
+                      )}
                       <div>
                         <p className="text-xs text-slate-500   ">Supplier ID</p>
                         <p className="text-xs  text-blue-600 mt-0.5 ">#{formData.vendorId || 'N/A'}</p>

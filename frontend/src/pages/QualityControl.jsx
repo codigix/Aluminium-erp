@@ -150,6 +150,30 @@ const QualityControl = () => {
     }
   };
 
+  const handleDownloadPdf = async (qcId) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/qc-inspections/${qcId}/pdf`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!response.ok) throw new Error('Failed to generate PDF');
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `QC_Report_${qcId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading PDF:', error);
+      errorToast('Failed to download QC Report');
+    }
+  };
+
   const handleViewDetails = async (id, type, status) => {
     setDetailModal({ open: true, data: null, type, status, loading: true });
     try {
@@ -397,6 +421,13 @@ const QualityControl = () => {
                         </td>
                         <td className="p-2 text-right">
                           <div className="flex justify-center gap-2  group-hover:opacity-100 transition-opacity">
+                            <button 
+                              onClick={() => handleDownloadPdf(qc.id)}
+                              className="p-2 text-slate-400 hover:text-orange-600 hover:bg-orange-50 rounded transition-colors"
+                              title="QC Report"
+                            >
+                              <FileText className="w-4 h-4" />
+                            </button>
                             <button 
                               onClick={() => handleViewDetails(qc.id, 'qc', qc.status)}
                               className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-colors"

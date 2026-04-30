@@ -45,7 +45,7 @@ const generatePoPdf = async (data) => {
           sr: idx + 1,
           itemCode: item.item_code || item.itemCode || '—',
           description: item.description || '—',
-          qty: displayQty.toFixed(3),
+          qty: `${displayQty.toFixed(3)} ${item.unit || item.uom || ''}`.trim(),
           receivedQty: parseFloat(item.received_quantity || item.accepted_qty || 0).toFixed(3),
           rate: formatCurrency(item.unit_rate || item.rate || 0),
           amount: formatCurrency(item.amount || (displayQty * parseFloat(item.unit_rate || item.rate || 0)))

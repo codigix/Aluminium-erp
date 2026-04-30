@@ -457,6 +457,41 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
 
         {/* Right Sidebar */}
         <div className="space-y-2">
+          {(po.project_name || po.company_name) && (
+            <div className="bg-white border border-slate-100 rounded p-2 ">
+              <div className="flex items-center gap-2 mb-6">
+                <div className="p-2 bg-indigo-50 text-indigo-600 rounded ">
+                  <Building2 className="w-4 h-4" />
+                </div>
+                <h4 className="text-sm  text-slate-700  ">Project Context</h4>
+              </div>
+              <div className="space-y-2">
+                {po.project_name && (
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 rounded  bg-slate-50 flex items-center justify-center text-slate-400 border border-slate-100">
+                      <Package className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-400   ">Project</p>
+                      <p className="text-xs   text-slate-700 mt-0.5 font-medium">{po.project_name}</p>
+                    </div>
+                  </div>
+                )}
+                {po.company_name && (
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 rounded  bg-slate-50 flex items-center justify-center text-slate-400 border border-slate-100">
+                      <User className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-400   ">Customer</p>
+                      <p className="text-xs   text-slate-700 mt-0.5">{po.company_name}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           <div className="bg-white border border-slate-100 rounded p-2 ">
             <div className="flex items-center gap-2 mb-6">
               <div className="p-2 bg-amber-50 text-amber-600 rounded ">

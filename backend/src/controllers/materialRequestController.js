@@ -8,9 +8,13 @@ const materialRequestController = {
         SELECT mr.*, CONCAT(u.first_name, ' ', u.last_name) as requester_name,
         COALESCE(
           (SELECT so.project_name FROM sales_orders so JOIN production_plans pp ON so.id = pp.sales_order_id WHERE pp.id = mr.plan_id),
+          (SELECT COALESCE(NULLIF(o.project_name, ''), c.company_name) FROM orders o JOIN production_plans pp ON o.id = pp.sales_order_id JOIN companies c ON o.client_id = c.id WHERE pp.id = mr.plan_id),
           (SELECT so2.project_name FROM sales_orders so2 WHERE mr.notes LIKE CONCAT('%', so2.project_name, '%') LIMIT 1),
-          mr.purpose,
-          'General Procurement'
+          (SELECT o2.project_name FROM orders o2 WHERE mr.notes LIKE CONCAT('%', o2.project_name, '%') LIMIT 1),
+          (SELECT so3.project_name FROM sales_orders so3 WHERE mr.notes REGEXP CONCAT('SO-[0-9]{4}-', LPAD(so3.id, 4, '0')) LIMIT 1),
+          (SELECT so4.project_name FROM sales_orders so4 WHERE mr.purpose LIKE CONCAT('%', so4.project_name, '%') LIMIT 1),
+          CASE WHEN mr.purpose = 'Material Issue' THEN 'General Project' ELSE mr.purpose END,
+          'General Project'
         ) as project_name,
         (
           SELECT CASE 
@@ -37,7 +41,17 @@ const materialRequestController = {
       const { id } = req.params;
       const { warehouse } = req.query;
       const [requests] = await pool.query(`
-        SELECT mr.*, CONCAT(u.first_name, ' ', u.last_name) as requester_name 
+        SELECT mr.*, CONCAT(u.first_name, ' ', u.last_name) as requester_name,
+        COALESCE(
+          (SELECT so.project_name FROM sales_orders so JOIN production_plans pp ON so.id = pp.sales_order_id WHERE pp.id = mr.plan_id),
+          (SELECT COALESCE(NULLIF(o.project_name, ''), c.company_name) FROM orders o JOIN production_plans pp ON o.id = pp.sales_order_id JOIN companies c ON o.client_id = c.id WHERE pp.id = mr.plan_id),
+          (SELECT so2.project_name FROM sales_orders so2 WHERE mr.notes LIKE CONCAT('%', so2.project_name, '%') LIMIT 1),
+          (SELECT o2.project_name FROM orders o2 WHERE mr.notes LIKE CONCAT('%', o2.project_name, '%') LIMIT 1),
+          (SELECT so3.project_name FROM sales_orders so3 WHERE mr.notes REGEXP CONCAT('SO-[0-9]{4}-', LPAD(so3.id, 4, '0')) LIMIT 1),
+          (SELECT so4.project_name FROM sales_orders so4 WHERE mr.purpose LIKE CONCAT('%', so4.project_name, '%') LIMIT 1),
+          CASE WHEN mr.purpose = 'Material Issue' THEN 'General Project' ELSE mr.purpose END,
+          'General Project'
+        ) as project_name
         FROM material_requests mr
         LEFT JOIN users u ON mr.requested_by = u.id
         WHERE mr.id = ?

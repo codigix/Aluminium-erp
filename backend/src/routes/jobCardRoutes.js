@@ -25,6 +25,7 @@ router.post('/:id/time-logs', authorize(['PROD_MANAGE']), jobCardController.addT
 router.put('/time-logs/:logId', authorize(['PROD_MANAGE']), jobCardController.updateTimeLog);
 router.delete('/time-logs/:logId', authorize(['PROD_MANAGE']), jobCardController.deleteTimeLog);
 
+router.get('/quality-logs/:logId/download', authorize(['PROD_VIEW', 'QC_VIEW']), jobCardController.downloadQualityReport);
 router.post('/:id/quality-logs', authorize(['PROD_MANAGE', 'QC_EDIT']), upload.single('vendorInvoice'), jobCardController.addQualityLog);
 router.put('/quality-logs/:logId', authorize(['PROD_MANAGE', 'QC_EDIT']), jobCardController.updateQualityLog);
 router.delete('/quality-logs/:logId', authorize(['PROD_MANAGE', 'QC_EDIT']), jobCardController.deleteQualityLog);

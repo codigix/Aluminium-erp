@@ -94,7 +94,12 @@ const getQCWithDetails = async (qcId) => {
          JOIN sales_orders so ON pp.sales_order_id = so.id
          WHERE mr_inner.id = po.mr_id LIMIT 1),
         'Stock/Internal'
-      ) as project_name
+      ) as project_name,
+      COALESCE(
+        (SELECT c.company_name FROM companies c JOIN sales_orders so ON c.id = so.company_id WHERE so.id = po.sales_order_id),
+        (SELECT c.company_name FROM companies c JOIN sales_orders so ON c.id = so.company_id JOIN production_plans pp ON so.id = pp.sales_order_id JOIN material_requests mr_inner ON pp.id = mr_inner.plan_id WHERE mr_inner.id = po.mr_id LIMIT 1),
+        'Internal'
+      ) as company_name
     FROM qc_inspections qc
     LEFT JOIN grns g ON qc.grn_id = g.id
     LEFT JOIN purchase_orders po ON g.po_number = po.po_number
@@ -203,7 +208,12 @@ const getAllQCs = async () => {
          JOIN sales_orders so ON pp.sales_order_id = so.id
          WHERE mr_inner.id = po.mr_id LIMIT 1),
         'Stock/Internal'
-      ) as project_name
+      ) as project_name,
+      COALESCE(
+        (SELECT c.company_name FROM companies c JOIN sales_orders so ON c.id = so.company_id WHERE so.id = po.sales_order_id),
+        (SELECT c.company_name FROM companies c JOIN sales_orders so ON c.id = so.company_id JOIN production_plans pp ON so.id = pp.sales_order_id JOIN material_requests mr_inner ON pp.id = mr_inner.plan_id WHERE mr_inner.id = po.mr_id LIMIT 1),
+        'Internal'
+      ) as company_name
     FROM qc_inspections qc
     LEFT JOIN grns g ON qc.grn_id = g.id
     LEFT JOIN purchase_orders po ON g.po_number = po.po_number
@@ -743,12 +753,14 @@ const getQCReports = async () => {
       CONCAT('GRN-', LPAD(qc.grn_id, 4, '0')) as grn,
       qc.inspection_date as date,
       qc.status,
-      u.username as inspector
+      'QA Inspector' as inspector
     FROM qc_inspections qc
-    LEFT JOIN users u ON 1=1 -- Assuming there might be an inspector_id later, using first user or mock
     ORDER BY qc.created_at DESC
-    LIMIT 5
+    LIMIT 100
   `);
+
+  // 6. Recent Rejections
+  const recentRejections = await getRejectedItems();
 
   return {
     kpis: {
@@ -761,7 +773,8 @@ const getQCReports = async () => {
     monthlyTrend,
     defectBreakdown,
     supplierPerformance,
-    recentReports
+    recentReports,
+    recentRejections: recentRejections.slice(0, 10)
   };
 };
 
@@ -960,6 +973,35 @@ const updateQCInvoice = async (qcId, invoiceUrl) => {
   return { id: qcId, invoice_url: invoiceUrl };
 };
 
+const addQCAttachments = async (qcId, attachments) => {
+  const results = [];
+  for (const attachment of attachments) {
+    const [result] = await pool.execute(
+      'INSERT INTO qc_attachments (qc_id, file_name, file_url) VALUES (?, ?, ?)',
+      [qcId, attachment.file_name, attachment.file_url]
+    );
+    results.push({ id: result.insertId, ...attachment });
+  }
+  return results;
+};
+
+const getQCAttachments = async (qcId) => {
+  const [rows] = await pool.query(
+    'SELECT * FROM qc_attachments WHERE qc_id = ? ORDER BY uploaded_at DESC',
+    [qcId]
+  );
+  return rows;
+};
+
+const deleteQCAttachment = async (attachmentId) => {
+  const [result] = await pool.execute(
+    'DELETE FROM qc_attachments WHERE id = ?',
+    [attachmentId]
+  );
+  if (result.affectedRows === 0) throw new Error('Attachment not found');
+  return { message: 'Attachment deleted successfully' };
+};
+
 const getRejectedItems = async () => {
   const [items] = await pool.query(
     `(SELECT 
@@ -981,7 +1023,8 @@ const getRejectedItems = async () => {
       qc.grn_id as ref_id,
       'GRN' as ref_type,
       v.vendor_name as source_name,
-      poi.material_name as material_name
+      poi.material_name as material_name,
+      qc.id as qc_inspection_id
     FROM qc_inspection_items qci
     JOIN qc_inspections qc ON qci.qc_inspection_id = qc.id
     LEFT JOIN grns g ON qc.grn_id = g.id
@@ -1004,7 +1047,8 @@ const getRejectedItems = async () => {
       jc.id as ref_id,
       'JOB_CARD' as ref_type,
       CONCAT('Op: ', COALESCE(o.operation_name, jc.operation_name)) as source_name,
-      wo.item_name as material_name
+      wo.item_name as material_name,
+      NULL as qc_inspection_id
     FROM job_card_quality_logs ql
     JOIN job_cards jc ON ql.job_card_id = jc.id
     JOIN work_orders wo ON jc.work_order_id = wo.id
@@ -1118,6 +1162,20 @@ const createShipmentFromQC = async (qcId) => {
   }
 };
 
+const generateQcPdfUtil = require('../utils/generateQcPdf');
+
+const generateQcPdf = async (qcId) => {
+  const qc = await getQCWithDetails(qcId);
+  if (!qc) throw new Error('QC Inspection not found');
+  
+  const items = qc.items_detail || [];
+  
+  return await generateQcPdfUtil({
+    qc,
+    items
+  });
+};
+
 module.exports = {
   getQCWithDetails,
   getAllQCs,
@@ -1130,6 +1188,10 @@ module.exports = {
   getQCReports,
   sendQCAlertEmail,
   updateQCInvoice,
+  addQCAttachments,
+  getQCAttachments,
+  deleteQCAttachment,
   getRejectedItems,
-  createShipmentFromQC
+  createShipmentFromQC,
+  generateQcPdf
 };

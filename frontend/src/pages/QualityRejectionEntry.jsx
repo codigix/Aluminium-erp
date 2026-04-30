@@ -6,7 +6,8 @@ import {
   RefreshCw,
   Save,
   Check,
-  History
+  History,
+  FileText
 } from 'lucide-react';
 import { StatusBadge } from '../components/ui.jsx';
 
@@ -112,84 +113,26 @@ const QualityRejectionEntry = () => {
     }
   };
 
-  const handleSaveAll = async () => {
-    setLoading(true);
+  const handleDownloadReport = async (logId) => {
     try {
       const token = localStorage.getItem('authToken');
-      const modifiedRecords = records.filter(r => r.status === 'PENDING' && (r.accepted !== '' || r.rejected !== '' || r.reason !== ''));
-      
-      if (modifiedRecords.length === 0) {
-        setLoading(false);
-        return;
+      const response = await fetch(`${API_BASE}/job-cards/quality-logs/${logId}/download`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `QC_Report_${logId}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+      } else {
+        alert('Failed to download report');
       }
-
-      await Promise.all(modifiedRecords.map(record => {
-        const payload = {
-          acceptedQty: parseFloat(record.accepted || 0),
-          rejectedQty: parseFloat(record.rejected || 0),
-          rejectionReason: record.reason,
-          status: 'PENDING'
-        };
-
-        return fetch(`${API_BASE}/job-cards/quality-logs/${record.id}`, {
-          method: 'PUT',
-          headers: { 
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}` 
-          },
-          body: JSON.stringify(payload)
-        });
-      }));
-
-      setSuccessMessage('Changes saved successfully');
-      setTimeout(() => setSuccessMessage(''), 5000);
-      fetchQueue();
     } catch (error) {
-      console.error('Error saving records:', error);
-      alert('Error saving records');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleApproveAll = async () => {
-    setLoading(true);
-    try {
-      const token = localStorage.getItem('authToken');
-      const validRecords = records.filter(r => r.status === 'PENDING' && (r.accepted !== '' || r.rejected !== ''));
-      
-      if (validRecords.length === 0) {
-        alert('Please enter inspection results for at least one record');
-        setLoading(false);
-        return;
-      }
-
-      await Promise.all(validRecords.map(record => {
-        const payload = {
-          acceptedQty: parseFloat(record.accepted || 0),
-          rejectedQty: parseFloat(record.rejected || 0),
-          rejectionReason: record.reason,
-          status: 'APPROVED'
-        };
-
-        return fetch(`${API_BASE}/job-cards/quality-logs/${record.id}`, {
-          method: 'PUT',
-          headers: { 
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}` 
-          },
-          body: JSON.stringify(payload)
-        });
-      }));
-
-      setSuccessMessage('All selected records approved successfully');
-      setTimeout(() => setSuccessMessage(''), 5000);
-      fetchQueue();
-    } catch (error) {
-      console.error('Error approving records:', error);
-      alert('Error approving records');
-    } finally {
-      setLoading(false);
+      console.error('Error downloading report:', error);
     }
   };
 
@@ -316,13 +259,23 @@ const QualityRejectionEntry = () => {
                     <StatusBadge status={record.status} small />
                   </td>
                   <td className="px-3 py-2 text-right">
-                    <button 
-                      onClick={() => handleInspect(record)}
-                      className="px-3 py-1 bg-emerald-600 text-white rounded-md text-[10px]  hover:bg-emerald-700 transition-all shadow-sm active:scale-95 flex items-center gap-1 ml-auto"
-                    >
-                      <CheckCircle2 className="w-3 h-3" />
-                      Quality Approved
-                    </button>
+                    <div className="flex items-center justify-end gap-2">
+                      <button 
+                        onClick={() => handleDownloadReport(record.id)}
+                        className="px-2 py-1 bg-white border border-slate-200 text-slate-600 rounded-md text-[10px] hover:bg-slate-50 transition-all flex items-center gap-1"
+                        title="Download QC Report"
+                      >
+                        <FileText className="w-3 h-3" />
+                        QC Report
+                      </button>
+                      <button 
+                        onClick={() => handleInspect(record)}
+                        className="px-3 py-1 bg-emerald-600 text-white rounded-md text-[10px]  hover:bg-emerald-700 transition-all shadow-sm active:scale-95 flex items-center gap-1"
+                      >
+                        <CheckCircle2 className="w-3 h-3" />
+                        Quality Approved
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -362,6 +315,7 @@ const QualityRejectionEntry = () => {
                 <th className="px-3 py-2 text-[10px]  text-slate-500 uppercase tracking-wider text-center text-rose-600">Rejected</th>
                 <th className="px-3 py-2 text-[10px]  text-slate-500 uppercase tracking-wider">Reason</th>
                 <th className="px-3 py-2 text-[10px]  text-slate-500 uppercase tracking-wider text-center">Status</th>
+                <th className="px-3 py-2 text-[10px]  text-slate-500 uppercase tracking-wider text-right">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -377,11 +331,21 @@ const QualityRejectionEntry = () => {
                   <td className="px-3 py-2 text-center">
                     <StatusBadge status={record.status} small />
                   </td>
+                  <td className="px-3 py-2 text-right">
+                    <button 
+                      onClick={() => handleDownloadReport(record.id)}
+                      className="px-2 py-1 bg-white border border-slate-200 text-slate-600 rounded-md text-[10px] hover:bg-slate-50 transition-all flex items-center gap-1 ml-auto"
+                      title="Download QC Report"
+                    >
+                      <FileText className="w-3 h-3" />
+                      QC Report
+                    </button>
+                  </td>
                 </tr>
               ))}
               {approvedRecords.length === 0 && !loading && (
                 <tr>
-                  <td colSpan="8" className="px-3 py-6 text-center text-slate-400 italic text-[11px]">
+                  <td colSpan="9" className="px-3 py-6 text-center text-slate-400 italic text-[11px]">
                     No approved records found
                   </td>
                 </tr>

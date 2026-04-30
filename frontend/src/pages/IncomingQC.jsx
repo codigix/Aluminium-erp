@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { Card, DataTable, Modal, FormControl, Tabs, Button } from '../components/ui.jsx';
-import { Beaker, Clock, Inbox, Search, CheckCircle2, Eye, Edit, Trash2, ListTodo, AlertTriangle, RefreshCw, X, CheckCircle, XCircle, ShieldCheck, Mail, Paperclip, Send, Database, ShoppingCart, Truck } from 'lucide-react';
+import { Beaker, Clock, Inbox, Search, CheckCircle2, Eye, Edit, Trash2, ListTodo, AlertTriangle, RefreshCw, X, CheckCircle, XCircle, ShieldCheck, Mail, Paperclip, Send, Database, ShoppingCart, Truck, FileText, Plus } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
 
@@ -9,7 +9,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/
 
 const qcStatusColors = {
   PENDING: { badge: 'bg-amber-100 text-amber-700 border-amber-200', label: 'Pending' },
-  IN_PROGRESS: { badge: 'bg-blue-100 text-blue-700 border-blue-200', label: 'In Progress' },
+  IN_PROGRESS: { badge: 'bg-blue-100 text-blue-700 border-blue-200', label: 'Partially' },
   PASSED: { badge: 'bg-emerald-100 text-emerald-700 border-emerald-200', label: 'Passed' },
   FAILED: { badge: 'bg-red-100 text-red-700 border-red-200', label: 'Failed' },
   SHORTAGE: { badge: 'bg-red-100 text-red-700 border-red-200', label: 'Shortage' },
@@ -37,6 +37,9 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
   });
   const [uploadingQcId, setUploadingQcId] = useState(null);
   const invoiceInputRef = useRef(null);
+  const attachmentsInputRef = useRef(null);
+  const [attachments, setAttachments] = useState([]);
+  const [isAttachmentsUploading, setIsAttachmentsUploading] = useState(false);
   const [editFormData, setEditFormData] = useState({
     status: '',
     remarks: '',
@@ -53,7 +56,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
     const id = searchParams.get('id');
 
     // Tab Sync
-    if (segments[1] === 'in-progress') setActiveTab('in-progress');
+    if (segments[1] === 'in-process') setActiveTab('in-process');
     else if (segments[1] === 'final') setActiveTab('final');
     else setActiveTab('incoming');
 
@@ -141,6 +144,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
   const handleViewQC = (qc) => {
     const tabPath = activeTab === 'incoming' ? '/incoming-qc' : `/incoming-qc/${activeTab}`;
     navigate(`${tabPath}/view?id=${qc.id}`);
+    fetchAttachments(qc.id);
   };
 
   const handleEditQC = (qc) => {
@@ -152,14 +156,15 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
     }
     
     setSelectedQC(qc);
+    fetchAttachments(qc.id);
     const items = (qc.items_detail || []).map(item => ({
       ...item,
-      accepted_qty: item.accepted_qty || item.received_qty || 0,
-      rejected_qty: item.rejected_qty || 0,
+      accepted_qty: item.accepted_qty !== undefined && item.accepted_qty !== null ? item.accepted_qty : (item.received_qty || 0),
+      rejected_qty: item.rejected_qty !== undefined && item.rejected_qty !== null ? item.rejected_qty : 0,
       remarks: item.remarks || ''
     }));
 
-    // Calculate initial status based on items
+    // Calculate initial status based on items ONLY if status is PENDING
     let hasShortageOverage = false;
 
     items.forEach(item => {
@@ -173,11 +178,9 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       }
     });
 
-    let overallStatus = 'PASSED';
-    if (hasShortageOverage) {
-      overallStatus = 'IN_PROGRESS';
-    } else {
-      overallStatus = 'PASSED';
+    let overallStatus = qc.status;
+    if (qc.status === 'PENDING') {
+      overallStatus = hasShortageOverage ? 'IN_PROGRESS' : 'PASSED';
     }
 
     setEditFormData({
@@ -189,6 +192,81 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       items: items
     });
     setShowEditModal(true);
+  };
+
+  const fetchAttachments = async (qcId) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/qc-inspections/${qcId}/attachments`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setAttachments(data);
+      }
+    } catch (error) {
+      console.error('Error fetching attachments:', error);
+    }
+  };
+
+  const handleAttachmentsUpload = async (e) => {
+    const files = Array.from(e.target.files);
+    if (!files.length || !selectedQC) return;
+
+    const formData = new FormData();
+    files.forEach(file => formData.append('attachments', file));
+
+    try {
+      setIsAttachmentsUploading(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/qc-inspections/${selectedQC.id}/attachments`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+      });
+
+      if (response.ok) {
+        successToast('Attachments uploaded successfully');
+        fetchAttachments(selectedQC.id);
+      } else {
+        const errorData = await response.json();
+        errorToast(errorData.message || 'Failed to upload attachments');
+      }
+    } catch (error) {
+      console.error('Error uploading attachments:', error);
+      errorToast('Error uploading attachments');
+    } finally {
+      setIsAttachmentsUploading(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleDeleteAttachment = async (attachmentId) => {
+    const result = await Swal.fire({
+      title: 'Delete Attachment?',
+      text: 'This action cannot be undone',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Delete',
+      confirmButtonColor: '#dc2626'
+    });
+
+    if (!result.isConfirmed) return;
+
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/qc-inspections/attachments/${attachmentId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        successToast('Attachment deleted');
+        fetchAttachments(selectedQC.id);
+      }
+    } catch {
+      errorToast('Failed to delete attachment');
+    }
   };
 
   const handleItemQtyChange = (idx, value) => {
@@ -210,7 +288,10 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       newItems[idx].status = 'AVAILABLE';
     }
     
-    // Calculate Overall Status based on Items
+    // Calculate Overall Status based on Items - ONLY if we want to auto-flip
+    // If it's already IN_PROGRESS or PASSED, we might want to keep auto-calculation
+    // but the user complained about it resetting to PASSED when they want it IN_PROGRESS
+    
     let hasShortageOverage = false;
 
     newItems.forEach(item => {
@@ -224,11 +305,10 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       }
     });
 
-    let overallStatus = 'PASSED';
-    if (hasShortageOverage) {
-      overallStatus = 'IN_PROGRESS';
-    } else {
-      overallStatus = 'PASSED';
+    // Auto-calculate status only if currently in a non-final state
+    let overallStatus = editFormData.status;
+    if (['PENDING', 'IN_PROGRESS', 'SHORTAGE', 'OVERAGE'].includes(editFormData.status)) {
+      overallStatus = hasShortageOverage ? 'IN_PROGRESS' : 'PASSED';
     }
     
     const totalAccepted = newItems.reduce((sum, item) => sum + (parseFloat(item.accepted_qty) || 0), 0);
@@ -523,41 +603,49 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
     }
   };
 
-  const handleCreateShipment = async (qc) => {
+  const handleDownloadPdf = async (qc) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/qc-inspections/${qc.id}/pdf`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!response.ok) throw new Error('Failed to generate PDF');
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `QC_Report_${qc.id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading PDF:', error);
+      errorToast('Failed to download QC Report');
+    }
+  };
+
+  const handleBulkDownload = async (inspections) => {
+    if (!inspections.length) return;
+    
     const result = await Swal.fire({
-      title: 'Create Shipment Order?',
-      text: `This will generate a shipment order for GRN-${String(qc.grn_id).padStart(4, '0')}.`,
+      title: 'Generate Bulk Reports?',
+      text: `This will download ${inspections.length} QC reports.`,
       icon: 'question',
       showCancelButton: true,
-      confirmButtonText: 'Yes, Create',
-      cancelButtonColor: '#4f46e5',
+      confirmButtonText: 'Generate All',
+      confirmButtonColor: '#f97316'
     });
 
     if (result.isConfirmed) {
-      try {
-        setLoading(true);
-        const token = localStorage.getItem('authToken');
-        // Note: This endpoint might need to be adjusted based on backend capabilities for Incoming QC
-        const response = await fetch(`${API_BASE}/qc-inspections/${qc.id}/create-shipment`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          successToast(`Shipment Order ${data.shipmentCode || ''} created successfully`);
-          fetchQCInspections();
-        } else {
-          const errorData = await response.json();
-          throw new Error(errorData.message || 'Failed to create shipment');
-        }
-      } catch (error) {
-        errorToast(error.message);
-      } finally {
-        setLoading(false);
+      successToast(`Starting bulk download of ${inspections.length} reports...`);
+      // Loop through and download each
+      for (const qc of inspections) {
+        await handleDownloadPdf(qc);
+        // Small delay to prevent browser blocking multiple downloads
+        await new Promise(resolve => setTimeout(resolve, 500));
       }
     }
   };
@@ -585,14 +673,38 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       )
     },
     {
-      label: 'Project Name',
+      label: 'Project / Customer',
       key: 'project_name',
       sortable: true,
-      render: (val) => (
-        <span className="text-xs font-medium text-slate-700 truncate max-w-[150px] block">
-          {val || '—'}
-        </span>
-      )
+      render: (val, row) => {
+        if (!val) return '—';
+        // Intelligent split: break at " for " (case insensitive) to keep drawing numbers on top line
+        const parts = val.split(/\s+for\s+/i);
+        return (
+          <div className="flex flex-col py-1 min-w-[300px] max-w-[420px]">
+            <div className="flex flex-col">
+              <span className="text-slate-900 font-bold text-[13px] leading-tight break-words">
+                {parts[0]}
+              </span>
+              {parts.length > 1 && (
+                <span className="text-[11px] text-slate-600 font-medium leading-relaxed mt-0.5 break-words">
+                  for {parts.slice(1).join(' for ')}
+                </span>
+              )}
+            </div>
+            {row.company_name && (
+              <div className="flex items-center gap-2 mt-2 pt-1.5 border-t border-slate-100/80">
+                <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-600 text-[9px] font-bold rounded border border-indigo-100 shrink-0 uppercase tracking-wider">
+                  Client
+                </span>
+                <span className="text-[11px] text-slate-500 font-medium italic truncate" title={row.company_name}>
+                  {row.company_name}
+                </span>
+              </div>
+            )}
+          </div>
+        );
+      }
     },
     {
       label: 'Pass/Fail',
@@ -667,6 +779,12 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
               >
                 <Database className="w-3.5 h-3.5" />
               </button>
+              <button 
+                onClick={(e) => { e.stopPropagation(); handleDownloadPdf(row); }} 
+                className="px-2 py-1 text-[10px] font-medium text-orange-600 bg-orange-50 border border-orange-100 rounded hover:bg-orange-100 transition-all active:scale-95"
+              >
+                QC Report
+              </button>
             </>
           )}
           {['PASSED', 'ACCEPTED', 'SHORTAGE', 'OVERAGE'].includes(row.status) && activeTab !== 'in-process' && (
@@ -679,6 +797,14 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
                 <Database className="w-3.5 h-3.5" />
               </button>
             </>
+          )}
+          {['PASSED', 'FAILED', 'ACCEPTED', 'SHORTAGE', 'OVERAGE'].includes(row.status) && activeTab === 'final' && (
+            <button 
+              onClick={(e) => { e.stopPropagation(); handleDownloadPdf(row); }} 
+              className="px-2 py-1 text-[10px] font-medium text-orange-600 bg-orange-50 border border-orange-100 rounded hover:bg-orange-100 transition-all active:scale-95"
+            >
+              QC Report
+            </button>
           )}
           <button onClick={(e) => { e.stopPropagation(); handleDeleteQC(row.id); }} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded  transition-colors bg-white border border-slate-100" title="Delete">
             <Trash2 className="w-3.5 h-3.5" />
@@ -906,14 +1032,14 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
 
   const tabs = [
     { id: 'incoming', label: 'Incoming QC', icon: Inbox, color: 'text-blue-600', bg: 'bg-blue-50' },
-    { id: 'in-process', label: 'In-Process QC', icon: Search, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+    { id: 'in-process', label: 'Partially QC', icon: Search, color: 'text-emerald-600', bg: 'bg-emerald-50' },
     { id: 'final', label: 'Final QC', icon: CheckCircle2, color: 'text-indigo-600', bg: 'bg-indigo-50' },
   ];
 
   const renderContent = () => {
     const pendingInspections = qcInspections.filter(q => q.status === 'PENDING');
-    const inProgressInspections = qcInspections.filter(q => q.status === 'IN_PROGRESS');
-    const finalInspections = qcInspections.filter(q => ['PASSED', 'FAILED', 'ACCEPTED', 'SHORTAGE', 'OVERAGE'].includes(q.status));
+    const inProgressInspections = qcInspections.filter(q => ['IN_PROGRESS', 'SHORTAGE', 'OVERAGE'].includes(q.status));
+    const finalInspections = qcInspections.filter(q => ['PASSED', 'FAILED', 'ACCEPTED'].includes(q.status));
 
     switch (activeTab) {
       case 'incoming':
@@ -961,8 +1087,15 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       case 'in-process':
         return (
           <div className="space-y-2">
-            <Card title="In-Process Quality Control" subtitle="Real-time production quality monitoring and line inspections">
-              <div className="flex justify-end mb-4">
+            <Card title="Partially Quality Control" subtitle="Real-time production quality monitoring and line inspections">
+              <div className="flex justify-end items-center gap-2 mb-4">
+                <button 
+                  onClick={() => handleBulkDownload(inProgressInspections)}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-orange-600 text-white rounded text-[10px] font-bold hover:bg-orange-700 transition-all active:scale-95 shadow-lg shadow-orange-100 uppercase tracking-wider"
+                >
+                  <FileText className="w-3 h-3" />
+                  Generate QC Reports
+                </button>
                 <button 
                   onClick={() => { fetchQCInspections(); }}
                   className="p-2 text-slate-500 hover:text-indigo-600 rounded  hover:bg-slate-50 transition-all"
@@ -987,6 +1120,21 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
                 title="Completed Incoming Inspections" 
                 subtitle="Recent raw material and component inspection results"
               >
+                <div className="flex justify-end items-center gap-2 mb-4">
+                  <button 
+                    onClick={() => handleBulkDownload(finalInspections)}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-orange-600 text-white rounded text-[10px] font-bold hover:bg-orange-700 transition-all active:scale-95 shadow-lg shadow-orange-100 uppercase tracking-wider"
+                  >
+                    <FileText className="w-3 h-3" />
+                    Generate QC Reports
+                  </button>
+                  <button 
+                    onClick={() => { fetchQCInspections(); }}
+                    className="p-2 text-slate-500 hover:text-indigo-600 rounded  hover:bg-slate-50 transition-all"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                  </button>
+                </div>
                 <DataTable
                   columns={columns}
                   data={finalInspections}
@@ -1099,6 +1247,35 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
                     "{selectedQC.remarks || 'Auto-created inspection record.'}"
                   </p>
                 </div>
+
+                {/* View Attachments */}
+                <div className="p-5 bg-slate-50/50 rounded border border-slate-100 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 bg-slate-100 text-slate-600 rounded flex items-center justify-center">
+                      <Paperclip className="w-4 h-4" />
+                    </div>
+                    <h4 className="text-xs text-slate-700 font-semibold uppercase">Attachments</h4>
+                  </div>
+                  <div className="space-y-2">
+                    {attachments.length > 0 ? (
+                      attachments.map((file) => (
+                        <div key={file.id} className="flex items-center gap-2 p-2 bg-white rounded border border-slate-100 hover:border-indigo-200 transition-all">
+                          <FileText className="w-3.5 h-3.5 text-slate-400" />
+                          <a
+                            href={`${API_BASE}/${file.file_url}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[10px] text-slate-600 hover:text-indigo-600 truncate flex-1"
+                          >
+                            {file.file_name}
+                          </a>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-[10px] text-slate-400 italic text-center py-2">No attachments uploaded.</p>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -1154,7 +1331,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
                 required
               >
                 <option value="PENDING">Pending</option>
-                <option value="IN_PROGRESS">In Progress</option>
+                <option value="IN_PROGRESS">Partially</option>
                 <option value="PASSED">Passed</option>
                 <option value="FAILED">Failed</option>
                 <option value="ACCEPTED">Accepted</option>
@@ -1181,6 +1358,65 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
                   emptyMessage="No items to inspect."
                 />
              </div>
+          </div>
+
+          {/* Attachments Section */}
+          <div className="mt-4 p-4 bg-slate-50 rounded border border-slate-200">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Paperclip className="w-4 h-4 text-indigo-600" />
+                <h4 className="text-sm font-semibold text-slate-900 uppercase tracking-wider">Inspection Attachments</h4>
+              </div>
+              <button
+                type="button"
+                onClick={() => attachmentsInputRef.current?.click()}
+                disabled={isAttachmentsUploading}
+                className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-50"
+              >
+                {isAttachmentsUploading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                {isAttachmentsUploading ? 'Uploading...' : 'Add Attachments'}
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {attachments.length > 0 ? (
+                attachments.map((file) => (
+                  <div key={file.id} className="flex items-center justify-between p-2 bg-white rounded border border-slate-100 group hover:border-indigo-200 transition-all">
+                    <div className="flex items-center gap-2 overflow-hidden">
+                      <div className="p-1.5 bg-slate-50 text-slate-400 rounded group-hover:bg-indigo-50 group-hover:text-indigo-500">
+                        <FileText className="w-4 h-4" />
+                      </div>
+                      <a
+                        href={`${API_BASE}/${file.file_url}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-slate-600 hover:text-indigo-600 truncate max-w-[150px]"
+                      >
+                        {file.file_name}
+                      </a>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteAttachment(file.id)}
+                      className="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded transition-all"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))
+              ) : (
+                <div className="col-span-full py-4 text-center text-slate-400 text-xs italic">
+                  No attachments found. Upload related documents or photos here.
+                </div>
+              )}
+            </div>
+            <input
+              type="file"
+              ref={attachmentsInputRef}
+              className="hidden"
+              multiple
+              onChange={handleAttachmentsUpload}
+            />
           </div>
 
           {/* Footer */}

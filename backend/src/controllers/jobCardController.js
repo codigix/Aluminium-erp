@@ -185,6 +185,16 @@ const getWorkOrderLogs = async (req, res) => {
   }
 };
 
+const downloadQualityReport = async (req, res) => {
+  try {
+    const { logId } = req.params;
+    const pdfPath = await jobCardService.downloadJobCardQcPdf(logId);
+    res.download(pdfPath);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 module.exports = {
   listJobCards,
   createJobCard,
@@ -203,5 +213,6 @@ module.exports = {
   deleteDowntimeLog,
   getVendorReceipts,
   getVendorReceiptItems,
-  sendVendorReceiptToPayment
+  sendVendorReceiptToPayment,
+  downloadQualityReport
 };
