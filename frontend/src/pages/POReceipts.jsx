@@ -576,6 +576,7 @@ const POReceipts = () => {
       key: 'id',
       label: 'GRN Number',
       sortable: true,
+      width: '12%',
       render: (val, row) => (
         <span className=" text-slate-900 text-xs ">{`GRN-${String(row.id).padStart(4, '0')}`}</span>
       )
@@ -584,18 +585,19 @@ const POReceipts = () => {
       key: 'po_number',
       label: 'PO Number',
       sortable: true,
+      width: '12%',
       render: (val) => (
-        <span className="text-xs  text-slate-600 bg-slate-50 px-2 py-1 rounded border border-slate-100  ">#{val || 'Direct'}</span>
+        <span className="text-xs  text-slate-600 bg-slate-50 px-2 rounded border border-slate-100  ">#{val || 'Direct'}</span>
       )
     },
     { 
       key: 'vendor_name', 
       label: 'Supplier', 
       sortable: true,
+      width: '20%',
       render: (val) => (
         <div className="flex flex-col">
-          <span className=" text-slate-900 text-xs ">{val}</span>
-          <span className="text-xs text-slate-500    mt-0.5 er">Active Vendor</span>
+          <span className=" text-slate-900 text-xs font-medium">{val}</span>
         </div>
       )
     },
@@ -603,12 +605,14 @@ const POReceipts = () => {
       key: 'project_name',
       label: 'Project / Customer',
       sortable: true,
+      width: '30%',
+      className: 'whitespace-normal',
       render: (val, row) => {
         if (!val) return '—';
         // Intelligent split: break at " for " (case insensitive) to keep drawing numbers on top line
         const parts = val.split(/\s+for\s+/i);
         return (
-          <div className="flex flex-col py-1 min-w-[300px] max-w-[420px]">
+          <div className="flex flex-col min-w-[150px] max-w-[320px]">
             <div className="flex flex-col">
               <span className="text-slate-900 font-bold text-[13px] leading-tight break-words">
                 {parts[0]}
@@ -620,7 +624,7 @@ const POReceipts = () => {
               )}
             </div>
             {row.company_name && (
-              <div className="flex items-center gap-2 mt-2 pt-1.5 border-t border-slate-100/80">
+              <div className="flex items-center gap-2 mt-1.5 pt-1 border-t border-slate-100/80">
                 <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-600 text-[9px] font-bold rounded border border-indigo-100 shrink-0 uppercase tracking-wider">
                   Client
                 </span>
@@ -637,8 +641,9 @@ const POReceipts = () => {
       key: 'receipt_date',
       label: 'Receipt Date',
       sortable: true,
+      width: '12%',
       render: (val) => (
-        <div className="flex items-center gap-1.5 px-2 py-1 bg-slate-50 border border-slate-100 rounded text-xs  text-slate-500   inline-flex">
+        <div className="flex items-center gap-1.5 px-2 bg-slate-50 border border-slate-100 rounded text-xs  text-slate-500   inline-flex">
           <Calendar className="w-3.5 h-3.5 text-slate-400" />
           {new Date(val).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
         </div>
@@ -648,6 +653,7 @@ const POReceipts = () => {
       key: 'status',
       label: 'Status',
       sortable: true,
+      width: '8%',
       render: (val) => (
         <span className={`inline-flex items-center gap-1  rounded text-xs     ${
           val === 'DRAFT' ? ' text-amber-700 border-amber-200' : 
@@ -669,6 +675,7 @@ const POReceipts = () => {
       key: 'actions',
       label: 'Actions',
       className: 'text-right',
+      width: '6%',
       render: (_, row) => (
         <div className="flex justify-center gap-2" onClick={(e) => e.stopPropagation()}>
           <button 

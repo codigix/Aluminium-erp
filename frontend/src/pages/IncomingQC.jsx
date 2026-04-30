@@ -40,6 +40,8 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
   const attachmentsInputRef = useRef(null);
   const [attachments, setAttachments] = useState([]);
   const [isAttachmentsUploading, setIsAttachmentsUploading] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('ALL');
   const [editFormData, setEditFormData] = useState({
     status: '',
     remarks: '',
@@ -655,8 +657,9 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       label: 'GRN #',
       key: 'grn_id',
       sortable: true,
+      width: '8%',
       render: (val) => (
-        <span className="   text-indigo-600">
+        <span className="text-indigo-600 font-medium">
           {val ? `GRN-${String(val).padStart(4, '0')}` : '—'}
         </span>
       )
@@ -665,10 +668,11 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       label: 'PO #',
       key: 'po_number',
       sortable: true,
+      width: '12%',
       render: (val, row) => (
-        <div>
-          <div className=" text-slate-900">{val || '—'}</div>
-          <div className="text-xs text-slate-500">{row.vendor_name || '—'}</div>
+        <div className="flex flex-col">
+          <div className="text-slate-900 font-medium text-[11px]">{val || '—'}</div>
+          <div className="text-[10px] text-slate-500 truncate max-w-[120px]" title={row.vendor_name}>{row.vendor_name || '—'}</div>
         </div>
       )
     },
@@ -676,28 +680,30 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       label: 'Project / Customer',
       key: 'project_name',
       sortable: true,
+      width: '25%',
+      className: 'whitespace-normal',
       render: (val, row) => {
         if (!val) return '—';
         // Intelligent split: break at " for " (case insensitive) to keep drawing numbers on top line
         const parts = val.split(/\s+for\s+/i);
         return (
-          <div className="flex flex-col py-1 min-w-[300px] max-w-[420px]">
+          <div className="flex flex-col py-0.5 pr-2 max-w-[250px]">
             <div className="flex flex-col">
-              <span className="text-slate-900 font-bold text-[13px] leading-tight break-words">
+              <span className="text-slate-900 font-bold text-[11px] leading-tight">
                 {parts[0]}
               </span>
               {parts.length > 1 && (
-                <span className="text-[11px] text-slate-600 font-medium leading-relaxed mt-0.5 break-words">
+                <span className="text-[10px] text-slate-500 font-medium leading-tight mt-0.5">
                   for {parts.slice(1).join(' for ')}
                 </span>
               )}
             </div>
             {row.company_name && (
-              <div className="flex items-center gap-2 mt-2 pt-1.5 border-t border-slate-100/80">
-                <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-600 text-[9px] font-bold rounded border border-indigo-100 shrink-0 uppercase tracking-wider">
-                  Client
+              <div className="flex items-center gap-1.5 mt-1 pt-1 border-t border-slate-100/50">
+                <span className="px-1 py-0.5 bg-slate-100 text-slate-600 text-[7px] font-bold rounded uppercase tracking-tighter">
+                  CLIENT
                 </span>
-                <span className="text-[11px] text-slate-500 font-medium italic truncate" title={row.company_name}>
+                <span className="text-[9px] text-slate-400 font-medium italic truncate max-w-[150px]" title={row.company_name}>
                   {row.company_name}
                 </span>
               </div>
@@ -709,13 +715,14 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
     {
       label: 'Pass/Fail',
       key: 'pass_quantity',
-      className: 'text-right',
+      width: '10%',
+      className: 'text-center align-middle',
       render: (val, row) => (
-        <div className="flex flex-col items-end">
-          <span className={`${row.status === 'PENDING' ? 'text-amber-600' : 'text-emerald-600'} `}>
+        <div className="flex flex-col items-center justify-center">
+          <span className={`font-bold text-[11px] leading-tight ${row.status === 'PENDING' ? 'text-amber-600' : 'text-emerald-600'}`}>
             {row.status === 'PENDING' ? 'Pending' : parseFloat(val || row.accepted_quantity || 0).toFixed(3)}
           </span>
-          <span className="text-red-500text-xs ">Fail: {parseFloat(row.fail_quantity || 0).toFixed(3)}</span>
+          <span className="text-rose-500 text-[9px] font-medium leading-tight">Fail: {parseFloat(row.fail_quantity || 0).toFixed(3)}</span>
         </div>
       )
     },
@@ -723,18 +730,23 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       label: 'Status',
       key: 'status',
       sortable: true,
+      width: '10%',
+      className: 'text-center align-middle',
       render: (val) => (
-        <span className={`inline-flex items-center px-2.5 py-0.5 rounded text-xs    border ${qcStatusColors[val]?.badge}`}>
-          {qcStatusColors[val]?.label || val}
-        </span>
+        <div className="flex items-center justify-center">
+          <span className={`inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold border uppercase tracking-tighter ${qcStatusColors[val]?.badge}`}>
+            {qcStatusColors[val]?.label || val}
+          </span>
+        </div>
       )
     },
     {
       label: 'Actions',
       key: 'id',
-      className: 'text-right',
+      width: '35%',
+      className: 'text-right align-middle',
       render: (val, row) => (
-        <div className="flex justify-end gap-1.5 transition-opacity">
+        <div className="flex justify-end items-center gap-1 flex-nowrap h-full">
           <button onClick={(e) => { e.stopPropagation(); handleViewQC(row); }} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-colors bg-white border border-slate-100" title="View Details">
             <Eye className="w-3.5 h-3.5" />
           </button>
