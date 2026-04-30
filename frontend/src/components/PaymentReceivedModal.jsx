@@ -43,19 +43,46 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
 
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
-  const [bankAccounts, setBankAccounts] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [customerInvoices, setCustomerInvoices] = useState([]);
   const [customerSalesOrders, setCustomerSalesOrders] = useState([]);
+  const [fullSODetail, setFullSODetail] = useState(null);
+  const [fetchingDetail, setFetchingDetail] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
-      fetchBankAccounts();
       if (!invoice) {
         fetchCustomers();
       }
     }
   }, [isOpen, invoice]);
+
+  const fetchFullSODetail = async (soId, source = 'SALES_ORDER') => {
+    if (!soId) return;
+    try {
+      setFetchingDetail(true);
+      const token = localStorage.getItem('authToken');
+      // Fix endpoint for DIRECT_ORDER to use singular /order/
+      const endpoint = source === 'DIRECT_ORDER' ? `${API_BASE}/order/${soId}` : `${API_BASE}/sales-orders/${soId}`;
+      const response = await fetch(endpoint, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setFullSODetail(data);
+      } else {
+        setFullSODetail(null);
+      }
+    } catch (error) {
+      console.error('Error fetching SO detail:', error);
+      setFullSODetail(null);
+    } finally {
+      setFetchingDetail(false);
+    }
+  };
 
   useEffect(() => {
     if (isOpen) {
@@ -64,6 +91,8 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
         const soId = invoice.sales_order_id || invoice.id || '';
         const source = invoice.sales_order_source || invoice.source || 'SALES_ORDER';
         
+        fetchFullSODetail(soId, source);
+
         setFormData({
           customerId: custId,
           salesOrderId: soId,
@@ -85,6 +114,7 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
           authorizationCode: '',
         });
       } else {
+        setFullSODetail(null);
         setFormData({
           customerId: '',
           salesOrderId: '',
@@ -115,21 +145,6 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
       fetchCustomerSalesOrders(formData.customerId);
     }
   }, [formData.customerId, invoice, isOpen]);
-
-  const fetchBankAccounts = async () => {
-    try {
-      const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/bank-accounts`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setBankAccounts(Array.isArray(data) ? data : []);
-      }
-    } catch (error) {
-      console.error('Error fetching bank accounts:', error);
-    }
-  };
 
   const fetchCustomers = async () => {
     try {
@@ -222,6 +237,7 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
       const [source, id] = value.split('_');
       const selectedSO = customerSalesOrders.find(so => so.id.toString() === id && so.source === source);
       if (selectedSO) {
+        fetchFullSODetail(id, source);
         setFormData(prev => ({ 
           ...prev, 
           [field]: value,
@@ -230,6 +246,7 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
           paymentAmount: selectedSO.outstanding ? parseFloat(selectedSO.outstanding).toFixed(2) : (selectedSO.total_amount ? parseFloat(selectedSO.total_amount).toFixed(2) : '')
         }));
       } else {
+        setFullSODetail(null);
         setFormData(prev => ({ ...prev, [field]: value }));
       }
     } else if (field === 'customerId') {
@@ -367,147 +384,226 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
     (formData.salesOrderId ? parseFloat(customerInvoices.find(inv => inv.id.toString() === formData.salesOrderId.toString())?.outstanding || 0) : null);
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={invoice ? "Record Payment Received" : "Add Payment Received"} size="2xl">
-      <div className="space-y-2">
-        
-        {/* Selection Section (Only if no invoice passed) */}
-        {!invoice && (
-          <div className="grid grid-cols-2 gap-2 bg-slate-50 p-2 rounded  border border-slate-200">
-            <div className="col-span-2">
-              <FormControl label="Customer *">
+    <Modal isOpen={isOpen} onClose={onClose} title={invoice ? "Record Payment Received" : "Add Payment Received"} size="5xl">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 overflow-y-auto max-h-[80vh] custom-scrollbar p-1">
+        <div className="space-y-4">
+          {/* Selection Section (Only if no invoice passed) */}
+          {!invoice && (
+            <div className="grid grid-cols-2 gap-2 bg-slate-50 p-2 rounded  border border-slate-200">
+              <div className="col-span-2">
+                <FormControl label="Customer *">
+                  <select
+                    value={formData.customerId}
+                    onChange={(e) => handleInputChange('customerId', e.target.value)}
+                    className={`w-full p-2 border rounded  text-sm bg-white ${errors.customerId ? 'border-rose-500' : 'border-slate-300'}`}
+                  >
+                    <option value="">Select Customer</option>
+                    {customers.map(c => <option key={c.id} value={c.id}>{c.company_name}</option>)}
+                  </select>
+                  {errors.customerId && <span className="text-xs text-rose-600 mt-1 block">{errors.customerId}</span>}
+                </FormControl>
+              </div>
+
+              <FormControl label="Invoice (Optional)">
                 <select
-                  value={formData.customerId}
-                  onChange={(e) => handleInputChange('customerId', e.target.value)}
-                  className={`w-full p-2 border rounded  text-sm bg-white ${errors.customerId ? 'border-rose-500' : 'border-slate-300'}`}
+                  value={formData.salesOrderId}
+                  onChange={(e) => handleInputChange('salesOrderId', e.target.value)}
+                  disabled={!formData.customerId}
+                  className="w-full p-2 border border-slate-300 rounded  text-sm bg-white disabled:bg-slate-100"
                 >
-                  <option value="">Select Customer</option>
-                  {customers.map(c => <option key={c.id} value={c.id}>{c.company_name}</option>)}
+                  <option value="">Advance Payment / On Account</option>
+                  {customerInvoices.map(inv => (
+                    <option key={inv.id} value={inv.id}>{inv.so_number} - {formatCurrency(inv.outstanding)} due</option>
+                  ))}
                 </select>
-                {errors.customerId && <span className="text-xs text-rose-600 mt-1 block">{errors.customerId}</span>}
+              </FormControl>
+
+              <FormControl label="Sales Order (Optional)">
+                <select
+                  value={formData.soId}
+                  onChange={(e) => handleInputChange('soId', e.target.value)}
+                  disabled={!formData.customerId}
+                  className="w-full p-2 border border-slate-300 rounded  text-sm bg-white disabled:bg-slate-100"
+                >
+                  <option value="">Select Sales Order</option>
+                  {customerSalesOrders.map(so => (
+                    <option key={`${so.source}_${so.id}`} value={`${so.source}_${so.id}`}>
+                      {so.so_number} - {formatCurrency(so.outstanding || so.total_amount)}
+                    </option>
+                  ))}
+                </select>
               </FormControl>
             </div>
+          )}
 
-            <FormControl label="Invoice (Optional)">
-              <select
-                value={formData.salesOrderId}
-                onChange={(e) => handleInputChange('salesOrderId', e.target.value)}
-                disabled={!formData.customerId}
-                className="w-full p-2 border border-slate-300 rounded  text-sm bg-white disabled:bg-slate-100"
-              >
-                <option value="">Advance Payment / On Account</option>
-                {customerInvoices.map(inv => (
-                  <option key={inv.id} value={inv.id}>{inv.so_number} - {formatCurrency(inv.outstanding)} due</option>
-                ))}
-              </select>
-            </FormControl>
+          {/* Invoice Summary (If invoice passed) */}
+          {(invoice || fullSODetail) && (
+            <div className="space-y-4">
+              <div className="bg-gradient-to-br from-emerald-50 to-slate-50 border border-emerald-100 rounded  p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className=" text-slate-900 text-xs  tracking-wide">Sales Order Summary</h3>
+                  <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded">READ ONLY</span>
+                </div>
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <span className="text-slate-500 ">SO Number</span>
+                    <p className=" text-slate-900 mt-1 font-semibold">{fullSODetail?.so_number || fullSODetail?.order_no || invoice?.po_number || invoice?.so_number || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 ">Customer</span>
+                    <p className=" text-slate-900 mt-1 font-semibold">{fullSODetail?.company_name || invoice?.customer_name || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 ">Project</span>
+                    <p className=" text-slate-900 mt-1 font-semibold truncate">{fullSODetail?.project_name || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 ">Total Amount</span>
+                    <p className=" text-slate-900 mt-1 font-semibold">{formatCurrency(fullSODetail?.total_amount || invoice?.total_amount || invoice?.net_total)}</p>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 ">Already Paid</span>
+                    <p className=" text-emerald-600 mt-1 font-semibold">{formatCurrency(invoice?.already_paid || 0)}</p>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 ">Outstanding</span>
+                    <p className=" text-rose-600 mt-1 font-bold">{formatCurrency(currentOutstanding)}</p>
+                  </div>
+                </div>
+              </div>
 
-            <FormControl label="Sales Order (Optional)">
-              <select
-                value={formData.soId}
-                onChange={(e) => handleInputChange('soId', e.target.value)}
-                disabled={!formData.customerId}
-                className="w-full p-2 border border-slate-300 rounded  text-sm bg-white disabled:bg-slate-100"
-              >
-                <option value="">Select Sales Order</option>
-                {customerSalesOrders.map(so => (
-                  <option key={`${so.source}_${so.id}`} value={`${so.source}_${so.id}`}>
-                    {so.so_number} - {formatCurrency(so.outstanding || so.total_amount)}
-                  </option>
-                ))}
-              </select>
-            </FormControl>
-          </div>
-        )}
-
-        {/* Invoice Summary (If invoice passed) */}
-        {invoice && (
-          <div className="bg-gradient-to-br from-emerald-50 to-slate-50 border border-emerald-100 rounded  p-5 space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className=" text-slate-900 text-xs  tracking-wide">Invoice Summary</h3>
+              {fullSODetail && (
+                <div className="bg-white border border-slate-100 rounded overflow-hidden">
+                  <div className="p-2.5 bg-slate-50/50 border-b border-slate-100">
+                    <h4 className="text-[11px] font-semibold text-slate-700 uppercase tracking-wider">Items List</h4>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead className="bg-slate-50/30">
+                        <tr>
+                          <th className="p-2 text-[10px] font-semibold text-slate-400">Description</th>
+                          <th className="p-2 text-[10px] font-semibold text-slate-400 text-center">Qty</th>
+                          <th className="p-2 text-[10px] font-semibold text-slate-400 text-right">Price</th>
+                          <th className="p-2 text-[10px] font-semibold text-slate-400 text-right">Amount</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50">
+                        {(fullSODetail.items || fullSODetail.order_items || []).map((item, idx) => (
+                          <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                            <td className="p-2">
+                              <p className="text-[11px] font-medium text-slate-800 leading-tight">{item.description || item.material_name || 'N/A'}</p>
+                              {item.item_code && <span className="text-[9px] text-slate-400 uppercase tracking-tighter">{item.item_code}</span>}
+                            </td>
+                            <td className="p-2 text-[11px] text-slate-600 text-center">
+                              {item.quantity} {item.unit || item.type || 'Nos'}
+                            </td>
+                            <td className="p-2 text-[11px] text-slate-600 text-right">
+                              {formatCurrency(item.rate || item.unit_rate)}
+                            </td>
+                            <td className="p-2 text-[11px] font-medium text-slate-900 text-right">
+                              {formatCurrency(item.total_amount || item.amount || (item.quantity || 0) * (item.rate || item.unit_rate || 0))}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="bg-slate-50/50 border-t border-slate-100">
+                        {(fullSODetail.subtotal || fullSODetail.gst) && (
+                          <>
+                            <tr>
+                              <td colSpan="3" className="p-2 text-[10px] font-semibold text-slate-500 text-right">Subtotal</td>
+                              <td className="p-2 text-[11px] font-medium text-slate-700 text-right">
+                                {formatCurrency(fullSODetail.subtotal)}
+                              </td>
+                            </tr>
+                            <tr>
+                              <td colSpan="3" className="p-2 text-[10px] font-semibold text-slate-500 text-right">GST</td>
+                              <td className="p-2 text-[11px] font-medium text-slate-700 text-right">
+                                {formatCurrency(fullSODetail.gst)}
+                              </td>
+                            </tr>
+                          </>
+                        )}
+                        <tr>
+                          <td colSpan="3" className="p-2 text-[10px] font-semibold text-slate-500 text-right">Total Amount (Incl. Taxes)</td>
+                          <td className="p-2 text-[11px] font-bold text-slate-900 text-right">
+                            {formatCurrency(fullSODetail.grand_total || fullSODetail.total_amount || fullSODetail.net_total || fullSODetail.po_net_total)}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+              )}
             </div>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div>
-                <span className="text-slate-500 ">Invoice No</span>
-                <p className=" text-slate-900 mt-1">{invoice.po_number || invoice.so_number || 'N/A'}</p>
-              </div>
-              <div>
-                <span className="text-slate-500 ">Customer</span>
-                <p className=" text-slate-900 mt-1">{invoice.customer_name || 'N/A'}</p>
-              </div>
-              <div>
-                <span className="text-slate-500 ">Invoice Amount</span>
-                <p className=" text-slate-900 mt-1">{formatCurrency(invoice.total_amount || invoice.net_total)}</p>
-              </div>
-              <div>
-                <span className="text-slate-500 ">Outstanding</span>
-                <p className=" text-rose-600 mt-1">{formatCurrency(currentOutstanding)}</p>
-              </div>
-            </div>
-          </div>
-        )}
+          )}
+        </div>
 
-        {/* Payment Details */}
-        <div className="space-y-2">
-          <h3 className=" text-slate-900 text-xs  tracking-wide">Payment Details</h3>
-          <div className="grid grid-cols-2 gap-2">
+        {/* Payment Entry Form */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+            <h3 className=" text-slate-900 text-xs  tracking-wide font-semibold">Recording Payment</h3>
+          </div>
+          
+          <div className="grid grid-cols-1 gap-4">
             <FormControl label="Payment Amount *">
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 ">₹</span>
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-bold">₹</span>
                 <input
                   type="number"
                   step="0.01"
                   value={formData.paymentAmount}
                   onChange={(e) => handleInputChange('paymentAmount', e.target.value)}
-                  className={`w-full pl-7 pr-3 py-2 border rounded  text-xs focus:ring-2 ${errors.paymentAmount ? 'border-rose-500 focus:ring-rose-200' : 'border-slate-300 focus:ring-emerald-200'}`}
+                  className={`w-full pl-7 pr-3 py-2.5 border rounded text-sm font-bold focus:outline-none focus:ring-2 transition-all ${errors.paymentAmount ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-emerald-500/30 focus:border-emerald-500'}`}
                   placeholder="0.00"
                 />
               </div>
-              {errors.paymentAmount && <span className="text-xs text-rose-600 mt-1 block">{errors.paymentAmount}</span>}
+              {errors.paymentAmount && <span className="text-xs text-rose-600 mt-1 block font-medium">{errors.paymentAmount}</span>}
             </FormControl>
 
-            <FormControl label="Payment Date *">
-              <input
-                type="date"
-                value={formData.paymentDate}
-                onChange={(e) => handleInputChange('paymentDate', e.target.value)}
-                className={`w-full p-2 border rounded  text-sm ${errors.paymentDate ? 'border-rose-500' : 'border-slate-300'}`}
-              />
-              {errors.paymentDate && <span className="text-xs text-rose-600 mt-1 block">{errors.paymentDate}</span>}
-            </FormControl>
+            <div className="grid grid-cols-2 gap-4">
+              <FormControl label="Payment Date *">
+                <input
+                  type="date"
+                  value={formData.paymentDate}
+                  onChange={(e) => handleInputChange('paymentDate', e.target.value)}
+                  className={`w-full p-2 border rounded text-sm font-medium focus:outline-none focus:ring-2 transition-all ${errors.paymentDate ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-emerald-500/30 focus:border-emerald-500'}`}
+                />
+                {errors.paymentDate && <span className="text-xs text-rose-600 mt-1 block font-medium">{errors.paymentDate}</span>}
+              </FormControl>
 
-            <FormControl label="Payment Mode *">
-              <select
-                value={formData.paymentMode}
-                onChange={(e) => handleInputChange('paymentMode', e.target.value)}
-                className={`w-full p-2 border rounded  text-sm ${errors.paymentMode ? 'border-rose-500' : 'border-slate-300'}`}
-              >
-                <option value="">Select Mode</option>
-                {paymentModes.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-              </select>
-              {errors.paymentMode && <span className="text-xs text-rose-600 mt-1 block">{errors.paymentMode}</span>}
-            </FormControl>
+              <FormControl label="Payment Mode *">
+                <select
+                  value={formData.paymentMode}
+                  onChange={(e) => handleInputChange('paymentMode', e.target.value)}
+                  className={`w-full p-2 border rounded text-sm font-medium focus:outline-none focus:ring-2 transition-all cursor-pointer ${errors.paymentMode ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-emerald-500/30 focus:border-emerald-500'}`}
+                >
+                  <option value="">Select Mode</option>
+                  {paymentModes.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                </select>
+                {errors.paymentMode && <span className="text-xs text-rose-600 mt-1 block font-medium">{errors.paymentMode}</span>}
+              </FormControl>
+            </div>
 
             {formData.paymentMode === 'BANK_TRANSFER' && (
-              <FormControl label="Bank Account *">
-                <SearchableSelect
-                  options={bankAccounts.map(a => ({ value: a.id, label: `${a.bank_name} - ${a.account_number}` }))}
+              <FormControl label="Bank Account / Reference *">
+                <input
+                  type="text"
                   value={formData.bankAccount}
                   onChange={(e) => handleInputChange('bankAccount', e.target.value)}
-                  placeholder="Select or enter account details"
-                  allowCustom={true}
-                  className={errors.bankAccount ? 'border-rose-500' : ''}
+                  className={`w-full p-2 border rounded text-sm font-medium focus:outline-none focus:ring-2 transition-all ${errors.bankAccount ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-emerald-500/30 focus:border-emerald-500'}`}
+                  placeholder="Enter bank name or account details"
                 />
-                {errors.bankAccount && <span className="text-xs text-rose-600 mt-1 block">{errors.bankAccount}</span>}
+                {errors.bankAccount && <span className="text-xs text-rose-600 mt-1 block font-medium">{errors.bankAccount}</span>}
               </FormControl>
             )}
 
             {formData.paymentMode === 'UPI' && (
-              <>
+              <div className="grid grid-cols-2 gap-4">
                 <FormControl label="UPI App *">
                   <select
                     value={formData.upiApp}
                     onChange={(e) => handleInputChange('upiApp', e.target.value)}
-                    className="w-full p-2 border border-slate-300 rounded  text-sm"
+                    className="w-full p-2 border border-slate-300 rounded text-sm font-medium"
                   >
                     <option value="">Select App</option>
                     {upiApps.map(a => <option key={a.value} value={a.value}>{a.label}</option>)}
@@ -518,74 +614,80 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                     type="text"
                     value={formData.upiTransactionId}
                     onChange={(e) => handleInputChange('upiTransactionId', e.target.value)}
-                    className="w-full p-2 border border-slate-300 rounded  text-sm"
-                    placeholder="ID"
+                    className="w-full p-2 border border-slate-300 rounded text-sm font-medium"
+                    placeholder="Ref ID"
                   />
                 </FormControl>
-              </>
+              </div>
             )}
 
             {formData.paymentMode === 'CHEQUE' && (
-              <>
+              <div className="grid grid-cols-3 gap-2">
                 <FormControl label="Cheque No *">
                   <input
                     type="text"
                     value={formData.chequeNumber}
                     onChange={(e) => handleInputChange('chequeNumber', e.target.value)}
-                    className={`w-full p-2 border rounded  text-sm ${errors.chequeNumber ? 'border-rose-500' : 'border-slate-300'}`}
+                    className={`w-full p-2 border rounded text-sm font-medium ${errors.chequeNumber ? 'border-rose-500' : 'border-slate-300'}`}
                   />
-                  {errors.chequeNumber && <span className="text-xs text-rose-600 mt-1 block">{errors.chequeNumber}</span>}
                 </FormControl>
                 <FormControl label="Bank Name *">
                   <input
                     type="text"
                     value={formData.bankName}
                     onChange={(e) => handleInputChange('bankName', e.target.value)}
-                    className={`w-full p-2 border rounded  text-sm ${errors.bankName ? 'border-rose-500' : 'border-slate-300'}`}
-                    placeholder="e.g. HDFC Bank"
+                    className={`w-full p-2 border rounded text-sm font-medium ${errors.bankName ? 'border-rose-500' : 'border-slate-300'}`}
                   />
-                  {errors.bankName && <span className="text-xs text-rose-600 mt-1 block">{errors.bankName}</span>}
                 </FormControl>
-                <FormControl label="Cheque Date *">
+                <FormControl label="Date *">
                   <input
                     type="date"
                     value={formData.chequeDate}
                     onChange={(e) => handleInputChange('chequeDate', e.target.value)}
-                    className={`w-full p-2 border rounded  text-sm ${errors.chequeDate ? 'border-rose-500' : 'border-slate-300'}`}
+                    className={`w-full p-2 border rounded text-sm font-medium ${errors.chequeDate ? 'border-rose-500' : 'border-slate-300'}`}
                   />
-                  {errors.chequeDate && <span className="text-xs text-rose-600 mt-1 block">{errors.chequeDate}</span>}
                 </FormControl>
-              </>
+              </div>
             )}
 
-            {(formData.paymentMode === 'BANK_TRANSFER' || formData.paymentMode === 'CREDIT_CARD' || formData.paymentMode === 'DEBIT_CARD') && (
-              <FormControl label="Ref No *">
+            {(['BANK_TRANSFER', 'CREDIT_CARD', 'DEBIT_CARD'].includes(formData.paymentMode)) && (
+              <FormControl label="Transaction Ref No *">
                 <input
                   type="text"
                   value={formData.transactionRefNo}
                   onChange={(e) => handleInputChange('transactionRefNo', e.target.value)}
-                  className="w-full p-2 border border-slate-300 rounded  text-sm"
-                  placeholder="Reference #"
+                  className="w-full p-2 border border-slate-300 rounded text-sm font-medium focus:ring-2 focus:ring-emerald-200 outline-none"
+                  placeholder="UTR / Ref Number"
                 />
               </FormControl>
             )}
+
+            <FormControl label="Remarks">
+              <textarea
+                value={formData.remarks}
+                onChange={(e) => handleInputChange('remarks', e.target.value)}
+                className="w-full p-2 border border-slate-300 rounded text-sm font-medium"
+                rows="2"
+                placeholder="Optional notes about this payment"
+              />
+            </FormControl>
           </div>
 
-          <FormControl label="Remarks">
-            <textarea
-              value={formData.remarks}
-              onChange={(e) => handleInputChange('remarks', e.target.value)}
-              className="w-full p-2 border border-slate-300 rounded  text-sm"
-              rows="2"
-            />
-          </FormControl>
-        </div>
-
-        <div className="flex gap-2 pt-4 border-t">
-          <button onClick={onClose} className="flex-1 px-4 py-2 border border-slate-300 rounded  text-sm font-semibold text-slate-700">Cancel</button>
-          <button onClick={handleSubmit} disabled={loading} className="flex-1 px-4 py-2 bg-emerald-600 text-white rounded  text-sm font-semibold hover:bg-emerald-700">
-            {loading ? 'Processing...' : 'Record Payment'}
-          </button>
+          <div className="flex gap-3 pt-4 border-t border-slate-100">
+            <button 
+              onClick={onClose} 
+              className="flex-1 px-4 py-2.5 bg-slate-100 text-slate-600 rounded text-sm font-bold hover:bg-slate-200 transition-all"
+            >
+              Cancel
+            </button>
+            <button 
+              onClick={handleSubmit} 
+              disabled={loading} 
+              className="flex-1 px-4 py-2.5 bg-emerald-600 text-white rounded text-sm font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 disabled:opacity-50"
+            >
+              {loading ? 'Processing...' : 'Complete Record'}
+            </button>
+          </div>
         </div>
       </div>
     </Modal>

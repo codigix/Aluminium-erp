@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { DataTable } from '../components/ui.jsx';
+import { History, RefreshCw, Download, Send, Calendar, User, FileText } from 'lucide-react';
+import { DataTable, Button } from '../components/ui.jsx';
 import { errorToast, successToast } from '../utils/toast';
 import SendEmailModal from '../components/SendEmailModal.jsx';
 
@@ -118,141 +119,145 @@ const CustomerPaymentHistory = () => {
 
   const columns = [
     {
-      label: 'Payment Receipt',
+      label: 'Receipt Details',
       key: 'payment_receipt_no',
       sortable: true,
-      className: 'font-mono text-slate-600'
-    },
-    {
-      label: 'Sales Order',
-      key: 'so_number',
-      sortable: true,
-      className: ' text-emerald-600'
+      render: (val, row) => (
+        <div className="flex flex-col py-1">
+          <span className=" text-rose-600 tracking-tight font-mono font-medium">
+            {val}
+          </span>
+          <div className="flex items-center gap-1 mt-0.5">
+            <span className="text-[10px] text-slate-400 px-1.5 py-0.5 bg-slate-50 rounded border border-slate-100 ">
+              SO: {row.so_number}
+            </span>
+          </div>
+        </div>
+      )
     },
     {
       label: 'Customer',
       key: 'customer_name',
-      sortable: true
+      sortable: true,
+      render: (val, row) => (
+        <div className="flex items-center gap-2 py-1">
+          <div className="w-8 h-8 rounded bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600 font-bold text-xs shadow-sm">
+            {val ? val.substring(0, 2).toUpperCase() : 'C'}
+          </div>
+          <div className="flex flex-col">
+            <span className="font-semibold text-slate-900 leading-tight">{val}</span>
+            <span className="text-[10px] text-slate-500 italic">
+              Mode: {row.payment_mode || 'N/A'}
+            </span>
+          </div>
+        </div>
+      )
     },
     {
       label: 'Payment Date',
       key: 'payment_date',
       sortable: true,
-      render: (val) => formatDate(val)
+      render: (val) => (
+        <div className="flex items-center gap-2 text-slate-600">
+          <Calendar className="w-3.5 h-3.5 text-slate-400" />
+          <span className="text-xs">{formatDate(val)}</span>
+        </div>
+      )
     },
     {
       label: 'Amount Received',
       key: 'payment_amount',
       sortable: true,
-      render: (val) => formatCurrency(val)
-    },
-    {
-      label: 'Payment Mode',
-      key: 'payment_mode',
-      render: (val) => {
-        const modeLabels = {
-          'BANK_TRANSFER': 'Bank Transfer',
-          'UPI': 'UPI',
-          'CHEQUE': 'Cheque',
-          'CREDIT_CARD': 'Credit Card',
-          'DEBIT_CARD': 'Debit Card',
-          'CASH': 'Cash'
-        };
-        return <span className="text-xs text-slate-600">{modeLabels[val] || val}</span>;
-      }
+      render: (val) => (
+        <div className="flex flex-col py-1">
+          <div className="flex items-center gap-1 font-bold text-slate-900">
+            <span className="text-rose-600">₹</span>
+            <span>{Number(val).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          </div>
+          <span className="text-[10px] text-emerald-600 flex items-center gap-0.5">
+            Payment Confirmed
+          </span>
+        </div>
+      )
     },
     {
       label: 'Status',
       key: 'status',
-      render: (val) => {
-        const statusColors = {
-          'PENDING': 'bg-amber-50 text-amber-700 border-amber-100',
-          'CONFIRMED': 'bg-emerald-50 text-emerald-700 border-emerald-100',
-          'FAILED': 'bg-red-50 text-red-700 border-red-100'
-        };
-        const colors = statusColors[val] || 'bg-slate-50 text-slate-700 border-slate-100';
-        return (
-          <span className={`px-2 py-1 rounded text-xs  border ${colors} `}>
-            {val}
+      render: (val) => (
+        <div className="flex items-center justify-center">
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border bg-emerald-50 text-emerald-700 border-emerald-100`}>
+            {val || 'CONFIRMED'}
           </span>
-        );
-      }
+        </div>
+      )
     },
     {
       label: 'Actions',
       key: 'id',
       className: 'text-right',
       render: (_, row) => (
-        <div className="flex justify-end gap-2 text-right">
+        <div className="flex justify-end items-center gap-2">
           <button
             onClick={() => openEmailModal(row)}
-            className="p-1.5 bg-blue-50 text-blue-600 rounded hover:bg-blue-100 transition-all active:scale-90"
-            title="Send Email"
+            className="p-2 hover:bg-rose-50 rounded text-slate-400 hover:text-rose-600 transition-all border border-transparent hover:border-rose-100 group shadow-sm"
+            title="Send Receipt to Customer"
           >
-            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M1.946 9.315c-.522-.174-.527-.455.01-.634l19.087-6.362c.529-.176.832.12.684.638l-5.454 19.086c-.15.529-.455.547-.679.045L12 14l6-8-8 6-8.054-2.685z" />
-            </svg>
+            <Send className="w-4 h-4 group-hover:scale-110" />
           </button>
           <button
             onClick={() => downloadReceipt(row.id, row.payment_receipt_no)}
-            className="flex items-center gap-1 p-1.5 bg-emerald-50 text-emerald-700 rounded  text-xs  hover:bg-emerald-100 transition-all border border-emerald-100"
+            className="p-2 hover:bg-emerald-50 rounded text-slate-400 hover:text-emerald-600 transition-all border border-transparent hover:border-emerald-100 group shadow-sm"
+            title="Download PDF"
           >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            Receipt
+            <Download className="w-4 h-4 group-hover:scale-110" />
           </button>
         </div>
       )
     }
   ];
 
-  const filteredData = history.filter(payment => 
-    payment.payment_receipt_no?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    payment.customer_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    payment.so_number?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const totalTransactions = history.length;
+  const totalReceived = history.reduce((sum, p) => sum + (parseFloat(p.payment_amount) || 0), 0);
 
   return (
-    <div className="space-y-2">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
-        <div>
-          <h1 className="text-xl  text-slate-900 ">Customer Payment History</h1>
-          <p className="text-xs text-slate-500 mt-1">View past customer payments and receipts</p>
-        </div>
-        
-        <div className="flex items-center gap-2">
-          <div className="relative">
-            <input 
-              type="text" 
-              placeholder="Search history..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 pr-4 py-2 bg-white border border-slate-200 rounded text-xs focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 outline-none transition-all w-64 shadow-sm"
-            />
-            <svg className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
+    <div className="space-y-6 animate-in fade-in duration-500 pb-10">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-rose-50 text-rose-600 rounded-xl shadow-sm">
+            <History size={24} />
           </div>
-          
-          <button 
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Client Payment History</h1>
+            <div className="flex items-center gap-3 mt-1">
+              <span className="text-xs font-medium text-slate-500 flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                {totalTransactions} Transactions
+              </span>
+              <span className="text-xs font-medium text-emerald-600 flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                {formatCurrency(totalReceived)} Total Collected
+              </span>
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <Button
+            variant="secondary"
             onClick={fetchPaymentHistory}
-            className="p-2 bg-white border border-slate-200 rounded  text-slate-500 hover:text-emerald-600 hover:border-emerald-100 transition-all shadow-sm"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-          </button>
+            icon={RefreshCw}
+            className={loading ? 'animate-spin' : ''}
+            title="Refresh Data"
+          />
         </div>
       </div>
 
-      <div className="bg-white rounded border border-slate-200 shadow-sm overflow-hidden">
+      <div className="overflow-hidden my-4">
         <DataTable
           columns={columns}
-          data={filteredData}
+          data={history}
           loading={loading}
-          hideHeader={true}
-          emptyMessage="No customer payment history found."
+          searchPlaceholder="Search by receipt, SO or customer..."
+          className="border-none"
         />
       </div>
 

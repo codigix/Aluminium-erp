@@ -118,6 +118,7 @@ privateRouter.use('/companies', companyRoutes);
 privateRouter.use('/customer-pos', customerPoRoutes);
 privateRouter.use('/sales-orders', salesOrderRoutes);
 privateRouter.use('/order', orderRoutes);
+privateRouter.use('/orders', orderRoutes);
 privateRouter.use('/design-orders', designOrderRoutes);
 privateRouter.use('/vendors', vendorRoutes);
 privateRouter.use('/suppliers', vendorRoutes);

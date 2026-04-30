@@ -350,122 +350,227 @@ const generatePaymentVoucherPDF = async (paymentId) => {
   );
   const vendor = vendorRows[0];
 
+  let poDetails = null;
+  if (payment.po_id) {
+    const [poRows] = await pool.query(
+      'SELECT * FROM purchase_orders WHERE id = ?',
+      [payment.po_id]
+    );
+    if (poRows.length > 0) {
+      poDetails = poRows[0];
+      const [itemRows] = await pool.query(
+        'SELECT * FROM purchase_order_items WHERE purchase_order_id = ?',
+        [payment.po_id]
+      );
+      poDetails.items = itemRows.map(item => {
+        const qty = parseFloat(item.quantity) || 0;
+        const rate = parseFloat(item.unit_rate || item.rate) || 0;
+        const amount = qty * rate;
+        return {
+          ...item,
+          quantity: qty,
+          rate: rate,
+          amount: amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+        };
+      });
+
+      // Calculate totals for items
+      const subtotal = itemRows.reduce((sum, item) => sum + ((parseFloat(item.quantity) || 0) * (parseFloat(item.unit_rate || item.rate) || 0)), 0);
+      const cgst = itemRows.reduce((sum, item) => sum + (parseFloat(item.cgst_amount) || ((parseFloat(item.quantity) || 0) * (parseFloat(item.unit_rate || item.rate) || 0) * 0.09)), 0);
+      const sgst = itemRows.reduce((sum, item) => sum + (parseFloat(item.sgst_amount) || ((parseFloat(item.quantity) || 0) * (parseFloat(item.unit_rate || item.rate) || 0) * 0.09)), 0);
+      
+      poDetails.subtotal = subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      poDetails.cgst = cgst.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      poDetails.sgst = sgst.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      poDetails.grand_total = (subtotal + cgst + sgst).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+  }
+
   const htmlTemplate = `
     <!DOCTYPE html>
     <html>
     <head>
       <style>
-        body { font-family: 'roboto, sans-serif; color: #333; line-height: 1.6; margin: 40px; }
-        .header { display: flex; justify-content: space-between; border-bottom: 2px solid #10b981; padding-bottom: 20px; margin-bottom: 30px; }
-        .company-info h1 { color: #059669; margin: 0; font-size: 24px; }
+        body { font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #334155; line-height: 1.5; margin: 0; padding: 40px; background-color: white; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; border-bottom: 2px solid #3b82f6; padding-bottom: 20px; }
+        .company-info h1 { color: #1e3a8a; margin: 0 0 5px 0; font-size: 24px; font-weight: 800; }
+        .company-info p { margin: 2px 0; color: #64748b; font-size: 13px; }
         .voucher-title { text-align: right; }
-        .voucher-title h2 { margin: 0; color: #64748b; font-size: 18px; }
-        .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-bottom: 40px; }
-        .section-label { font-weight: bold; color: #64748b; font-size: 12px; margin-bottom: 8px; text-transform: ; }
-        .payment-info { background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom: 30px; }
-        .info-row { display: flex; justify-content: space-between; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px dashed #e2e8f0; }
-        .info-row:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
-        .info-label { color: #64748b; font-size: 12px; }
-        .info-value { font-weight: 600; color: #1e293b; font-size: 13px; }
-        .amount-section { text-align: right; margin-top: 40px; padding-top: 20px; border-top: 2px solid #e2e8f0; }
-        .amount-label { font-size: 14px; color: #64748b; }
-        .amount-value { font-size: 24px; font-weight: 800; color: #059669; }
-        .footer { margin-top: 60px; text-align: center; color: #94a3b8; font-size: 10px; border-top: 1px solid #e2e8f0; padding-top: 20px; }
-        .signature-area { display: flex; justify-content: space-between; margin-top: 80px; }
-        .sig-box { border-top: 1px solid #cbd5e1; width: 200px; text-align: center; padding-top: 8px; font-size: 12px; color: #64748b; }
+        .voucher-title h2 { margin: 0; color: #3b82f6; font-size: 20px; text-transform: uppercase; letter-spacing: 1px; }
+        .voucher-title p { margin: 5px 0 0 0; font-size: 13px; color: #475569; }
+        
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 30px; }
+        .section { background: #f8fafc; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0; }
+        .section-title { font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 12px; display: flex; align-items: center; border-bottom: 1px solid #cbd5e1; padding-bottom: 8px; }
+        
+        .info-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 12px; }
+        .info-label { color: #64748b; }
+        .info-value { font-weight: 600; color: #1e293b; }
+        
+        .items-table { width: 100%; border-collapse: collapse; margin-bottom: 30px; font-size: 12px; }
+        .items-table th { background: #f1f5f9; color: #475569; text-align: left; padding: 12px 10px; font-weight: 700; border-bottom: 1px solid #e2e8f0; }
+        .items-table td { padding: 10px; border-bottom: 1px solid #f1f5f9; color: #334155; }
+        .items-table .text-right { text-align: right; }
+        .items-table .text-center { text-align: center; }
+        
+        .totals-section { margin-left: auto; width: 250px; margin-bottom: 40px; }
+        .total-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 12px; }
+        .total-row.grand-total { border-top: 2px solid #3b82f6; margin-top: 10px; padding-top: 10px; font-weight: 800; font-size: 15px; color: #1e3a8a; }
+        
+        .payment-summary { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+        .payment-summary h3 { margin: 0 0 15px 0; font-size: 14px; color: #1e40af; border-bottom: 1px solid #bfdbfe; padding-bottom: 10px; }
+        
+        .footer { margin-top: 40px; text-align: center; font-size: 10px; color: #94a3b8; border-top: 1px solid #f1f5f9; padding-top: 20px; }
       </style>
     </head>
     <body>
-      <div class="header">
-        <div class="company-info">
-          <h1>SPTECHPIONEER PVT LTD</h1>
-          <p>Industrial Area, Sector 5<br>Pune, Maharashtra - 411026</p>
-        </div>
-        <div class="voucher-title">
-          <h2>Payment Voucher</h2>
-          <p><strong>Voucher No:</strong> {{payment_voucher_no}}<br>
-          <strong>Date:</strong> {{formatted_date}}</p>
-        </div>
-      </div>
-
-      <div class="details-grid">
-        <div>
-          <div class="section-label">Pay To</div>
-          <p><strong>{{vendor_name}}</strong><br>
-          {{location}}<br>
-          {{email}}<br>
-          {{phone}}</p>
-        </div>
-        <div style="text-align: right;">
-          <div class="section-label">Reference</div>
-          <p><strong>PO Number:</strong> {{po_number}}<br>
-          <strong>Status:</strong> {{status}}</p>
-        </div>
-      </div>
-
-      <div class="payment-info">
-        <div class="section-label" style="margin-bottom: 15px;">Payment Details</div>
-        
-        <div class="info-row">
-          <span class="info-label">Payment Mode</span>
-          <span class="info-value">{{payment_mode}}</span>
+      <div class="container">
+        <div class="header">
+          <div class="company-info">
+            <h1>SPTECHPIONEER PVT LTD</h1>
+            <p>Industrial Area, Sector 5</p>
+            <p>Pune, Maharashtra - 411026</p>
+            <p>GSTIN: 27AASCS1234A1Z1</p>
+          </div>
+          <div class="voucher-title">
+            <h2>Payment Voucher</h2>
+            <p><strong>No:</strong> {{payment_voucher_no}}</p>
+            <p><strong>Date:</strong> {{formatted_date}}</p>
+          </div>
         </div>
 
-        {{#cheque_number}}
-        <div class="info-row">
-          <span class="info-label">Cheque Number</span>
-          <span class="info-value">{{cheque_number}}</span>
+        <div class="grid">
+          <div class="section">
+            <div class="section-title">Vendor / Beneficiary</div>
+            <p style="margin: 0; font-size: 14px; font-weight: 700; color: #1e293b;">{{vendor_name}}</p>
+            <p style="margin: 5px 0 0 0; font-size: 12px; color: #64748b;">{{location}}</p>
+            <p style="margin: 2px 0 0 0; font-size: 12px; color: #64748b;">Email: {{email}}</p>
+            <p style="margin: 2px 0 0 0; font-size: 12px; color: #64748b;">Phone: {{phone}}</p>
+          </div>
+          <div class="section">
+            <div class="section-title">Reference Details</div>
+            <div class="info-row">
+              <span class="info-label">PO Number:</span>
+              <span class="info-value">{{po_number}}</span>
+            </div>
+            {{#po_details}}
+            <div class="info-row">
+              <span class="info-label">Incoterm:</span>
+              <span class="info-value">{{incoterm}}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Shipping:</span>
+              <span class="info-value">{{shipping_rule}}</span>
+            </div>
+            {{/po_details}}
+          </div>
         </div>
-        <div class="info-row">
-          <span class="info-label">Bank Name</span>
-          <span class="info-value">{{cheque_bank_name}}</span>
+
+        {{#po_details}}
+        <div class="section-title">Items Detail</div>
+        <table class="items-table">
+          <thead>
+            <tr>
+              <th>Description</th>
+              <th class="text-center">Quantity</th>
+              <th class="text-right">Rate</th>
+              <th class="text-right">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{#items}}
+            <tr>
+              <td>{{material_name}}</td>
+              <td class="text-center">{{quantity}} {{unit}}</td>
+              <td class="text-right">₹{{rate}}</td>
+              <td class="text-right">₹{{amount}}</td>
+            </tr>
+            {{/items}}
+          </tbody>
+        </table>
+
+        <div class="totals-section">
+          <div class="total-row">
+            <span class="info-label">Subtotal</span>
+            <span class="info-value">₹{{subtotal}}</span>
+          </div>
+          <div class="total-row">
+            <span class="info-label">CGST (9%)</span>
+            <span class="info-value">₹{{cgst}}</span>
+          </div>
+          <div class="total-row">
+            <span class="info-label">SGST (9%)</span>
+            <span class="info-value">₹{{sgst}}</span>
+          </div>
+          <div class="total-row grand-total">
+            <span>Total Payable</span>
+            <span>₹{{grand_total}}</span>
+          </div>
         </div>
-        <div class="info-row">
-          <span class="info-label">Cheque Date</span>
-          <span class="info-value">{{formatted_cheque_date}}</span>
+        {{/po_details}}
+
+        <div class="payment-summary">
+          <h3>Transaction Details</h3>
+          <div class="grid" style="margin-bottom: 0; gap: 40px;">
+            <div>
+              <div class="info-row">
+                <span class="info-label">Payment Mode</span>
+                <span class="info-value">{{payment_mode}}</span>
+              </div>
+              {{#transaction_ref_no}}
+              <div class="info-row">
+                <span class="info-label">Transaction Ref</span>
+                <span class="info-value">{{transaction_ref_no}}</span>
+              </div>
+              {{/transaction_ref_no}}
+              {{#upi_transaction_id}}
+              <div class="info-row">
+                <span class="info-label">UPI ID / App</span>
+                <span class="info-value">{{upi_transaction_id}} ({{upi_app}})</span>
+              </div>
+              {{/upi_transaction_id}}
+            </div>
+            <div>
+              {{#bank_name}}
+              <div class="info-row">
+                <span class="info-label">Bank Name</span>
+                <span class="info-value">{{bank_name}}</span>
+              </div>
+              {{#account_number}}
+              <div class="info-row">
+                <span class="info-label">Account No</span>
+                <span class="info-value">{{account_number}}</span>
+              </div>
+              {{/account_number}}
+              {{/bank_name}}
+              {{#cheque_number}}
+              <div class="info-row">
+                <span class="info-label">Cheque No</span>
+                <span class="info-value">{{cheque_number}}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Cheque Date</span>
+                <span class="info-value">{{formatted_cheque_date}}</span>
+              </div>
+              {{/cheque_number}}
+            </div>
+          </div>
+          <div class="info-row" style="margin-top: 15px; padding-top: 15px; border-top: 1px dashed #bfdbfe;">
+            <span class="info-label">Amount Paid</span>
+            <span class="info-value" style="font-size: 16px; color: #1e40af;">₹{{formatted_amount}}</span>
+          </div>
+          {{#remarks}}
+          <div style="margin-top: 10px; font-size: 11px; color: #64748b;">
+            <strong>Remarks:</strong> {{remarks}}
+          </div>
+          {{/remarks}}
         </div>
-        {{/cheque_number}}
 
-        {{#transaction_ref_no}}
-        <div class="info-row">
-          <span class="info-label">Transaction Ref</span>
-          <span class="info-value">{{transaction_ref_no}}</span>
+        <div class="footer">
+          <p>This is a computer-generated payment voucher and does not require a physical signature.</p>
+          <p>SPTECHPIONEER PVT LTD | Confidential | Generated on {{current_timestamp}}</p>
         </div>
-        {{/transaction_ref_no}}
-
-        {{#bank_name}}
-        <div class="info-row">
-          <span class="info-label">Bank Account</span>
-          <span class="info-value">{{bank_name}} {{#account_number}}({{account_number}}){{/account_number}}</span>
-        </div>
-        {{/bank_name}}
-
-        {{#upi_transaction_id}}
-        <div class="info-row">
-          <span class="info-label">UPI ID / App</span>
-          <span class="info-value">{{upi_transaction_id}} ({{upi_app}})</span>
-        </div>
-        {{/upi_transaction_id}}
-
-        <div class="info-row">
-          <span class="info-label">Remarks</span>
-          <span class="info-value">{{remarks}}</span>
-        </div>
-      </div>
-
-      <div class="amount-section">
-        <div class="amount-label">Total Amount Paid</div>
-        <div class="amount-value">₹{{formatted_amount}}</div>
-      </div>
-
-      <div class="signature-area">
-        <div class="sig-box">Receiver's Signature</div>
-        <div class="sig-box">Authorized Signatory</div>
-      </div>
-
-      <div class="footer">
-        <p>This is a computer-generated payment voucher.<br>
-        SPTECHPIONEER PVT LTD | Confidential</p>
       </div>
     </body>
     </html>
@@ -482,7 +587,9 @@ const generatePaymentVoucherPDF = async (paymentId) => {
     formatted_date: formatDate(payment.payment_date),
     formatted_cheque_date: formatDate(payment.cheque_date),
     formatted_amount: parseFloat(payment.payment_amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-    remarks: payment.remarks || '—'
+    remarks: payment.remarks || '',
+    po_details: poDetails,
+    current_timestamp: new Date().toLocaleString('en-IN')
   };
 
   const html = mustache.render(htmlTemplate, viewData);
