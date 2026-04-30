@@ -220,7 +220,7 @@ const ShipmentReturns = ({ apiRequest }) => {
                   <h2 className="text-xl  text-slate-900 ">{selectedReturn.return_code}</h2>
                   <StatusBadge status={selectedReturn.status} />
                 </div>
-                <p className="text-slate-500 text-sm font-medium">Origin Shipment: <span className=" text-indigo-600 ">{selectedReturn.shipment_code}</span></p>
+                <p className="text-slate-500 text-sm ">Origin Shipment: <span className=" text-indigo-600 ">{selectedReturn.shipment_code}</span></p>
               </div>
               <div className="flex gap-2">
                 {selectedReturn.status === 'RETURN_INITIATED' && (

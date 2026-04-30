@@ -1170,9 +1170,7 @@ function App() {
         <div className="w-full max-w-md">
           <div className="bg-white rounded  shadow-2xl p-2 space-y-2">
             <div className="text-center space-y-2">
-              <div className="p-2 w-fit rounded  bg-slate-900 flex items-center justify-center mx-auto p-2">
-                <Building2 className="h-3 w-3 text-white" />
-              </div>
+              
               <h1 className="text-xl text-slate-900">SPTECHPIONEER</h1>
               <p className="text-xs text-slate-500">Sales & Operations ERP</p>
             </div>
@@ -1203,7 +1201,7 @@ function App() {
             </div>
 
             {authMode === 'login' ? (
-              <form onSubmit={handleLogin} className="grid gap-2">
+              <form onSubmit={handleLogin} className="grid my-5 grid-cols-2 gap-2">
                 <div>
                   <label className="block text-xs  text-slate-700 mb-2">Email</label>
                   <input
@@ -1230,7 +1228,7 @@ function App() {
                   type="submit"
                   variant="dark"
                   loading={loginLoading}
-                  className="w-full"
+                  className="w-full col-span-2"
                 >
                   Sign In
                 </Button>
@@ -1359,10 +1357,10 @@ function App() {
             {authMode === 'login' && (
               <div className="text-left text-xs text-slate-500 space-y-2 border-t border-slate-200 pt-4 mt-4">
                 <p className="">Demo Credentials:</p>
-                <div className="grid grid-cols-2 gap-2 text-left bg-slate-50 p-2 rounded  overflow-y-auto max-h-64">
+                <div className="grid grid-cols-3 gap-2 text-left bg-slate-50 p-2 rounded  overflow-y-auto max-h-64">
                   <button 
                     onClick={() => performLogin('admin@company.com', 'Admin@123')}
-                    className="p-2 border border-slate-200 rounded hover:bg-white hover:border-slate-300 transition group text-left col-span-2"
+                    className="p-2 border border-slate-200 rounded hover:bg-white hover:border-slate-300 transition group text-left"
                   >
                     <p className=" text-slate-700 group-hover:text-blue-600">Admin</p>
                     <p className="opacity-70">Full Access</p>
@@ -1466,7 +1464,7 @@ function App() {
                 if (item.isGroup) {
                   return (
                     <div key={`group-${item.groupId || item.label}-${index}`} className="pt-5 pb-2 px-3">
-                      <p className="text-[10px]  text-slate-400  tracking-[0.2em]">{item.label}</p>
+                      <p className="text-xs   text-slate-400  tracking-[0.2em]">{item.label}</p>
                     </div>
                   )
                 }
@@ -1481,7 +1479,7 @@ function App() {
                         setMobileMenuOpen(false)
                       }
                     }}
-                    className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all duration-200 group relative ${
+                    className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-[13px]  transition-all duration-200 group relative ${
                       isActive 
                         ? 'bg-rose-50 text-rose-600 shadow-sm' 
                         : isDisabled 
@@ -1513,7 +1511,7 @@ function App() {
               <button
                 type="button"
                 onClick={handleLogout}
-                className="flex items-center justify-center gap-2 w-full p-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 text-[13px] font-medium hover:bg-rose-50 hover:text-rose-600 hover:border-rose-100 transition-all duration-300"
+                className="flex items-center justify-center gap-2 w-full p-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 text-[13px]  hover:bg-rose-50 hover:text-rose-600 hover:border-rose-100 transition-all duration-300"
               >
                 <LogOut className="w-4 h-4" />
                 <span>Logout</span>
@@ -1542,10 +1540,10 @@ function App() {
                 <div className="flex items-center gap-4 ml-auto">
                   <div className="flex items-center gap-3 pr-4 border-r border-slate-200">
                     <div className="text-right">
-                      <p className="text-xs text-slate-900 font-medium leading-none">{user?.first_name && user?.last_name ? `${user.first_name} ${user.last_name}` : user?.first_name || user?.username || 'User'}</p>
-                      <p className="text-[10px] text-slate-500 mt-0.5">{user?.role_name || user?.department_name || 'User'}</p>
+                      <p className="text-xs text-slate-900  leading-none">{user?.first_name && user?.last_name ? `${user.first_name} ${user.last_name}` : user?.first_name || user?.username || 'User'}</p>
+                      <p className="text-xs  text-slate-500 mt-0.5">{user?.role_name || user?.department_name || 'User'}</p>
                     </div>
-                    <div className="h-6 w-6 rounded bg-rose-500 flex items-center justify-center text-white text-[10px] ">
+                    <div className="h-6 w-6 rounded bg-rose-500 flex items-center justify-center text-white text-xs  ">
                       {(user?.first_name?.[0] || user?.username?.[0] || 'U').toUpperCase()}
                     </div>
                   </div>

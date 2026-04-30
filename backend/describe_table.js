@@ -1,29 +1,29 @@
 const mysql = require('mysql2/promise');
+require('dotenv').config({ path: '.env' });
 
-async function runQuery(sql, params = []) {
-  try {
-    const conn = await mysql.createConnection({
-      host: '127.0.0.1',
-      port: 3307,
-      user: 'aluminium_user',
-      password: 'C0digix$309',
-      database: 'sales_erp'
-    });
-    
-    console.log(`--- Running Query: ${sql} ---`);
-    const [rows] = await conn.query(sql, params);
-    console.table(rows);
-    
-    await conn.end();
-  } catch (err) {
-    console.error(err);
-  }
+async function describeTable() {
+    const config = {
+        host: process.env.DB_HOST || 'localhost',
+        port: Number(process.env.DB_PORT || 3306),
+        user: process.env.DB_USER || 'root',
+        password: process.env.DB_PASSWORD || '',
+        database: process.env.DB_NAME || 'sales_erp'
+    };
+
+    const connection = await mysql.createConnection(config);
+
+    try {
+        const [cols] = await connection.query('DESCRIBE quotation_requests');
+        console.log('quotation_requests columns:', cols);
+        
+        const [rows] = await connection.query('SELECT COUNT(*) as count FROM material_requests');
+        console.log('material_requests row count:', rows[0].count);
+
+    } catch (error) {
+        console.error('Error:', error);
+    } finally {
+        await connection.end();
+    }
 }
 
-const table = process.argv[2];
-if (table && table.includes(' ')) {
-    runQuery(table);
-} else {
-    runQuery(`DESCRIBE ${table || 'production_plan_operations'}`);
-}
-
+describeTable();

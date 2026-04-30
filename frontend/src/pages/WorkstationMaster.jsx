@@ -284,11 +284,11 @@ const WorkstationMaster = ({ showForm: propShowForm, setShowForm: propSetShowFor
   ];
 
   return (
-    <div className="p-4">
+    <div className="">
       <Modal isOpen={showForm} onClose={() => { navigate('/workstation-master'); }} title={isEditing ? "Edit Workstation" : "Create Workstation"}>
         <form onSubmit={handleSubmit} className="space-y-3">
             {/* Basic Information */}
-            <section className="space-y-3">
+            <section className="space-y-2">
               <div className="flex items-center gap-2  border-b border-slate-100 pb-3">
                 <span className="p-1.5 bg-blue-50 text-blue-600 rounded  text-xs">📋</span>
                 <h3 className="text-xs  text-slate-500">Basic Information</h3>
@@ -363,11 +363,9 @@ const WorkstationMaster = ({ showForm: propShowForm, setShowForm: propSetShowFor
       </Modal>
 
       {/* Header Section */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 bg-white p-2 rounded  border border-slate-100 ">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <div className="p-2 bg-indigo-600 rounded  shadow-lg shadow-indigo-100">
-            <RefreshCw className={`w-3 h-3 text-white ${loading ? 'animate-spin' : ''}`} />
-          </div>
+          
           <div>
             <h1 className="text-xl  text-slate-900">Workstation Master</h1>
             <p className="text-slate-500 text-xs">Manage production floor workstations and equipment</p>
@@ -383,7 +381,6 @@ const WorkstationMaster = ({ showForm: propShowForm, setShowForm: propSetShowFor
       </div>
 
       {/* List Section */}
-      <Card className="overflow-hidden border-none shadow-xl bg-white/50 backdrop-blur-sm">
         <DataTable
           columns={columns}
           data={workstations}
@@ -391,7 +388,7 @@ const WorkstationMaster = ({ showForm: propShowForm, setShowForm: propSetShowFor
           searchPlaceholder="Search workstations, locations, or types..."
           searchKey="workstation_name"
         />
-      </Card>
+      
     </div>
   );
 };

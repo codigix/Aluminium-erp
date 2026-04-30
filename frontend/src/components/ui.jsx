@@ -116,9 +116,9 @@ export const SearchableSelect = ({
                   }}
                 >
                   <div className="flex items-center gap-2">
-                    <span className="font-medium">{getLabel(opt)}</span>
+                    <span className="">{getLabel(opt)}</span>
                     {getSublabel(opt) && (
-                      <span className="text-[10px] text-slate-400 font-normal">({getSublabel(opt)})</span>
+                      <span className="text-xs  text-slate-400 font-normal">({getSublabel(opt)})</span>
                     )}
                   </div>
                 </div>
@@ -249,7 +249,7 @@ export const MultiSelect = ({ options, value = [], onChange, placeholder, labelF
 };
 
 export const FormControl = ({ label, children }) => (
-  <label className="flex flex-col gap-2">
+  <label className="flex flex-col gap-2 w-full">
     <span className="text-xs text-slate-500 ">{label}</span>
     {children}
   </label>
@@ -271,7 +271,7 @@ export const Button = ({
     default: 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 shadow-sm',
     primary: 'bg-rose-600 text-white border-rose-700 hover:bg-rose-700 shadow-md shadow-rose-100',
     secondary: 'bg-sky-500 text-white border-sky-600 hover:bg-sky-600 shadow-md shadow-sky-100',
-    success: 'bg-emerald-500 text-white border-emerald-600 hover:bg-emerald-600 shadow-md shadow-emerald-100',
+    success: 'text-emerald-500 text-white border-emerald-600 hover:bg-emerald-600 shadow-md shadow-emerald-100',
     danger: 'bg-rose-500 text-white border-rose-600 hover:bg-rose-600 shadow-md shadow-rose-100',
     warning: 'bg-amber-500 text-white border-amber-600 hover:bg-amber-600 shadow-md shadow-amber-100',
     info: 'bg-blue-500 text-white border-blue-600 hover:bg-blue-600 shadow-md shadow-blue-100',
@@ -280,7 +280,7 @@ export const Button = ({
   };
 
   const sizes = {
-    xs: 'px-2 py-1 text-[10px]',
+    xs: 'px-2 py-1 text-xs ',
     sm: 'px-3 py-1.5 text-xs',
     md: 'p-2 text-xs',
     lg: 'px-6 py-3 text-base'
@@ -335,7 +335,7 @@ export const Tabs = ({ tabs = [], activeTab, onTabChange, className = '' }) => {
                 className={`w-4 h-4 transition-colors ${isActive ? 'text-rose-500' : 'text-slate-400 group-hover:text-slate-600'}`} 
               />
             )}
-            <span className={`text-sm font-medium ${isActive ? '' : ''}`}>
+            <span className={`text-sm  ${isActive ? '' : ''}`}>
               {tab.label}
             </span>
           </button>
@@ -384,7 +384,7 @@ export const StatusBadge = ({ status }) => {
       case 'QC_APPROVED':
       case 'READY_TO_DISPATCH':
         // Success style: Green
-        return 'bg-emerald-500 border-emerald-600 text-white shadow-sm'
+        return 'text-emerald-500'
       
       case 'DESIGN_QUERY':
       case 'INACTIVE':
@@ -420,7 +420,7 @@ export const StatusBadge = ({ status }) => {
   }
 
   return (
-    <span className={`p-1 rounded text-xs    border flex-shrink-0 text-center min-w-fit inline-flex items-center justify-center transition-all duration-200 ${getStatusStyles(normalized)}`}>
+    <span className={`p-1 rounded text-xs     flex-shrink-0 text-center min-w-fit inline-flex items-center justify-center transition-all duration-200 ${getStatusStyles(normalized)}`}>
       {formatStatus(normalized)}
     </span>
   )
@@ -429,7 +429,7 @@ export const StatusBadge = ({ status }) => {
 export const Badge = ({ children, variant = 'default', className = '' }) => {
   const variants = {
     default: 'bg-white text-slate-700 border-slate-200 shadow-sm',
-    success: 'bg-emerald-500 text-white border-emerald-600 shadow-sm',
+    success: 'text-emerald-500 text-white border-emerald-600 shadow-sm',
     warning: 'bg-amber-500 text-white border-amber-600 shadow-sm',
     danger: 'bg-rose-500 text-white border-rose-600 shadow-sm',
     info: 'bg-blue-500 text-white border-blue-600 shadow-sm',
@@ -438,7 +438,7 @@ export const Badge = ({ children, variant = 'default', className = '' }) => {
   };
 
   return (
-    <span className={`px-2 py-1 rounded-md text-[10px]   tracking-wide border ${variants[variant] || variants.default} ${className}`}>
+    <span className={`px-2 py-1 rounded-md text-xs    tracking-wide border ${variants[variant] || variants.default} ${className}`}>
       {children}
     </span>
   );
@@ -521,7 +521,7 @@ export const Pagination = ({ currentPage, totalPages, onPageChange, totalItems, 
 
   return (
     <div className="flex flex-col sm:flex-row items-center justify-between gap-2 p-2 border-t border-slate-50 bg-white">
-      <div className="text-xs text-slate-500 font-medium">
+      <div className="text-xs text-slate-500 ">
         Showing <span className="text-slate-900 ">{startItem}</span> to <span className="text-slate-900 ">{endItem}</span> of <span className="text-slate-900 ">{totalItems}</span> entries
       </div>
       
@@ -676,7 +676,7 @@ export const DataTable = ({
   const handleSelectAll = (e) => {
     if (onSelectionChange) {
       if (e.target.checked) {
-        onSelectionChange(new Set(paginatedData.map((row, idx) => row[rowIdProp] || row.id || (currentPage - 1) * pageSize + idx)));
+        onSelectionChange(new Set(filteredData.map((row, idx) => row[rowIdProp] || row.id || idx)));
       } else {
         onSelectionChange(new Set());
       }
@@ -723,7 +723,7 @@ export const DataTable = ({
                 placeholder={searchPlaceholder}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded text-sm focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none transition-all placeholder:text-slate-400 bg-white text-slate-900 shadow-sm"
+                className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded text-xs focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none transition-all placeholder:text-slate-400 bg-white text-slate-900 shadow-sm"
               />
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-rose-500 transition-colors" />
             </div>
@@ -732,7 +732,7 @@ export const DataTable = ({
         </div>
       )}
 
-      <div className="overflow-x-auto custom-scrollbar bg-white relative max-h-[calc(100vh-320px)] min-h-[300px]">
+      <div className="overflow-x-auto custom-scrollbar bg-white relative max-h-[calc(100vh-320px)] min-h-[90vh]">
         <table className="w-full text-left bg-white text-sm border-collapse">
           <thead className="sticky top-0 z-20 bg-white border-b border-slate-200 shadow-[0_2px_4px_rgba(0,0,0,0.02)]">
             <tr>
@@ -742,7 +742,7 @@ export const DataTable = ({
                     type="checkbox"
                     className="rounded border-slate-300 text-rose-600 focus:ring-rose-500"
                     onChange={handleSelectAll}
-                    checked={paginatedData.length > 0 && paginatedData.every((row, idx) => selectedRows.has(row[rowIdProp] || row.id || (currentPage - 1) * pageSize + idx))}
+                    checked={filteredData.length > 0 && filteredData.every((row, idx) => selectedRows.has(row[rowIdProp] || row.id || idx))}
                   />
                 </th>
               )}
@@ -750,7 +750,7 @@ export const DataTable = ({
               {columns.map((col, idx) => (
                 <th 
                   key={idx} 
-                  className={`px-4 py-3 border-b border-slate-200 bg-slate-50 text-slate-600 text-xs    ${col.sortable ? 'cursor-pointer hover:bg-slate-100 transition-colors' : ''} ${col.className || ''}`}
+                  className={`p-2 border-b border-slate-200 bg-slate-50 text-slate-600 text-xs    ${col.sortable ? 'cursor-pointer hover:bg-slate-100 transition-colors' : ''} ${col.className || ''}`}
                   onClick={() => col.sortable && handleSort(col.key)}
                   style={{ width: col.width }}
                 >
@@ -772,7 +772,7 @@ export const DataTable = ({
                 <td colSpan={columns.length + (renderExpanded && !hideExpander ? 1 : 0) + (selectable ? 1 : 0)} className="p-12 text-center">
                   <div className="flex flex-col items-center gap-3">
                     <Loader2 className="w-8 h-8 text-rose-600 animate-spin" />
-                    <span className="text-slate-500 text-sm font-medium animate-pulse">{loadingMessage}</span>
+                    <span className="text-slate-500 text-sm  animate-pulse">{loadingMessage}</span>
                   </div>
                 </td>
               </tr>
@@ -783,7 +783,7 @@ export const DataTable = ({
                     <div className="p-4 bg-slate-50 rounded-full">
                       <FileText className="w-8 h-8 text-slate-300" />
                     </div>
-                    <p className="text-slate-500 font-medium">{emptyMessage}</p>
+                    <p className="text-slate-500 ">{emptyMessage}</p>
                     <p className="text-slate-400 text-xs mt-1">Try adjusting your search or filters</p>
                   </div>
                 </td>

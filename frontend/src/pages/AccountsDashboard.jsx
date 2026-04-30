@@ -70,7 +70,7 @@ const AccountsDashboard = () => {
               </span>
             )}
           </div>
-          <p className="text-xs text-slate-500 mt-1 font-medium">{subtitle}</p>
+          <p className="text-xs text-slate-500 mt-1 ">{subtitle}</p>
         </div>
         <div className={`p-2 rounded ${color.replace('bg-', 'bg-').replace('500', '100')} ${color.replace('bg-', 'text-').replace('500', '600')} transition-transform group-hover:rotate-12 shadow-sm`}>
           <Icon className="w-3 h-3" />
@@ -99,7 +99,7 @@ const AccountsDashboard = () => {
     { key: 'vendor', label: 'ENTITY', render: (val) => <span className=" text-slate-600">{val}</span> },
     { key: 'amount', label: 'AMOUNT', className: 'text-right', render: (val) => <span className=" text-indigo-600">₹{parseFloat(val || 0).toLocaleString('en-IN')}</span> },
     { key: 'status', label: 'STATUS', render: (val) => <StatusBadge status={val} /> },
-    { key: 'date', label: 'DATE', render: (val) => <span className="text-slate-500 font-medium">{val}</span> },
+    { key: 'date', label: 'DATE', render: (val) => <span className="text-slate-500 ">{val}</span> },
     { 
       key: 'actions', 
       label: 'ACTION', 

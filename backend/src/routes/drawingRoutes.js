@@ -8,6 +8,7 @@ router.get('/', authorize(['DESIGN_VIEW', 'PROD_VIEW']), drawingController.listD
 router.get('/approved', authorize(['DESIGN_VIEW', 'PROD_VIEW']), drawingController.getApprovedDrawings);
 router.post('/', authorize(['DESIGN_MANAGE']), upload.fields([{ name: 'file', maxCount: 1 }, { name: 'zipFile', maxCount: 1 }]), drawingController.createDrawing);
 router.post('/share/bulk', authorize(['DESIGN_MANAGE']), drawingController.shareDrawingsBulk);
+router.post('/delete/bulk', authorize(['DESIGN_MANAGE']), drawingController.deleteDrawingsBulk);
 router.post('/:id/share', authorize(['DESIGN_MANAGE']), drawingController.shareDrawing);
 router.delete('/:id', authorize(['DESIGN_MANAGE']), drawingController.deleteDrawing);
 router.get('/:drawingNo/revisions', authorize(['DESIGN_VIEW', 'PROD_VIEW']), drawingController.getDrawingRevisions);

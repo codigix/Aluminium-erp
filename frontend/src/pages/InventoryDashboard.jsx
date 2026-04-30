@@ -88,7 +88,7 @@ const InventoryDashboard = () => {
               </span>
             )}
           </div>
-          <p className="text-xs text-slate-500 mt-1 font-medium">{subtitle}</p>
+          <p className="text-xs text-slate-500 mt-1 ">{subtitle}</p>
         </div>
         <div className={`p-2 rounded  ${color.replace('bg-', 'bg-').replace('500', '100')} ${color.replace('bg-', 'text-').replace('500', '600')} transition-transform group-hover:rotate-12`}>
           <Icon className="w-3 h-3" />
@@ -114,7 +114,7 @@ const InventoryDashboard = () => {
     { key: 'request_no', label: 'Request No', sortable: true, render: (val) => <span className=" text-slate-900">{val}</span> },
     { key: 'department', label: 'Department', sortable: true },
     { key: 'purpose', label: 'Purpose' },
-    { key: 'items_count', label: 'Items', className: 'text-right font-medium' },
+    { key: 'items_count', label: 'Items', className: 'text-right ' },
     { key: 'required_date', label: 'Required By', sortable: true, render: (val) => val ? new Date(val).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '—' },
     { key: 'status', label: 'Status', render: (val) => <StatusBadge status={val} /> }
   ];
@@ -122,7 +122,7 @@ const InventoryDashboard = () => {
   const grnColumns = [
     { key: 'id', label: 'GRN ID', sortable: true, render: (val) => <span className=" text-slate-900">GRN-{String(val).padStart(4, '0')}</span> },
     { key: 'po_number', label: 'PO Number', sortable: true },
-    { key: 'received_quantity', label: 'Qty Received', className: 'text-right font-medium', render: (val) => parseFloat(val || 0).toFixed(3) },
+    { key: 'received_quantity', label: 'Qty Received', className: 'text-right ', render: (val) => parseFloat(val || 0).toFixed(3) },
     { key: 'grn_date', label: 'Date', sortable: true, render: (val) => new Date(val).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) },
     { key: 'status', label: 'Status', render: (val) => <StatusBadge status={val} /> }
   ];

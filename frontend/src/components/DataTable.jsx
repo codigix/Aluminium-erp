@@ -168,7 +168,7 @@ const DataTable = ({
                     <button
                       key={pageNum}
                       onClick={() => handlePageChange(pageNum)}
-                      className={`w-8 h-8 text-sm font-medium rounded mx-0.5 ${
+                      className={`w-8 h-8 text-sm  rounded mx-0.5 ${
                         currentPage === pageNum 
                           ? 'bg-rose-600 text-white' 
                           : 'text-slate-600 hover:bg-slate-50'

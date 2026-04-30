@@ -647,10 +647,28 @@ const transitionToDepartment = async (salesOrderId, toDepartment, newStatus) => 
 };
 
 const sendOrderToDesign = async (salesOrderId) => {
-  await pool.execute(
-    'UPDATE sales_orders SET status = ?, current_department = ?, request_accepted = 0, updated_at = NOW() WHERE id = ?',
-    ['DESIGN_IN_REVIEW', 'DESIGN_ENG', salesOrderId]
-  );
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    await connection.execute(
+      'UPDATE sales_orders SET status = ?, current_department = ?, request_accepted = 0, updated_at = NOW() WHERE id = ?',
+      ['DESIGN_IN_REVIEW', 'DESIGN_ENG', salesOrderId]
+    );
+
+    // Also update all items to DESIGN_IN_REVIEW status so they show up in Drawing Master
+    await connection.execute(
+      "UPDATE sales_order_items SET status = 'DESIGN_IN_REVIEW' WHERE sales_order_id = ? AND (status IS NULL OR status = 'PENDING')",
+      [salesOrderId]
+    );
+
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 };
 
 const approveDesignAndCreateQuotation = async (salesOrderId) => {

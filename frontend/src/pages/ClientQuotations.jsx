@@ -690,8 +690,8 @@ const ClientQuotations = () => {
         return (
           <div className="flex flex-col gap-1">
             {isPending ? (
-              <span className="p-1 bg-amber-50 text-amber-600 rounded text-xs border border-amber-100">
-                NEW PENDING
+              <span className="p-1 text-amber-600  text-xs">
+                Pending
               </span>
             ) : (
               <div className="flex flex-col gap-1">
@@ -699,7 +699,7 @@ const ClientQuotations = () => {
                   QRT-{String(group.display_id || val).padStart(4, '0')}
                 </span>
                 {group.version && (
-                  <span className="text-[10px] text-slate-500 font-medium ml-1">
+                  <span className="text-xs  text-slate-500  ml-1">
                     Version {group.version}
                   </span>
                 )}
@@ -734,7 +734,7 @@ const ClientQuotations = () => {
       key: 'id',
       render: (_, group) => (
         <div className="flex flex-col gap-0.5">
-          <span className="text-xs text-slate-700 font-medium">
+          <span className="text-xs text-slate-700 ">
             {(() => {
               const uniqueDrawings = [...new Set((group.quotes || []).map(q => q.drawing_no).filter(Boolean))];
               return uniqueDrawings.length > 1 
@@ -760,7 +760,7 @@ const ClientQuotations = () => {
               if (saCount > 0) parts.push(`${saCount} SA`);
               
               return (
-                <span className="text-[10px] text-slate-400 font-medium bg-slate-50 px-1 rounded border border-slate-100">
+                <span className="text-xs  text-slate-400  bg-slate-50 px-1 rounded border border-slate-100">
                   {parts.length > 0 ? parts.join(' + ') : `${items.length} item(s)`}
                 </span>
               );
@@ -796,7 +796,7 @@ const ClientQuotations = () => {
                   return formatCurrency(total);
                 })()}
               </span>
-              <span className="text-[10px] text-slate-400">Estimated Total</span>
+              <span className="text-xs  text-slate-400">Estimated Total</span>
             </div>
           );
         } else {
@@ -936,11 +936,11 @@ const ClientQuotations = () => {
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1">
                   <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
                     <User size={12} className="text-slate-400" />
-                    <span className="font-medium">{group.company_name}</span>
+                    <span className="">{group.company_name}</span>
                   </div>
                   <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
                     <Package size={12} className="text-slate-400" />
-                    <span className="font-medium italic">{group.project_name || 'General Project'}</span>
+                    <span className=" italic">{group.project_name || 'General Project'}</span>
                   </div>
                   {group.quotes?.[0]?.email && (
                     <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
@@ -1012,7 +1012,7 @@ const ClientQuotations = () => {
                     return (
                       <React.Fragment key={dNo}>
                         <tr className="bg-slate-50/50 border-y border-slate-100">
-                          <td colSpan={isPending ? 7 : 4} className="px-4 py-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider bg-slate-100/30">
+                          <td colSpan={isPending ? 7 : 4} className="px-4 py-1.5 text-xs  font-bold text-slate-500 uppercase tracking-wider bg-slate-100/30">
                             Drawing: {dNo}
                           </td>
                         </tr>
@@ -1031,7 +1031,7 @@ const ClientQuotations = () => {
                                     {isSA && <GitBranch size={10} className="text-slate-400 rotate-180" />}
                                     <span className="text-xs  text-slate-900 ">{item.description || item.item_description || '—'}</span>
                                     {displayGroup && (
-                                      <span className={`px-1.5 py-0.5 rounded text-[10px]   ${
+                                      <span className={`px-1.5 py-0.5 rounded text-xs    ${
                                         isSA 
                                           ? 'bg-blue-100 text-blue-700 border border-blue-200' 
                                           : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
@@ -1041,7 +1041,7 @@ const ClientQuotations = () => {
                                     )}
                                   </div>
                                   {!isSA && (
-                                    <span className="text-[10px] text-slate-500 font-medium ">
+                                    <span className="text-xs  text-slate-500  ">
                                       DRAWING: {item.drawing_no || 'NA'}
                                     </span>
                                   )}
@@ -1051,18 +1051,18 @@ const ClientQuotations = () => {
                                 <span className="text-xs  text-slate-900">
                                   {item.item_qty || item.design_qty}
                                 </span>
-                                <span className="text-[10px] text-slate-400 ml-1 ">{item.item_unit || item.unit || 'Nos'}</span>
+                                <span className="text-xs  text-slate-400 ml-1 ">{item.item_unit || item.unit || 'Nos'}</span>
                               </td>
                               <td className="px-4 p-2">
                                 <div className="flex flex-col gap-1">
-                                  <span className="text-xs font-medium text-slate-600">
+                                  <span className="text-xs  text-slate-600">
                                     {formatCurrency(item.bom_cost || item.latest_bom_cost)}
                                   </span>
                                   {item.pending_bom_cost && (
                                     <div className="flex items-center gap-1.5 animate-in slide-in-from-left duration-300">
                                       <div className="p-1 bg-rose-50 text-rose-600 rounded border border-rose-100 flex items-center gap-1" title="New BOM Update Requested">
                                         <ArrowUpRight size={10} className={item.pending_bom_cost > (item.bom_cost || item.latest_bom_cost) ? 'text-rose-500' : 'rotate-90 text-emerald-500'} />
-                                        <span className="text-[10px] font-bold">{formatCurrency(item.pending_bom_cost)}</span>
+                                        <span className="text-xs  font-bold">{formatCurrency(item.pending_bom_cost)}</span>
                                       </div>
                                       <button
                                         onClick={() => handleApplyPendingBOM(group, item)}
@@ -1085,14 +1085,14 @@ const ClientQuotations = () => {
                                             type="text"
                                             value={profitMap[group.company_name]?.[item.id]}
                                             onChange={(e) => handleProfitChange(group.company_name, item, e.target.value)}
-                                            className="w-full bg-transparent text-xs text-slate-900 focus:outline-none font-medium"
+                                            className="w-full bg-transparent text-xs text-slate-900 focus:outline-none "
                                           />
-                                          <span className="text-slate-400 text-[10px]">%</span>
+                                          <span className="text-slate-400 text-xs ">%</span>
                                         </div>
                                       </td>
                                       <td className="px-4 p-2">
                                         <div className="flex items-center gap-1.5 bg-indigo-50 border border-indigo-100 rounded px-2 py-1">
-                                          <span className="text-indigo-600 text-[10px] ">₹</span>
+                                          <span className="text-indigo-600 text-xs  ">₹</span>
                                           <input
                                             type="text"
                                             value={quotePricesMap[group.company_name]?.[item.id]}
@@ -1135,7 +1135,7 @@ const ClientQuotations = () => {
                                         <div className="flex items-center justify-end gap-1.5">
                                           {editingItemRates[item.id] !== undefined ? (
                                             <div className="flex items-center gap-1 bg-emerald-50 border border-emerald-100 rounded px-2 py-1">
-                                              <span className="text-emerald-600 text-[10px]">₹</span>
+                                              <span className="text-emerald-600 text-xs ">₹</span>
                                               <input
                                                 type="text"
                                                 value={editingItemRates[item.id]}
@@ -1158,7 +1158,7 @@ const ClientQuotations = () => {
                                           ) : (
                                             <button 
                                               onClick={() => setEditingItemRates(prev => ({ ...prev, [item.id]: (parseFloat(item.unit_rate) || (parseFloat(item.total_amount) / (parseFloat(item.item_qty) || 1))).toFixed(2) }))}
-                                              className="text-xs font-medium text-slate-600 hover:text-indigo-600"
+                                              className="text-xs  text-slate-600 hover:text-indigo-600"
                                             >
                                               {formatCurrency(item.unit_rate || (parseFloat(item.total_amount) / (parseFloat(item.item_qty) || 1)))}
                                             </button>
@@ -1267,7 +1267,7 @@ const ClientQuotations = () => {
                 return (
                   <>
                     <div className="space-y-1 w-72">
-                      <div className="flex justify-between text-xs font-medium">
+                      <div className="flex justify-between text-xs ">
                         <span className="text-slate-500">Sub Total:</span>
                         <span className="text-slate-900">{formatCurrency(subTotal)}</span>
                       </div>
@@ -1275,7 +1275,7 @@ const ClientQuotations = () => {
                         <span>Est. Profit:</span>
                         <span>{formatCurrency(totalProfit)}</span>
                       </div>
-                      <div className="flex justify-between text-xs font-medium">
+                      <div className="flex justify-between text-xs ">
                         <span className="text-slate-500">Tax (GST):</span>
                         <span className="text-slate-900">{formatCurrency(totalTax)}</span>
                       </div>
@@ -1287,9 +1287,9 @@ const ClientQuotations = () => {
                     <button
                       onClick={() => handleSendQuote(group.company_name)}
                       disabled={(subTotal + totalTax) === 0}
-                      className="mt-4 w-72 flex justify-center items-center gap-2 px-6 p-2 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 disabled:opacity-50 active:scale-95"
+                      className="mt-2  flex justify-center items-center gap-2 p-2 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 disabled:opacity-50 active:scale-95"
                     >
-                      <Save className="w-5 h-5" />
+                      <Save className="w-4 h-4" />
                       Create Quotation
                     </button>
                   </>
@@ -1300,12 +1300,12 @@ const ClientQuotations = () => {
           {!isPending && (
             <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-between items-center">
               <div className="text-xs text-slate-500">
-                <span className="font-medium">Summary:</span> {(group.quotes || []).length} items included in this quotation set.
+                <span className="">Summary:</span> {(group.quotes || []).length} items included in this quotation set.
               </div>
               <div className="flex gap-4 text-xs">
                 <div className="flex flex-col items-end">
                   <span className="text-slate-400">Base Amount</span>
-                  <span className="text-slate-900 font-medium">{formatCurrency(group.total_amount)}</span>
+                  <span className="text-slate-900 ">{formatCurrency(group.total_amount)}</span>
                 </div>
                 <div className="flex flex-col items-end">
                   <span className="text-slate-400">Total (Incl. GST)</span>
@@ -2001,11 +2001,11 @@ const ClientQuotations = () => {
                   </div>
                   <div className="space-y-4">
                     <div>
-                      <p className="text-[10px]  text-slate-400  tracking-widest mb-1">Client</p>
+                      <p className="text-xs   text-slate-400  tracking-widest mb-1">Client</p>
                       <p className="text-sm font-semibold text-slate-700">{selectedQuoteForComm?.company_name}</p>
                     </div>
                     <div>
-                      <p className="text-[10px]  text-slate-400  tracking-widest mb-1">Reference</p>
+                      <p className="text-xs   text-slate-400  tracking-widest mb-1">Reference</p>
                       <p className="text-sm font-mono text-indigo-600 bg-indigo-50 px-2 py-1 rounded-md w-fit">
                         QRT-{String(selectedQuoteForComm?.id).padStart(4, '0')}
                       </p>
@@ -2022,7 +2022,7 @@ const ClientQuotations = () => {
                       className="w-full flex items-center gap-3 p-3 text-slate-600 hover:bg-white hover:text-indigo-600 hover:shadow-md rounded-xl transition-all group"
                     >
                       <RotateCw size={18} className={syncing ? 'animate-spin' : 'group-hover:rotate-180 duration-500'} />
-                      <span className="text-sm font-medium">Sync with Email</span>
+                      <span className="text-sm ">Sync with Email</span>
                     </button>
                   </div>
                 </div>
@@ -2040,7 +2040,7 @@ const ClientQuotations = () => {
                       <h3 className=" text-slate-900">{selectedQuoteForComm?.company_name}</h3>
                       <div className="flex items-center gap-2">
                         <span className={`w-2 h-2 rounded-full ${commType === 'CLIENT' ? 'bg-emerald-500' : 'bg-amber-500'} animate-pulse`} />
-                        <span className="text-[10px] font-medium text-slate-400 ">
+                        <span className="text-xs   text-slate-400 ">
                           {commType === 'CLIENT' ? 'Active Channel (Client)' : 'Internal Requests'}
                         </span>
                       </div>
@@ -2108,13 +2108,13 @@ const ClientQuotations = () => {
                         <div key={idx} className={`flex ${isClient ? 'justify-start' : 'justify-end'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
                           <div className={`max-w-[80%] flex flex-col ${isClient ? 'items-start' : 'items-end'}`}>
                             <div className={`flex items-center gap-2 mb-1.5 ${isClient ? 'flex-row' : 'flex-row-reverse'}`}>
-                              <span className={`text-[10px]    ${
+                              <span className={`text-xs     ${
                                 isClient ? 'text-slate-400' : isSystem ? 'text-amber-500' : 'text-indigo-400'
                               }`}>
                                 {isClient ? 'Client' : isSystem ? 'System Notification' : 'Internal Team'}
                               </span>
-                              <span className="text-[10px] text-slate-300">•</span>
-                              <span className="text-[10px] text-slate-400">
+                              <span className="text-xs  text-slate-300">•</span>
+                              <span className="text-xs  text-slate-400">
                                 {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                               </span>
                             </div>
@@ -2130,7 +2130,7 @@ const ClientQuotations = () => {
                             {!isClient && !isSystem && (
                               <div className="flex items-center gap-1 mt-1.5">
                                 <CheckCheck size={12} className="text-indigo-400" />
-                                <span className="text-[10px] font-medium text-slate-400 ">Sent</span>
+                                <span className="text-xs   text-slate-400 ">Sent</span>
                               </div>
                             )}
                           </div>
@@ -2168,7 +2168,7 @@ const ClientQuotations = () => {
                       )}
                     </button>
                   </form>
-                  <p className="mt-3 text-[10px] text-center text-slate-400 font-medium">
+                  <p className="mt-3 text-xs  text-center text-slate-400 ">
                     Press <kbd className="px-1.5 py-0.5 bg-slate-100 rounded text-slate-500 font-sans">Enter</kbd> to send, <kbd className="px-1.5 py-0.5 bg-slate-100 rounded text-slate-500 font-sans">Shift+Enter</kbd> for new line.
                   </p>
                 </div>

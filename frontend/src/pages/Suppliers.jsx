@@ -326,7 +326,7 @@ const Suppliers = () => {
               <Users className="w-3 h-3 text-indigo-600" />
             </div>
             <div>
-              <p className="text-xs text-slate-500 font-medium">Total Suppliers</p>
+              <p className="text-xs text-slate-500 ">Total Suppliers</p>
               <p className="text-2xl text-slate-900 ">{stats?.total_vendors || suppliers.length}</p>
             </div>
           </div>
@@ -337,7 +337,7 @@ const Suppliers = () => {
               <CheckCircle className="w-3 h-3 text-emerald-600" />
             </div>
             <div>
-              <p className="text-xs text-slate-500 font-medium">Active</p>
+              <p className="text-xs text-slate-500 ">Active</p>
               <p className="text-2xl text-slate-900 ">{stats?.active_vendors || suppliers.filter(v => v.status === 'ACTIVE').length}</p>
             </div>
           </div>
@@ -348,7 +348,7 @@ const Suppliers = () => {
               <Star className="w-3 h-3 text-yellow-600 fill-current" />
             </div>
             <div>
-              <p className="text-xs text-slate-500 font-medium">Avg Rating</p>
+              <p className="text-xs text-slate-500 ">Avg Rating</p>
               <p className="text-2xl text-slate-900 ">
                 {parseFloat(stats?.avg_rating || 0).toFixed(1)}
               </p>
@@ -361,7 +361,7 @@ const Suppliers = () => {
               <ShoppingBag className="w-3 h-3 text-indigo-600" />
             </div>
             <div>
-              <p className="text-xs text-slate-500 font-medium">Total Orders</p>
+              <p className="text-xs text-slate-500 ">Total Orders</p>
               <p className="text-2xl text-slate-900 ">{stats?.total_orders || 0}</p>
             </div>
           </div>

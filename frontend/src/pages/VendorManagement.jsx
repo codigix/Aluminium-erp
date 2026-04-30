@@ -56,7 +56,7 @@ const Vendors = ({ onAddVendor }) => {
       {loading && <p className="text-xs text-slate-400">Loading vendors...</p>}
       {!loading && vendors.length === 0 && (
         <div className="text-center py-12">
-          <p className="text-slate-500 mb-3 font-medium">No vendors added yet</p>
+          <p className="text-slate-500 mb-3 ">No vendors added yet</p>
           <button
             type="button"
             onClick={onAddVendor}
@@ -117,7 +117,7 @@ const Quotations = ({ onCreateRFQ }) => {
       {loading && <p className="text-xs text-slate-400">Loading quotations...</p>}
       {!loading && rfqs.length === 0 && (
         <div className="text-center py-12">
-          <p className="text-slate-500 mb-3 font-medium">No quotations yet</p>
+          <p className="text-slate-500 mb-3 ">No quotations yet</p>
           <button
             type="button"
             onClick={onCreateRFQ}
@@ -180,7 +180,7 @@ const PurchaseOrders = ({ onCreatePO }) => {
       {loading && <p className="text-xs text-slate-400">Loading purchase orders...</p>}
       {!loading && pos.length === 0 && (
         <div className="text-center py-12">
-          <p className="text-slate-500 mb-3 font-medium">No purchase orders yet</p>
+          <p className="text-slate-500 mb-3 ">No purchase orders yet</p>
           <button
             type="button"
             onClick={onCreatePO}

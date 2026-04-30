@@ -1298,7 +1298,7 @@ const Quotations = () => {
             <div className="text-sm  tracking-tight flex items-center gap-2">
               {val}
               {q.version && (
-                <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded text-[10px] font-medium">
+                <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded text-xs  ">
                   V{q.version}
                 </span>
               )}
@@ -1333,10 +1333,10 @@ const Quotations = () => {
         sortable: true,
         render: (val, q) => (
           <div className="flex flex-col">
-            <span className="text-slate-900 font-medium ">{val ? getVendorName(val) : (q.isRFQOnly ? 'Unassigned' : 'Unknown')}</span>
-            {val && q.is_single_vendor && <span className="text-[10px]   text-slate-400 mt-0.5 ">[Single Vendor]</span>}
+            <span className="text-slate-900  ">{val ? getVendorName(val) : (q.isRFQOnly ? 'Unassigned' : 'Unknown')}</span>
+            {val && q.is_single_vendor && <span className="text-xs    text-slate-400 mt-0.5 ">[Single Vendor]</span>}
             {val && <span className="text-xs text-slate-400 mt-1 flex items-center gap-1 opacity-70">Vendor ID: #{val}</span>}
-            {q.isRFQOnly && <span className="text-xs text-amber-500 italic mt-1 font-medium">Select vendor below</span>}
+            {q.isRFQOnly && <span className="text-xs text-amber-500 italic mt-1 ">Select vendor below</span>}
           </div>
         )
       },
@@ -1372,7 +1372,7 @@ const Quotations = () => {
               {rfqStatusColors[val]?.label?.toUpperCase() || val}
             </span>
             {val === 'REVIEWED' && q.is_single_vendor && (
-              <span className="text-[10px] text-indigo-500 font-medium ml-1">Auto Approved</span>
+              <span className="text-xs  text-indigo-500  ml-1">Auto Approved</span>
             )}
           </div>
         )
@@ -1781,11 +1781,11 @@ const Quotations = () => {
                                 />
                                 {(item.length > 0 || item.width > 0 || item.thickness > 0 || item.diameter > 0) && (
                                   <div className="flex flex-wrap gap-x-2 gap-y-1 px-1">
-                                    {item.length > 0 && <span className="text-[10px] text-slate-500">L: {item.length}</span>}
-                                    {item.width > 0 && <span className="text-[10px] text-slate-500">W: {item.width}</span>}
-                                    {item.thickness > 0 && <span className="text-[10px] text-slate-500">T: {item.thickness}</span>}
-                                    {item.diameter > 0 && <span className="text-[10px] text-slate-500">Dia: {item.diameter}</span>}
-                                    {item.outer_diameter > 0 && <span className="text-[10px] text-slate-500">OD: {item.outer_diameter}</span>}
+                                    {item.length > 0 && <span className="text-xs  text-slate-500">L: {item.length}</span>}
+                                    {item.width > 0 && <span className="text-xs  text-slate-500">W: {item.width}</span>}
+                                    {item.thickness > 0 && <span className="text-xs  text-slate-500">T: {item.thickness}</span>}
+                                    {item.diameter > 0 && <span className="text-xs  text-slate-500">Dia: {item.diameter}</span>}
+                                    {item.outer_diameter > 0 && <span className="text-xs  text-slate-500">OD: {item.outer_diameter}</span>}
                                   </div>
                                 )}
                               </div>
@@ -1797,10 +1797,10 @@ const Quotations = () => {
                                 className="col-span-1 p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                               />
                               <div className="col-span-2 flex flex-col items-center">
-                                <div className="text-[10px] text-slate-400 mb-0.5">
+                                <div className="text-xs  text-slate-400 mb-0.5">
                                   {Number(item.planned_qty || 0).toFixed(3)} {item.uom || 'Kg'}
                                 </div>
-                                <div className="text-[10px] font-medium text-slate-600">
+                                <div className="text-xs   text-slate-600">
                                   Design Qty
                                 </div>
                               </div>
@@ -1812,7 +1812,7 @@ const Quotations = () => {
                                   onChange={(e) => handleItemChange(idx, 'design_qty', parseFloat(e.target.value) || 0)}
                                   className="w-full p-2 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
                                 />
-                                <div className="p-2 bg-slate-50 border border-slate-200 rounded text-[10px] text-slate-500 flex items-center justify-center min-w-[40px]">
+                                <div className="p-2 bg-slate-50 border border-slate-200 rounded text-xs  text-slate-500 flex items-center justify-center min-w-[40px]">
                                   {item.uom || 'Kg'}
                                 </div>
                               </div>
@@ -2022,10 +2022,10 @@ const Quotations = () => {
                                   />
                                 </td>
                                 <td className="p-2 text-center">
-                                  <div className="text-[10px] text-slate-400">
+                                  <div className="text-xs  text-slate-400">
                                     {Number(item.planned_qty || 0).toFixed(3)}
                                   </div>
-                                  <div className="text-[9px] text-slate-500 font-medium ">
+                                  <div className="text-[9px] text-slate-500  ">
                                     Design Qty
                                   </div>
                                 </td>
@@ -2328,11 +2328,11 @@ const Quotations = () => {
                               />
                               {(item.length > 0 || item.width > 0 || item.thickness > 0 || item.diameter > 0 || item.outer_diameter > 0) && (
                                 <div className="flex flex-wrap gap-x-2 gap-y-1 mt-1 opacity-70">
-                                  {item.length > 0 && <span className="text-[10px] text-slate-400 font-mono">L:{item.length}</span>}
-                                  {item.width > 0 && <span className="text-[10px] text-slate-400 font-mono">W:{item.width}</span>}
-                                  {item.thickness > 0 && <span className="text-[10px] text-slate-400 font-mono">T:{item.thickness}</span>}
-                                  {item.diameter > 0 && <span className="text-[10px] text-slate-400 font-mono">D:{item.diameter}</span>}
-                                  {item.outer_diameter > 0 && <span className="text-[10px] text-slate-400 font-mono">OD:{item.outer_diameter}</span>}
+                                  {item.length > 0 && <span className="text-xs  text-slate-400 font-mono">L:{item.length}</span>}
+                                  {item.width > 0 && <span className="text-xs  text-slate-400 font-mono">W:{item.width}</span>}
+                                  {item.thickness > 0 && <span className="text-xs  text-slate-400 font-mono">T:{item.thickness}</span>}
+                                  {item.diameter > 0 && <span className="text-xs  text-slate-400 font-mono">D:{item.diameter}</span>}
+                                  {item.outer_diameter > 0 && <span className="text-xs  text-slate-400 font-mono">OD:{item.outer_diameter}</span>}
                                 </div>
                               )}
                             </div>
@@ -2348,10 +2348,10 @@ const Quotations = () => {
                               className="col-span-1 p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
                             <div className="col-span-2 flex flex-col items-center">
-                                <div className="text-[10px] text-slate-400 mb-0.5">
+                                <div className="text-xs  text-slate-400 mb-0.5">
                                   {Number(item.planned_qty || 0).toFixed(3)} {item.uom || 'Kg'}
                                 </div>
-                                <div className="text-[10px] font-medium text-slate-600">
+                                <div className="text-xs   text-slate-600">
                                   Design Qty
                                 </div>
                               </div>
@@ -2369,7 +2369,7 @@ const Quotations = () => {
                                 }}
                                 className="w-full p-2 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
                               />
-                              <span className="text-[10px] text-slate-400 mt-0.5 ">{item.uom || 'Kg'}</span>
+                              <span className="text-xs  text-slate-400 mt-0.5 ">{item.uom || 'Kg'}</span>
                             </div>
                           </>
                         ) : (
@@ -2400,11 +2400,11 @@ const Quotations = () => {
                               />
                               {(item.length > 0 || item.width > 0 || item.thickness > 0 || item.diameter > 0 || item.outer_diameter > 0) && (
                                 <div className="flex flex-wrap gap-x-2 gap-y-1 mt-1 opacity-70">
-                                  {item.length > 0 && <span className="text-[10px] text-slate-400 font-mono">L:{item.length}</span>}
-                                  {item.width > 0 && <span className="text-[10px] text-slate-400 font-mono">W:{item.width}</span>}
-                                  {item.thickness > 0 && <span className="text-[10px] text-slate-400 font-mono">T:{item.thickness}</span>}
-                                  {item.diameter > 0 && <span className="text-[10px] text-slate-400 font-mono">D:{item.diameter}</span>}
-                                  {item.outer_diameter > 0 && <span className="text-[10px] text-slate-400 font-mono">OD:{item.outer_diameter}</span>}
+                                  {item.length > 0 && <span className="text-xs  text-slate-400 font-mono">L:{item.length}</span>}
+                                  {item.width > 0 && <span className="text-xs  text-slate-400 font-mono">W:{item.width}</span>}
+                                  {item.thickness > 0 && <span className="text-xs  text-slate-400 font-mono">T:{item.thickness}</span>}
+                                  {item.diameter > 0 && <span className="text-xs  text-slate-400 font-mono">D:{item.diameter}</span>}
+                                  {item.outer_diameter > 0 && <span className="text-xs  text-slate-400 font-mono">OD:{item.outer_diameter}</span>}
                                 </div>
                               )}
                             </div>
@@ -2420,7 +2420,7 @@ const Quotations = () => {
                               className="col-span-1 p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
                             <div className="col-span-1 flex flex-col items-center">
-                              <div className="text-[10px] text-slate-400">
+                              <div className="text-xs  text-slate-400">
                                 {Number(item.planned_qty || 0).toFixed(3)}
                               </div>
                               <div className="text-[9px] text-slate-400 ">
@@ -2544,7 +2544,7 @@ const Quotations = () => {
                       <td className="p-2 border text-center text-slate-400">
                         {Number(firstItem?.planned_qty || firstItem?.design_qty || 0).toFixed(3)}
                       </td>
-                      <td className="p-2 border text-center text-slate-800 font-medium">
+                      <td className="p-2 border text-center text-slate-800 ">
                         {Number(firstItem?.quantity || 0).toFixed(3)}
                       </td>
                       {compareData.map((q, qIdx) => {

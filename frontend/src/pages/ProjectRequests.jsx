@@ -122,7 +122,7 @@ const ProjectRequests = () => {
       label: 'SO Code',
       key: 'id',
       sortable: true,
-      render: (val) => <span className="text-indigo-600 font-medium">{formatOrderCode(val)}</span>
+      render: (val) => <span className="text-indigo-600 ">{formatOrderCode(val)}</span>
     },
     {
       label: 'Project / Customer',
@@ -130,8 +130,8 @@ const ProjectRequests = () => {
       sortable: true,
       render: (val, row) => (
         <div>
-          <div className="text-slate-900 font-medium">{val || '—'}</div>
-          <div className="text-[10px] text-slate-500 mt-0.5">{row.company_name}</div>
+          <div className="text-slate-900 ">{val || '—'}</div>
+          <div className="text-xs  text-slate-500 mt-0.5">{row.company_name}</div>
         </div>
       )
     },
@@ -142,8 +142,8 @@ const ProjectRequests = () => {
       render: (val, row) => (
         <div>
           <div className="text-slate-900">{val}</div>
-          <div className="text-[10px] text-slate-500 mt-0.5">
-            Code: {row.item_code || '—'} | Qty: <span className="font-medium text-slate-700">{row.item_qty} {row.item_unit}</span>
+          <div className="text-xs  text-slate-500 mt-0.5">
+            Code: {row.item_code || '—'} | Qty: <span className=" text-slate-700">{row.item_qty} {row.item_unit}</span>
           </div>
         </div>
       )
@@ -153,7 +153,7 @@ const ProjectRequests = () => {
       key: 'drawing_no',
       sortable: true,
       render: (val) => (
-        <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded text-[10px] font-medium border border-slate-200">
+        <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded text-xs   border border-slate-200">
           {val || 'N/A'}
         </span>
       )
@@ -167,7 +167,7 @@ const ProjectRequests = () => {
           href={getFileUrl(val)} 
           target="_blank" 
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 text-indigo-600 hover:text-indigo-800 font-medium"
+          className="inline-flex items-center gap-1.5 text-indigo-600 hover:text-indigo-800 "
         >
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -176,7 +176,7 @@ const ProjectRequests = () => {
           View
         </a>
       ) : (
-        <span className="text-slate-400 italic text-[10px]">No Drawing</span>
+        <span className="text-slate-400 italic text-xs ">No Drawing</span>
       )
     },
     {
@@ -196,7 +196,7 @@ const ProjectRequests = () => {
       key: 'production_priority',
       sortable: true,
       render: (val) => (
-        <span className={`text-[10px]    ${priorityColors[val] || priorityColors.NORMAL}`}>
+        <span className={`text-xs     ${priorityColors[val] || priorityColors.NORMAL}`}>
           {val || 'NORMAL'}
         </span>
       )
@@ -210,14 +210,14 @@ const ProjectRequests = () => {
           <button
             onClick={() => handleAction(row.id, 'accept')}
             disabled={actionLoading === row.id}
-            className="px-3 py-1 bg-emerald-600 text-white text-[10px]    rounded hover:bg-emerald-700 disabled:opacity-50 transition-all shadow-sm active:scale-95"
+            className="px-3 py-1 bg-emerald-600 text-white text-xs     rounded hover:bg-emerald-700 disabled:opacity-50 transition-all shadow-sm active:scale-95"
           >
             {actionLoading === row.id ? '...' : 'Accept'}
           </button>
           <button
             onClick={() => handleAction(row.id, 'reject')}
             disabled={actionLoading === row.id}
-            className="px-3 py-1 border border-slate-200 text-slate-600 text-[10px]    rounded hover:bg-slate-50 disabled:opacity-50 transition-all active:scale-95"
+            className="px-3 py-1 border border-slate-200 text-slate-600 text-xs     rounded hover:bg-slate-50 disabled:opacity-50 transition-all active:scale-95"
           >
             Reject
           </button>
@@ -226,13 +226,13 @@ const ProjectRequests = () => {
         <div className="flex justify-end gap-2">
           <button
             onClick={() => navigate('/production-plan', { state: { salesOrderId: row.id } })}
-            className="px-3 py-1 bg-indigo-50 text-indigo-600 text-[10px]    rounded border border-indigo-100 hover:bg-indigo-600 hover:text-white transition-all active:scale-95 shadow-sm"
+            className="px-3 py-1 bg-indigo-50 text-indigo-600 text-xs     rounded border border-indigo-100 hover:bg-indigo-600 hover:text-white transition-all active:scale-95 shadow-sm"
           >
             Plan
           </button>
           <button
             onClick={() => navigate('/work-order-form', { state: { salesOrderId: row.id, salesOrderItemId: row.item_id } })}
-            className="px-3 py-1 bg-emerald-50 text-emerald-600 text-[10px]    rounded border border-emerald-100 hover:bg-emerald-600 hover:text-white transition-all active:scale-95 shadow-sm"
+            className="px-3 py-1 bg-emerald-50 text-emerald-600 text-xs     rounded border border-emerald-100 hover:bg-emerald-600 hover:text-white transition-all active:scale-95 shadow-sm"
           >
             Work Order
           </button>
@@ -242,11 +242,11 @@ const ProjectRequests = () => {
   ], [actionLoading, navigate]);
 
   return (
-    <div className="space-y-4 p-4 min-h-screen bg-slate-50/50">
+    <div className="space-y-2 min-h-screen bg-slate-50/50">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl  text-slate-900 tracking-tight">Project Requests</h1>
-          <p className="text-sm text-slate-500 mt-1">Review and initiate production for new project requests from Sales</p>
+          <h1 className="text-xl  text-slate-900 tracking-tight">Project Requests</h1>
+          <p className="text-xs text-slate-500 mt-1">Review and initiate production for new project requests from Sales</p>
         </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded shadow-sm">
@@ -265,7 +265,7 @@ const ProjectRequests = () => {
         </div>
       </div>
 
-      <Card className="border-none shadow-xl bg-white/50 backdrop-blur-sm overflow-hidden">
+      
         <DataTable
           columns={columns}
           data={requests}
@@ -273,7 +273,7 @@ const ProjectRequests = () => {
           searchPlaceholder="Search by SO Code, Project, or Item..."
           searchKey="project_name"
         />
-      </Card>
+      
     </div>
   );
 };

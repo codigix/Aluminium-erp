@@ -302,7 +302,7 @@ const ShipmentOrders = ({ apiRequest }) => {
                         <td className=" p-2">
                           <div className="flex flex-col">
                             <span className=" text-slate-900 text-xs">{item.description || 'Unnamed Item'}</span>
-                            <span className="text-xs text-slate-400 font-medium">Code: {item.item_code}</span>
+                            <span className="text-xs text-slate-400 ">Code: {item.item_code}</span>
                           </div>
                         </td>
                         <td className="p-2 ">

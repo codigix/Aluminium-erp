@@ -1061,7 +1061,7 @@ const PurchaseOrders = () => {
           </div>
           <div>
             <h1 className="text-2xl  text-slate-900 tracking-tight">Purchase Orders</h1>
-            <p className="text-sm text-slate-500 font-medium">Manage procurement cycles and supplier orders</p>
+            <p className="text-sm text-slate-500 ">Manage procurement cycles and supplier orders</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -1122,7 +1122,7 @@ const PurchaseOrders = () => {
                   </div>
                 </div>
                 <p className={`text-2xl  ${stat.text} `}>{stat.value || 0}</p>
-                <p className={`text-xs ${stat.subText} mt-1 font-medium`}>{stat.sub}</p>
+                <p className={`text-xs ${stat.subText} mt-1 `}>{stat.sub}</p>
               </div>
             </div>
           ))}
@@ -1282,11 +1282,11 @@ const PurchaseOrders = () => {
                             </select>
                             {(item.length > 0 || item.width > 0 || item.thickness > 0 || item.diameter > 0) && (
                               <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1 px-1">
-                                {item.length > 0 && <span className="text-[10px] text-slate-400">L: {item.length}</span>}
-                                {item.width > 0 && <span className="text-[10px] text-slate-400">W: {item.width}</span>}
-                                {item.thickness > 0 && <span className="text-[10px] text-slate-400">T: {item.thickness}</span>}
-                                {item.diameter > 0 && <span className="text-[10px] text-slate-400">Dia: {item.diameter}</span>}
-                                {item.outer_diameter > 0 && <span className="text-[10px] text-slate-400">OD: {item.outer_diameter}</span>}
+                                {item.length > 0 && <span className="text-xs  text-slate-400">L: {item.length}</span>}
+                                {item.width > 0 && <span className="text-xs  text-slate-400">W: {item.width}</span>}
+                                {item.thickness > 0 && <span className="text-xs  text-slate-400">T: {item.thickness}</span>}
+                                {item.diameter > 0 && <span className="text-xs  text-slate-400">Dia: {item.diameter}</span>}
+                                {item.outer_diameter > 0 && <span className="text-xs  text-slate-400">OD: {item.outer_diameter}</span>}
                               </div>
                             )}
                           </td>
@@ -1384,13 +1384,13 @@ const PurchaseOrders = () => {
                 <div className="bg-blue-600 rounded p-1 shadow-lg shadow-blue-200 overflow-hidden flex flex-col">
                   <div className="flex-1 p-2 space-y-2">
                     <div className="flex justify-between items-center text-white/80 border-b border-white/10 pb-3">
-                      <span className="text-sm font-medium">Subtotal</span>
+                      <span className="text-sm ">Subtotal</span>
                       <span className="text-lg ">
                         {formatCurrency(manualFormData.items.reduce((sum, i) => sum + (parseFloat(i.amount) || 0), 0))}
                       </span>
                     </div>
                     <div className="flex justify-between items-center text-white/80 border-b border-white/10 pb-3">
-                      <span className="text-sm font-medium">Tax Amount</span>
+                      <span className="text-sm ">Tax Amount</span>
                       <span className="text-lg ">{formatCurrency(0)}</span>
                     </div>
                   </div>
@@ -1689,7 +1689,7 @@ const PurchaseOrders = () => {
                           <td className="px-4 p-2">
                             <div className="flex flex-col">
                               <span className="text-xs  text-slate-700">{item.material_name || item.description}</span>
-                              <span className="text-xs text-slate-400 font-medium">{item.item_code}</span>
+                              <span className="text-xs text-slate-400 ">{item.item_code}</span>
                             </div>
                           </td>
                           <td className="px-4 p-2 text-center">

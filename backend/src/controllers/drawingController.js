@@ -227,6 +227,19 @@ const deleteDrawing = async (req, res, next) => {
   }
 };
 
+const deleteDrawingsBulk = async (req, res, next) => {
+  try {
+    const { ids } = req.body;
+    if (!ids || !Array.isArray(ids)) {
+      throw new Error('Drawing IDs are required and must be an array');
+    }
+    await drawingService.deleteDrawingsBulk(ids);
+    res.json({ message: `${ids.length} drawings deleted successfully` });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const shareDrawing = async (req, res, next) => {
   try {
     await drawingService.shareWithDesign(req.params.id);
@@ -265,6 +278,7 @@ module.exports = {
   updateItemDrawing,
   createDrawing,
   deleteDrawing,
+  deleteDrawingsBulk,
   shareDrawing,
   shareDrawingsBulk,
   getApprovedDrawings

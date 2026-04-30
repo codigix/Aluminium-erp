@@ -143,12 +143,12 @@ const FinalQC = () => {
             <table className="w-full text-xs">
               <thead className="bg-slate-50 text-slate-500 ">
                 <tr>
-                  <th className="px-5 py-4 text-left font-medium">SO Number</th>
-                  <th className="px-5 py-4 text-left font-medium">Customer</th>
-                  <th className="px-5 py-4 text-left font-medium">Target Dispatch</th>
-                  <th className="px-5 py-4 text-left font-medium">Priority</th>
-                  <th className="px-5 py-4 text-left font-medium">Status</th>
-                  <th className="px-5 py-4 text-right font-medium">Actions</th>
+                  <th className="px-5 py-4 text-left ">SO Number</th>
+                  <th className="px-5 py-4 text-left ">Customer</th>
+                  <th className="px-5 py-4 text-left ">Target Dispatch</th>
+                  <th className="px-5 py-4 text-left ">Priority</th>
+                  <th className="px-5 py-4 text-left ">Status</th>
+                  <th className="px-5 py-4 text-right ">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">

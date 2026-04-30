@@ -222,11 +222,11 @@ const MaterialRequirements = () => {
   const withShortage = requirements.filter(r => r.shortage > 0).length;
 
   return (
-    <div className="space-y-2 p-4 min-w-0">
+    <div className="space-y-2 min-w-0">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl text-slate-900">Material Requirements</h2>
-          <p className="text-sm text-slate-500">Plan and allocate materials for active production orders</p>
+          <p className="text-xs text-slate-500">Plan and allocate materials for active production orders</p>
         </div>
         <button 
           onClick={fetchRequirements}
