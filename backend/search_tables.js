@@ -1,7 +1,7 @@
 const mysql = require('mysql2/promise');
 require('dotenv').config({ path: '.env' });
 
-async function describeTable() {
+async function searchTables() {
     const config = {
         host: process.env.DB_HOST || 'localhost',
         port: Number(process.env.DB_PORT || 3306),
@@ -13,11 +13,15 @@ async function describeTable() {
     const connection = await mysql.createConnection(config);
 
     try {
-        const [cols] = await connection.query('DESCRIBE quotation_requests');
-        console.log('quotation_requests columns:', cols);
+        const [tables] = await connection.query('SHOW TABLES');
+        const list = tables.map(t => Object.values(t)[0]);
+        console.log('All tables:', list);
         
-        const [rows] = await connection.query('SELECT COUNT(*) as count FROM material_requests');
-        console.log('material_requests row count:', rows[0].count);
+        const projectTables = list.filter(t => t.toLowerCase().includes('project'));
+        console.log('Tables containing "project":', projectTables);
+        
+        const requestTables = list.filter(t => t.toLowerCase().includes('request'));
+        console.log('Tables containing "request":', requestTables);
 
     } catch (error) {
         console.error('Error:', error);
@@ -26,4 +30,4 @@ async function describeTable() {
     }
 }
 
-describeTable();
+searchTables();

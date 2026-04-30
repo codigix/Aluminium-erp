@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react';
 import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
-import { Card, Modal, FormControl, StatusBadge, SearchableSelect, Tabs, Button } from '../components/ui.jsx';
+import { Card, Modal, FormControl, StatusBadge, SearchableSelect, Tabs, Button, DataTable } from '../components/ui.jsx';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
 import {
-  ClipboardList, Activity, CheckCircle, TrendingUp,
+  ClipboardList, Activity, CheckCircle, TrendingUp, Calendar,
   Play, Check, Edit2, Trash2, Search, Filter, Plus, X, Pause, Square,
   Clock, Package, User, Monitor, AlertCircle, ChevronDown, ChevronRight, ChevronLeft,
   DollarSign, Zap, Eye, Truck, Box, Target, Layers, ArrowRight, FileText, History,
@@ -1552,17 +1552,56 @@ const JobCard = () => {
     setFormData(prev => ({ ...prev, workstationId: wsId }));
   };
 
+  const calculateAutoEndTime = (startTime, startAMPM, producedQty) => {
+    if (!startTime || !startAMPM || !selectedJC) return;
+
+    try {
+      const [hStr, mStr] = startTime.split(':');
+      let hours = parseInt(hStr);
+      const minutes = parseInt(mStr);
+
+      if (startAMPM === 'PM' && hours < 12) hours += 12;
+      if (startAMPM === 'AM' && hours === 12) hours = 0;
+
+      const startDate = new Date();
+      startDate.setHours(hours, minutes, 0, 0);
+
+      const cycleTime = parseFloat(selectedJC.cycle_time || selectedJC.std_time || 0);
+      const setupTime = parseFloat(selectedJC.setup_time || 0);
+      const qty = parseFloat(producedQty || 0);
+
+      // Total time in minutes = (Cycle Time * Quantity) + Setup Time
+      const totalMinutes = (cycleTime * qty) + setupTime;
+      const endDate = new Date(startDate.getTime() + totalMinutes * 60000);
+
+      let endHours = endDate.getHours();
+      const endMinutes = endDate.getMinutes();
+      const endAMPM = endHours >= 12 ? 'PM' : 'AM';
+
+      if (endHours > 12) endHours -= 12;
+      if (endHours === 0) endHours = 12;
+
+      const endTimeStr = `${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}`;
+
+      setTimeLogForm(prev => ({
+        ...prev,
+        endTime: endTimeStr,
+        endAMPM: endAMPM
+      }));
+    } catch (error) {
+      console.error('Error calculating auto end time:', error);
+    }
+  };
+
   const renderProductionEntry = () => {
     if (!selectedJC) return null;
 
     const balanceWip = parseFloat(selectedJC.planned_qty || 0) - parseFloat(selectedJC.accepted_qty || 0);
 
     const totalStdMins = (() => {
-      let stdTime = parseFloat(selectedJC.std_time || 0);
-      const uom = (selectedJC.time_uom || 'min').toLowerCase();
-      if (uom === 'hr' || uom === 'hour' || uom === 'hours') stdTime *= 60;
-      else if (uom === 'sec' || uom === 'second' || uom === 'seconds') stdTime /= 60;
-      return Math.round(stdTime * parseFloat(selectedJC.accepted_qty || 0));
+      const cycleTime = parseFloat(selectedJC.cycle_time || selectedJC.std_time || 0);
+      const setupTime = parseFloat(selectedJC.setup_time || 0);
+      return Math.round((cycleTime * parseFloat(selectedJC.accepted_qty || 0)) + setupTime);
     })();
 
     const totalActualMins = (logs.timeLogs || []).reduce((acc, log) => {
@@ -1594,11 +1633,11 @@ const JobCard = () => {
 
         {/* Target Item Summary */}
         <div className="bg-white p-2 rounded  border border-slate-100 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-5 h-5 bg-slate-50 rounded  flex items-center justify-center border border-slate-100">
-                <Box className="w-3 h-3 text-slate-400" />
-              </div>
+
+
+          <div className="flex gap-2 justify-between">
+            <div className="flex gap-2">
+
               <div>
                 <p className="text-xs  text-slate-400   mb-0.5">Target Item</p>
                 <h3 className="text-xs  text-slate-900">{selectedJC.item_name}</h3>
@@ -1606,66 +1645,79 @@ const JobCard = () => {
               </div>
             </div>
 
-            <div className="flex gap-10">
-              <div className="text-center">
-                <p className="text-xs  text-slate-400   mb-1.5">Planned</p>
-                <p className="text-xs  text-slate-900">
-                  {selectedJC.planned_qty} <span className="text-xs text-slate-400">Units</span>
+            <div className="text-center">
+              <p className="text-xs  text-slate-400   mb-1.5">Planned</p>
+              <p className="text-xs  text-slate-900">
+                {selectedJC.planned_qty} <span className="text-xs text-slate-400">Units</span>
+              </p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs  text-slate-400   mb-1.5">Produced</p>
+              <p className="text-xs  text-slate-900">
+                {selectedJC.produced_qty || 0} <span className="text-xs text-slate-400">Units</span>
+              </p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs  text-slate-400   mb-1.5">Accepted</p>
+              <p className="text-sm  text-emerald-600">
+                {selectedJC.accepted_qty || 0} <span className="text-xs text-emerald-400">Units</span>
+              </p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs  text-slate-400   mb-1.5 text-indigo-400">Transferred</p>
+              <p className="text-sm  text-indigo-600">
+                {selectedJC.transferred_qty || 0} <span className="text-xs text-indigo-400">Units</span>
+              </p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs  text-amber-500   mb-1.5">Balance WIP</p>
+              <p className="text-sm  text-amber-600">
+                {balanceWip.toFixed(2)} <span className="text-xs text-amber-400">Units</span>
+              </p>
+            </div>
+            <div className="text-center border-l border-slate-100">
+              <p className="text-xs text-indigo-500 mb-1.5 font-medium">Total Execution Time</p>
+              <p className="text-[10px] text-slate-400 mb-1 font-medium italic">(For all units)</p>
+              <div className="flex flex-col items-center">
+                <p className="text-sm  text-indigo-600 font-bold">
+                  {((parseFloat(selectedJC.cycle_time || selectedJC.std_time || 0) * parseFloat(selectedJC.planned_qty || 0)) + parseFloat(selectedJC.setup_time || 0)).toFixed(0)} <span className="text-[10px] text-indigo-400 lowercase">Min</span>
                 </p>
-              </div>
-              <div className="text-center">
-                <p className="text-xs  text-slate-400   mb-1.5">Produced</p>
-                <p className="text-xs  text-slate-900">
-                  {selectedJC.produced_qty || 0} <span className="text-xs text-slate-400">Units</span>
-                </p>
-              </div>
-              <div className="text-center">
-                <p className="text-xs  text-slate-400   mb-1.5">Accepted</p>
-                <p className="text-sm  text-emerald-600">
-                  {selectedJC.accepted_qty || 0} <span className="text-xs text-emerald-400">Units</span>
-                </p>
-              </div>
-              <div className="text-center">
-                <p className="text-xs  text-slate-400   mb-1.5 text-indigo-400">Transferred</p>
-                <p className="text-sm  text-indigo-600">
-                  {selectedJC.transferred_qty || 0} <span className="text-xs text-indigo-400">Units</span>
-                </p>
-              </div>
-              <div className="text-center">
-                <p className="text-xs  text-amber-500   mb-1.5">Balance WIP</p>
-                <p className="text-sm  text-amber-600">
-                  {balanceWip.toFixed(2)} <span className="text-xs text-amber-400">Units</span>
-                </p>
-              </div>
-              <div className="text-center border-l border-slate-100 pl-8">
-                <p className="text-xs text-indigo-500 mb-1.5 font-medium">Net Time (Per Unit)</p>
-                <p className="text-sm  text-indigo-600">
-                  {parseFloat(selectedJC.std_time || 0).toFixed(0)} <span className="text-[10px] text-indigo-400 lowercase">{(selectedJC.time_uom || 'Min').toLowerCase()}</span>
-                  <span className="text-[9px] text-indigo-300 ml-1">/ unit</span>
-                </p>
-              </div>
-              <div className="text-right border-l border-slate-100 pl-8 min-w-[120px]">
-                <p className="text-xs  text-slate-400   mb-1">Current Status</p>
-                <div className="flex items-center justify-end gap-1.5">
-                  <span className={`w-2 h-2 rounded-full animate-pulse shrink-0 ${selectedJC.status === 'IN_PROGRESS' ? 'bg-amber-500' :
-                      selectedJC.status === 'COMPLETED' ? 'bg-emerald-500' :
-                        'bg-slate-400'
-                    }`}></span>
-                  <p className={`text-sm  tracking-tight ${selectedJC.status === 'IN_PROGRESS' ? 'text-amber-600' :
-                      selectedJC.status === 'COMPLETED' ? 'text-emerald-600' :
-                        'text-slate-600'
-                    }`}>
-                    {selectedJC.status === 'IN_PROGRESS' ? 'Running' : selectedJC.status === 'COMPLETED' ? 'Completed' : selectedJC.status}
-                  </p>
+                <div className="text-[9px] text-slate-400 mt-1 flex gap-1">
+                  <span>C: {(selectedJC.cycle_time || selectedJC.std_time || 0)}m</span>
+                  <span>•</span>
+                  <span>S: {(selectedJC.setup_time || 0)}m</span>
                 </div>
-                <p className="text-[10px] font-medium text-slate-400 mt-1  ">{selectedJC.operation_name}</p>
               </div>
+            </div>
+            <div className="text-center border-l border-slate-100">
+              <p className="text-xs text-slate-400 mb-1.5 font-medium">Net Time (Per Unit)</p>
+              <p className="text-sm  text-slate-600">
+                {parseFloat(selectedJC.cycle_time || selectedJC.std_time || 0).toFixed(0)} <span className="text-[10px] text-slate-400 lowercase">{(selectedJC.time_uom || 'Min').toLowerCase()}</span>
+                <span className="text-[9px] text-slate-400 ml-1">/ unit</span>
+              </p>
+            </div>
+            <div className="text-right border-l border-slate-100 pl-8 min-w-[120px]">
+              <p className="text-xs  text-slate-400   mb-1">Current Status</p>
+              <div className="flex items-center justify-end gap-1.5">
+                <span className={`w-2 h-2 rounded-full animate-pulse shrink-0 ${selectedJC.status === 'IN_PROGRESS' ? 'bg-amber-500' :
+                  selectedJC.status === 'COMPLETED' ? 'bg-emerald-500' :
+                    'bg-slate-400'
+                  }`}></span>
+                <p className={`text-sm  tracking-tight ${selectedJC.status === 'IN_PROGRESS' ? 'text-amber-600' :
+                  selectedJC.status === 'COMPLETED' ? 'text-emerald-600' :
+                    'text-slate-600'
+                  }`}>
+                  {selectedJC.status === 'IN_PROGRESS' ? 'Running' : selectedJC.status === 'COMPLETED' ? 'Completed' : selectedJC.status}
+                </p>
+              </div>
+              <p className="text-[10px] font-medium text-slate-400 mt-1  ">{selectedJC.operation_name}</p>
             </div>
           </div>
         </div>
 
+
         {/* Efficiency, Quality Yield, Productivity Row */}
-        <div className="grid grid-cols-3 gap-6">
+        {/* <div className="grid grid-cols-3 gap-6">
           <div className="bg-white p-5 rounded  border border-slate-100 shadow-sm flex items-center gap-2">
             <div className="w-5 h-5 bg-rose-50 rounded  flex items-center justify-center text-rose-500">
               <Zap className="w-5 h-5" />
@@ -1710,147 +1762,177 @@ const JobCard = () => {
               <p className="text-xs  text-slate-400   mt-0.5">Productivity</p>
             </div>
           </div>
-        </div>
+        </div> */}
 
         {/* Sections */}
         <div className="space-y-12 mt-12">
           {/* 1. Add Time Log Section */}
           <section className="space-y-2">
             <div className="flex items-center gap-2 px-1">
-              <div className="w-8 h-8 bg-indigo-50 rounded  flex items-center justify-center text-indigo-600">
-                <Plus className="w-4 h-4" />
-              </div>
+
               <h2 className="text-sm  text-slate-800  ">Add Time Log</h2>
             </div>
 
             <div className="bg-white rounded  border border-slate-100 shadow-sm">
-              <div className="p-6">
-                <div className="grid grid-cols-1 md:grid-cols-6 gap-2 mb-6">
-                  <FormControl label="Day & Date" required>
-                    <div className="flex items-center gap-1">
-                      <input
-                        type="number"
-                        value={timeLogForm.day}
-                        onChange={e => setTimeLogForm({ ...timeLogForm, day: e.target.value })}
-                        className="w-14 px-2 py-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-indigo-500 "
-                      />
-                      <input
-                        type="date"
-                        value={timeLogForm.logDate}
-                        onChange={e => handleDateChange('time', e.target.value)}
-                        className="flex-1 p-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-indigo-500"
-                      />
-                    </div>
-                  </FormControl>
-                  <FormControl label="Operator" required>
-                    <SearchableSelect
-                      options={users.map(u => {
-                        const busyJob = jobCards.find(jc =>
-                          jc.id !== selectedJC?.id &&
-                          jc.assigned_to === u.id &&
-                          jc.status === 'IN_PROGRESS'
-                        );
-
-                        const busyRange = busyJob
-                          ? `${formatLocalTime(busyJob.latest_log_start_time || busyJob.start_time)} – ${getEstimatedEndTime(busyJob)}`
-                          : '';
-
-                        return {
-                          value: u.id,
-                          label: u.username,
-                          subLabel: busyJob
-                            ? `🔴 Busy (${busyRange})`
-                            : '🟢 Available',
-                        };
-                      })}
-                      subLabelField="subLabel"
-                      value={timeLogForm.operatorId}
-                      onChange={(e) => setTimeLogForm({ ...timeLogForm, operatorId: e.target.value })}
-                      placeholder="Select Operator..."
-                    />
-                  </FormControl>
-                  <FormControl label="Workstation" required>
-                    <SearchableSelect
-                      options={workstations.map(w => {
-                        const busyJob = jobCards.find(jc =>
-                          jc.id !== selectedJC?.id &&
-                          jc.workstation_id === w.id &&
-                          jc.status === 'IN_PROGRESS'
-                        );
-
-                        return {
-                          value: w.id,
-                          label: w.workstation_name,
-                          subLabel: busyJob
-                            ? `Busy till ${getEstimatedEndTime(busyJob)} by ${busyJob.job_card_no}`
-                            : 'Available',
-                        };
-                      })}
-                      subLabelField="subLabel"
-                      value={timeLogForm.workstationId}
-                      onChange={(e) => handleWorkstationChange(e.target.value)}
-                      placeholder="Select Machine..."
-                    />
-                  </FormControl>
-                  <FormControl label="Shift" required>
-                    <div className="flex items-center gap-1">
-                      <select value={timeLogForm.shift} onChange={e => setTimeLogForm({ ...timeLogForm, shift: e.target.value })} className="flex-1 p-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-indigo-500 appearance-none">
-                        <option value="SHIFT_A">A</option>
-                        <option value="SHIFT_B">B</option>
-                        <option value="SHIFT_C">C</option>
-                      </select>
-                      <button className="p-2 bg-indigo-50 text-indigo-600 rounded border border-indigo-100">
-                        <ChevronRight className="w-3 h-3" />
-                      </button>
-                    </div>
-                  </FormControl>
-                  <FormControl label="Produce Qty" required>
-                    <div className="relative">
-                      <input type="number" value={timeLogForm.producedQty} onChange={e => setTimeLogForm({ ...timeLogForm, producedQty: e.target.value })} className="w-full p-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-indigo-500" />
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs  text-slate-400 ">Units</span>
-                    </div>
-                  </FormControl>
-                </div>
-
-                <div className="flex items-end gap-6">
-                  <div className="flex-1 grid grid-cols-2 gap-2">
-                    <FormControl label="Production Period" required>
-                      <div className="flex items-center gap-2">
-                        <div className="flex-1">
-                          <TimePicker
-                            value={timeLogForm.startTime}
-                            ampmValue={timeLogForm.startAMPM}
-                            placeholder="08:00"
-                            placeholderAMPM="AM"
-                            onTimeChange={(newTime) => setTimeLogForm({ ...timeLogForm, startTime: newTime, startAMPM: timeLogForm.startAMPM || 'AM' })}
-                            onAMPMChange={(newAMPM) => setTimeLogForm({ ...timeLogForm, startAMPM: newAMPM })}
-                          />
-                        </div>
-                        <ChevronRight className="w-3 h-3 text-slate-300" />
-                        <div className="flex-1">
-                          <TimePicker
-                            value={timeLogForm.endTime}
-                            ampmValue={timeLogForm.endAMPM}
-                            placeholder="04:00"
-                            placeholderAMPM="PM"
-                            onTimeChange={(newTime) => setTimeLogForm({ ...timeLogForm, endTime: newTime, endAMPM: timeLogForm.endAMPM || 'PM' })}
-                            onAMPMChange={(newAMPM) => setTimeLogForm({ ...timeLogForm, endAMPM: newAMPM })}
-                          />
-                        </div>
+              <div className="p-2">
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-2 items-end">
+                  <div className='col-span-3'>
+                    <FormControl label="Day & Date" required>
+                      <div className="flex items-center  gap-1">
+                        <input
+                          type="number"
+                          value={timeLogForm.day}
+                          onChange={e => setTimeLogForm({ ...timeLogForm, day: e.target.value })}
+                          className="p-2 w-10 bg-white border border-slate-200 rounded text-xs outline-none focus:border-indigo-500 "
+                        />
+                        <input
+                          type="date"
+                          value={timeLogForm.logDate}
+                          onChange={e => handleDateChange('time', e.target.value)}
+                          className="flex-1 p-2 bg-white border  border-slate-200 rounded text-xs outline-none focus:border-indigo-500"
+                        />
                       </div>
                     </FormControl>
-                    <FormControl label="Total Mins" required>
-                      <input
-                        type="text"
-                        placeholder="480"
-                        value={calculateTotalMins(timeLogForm.startTime, timeLogForm.startAMPM, timeLogForm.endTime, timeLogForm.endAMPM) || ''}
-                        readOnly
-                        className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs outline-none  text-slate-600"
+                  </div>
+
+                  <div className='col-span-3'>
+                    <FormControl label="Operator" required>
+                      <SearchableSelect
+                        options={users.map(u => {
+                          const busyJob = jobCards.find(jc =>
+                            jc.id !== selectedJC?.id &&
+                            jc.assigned_to === u.id &&
+                            jc.status === 'IN_PROGRESS'
+                          );
+
+                          const busyRange = busyJob
+                            ? `${formatLocalTime(busyJob.latest_log_start_time || busyJob.start_time)} – ${getEstimatedEndTime(busyJob)}`
+                            : '';
+
+                          return {
+                            value: u.id,
+                            label: u.username,
+                            subLabel: busyJob
+                              ? `🔴 Busy (${busyRange})`
+                              : '🟢 Available',
+                          };
+                        })}
+                        subLabelField="subLabel"
+                        value={timeLogForm.operatorId}
+                        onChange={(e) => setTimeLogForm({ ...timeLogForm, operatorId: e.target.value })}
+                        placeholder="Select Operator..."
                       />
                     </FormControl>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <button
+                  <div className='col-span-2'>
+                    <FormControl label="Workstation" required>
+                      <SearchableSelect
+                        options={workstations.map(w => {
+                          const busyJob = jobCards.find(jc =>
+                            jc.id !== selectedJC?.id &&
+                            jc.workstation_id === w.id &&
+                            jc.status === 'IN_PROGRESS'
+                          );
+
+                          return {
+                            value: w.id,
+                            label: w.workstation_name,
+                            subLabel: busyJob
+                              ? `Busy till ${getEstimatedEndTime(busyJob)} by ${busyJob.job_card_no}`
+                              : 'Available',
+                          };
+                        })}
+                        subLabelField="subLabel"
+                        value={timeLogForm.workstationId}
+                        onChange={(e) => handleWorkstationChange(e.target.value)}
+                        placeholder="Select Machine..."
+                      />
+                    </FormControl>
+                  </div>
+                  <div className='col-span-2'>
+                    <FormControl label="Shift" required>
+                      <div className="flex items-center gap-1">
+                        <select value={timeLogForm.shift} onChange={e => setTimeLogForm({ ...timeLogForm, shift: e.target.value })} className="flex-1 p-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-indigo-500 appearance-none">
+                          <option value="SHIFT_A">A</option>
+                          <option value="SHIFT_B">B</option>
+                          <option value="SHIFT_C">C</option>
+                        </select>
+                        <button className="p-2 bg-indigo-50 text-indigo-600 rounded border border-indigo-100">
+                          <ChevronRight className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </FormControl>
+                  </div>
+                  <div className='col-span-2'>
+                    <FormControl label="Produce Qty" required>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          value={timeLogForm.producedQty}
+                          onChange={e => {
+                            const newQty = e.target.value;
+                            setTimeLogForm({ ...timeLogForm, producedQty: newQty });
+                            if (timeLogForm.startTime) {
+                              calculateAutoEndTime(timeLogForm.startTime, timeLogForm.startAMPM || 'AM', newQty);
+                            }
+                          }}
+                          className="w-full p-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-indigo-500"
+                        />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs  text-slate-400 ">Units</span>
+                      </div>
+                    </FormControl>
+                  </div>
+                  <div className='col-span-4'>
+                    <div className="flex justify-between">
+                      <FormControl label="Production Period" required>
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1">
+                            <TimePicker
+                              value={timeLogForm.startTime}
+                              ampmValue={timeLogForm.startAMPM}
+                              placeholder="08:00"
+                              placeholderAMPM="AM"
+                              onTimeChange={(newTime) => {
+                                setTimeLogForm({ ...timeLogForm, startTime: newTime, startAMPM: timeLogForm.startAMPM || 'AM' });
+                                calculateAutoEndTime(newTime, timeLogForm.startAMPM || 'AM', timeLogForm.producedQty);
+                              }}
+                              onAMPMChange={(newAMPM) => {
+                                setTimeLogForm({ ...timeLogForm, startAMPM: newAMPM });
+                                calculateAutoEndTime(timeLogForm.startTime, newAMPM, timeLogForm.producedQty);
+                              }}
+                            />
+                          </div>
+                          <ChevronRight className="w-3 h-3 text-slate-300" />
+                          <div className="flex-1">
+                            <TimePicker
+                              value={timeLogForm.endTime}
+                              ampmValue={timeLogForm.endAMPM}
+                              placeholder="04:00"
+                              placeholderAMPM="PM"
+                              onTimeChange={(newTime) => setTimeLogForm({ ...timeLogForm, endTime: newTime, endAMPM: timeLogForm.endAMPM || 'PM' })}
+                              onAMPMChange={(newAMPM) => setTimeLogForm({ ...timeLogForm, endAMPM: newAMPM })}
+                            />
+                          </div>
+                        </div>
+                      </FormControl>
+
+                    </div>
+                    
+                  </div>
+                  <div className='col-span-1'>
+                      <FormControl label="Total Mins" required>
+                        <input
+                          type="text"
+                          placeholder="480"
+                          value={calculateTotalMins(timeLogForm.startTime, timeLogForm.startAMPM, timeLogForm.endTime, timeLogForm.endAMPM) || ''}
+                          readOnly
+                          className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs outline-none  text-slate-600"
+                        />
+                      </FormControl>
+                    </div>
+                    <div className='col-span-6'>
+                     <div className='flex gap-2'>
+                       <button
                       onClick={handleStartMachine}
                       className={`p-2 rounded transition-all text-xs flex items-center gap-2 h-[38px] ${machineStatus === 'RUNNING' ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-600 hover:bg-rose-50 hover:text-rose-600'
                         }`}
@@ -1884,10 +1966,18 @@ const JobCard = () => {
                       <Monitor className="w-4 h-4" />
                       Record Time
                     </button>
+                     </div>
+                    </div>
+                </div>
+
+                <div className="flex items-end gap-2">
+
+                  <div className="flex items-center gap-2">
+                    
                   </div>
                 </div>
 
-                <div className="mt-8 overflow-hidden rounded-xl border border-slate-100 shadow-sm bg-white">
+                <div className=" overflow-hidden rounded-xl border border-slate-100 shadow-sm bg-white">
                   <DataTable
                     columns={timeLogColumns}
                     data={logs.timeLogs}
@@ -2036,8 +2126,8 @@ const JobCard = () => {
                     onClick={() => addDowntimeLog(downtimeLogForm)}
                     disabled={logs.qualityLogs?.some(log => log.status?.trim() !== 'APPROVED')}
                     className={`px-10 py-2.5 rounded  transition-all text-xs    shadow-lg flex items-center gap-2 h-[38px] ${logs.qualityLogs?.some(log => log.status?.trim() !== 'APPROVED')
-                        ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
-                        : 'bg-orange-600 text-white hover:bg-orange-700 shadow-orange-100'
+                      ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+                      : 'bg-orange-600 text-white hover:bg-orange-700 shadow-orange-100'
                       }`}
                   >
                     <Clock className="w-4 h-4" />
@@ -2073,8 +2163,8 @@ const JobCard = () => {
                   onClick={handleReadyForDispatch}
                   disabled={logs.qualityLogs.some(log => log.status !== 'APPROVED')}
                   className={`flex items-center gap-2 p-1.5 border rounded  transition-all ${logs.qualityLogs.some(log => log.status !== 'APPROVED')
-                      ? 'bg-slate-50 border-slate-100 text-slate-300 cursor-not-allowed'
-                      : 'bg-white border-emerald-100 text-emerald-600 shadow-sm hover:bg-emerald-50'
+                    ? 'bg-slate-50 border-slate-100 text-slate-300 cursor-not-allowed'
+                    : 'bg-white border-emerald-100 text-emerald-600 shadow-sm hover:bg-emerald-50'
                     }`}
                   title={logs.qualityLogs.some(log => log.status !== 'APPROVED') ? 'Approve all quality records to proceed' : 'Mark Ready'}
                 >
@@ -2144,13 +2234,13 @@ const JobCard = () => {
                   onClick={handleReadyForDispatch}
                   disabled={!qcStats.isApproved || !qcStats.isComplete}
                   className={`group relative flex items-center gap-2 p-2  rounded  transition-all ${!qcStats.isApproved || !qcStats.isComplete
-                      ? 'bg-slate-50 text-slate-300 cursor-not-allowed border border-slate-100'
-                      : 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-200'
+                    ? 'bg-slate-50 text-slate-300 cursor-not-allowed border border-slate-100'
+                    : 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-200'
                     }`}
                 >
                   <div className={`w-8 h-8 rounded  flex items-center justify-center transition-colors ${!qcStats.isApproved || !qcStats.isComplete
-                      ? 'bg-slate-100 text-slate-200'
-                      : 'bg-white/20 text-white'
+                    ? 'bg-slate-100 text-slate-200'
+                    : 'bg-white/20 text-white'
                     }`}>
                     <CheckCircle className="w-4 h-4" />
                   </div>
@@ -2964,7 +3054,7 @@ const JobCard = () => {
   const handleVendorInward = async () => {
     try {
       const token = localStorage.getItem('authToken');
-      
+
       const payload = {
         outwardChallanId: selectedJCOutward.outward_challan_id,
         jobCardId: selectedJCOutward.id,
@@ -3376,11 +3466,10 @@ const JobCard = () => {
       label: 'Status',
       key: 'status',
       render: (val) => (
-        <div className={`inline-flex items-center px-2 py-1 rounded-full text-[10px]  border   ${
-          val?.trim() === 'APPROVED'
+        <div className={`inline-flex items-center px-2 py-1 rounded-full text-[10px]  border   ${val?.trim() === 'APPROVED'
             ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
             : 'bg-amber-50 text-amber-600 border-amber-100'
-        }`}>
+          }`}>
           <div className={`w-1.5 h-1.5 rounded-full mr-1.5 ${val?.trim() === 'APPROVED' ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'}`} />
           {val?.trim() === 'APPROVED' ? 'Verified' : 'Pending Verification'}
         </div>
@@ -3404,11 +3493,10 @@ const JobCard = () => {
         }
         return (
           <div className={`flex flex-col gap-1 max-w-[200px]`}>
-            <div className={`inline-flex items-center px-2 py-0.5 rounded text-[10px]  border w-fit  ${
-              (row.rejected_qty > 0 || row.scrap_qty > 0)
+            <div className={`inline-flex items-center px-2 py-0.5 rounded text-[10px]  border w-fit  ${(row.rejected_qty > 0 || row.scrap_qty > 0)
                 ? 'bg-rose-50 text-rose-600 border-rose-100'
                 : 'bg-emerald-50 text-emerald-600 border-emerald-100'
-            }`}>
+              }`}>
               {(row.rejected_qty > 0 || row.scrap_qty > 0) ? 'QC REJECTED' : 'QC PASSED'}
             </div>
             <p className="text-[10px] text-slate-400 italic leading-tight truncate" title={val || row.rejection_reason}>
@@ -3753,7 +3841,7 @@ const JobCard = () => {
 
   const jobCardColumns = [
     {
-      label: 'ID',
+      label: 'ID / Project',
       key: 'job_card_no',
       sortable: true,
       render: (val, row) => (
@@ -3764,66 +3852,51 @@ const JobCard = () => {
                 {row.sequence_no}
               </span>
             )}
-            <span className="text-xs  text-indigo-600">
+            <span className="text-xs font-medium text-indigo-600">
               {val}
             </span>
           </div>
           <span className="text-[10px] text-slate-400 mt-0.5 font-medium">
             WO: {row.wo_number}
           </span>
+          <span className="text-[10px] text-slate-500 mt-0.5 font-bold uppercase tracking-wider">{row.client_name || "Internal"}</span>
         </div>
       )
     },
     {
-      label: 'Project / Client',
-      key: 'client_name',
-      render: (val) => (
-        <span className="text-[10px] text-slate-500   ">{val || "Internal"}</span>
-      )
-    },
-    {
-      label: 'Operation',
+      label: 'Operation / Status',
       key: 'operation_name',
-      render: (val) => (
-        <span className="text-xs text-slate-900 ">{val}</span>
-      )
-    },
-    {
-      label: 'Specification',
-      key: 'item_name',
       render: (val, row) => (
-        <div className="flex flex-col gap-1">
-          <span className={`px-2 py-0.5 rounded text-[10px]   tracking-widest w-fit ${row.source_type === 'SA' ? 'bg-amber-50 text-amber-700 border border-amber-100' : 'bg-indigo-50 text-indigo-700 border border-indigo-100'}`}>
-            {row.source_type === 'SA' ? 'Sub Assembly' : 'Finished Good'}
-          </span>
-          <span className="text-[10px] text-slate-500 font-medium truncate max-w-[150px]" title={val}>
-            {val}
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs text-slate-900 font-medium">{val}</span>
+          <span className={`px-2 py-0.5 rounded-full text-[10px] border w-fit ${row.status === 'IN_PROGRESS' ? 'bg-amber-50 text-amber-600 border-amber-100' :
+              row.status === 'COMPLETED' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
+                'bg-slate-50 text-slate-500 border-slate-100'
+            }`}>
+            {row.status === 'IN_PROGRESS' ? 'In-Progress' : row.status?.charAt(0) + row.status?.slice(1).toLowerCase()}
           </span>
         </div>
       )
     },
     {
-      label: 'Status',
-      key: 'status',
-      render: (val) => (
-        <span className={`px-2 py-1 rounded-full text-[10px]  border   ${
-          val === 'IN_PROGRESS' ? 'bg-amber-50 text-amber-600 border-amber-100' :
-          val === 'COMPLETED' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
-          'bg-slate-50 text-slate-500 border-slate-100'
-        }`}>
-          {val === 'IN_PROGRESS' ? 'In-Progress' : val?.charAt(0) + val?.slice(1).toLowerCase()}
-        </span>
-      )
-    },
-    {
-      label: 'Execution',
-      key: 'execution_type',
-      render: (_, row) => {
+      label: 'Specification / Execution',
+      key: 'item_name',
+      render: (val, row) => {
         const isSubcontract = row.execution_type === 'Outsource' || row.execution_type === 'Subcontract' || row.execution_type === 'Sub-Contract' || row.outward_challan_id;
         return (
-          <span className={`text-[10px]   ${isSubcontract ? 'text-amber-600' : 'text-blue-600'}`}>
-            {isSubcontract ? 'Subcontract' : 'In-house'}
-          </span>
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center gap-2">
+              <span className={`px-2 py-0.5 rounded text-[10px]   tracking-widest w-fit ${row.source_type === 'SA' ? 'bg-amber-50 text-amber-700 border border-amber-100' : 'bg-indigo-50 text-indigo-700 border border-indigo-100'}`}>
+                {row.source_type === 'SA' ? 'Sub Assembly' : 'Finished Good'}
+              </span>
+              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${isSubcontract ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>
+                {isSubcontract ? 'SUBCONTRACT' : 'IN-HOUSE'}
+              </span>
+            </div>
+            <span className="text-[10px] text-slate-500 font-medium truncate max-w-[150px]" title={val}>
+              {val}
+            </span>
+          </div>
         );
       }
     },
@@ -4030,15 +4103,13 @@ const JobCard = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] p-4 ">
+    <div className="min-h-screen bg-[#F8FAFC]">
       {!showProductionEntry ? (
         <>
           {/* Header Section */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="w-5 h-5 bg-indigo-600 text-white rounded  flex items-center justify-center shadow-lg shadow-indigo-100">
-                <ClipboardList className="w-3 h-3" />
-              </div>
+
               <div>
                 <div className="flex items-center gap-2">
                   <h1 className="text-xl  text-slate-900  ">Job Cards</h1>
@@ -4086,9 +4157,9 @@ const JobCard = () => {
                   </p>
                 </div>
                 <div className={`w-14 h-14 rounded  flex items-center justify-center transition-all group-hover:scale-110 ${stat.color === 'indigo' ? 'bg-indigo-50 text-indigo-600' :
-                    stat.color === 'amber' ? 'bg-amber-50 text-amber-600' :
-                      stat.color === 'emerald' ? 'bg-emerald-50 text-emerald-600' :
-                        'bg-purple-50 text-purple-600'
+                  stat.color === 'amber' ? 'bg-amber-50 text-amber-600' :
+                    stat.color === 'emerald' ? 'bg-emerald-50 text-emerald-600' :
+                      'bg-purple-50 text-purple-600'
                   }`}>
                   <stat.icon className="w-7 h-7" />
                 </div>
@@ -4121,17 +4192,15 @@ const JobCard = () => {
               <table className=" text-left ">
                 <thead className="bg-slate-50/50 border-b border-slate-100">
                   <tr>
-                    <th className="p-2 text-xs  text-slate-500   min-w-[140px]">ID</th>
-                    <th className="p-2 text-xs  text-slate-500  ">Project / Client</th>
-                    <th className="p-2 text-xs  text-slate-500  ">Operation</th>
-                    <th className="p-2 text-xs  text-slate-500  ">Specification</th>
-                    <th className="p-2 text-xs  text-slate-500  ">Status</th>
-                    <th className="p-2 text-xs  text-slate-500  ">Execution Type</th>
+                    <th className="p-2 text-xs  text-slate-500   min-w-[140px]">ID / Project</th>
+                    <th className="p-2 text-xs  text-slate-500  ">Operation / Status</th>
+                    <th className="p-2 text-xs  text-slate-500  ">Specification / Execution</th>
+                    <th className="p-2 text-xs  text-slate-500  ">Workstation</th>
+                    <th className="p-2 text-xs  text-slate-500  ">Assignee</th>
                     <th className="p-2 text-xs  text-slate-500  ">Qty</th>
                     <th className="p-2 text-xs  text-slate-500  ">Produced</th>
                     <th className="p-2 text-xs  text-slate-500  ">Accepted</th>
-                    <th className="p-2 text-xs  text-slate-500  ">Workstation</th>
-                    <th className="p-2 text-xs  text-slate-500  ">Assignee</th>
+
                     <th className="p-2 text-xs  text-slate-500   text-right">Actions</th>
                   </tr>
                 </thead>
@@ -4153,54 +4222,38 @@ const JobCard = () => {
                           <span className="text-xs text-slate-400 mt-0.5 ml-0">
                             WO: {jc.wo_number}
                           </span>
+                          <span className="text-[10px] text-slate-500 mt-0.5 font-bold uppercase tracking-wider">{jc.client_name || "Internal"}</span>
                         </div>
                       </td>
                       <td className="p-2">
-                        <div className="flex flex-col">
-                          <span className="text-[10px] text-slate-500 mt-0.5  ">{jc.client_name || "Internal"}</span>
-                        </div>
-                      </td>
-                      <td className="p-2">
-                        <div className="flex flex-col">
+                        <div className="flex flex-col gap-1.5">
                           <span className="text-xs  text-slate-900 font-medium">{jc.operation_name}</span>
+                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border w-fit ${jc.status === 'IN_PROGRESS' ? 'bg-amber-50 text-amber-600 border-amber-100' :
+                            jc.status === 'COMPLETED' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-slate-50 text-slate-500 border-slate-100'
+                            }`}>
+                            {jc.status === 'IN_PROGRESS' ? 'In-Progress' : jc.status?.charAt(0) + jc.status?.slice(1).toLowerCase()}
+                          </span>
                         </div>
                       </td>
                       <td className="p-2">
-                        <div className="flex flex-col gap-1">
-                          <span className={`px-2 py-0.5 rounded text-[10px]   tracking-widest w-fit ${jc.source_type === 'SA' ? 'bg-amber-50 text-amber-700 border border-amber-100' : 'bg-indigo-50 text-indigo-700 border border-indigo-100'}`}>
-                            {jc.source_type === 'SA' ? 'Sub Assembly' : 'Finished Good'}
-                          </span>
-                          <span className="text-[10px] text-slate-500 font-medium truncate max-w-[150px]" title={jc.item_name}>
-                            {jc.item_name}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="p-2 ">
-                        <span className={`text-xs  font-semibold ${jc.status === 'IN_PROGRESS' ? 'text-amber-600' :
-                            jc.status === 'COMPLETED' ? 'text-emerald-600' : 'text-slate-500'
-                          }`}>
-                          {jc.status === 'IN_PROGRESS' ? 'In-Progress' : jc.status?.charAt(0) + jc.status?.slice(1).toLowerCase()}
-                        </span>
-                      </td>
-                      <td className="p-2 ">
-                        <span className={`text-xs  ${(jc.execution_type === 'Outsource' || jc.execution_type === 'Subcontract' || jc.execution_type === 'Sub-Contract' || jc.outward_challan_id) ? 'text-amber-600' : 'text-blue-600'}`}>
-                          {(jc.execution_type === 'Outsource' || jc.execution_type === 'Subcontract' || jc.execution_type === 'Sub-Contract' || jc.outward_challan_id) ? 'Subcontract' : 'In-house'}
-                        </span>
-                      </td>
-                      <td className="p-2 ">
-                        <span className="text-xs   text-slate-900">
-                          {jc.planned_qty || 0}
-                        </span>
-                      </td>
-                      <td className="p-2 ">
-                        <span className="text-xs   text-indigo-600">
-                          {parseFloat(jc.produced_qty || 0).toFixed(2)}
-                        </span>
-                      </td>
-                      <td className="p-2 ">
-                        <span className="text-xs   text-emerald-600">
-                          {parseFloat(jc.accepted_qty || 0).toFixed(2)}
-                        </span>
+                        {(() => {
+                          const isSubcontract = jc.execution_type === 'Outsource' || jc.execution_type === 'Subcontract' || jc.execution_type === 'Sub-Contract' || jc.outward_challan_id;
+                          return (
+                            <div className="flex flex-col gap-1.5">
+                              <div className="flex items-center gap-2">
+                                <span className={`text-xs ${jc.source_type === 'SA' ? 'text-amber-700' : 'text-indigo-700'}`}>
+                                  {jc.source_type === 'SA' ? 'Sub Assembly' : 'Finished Good'}
+                                </span>
+                                <span className={`text-xs ${isSubcontract ? 'text-amber-600' : 'text-blue-600'}`}>
+                                  ({isSubcontract ? 'Outsource' : 'In-House'})
+                                </span>
+                              </div>
+                              <span className="text-[10px] text-slate-500 font-medium truncate max-w-[150px]" title={jc.item_name}>
+                                {jc.item_name}
+                              </span>
+                            </div>
+                          );
+                        })()}
                       </td>
                       <td className="p-2 ">
                         <div className="flex flex-col">
@@ -4350,6 +4403,22 @@ const JobCard = () => {
                           )}
                         </div>
                       </td>
+                      <td className="p-2 ">
+                        <span className="text-xs   text-slate-900">
+                          {jc.planned_qty || 0}
+                        </span>
+                      </td>
+                      <td className="p-2 ">
+                        <span className="text-xs   text-indigo-600">
+                          {parseFloat(jc.produced_qty || 0).toFixed(2)}
+                        </span>
+                      </td>
+                      <td className="p-2 ">
+                        <span className="text-xs   text-emerald-600">
+                          {parseFloat(jc.accepted_qty || 0).toFixed(2)}
+                        </span>
+                      </td>
+
                       <td className="p-2  text-right">
                         <div className="flex items-center justify-end gap-1">
                           {/* View Details - Always Show */}
@@ -4659,8 +4728,8 @@ const JobCard = () => {
                       type="button"
                       onClick={() => setFormData({ ...formData, executionMode: 'In-house' })}
                       className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all ${formData.executionMode === 'In-house'
-                          ? 'bg-indigo-600 text-white shadow-sm'
-                          : 'text-slate-500 hover:text-slate-700'
+                        ? 'bg-indigo-600 text-white shadow-sm'
+                        : 'text-slate-500 hover:text-slate-700'
                         }`}
                     >
                       In-house
@@ -4669,8 +4738,8 @@ const JobCard = () => {
                       type="button"
                       onClick={() => setFormData({ ...formData, executionMode: 'Outsource' })}
                       className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all ${formData.executionMode === 'Outsource'
-                          ? 'bg-orange-500 text-white shadow-sm'
-                          : 'text-slate-500 hover:text-slate-700'
+                        ? 'bg-orange-500 text-white shadow-sm'
+                        : 'text-slate-500 hover:text-slate-700'
                         }`}
                     >
                       Outsource

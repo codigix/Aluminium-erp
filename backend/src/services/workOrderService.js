@@ -453,6 +453,9 @@ const createJobCardsForWorkOrder = async (workOrderId, connection, initialStatus
       stdTime = parseFloat(op.net_time) * 60;
     }
 
+    const cycleTime = op.cycle_time_min || (masterOps[0]?.std_time && masterOps[0]?.time_uom === 'Min' ? masterOps[0]?.std_time : 0);
+    const setupTime = op.setup_time_min || 0;
+
     // If it's from op.base_time or op.cycle_time_min, it's almost always intended as Min in this system
     const timeUom = (op.net_time || op.base_time || op.cycle_time_min) ? 'Min' : (masterOps[0]?.time_uom || 'Min');
     const hourlyRate = op.hourly_rate || masterOps[0]?.hourly_rate || 0;
@@ -460,9 +463,9 @@ const createJobCardsForWorkOrder = async (workOrderId, connection, initialStatus
 
     await connection.execute(
       `INSERT INTO job_cards 
-       (job_card_no, work_order_id, operation_id, workstation_id, planned_qty, status, std_time, time_uom, hourly_rate, operation_name, execution_type, execution_mode, sequence_no, target_warehouse_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [jcNo, workOrderId, masterOps[0]?.id || null, masterWs[0]?.id || null, wo.quantity, initialStatus, stdTime, timeUom, hourlyRate, op.operation_name, executionType, executionType, sequenceNo, targetWarehouseId]
+       (job_card_no, work_order_id, operation_id, workstation_id, planned_qty, status, std_time, time_uom, hourly_rate, operation_name, execution_type, execution_mode, sequence_no, target_warehouse_id, cycle_time, setup_time)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [jcNo, workOrderId, masterOps[0]?.id || null, masterWs[0]?.id || null, wo.quantity, initialStatus, stdTime, timeUom, hourlyRate, op.operation_name, executionType, executionType, sequenceNo, targetWarehouseId, cycleTime, setupTime]
     );
   }
 };

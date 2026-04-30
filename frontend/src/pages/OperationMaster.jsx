@@ -345,7 +345,7 @@ const OperationMaster = ({ showForm: propShowForm, setShowForm: propSetShowForm 
   ];
 
   return (
-    <div className="p-6">
+    <div className="">
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-xl text-slate-900">Operation Master</h1>

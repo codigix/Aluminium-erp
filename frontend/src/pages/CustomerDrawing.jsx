@@ -102,7 +102,7 @@ const CustomerDrawing = () => {
       render: (_, row) => (
         <div className="flex items-center gap-2">
           <button
-            onClick={() => handleViewClientDrawings(row.client_name || row.company_name)}
+            onClick={() => handleViewClientDrawings(row)}
             className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded transition-all"
             title="View Details"
           >
@@ -161,9 +161,9 @@ const CustomerDrawing = () => {
             </button>
           )}
           <button
-            onClick={() => handleDeleteRequirement(row.id)}
+            onClick={() => handleDeleteRequirement(row.company_id, row.client_name)}
             className="p-1.5 text-rose-600 hover:bg-rose-50 rounded transition-all"
-            title="Delete Requirement"
+            title="Delete Client & Requirements"
           >
             <Trash2 size={15} />
           </button>
@@ -379,7 +379,11 @@ const CustomerDrawing = () => {
   const groupedDrawings = drawings.reduce((acc, drawing) => {
     const client = drawing.client_name || 'Unassigned';
     if (!acc[client]) acc[client] = [];
-    acc[client].push(drawing);
+    
+    // Ensure uniqueness by drawing_master_id
+    if (!acc[client].some(d => d.drawing_master_id === drawing.drawing_master_id)) {
+      acc[client].push(drawing);
+    }
     return acc;
   }, {});
 
@@ -531,7 +535,7 @@ const CustomerDrawing = () => {
       id: drawing.id,
       drawing_no: drawing.drawing_no,
       revision_no: drawing.revision || drawing.revision_no || '0',
-      description: drawing.description || '',
+      description: drawing.drawing_description || drawing.description || '',
       client_name: drawing.client_name,
       contact_person: drawing.contact_person || (company ? company.contact_person : ''),
       phone: drawing.phone || (company ? company.contact_mobile : ''),
@@ -909,7 +913,8 @@ const CustomerDrawing = () => {
   const clientDrawingColumns = [
     { label: '#', key: 'id', render: (_, __, idx) => idx + 1, width: '50px' },
     { label: 'Drawing No', key: 'drawing_no', className: 'font-medium text-slate-900' },
-    { label: 'Description', key: 'description' },
+    { label: 'Drawing Name', key: 'drawing_description', className: 'text-slate-700' },
+    { label: 'Description', key: 'remarks' },
     { 
       label: 'Revision', 
       key: 'revision', 
@@ -1156,10 +1161,19 @@ const CustomerDrawing = () => {
     }
   };
 
-  const handleViewClientDrawings = (clientName) => {
+  const handleViewClientDrawings = (row) => {
+    const clientName = row.client_name || row.company_name;
+    const projectDrawingIds = new Set((row.original_items || []).map(item => String(item.drawing_id)));
+    
+    // Filter all client drawings to only those associated with this requirement/project
+    const clientDrawings = groupedDrawings[clientName] || [];
+    const filteredDrawings = clientDrawings.filter(d => 
+      projectDrawingIds.has(String(d.drawing_master_id))
+    );
+
     setViewingClient({
       name: clientName,
-      drawings: groupedDrawings[clientName] || []
+      drawings: filteredDrawings
     });
     setShowClientDrawingsModal(true);
 
@@ -1167,29 +1181,30 @@ const CustomerDrawing = () => {
     window.history.pushState({}, '', '/customer-drawing/view-draw');
   };
 
-  const handleDeleteRequirement = async (id) => {
+  const handleDeleteRequirement = async (companyId, clientName) => {
     const result = await Swal.fire({
-      title: 'Delete Requirement?',
-      text: "This will remove the client requirement. You won't be able to revert this!",
+      title: 'Delete Client?',
+      text: `This will remove ${clientName} and all associated requirements/drawings. You won't be able to revert this!`,
       icon: 'warning',
       showCancelButton: true,
       confirmButtonColor: '#dc2626',
       cancelButtonColor: '#6b7280',
-      confirmButtonText: 'Yes, delete it'
+      confirmButtonText: 'Yes, delete everything'
     });
 
     if (result.isConfirmed) {
       try {
         const token = localStorage.getItem('authToken');
-        const response = await fetch(`${API_BASE}/sales-orders/${id}`, {
+        const response = await fetch(`${API_BASE}/companies/${companyId}`, {
           method: 'DELETE',
           headers: {
             'Authorization': `Bearer ${token}`
           }
         });
         if (!response.ok) throw new Error('Delete failed');
-        successToast('Requirement has been deleted.');
+        successToast('Client and all associated data have been deleted.');
         fetchRequirements();
+        fetchDrawings();
       } catch (error) {
         errorToast(error.message);
       }
@@ -1230,40 +1245,12 @@ const CustomerDrawing = () => {
       </div>
 
       {/* SEARCH & FILTER SECTION */}
-      <Card className="p-2 border-slate-100 bg-white">
-        <div className="flex flex-col md:flex-row items-center gap-4">
-          <form onSubmit={handleSearch} className="relative flex-1 group">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-rose-500 transition-colors" size={18} />
-            <input
-              type="text"
-              placeholder="Search drawings, clients..."
-              className="w-full pl-11 pr-4 py-2 bg-slate-50 border border-slate-200 rounded text-sm focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none transition-all"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </form>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="secondary"
-              onClick={() => { setSearchTerm(''); fetchDrawings(''); }}
-            >
-              Reset
-            </Button>
-            <Button
-              variant="primary"
-              onClick={handleSearch}
-            >
-              Search
-            </Button>
-          </div>
-        </div>
-      </Card>
+      
 
       {/* SECTION 2: CLIENT REQUIREMENTS TABLE */}
       <Card className="overflow-hidden">
-        <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-white">
+        <div className="">
           <h2 className="text-lg  text-slate-800 flex items-center gap-2">
-            <FileText className="w-5 h-5 text-rose-500" />
             Client Requirements
           </h2>
         </div>

@@ -47,7 +47,9 @@ const ensureJobCardColumns = async () => {
       { name: 'target_warehouse_id', definition: 'INT NULL' },
       { name: 'outward_challan_id', definition: 'INT NULL' },
       { name: 'outward_challan_no', definition: 'VARCHAR(100) NULL' },
-      { name: 'dispatch_qty', definition: 'DECIMAL(12, 3) DEFAULT 0' }
+      { name: 'dispatch_qty', definition: 'DECIMAL(12, 3) DEFAULT 0' },
+      { name: 'cycle_time', definition: 'DECIMAL(12, 3) DEFAULT 0' },
+      { name: 'setup_time', definition: 'DECIMAL(12, 3) DEFAULT 0' }
     ];
 
     const missing = requiredColumns.filter(column => !existing.has(column.name));
@@ -763,10 +765,18 @@ const ensureCustomerDrawingTable = async () => {
         purpose VARCHAR(50) DEFAULT 'Reference Only',
         uploaded_by VARCHAR(120),
         status ENUM('PENDING', 'SHARED') DEFAULT 'PENDING',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       )
     `);
     
+    // Add updated_at column if it doesn't exist
+    const [updatedAtCols] = await connection.query("SHOW COLUMNS FROM customer_drawings LIKE 'updated_at'");
+    if (updatedAtCols.length === 0) {
+      await connection.query("ALTER TABLE customer_drawings ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER created_at");
+      console.log('Added updated_at column to customer_drawings');
+    }
+
     // Add client_name column if it doesn't exist
     const [cols] = await connection.query("SHOW COLUMNS FROM customer_drawings LIKE 'client_name'");
     if (cols.length === 0) {

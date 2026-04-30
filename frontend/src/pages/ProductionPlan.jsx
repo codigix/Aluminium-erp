@@ -1128,7 +1128,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
     const totalMaterialCount = materialsToDisplay.length;
     
     return (
-      <div className="space-y-6 animate-in fade-in duration-500 pb-20">
+      <div className="space-y-2 animate-in fade-in duration-500">
         {/* Header Section */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 bg-white border border-slate-200 rounded-xl sticky top-0 z-30 shadow-sm">
           <div className="flex items-center gap-4">
@@ -1177,7 +1177,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
 
         {/* Tab Navigation & Content Container */}
         <div className="flex-1 overflow-y-auto">
-          <div className="mx-auto p-2 space-y-4 pb-20">
+          <div className="mx-auto p-2 space-y-2">
             {/* Tab Navigation */}
             
 
@@ -2055,16 +2055,14 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
   }
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 pb-10">
+    <div className="space-y-2 animate-in fade-in duration-500 pb-10">
       {/* Header Section */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-rose-50 text-rose-600 rounded-xl shadow-sm">
-            <Layers size={24} />
-          </div>
+          
           <div>
-            <h1 className="text-2xl  text-slate-900 tracking-tight">Production Plans</h1>
-            <p className="text-sm text-slate-500 font-medium">Manage manufacturing strategies and resource allocation</p>
+            <h1 className="text-xl  text-slate-900 tracking-tight">Production Plans</h1>
+            <p className="text-xs text-slate-500 font-medium">Manage manufacturing strategies and resource allocation</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -2085,26 +2083,10 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
       </div>
 
       {/* SEARCH & FILTER SECTION */}
-      <Card className="p-2 border-slate-100 bg-white">
-        <div className="flex flex-col md:flex-row items-center gap-4">
-          <div className="relative flex-1 group">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-rose-500 transition-colors" size={18} />
-            <input 
-              type="text" 
-              placeholder="Search by plan code, customer or project..." 
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-11 pr-4 py-2 bg-slate-50 border border-slate-200 rounded text-sm focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none transition-all"
-            />
-          </div>
-          <div className="flex items-center gap-2">
-             <Button variant="secondary" icon={Filter}>Filter</Button>
-          </div>
-        </div>
-      </Card>
+     
 
       {/* Content Section */}
-      <Card className="overflow-hidden border-none shadow-xl bg-white/50 backdrop-blur-sm">
+      <div className="">
         <DataTable
           columns={columns}
           data={filteredPlans}
@@ -2114,7 +2096,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
         />
         
         {/* Summary Footer */}
-        <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between bg-white/30">
+        <div className="p-2 border-t border-slate-100 flex items-center justify-between bg-white/30">
           <div className="text-[10px] text-slate-400   flex items-center gap-2 ">
             Showing {filteredPlans.length} of {plans.length} strategic formulations
           </div>
@@ -2123,7 +2105,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
             <span className="text-[10px]  text-slate-900  ">Neural Link Active</span>
           </div>
         </div>
-      </Card>
+      </div>
 
       {/* Material Request Preview Modal */}
       <Modal
@@ -2131,9 +2113,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
         onClose={() => !transmittingMr && setMrModalOpen(false)}
         title={
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-indigo-50 text-indigo-600 rounded flex items-center justify-center">
-              <Layers className="w-4 h-4" />
-            </div>
+            
             <div>
               <h2 className="text-lg  text-slate-800 tracking-tight">Material Request</h2>
               <div className="flex items-center gap-1 text-xs text-indigo-500   ">
@@ -2459,6 +2439,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                       <th className="py-3 px-2  text-slate-400  ">Workstation</th>
                       <th className="py-3 px-2  text-slate-400  ">Process Type</th>
                       <th className="py-3 px-2  text-slate-400   text-right">Net Time (M/U)</th>
+                      <th className="py-3 px-2  text-slate-400   text-right text-indigo-500">Execution Time</th>
                       <th className="py-3 px-2  text-slate-400   text-right">Rate/Hr</th>
                       <th className="py-3 px-2  text-slate-400   text-right text-emerald-600">Total Cost</th>
                     </tr>
@@ -2492,6 +2473,12 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                             </span>
                           </td>
                           <td className="py-4 px-2 text-right text-slate-400 ">{Math.round(parseFloat(op.net_time || op.base_time || 0) * 60)} min</td>
+                          <td className="py-4 px-2 text-right text-indigo-600 font-semibold ">
+                            {Math.round(
+                              (parseFloat(op.net_time || op.base_time || 0) * 60 * (selectedPlanConfig.target_qty || 1)) + 
+                              parseFloat(op.setup_time_min || 0)
+                            )} min
+                          </td>
                           <td className="py-4 px-2 text-right text-slate-400">₹{op.hourly_rate || 0}</td>
                           <td className="py-4 px-2 text-right  text-emerald-600">₹{(parseFloat(op.base_time || 0) * (selectedPlanConfig.target_qty || 1) * parseFloat(op.hourly_rate || 0)).toFixed(2)}</td>
                         </tr>

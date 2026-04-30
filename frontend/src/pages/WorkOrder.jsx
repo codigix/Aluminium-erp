@@ -205,7 +205,7 @@ const WorkOrder = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50/50 p-4">
+    <div className="min-h-screen">
       {/* Header Section */}
       <div className="">
         <div className="flex items-center justify-between mb-6">
@@ -251,7 +251,7 @@ const WorkOrder = () => {
         </div>
 
         {/* Work Orders List */}
-        <Card className="border-none bg-white/50 backdrop-blur-sm shadow-xl overflow-hidden">
+       
           <DataTable
             columns={columns}
             data={workOrders}
@@ -259,7 +259,7 @@ const WorkOrder = () => {
             searchPlaceholder="Search by Work Order, Project, or Item..."
             searchKey="wo_number"
           />
-        </Card>
+        
       </div>
 
       {/* Work Order Record View Modal */}

@@ -249,7 +249,7 @@ export const MultiSelect = ({ options, value = [], onChange, placeholder, labelF
 };
 
 export const FormControl = ({ label, children }) => (
-  <label className="flex flex-col gap-2">
+  <label className="flex flex-col gap-2 w-full">
     <span className="text-xs text-slate-500 ">{label}</span>
     {children}
   </label>
@@ -676,7 +676,7 @@ export const DataTable = ({
   const handleSelectAll = (e) => {
     if (onSelectionChange) {
       if (e.target.checked) {
-        onSelectionChange(new Set(paginatedData.map((row, idx) => row[rowIdProp] || row.id || (currentPage - 1) * pageSize + idx)));
+        onSelectionChange(new Set(filteredData.map((row, idx) => row[rowIdProp] || row.id || idx)));
       } else {
         onSelectionChange(new Set());
       }
@@ -723,7 +723,7 @@ export const DataTable = ({
                 placeholder={searchPlaceholder}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded text-sm focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none transition-all placeholder:text-slate-400 bg-white text-slate-900 shadow-sm"
+                className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded text-xs focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none transition-all placeholder:text-slate-400 bg-white text-slate-900 shadow-sm"
               />
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-rose-500 transition-colors" />
             </div>
@@ -742,7 +742,7 @@ export const DataTable = ({
                     type="checkbox"
                     className="rounded border-slate-300 text-rose-600 focus:ring-rose-500"
                     onChange={handleSelectAll}
-                    checked={paginatedData.length > 0 && paginatedData.every((row, idx) => selectedRows.has(row[rowIdProp] || row.id || (currentPage - 1) * pageSize + idx))}
+                    checked={filteredData.length > 0 && filteredData.every((row, idx) => selectedRows.has(row[rowIdProp] || row.id || idx))}
                   />
                 </th>
               )}
@@ -831,7 +831,7 @@ export const DataTable = ({
                       )}
                       {columns.map((col, colIdx) => (
                         <td key={colIdx} className={`p-2 whitespace-nowrap text-xs text-slate-600 group-hover:text-slate-900 transition-colors ${col.className || ''}`}>
-                          {col.render ? col.render(row[col.key], row) : (row[col.key] || '—')}
+                          {col.render ? col.render(row[col.key], row, (currentPage - 1) * pageSize + rowIdx) : (row[col.key] || '—')}
                         </td>
                       ))}
                     </tr>

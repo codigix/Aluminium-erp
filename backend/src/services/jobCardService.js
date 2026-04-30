@@ -6,6 +6,8 @@ const listJobCards = async () => {
             so.project_name, c.company_name as client_name,
             COALESCE(o.operation_name, jc.operation_name) as operation_name, 
             COALESCE(NULLIF(jc.std_time, 0), o.std_time, 0) as std_time, 
+            COALESCE(NULLIF(jc.cycle_time, 0), CASE WHEN o.time_uom = 'Min' THEN o.std_time ELSE 0 END, 0) as cycle_time,
+            COALESCE(NULLIF(jc.setup_time, 0), 0) as setup_time,
             COALESCE(jc.time_uom, o.time_uom, 'Min') as time_uom, 
             COALESCE(NULLIF(jc.hourly_rate, 0), o.hourly_rate, 0) as hourly_rate, 
             w.workstation_name, u.username as operator_name, soi.status as item_status,
@@ -217,6 +219,8 @@ const getJobCardById = async (id) => {
     `SELECT jc.*, wo.wo_number, wo.item_name, wo.drawing_no,
             COALESCE(o.operation_name, jc.operation_name) as operation_name, 
             COALESCE(NULLIF(jc.std_time, 0), o.std_time, 0) as std_time, 
+            COALESCE(NULLIF(jc.cycle_time, 0), CASE WHEN o.time_uom = 'Min' THEN o.std_time ELSE 0 END, 0) as cycle_time,
+            COALESCE(NULLIF(jc.setup_time, 0), 0) as setup_time,
             COALESCE(jc.time_uom, o.time_uom, 'Min') as time_uom, 
             COALESCE(NULLIF(jc.hourly_rate, 0), o.hourly_rate, 0) as hourly_rate, 
             w.workstation_name, u.username as operator_name

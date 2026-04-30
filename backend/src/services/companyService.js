@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const drawingService = require('./drawingService');
 
 const contactsColumnCache = new Map();
 const contactColumnDefinitions = {
@@ -329,7 +330,28 @@ const updateCompanyStatus = async (companyId, status) => {
 };
 
 const deleteCompany = async companyId => {
-  await pool.execute('DELETE FROM companies WHERE id = ?', [companyId]);
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // 1. Get company name to delete associated drawings
+    const [companies] = await connection.query('SELECT company_name FROM companies WHERE id = ?', [companyId]);
+    if (companies.length > 0) {
+      const companyName = companies[0].company_name;
+      // Delete from customer_drawings and cleanup associated requirements
+      await drawingService.deleteClientDrawings(companyName, connection);
+    }
+
+    // 2. Delete company
+    await connection.execute('DELETE FROM companies WHERE id = ?', [companyId]);
+
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 };
 
 const addContact = async ({ companyId, ...rest }) => {

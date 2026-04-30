@@ -267,6 +267,46 @@ const DrawingMaster = () => {
     }
   };
 
+  const handleDeleteGroup = async () => {
+    const selectedIds = Array.from(selectedRows);
+    if (selectedIds.length === 0) return;
+
+    const result = await Swal.fire({
+      title: 'Delete Selected Drawings?',
+      text: `Are you sure you want to delete ${selectedIds.length} drawings? This will also remove their revision history and linked records.`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#ef4444',
+      confirmButtonText: 'Yes, Delete All',
+      cancelButtonText: 'Cancel'
+    });
+
+    if (!result.isConfirmed) return;
+
+    try {
+      setBulkOperationLoading(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/drawings/delete/bulk`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ ids: selectedIds })
+      });
+
+      if (!response.ok) throw new Error('Failed to delete drawings');
+
+      successToast(`${selectedIds.length} drawings deleted successfully`);
+      setSelectedRows(new Set());
+      fetchDrawings(searchTerm);
+    } catch (error) {
+      errorToast(error.message);
+    } finally {
+      setBulkOperationLoading(false);
+    }
+  };
+
   const columns = [
     { 
       label: 'Drawing No', 
@@ -585,16 +625,28 @@ const DrawingMaster = () => {
                 onKeyDown={(e) => e.key === 'Enter' && fetchDrawings(searchTerm)}
               />
             </div>
-            {selectedRows.size > 0 && drawings.some(d => selectedRows.has(d.id) && (d.item_status || '').trim().toUpperCase() !== 'APPROVED' && (d.item_status || '').trim().toUpperCase() !== 'REJECTED') && (
-              <button
-                onClick={handleApproveGroup}
-                disabled={bulkOperationLoading}
-                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded text-xs  hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-50 disabled:opacity-50 border-none ml-2"
-              >
-                {bulkOperationLoading ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} />}
-                Approve Selective ({drawings.filter(d => selectedRows.has(d.id) && (d.item_status || '').trim().toUpperCase() !== 'APPROVED' && (d.item_status || '').trim().toUpperCase() !== 'REJECTED').length})
-              </button>
-           )}
+            {selectedRows.size > 0 && (
+              <div className="flex items-center gap-2 ml-2">
+                {drawings.some(d => selectedRows.has(d.drawing_master_id) && (d.item_status || '').trim().toUpperCase() !== 'APPROVED' && (d.item_status || '').trim().toUpperCase() !== 'REJECTED') && (
+                  <button
+                    onClick={handleApproveGroup}
+                    disabled={bulkOperationLoading}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-emerald-600 text-white rounded text-[11px]  hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-50 disabled:opacity-50 border-none"
+                  >
+                    {bulkOperationLoading ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} />}
+                    Approve Selective ({drawings.filter(d => selectedRows.has(d.drawing_master_id) && (d.item_status || '').trim().toUpperCase() !== 'APPROVED' && (d.item_status || '').trim().toUpperCase() !== 'REJECTED').length})
+                  </button>
+                )}
+                <button
+                  onClick={handleDeleteGroup}
+                  disabled={bulkOperationLoading}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-rose-600 text-white rounded text-[11px]  hover:bg-rose-700 transition-all shadow-lg shadow-rose-50 disabled:opacity-50 border-none"
+                >
+                  {bulkOperationLoading ? <RefreshCw size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                  Delete Selective ({selectedRows.size})
+                </button>
+              </div>
+            )}
           </div>
           <div className="p-2">
             <DataTable 

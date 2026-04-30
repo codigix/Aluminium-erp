@@ -242,11 +242,11 @@ const ProjectRequests = () => {
   ], [actionLoading, navigate]);
 
   return (
-    <div className="space-y-4 p-4 min-h-screen bg-slate-50/50">
+    <div className="space-y-2 min-h-screen bg-slate-50/50">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl  text-slate-900 tracking-tight">Project Requests</h1>
-          <p className="text-sm text-slate-500 mt-1">Review and initiate production for new project requests from Sales</p>
+          <h1 className="text-xl  text-slate-900 tracking-tight">Project Requests</h1>
+          <p className="text-xs text-slate-500 mt-1">Review and initiate production for new project requests from Sales</p>
         </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded shadow-sm">
@@ -265,7 +265,7 @@ const ProjectRequests = () => {
         </div>
       </div>
 
-      <Card className="border-none shadow-xl bg-white/50 backdrop-blur-sm overflow-hidden">
+      
         <DataTable
           columns={columns}
           data={requests}
@@ -273,7 +273,7 @@ const ProjectRequests = () => {
           searchPlaceholder="Search by SO Code, Project, or Item..."
           searchKey="project_name"
         />
-      </Card>
+      
     </div>
   );
 };
