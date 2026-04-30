@@ -279,9 +279,9 @@ const StockBalance = () => {
         
         return (
           <div className="flex flex-col">
-            <span className="text-slate-900 font-medium">{val || '—'}{dimensionStr}</span>
+            <span className="text-slate-900 ">{val || '—'}{dimensionStr}</span>
             {row.material_grade && (
-              <span className="text-[10px] text-slate-400 leading-none mt-0.5">{row.material_grade}</span>
+              <span className="text-xs  text-slate-400 leading-none mt-0.5">{row.material_grade}</span>
             )}
           </div>
         );

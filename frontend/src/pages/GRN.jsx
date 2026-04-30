@@ -309,7 +309,7 @@ const GRN = () => {
       label: 'Project Name',
       sortable: true,
       render: (val) => (
-        <span className="text-xs font-medium text-slate-700 truncate max-w-[150px] block">
+        <span className="text-xs  text-slate-700 truncate max-w-[150px] block">
           {val || '—'}
         </span>
       )

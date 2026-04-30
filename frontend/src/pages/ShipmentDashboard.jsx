@@ -114,7 +114,7 @@ const ShipmentDashboard = ({ apiRequest }) => {
         <div>
           <p className="text-xs  text-slate-400   mb-1">{title}</p>
           <h3 className="text-xl  text-slate-900">{value}</h3>
-          <p className="text-xs text-slate-500 mt-1 font-medium">{subtitle}</p>
+          <p className="text-xs text-slate-500 mt-1 ">{subtitle}</p>
         </div>
         <div className={`p-2 rounded ${color.replace('bg-', 'bg-').replace('500', '100')} ${color.replace('bg-', 'text-').replace('500', '600')} transition-transform group-hover:rotate-12 shadow-sm`}>
           <Icon className="w-3 h-3" />

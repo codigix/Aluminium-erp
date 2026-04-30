@@ -114,7 +114,7 @@ const DeliveryChallan = () => {
             <!-- Header -->
             <div class="bg-[#4f6ebc] text-white p-8 text-center">
               <h1 class="text-2xl    mb-1">SPTECHPIONEER PRIVATE LIMITED</h1>
-              <p class="text-xs opacity-90 font-medium">MIDC Bhosari, Pune – 411026, Maharashtra</p>
+              <p class="text-xs opacity-90 ">MIDC Bhosari, Pune – 411026, Maharashtra</p>
               <p class="text-xs opacity-80 mt-1">GSTIN: 27ABCDE1234F1Z5 | Phone: +91-9876543210 | Email: info@sptech.com</p>
             </div>
 

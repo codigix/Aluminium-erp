@@ -589,7 +589,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       key: 'project_name',
       sortable: true,
       render: (val) => (
-        <span className="text-xs font-medium text-slate-700 truncate max-w-[150px] block">
+        <span className="text-xs  text-slate-700 truncate max-w-[150px] block">
           {val || '—'}
         </span>
       )
@@ -694,8 +694,8 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       key: 'material_name',
       render: (val, item) => (
         <div className="flex flex-col gap-0.5">
-          <div className=" text-slate-900 text-xs font-medium">{val || 'Unnamed Item'}</div>
-          <div className="inline-flex items-center p-1 rounded-md bg-slate-100 text-slate-600 text-[10px] w-fit tracking-tight border border-slate-200">
+          <div className=" text-slate-900 text-xs ">{val || 'Unnamed Item'}</div>
+          <div className="inline-flex items-center p-1 rounded-md bg-slate-100 text-slate-600 text-xs  w-fit tracking-tight border border-slate-200">
             {item.item_code}
           </div>
           {(item.length || item.width || item.thickness || item.diameter || item.outer_diameter) && (
@@ -731,7 +731,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       render: (val, item) => (
         <span className="text-xs text-slate-400">
           {parseFloat(item.planned_qty || val || 0).toFixed(3)}
-          <span className="ml-1 text-[10px] text-slate-300 uppercase">{item.uom || 'Nos'}</span>
+          <span className="ml-1 text-xs  text-slate-300 uppercase">{item.uom || 'Nos'}</span>
         </span>
       )
     },
@@ -742,7 +742,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       render: (val, item) => (
         <span className="text-xs text-slate-600">
           {parseFloat(val || 0).toFixed(3)}
-          <span className="ml-1 text-[10px] text-slate-400 uppercase">{item.uom || 'Nos'}</span>
+          <span className="ml-1 text-xs  text-slate-400 uppercase">{item.uom || 'Nos'}</span>
         </span>
       )
     },
@@ -753,7 +753,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       render: (val, item) => (
         <span className="text-xs text-slate-600">
           {parseFloat(val || 0).toFixed(3)}
-          <span className="ml-1 text-[10px] text-slate-400 uppercase">{item.uom || 'Nos'}</span>
+          <span className="ml-1 text-xs  text-slate-400 uppercase">{item.uom || 'Nos'}</span>
         </span>
       )
     },
@@ -765,7 +765,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
         selectedQC?.status === 'PENDING' ? 'Pending' : (
           <span className="text-xs text-emerald-600">
             {parseFloat(val || 0).toFixed(3)}
-            <span className="ml-1 text-[10px] text-emerald-300 uppercase">{item.uom || 'Nos'}</span>
+            <span className="ml-1 text-xs  text-emerald-300 uppercase">{item.uom || 'Nos'}</span>
           </span>
         )
       )
@@ -778,8 +778,8 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       key: 'material_name',
       render: (val, item) => (
         <div className="flex flex-col gap-0.5">
-          <div className=" text-slate-900 text-xs font-medium">{val || item.item_code || 'Unnamed Item'}</div>
-          <div className="inline-flex items-center p-1 rounded-md bg-slate-100 text-slate-600 text-[10px] w-fit tracking-tight border border-slate-200">
+          <div className=" text-slate-900 text-xs ">{val || item.item_code || 'Unnamed Item'}</div>
+          <div className="inline-flex items-center p-1 rounded-md bg-slate-100 text-slate-600 text-xs  w-fit tracking-tight border border-slate-200">
             {item.item_code}
           </div>
           {(item.length || item.width || item.thickness || item.diameter || item.outer_diameter) && (
@@ -806,7 +806,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       render: (val, item) => (
         <span className="text-xs text-slate-400">
           {parseFloat(item.planned_qty || val || 0).toFixed(3)}
-          <span className="ml-1 text-[10px] text-slate-300 uppercase">{item.uom || 'Nos'}</span>
+          <span className="ml-1 text-xs  text-slate-300 uppercase">{item.uom || 'Nos'}</span>
         </span>
       )
     },
@@ -817,7 +817,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       render: (val, item) => (
         <span className="text-xs text-slate-600">
           {parseFloat(val || 0).toFixed(3)}
-          <span className="ml-1 text-[10px] text-slate-400 uppercase">{item.uom || 'Nos'}</span>
+          <span className="ml-1 text-xs  text-slate-400 uppercase">{item.uom || 'Nos'}</span>
         </span>
       )
     },
@@ -828,7 +828,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       render: (val, item) => (
         <span className="text-xs text-slate-900">
           {parseFloat(val || 0).toFixed(3)}
-          <span className="ml-1 text-[10px] text-slate-400 uppercase">{item.uom || 'Nos'}</span>
+          <span className="ml-1 text-xs  text-slate-400 uppercase">{item.uom || 'Nos'}</span>
         </span>
       )
     },
@@ -845,14 +845,14 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
             onChange={(e) => handleItemQtyChange(idx, e.target.value)}
             className="w-24 p-2.5 bg-white border border-blue-200 rounded text-center text-xs text-blue-600 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all"
           />
-          <span className="text-[10px] text-slate-400 uppercase">{item.uom || 'Nos'}</span>
+          <span className="text-xs  text-slate-400 uppercase">{item.uom || 'Nos'}</span>
         </div>
       )
     },
     {
       label: 'Shortage',
       key: 'shortage',
-      className: 'text-center text-rose-500 font-medium',
+      className: 'text-center text-rose-500 ',
       render: (_, item) => {
         const shortage = Math.max(0, parseFloat(item.ordered_qty || 0) - parseFloat(item.accepted_qty || 0));
         return shortage > 0 ? (
@@ -866,7 +866,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
     {
       label: 'Overage',
       key: 'overage',
-      className: 'text-center text-blue-500 font-medium',
+      className: 'text-center text-blue-500 ',
       render: (_, item) => {
         const overage = Math.max(0, parseFloat(item.accepted_qty || 0) - parseFloat(item.ordered_qty || 0));
         return overage > 0 ? (

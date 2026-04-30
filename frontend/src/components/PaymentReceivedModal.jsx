@@ -427,19 +427,19 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
             </div>
             <div className="grid grid-cols-2 gap-2 text-xs">
               <div>
-                <span className="text-slate-500 font-medium">Invoice No</span>
+                <span className="text-slate-500 ">Invoice No</span>
                 <p className=" text-slate-900 mt-1">{invoice.po_number || invoice.so_number || 'N/A'}</p>
               </div>
               <div>
-                <span className="text-slate-500 font-medium">Customer</span>
+                <span className="text-slate-500 ">Customer</span>
                 <p className=" text-slate-900 mt-1">{invoice.customer_name || 'N/A'}</p>
               </div>
               <div>
-                <span className="text-slate-500 font-medium">Invoice Amount</span>
+                <span className="text-slate-500 ">Invoice Amount</span>
                 <p className=" text-slate-900 mt-1">{formatCurrency(invoice.total_amount || invoice.net_total)}</p>
               </div>
               <div>
-                <span className="text-slate-500 font-medium">Outstanding</span>
+                <span className="text-slate-500 ">Outstanding</span>
                 <p className=" text-rose-600 mt-1">{formatCurrency(currentOutstanding)}</p>
               </div>
             </div>

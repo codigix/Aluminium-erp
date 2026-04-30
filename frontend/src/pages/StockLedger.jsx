@@ -151,13 +151,13 @@ const StockLedger = () => {
 
         return (
           <div className="flex flex-col">
-            <span className="text-slate-900 font-medium">{val || '—'}{dimensionStr}</span>
+            <span className="text-slate-900 ">{val || '—'}{dimensionStr}</span>
             <div className="flex items-center gap-2">
-              <span className="text-[10px] text-slate-400 leading-none">{row.material_type || '—'}</span>
+              <span className="text-xs  text-slate-400 leading-none">{row.material_type || '—'}</span>
               {row.material_grade && (
                 <>
-                  <span className="text-slate-200 text-[10px]">•</span>
-                  <span className="text-[10px] text-indigo-400 font-medium leading-none">{row.material_grade}</span>
+                  <span className="text-slate-200 text-xs ">•</span>
+                  <span className="text-xs  text-indigo-400  leading-none">{row.material_grade}</span>
                 </>
               )}
             </div>

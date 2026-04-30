@@ -41,7 +41,7 @@ const StatusBadge = ({ status, tone, children }) => {
   };
 
   return (
-    <span className={`px-2 py-1 rounded-md text-[10px]  uppercase tracking-wider border inline-flex items-center justify-center min-w-[70px] ${variants[variant] || variants.muted}`}>
+    <span className={`px-2 py-1 rounded-md text-xs   uppercase tracking-wider border inline-flex items-center justify-center min-w-[70px] ${variants[variant] || variants.muted}`}>
       {children || label || '—'}
     </span>
   )

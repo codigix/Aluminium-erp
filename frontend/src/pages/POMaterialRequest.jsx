@@ -430,7 +430,7 @@ const POMaterialRequest = () => {
       label: 'Project Name',
       sortable: true,
       render: (val) => (
-        <span className="text-xs font-medium text-slate-700 truncate max-w-[150px] block">
+        <span className="text-xs  text-slate-700 truncate max-w-[150px] block">
           {val || '—'}
         </span>
       )
@@ -1069,32 +1069,32 @@ const POMaterialRequest = () => {
                           <td className="px-6 py-5">
                             <div>
                               <p className="text-xs font-semibold text-slate-900 group-hover:text-indigo-600 transition-colors">{item.item_code}</p>
-                              <p className="text-sm font-medium text-slate-600 mt-0.5">{item.name}</p>
+                              <p className="text-sm  text-slate-600 mt-0.5">{item.name}</p>
                               {(item.length || item.width || item.thickness || item.diameter || item.outer_diameter) && (
                                 <div className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5">
-                                  {item.length > 0 && <span className="text-[10px] text-slate-400">L: {item.length}</span>}
-                                  {item.width > 0 && <span className="text-[10px] text-slate-400">W: {item.width}</span>}
-                                  {item.thickness > 0 && <span className="text-[10px] text-slate-400">T: {item.thickness}</span>}
-                                  {item.diameter > 0 && <span className="text-[10px] text-slate-400">Dia: {item.diameter}</span>}
-                                  {item.outer_diameter > 0 && <span className="text-[10px] text-slate-400">OD: {item.outer_diameter}</span>}
+                                  {item.length > 0 && <span className="text-xs  text-slate-400">L: {item.length}</span>}
+                                  {item.width > 0 && <span className="text-xs  text-slate-400">W: {item.width}</span>}
+                                  {item.thickness > 0 && <span className="text-xs  text-slate-400">T: {item.thickness}</span>}
+                                  {item.diameter > 0 && <span className="text-xs  text-slate-400">Dia: {item.diameter}</span>}
+                                  {item.outer_diameter > 0 && <span className="text-xs  text-slate-400">OD: {item.outer_diameter}</span>}
                                 </div>
                               )}
                             </div>
                           </td>
                           <td className="px-6 py-5 text-center">
                             <div className="flex flex-col items-center">
-                              <span className="text-xs font-medium text-slate-800">
+                              <span className="text-xs  text-slate-800">
                                 {Number(item.design_qty || 0).toFixed(3)}
                               </span>
-                              <span className="text-[10px] text-slate-400 font-medium">{item.uom}</span>
+                              <span className="text-xs  text-slate-400 ">{item.uom}</span>
                             </div>
                           </td>
                           <td className="px-6 py-5 text-center">
                             <div className="flex flex-col items-center">
-                              <span className="text-xs font-medium text-slate-800">
+                              <span className="text-xs  text-slate-800">
                                 {Number(item.quantity || 0).toFixed(3)}
                               </span>
-                              <span className="text-[10px] text-slate-400 font-medium">{item.uom}</span>
+                              <span className="text-xs  text-slate-400 ">{item.uom}</span>
                             </div>
                           </td>
                           <td className="px-6 py-5 text-center">
@@ -1107,12 +1107,12 @@ const POMaterialRequest = () => {
                               <div className="flex flex-col items-center mt-1">
                                 {item.stocks && item.stocks.length > 0 ? (
                                   item.stocks.map((st, sidx) => (
-                                    <span key={sidx} className="text-[10px] text-indigo-500 leading-tight">
+                                    <span key={sidx} className="text-xs  text-indigo-500 leading-tight">
                                       {st.warehouse_name}: {isWeightBased(item.uom) ? Number(st.current_stock).toFixed(3) : Number(st.current_stock).toFixed(0)}
                                     </span>
                                   ))
                                 ) : (
-                                  <span className="text-xs text-indigo-400 font-medium">All Warehouses</span>
+                                  <span className="text-xs text-indigo-400 ">All Warehouses</span>
                                 )}
                               </div>
                             </div>
@@ -1165,7 +1165,7 @@ const POMaterialRequest = () => {
                           <div className="flex justify-between items-start mb-3">
                             <div>
                               <p className="text-xs   text-slate-900">{rfq.rfq_number}</p>
-                              <p className="text-[10px] text-slate-400 mt-0.5 uppercase tracking-wider">{formatDate(rfq.created_at)}</p>
+                              <p className="text-xs  text-slate-400 mt-0.5 uppercase tracking-wider">{formatDate(rfq.created_at)}</p>
                             </div>
                             <StatusBadge status={rfq.status} />
                           </div>
@@ -1175,7 +1175,7 @@ const POMaterialRequest = () => {
                               {rfq.items.map((it, iidx) => (
                                 <div key={iidx} className="flex justify-between items-start text-xs">
                                   <div className="flex-1 min-w-0 pr-2">
-                                    <p className="font-medium text-slate-700 truncate">{it.material_name || it.item_code}</p>
+                                    <p className=" text-slate-700 truncate">{it.material_name || it.item_code}</p>
                                     {(it.length || it.width || it.thickness || it.diameter || it.outer_diameter) && (
                                       <p className="text-[9px] text-slate-400 flex flex-wrap gap-x-1">
                                         {it.length > 0 && <span>L: {it.length}</span>}
@@ -1196,7 +1196,7 @@ const POMaterialRequest = () => {
                                     
                                     {Number(it.planned_qty || 0) > 0 && (
                                       <div className="flex flex-col items-end mt-1.5 pt-1.5 border-t border-slate-50 w-full">
-                                        <span className="text-[10px] font-semibold text-slate-700">
+                                        <span className="text-xs  font-semibold text-slate-700">
                                           {Number(it.planned_qty).toFixed(3)} {it.uom}
                                         </span>
                                         <span className="text-[8px] text-slate-400 uppercase tracking-tighter">Design Qty</span>
@@ -1210,7 +1210,7 @@ const POMaterialRequest = () => {
                           
                           {rfq.quotations && rfq.quotations.length > 0 ? (
                             <div className="space-y-2">
-                              <p className="text-[10px]   text-slate-400 uppercase tracking-widest">RECEIVED QUOTES</p>
+                              <p className="text-xs    text-slate-400 uppercase tracking-widest">RECEIVED QUOTES</p>
                               {rfq.quotations.map((q, qidx) => (
                                 <div key={qidx} className="flex justify-between items-center bg-slate-50/50 p-1.5 rounded border border-slate-100/50">
                                   <span className="text-xs  text-slate-600 truncate max-w-[120px]">{q.vendor_name}</span>
@@ -1221,7 +1221,7 @@ const POMaterialRequest = () => {
                           ) : (
                             <div className="flex items-center gap-2 text-amber-500 bg-amber-50/50 p-2 rounded border border-amber-100/50">
                               <svg className="w-3 h-3 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                              <p className="text-[10px] font-medium italic">Waiting for responses...</p>
+                              <p className="text-xs   italic">Waiting for responses...</p>
                             </div>
                           )}
                           

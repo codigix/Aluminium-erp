@@ -80,7 +80,7 @@ const ProductionDashboard = ({ apiRequest }) => {
               </span>
             )}
           </div>
-          <p className="text-xs text-slate-500 mt-1 font-medium">{subtitle}</p>
+          <p className="text-xs text-slate-500 mt-1 ">{subtitle}</p>
         </div>
         <div className={`p-2 rounded ${color.replace('bg-', 'bg-').replace('500', '100')} ${color.replace('bg-', 'text-').replace('500', '600')} transition-transform group-hover:rotate-12 shadow-sm`}>
           <Icon className="w-3 h-3" />
@@ -207,7 +207,7 @@ const ProductionDashboard = ({ apiRequest }) => {
               <Activity className="w-4 h-4 text-indigo-600" />
               PRIORITY WORK ORDERS
             </h3>
-            <p className="text-[10px] text-slate-500 font-medium mt-0.5 ">REAL-TIME PRODUCTION PIPELINE</p>
+            <p className="text-xs  text-slate-500  mt-0.5 ">REAL-TIME PRODUCTION PIPELINE</p>
           </div>
         </div>
         <DataTable
@@ -215,7 +215,7 @@ const ProductionDashboard = ({ apiRequest }) => {
             {
               label: 'WO Code',
               key: 'wo_code',
-              render: (val) => <span className="text-indigo-600 font-medium">{val}</span>
+              render: (val) => <span className="text-indigo-600 ">{val}</span>
             },
             {
               label: 'Item',
@@ -225,7 +225,7 @@ const ProductionDashboard = ({ apiRequest }) => {
             {
               label: 'Quantity',
               key: 'quantity',
-              render: (val, row) => <span className="text-slate-900 font-medium">{val} <span className="text-slate-400 font-normal text-[10px]">{row.unit}</span></span>
+              render: (val, row) => <span className="text-slate-900 ">{val} <span className="text-slate-400 font-normal text-xs ">{row.unit}</span></span>
             },
             {
               label: 'Status',

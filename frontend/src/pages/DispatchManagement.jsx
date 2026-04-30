@@ -184,7 +184,7 @@ const DispatchManagement = ({ apiRequest }) => {
       render: (val, item) => (
         <span 
           onClick={() => handleView(item.id || item.shipment_order_id)}
-          className="text-xs text-indigo-600 hover:underline cursor-pointer font-medium"
+          className="text-xs text-indigo-600 hover:underline cursor-pointer "
         >
           {val}
         </span>
@@ -221,12 +221,12 @@ const DispatchManagement = ({ apiRequest }) => {
       key: 'driver_name',
       render: (val, item) => (
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-slate-100 rounded flex items-center justify-center text-[10px]  text-slate-500 uppercase">
+          <div className="w-8 h-8 bg-slate-100 rounded flex items-center justify-center text-xs   text-slate-500 uppercase">
             {val ? val.split(' ').map(n => n[0]).join('') : '?'}
           </div>
           <div className="flex flex-col">
-            <span className="text-xs font-medium text-slate-700">{val || 'Not Assigned'}</span>
-            <span className="text-[10px] text-slate-400">{item.vehicle_number || '—'}</span>
+            <span className="text-xs  text-slate-700">{val || 'Not Assigned'}</span>
+            <span className="text-xs  text-slate-400">{item.vehicle_number || '—'}</span>
           </div>
         </div>
       )
@@ -408,7 +408,7 @@ const DispatchManagement = ({ apiRequest }) => {
               </div>
               <h3 className="text-xs font-semibold text-slate-500   mb-1">{card.label}</h3>
               <p className="text-xl  text-slate-900 mb-1">{card.count}</p>
-              <p className="text-xs text-slate-400 max-w-[120px] leading-tight font-medium">{card.description}</p>
+              <p className="text-xs text-slate-400 max-w-[120px] leading-tight ">{card.description}</p>
             </div>
             {index < statusCards.length - 1 && (
               <div className="hidden md:flex items-center justify-center px-2">
@@ -504,7 +504,7 @@ const DispatchManagement = ({ apiRequest }) => {
                   <div className="w-full bg-slate-100 h-1.5 rounded mt-2 overflow-hidden">
                     <div className="bg-emerald-500 h-full rounded" style={{ width: '85%' }} />
                   </div>
-                  <p className="text-xs text-slate-500 mt-1 font-medium">On schedule for 94% of orders</p>
+                  <p className="text-xs text-slate-500 mt-1 ">On schedule for 94% of orders</p>
                 </div>
               </div>
             </div>

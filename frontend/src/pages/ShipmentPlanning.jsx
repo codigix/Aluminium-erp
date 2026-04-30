@@ -523,7 +523,7 @@ const ShipmentPlanning = ({ apiRequest }) => {
                       <td className=" p-2">
                         <div className="flex flex-col">
                           <span className=" text-slate-900 text-xs">{item.description}</span>
-                          <span className="text-xs text-slate-400 font-medium">Code: {item.item_code}</span>
+                          <span className="text-xs text-slate-400 ">Code: {item.item_code}</span>
                         </div>
                       </td>
                       <td className=" p-2 text-xs  text-slate-500 ">{item.warehouse || 'MAIN STORE'}</td>

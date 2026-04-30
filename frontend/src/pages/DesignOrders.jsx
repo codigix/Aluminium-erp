@@ -234,13 +234,13 @@ const DesignOrders = () => {
       key: 'drawing_no',
       render: (val, row) => (
         <div className="flex flex-col">
-          <span className="font-medium text-slate-900">{val || '—'}</span>
-          <span className="text-[10px] text-slate-500">{row.item_code || '—'}</span>
+          <span className=" text-slate-900">{val || '—'}</span>
+          <span className="text-xs  text-slate-500">{row.item_code || '—'}</span>
         </div>
       )
     },
     { label: 'Description', key: 'item_description', render: (val, row) => val || row.description || '—' },
-    { label: 'Qty', key: 'quantity', className: 'text-indigo-600 font-medium', render: (val, row) => val || row.item_qty || 1 },
+    { label: 'Qty', key: 'quantity', className: 'text-indigo-600 ', render: (val, row) => val || row.item_qty || 1 },
     { 
       label: 'Status', 
       key: 'status',
@@ -248,7 +248,7 @@ const DesignOrders = () => {
         <div className="flex flex-col gap-1">
           <StatusBadge status={val || row.item_status} />
           {(val === 'REJECTED' || row.item_status === 'REJECTED') && (
-            <span className="text-[10px] text-rose-500 italic">
+            <span className="text-xs  text-rose-500 italic">
               {row.rejection_reason || row.item_rejection_reason || 'No reason'}
             </span>
           )}
@@ -266,20 +266,20 @@ const DesignOrders = () => {
               <button 
                 onClick={() => handleApproveItem(row.id || row.item_id)}
                 disabled={bulkOperationLoading}
-                className="px-3 py-1 bg-emerald-50 text-emerald-600 rounded-md hover:bg-emerald-600 hover:text-white transition-all border border-emerald-100 text-[10px]   disabled:opacity-50"
+                className="px-3 py-1 bg-emerald-50 text-emerald-600 rounded-md hover:bg-emerald-600 hover:text-white transition-all border border-emerald-100 text-xs    disabled:opacity-50"
               >
                 Approve
               </button>
               <button 
                 onClick={() => handleRejectItem(row.id || row.item_id)}
                 disabled={bulkOperationLoading}
-                className="px-3 py-1 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-all text-[10px]   border border-slate-100 hover:border-rose-200 disabled:opacity-50"
+                className="px-3 py-1 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-all text-xs    border border-slate-100 hover:border-rose-200 disabled:opacity-50"
               >
                 Reject
               </button>
             </>
           ) : (
-            <div className="flex items-center gap-1 text-[10px]  text-slate-400 ">
+            <div className="flex items-center gap-1 text-xs   text-slate-400 ">
               <Check className="w-3 h-3" />
               Processed
             </div>
@@ -302,7 +302,7 @@ const DesignOrders = () => {
             value={editItemData.drawing_no}
             onChange={(e) => setEditItemData({...editItemData, drawing_no: e.target.value})}
           />
-        ) : <span className="text-slate-900 font-medium">{val || '—'}</span>
+        ) : <span className="text-slate-900 ">{val || '—'}</span>
       )
     },
     { 
@@ -326,7 +326,7 @@ const DesignOrders = () => {
       key: 'quantity', 
       className: 'text-center',
       render: (val, row) => (
-        <span className="text-indigo-600 font-medium">
+        <span className="text-indigo-600 ">
           {parseFloat(val).toFixed(3)} {row.unit}
         </span>
       )
@@ -341,7 +341,7 @@ const DesignOrders = () => {
             <input 
               type="file" 
               accept=".pdf"
-              className="text-[10px]"
+              className="text-xs "
               onChange={(e) => setEditItemData({...editItemData, drawing_pdf: e.target.files[0]})}
             />
             <div className="flex gap-1">
@@ -380,7 +380,7 @@ const DesignOrders = () => {
                 <Eye className="w-4 h-4" />
               </button>
             ) : (
-              <span className="text-slate-300 text-[10px] italic">No PDF</span>
+              <span className="text-slate-300 text-xs  italic">No PDF</span>
             )}
             <button 
               onClick={() => handleEditItem(row)}
@@ -832,7 +832,7 @@ const DesignOrders = () => {
                           </span>
                         )}
                       </h2>
-                      <p className="text-blue-100/80 text-xs  mt-0.5 font-medium">Review and approve drawings from sales department</p>
+                      <p className="text-blue-100/80 text-xs  mt-0.5 ">Review and approve drawings from sales department</p>
                     </div>
                   </div>
                   
@@ -1261,7 +1261,7 @@ const DesignOrders = () => {
                           </span>
                         )}
                       </h2>
-                      <p className="text-purple-100/80 text-xs  mt-0.5 font-medium">Manage active design orders and technical specifications</p>
+                      <p className="text-purple-100/80 text-xs  mt-0.5 ">Manage active design orders and technical specifications</p>
                     </div>
                   </div>
                   

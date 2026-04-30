@@ -159,7 +159,7 @@ const Challans = () => {
   };
 
   const outwardColumns = [
-    { label: 'Challan No', key: 'challan_number', className: 'font-medium text-indigo-600' },
+    { label: 'Challan No', key: 'challan_number', className: ' text-indigo-600' },
     { label: 'Job Card', key: 'job_card_no' },
     { label: 'Vendor', key: 'vendor_name' },
     { label: 'Operation', key: 'operation_name' },
@@ -192,7 +192,7 @@ const Challans = () => {
   ];
 
   const inwardColumns = [
-    { label: 'Inward No', key: 'inward_number', className: 'font-medium text-emerald-600' },
+    { label: 'Inward No', key: 'inward_number', className: ' text-emerald-600' },
     { label: 'Outward Ref', key: 'outward_challan_no' },
     { label: 'Job Card', key: 'job_card_no' },
     { label: 'Vendor', key: 'vendor_name' },
@@ -252,7 +252,7 @@ const Challans = () => {
           <div className="space-y-6">
             <div className="grid grid-cols-2 gap-6 bg-slate-50 p-4 rounded-xl border border-slate-100">
               <div className="space-y-1">
-                <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+                <p className="text-xs  text-slate-400 uppercase tracking-wider">
                   {activeTab === 'outward' ? 'Challan Number' : 'Inward Number'}
                 </p>
                 <p className="text-lg  text-slate-900">
@@ -260,22 +260,22 @@ const Challans = () => {
                 </p>
               </div>
               <div className="space-y-1">
-                <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Status</p>
+                <p className="text-xs  text-slate-400 uppercase tracking-wider">Status</p>
                 <StatusBadge 
                   status={selectedChallan.status === 'RECEIVED' ? 'APPROVED' : (selectedChallan.status === 'DISPATCHED' ? 'IN_PROGRESS' : 'PENDING')} 
                   text={selectedChallan.status} 
                 />
               </div>
               <div className="space-y-1">
-                <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Job Card</p>
+                <p className="text-xs  text-slate-400 uppercase tracking-wider">Job Card</p>
                 <p className="text-slate-900 font-semibold">{selectedChallan.job_card_no}</p>
               </div>
               <div className="space-y-1">
-                <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Vendor</p>
+                <p className="text-xs  text-slate-400 uppercase tracking-wider">Vendor</p>
                 <p className="text-slate-900 font-semibold">{selectedChallan.vendor_name}</p>
               </div>
               <div className="space-y-1">
-                <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+                <p className="text-xs  text-slate-400 uppercase tracking-wider">
                   {activeTab === 'outward' ? 'Dispatch Qty' : 'Received Qty'}
                 </p>
                 <p className="text-slate-900 ">
@@ -283,7 +283,7 @@ const Challans = () => {
                 </p>
               </div>
               <div className="space-y-1">
-                <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+                <p className="text-xs  text-slate-400 uppercase tracking-wider">
                   {activeTab === 'outward' ? 'Dispatch Date' : 'Received Date'}
                 </p>
                 <p className="text-slate-900 font-semibold">
@@ -294,7 +294,7 @@ const Challans = () => {
 
             {selectedChallan.notes && (
               <div className="space-y-2">
-                <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Notes / Remarks</p>
+                <p className="text-xs  text-slate-400 uppercase tracking-wider">Notes / Remarks</p>
                 <div className="bg-amber-50/50 p-3 rounded border border-amber-100 italic text-sm text-slate-600">
                   {selectedChallan.notes}
                 </div>
@@ -304,12 +304,12 @@ const Challans = () => {
             <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
               <button 
                 onClick={() => navigate(`/sub-contract-challans/${activeTab}`)}
-                className="p-2 text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors"
+                className="p-2 text-xs  text-slate-600 hover:text-slate-900 transition-colors"
               >
                 Close
               </button>
               <button 
-                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded text-sm font-medium hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
+                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded text-sm  hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
               >
                 <Download className="w-4 h-4" />
                 Download PDF
@@ -395,13 +395,13 @@ const Challans = () => {
           <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
             <button
               onClick={() => setIsInwardModalOpen(false)}
-              className="p-2 text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors"
+              className="p-2 text-xs  text-slate-600 hover:text-slate-900 transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={handleVendorInward}
-              className="flex items-center gap-2 px-6 py-2 bg-emerald-600 text-white rounded text-sm font-medium hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100"
+              className="flex items-center gap-2 px-6 py-2 bg-emerald-600 text-white rounded text-sm  hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100"
             >
               <CheckCircle className="w-4 h-4" />
               Complete Receipt

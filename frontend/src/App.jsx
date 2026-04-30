@@ -1464,7 +1464,7 @@ function App() {
                 if (item.isGroup) {
                   return (
                     <div key={`group-${item.groupId || item.label}-${index}`} className="pt-5 pb-2 px-3">
-                      <p className="text-[10px]  text-slate-400  tracking-[0.2em]">{item.label}</p>
+                      <p className="text-xs   text-slate-400  tracking-[0.2em]">{item.label}</p>
                     </div>
                   )
                 }
@@ -1479,7 +1479,7 @@ function App() {
                         setMobileMenuOpen(false)
                       }
                     }}
-                    className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all duration-200 group relative ${
+                    className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-[13px]  transition-all duration-200 group relative ${
                       isActive 
                         ? 'bg-rose-50 text-rose-600 shadow-sm' 
                         : isDisabled 
@@ -1511,7 +1511,7 @@ function App() {
               <button
                 type="button"
                 onClick={handleLogout}
-                className="flex items-center justify-center gap-2 w-full p-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 text-[13px] font-medium hover:bg-rose-50 hover:text-rose-600 hover:border-rose-100 transition-all duration-300"
+                className="flex items-center justify-center gap-2 w-full p-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 text-[13px]  hover:bg-rose-50 hover:text-rose-600 hover:border-rose-100 transition-all duration-300"
               >
                 <LogOut className="w-4 h-4" />
                 <span>Logout</span>
@@ -1540,10 +1540,10 @@ function App() {
                 <div className="flex items-center gap-4 ml-auto">
                   <div className="flex items-center gap-3 pr-4 border-r border-slate-200">
                     <div className="text-right">
-                      <p className="text-xs text-slate-900 font-medium leading-none">{user?.first_name && user?.last_name ? `${user.first_name} ${user.last_name}` : user?.first_name || user?.username || 'User'}</p>
-                      <p className="text-[10px] text-slate-500 mt-0.5">{user?.role_name || user?.department_name || 'User'}</p>
+                      <p className="text-xs text-slate-900  leading-none">{user?.first_name && user?.last_name ? `${user.first_name} ${user.last_name}` : user?.first_name || user?.username || 'User'}</p>
+                      <p className="text-xs  text-slate-500 mt-0.5">{user?.role_name || user?.department_name || 'User'}</p>
                     </div>
-                    <div className="h-6 w-6 rounded bg-rose-500 flex items-center justify-center text-white text-[10px] ">
+                    <div className="h-6 w-6 rounded bg-rose-500 flex items-center justify-center text-white text-xs  ">
                       {(user?.first_name?.[0] || user?.username?.[0] || 'U').toUpperCase()}
                     </div>
                   </div>

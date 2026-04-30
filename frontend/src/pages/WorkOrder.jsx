@@ -59,7 +59,7 @@ const WorkOrder = () => {
       label: 'Work Order ID',
       key: 'wo_number',
       sortable: true,
-      render: (val) => <span className="text-indigo-600 font-medium">{val}</span>
+      render: (val) => <span className="text-indigo-600 ">{val}</span>
     },
     {
       label: 'Project / Client',
@@ -68,7 +68,7 @@ const WorkOrder = () => {
       render: (val, row) => (
         <div className="flex flex-col">
           <span className="text-xs text-slate-900 leading-tight">{val || 'N/A'}</span>
-          <span className="text-[10px] text-slate-400 mt-0.5">{row.client_name || '---'}</span>
+          <span className="text-xs  text-slate-400 mt-0.5">{row.client_name || '---'}</span>
         </div>
       )
     },
@@ -76,7 +76,7 @@ const WorkOrder = () => {
       label: 'Specification',
       key: 'source_type',
       render: (val) => (
-        <span className={`px-2 py-0.5 rounded text-[10px] ${
+        <span className={`px-2 py-0.5 rounded text-xs  ${
           val === 'SA' ? 'bg-rose-50 text-rose-600 border border-rose-100' : 'bg-indigo-50 text-indigo-600 border border-indigo-100'
         }`}>
           {val === 'SA' ? 'Sub Assembly' : 'Finished Goods'}
@@ -90,7 +90,7 @@ const WorkOrder = () => {
       render: (val, row) => (
         <div className="flex flex-col">
           <span className="text-xs text-slate-900 leading-tight">{val || row.item_code}</span>
-          <span className="text-[10px] text-slate-400 mt-0.5">BOM-{row.bom_no || 'NA'}</span>
+          <span className="text-xs  text-slate-400 mt-0.5">BOM-{row.bom_no || 'NA'}</span>
         </div>
       )
     },
@@ -98,7 +98,7 @@ const WorkOrder = () => {
       label: 'Qty',
       key: 'quantity',
       sortable: true,
-      render: (val) => <span className="text-slate-900 font-medium">{val} <span className="text-slate-400 font-normal text-[10px]">units</span></span>
+      render: (val) => <span className="text-slate-900 ">{val} <span className="text-slate-400 font-normal text-xs ">units</span></span>
     },
     {
       label: 'Planned Start',
@@ -119,10 +119,10 @@ const WorkOrder = () => {
         return (
           <div className="w-full max-w-[120px]">
             <div className="flex items-center justify-between mb-1">
-              <span className="text-[10px] text-slate-500">
+              <span className="text-xs  text-slate-500">
                 {row.completed_job_cards || 0}/{row.total_job_cards || 0}
               </span>
-              <span className="text-[10px] font-medium text-blue-600">{progress}%</span>
+              <span className="text-xs   text-blue-600">{progress}%</span>
             </div>
             <div className="h-1 w-full bg-slate-100 rounded-full overflow-hidden">
               <div 

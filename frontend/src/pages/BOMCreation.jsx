@@ -309,7 +309,7 @@ const BOMCreation = () => {
 
       const result = await Swal.fire({
         title: '<span class="text-base  text-slate-800">Delete All Client BOMs?</span>',
-        html: `<span class="text-xs text-slate-600">Are you sure you want to delete <span class=" font-bold">${itemsWithBOM.length}</span> BOMs for <span class=" text-indigo-600">${client.client_name}</span>? This action <span class=" text-rose-600">cannot be undone</span>.</span>`,
+        html: `<span class="text-xs text-slate-600">Are you sure you want to delete <span class=" ">${itemsWithBOM.length}</span> BOMs for <span class=" text-indigo-600">${client.client_name}</span>? This action <span class=" text-rose-600">cannot be undone</span>.</span>`,
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#ef4444',
@@ -363,7 +363,7 @@ const BOMCreation = () => {
 
       const result = await Swal.fire({
         title: '<span class="text-base  text-slate-800">Delete Drawing BOMs?</span>',
-        html: `<span class="text-xs text-slate-600">Are you sure you want to delete <span class=" font-bold">${itemsWithBOM.length}</span> BOMs for drawing <span class=" text-indigo-600">${drawingNo}</span>? This action <span class=" text-rose-600">cannot be undone</span>.</span>`,
+        html: `<span class="text-xs text-slate-600">Are you sure you want to delete <span class=" ">${itemsWithBOM.length}</span> BOMs for drawing <span class=" text-indigo-600">${drawingNo}</span>? This action <span class=" text-rose-600">cannot be undone</span>.</span>`,
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#ef4444',
@@ -557,9 +557,9 @@ const BOMCreation = () => {
       className: ' text-slate-900',
       render: (val, row) => (
         <div className="flex flex-col">
-          <span className="font-medium text-slate-900">{val}</span>
+          <span className=" text-slate-900">{val}</span>
           {row.items?.[0]?.project_name && (
-            <span className="text-[10px] text-slate-500 font-normal">{row.items[0].project_name}</span>
+            <span className="text-xs  text-slate-500 font-normal">{row.items[0].project_name}</span>
           )}
         </div>
       )
@@ -602,7 +602,7 @@ const BOMCreation = () => {
           return total;
         }, 0);
         
-        return <span className="font-semibold text-slate-900">₹{fgBomCost.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>;
+        return <span className=" text-slate-900">₹{fgBomCost.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>;
       }
     },
     {
@@ -682,7 +682,7 @@ const BOMCreation = () => {
       <div className="bg-slate-50/50 p-2 rounded border border-slate-100 m-2 space-y-2">
         {Object.entries(drawingsMap).length === 0 ? (
           <div className="text-center py-6">
-            <p className="text-sm text-slate-400 font-medium">No drawings found for this client.</p>
+            <p className="text-sm text-slate-400 ">No drawings found for this client.</p>
           </div>
         ) : (
           Object.entries(drawingsMap).map(([dwgNo, dwgItems]) => {
@@ -691,6 +691,22 @@ const BOMCreation = () => {
             const drawingName = dwgItems[0].drawing_name || dwgItems[0].item_name || dwgItems[0].item_description || 'No Description';
             const drawingId = dwgItems[0].drawing_id;
             const itemsWithBOM = dwgItems.filter(i => i.has_bom || i.has_master_bom);
+            
+            // Calculate total FG/SA cost for this drawing
+            const fgItems = dwgItems.filter(i => 
+              (i.item_group === 'FG' || i.product_type === 'FG' || (i.item_group || '').toLowerCase().includes('finished'))
+            );
+            const topItems = fgItems.length > 0 ? fgItems : dwgItems.filter(i => 
+              (i.item_code || '').startsWith('SA-') || (i.item_group || '').includes('SA')
+            );
+            const latestCosts = topItems.reduce((acc, i) => {
+              const key = i.item_code || i.description;
+              if (!acc[key] || (parseFloat(i.version || i.revision_no || 0) > parseFloat(acc[key].version || acc[key].revision_no || 0))) {
+                acc[key] = i;
+              }
+              return acc;
+            }, {});
+            const totalDisplayCost = Object.values(latestCosts).reduce((sum, i) => sum + parseFloat(i.bom_cost || 0), 0);
             
             // Refined status logic
             let dwgStatus = 'PENDING';
@@ -713,12 +729,12 @@ const BOMCreation = () => {
                       </svg>
                     </div>
                     <div>
-                                            <p className="text-xs text-slate-500 font-medium">{drawingName}</p>
+                                            <p className="text-xs text-slate-500 ">{drawingName}</p>
 
                       <div className="flex items-center gap-2">
                         <span className="text-xs  text-slate-900">{dwgNo}</span>
                         {dwgStatus === 'DESIGN_APPROVED' ? (
-                          <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded text-[10px]  border border-emerald-100">
+                          <span className="p-1 bg-emerald-50 text-emerald-600 rounded text-xs   border border-emerald-100">
                             Design Approved
                           </span>
                         ) : (
@@ -728,10 +744,16 @@ const BOMCreation = () => {
                     </div>
                   </div>
                   
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-4">
+                    <div className="text-right hidden sm:block border-r border-slate-100 pr-4">
+                      <p className="text-xs  text-slate-400  uppercase tracking-wider mb-0.5">Est. Price</p>
+                      <p className="text-sm  text-indigo-600 leading-none">
+                        ₹{totalDisplayCost.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      </p>
+                    </div>
                     <div className="text-right hidden sm:block">
-                      <p className="text-xs text-slate-400   ">BOMs</p>
-                      <p className="text-xs  text-slate-700">{itemsWithBOM.length}</p>
+                      <p className="text-xs  text-slate-400  uppercase tracking-wider mb-0.5">BOMs</p>
+                      <p className="text-sm  text-slate-700 leading-none">{itemsWithBOM.length}</p>
                     </div>
                     <Link 
                       to={`/bom-form?drawing_no=${encodeURIComponent(dwgNo)}&drawing_id=${drawingId}&drawing_name=${encodeURIComponent(drawingName)}&sales_order_id=${dwgItems[0].sales_order_id}`}
@@ -796,10 +818,10 @@ const BOMCreation = () => {
                                     <td className="px-4 p-2">
                                       <div className="flex items-center gap-2">
                                         <div className="flex flex-col">
-                                          <span className="text-xs font-medium text-slate-700">
+                                          <span className="text-xs  text-slate-700">
                                             {cleanText(latest.description || latest.material_name || 'BOM Item')}
                                           </span>
-                                          <span className="text-[10px] text-slate-400 ">{latest.item_code}</span>
+                                          <span className="text-xs  text-slate-400 ">{latest.item_code}</span>
                                         </div>
                                       </div>
                                     </td>
@@ -809,18 +831,18 @@ const BOMCreation = () => {
                                       </span>
                                     </td>
                                     <td className="px-4 p-2 text-center">
-                                      <span className="text-[10px] text-slate-500">
+                                      <span className="text-xs  text-slate-500">
                                         {formatDate(latest.created_at)}
                                       </span>
                                     </td>
                                     <td className="px-4 p-2 text-center">
-                                      <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px] font-medium ">
+                                      <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-xs   ">
                                         {latest.item_group || '—'}
                                       </span>
                                     </td>
                                     <td className="px-4 p-2 text-center">
                                       <span className="text-xs  text-slate-700">
-                                        {latest.total_quantity || latest.quantity} <span className="text-[10px] text-slate-400 font-normal">{latest.unit || 'NOS'}</span>
+                                        {latest.total_quantity || latest.quantity} <span className="text-xs  text-slate-400 font-normal">{latest.unit || 'NOS'}</span>
                                       </span>
                                     </td>
                                     <td className="px-4 p-2 text-center">
@@ -1046,9 +1068,9 @@ const BOMCreation = () => {
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2 mb-1">
                                     <h4 className="text-xs  text-slate-900 truncate tracking-tight">{item.item_code}</h4>
-                                    <span className="px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded text-[10px]   ">{item.item_group || 'FINISHED_GOOD'}</span>
+                                    <span className="px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded text-xs    ">{item.item_group || 'FINISHED_GOOD'}</span>
                                   </div>
-                                  <div className="flex items-center gap-3 text-[10px] text-slate-500 font-medium">
+                                  <div className="flex items-center gap-3 text-xs  text-slate-500 ">
                                     <button 
                                       onClick={() => item.drawing_no && handlePreviewByNo(item.drawing_no)}
                                       className="flex items-center gap-1 text-indigo-600 hover:text-indigo-700 transition-colors "
@@ -1066,24 +1088,24 @@ const BOMCreation = () => {
                                 
                                 <div className="flex gap-6 text-center">
                                   <div>
-                                    <p className="text-[10px] text-slate-400   mb-1">Order Qty</p>
-                                    <p className="text-xs  text-slate-700">{item.quantity} <span className="text-[10px] font-normal text-slate-400">{item.unit || 'Nos'}</span></p>
+                                    <p className="text-xs  text-slate-400   mb-1">Order Qty</p>
+                                    <p className="text-xs  text-slate-700">{item.quantity} <span className="text-xs  font-normal text-slate-400">{item.unit || 'Nos'}</span></p>
                                   </div>
                                   <div>
-                                    <p className="text-[10px] text-slate-400   mb-1">Material Cost</p>
+                                    <p className="text-xs  text-slate-400   mb-1">Material Cost</p>
                                     <p className="text-xs  text-slate-700">₹{matCost.toLocaleString('en-IN')}</p>
                                   </div>
                                   <div>
-                                    <p className="text-[10px] text-slate-400   mb-1">Labor Cost</p>
+                                    <p className="text-xs  text-slate-400   mb-1">Labor Cost</p>
                                     <p className="text-xs  text-slate-700">₹{laborCost.toLocaleString('en-IN')}</p>
                                   </div>
                                   <div className="px-4 py-1 bg-emerald-50/50 rounded border border-emerald-100/50">
-                                    <p className="text-[10px] text-emerald-600/70   mb-1">Est. Profit</p>
+                                    <p className="text-xs  text-emerald-600/70   mb-1">Est. Profit</p>
                                     <p className="text-xs  text-emerald-600">₹{estProfit.toLocaleString('en-IN')}</p>
                                   </div>
                                   <div className="flex items-center gap-2 pl-4 border-l border-slate-100">
                                     <div>
-                                      <p className="text-[10px] text-slate-400   mb-1">Item Total</p>
+                                      <p className="text-xs  text-slate-400   mb-1">Item Total</p>
                                       <p className="text-sm  text-indigo-600">₹{itemTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
                                     </div>
                                     <div className="p-1.5 bg-emerald-100 text-emerald-600 rounded-full">
@@ -1106,23 +1128,23 @@ const BOMCreation = () => {
                                     {/* Materials */}
                                     <div className="bg-slate-50/50 p-2 rounded border border-slate-100">
                                       <div className="flex items-center justify-between mb-3 px-1">
-                                        <h5 className="text-[10px]  text-indigo-600  tracking-widest flex items-center gap-2">
+                                        <h5 className="text-xs   text-indigo-600  tracking-widest flex items-center gap-2">
                                           <div className="w-1 h-3 bg-indigo-600 rounded-full" />
                                           Raw Materials
                                         </h5>
-                                        <span className="text-[10px]  text-slate-400">₹{matCost.toLocaleString('en-IN')}</span>
+                                        <span className="text-xs   text-slate-400">₹{matCost.toLocaleString('en-IN')}</span>
                                       </div>
                                       <div className="space-y-1.5">
                                         {item.materials?.length > 0 ? item.materials.map((m, idx) => (
                                           <div key={idx} className="bg-white p-2 rounded border border-slate-100 flex justify-between items-center group hover:border-indigo-200 transition-colors">
                                             <div>
                                               <p className="text-xs  text-slate-700">{m.material_name}</p>
-                                              <p className="text-[10px] text-slate-400 font-medium">{m.qty_per_pc} @ ₹{parseFloat(m.rate || 0).toLocaleString('en-IN')}</p>
+                                              <p className="text-xs  text-slate-400 ">{m.qty_per_pc} @ ₹{parseFloat(m.rate || 0).toLocaleString('en-IN')}</p>
                                             </div>
                                             <p className="text-xs  text-slate-600">₹{(parseFloat(m.qty_per_pc || 0) * parseFloat(item.quantity) * parseFloat(m.rate || 0)).toLocaleString('en-IN')}</p>
                                           </div>
                                         )) : (
-                                          <p className="text-[10px] text-slate-400 italic px-1">No materials listed</p>
+                                          <p className="text-xs  text-slate-400 italic px-1">No materials listed</p>
                                         )}
                                       </div>
                                     </div>
@@ -1130,23 +1152,23 @@ const BOMCreation = () => {
                                     {/* Components */}
                                     <div className="bg-slate-50/50 p-2 rounded border border-slate-100">
                                       <div className="flex items-center justify-between mb-3 px-1">
-                                        <h5 className="text-[10px]  text-blue-600  tracking-widest flex items-center gap-2">
+                                        <h5 className="text-xs   text-blue-600  tracking-widest flex items-center gap-2">
                                           <div className="w-1 h-3 bg-blue-600 rounded-full" />
                                           Components
                                         </h5>
-                                        <span className="text-[10px]  text-slate-400">₹{compCost.toLocaleString('en-IN')}</span>
+                                        <span className="text-xs   text-slate-400">₹{compCost.toLocaleString('en-IN')}</span>
                                       </div>
                                       <div className="space-y-1.5">
                                         {item.components?.length > 0 ? item.components.map((c, idx) => (
                                           <div key={idx} className="bg-white p-2 rounded border border-slate-100 flex justify-between items-center hover:border-blue-200 transition-colors">
                                             <div>
                                               <p className="text-xs  text-slate-700">{c.description || c.component_code}</p>
-                                              <p className="text-[10px] text-slate-400 font-medium">{c.quantity} @ ₹{parseFloat(c.rate || 0).toLocaleString('en-IN')}</p>
+                                              <p className="text-xs  text-slate-400 ">{c.quantity} @ ₹{parseFloat(c.rate || 0).toLocaleString('en-IN')}</p>
                                             </div>
                                             <p className="text-xs  text-slate-600">₹{(parseFloat(c.quantity || 0) * parseFloat(item.quantity) * parseFloat(c.rate || 0)).toLocaleString('en-IN')}</p>
                                           </div>
                                         )) : (
-                                          <p className="text-[10px] text-slate-400 italic px-1">No components listed</p>
+                                          <p className="text-xs  text-slate-400 italic px-1">No components listed</p>
                                         )}
                                       </div>
                                     </div>
@@ -1154,11 +1176,11 @@ const BOMCreation = () => {
                                     {/* Operations */}
                                     <div className="bg-slate-50/50 p-2 rounded border border-slate-100">
                                       <div className="flex items-center justify-between mb-3 px-1">
-                                        <h5 className="text-[10px]  text-amber-600  tracking-widest flex items-center gap-2">
+                                        <h5 className="text-xs   text-amber-600  tracking-widest flex items-center gap-2">
                                           <div className="w-1 h-3 bg-amber-600 rounded-full" />
                                           Operations
                                         </h5>
-                                        <span className="text-[10px]  text-slate-400">₹{laborCost.toLocaleString('en-IN')}</span>
+                                        <span className="text-xs   text-slate-400">₹{laborCost.toLocaleString('en-IN')}</span>
                                       </div>
                                       <div className="space-y-1.5">
                                         {item.operations?.length > 0 ? item.operations.map((o, idx) => {
@@ -1167,13 +1189,13 @@ const BOMCreation = () => {
                                             <div key={idx} className="bg-white p-2 rounded border border-slate-100 flex justify-between items-center hover:border-amber-200 transition-colors">
                                               <div>
                                                 <p className="text-xs  text-slate-700">{o.operation_name}</p>
-                                                <p className="text-[10px] text-slate-400 font-medium">{o.cycle_time_min + o.setup_time_min} MIN @ ₹{parseFloat(o.hourly_rate || 0).toLocaleString('en-IN')}/hr</p>
+                                                <p className="text-xs  text-slate-400 ">{o.cycle_time_min + o.setup_time_min} MIN @ ₹{parseFloat(o.hourly_rate || 0).toLocaleString('en-IN')}/hr</p>
                                               </div>
                                               <p className="text-xs  text-slate-600">₹{opCost.toLocaleString('en-IN')}</p>
                                             </div>
                                           );
                                         }) : (
-                                          <p className="text-[10px] text-slate-400 italic px-1">No operations listed</p>
+                                          <p className="text-xs  text-slate-400 italic px-1">No operations listed</p>
                                         )}
                                       </div>
                                     </div>

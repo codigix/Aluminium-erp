@@ -235,8 +235,8 @@ const DrawingMaster = () => {
         width: '350px',
         padding: '1.25rem',
         customClass: {
-          confirmButton: 'text-[10px]  px-4 py-2 rounded shadow-lg shadow-emerald-100  ',
-          cancelButton: 'text-[10px]  px-4 py-2 rounded  ',
+          confirmButton: 'text-xs   px-4 py-2 rounded shadow-lg shadow-emerald-100  ',
+          cancelButton: 'text-xs   px-4 py-2 rounded  ',
           title: 'mt-2'
         }
     });
@@ -304,8 +304,8 @@ const DrawingMaster = () => {
         }
       },
       customClass: {
-        confirmButton: 'text-[10px] px-4 py-2 rounded shadow-lg shadow-rose-100',
-        cancelButton: 'text-[10px] px-4 py-2 rounded',
+        confirmButton: 'text-xs  px-4 py-2 rounded shadow-lg shadow-rose-100',
+        cancelButton: 'text-xs  px-4 py-2 rounded',
         title: 'mt-2',
         input: 'text-xs'
       }
@@ -348,7 +348,7 @@ const DrawingMaster = () => {
       label: 'Description', 
       key: 'drawing_description',
       sortable: true,
-      render: (val, row) => <div className="max-w-xs truncate text-slate-600 font-medium">{val || row.item_description || '—'}</div>
+      render: (val, row) => <div className="max-w-xs truncate text-slate-600 ">{val || row.item_description || '—'}</div>
     },
     { 
       label: 'Client / Ref', 
@@ -364,7 +364,7 @@ const DrawingMaster = () => {
       label: 'Last Updated', 
       key: 'updated_at',
       render: (val) => (
-        <span className="text-slate-500 text-xs font-medium">
+        <span className="text-slate-500 text-xs ">
           {new Date(val || Date.now()).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
         </span>
       )
@@ -377,11 +377,11 @@ const DrawingMaster = () => {
         const drawingStatus = (row.drawing_status || '').trim().toUpperCase();
         
         if (itemStatus === 'APPROVED' || drawingStatus === 'APPROVED') {
-          return <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-[10px]  border border-emerald-200 ">Approved</span>;
+          return <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-xs   border border-emerald-200 ">Approved</span>;
         } else if (itemStatus === 'REJECTED' || drawingStatus === 'REJECTED') {
-          return <span className="px-2 py-0.5 bg-rose-100 text-rose-700 rounded text-[10px]  border border-rose-200 ">Rejected</span>;
+          return <span className="px-2 py-0.5 bg-rose-100 text-rose-700 rounded text-xs   border border-rose-200 ">Rejected</span>;
         } else if (row.sales_order_item_id || drawingStatus === 'SHARED') {
-          return <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-[10px]  border border-amber-200  whitespace-nowrap">⏳ Pending</span>;
+          return <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-xs   border border-amber-200  whitespace-nowrap">⏳ Pending</span>;
         }
         return <span className="text-slate-300">—</span>;
       }
@@ -734,7 +734,7 @@ const DrawingMaster = () => {
                                 <td className="p-2 text-xs  text-indigo-600">
                                   {rev.revision_no || '0'}
                                 </td>
-                                <td className="px-4 p-2 text-xs text-slate-500 font-medium">
+                                <td className="px-4 p-2 text-xs text-slate-500 ">
                                   {new Date(rev.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                                 </td>
                                 <td className="p-2 text-xs text-slate-600 max-w-md truncate">
@@ -772,7 +772,7 @@ const DrawingMaster = () => {
                     </div>
                     <div>
                         <h2 className="text-md  text-slate-900">Edit Drawing Details</h2>
-                        <p className="text-xs text-slate-500 font-medium">Update metadata for {editData.drawing_no}</p>
+                        <p className="text-xs text-slate-500 ">Update metadata for {editData.drawing_no}</p>
                     </div>
                 </div>
                 <button 

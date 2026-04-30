@@ -244,27 +244,27 @@ const ProcessPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
           <div className="border-t border-blue-100 pt-3"></div>
           <div className="grid grid-cols-2 gap-2 text-xs">
             <div>
-              <span className="text-slate-500 text-xs font-medium">Invoice No</span>
+              <span className="text-slate-500 text-xs ">Invoice No</span>
               <p className=" text-slate-900 mt-2 text-sm">{invoice.po_number || 'N/A'}</p>
             </div>
             <div>
-              <span className="text-slate-500 text-xs font-medium">Supplier</span>
+              <span className="text-slate-500 text-xs ">Supplier</span>
               <p className=" text-slate-900 mt-2 text-sm">{invoice.vendor_name || 'N/A'}</p>
             </div>
             <div>
-              <span className="text-slate-500 text-xs font-medium">Invoice Date</span>
+              <span className="text-slate-500 text-xs ">Invoice Date</span>
               <p className=" text-slate-900 mt-2 text-sm">{formatDate(invoice.created_at)}</p>
             </div>
             <div>
-              <span className="text-slate-500 text-xs font-medium">Invoice Amount</span>
+              <span className="text-slate-500 text-xs ">Invoice Amount</span>
               <p className=" text-slate-900 mt-2 text-sm">{formatCurrency(invoice.total_amount)}</p>
             </div>
             <div>
-              <span className="text-slate-500 text-xs font-medium">Already Paid</span>
+              <span className="text-slate-500 text-xs ">Already Paid</span>
               <p className=" text-emerald-600 mt-2 text-sm">{formatCurrency(alreadyPaid)}</p>
             </div>
             <div>
-              <span className="text-slate-500 text-xs font-medium">Outstanding</span>
+              <span className="text-slate-500 text-xs ">Outstanding</span>
               <p className=" text-rose-600 mt-2 text-sm">{formatCurrency(outstanding)}</p>
             </div>
           </div>

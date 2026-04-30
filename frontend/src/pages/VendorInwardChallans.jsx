@@ -308,7 +308,7 @@ const VendorInwardChallans = () => {
                         <tr key={idx} className="bg-white hover:bg-slate-50 transition-colors">
                           <td className="p-2 text-slate-700">{item.item_code}</td>
                           <td className="p-2 text-center text-slate-600 ">{item.release_qty}</td>
-                          <td className="p-2 text-right text-slate-900 font-medium">{formatCurrency(item.rate)}</td>
+                          <td className="p-2 text-right text-slate-900 ">{formatCurrency(item.rate)}</td>
                           <td className="p-2 text-right text-slate-900 ">{formatCurrency(Number(item.release_qty) * Number(item.rate))}</td>
                         </tr>
                       ))}

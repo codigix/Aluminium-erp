@@ -639,9 +639,9 @@ const ItemsMaster = () => {
         
         return (
           <div className="flex flex-col">
-            <span className="font-medium text-slate-900">{val}</span>
+            <span className=" text-slate-900">{val}</span>
             {dims.length > 0 && (
-              <span className="text-[10px] text-slate-400 mt-0.5">
+              <span className="text-xs  text-slate-400 mt-0.5">
                 {dims.join(' x ')}
               </span>
             )}
@@ -679,7 +679,7 @@ const ItemsMaster = () => {
                 <span className={`text-sm font-semibold ${isLow ? 'text-amber-700' : 'text-slate-700'}`}>
                   {balance.toLocaleString('en-IN', { minimumFractionDigits: row.weight_per_unit > 0 ? 3 : 2 })}
                 </span>
-                <span className="px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded text-[10px] font-medium  ">
+                <span className="px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded text-xs    ">
                   {uom}
                 </span>
               </div>
@@ -717,7 +717,7 @@ const ItemsMaster = () => {
   ], [shapes, handleCopyItem, handleEditItem, handleDeleteItem]);
 
   const groupColumns = useMemo(() => [
-    { label: 'Group Name', key: 'name', sortable: true, className: 'font-medium' },
+    { label: 'Group Name', key: 'name', sortable: true, className: '' },
     { label: 'Type', key: 'group_type', sortable: true, render: (val) => <span className="px-2 py-0.5 bg-blue-50 text-blue-600 border border-blue-100 rounded text-xs">{val || 'OTHER'}</span> },
     { label: 'Status', key: 'status', render: (val) => <StatusBadge status={val || 'ACTIVE'} /> },
     { 
@@ -734,7 +734,7 @@ const ItemsMaster = () => {
   ], [handleDeleteGroup]);
 
   const shapeColumns = useMemo(() => [
-    { label: 'Shape Name', key: 'name', sortable: true, className: 'font-medium' },
+    { label: 'Shape Name', key: 'name', sortable: true, className: '' },
     { label: 'Status', key: 'status', render: (val) => <StatusBadge status={val || 'ACTIVE'} /> },
     { 
       label: 'Actions', 
@@ -750,7 +750,7 @@ const ItemsMaster = () => {
   ], [handleDeleteShape]);
 
   const materialColumns = useMemo(() => [
-    { label: 'Material Name', key: 'name', sortable: true, className: 'font-medium' },
+    { label: 'Material Name', key: 'name', sortable: true, className: '' },
     { label: 'Density', key: 'density', sortable: true, render: (val, row) => `${parseFloat(val).toFixed(4)} ${row.density_unit || 'g/cm³'}` },
     { label: 'Status', key: 'status', render: (val) => <StatusBadge status={val || 'ACTIVE'} /> },
     { 
@@ -1039,7 +1039,7 @@ const ItemsMaster = () => {
 
                       {selectedShape && (
                         <div className="md:col-span-3 p-4 bg-indigo-50/50 rounded border border-indigo-100 space-y-3">
-                          <div className="flex items-center gap-2 text-indigo-700 font-medium text-sm">
+                          <div className="flex items-center gap-2 text-indigo-700  text-sm">
                             <div className="w-1.5 h-1.5 rounded-full bg-indigo-500"></div>
                             {selectedShape} Dimensions (All in mm)
                           </div>
@@ -1047,15 +1047,15 @@ const ItemsMaster = () => {
                             {selectedShape.toLowerCase() === 'plate' && (
                               <>
                                 <div className="space-y-1.5">
-                                  <label className="text-[10px]   font-semibold text-slate-400">Length (mm) *</label>
+                                  <label className="text-xs    font-semibold text-slate-400">Length (mm) *</label>
                                   <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.length} onChange={(e) => setItemFormData({...itemFormData, length: e.target.value})} required />
                                 </div>
                                 <div className="space-y-1.5">
-                                  <label className="text-[10px]   font-semibold text-slate-400">Width (mm) *</label>
+                                  <label className="text-xs    font-semibold text-slate-400">Width (mm) *</label>
                                   <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.width} onChange={(e) => setItemFormData({...itemFormData, width: e.target.value})} required />
                                 </div>
                                 <div className="space-y-1.5">
-                                  <label className="text-[10px]   font-semibold text-slate-400">Thickness (mm) *</label>
+                                  <label className="text-xs    font-semibold text-slate-400">Thickness (mm) *</label>
                                   <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.thickness} onChange={(e) => setItemFormData({...itemFormData, thickness: e.target.value})} required />
                                 </div>
                               </>
@@ -1063,11 +1063,11 @@ const ItemsMaster = () => {
                             {selectedShape.toLowerCase() === 'round' && (
                               <>
                                 <div className="space-y-1.5">
-                                  <label className="text-[10px]   font-semibold text-slate-400">Diameter (mm) *</label>
+                                  <label className="text-xs    font-semibold text-slate-400">Diameter (mm) *</label>
                                   <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.diameter} onChange={(e) => setItemFormData({...itemFormData, diameter: e.target.value})} required />
                                 </div>
                                 <div className="space-y-1.5">
-                                  <label className="text-[10px]   font-semibold text-slate-400">Length (mm) *</label>
+                                  <label className="text-xs    font-semibold text-slate-400">Length (mm) *</label>
                                   <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.length} onChange={(e) => setItemFormData({...itemFormData, length: e.target.value})} required />
                                 </div>
                               </>
@@ -1075,15 +1075,15 @@ const ItemsMaster = () => {
                             {selectedShape.toLowerCase() === 'pipe' && (
                               <>
                                 <div className="space-y-1.5">
-                                  <label className="text-[10px]   font-semibold text-slate-400">Outer Diameter (mm) *</label>
+                                  <label className="text-xs    font-semibold text-slate-400">Outer Diameter (mm) *</label>
                                   <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.outerDiameter} onChange={(e) => setItemFormData({...itemFormData, outerDiameter: e.target.value})} required />
                                 </div>
                                 <div className="space-y-1.5">
-                                  <label className="text-[10px]   font-semibold text-slate-400">Thickness (mm) *</label>
+                                  <label className="text-xs    font-semibold text-slate-400">Thickness (mm) *</label>
                                   <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.thickness} onChange={(e) => setItemFormData({...itemFormData, thickness: e.target.value})} required />
                                 </div>
                                 <div className="space-y-1.5">
-                                  <label className="text-[10px]   font-semibold text-slate-400">Length (mm) *</label>
+                                  <label className="text-xs    font-semibold text-slate-400">Length (mm) *</label>
                                   <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.length} onChange={(e) => setItemFormData({...itemFormData, length: e.target.value})} required />
                                 </div>
                               </>

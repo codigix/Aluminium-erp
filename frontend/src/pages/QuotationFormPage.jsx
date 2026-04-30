@@ -915,7 +915,7 @@ const QuotationFormPage = () => {
         <div className="flex items-center gap-2">
           <button
             onClick={() => navigate('/client-quotations')}
-            className="px-3 py-1.5 text-xs font-medium text-slate-600 bg-white border border-slate-200 rounded hover:bg-slate-50 transition-all flex items-center gap-2"
+            className="px-3 py-1.5 text-xs  text-slate-600 bg-white border border-slate-200 rounded hover:bg-slate-50 transition-all flex items-center gap-2"
           >
             <X size={14} />
             {isLocked ? 'Close' : 'Cancel'}
@@ -928,7 +928,7 @@ const QuotationFormPage = () => {
                   <button
                     onClick={() => handleSave('Rejected', false)}
                     disabled={saving}
-                    className="px-3 py-1.5 text-xs font-medium text-rose-600 bg-rose-50 border border-rose-100 rounded hover:bg-rose-100 transition-all flex items-center gap-2 disabled:opacity-50"
+                    className="px-3 py-1.5 text-xs  text-rose-600 bg-rose-50 border border-rose-100 rounded hover:bg-rose-100 transition-all flex items-center gap-2 disabled:opacity-50"
                   >
                     {saving ? <Loader2 size={14} className="animate-spin" /> : <X size={14} />}
                     Reject
@@ -936,7 +936,7 @@ const QuotationFormPage = () => {
                   <button
                     onClick={() => handleSave('Approved', false)}
                     disabled={saving}
-                    className="px-3 py-1.5 text-xs font-medium text-emerald-600 bg-emerald-50 border border-emerald-100 rounded hover:bg-emerald-100 transition-all flex items-center gap-2 disabled:opacity-50"
+                    className="px-3 py-1.5 text-xs  text-emerald-600 bg-emerald-50 border border-emerald-100 rounded hover:bg-emerald-100 transition-all flex items-center gap-2 disabled:opacity-50"
                   >
                     {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
                     Approve
@@ -944,7 +944,7 @@ const QuotationFormPage = () => {
                   <button
                     onClick={() => handleSave('Revised', false)}
                     disabled={saving}
-                    className="px-3 py-1.5 text-xs font-medium text-amber-600 bg-amber-50 border border-amber-100 rounded hover:bg-amber-100 transition-all flex items-center gap-2 disabled:opacity-50"
+                    className="px-3 py-1.5 text-xs  text-amber-600 bg-amber-50 border border-amber-100 rounded hover:bg-amber-100 transition-all flex items-center gap-2 disabled:opacity-50"
                   >
                     {saving ? <Loader2 size={14} className="animate-spin" /> : <GitBranch size={14} />}
                     Create Revision
@@ -952,7 +952,7 @@ const QuotationFormPage = () => {
                   <button
                     onClick={() => handleSave('Revised', true)}
                     disabled={saving}
-                    className="px-4 py-1.5 text-xs font-medium text-white bg-indigo-600 rounded hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100 flex items-center gap-2 disabled:opacity-50"
+                    className="px-4 py-1.5 text-xs  text-white bg-indigo-600 rounded hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100 flex items-center gap-2 disabled:opacity-50"
                   >
                     {saving ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
                     Send to Client
@@ -963,7 +963,7 @@ const QuotationFormPage = () => {
                   <button
                     onClick={() => handleSave('Draft', false)}
                     disabled={saving}
-                    className="px-3 py-1.5 text-xs font-medium text-indigo-600 bg-indigo-50 border border-indigo-100 rounded hover:bg-indigo-100 transition-all flex items-center gap-2 disabled:opacity-50"
+                    className="px-3 py-1.5 text-xs  text-indigo-600 bg-indigo-50 border border-indigo-100 rounded hover:bg-indigo-100 transition-all flex items-center gap-2 disabled:opacity-50"
                   >
                     {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
                     Save as Draft
@@ -971,7 +971,7 @@ const QuotationFormPage = () => {
                   <button
                     onClick={() => handleSave('Revised', false)}
                     disabled={saving}
-                    className="px-3 py-1.5 text-xs font-medium text-amber-600 bg-amber-50 border border-amber-100 rounded hover:bg-amber-100 transition-all flex items-center gap-2 disabled:opacity-50"
+                    className="px-3 py-1.5 text-xs  text-amber-600 bg-amber-50 border border-amber-100 rounded hover:bg-amber-100 transition-all flex items-center gap-2 disabled:opacity-50"
                   >
                     {saving ? <Loader2 size={14} className="animate-spin" /> : <GitBranch size={14} />}
                     Create Revision
@@ -979,7 +979,7 @@ const QuotationFormPage = () => {
                   <button
                     onClick={() => handleSave('Revised', true)}
                     disabled={saving}
-                    className="px-4 py-1.5 text-xs font-medium text-white bg-indigo-600 rounded hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100 flex items-center gap-2 disabled:opacity-50"
+                    className="px-4 py-1.5 text-xs  text-white bg-indigo-600 rounded hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100 flex items-center gap-2 disabled:opacity-50"
                   >
                     {saving ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
                     Send to Client
@@ -990,7 +990,7 @@ const QuotationFormPage = () => {
                   <button
                     onClick={() => handleSave('Draft')}
                     disabled={saving}
-                    className="px-3 py-1.5 text-xs font-medium text-indigo-600 bg-indigo-50 border border-indigo-100 rounded hover:bg-indigo-100 transition-all flex items-center gap-2 disabled:opacity-50"
+                    className="px-3 py-1.5 text-xs  text-indigo-600 bg-indigo-50 border border-indigo-100 rounded hover:bg-indigo-100 transition-all flex items-center gap-2 disabled:opacity-50"
                   >
                     {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
                     Save as Draft
@@ -998,7 +998,7 @@ const QuotationFormPage = () => {
                   <button
                     onClick={() => handleSave('Sent', false)}
                     disabled={saving}
-                    className="px-3 py-1.5 text-xs font-medium text-emerald-600 bg-emerald-50 border border-emerald-100 rounded hover:bg-emerald-100 transition-all flex items-center gap-2 disabled:opacity-50"
+                    className="px-3 py-1.5 text-xs  text-emerald-600 bg-emerald-50 border border-emerald-100 rounded hover:bg-emerald-100 transition-all flex items-center gap-2 disabled:opacity-50"
                   >
                     {saving ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
                     Create Quotation
@@ -1006,7 +1006,7 @@ const QuotationFormPage = () => {
                   <button
                     onClick={() => handleSave('Sent', true)}
                     disabled={saving}
-                    className="px-4 py-1.5 text-xs font-medium text-white bg-indigo-600 rounded hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100 flex items-center gap-2 disabled:opacity-50"
+                    className="px-4 py-1.5 text-xs  text-white bg-indigo-600 rounded hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100 flex items-center gap-2 disabled:opacity-50"
                   >
                     {saving ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
                     Send to Client
@@ -1020,7 +1020,7 @@ const QuotationFormPage = () => {
             <button
               onClick={handleDownloadPDF}
               disabled={loading}
-              className="px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-100 rounded hover:bg-blue-100 transition-all flex items-center gap-2 disabled:opacity-50"
+              className="px-3 py-1.5 text-xs  text-blue-600 bg-blue-50 border border-blue-100 rounded hover:bg-blue-100 transition-all flex items-center gap-2 disabled:opacity-50"
             >
               {loading ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />}
               Download PDF
@@ -1170,7 +1170,7 @@ const QuotationFormPage = () => {
               {!isLocked && (
                 <button
                   onClick={handleAddItem}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white rounded text-xs font-medium hover:bg-indigo-700 transition-all shadow-sm"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white rounded text-xs  hover:bg-indigo-700 transition-all shadow-sm"
                 >
                   <Plus size={14} />
                   Add Item
@@ -1205,7 +1205,7 @@ const QuotationFormPage = () => {
                       // Parent Item Row
                       rows.push(
                         <tr key={item.id} className="hover:bg-slate-50/30 transition-colors">
-                          <td className="p-2 text-xs font-medium text-slate-400">{index + 1}</td>
+                          <td className="p-2 text-xs  text-slate-400">{index + 1}</td>
                           <td className="p-2 align-top">
                             <div className="space-y-1">
                               <div className="flex items-center gap-2 group">
@@ -1214,9 +1214,9 @@ const QuotationFormPage = () => {
                                     <div className="flex flex-col">
                                       <span className="text-sm  text-slate-900 ">{item.description || 'No Description'}</span>
                                       <div className="flex items-center gap-2 mt-0.5">
-                                        <span className="text-[10px] font-medium text-slate-500">{item.drawing_no || 'Manual Item'}</span>
+                                        <span className="text-xs   text-slate-500">{item.drawing_no || 'Manual Item'}</span>
                                         {item.item_group && (
-                                          <span className={`px-1.5 py-0.5 rounded text-[10px]  border  ${
+                                          <span className={`px-1.5 py-0.5 rounded text-xs   border  ${
                                             (item.item_group.toUpperCase().includes('SA') || item.item_group.toUpperCase().includes('SUB') || item.item_group.toUpperCase().includes('ASSEMBLY')) && !item.item_group.toUpperCase().includes('FG')
                                               ? 'bg-amber-50 text-amber-600 border-amber-100'
                                               : 'bg-emerald-50 text-emerald-700 border-emerald-100'
@@ -1243,10 +1243,10 @@ const QuotationFormPage = () => {
                                           placeholder="Drawing No..."
                                           value={item.drawing_no}
                                           onChange={(e) => handleItemChange(item.id, 'drawing_no', e.target.value)}
-                                          className="flex-1 px-0 py-0 text-[10px] font-medium text-slate-500 border-none focus:ring-0 placeholder:text-slate-300 bg-transparent"
+                                          className="flex-1 px-0 py-0 text-xs   text-slate-500 border-none focus:ring-0 placeholder:text-slate-300 bg-transparent"
                                         />
                                         {item.item_group && (
-                                          <span className={`px-1.5 py-0.5 rounded text-[10px]  border  ${
+                                          <span className={`px-1.5 py-0.5 rounded text-xs   border  ${
                                             (item.item_group.toUpperCase().includes('SA') || item.item_group.toUpperCase().includes('SUB') || item.item_group.toUpperCase().includes('ASSEMBLY')) && !item.item_group.toUpperCase().includes('FG')
                                               ? 'bg-amber-50 text-amber-600 border-amber-100'
                                               : 'bg-emerald-50 text-emerald-700 border-emerald-100'
@@ -1301,11 +1301,11 @@ const QuotationFormPage = () => {
                                             labelField="drawing_no"
                                             valueField="id"
                                             subLabelField="description"
-                                            className="border-none p-0 focus-within:ring-0 shadow-none bg-transparent text-[10px] font-medium text-slate-500 hide-arrow"
+                                            className="border-none p-0 focus-within:ring-0 shadow-none bg-transparent text-xs   text-slate-500 hide-arrow"
                                           />
                                         </div>
                                         {item.item_group && (
-                                          <span className={`px-1.5 py-0.5 rounded text-[10px]  border  ${
+                                          <span className={`px-1.5 py-0.5 rounded text-xs   border  ${
                                             (item.item_group.toUpperCase().includes('SA') || item.item_group.toUpperCase().includes('SUB') || item.item_group.toUpperCase().includes('ASSEMBLY')) && !item.item_group.toUpperCase().includes('FG')
                                               ? 'bg-amber-50 text-amber-600 border-amber-100'
                                               : 'bg-emerald-50 text-emerald-700 border-emerald-100'
@@ -1329,9 +1329,9 @@ const QuotationFormPage = () => {
                                 value={item.quantity}
                                 readOnly={isLocked}
                                 onChange={(e) => handleItemChange(item.id, 'quantity', e.target.value)}
-                                className={`w-full px-2 py-1 text-xs border rounded outline-none transition-all ${isLocked ? 'bg-transparent border-transparent text-slate-700 font-medium' : 'bg-white border-slate-200 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500'}`}
+                                className={`w-full px-2 py-1 text-xs border rounded outline-none transition-all ${isLocked ? 'bg-transparent border-transparent text-slate-700 ' : 'bg-white border-slate-200 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500'}`}
                               />
-                              <span className="text-xs text-slate-400 font-medium">{item.unit || 'Nos'}</span>
+                              <span className="text-xs text-slate-400 ">{item.unit || 'Nos'}</span>
                             </div>
                           </td>
                           <td className="p-2">
@@ -1351,7 +1351,7 @@ const QuotationFormPage = () => {
                           <td className="p-2 text-xs text-slate-900">
                             <div className="flex flex-col items-start">
                               <span className="font-semibold">{formatCurrency(item.total)}</span>
-                              <span className="text-[10px] text-slate-400 font-normal">Base Amount</span>
+                              <span className="text-xs  text-slate-400 font-normal">Base Amount</span>
                             </div>
                           </td>
                           {!isLocked && (
@@ -1385,13 +1385,13 @@ const QuotationFormPage = () => {
                                   </div>
                                 </div>
                               </td>
-                              <td className="p-2 border-b border-slate-100 text-[11px] text-slate-600 font-medium">
+                              <td className="p-2 border-b border-slate-100 text-[11px] text-slate-600 ">
                                 {(parseFloat(sa.quantity || 0) * (parseFloat(item.quantity) || 0)).toFixed(3)} {sa.unit || 'Nos'}
                               </td>
                               <td className="p-2 border-b border-slate-100 text-[11px] text-indigo-600 font-bold bg-indigo-50/30">
                                 {formatCurrency(sa.bom_cost)}
                               </td>
-                              <td className="p-2 border-b border-slate-100 text-[11px] text-slate-700 font-medium">
+                              <td className="p-2 border-b border-slate-100 text-[11px] text-slate-700 ">
                                 {formatCurrency(sa.rate || sa.bom_cost)}
                               </td>
                               <td className="p-2 border-b border-slate-100 text-[11px] text-slate-900 font-bold">
@@ -1436,7 +1436,7 @@ const QuotationFormPage = () => {
                       <div className="space-y-1">
                         <div className="flex justify-between text-xs">
                           <span className="text-slate-500">Previous (V{version-1})</span>
-                          <span className="text-slate-700 font-medium">{formatCurrency(parseFloat(prevVersion.received_amount) || parseFloat(prevVersion.total_amount) * 1.18)}</span>
+                          <span className="text-slate-700 ">{formatCurrency(parseFloat(prevVersion.received_amount) || parseFloat(prevVersion.total_amount) * 1.18)}</span>
                         </div>
                         <div className="flex justify-between text-xs">
                           <span className="text-slate-500">Net Change</span>
@@ -1451,11 +1451,11 @@ const QuotationFormPage = () => {
               )}
 
               <div className="flex justify-between items-center text-xs">
-                <span className="text-slate-500 font-medium">Base Amount</span>
+                <span className="text-slate-500 ">Base Amount</span>
                 <span className="text-slate-900 ">{formatCurrency(summary.baseAmount)}</span>
               </div>
               <div className="flex justify-between items-center text-xs">
-                <span className="text-slate-500 font-medium">GST (18%)</span>
+                <span className="text-slate-500 ">GST (18%)</span>
                 <span className="text-slate-900 ">{formatCurrency(summary.gstAmount)}</span>
               </div>
               
@@ -1501,7 +1501,7 @@ const QuotationFormPage = () => {
                             </span>
                             <StatusBadge status={v.status} size="xs" />
                           </div>
-                          <span className="text-[10px] font-bold text-slate-900">{formatCurrency(parseFloat(v.received_amount) || parseFloat(v.total_amount) * 1.18)}</span>
+                          <span className="text-xs  font-bold text-slate-900">{formatCurrency(parseFloat(v.received_amount) || parseFloat(v.total_amount) * 1.18)}</span>
                         </div>
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-1.5 text-[9px] text-slate-400">
@@ -1574,7 +1574,7 @@ const QuotationFormPage = () => {
                   <div className="text-amber-600 mt-0.5">
                     <FileText size={14} />
                   </div>
-                  <p className="text-xs text-amber-800 leading-relaxed font-medium">
+                  <p className="text-xs text-amber-800 leading-relaxed ">
                     PDF can be downloaded at any time after saving.
                   </p>
                 </div>

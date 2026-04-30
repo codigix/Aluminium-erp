@@ -590,7 +590,7 @@ const POReceipts = () => {
       label: 'Project Name',
       sortable: true,
       render: (val) => (
-        <span className="text-xs font-medium text-slate-700 truncate max-w-[150px] block">
+        <span className="text-xs  text-slate-700 truncate max-w-[150px] block">
           {val || '—'}
         </span>
       )
@@ -970,34 +970,34 @@ const POReceipts = () => {
                     {(selectedReceiptForView.items || []).map((item, idx) => (
                       <tr key={idx} className="group hover:bg-slate-50/50 transition-colors">
                         <td className="p-2 ">
-                          <div className="text-xs  text-slate-900 font-medium">{item.item_code}</div>
+                          <div className="text-xs  text-slate-900 ">{item.item_code}</div>
                           <div className="text-xs text-slate-500   mt-0.5 ">{item.material_name || item.description}</div>
                           {(item.length > 0 || item.width > 0 || item.thickness > 0 || item.diameter > 0) && (
                             <div className="flex flex-wrap gap-x-2 gap-y-1 mt-1 opacity-70">
-                              {item.length > 0 && <span className="text-[10px] text-slate-400">L: {item.length}</span>}
-                              {item.width > 0 && <span className="text-[10px] text-slate-400">W: {item.width}</span>}
-                              {item.thickness > 0 && <span className="text-[10px] text-slate-400">T: {item.thickness}</span>}
-                              {item.diameter > 0 && <span className="text-[10px] text-slate-400">Dia: {item.diameter}</span>}
-                              {item.outer_diameter > 0 && <span className="text-[10px] text-slate-400">OD: {item.outer_diameter}</span>}
+                              {item.length > 0 && <span className="text-xs  text-slate-400">L: {item.length}</span>}
+                              {item.width > 0 && <span className="text-xs  text-slate-400">W: {item.width}</span>}
+                              {item.thickness > 0 && <span className="text-xs  text-slate-400">T: {item.thickness}</span>}
+                              {item.diameter > 0 && <span className="text-xs  text-slate-400">Dia: {item.diameter}</span>}
+                              {item.outer_diameter > 0 && <span className="text-xs  text-slate-400">OD: {item.outer_diameter}</span>}
                             </div>
                           )}
                         </td>
                         <td className="p-2  text-center  text-slate-500 text-xs">
                           <div className="flex flex-col items-center">
                             <span>{parseFloat(item.planned_qty || item.design_qty || 0).toFixed(3)}</span>
-                            <span className="text-[10px] text-slate-400 uppercase tracking-wider">{item.unit || 'NOS'}</span>
+                            <span className="text-xs  text-slate-400 uppercase tracking-wider">{item.unit || 'NOS'}</span>
                           </div>
                         </td>
                         <td className="p-2  text-center  text-slate-500 text-xs">
                           <div className="flex flex-col items-center">
-                            <span className="font-medium text-blue-600">{parseFloat(item.required_qty || item.expected_quantity || item.quantity || 0).toFixed(3)}</span>
-                            <span className="text-[10px] text-slate-400 uppercase tracking-wider">{item.unit || 'NOS'}</span>
+                            <span className=" text-blue-600">{parseFloat(item.required_qty || item.expected_quantity || item.quantity || 0).toFixed(3)}</span>
+                            <span className="text-xs  text-slate-400 uppercase tracking-wider">{item.unit || 'NOS'}</span>
                           </div>
                         </td>
                         <td className="p-2  text-right  text-slate-900 text-xs">
                           <div className="flex flex-col items-end">
                             <span>{parseFloat(item.received_quantity || 0).toFixed(3)}</span>
-                            <span className="text-[10px] text-slate-400 uppercase tracking-wider">{item.unit || 'NOS'}</span>
+                            <span className="text-xs  text-slate-400 uppercase tracking-wider">{item.unit || 'NOS'}</span>
                           </div>
                         </td>
                       </tr>
@@ -1193,11 +1193,11 @@ const POReceipts = () => {
                             )}
                             {(item.length > 0 || item.width > 0 || item.thickness > 0 || item.diameter > 0) && (
                               <div className="flex flex-wrap gap-x-2 gap-y-1 mt-1">
-                                {item.length > 0 && <span className="text-[10px] text-slate-400">L: {item.length}</span>}
-                                {item.width > 0 && <span className="text-[10px] text-slate-400">W: {item.width}</span>}
-                                {item.thickness > 0 && <span className="text-[10px] text-slate-400">T: {item.thickness}</span>}
-                                {item.diameter > 0 && <span className="text-[10px] text-slate-400">Dia: {item.diameter}</span>}
-                                {item.outer_diameter > 0 && <span className="text-[10px] text-slate-400">OD: {item.outer_diameter}</span>}
+                                {item.length > 0 && <span className="text-xs  text-slate-400">L: {item.length}</span>}
+                                {item.width > 0 && <span className="text-xs  text-slate-400">W: {item.width}</span>}
+                                {item.thickness > 0 && <span className="text-xs  text-slate-400">T: {item.thickness}</span>}
+                                {item.diameter > 0 && <span className="text-xs  text-slate-400">Dia: {item.diameter}</span>}
+                                {item.outer_diameter > 0 && <span className="text-xs  text-slate-400">OD: {item.outer_diameter}</span>}
                               </div>
                             )}
                           </div>
@@ -1219,14 +1219,14 @@ const POReceipts = () => {
                         </td>
                         <td className="p-2  text-center  text-slate-500 text-xs">
                           <div className="flex flex-col items-center">
-                            <span className="font-medium text-slate-700">{Number(item.design_qty || 0).toFixed(3)}</span>
-                            <span className="text-[10px] text-slate-400 uppercase tracking-wider">{item.unit || 'NOS'}</span>
+                            <span className=" text-slate-700">{Number(item.design_qty || 0).toFixed(3)}</span>
+                            <span className="text-xs  text-slate-400 uppercase tracking-wider">{item.unit || 'NOS'}</span>
                           </div>
                         </td>
                         <td className="p-2  text-center  text-slate-500 text-xs">
                           <div className="flex flex-col items-center">
-                            <span className="font-medium text-blue-600">{Number(item.required_qty || item.quantity || 0).toFixed(3)}</span>
-                            <span className="text-[10px] text-slate-400 uppercase tracking-wider">{item.unit || 'NOS'}</span>
+                            <span className=" text-blue-600">{Number(item.required_qty || item.quantity || 0).toFixed(3)}</span>
+                            <span className="text-xs  text-slate-400 uppercase tracking-wider">{item.unit || 'NOS'}</span>
                           </div>
                         </td>
                         <td className="p-2 ">

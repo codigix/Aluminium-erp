@@ -17,7 +17,7 @@ const Sidebar = ({ items = [] }) => (
           key={item.path} 
           to={item.path} 
           className={({ isActive }) => `
-            flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all duration-200 group relative
+            flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px]  transition-all duration-200 group relative
             ${isActive 
               ? 'bg-rose-50 text-rose-600 shadow-sm' 
               : 'text-slate-500 hover:text-rose-600 hover:bg-rose-50/30'}

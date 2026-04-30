@@ -443,7 +443,7 @@ const CustomerPO = ({
           </span>
           <div className="flex items-center gap-1.5 text-slate-400 mt-0.5">
             <Calendar className="w-3 h-3" />
-            <span className="text-[10px]">
+            <span className="text-xs ">
               {new Date(row.po_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
             </span>
           </div>
@@ -570,7 +570,7 @@ const CustomerPO = ({
             placeholder="Search by PO number or client name..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-11 pr-4 p-2 bg-white border border-slate-200 rounded text-xs focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all  font-medium"
+            className="w-full pl-11 pr-4 p-2 bg-white border border-slate-200 rounded text-xs focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all  "
           />
         </div>
         <div className="flex items-center gap-2 p-2  bg-white border border-slate-200 rounded  w-full md:w-auto">
@@ -605,7 +605,7 @@ const CustomerPO = ({
               <Package className="w-8 h-8 text-slate-300" />
             </div>
             <h3 className="text-slate-900  text-lg">No orders found</h3>
-            <p className="text-slate-500 text-xs  font-medium">Try adjusting your filters or search term</p>
+            <p className="text-slate-500 text-xs  ">Try adjusting your filters or search term</p>
           </div>
         )}
       </div>
@@ -964,13 +964,13 @@ const CustomerPO = ({
                                       </div>
                                     </div>
                                   </td>
-                                  <td className="p-2 border-b border-slate-100 text-center text-[11px] text-slate-600 font-medium">
+                                  <td className="p-2 border-b border-slate-100 text-center text-[11px] text-slate-600 ">
                                     {saQty.toFixed(3)}
                                   </td>
-                                  <td className="p-2 border-b border-slate-100 text-center text-[11px] text-slate-400 font-medium">
+                                  <td className="p-2 border-b border-slate-100 text-center text-[11px] text-slate-400 ">
                                     {sa.unit || 'Nos'}
                                   </td>
-                                  <td className="p-2 border-b border-slate-100 text-center text-[11px] text-slate-700 font-medium">
+                                  <td className="p-2 border-b border-slate-100 text-center text-[11px] text-slate-700 ">
                                     {formatCurrency(saRate)}
                                   </td>
                                   <td colSpan="3" className="p-2 border-b border-slate-100"></td>

@@ -6,7 +6,7 @@ import {
   Eye, BarChart2, Settings, Send, Edit2, FileText, Trash2, 
   Search, Filter, Plus, Zap, CheckCircle2, FileJson, 
   MoreVertical, Activity, Layers, Target, Clock, AlertCircle, X,
-  ArrowLeft, Save, RefreshCw
+  ArrowLeft, Save, RefreshCw, Package
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
@@ -255,7 +255,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
     
     if (parts.length === 0) return null;
     return (
-      <div className="flex flex-wrap items-center gap-1 mt-0.5 text-xs text-slate-500 font-medium">
+      <div className="flex flex-wrap items-center gap-1 mt-0.5 text-xs text-slate-500 ">
         {parts.map((p, i) => (
           <React.Fragment key={i}>
             <span>{p}</span>
@@ -1079,12 +1079,12 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
             return (
               <div key={i} className="flex items-center justify-between bg-white p-3 rounded border border-slate-200 shadow-sm hover:border-indigo-200 transition-colors">
                 <div className="flex items-center gap-3">
-                  <div className="w-6 h-6 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center text-[10px] ">
+                  <div className="w-6 h-6 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center text-xs  ">
                     {i + 1}
                   </div>
                   <div>
                     <div className="text-xs  text-slate-800">{op.operation_name}</div>
-                    <div className="flex items-center gap-3 mt-1 text-[10px] text-slate-500 font-medium">
+                    <div className="flex items-center gap-3 mt-1 text-xs  text-slate-500 ">
                       <span className="flex items-center gap-1">
                         <Settings className="w-3 h-3" /> {op.workstation || 'N/A'}
                       </span>
@@ -1096,15 +1096,15 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                 </div>
                 <div className="flex items-center gap-6">
                   <div className="text-right">
-                    <div className="text-[10px] text-slate-400  tracking-tighter">Cycle / Setup</div>
-                    <div className="text-xs font-medium text-slate-700">{cycleTime}m / {setupTime}m</div>
+                    <div className="text-xs  text-slate-400  er">Cycle / Setup</div>
+                    <div className="text-xs  text-slate-700">{cycleTime}m / {setupTime}m</div>
                   </div>
                   <div className="text-right">
-                    <div className="text-[10px] text-slate-400  tracking-tighter">Rate / Hr</div>
-                    <div className="text-xs font-medium text-slate-700">₹{hourlyRate.toFixed(2)}</div>
+                    <div className="text-xs  text-slate-400  er">Rate / Hr</div>
+                    <div className="text-xs  text-slate-700">₹{hourlyRate.toFixed(2)}</div>
                   </div>
                   <div className="text-right min-w-[80px]">
-                    <div className="text-[10px] text-slate-400  tracking-tighter">Total Cost</div>
+                    <div className="text-xs  text-slate-400  er">Total Cost</div>
                     <div className="text-xs  text-emerald-600">₹{totalCost.toFixed(2)}</div>
                   </div>
                 </div>
@@ -1146,12 +1146,12 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                   {isViewing ? `Plan: ${newPlan.planCode}` : 'New Production Plan'}
                 </h1>
                 <div className="flex items-center gap-2 mt-0.5">
-                  <span className={`px-2 py-0.5 text-[10px]  rounded-full border   ${
+                  <span className={`px-2 py-0.5 text-xs   rounded-full border   ${
                     newPlan.operationalStatus === 'Draft' ? 'bg-amber-50 text-amber-600 border-amber-200' : 'bg-emerald-50 text-emerald-600 border-emerald-200'
                   }`}>
                     {isViewing ? newPlan.operationalStatus : 'Draft'}
                   </span>
-                  <span className="text-xs text-slate-400 font-medium">Production Strategy</span>
+                  <span className="text-xs text-slate-400 ">Production Strategy</span>
                 </div>
               </div>
             </div>
@@ -1305,7 +1305,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                 <div className="flex items-center gap-2 ">
                   <span className="text-xs  text-blue-600">02</span>
                   <h2 className="text-base  text-slate-800">Finished Goods</h2>
-                  <span className="p-1  bg-blue-50 text-blue-600 text-xs   rounded  ml-2  tracking-tight">{newPlan.items.length} ITEMS</span>
+                  <span className="p-1  bg-blue-50 text-blue-600 text-xs   rounded  ml-2  ">{newPlan.items.length} ITEMS</span>
                 </div>
                 <p className="text-xs text-slate-400">Finished goods and target fulfillment</p>
               </div>
@@ -1374,7 +1374,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                           <td className="p-2  text-center">
                             <button 
                               onClick={() => toggleRow(rowId)}
-                              className={`flex items-center gap-1 mx-auto px-2 py-1 rounded transition-all text-[10px]    ${isExpanded ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100 border border-indigo-100'}`}
+                              className={`flex items-center gap-1 mx-auto px-2 py-1 rounded transition-all text-xs     ${isExpanded ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100 border border-indigo-100'}`}
                             >
                               <Activity className="w-3 h-3" />
                               {isExpanded ? 'Hide Ops' : 'Operations'}
@@ -1415,10 +1415,10 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                 <div className="flex items-center gap-2 ">
                   <span className="text-xs  text-rose-600">04</span>
                   <h2 className="text-base  text-slate-800">Sub Assemblies</h2>
-                  <span className="p-1  bg-rose-50 text-rose-600 text-xs   rounded  ml-2  tracking-tight">{subAssembliesToDisplay.length} ITEMS</span>
+                  <span className="p-1  bg-rose-50 text-rose-600 text-xs   rounded  ml-2  ">{subAssembliesToDisplay.length} ITEMS</span>
                 </div>
                 <p className="text-xs text-slate-400">Manufacturing breakdown of intermediate components</p>
-                <p className="text-xs text-rose-600 mt-1   tracking-tight">Target Quantity: {newPlan.targetQuantity} UNIT (Quantity fetched from Design Order)</p>
+                <p className="text-xs text-rose-600 mt-1   ">Target Quantity: {newPlan.targetQuantity} UNIT (Quantity fetched from Design Order)</p>
               </div>
               <button className="ml-auto p-1 hover:bg-slate-50 rounded text-rose-400">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 15l7-7 7 7" /></svg>
@@ -1496,7 +1496,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                           <td className="p-2  text-center">
                             <button 
                               onClick={() => toggleRow(rowId)}
-                              className={`flex items-center gap-1 mx-auto px-2 py-1 rounded transition-all text-[10px]    ${isExpanded ? 'bg-rose-600 text-white shadow-md shadow-rose-200' : 'bg-rose-50 text-rose-600 hover:bg-rose-100 border border-rose-100'}`}
+                              className={`flex items-center gap-1 mx-auto px-2 py-1 rounded transition-all text-xs     ${isExpanded ? 'bg-rose-600 text-white shadow-md shadow-rose-200' : 'bg-rose-50 text-rose-600 hover:bg-rose-100 border border-rose-100'}`}
                             >
                               <Activity className="w-3 h-3" />
                               {isExpanded ? 'Hide Ops' : 'Operations'}
@@ -1537,10 +1537,10 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                 <div className="flex items-center gap-2 ">
                   <span className="text-xs  text-amber-600">03</span>
                   <h2 className="text-base  text-slate-800">Materials</h2>
-                  <span className="p-1  bg-amber-50 text-amber-600 text-xs   rounded  ml-2  tracking-tight">{totalMaterialCount} ITEMS</span>
+                  <span className="p-1  bg-amber-50 text-amber-600 text-xs   rounded  ml-2  ">{totalMaterialCount} ITEMS</span>
                 </div>
                 <p className="text-xs text-slate-400">Consolidated material explosion across all levels</p>
-                <p className="text-xs text-amber-600 mt-1   tracking-tight">Target Quantity: {newPlan.targetQuantity} UNIT (Quantity fetched from Design Order)</p>
+                <p className="text-xs text-amber-600 mt-1   ">Target Quantity: {newPlan.targetQuantity} UNIT (Quantity fetched from Design Order)</p>
               </div>
               <button className="ml-auto p-1 hover:bg-slate-50 rounded text-amber-400">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 15l7-7 7 7" /></svg>
@@ -1569,7 +1569,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                     {(isViewing ? materialsToDisplay.filter(m => m.material_category === 'CORE') : coreMaterials).map((mat, idx) => (
                       <tr key={idx} className="hover:bg-slate-50/50">
                         <td className="p-2 ">
-                          <div className=" text-slate-800 text-xs font-medium">{mat.material_name}</div>
+                          <div className=" text-slate-800 text-xs ">{mat.material_name}</div>
                           <div className="text-xs text-slate-500 flex items-center gap-1.5 flex-wrap">
                             {renderDimensions(mat.dimensions) || (
                               <span>{mat.description || mat.item_code || mat.itemCode || 'Direct Material'}</span>
@@ -1580,7 +1580,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                           {Number(isViewing ? (mat.design_qty || newPlan.targetQuantity) : mat.totalDesignQty).toFixed(3)}
                         </td>
                         <td className="p-2  text-right">
-                          <div className=" text-amber-600 font-medium">
+                          <div className=" text-amber-600 ">
                             {Number(isViewing ? mat.required_qty : mat.totalPlannedQty).toFixed(3)}
                           </div>
                           <div className="text-xs text-slate-400 ">
@@ -1640,7 +1640,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                     {(isViewing ? materialsToDisplay.filter(m => m.material_category === 'EXPLODED') : explodedMaterials).map((mat, idx) => (
                       <tr key={idx} className="hover:bg-slate-50/50">
                         <td className="p-2 ">
-                          <div className=" text-slate-800 text-xs font-medium">{mat.material_name || mat.materialName}</div>
+                          <div className=" text-slate-800 text-xs ">{mat.material_name || mat.materialName}</div>
                           <div className="text-xs text-slate-500 flex items-center gap-1.5 flex-wrap">
                             {mat.dimensions ? (
                               <>
@@ -1659,7 +1659,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                           {Number(isViewing ? (mat.design_qty || newPlan.targetQuantity) : mat.totalDesignQty).toFixed(3)}
                         </td>
                         <td className="p-2  text-right">
-                          <div className=" text-rose-600 font-medium">
+                          <div className=" text-rose-600 ">
                             {Number(isViewing ? mat.required_qty : mat.totalPlannedQty).toFixed(3)}
                           </div>
                           <div className="text-xs text-slate-400 ">
@@ -1706,7 +1706,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                 <div className="flex items-center gap-2 ">
                   <span className="text-xs  text-indigo-600">05</span>
                   <h2 className="text-base  text-slate-800">Operations</h2>
-                  <span className="p-1  bg-indigo-50 text-indigo-600 text-xs   rounded  ml-2  tracking-tight">{operationsToDisplay.length} OPERATIONS</span>
+                  <span className="p-1  bg-indigo-50 text-indigo-600 text-xs   rounded  ml-2  ">{operationsToDisplay.length} OPERATIONS</span>
                 </div>
                 <p className="text-xs text-slate-400">Sequential manufacturing steps and workstation routing</p>
               </div>
@@ -1780,7 +1780,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
             <div className="h-8 w-px bg-slate-100"></div>
             <div>
               <span className="text-xs  text-slate-400   block mb-0.5">Calculated Materials</span>
-              <span className="text-xs  text-slate-700 tracking-tight">{totalMaterialCount} Items Identified</span>
+              <span className="text-xs  text-slate-700 ">{totalMaterialCount} Items Identified</span>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -1920,14 +1920,25 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
       sortable: true,
       render: (val, row) => (
         <div className="flex items-start gap-2">
-          <div className="p-1 bg-slate-900 text-white rounded flex items-center justify-center shadow-sm">
-            <Layers className="w-3 h-3" />
-          </div>
           <div>
-            <div className="text-xs  text-slate-800 tracking-tight">{val}</div>
-            <div className="text-[10px] text-slate-400 font-medium">
-              {row.company_name || (row.item_code ? `${row.item_code} - ${row.item_description}` : (row.project_name || 'Global Manufacturing'))}
+            <div className="text-xs  text-slate-800 ">{row.company_name || row.project_name || 'Global Manufacturing'}</div>
+            <div className="text-xs  text-slate-400 ">
+              {val}
             </div>
+          </div>
+        </div>
+      )
+    },
+    {
+      label: 'Finished Good',
+      key: 'item_description',
+      sortable: true,
+      render: (val, row) => (
+        <div className="flex items-center gap-2">
+          
+          <div className="flex flex-col">
+            <div className="text-xs  text-slate-800 ">{val || '---'}</div>
+            <div className="text-[10px] text-slate-500 line-clamp-1">{row.item_code || '---'}</div>
           </div>
         </div>
       )
@@ -1938,13 +1949,11 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
       render: (val, row) => (
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-1.5">
-            <div className="p-0.5 bg-indigo-50 text-indigo-600 rounded">
-              <Layers className="w-2.5 h-2.5" />
-            </div>
-            <span className="text-[10px]  text-slate-600">{val || 'N/A'}</span>
+           
+            <span className="text-xs   text-slate-600">{val || 'N/A'}</span>
           </div>
           <div className="flex gap-1">
-            <span className={`px-1.5 py-0.5 rounded text-[10px]  border flex items-center gap-1
+            <span className={`px-1.5 py-0.5 rounded text-xs   border flex items-center gap-1
               ${row.status === 'Draft' ? 'bg-amber-50 text-amber-600 border-amber-100' : 
                 row.status === 'Completed' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 
                 'bg-indigo-50 text-indigo-600 border-indigo-100'}`}
@@ -1953,7 +1962,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
               {row.status}
             </span>
             {row.mr_status && (
-              <span className={`px-1.5 py-0.5 rounded text-[10px]  border flex items-center gap-1
+              <span className={`px-1.5 py-0.5 rounded text-xs   border flex items-center gap-1
                 ${row.mr_status === 'COMPLETED' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 
                   row.mr_status === 'DRAFT' ? 'bg-slate-50 text-slate-600 border-slate-100' : 
                   'bg-indigo-50 text-indigo-600 border-indigo-100'}`}
@@ -1970,14 +1979,12 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
       key: 'start_date',
       render: (val, row) => (
         <div className="flex items-center gap-2">
-          <div className="p-1 rounded border border-slate-100 bg-white text-slate-400">
-            <Clock className="w-3 h-3" />
-          </div>
+          
           <div>
-            <div className="text-[10px]  text-slate-600">
+            <div className="text-xs   text-slate-600">
               {val ? new Date(val).toLocaleDateString() : '-'}
             </div>
-            <div className="text-[10px] text-slate-400">
+            <div className="text-xs  text-slate-400">
               {row.wo_count > 0 ? `${row.wo_count} Active Work Orders` : 'No work orders'}
             </div>
           </div>
@@ -2000,8 +2007,8 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
         return (
           <div className="w-40">
             <div className="flex items-center justify-between mb-1">
-              <span className="text-[10px] text-slate-400 ">{progress}% Complete</span>
-              <span className="text-[10px]  text-slate-900 bg-slate-100 px-1.5 py-0.5 rounded">
+              <span className="text-xs  text-slate-400 ">{progress}% Complete</span>
+              <span className="text-xs   text-slate-900 bg-slate-100 px-1.5 py-0.5 rounded">
                 {row.completed_ops}/{row.total_ops} OPS
               </span>
             </div>
@@ -2019,7 +2026,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
       label: 'Operations',
       key: 'total_ops',
       render: (val) => (
-        <div className="p-1 w-8 h-8 rounded-full border-2 border-white bg-indigo-50 flex items-center justify-center text-indigo-600 text-[10px]  ring-1 ring-indigo-100 shadow-sm">
+        <div className="p-1 w-8 h-8 rounded-full border-2 border-white bg-indigo-50 flex items-center justify-center text-indigo-600 text-xs   ring-1 ring-indigo-100 shadow-sm">
           {val}
         </div>
       )
@@ -2061,8 +2068,8 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
         <div className="flex items-center gap-3">
           
           <div>
-            <h1 className="text-xl  text-slate-900 tracking-tight">Production Plans</h1>
-            <p className="text-xs text-slate-500 font-medium">Manage manufacturing strategies and resource allocation</p>
+            <h1 className="text-xl  text-slate-900 ">Production Plans</h1>
+            <p className="text-xs text-slate-500 ">Manage manufacturing strategies and resource allocation</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -2097,12 +2104,12 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
         
         {/* Summary Footer */}
         <div className="p-2 border-t border-slate-100 flex items-center justify-between bg-white/30">
-          <div className="text-[10px] text-slate-400   flex items-center gap-2 ">
+          <div className="text-xs  text-slate-400   flex items-center gap-2 ">
             Showing {filteredPlans.length} of {plans.length} strategic formulations
           </div>
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
-            <span className="text-[10px]  text-slate-900  ">Neural Link Active</span>
+            <span className="text-xs   text-slate-900  ">Neural Link Active</span>
           </div>
         </div>
       </div>
@@ -2115,7 +2122,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
           <div className="flex items-center gap-2">
             
             <div>
-              <h2 className="text-lg  text-slate-800 tracking-tight">Material Request</h2>
+              <h2 className="text-lg  text-slate-800 ">Material Request</h2>
               <div className="flex items-center gap-1 text-xs text-indigo-500   ">
                 <Activity className="w-3 h-3" />
                 Resource Acquisition Phase
@@ -2199,10 +2206,10 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                     </td>
                     <td className="py-4 text-center">
                       <div className="flex flex-col items-center">
-                        <span className="text-xs font-medium text-slate-800">
+                        <span className="text-xs  text-slate-800">
                           {isWeightBased(item.uom) ? Number(item.design_qty || 0).toFixed(3) : Number(item.design_qty || 0).toFixed(0)}
                         </span>
-                        <span className="text-xs text-slate-400 font-medium">{item.uom}</span>
+                        <span className="text-xs text-slate-400 ">{item.uom}</span>
                       </div>
                     </td>
                     <td className="py-4 text-center">
@@ -2225,14 +2232,14 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                       {item.is_fulfilled || (parseFloat(item.inventory || 0) + 0.0001) >= parseFloat(item.quantity) ? (
                         <div className="flex items-center justify-end gap-1.5 text-emerald-500">
                           <CheckCircle2 className="w-3.5 h-3.5" />
-                          <span className="text-xs   tracking-tight">
+                          <span className="text-xs   ">
                             {item.is_fulfilled ? 'Fulfilled' : 'In Stock'}
                           </span>
                         </div>
                       ) : (
                         <div className="flex items-center justify-end gap-1.5 text-rose-500">
                           <AlertCircle className="w-3.5 h-3.5" />
-                          <span className="text-xs   tracking-tight">
+                          <span className="text-xs   ">
                             {parseFloat(item.inventory || 0) <= 0.0001 ? 'Zero Stock' : 'Shortage'}
                           </span>
                         </div>
@@ -2377,7 +2384,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
               <Zap className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-lg text-slate-800 tracking-tight ">Configure Work Order</h2>
+              <h2 className="text-lg text-slate-800  ">Configure Work Order</h2>
               <div className="flex items-center gap-1 text-xs text-indigo-500   ">
                 <Activity className="w-3 h-3" />
                 Strategy Implementation Phase
@@ -2444,7 +2451,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                       <th className="py-3 px-2  text-slate-400   text-right text-emerald-600">Total Cost</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-50 font-medium">
+                  <tbody className="divide-y divide-slate-50 ">
                     {selectedPlanConfig?.operations?.length > 0 ? (
                       selectedPlanConfig.operations.map((op, idx) => (
                         <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
@@ -2453,7 +2460,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                               <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full" />
                               <div>
                                 <span className="text-slate-700 ">{op.operation_name}</span>
-                                <div className="text-[10px] text-slate-400 font-normal tracking-tight flex items-center gap-1">
+                                <div className="text-xs  text-slate-400 font-normal  flex items-center gap-1">
                                   <span className={op.item_type === 'FG' ? 'text-indigo-500' : 'text-rose-500'}>
                                     {op.item_type === 'FG' ? 'Finished Goods' : 'Sub Assembly'}:
                                   </span>
@@ -2500,13 +2507,13 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                       <th className="py-3 px-2  text-slate-400   text-center">Status</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-50 font-medium">
+                  <tbody className="divide-y divide-slate-50 ">
                     {selectedPlanConfig?.materials?.length > 0 ? (
                       selectedPlanConfig.materials.map((mat, idx) => (
                         <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
                           <td className="py-4 px-2">
                             <div className=" text-slate-700">{mat.item_code}</div>
-                            <div className="text-xs text-slate-400  tracking-tight mt-0.5">{mat.material_name}</div>
+                            <div className="text-xs text-slate-400   mt-0.5">{mat.material_name}</div>
                           </td>
                           <td className="py-4 px-2 text-right  text-slate-900">{mat.required_qty} <span className="text-slate-400 font-normal">{mat.uom}</span></td>
                           <td className="py-4 px-2 text-right  text-slate-500">0.00 <span className="text-slate-400 font-normal">{mat.uom}</span></td>

@@ -211,7 +211,7 @@ const Vendors = () => {
       render: (_, row) => (
         <div className="flex flex-col">
           <span className="text-xs  text-slate-700">{row.contact_person || '—'}</span>
-          <span className="text-xs text-slate-400 font-medium">{row.phone || 'No Phone'}</span>
+          <span className="text-xs text-slate-400 ">{row.phone || 'No Phone'}</span>
         </div>
       )
     },

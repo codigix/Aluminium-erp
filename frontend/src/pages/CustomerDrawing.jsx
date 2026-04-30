@@ -62,7 +62,7 @@ const CustomerDrawing = () => {
       key: 'project_name',
       sortable: true,
       render: (val) => (
-        <span className="font-medium text-slate-900">{val || '—'}</span>
+        <span className=" text-slate-900">{val || '—'}</span>
       )
     },
     {
@@ -71,9 +71,9 @@ const CustomerDrawing = () => {
       sortable: true,
       render: (val, row) => (
         <div className="flex flex-col">
-          <span className="font-medium text-slate-900">{val || row.company_name || '—'}</span>
+          <span className=" text-slate-900">{val || row.company_name || '—'}</span>
           {row.drawing_count > 0 && (
-            <span className="text-[10px] text-indigo-600 font-semibold">{row.drawing_count} Drawings</span>
+            <span className="text-xs  text-indigo-600 font-semibold">{row.drawing_count} Drawings</span>
           )}
         </div>
       )
@@ -88,10 +88,10 @@ const CustomerDrawing = () => {
 
         return (
           <div className="flex flex-col">
-            <span className="font-medium text-slate-900">{phone}</span>
-            <span className="text-[10px] text-slate-500">{email}</span>
+            <span className=" text-slate-900">{phone}</span>
+            <span className="text-xs  text-slate-500">{email}</span>
             {person && person !== phone && (
-              <span className="text-[10px] text-indigo-600 italic">{person}</span>
+              <span className="text-xs  text-indigo-600 italic">{person}</span>
             )}
           </div>
         );
@@ -1064,7 +1064,7 @@ const CustomerDrawing = () => {
 
   const clientDrawingColumns = [
     { label: '#', key: 'id', render: (_, __, rowIdx) => rowIdx + 1, width: '50px' },
-    { label: 'Drawing No', key: 'drawing_no', className: 'font-medium text-slate-900' },
+    { label: 'Drawing No', key: 'drawing_no', className: ' text-slate-900' },
     { label: 'Project Name', key: 'project_name' },
     { label: 'Description', key: 'drawing_description' },
     { 
@@ -1072,12 +1072,12 @@ const CustomerDrawing = () => {
       key: 'revision', 
       className: 'text-center',
       render: (val, row) => (
-        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
+        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs  bg-slate-100 text-slate-700 border border-slate-200">
           {val || row.revision_no || '0'}
         </span>
       )
     },
-    { label: 'Qty', key: 'qty', className: 'text-center text-indigo-600 font-medium', render: (val) => val || 1 },
+    { label: 'Qty', key: 'qty', className: 'text-center text-indigo-600 ', render: (val) => val || 1 },
     { 
       label: 'File', 
       key: 'file_path', 
@@ -1363,7 +1363,7 @@ const CustomerDrawing = () => {
           
           <div>
             <h1 className="text-xl  text-slate-900 ">Customer Drawings</h1>
-            <p className="text-xs text-slate-500 font-medium">Manage customer reference drawings and technical documentation</p>
+            <p className="text-xs text-slate-500 ">Manage customer reference drawings and technical documentation</p>
           </div>
         </div>
 
@@ -1870,7 +1870,7 @@ const CustomerDrawing = () => {
                 onBlur={formik.handleBlur}
               />
               {formik.touched.project_name && formik.errors.project_name && (
-                <div className="text-red-500 text-[10px] mt-0.5">{formik.errors.project_name}</div>
+                <div className="text-red-500 text-xs  mt-0.5">{formik.errors.project_name}</div>
               )}
             </div>
 
@@ -1891,7 +1891,7 @@ const CustomerDrawing = () => {
                     onFocus={() => formik.values.client_name && setShowSuggestions(true)}
                   />
                   {formik.touched.client_name && formik.errors.client_name && (
-                    <div className="text-red-500 text-[10px] mt-0.5">{formik.errors.client_name}</div>
+                    <div className="text-red-500 text-xs  mt-0.5">{formik.errors.client_name}</div>
                   )}
                   {showSuggestions && clientSuggestions.length > 0 && (
                     <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-300 rounded shadow-lg z-10 max-h-48 overflow-y-auto">
@@ -1935,7 +1935,7 @@ const CustomerDrawing = () => {
                 onBlur={formik.handleBlur}
               />
               {formik.touched.contact_person && formik.errors.contact_person && (
-                <div className="text-red-500 text-[10px] mt-0.5">{formik.errors.contact_person}</div>
+                <div className="text-red-500 text-xs  mt-0.5">{formik.errors.contact_person}</div>
               )}
             </div>
             <div>
@@ -1954,7 +1954,7 @@ const CustomerDrawing = () => {
                 onBlur={formik.handleBlur}
               />
               {formik.touched.phone_number && formik.errors.phone_number && (
-                <div className="text-red-500 text-[10px] mt-0.5">{formik.errors.phone_number}</div>
+                <div className="text-red-500 text-xs  mt-0.5">{formik.errors.phone_number}</div>
               )}
             </div>
             <div>
@@ -1969,7 +1969,7 @@ const CustomerDrawing = () => {
                 onBlur={formik.handleBlur}
               />
               {formik.touched.email_address && formik.errors.email_address && (
-                <div className="text-red-500 text-[10px] mt-0.5">{formik.errors.email_address}</div>
+                <div className="text-red-500 text-xs  mt-0.5">{formik.errors.email_address}</div>
               )}
             </div>
             <div>
@@ -1984,7 +1984,7 @@ const CustomerDrawing = () => {
                 onBlur={formik.handleBlur}
               />
               {formik.touched.customer_type && formik.errors.customer_type && (
-                <div className="text-red-500 text-[10px] mt-0.5">{formik.errors.customer_type}</div>
+                <div className="text-red-500 text-xs  mt-0.5">{formik.errors.customer_type}</div>
               )}
             </div>
             <div>
@@ -1999,7 +1999,7 @@ const CustomerDrawing = () => {
                 onBlur={formik.handleBlur}
               />
               {formik.touched.gstin && formik.errors.gstin && (
-                <div className="text-red-500 text-[10px] mt-0.5">{formik.errors.gstin}</div>
+                <div className="text-red-500 text-xs  mt-0.5">{formik.errors.gstin}</div>
               )}
             </div>
             <div>
@@ -2014,7 +2014,7 @@ const CustomerDrawing = () => {
                 onBlur={formik.handleBlur}
               />
               {formik.touched.city && formik.errors.city && (
-                <div className="text-red-500 text-[10px] mt-0.5">{formik.errors.city}</div>
+                <div className="text-red-500 text-xs  mt-0.5">{formik.errors.city}</div>
               )}
             </div>
             <div>
@@ -2029,7 +2029,7 @@ const CustomerDrawing = () => {
                 onBlur={formik.handleBlur}
               />
               {formik.touched.state && formik.errors.state && (
-                <div className="text-red-500 text-[10px] mt-0.5">{formik.errors.state}</div>
+                <div className="text-red-500 text-xs  mt-0.5">{formik.errors.state}</div>
               )}
             </div>
             <div className="lg:col-span-2">
@@ -2044,7 +2044,7 @@ const CustomerDrawing = () => {
                 onBlur={formik.handleBlur}
               />
               {formik.touched.billing_address && formik.errors.billing_address && (
-                <div className="text-red-500 text-[10px] mt-0.5">{formik.errors.billing_address}</div>
+                <div className="text-red-500 text-xs  mt-0.5">{formik.errors.billing_address}</div>
               )}
             </div>
             <div className="lg:col-span-2">
@@ -2163,7 +2163,7 @@ const CustomerDrawing = () => {
                                   setPreviewDrawing({ ...drawing, drawing_pdf: drawing.file_path });
                                   setShowPreviewModal(true);
                                 }}
-                                className="text-[10px] text-indigo-600 hover:underline text-left flex items-center gap-1"
+                                className="text-xs  text-indigo-600 hover:underline text-left flex items-center gap-1"
                               >
                                 <Eye size={10} /> View Current
                               </button>
@@ -2214,12 +2214,12 @@ const CustomerDrawing = () => {
                   />
                   <div className="text-center">
                     <FileText className={`mx-auto h-6 w-6 ${formik.values.file ? 'text-indigo-600' : 'text-slate-400'}`} />
-                    <p className="mt-1 text-[10px] text-slate-500">{formik.values.file ? formik.values.file.name : 'Upload Excel File'}</p>
+                    <p className="mt-1 text-xs  text-slate-500">{formik.values.file ? formik.values.file.name : 'Upload Excel File'}</p>
                     <p className="text-[8px] text-slate-400">Format: Drawing No, Revision, Description, Qty, Drawing_File</p>
                   </div>
                 </div>
                 {formik.touched.file && formik.errors.file && (
-                  <div className="text-red-500 text-[10px] mt-1">{formik.errors.file}</div>
+                  <div className="text-red-500 text-xs  mt-1">{formik.errors.file}</div>
                 )}
               </div>
 
@@ -2235,7 +2235,7 @@ const CustomerDrawing = () => {
                   />
                   <div className="text-center">
                     <Package className={`mx-auto h-6 w-6 ${formik.values.zipFile ? 'text-indigo-600' : 'text-slate-400'}`} />
-                    <p className="mt-1 text-[10px] text-slate-500">{formik.values.zipFile ? formik.values.zipFile.name : 'Upload ZIP File'}</p>
+                    <p className="mt-1 text-xs  text-slate-500">{formik.values.zipFile ? formik.values.zipFile.name : 'Upload ZIP File'}</p>
                     <p className="text-[8px] text-slate-400">Contains images or PDFs of drawings</p>
                   </div>
                 </div>
