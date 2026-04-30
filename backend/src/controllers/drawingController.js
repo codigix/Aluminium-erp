@@ -31,6 +31,7 @@ const updateDrawing = async (req, res, next) => {
       description, 
       revisionNo, 
       clientName, 
+      projectName,
       contactPerson, 
       phoneNumber, 
       emailAddress,
@@ -51,6 +52,7 @@ const updateDrawing = async (req, res, next) => {
       revisionNo, 
       drawingPdf,
       clientName,
+      projectName,
       contactPerson,
       phoneNumber,
       emailAddress,
@@ -86,7 +88,7 @@ const updateItemDrawing = async (req, res, next) => {
 const createDrawing = async (req, res, next) => {
   try {
     const { 
-      clientName, drawingNo, revision, qty, description, remarks, fileType, 
+      clientName, projectName, drawingNo, revision, qty, description, remarks, fileType, 
       contactPerson, phoneNumber, emailAddress,
       customerType, gstin, city, state, billingAddress, shippingAddress
     } = req.body;
@@ -156,6 +158,7 @@ const createDrawing = async (req, res, next) => {
           
           batchData.push({
             clientName,
+            projectName,
             drawingNo: d.drawingNo,
             revision: d.revision || revision,
             qty: d.qty || qty || 1,
@@ -176,7 +179,10 @@ const createDrawing = async (req, res, next) => {
           });
         }
         
-        const count = await drawingService.createBatchCustomerDrawings(batchData);
+        const count = await drawingService.createBatchCustomerDrawings(batchData, {
+          excelPath: dbFilePath,
+          zipPath: zipFile ? `uploads/${zipFile.filename}` : null
+        });
         return res.status(201).json({ 
           message: `${count} drawings imported from Excel successfully`,
           count 
@@ -186,6 +192,7 @@ const createDrawing = async (req, res, next) => {
 
     const id = await drawingService.createCustomerDrawing({
       clientName,
+      projectName,
       drawingNo,
       revision,
       qty,

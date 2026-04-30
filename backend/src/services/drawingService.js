@@ -13,46 +13,48 @@ const getAllDrawings = async () => {
 const listDrawings = async (search = '', onlyShared = false, clientName = null) => {
   let query = `
     SELECT 
-      d.id as drawing_master_id,
+      MAX(d.id) as drawing_master_id,
       d.drawing_no,
-      d.file_path,
+      MAX(d.file_path) as file_path,
       d.client_name,
-      d.status,
-      d.status as drawing_status,
-      d.description as drawing_description,
-      d.uploaded_by as uploader_name,
-      d.updated_at,
-      d.created_at,
-      d.qty,
+      MAX(d.project_name) as project_name,
+      MAX(d.status) as status,
+      MAX(d.status) as drawing_status,
+      MAX(d.description) as drawing_description,
+      MAX(d.uploaded_by) as uploader_name,
+      MAX(d.created_at) as updated_at,
+      MAX(d.qty) as qty,
       d.revision,
-      d.remarks,
-      d.contact_person,
-      d.phone,
-      d.email,
-      d.customer_type,
-      d.gstin,
-      d.city,
-      d.state,
-      d.billing_address,
-      d.shipping_address,
-      soi.id as sales_order_item_id,
-      soi.status as item_status,
-      soi.sales_order_id,
-      soi.description as item_description,
-      soi.bom_cost,
-      soi.item_group,
-      soi.unit,
-      soi.item_code
+      MAX(d.remarks) as remarks,
+      MAX(d.contact_person) as contact_person,
+      MAX(d.phone) as phone,
+      MAX(d.email) as email,
+      MAX(d.customer_type) as customer_type,
+      MAX(d.gstin) as gstin,
+      MAX(d.city) as city,
+      MAX(d.state) as state,
+      MAX(d.billing_address) as billing_address,
+      MAX(d.shipping_address) as shipping_address,
+      MAX(d.excel_path) as excel_path,
+      MAX(d.zip_path) as zip_path,
+      MAX(soi.id) as sales_order_item_id,
+      MAX(soi.status) as item_status,
+      MAX(soi.sales_order_id) as sales_order_id,
+      MAX(soi.description) as item_description,
+      MAX(soi.bom_cost) as bom_cost,
+      MAX(soi.item_group) as item_group,
+      MAX(soi.unit) as unit,
+      MAX(soi.item_code) as item_code
     FROM customer_drawings d
     LEFT JOIN (
       SELECT s1.id, s1.drawing_no, s1.status, s1.sales_order_id, s1.description, s1.bom_cost, s1.item_group, s1.unit, s1.drawing_id, s1.item_code
       FROM sales_order_items s1
       INNER JOIN (
-        SELECT COALESCE(drawing_id, drawing_no) as identifier, item_code, item_group, MAX(id) as max_id
+        SELECT COALESCE(drawing_id, drawing_no) as identifier, MAX(id) as max_id
         FROM sales_order_items
-        GROUP BY identifier, item_code, item_group
+        GROUP BY identifier
       ) s2 ON s1.id = s2.max_id
-    ) soi ON (d.id = soi.drawing_id OR d.drawing_no = soi.drawing_no)
+    ) soi ON (d.id = soi.drawing_id OR (soi.drawing_id IS NULL AND d.drawing_no = soi.drawing_no))
     WHERE 1=1
   `;
   const params = [];
@@ -74,7 +76,7 @@ const listDrawings = async (search = '', onlyShared = false, clientName = null) 
     params.push(searchPattern, searchPattern, searchPattern);
   }
 
-  query += ` ORDER BY d.updated_at DESC, d.created_at DESC, (soi.item_group LIKE '%FG%' OR soi.item_group LIKE '%FINISHED%') DESC, (soi.bom_cost > 0) DESC, soi.id DESC`;
+  query += ` GROUP BY d.client_name, d.drawing_no, d.revision ORDER BY MAX(d.created_at) DESC, (MAX(soi.item_group) LIKE '%FG%' OR MAX(soi.item_group) LIKE '%FINISHED%') DESC, (MAX(soi.bom_cost) > 0) DESC, MAX(soi.id) DESC`;
   const [rows] = await pool.query(query, params);
   
   // Enrich with sub-assemblies for items with BOM structure
@@ -120,7 +122,7 @@ const getDrawingRevisions = async (drawingNo) => {
 
 const updateDrawing = async (id, data) => {
   const { 
-    description, revisionNo, drawingPdf, clientName, contactPerson, 
+    description, revisionNo, drawingPdf, clientName, projectName, contactPerson, 
     phoneNumber, emailAddress, customerType, gstin, city, state, 
     billingAddress, shippingAddress, qty, remarks, drawingNo 
   } = data;
@@ -133,6 +135,7 @@ const updateDrawing = async (id, data) => {
   if (revisionNo !== undefined) { updates.push('revision = ?'); params.push(revisionNo); }
   if (drawingPdf !== undefined && drawingPdf !== null) { updates.push('file_path = ?'); params.push(drawingPdf); }
   if (clientName !== undefined) { updates.push('client_name = ?'); params.push(clientName); }
+  if (projectName !== undefined) { updates.push('project_name = ?'); params.push(projectName); }
   if (contactPerson !== undefined) { updates.push('contact_person = ?'); params.push(contactPerson); }
   if (phoneNumber !== undefined) { updates.push('phone = ?'); params.push(phoneNumber); }
   if (emailAddress !== undefined) { updates.push('email = ?'); params.push(emailAddress); }
@@ -189,7 +192,7 @@ const getDrawingsByClient = async (clientName) => {
 
 const createCustomerDrawing = async (data) => {
   const { 
-    clientName, drawingNo, revision, qty, description, filePath, fileType, remarks, 
+    clientName, projectName, drawingNo, revision, qty, description, filePath, fileType, remarks, 
     uploadedBy, contactPerson, phoneNumber, emailAddress,
     customerType, gstin, city, state, billingAddress, shippingAddress
   } = data;
@@ -201,15 +204,17 @@ const createCustomerDrawing = async (data) => {
     // 1. Insert into customer_drawings
     const [result] = await connection.execute(
       `INSERT INTO customer_drawings 
-        (client_name, drawing_no, revision, qty, description, file_path, file_type, remarks, 
+        (client_name, project_name, drawing_no, revision, qty, description, file_path, file_type, remarks, 
          uploaded_by, contact_person, phone, email, 
-         customer_type, gstin, city, state, billing_address, shipping_address)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         customer_type, gstin, city, state, billing_address, shipping_address, excel_path, zip_path)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ,
       [
-        clientName || null, drawingNo, revision || null, qty || 1, description || null, filePath, fileType, remarks || null, 
+        clientName || null, projectName || null, drawingNo, revision || null, qty || 1, description || null, filePath, fileType, remarks || null, 
         uploadedBy || 'Sales', contactPerson || null, phoneNumber || null, emailAddress || null,
-        customerType || null, gstin || null, city || null, state || null, billingAddress || null, shippingAddress || null
+        customerType || null, gstin || null, city || null, state || null, billingAddress || null, shippingAddress || null,
+        fileType === 'XLSX' || fileType === 'XLS' ? filePath : null,
+        null
       ]
     );
     const drawingId = result.insertId;
@@ -254,9 +259,25 @@ const createCustomerDrawing = async (data) => {
 
     // 3. Create Sales Order Requirement
     const [soResult] = await connection.execute(
-      `INSERT INTO sales_orders (company_id, project_name, drawing_required, production_priority, status, current_department, request_accepted)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [companyId, `Design Review - Drawing ${drawingNo} for ${clientName}`, 1, 'NORMAL', 'CREATED', 'SALES', 0]
+      `INSERT INTO sales_orders (company_id, project_name, drawing_required, production_priority, status, current_department, request_accepted, billing_address, shipping_address, city, state, gstin, customer_type, excel_path, zip_path)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        companyId, 
+        projectName || `Design Review - Drawing ${drawingNo} for ${clientName}`, 
+        1, 
+        'NORMAL', 
+        'CREATED', 
+        'SALES', 
+        0,
+        billingAddress || null,
+        shippingAddress || null,
+        city || null,
+        state || null,
+        gstin || null,
+        customerType || null,
+        fileType === 'XLSX' || fileType === 'XLS' ? filePath : null,
+        null // zip_path handled in batch
+      ]
     );
     const salesOrderId = soResult.insertId;
 
@@ -277,7 +298,7 @@ const createCustomerDrawing = async (data) => {
   }
 };
 
-const createBatchCustomerDrawings = async (batchData) => {
+const createBatchCustomerDrawings = async (batchData, batchInfo = {}) => {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
@@ -285,7 +306,7 @@ const createBatchCustomerDrawings = async (batchData) => {
 
     for (const data of batchData) {
       const { 
-        clientName, drawingNo, revision, qty, description, filePath, fileType, remarks, 
+        clientName, projectName, drawingNo, revision, qty, description, filePath, fileType, remarks, 
         uploadedBy, contactPerson, phoneNumber, emailAddress,
         customerType, gstin, city, state, billingAddress, shippingAddress
       } = data;
@@ -293,15 +314,17 @@ const createBatchCustomerDrawings = async (batchData) => {
       // 1. Insert into customer_drawings
       const [result] = await connection.execute(
         `INSERT INTO customer_drawings 
-          (client_name, drawing_no, revision, qty, description, file_path, file_type, remarks, 
+          (client_name, project_name, drawing_no, revision, qty, description, file_path, file_type, remarks, 
            uploaded_by, contact_person, phone, email, 
-           customer_type, gstin, city, state, billing_address, shipping_address)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+           customer_type, gstin, city, state, billing_address, shipping_address, excel_path, zip_path)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         ,
         [
-          clientName || null, drawingNo, revision || null, qty || 1, description || null, filePath, fileType, remarks || null, 
+          clientName || null, projectName || null, drawingNo, revision || null, qty || 1, description || null, filePath, fileType, remarks || null, 
           uploadedBy || 'Sales', contactPerson || null, phoneNumber || null, emailAddress || null,
-          customerType || null, gstin || null, city || null, state || null, billingAddress || null, shippingAddress || null
+          customerType || null, gstin || null, city || null, state || null, billingAddress || null, shippingAddress || null,
+          batchInfo.excelPath || null,
+          batchInfo.zipPath || null
         ]
       );
       const drawingId = result.insertId;
@@ -340,9 +363,25 @@ const createBatchCustomerDrawings = async (batchData) => {
 
       // 3. Create Sales Order Requirement
       const [soResult] = await connection.execute(
-        `INSERT INTO sales_orders (company_id, project_name, drawing_required, production_priority, status, current_department, request_accepted)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [companyId, `Design Review - Drawing ${drawingNo} for ${clientName}`, 1, 'NORMAL', 'CREATED', 'SALES', 0]
+        `INSERT INTO sales_orders (company_id, project_name, drawing_required, production_priority, status, current_department, request_accepted, billing_address, shipping_address, city, state, gstin, customer_type, excel_path, zip_path)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          companyId, 
+          projectName || `Design Review - Drawing ${drawingNo} for ${clientName}`, 
+          1, 
+          'NORMAL', 
+          'CREATED', 
+          'SALES', 
+          0,
+          billingAddress || null,
+          shippingAddress || null,
+          city || null,
+          state || null,
+          gstin || null,
+          customerType || null,
+          batchInfo.excelPath || null,
+          batchInfo.zipPath || null
+        ]
       );
       const salesOrderId = soResult.insertId;
 
@@ -537,16 +576,17 @@ const shareDrawingsBulk = async (ids) => {
 const getApprovedDrawings = async () => {
   const [rows] = await pool.query(
     `SELECT 
-       d.id as drawing_master_id,
+       MAX(d.id) as drawing_master_id,
        d.drawing_no,
-       d.file_path,
-       d.description as drawing_description,
-       latest_bom.id as id,
-       latest_bom.bom_cost, 
-       latest_bom.item_group, 
-       latest_bom.unit,
-       latest_bom.description,
-       latest_bom.item_code
+       d.client_name,
+       MAX(d.file_path) as file_path,
+       MAX(d.description) as drawing_description,
+       MAX(latest_bom.id) as id,
+       MAX(latest_bom.bom_cost) as bom_cost, 
+       MAX(latest_bom.item_group) as item_group, 
+       MAX(latest_bom.unit) as unit,
+       MAX(latest_bom.description) as description,
+       MAX(latest_bom.item_code) as item_code
      FROM customer_drawings d
      INNER JOIN (
        SELECT 
@@ -557,17 +597,19 @@ const getApprovedDrawings = async () => {
          item_type,
          unit,
          description,
-         item_code
+         item_code,
+         drawing_id
        FROM sales_order_items 
        WHERE id IN (
          SELECT MAX(id) 
          FROM sales_order_items 
          WHERE bom_cost > 0
-         GROUP BY drawing_no, item_code, item_group, item_type
+         GROUP BY COALESCE(drawing_id, drawing_no)
        )
-     ) latest_bom ON d.drawing_no = latest_bom.drawing_no
+     ) latest_bom ON (d.id = latest_bom.drawing_id OR (latest_bom.drawing_id IS NULL AND d.drawing_no = latest_bom.drawing_no))
      WHERE d.status = 'APPROVED' OR d.shared_with_design = 1
-     ORDER BY d.created_at DESC`
+     GROUP BY d.client_name, d.drawing_no
+     ORDER BY MAX(d.created_at) DESC`
   );
 
   // Enrich with sub-assemblies for FG items

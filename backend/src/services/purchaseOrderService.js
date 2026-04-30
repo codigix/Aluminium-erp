@@ -438,8 +438,12 @@ const getPurchaseOrders = async (filters = {}) => {
         (SELECT project_name FROM sales_orders WHERE id = po.sales_order_id),
         (SELECT so.project_name 
          FROM material_requests mr_inner
-         JOIN production_plans pp ON mr_inner.notes LIKE CONCAT('%', pp.plan_code, '%')
+         JOIN production_plans pp ON mr_inner.plan_id = pp.id
          JOIN sales_orders so ON pp.sales_order_id = so.id
+         WHERE mr_inner.id = po.mr_id LIMIT 1),
+        (SELECT so.project_name 
+         FROM material_requests mr_inner
+         JOIN sales_orders so ON mr_inner.notes LIKE CONCAT('%', so.project_name, '%')
          WHERE mr_inner.id = po.mr_id LIMIT 1),
         'Stock/Internal'
       ) as project_name,
@@ -508,19 +512,24 @@ const getPurchaseOrders = async (filters = {}) => {
 
 const getPurchaseOrderById = async (poId) => {
   const [rows] = await pool.query(
-    `SELECT po.*, v.vendor_name, v.email as vendor_email, mr.mr_number,
+    `SELECT po.*, v.vendor_name, v.email as vendor_email, mr.mr_number, so.so_number,
      COALESCE(
-       (SELECT project_name FROM sales_orders WHERE id = po.sales_order_id),
-       (SELECT so.project_name 
+       so.project_name,
+       (SELECT so2.project_name 
         FROM material_requests mr_inner
-        JOIN production_plans pp ON mr_inner.notes LIKE CONCAT('%', pp.plan_code, '%')
-        JOIN sales_orders so ON pp.sales_order_id = so.id
+        JOIN production_plans pp ON mr_inner.plan_id = pp.id
+        JOIN sales_orders so2 ON pp.sales_order_id = so2.id
+        WHERE mr_inner.id = po.mr_id LIMIT 1),
+       (SELECT so3.project_name 
+        FROM material_requests mr_inner
+        JOIN sales_orders so3 ON mr_inner.notes LIKE CONCAT('%', so3.project_name, '%')
         WHERE mr_inner.id = po.mr_id LIMIT 1),
        'Stock/Internal'
      ) as project_name
      FROM purchase_orders po
      LEFT JOIN vendors v ON v.id = po.vendor_id
      LEFT JOIN material_requests mr ON mr.id = po.mr_id
+     LEFT JOIN sales_orders so ON so.id = po.sales_order_id
      WHERE po.id = ?`,
     [poId]
   );
@@ -902,102 +911,411 @@ const generatePurchaseOrderPDF = async (poId) => {
     <!DOCTYPE html>
     <html>
     <head>
+      <meta charset="utf-8">
       <style>
-        body { font-family: 'roboto' sans-serif; color: #333; line-height: 1.6; margin: 40px; }
-        .header { display: flex; justify-content: space-between; border-bottom: 2px solid #2563eb; padding-bottom: 20px; margin-bottom: 30px; }
-        .company-info h1 { color: #2563eb; margin: 0; font-size: 24px; }
-        .quote-title { text-align: right; }
-        .quote-title h2 { margin: 0; color: #64748b; font-size: 18px; }
-        .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-bottom: 40px; }
-        .section-label { font-weight: bold; color: #64748b; font-size: 12px; margin-bottom: 8px; }
-        table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
-        th { background: #f8fafc; color: #64748b; text-align: left; padding: 12px 8px; font-size: 11px; border-bottom: 1px solid #e2e8f0; }
-        td { padding: 12px 8px; border-bottom: 1px solid #f1f5f9; font-size: 12px; }
-        .notes-section { background: #f8fafc; padding: 20px; border-radius: 8px; border-left: 4px solid #cbd5e1; }
-        .footer { margin-top: 50px; text-align: center; color: #94a3b8; font-size: 10px; border-top: 1px solid #e2e8f0; padding-top: 20px; }
-        .total-row { font-weight: bold; background: #eff6ff; }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        
+        body { 
+          font-family: 'Inter', sans-serif; 
+          color: #1e293b; 
+          line-height: 1.5; 
+          margin: 0;
+          padding: 0;
+          background-color: #fff;
+        }
+        
+        .page {
+          padding: 40px;
+        }
+
+        .header-top {
+          text-align: center;
+          margin-bottom: 30px;
+        }
+
+        .company-name {
+          color: #4f46e5;
+          font-size: 32px;
+          font-weight: 700;
+          margin: 0;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+        }
+
+        .company-address {
+          color: #64748b;
+          font-size: 14px;
+          margin: 5px 0;
+        }
+
+        .divider {
+          height: 2px;
+          background: linear-gradient(to right, transparent, #4f46e5, transparent);
+          margin: 20px 0;
+        }
+
+        .rfq-header {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 20px;
+          margin-bottom: 30px;
+        }
+
+        .rfq-title {
+          font-size: 24px;
+          font-weight: 700;
+          color: #312e81;
+          text-transform: uppercase;
+          letter-spacing: 2px;
+          margin: 0;
+        }
+
+        .dot {
+          width: 8px;
+          height: 8px;
+          background-color: #4f46e5;
+          border-radius: 50%;
+        }
+
+        .info-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr 1fr;
+          gap: 15px;
+          margin-bottom: 30px;
+        }
+
+        .info-card {
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+          border-radius: 8px;
+          padding: 10px 12px;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+
+        .icon-box {
+          width: 32px;
+          height: 32px;
+          background: #fff;
+          border: 1px solid #e2e8f0;
+          border-radius: 6px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: #4f46e5;
+          flex-shrink: 0;
+        }
+
+        .info-label {
+          font-size: 9px;
+          font-weight: 600;
+          color: #4f46e5;
+          text-transform: uppercase;
+          margin-bottom: 1px;
+          letter-spacing: 0.5px;
+        }
+
+        .info-value {
+          font-size: 12px;
+          font-weight: 700;
+          color: #1e293b;
+          word-break: break-all;
+        }
+
+        .details-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 20px;
+          margin-bottom: 30px;
+        }
+
+        .section-card {
+          border: 1px solid #e2e8f0;
+          border-radius: 8px;
+          overflow: hidden;
+        }
+
+        .section-header {
+          background: #3730a3;
+          color: #fff;
+          padding: 8px 15px;
+          font-size: 12px;
+          font-weight: 600;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          text-transform: uppercase;
+        }
+
+        .section-content {
+          padding: 15px;
+          font-size: 13px;
+        }
+
+        .section-content p {
+          margin: 0;
+          line-height: 1.6;
+        }
+
+        table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-bottom: 20px;
+          border-radius: 8px;
+          overflow: hidden;
+          border: 1px solid #e2e8f0;
+        }
+
+        th {
+          background: #f5f3ff;
+          color: #3730a3;
+          text-align: left;
+          padding: 12px 15px;
+          font-size: 11px;
+          font-weight: 700;
+          text-transform: uppercase;
+          border-bottom: 2px solid #ddd6fe;
+        }
+
+        td {
+          padding: 10px 15px;
+          border-bottom: 1px solid #f1f5f9;
+          font-size: 12px;
+          color: #334155;
+        }
+
+        tr:nth-child(even) {
+          background-color: #fcfcfc;
+        }
+
+        .amount-col {
+          text-align: right;
+          font-weight: 500;
+        }
+
+        .summary-container {
+          display: flex;
+          justify-content: flex-end;
+          margin-bottom: 30px;
+        }
+
+        .summary-table {
+          width: 300px;
+          border: 1px solid #e2e8f0;
+          margin-bottom: 0;
+        }
+
+        .summary-table td {
+          padding: 8px 15px;
+        }
+
+        .summary-label {
+          color: #64748b;
+          font-weight: 500;
+        }
+
+        .summary-value {
+          text-align: right;
+          font-weight: 600;
+        }
+
+        .grand-total-row {
+          background: #f5f3ff;
+          color: #4f46e5;
+          font-size: 14px !important;
+          font-weight: 700 !important;
+        }
+
+        .notes-card {
+          border: 1px solid #e2e8f0;
+          border-radius: 8px;
+          margin-bottom: 40px;
+        }
+
+        .notes-header {
+          padding: 10px 15px;
+          font-size: 11px;
+          font-weight: 600;
+          color: #4f46e5;
+          text-transform: uppercase;
+          border-bottom: 1px solid #f1f5f9;
+        }
+
+        .notes-content {
+          padding: 15px;
+          font-size: 12px;
+          color: #475569;
+          background: #fbfbfb;
+        }
+
+        .footer {
+          margin-top: auto;
+          padding-top: 20px;
+          border-top: 1px solid #e2e8f0;
+          display: flex;
+          justify-content: space-between;
+          color: #94a3b8;
+          font-size: 10px;
+        }
+
+        .footer-left {
+          font-style: italic;
+        }
+
+        .badge {
+          display: inline-block;
+          padding: 2px 6px;
+          border-radius: 4px;
+          font-size: 10px;
+          font-weight: 600;
+          background: #f3f4f6;
+          color: #64748b;
+          margin-top: 5px;
+        }
+
+        @media print {
+          body { margin: 0; }
+          .page { padding: 20px; }
+        }
       </style>
     </head>
     <body>
-      <div class="header">
-        <div class="company-info">
-          <h1>SPTECHPIONEER PVT LTD</h1>
-          <p>Industrial Area, Sector 5<br>Pune, Maharashtra - 411026</p>
+      <div class="page">
+        <div class="header-top">
+          <h1 class="company-name">SPTECHPIONEER PVT LTD</h1>
+          <p class="company-address">Industrial Area, Sector 5, Pune, Maharashtra - 411026</p>
         </div>
-        <div class="quote-title">
-          <h2>Purchase Order</h2>
-          <p><strong>PO No:</strong> {{po_number}}<br>
-          <strong>Date:</strong> {{created_at}}<br>
-          <strong>Expected Date:</strong> {{expected_delivery_date}}</p>
+
+        <div class="divider"></div>
+
+        <div class="rfq-header">
+          <div class="dot"></div>
+          <h2 class="rfq-title">Purchase Order</h2>
+          <div class="dot"></div>
         </div>
-      </div>
 
-      <div class="details-grid">
-        <div>
-          <div class="section-label">Vendor Information</div>
-          <p><strong>{{vendor_name}}</strong><br>
-          {{location}}<br>
-          Email: {{vendor_email}}<br>
-          Phone: {{phone}}</p>
+        <div class="info-grid">
+          <div class="info-card">
+            <div class="icon-box">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+            </div>
+            <div>
+              <div class="info-label">PO No:</div>
+              <div class="info-value">{{po_number}}</div>
+            </div>
+          </div>
+          <div class="info-card">
+            <div class="icon-box">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+            </div>
+            <div>
+              <div class="info-label">Date:</div>
+              <div class="info-value">{{created_at}}</div>
+            </div>
+          </div>
+          <div class="info-card">
+            <div class="icon-box">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+            </div>
+            <div>
+              <div class="info-label">Expected Date:</div>
+              <div class="info-value">{{expected_delivery_date}}</div>
+            </div>
+          </div>
         </div>
-        <div style="text-align: right;">
-          <div class="section-label">Reference</div>
-          <p>{{project_ref}}</p>
+
+        <div class="details-grid">
+          <div class="section-card">
+            <div class="section-header">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+              Vendor Information
+            </div>
+            <div class="section-content">
+              <p><strong>{{vendor_name}}</strong></p>
+              <p>{{location}}</p>
+              <p style="margin-top: 5px; color: #64748b;">Email: {{vendor_email}}</p>
+              <p style="color: #64748b;">Phone: {{phone}}</p>
+            </div>
+          </div>
+          <div class="section-card">
+            <div class="section-header">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+              Project Reference
+            </div>
+            <div class="section-content">
+              <p><strong>{{project_ref}}</strong></p>
+              {{#project_name}}
+              <p style="margin-top: 5px; color: #64748b; font-size: 11px;">Project: {{project_name}}</p>
+              {{/project_name}}
+            </div>
+          </div>
         </div>
-      </div>
 
-      <table>
-        <thead>
-          <tr>
-            <th style="width: 45%">Item Details</th>
-            <th style="width: 15%">Design Qty</th>
-            <th style="width: 20%">Rate (₹)</th>
-            <th style="width: 20%">Amount</th>
-          </tr>
-        </thead>
-        <tbody>
-          {{#items}}
-          <tr>
-            <td>
-              <div style="font-weight: bold; font-size: 13px;">{{material_name}}</div>
-              <div style="font-size: 10px; color: #64748b;">{{drawing_no}} {{#material_type}}({{material_type}}){{/material_type}}</div>
-            </td>
-            <td>{{quantity}} {{unit}}</td>
-            <td>{{unit_rate}}</td>
-            <td>{{amount}}</td>
-          </tr>
-          {{/items}}
-        </tbody>
-        <tfoot style="background: #f8fafc; font-weight: bold;">
-          <tr>
-            <td colspan="3" style="text-align: right; padding: 8px 8px;">Subtotal:</td>
-            <td style="padding: 8px 8px;">₹{{subtotal}}</td>
-          </tr>
-          <tr style="color: #64748b; font-size: 11px;">
-            <td colspan="3" style="text-align: right; padding: 4px 8px;">CGST (9%):</td>
-            <td style="padding: 4px 8px;">₹{{cgst_total}}</td>
-          </tr>
-          <tr style="color: #64748b; font-size: 11px;">
-            <td colspan="3" style="text-align: right; padding: 4px 8px;">SGST (9%):</td>
-            <td style="padding: 4px 8px;">₹{{sgst_total}}</td>
-          </tr>
-          <tr class="total-row">
-            <td colspan="3" style="text-align: right; padding: 12px 8px; font-size: 14px;">Grand Total:</td>
-            <td style="padding: 12px 8px; font-size: 14px; color: #2563eb;">₹{{total_amount}}</td>
-          </tr>
-        </tfoot>
-      </table>
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 5%">#</th>
+              <th style="width: 50%">Item Details</th>
+              <th style="width: 15%">Quantity</th>
+              <th style="width: 15%" class="amount-col">Rate (₹)</th>
+              <th style="width: 15%" class="amount-col">Amount (₹)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{#items}}
+            <tr>
+              <td>{{sr}}</td>
+              <td>
+                <div style="font-weight: 600; font-size: 13px; color: #1e293b;">{{material_name}}</div>
+                <div style="font-size: 10px; color: #64748b; margin-top: 2px;">
+                  {{drawing_no}} {{#material_type}}• <span class="badge">{{material_type}}</span>{{/material_type}}
+                </div>
+                {{#description}}
+                <div style="font-size: 10px; color: #94a3b8; margin-top: 2px; font-style: italic;">{{description}}</div>
+                {{/description}}
+              </td>
+              <td><strong>{{quantity}}</strong> {{unit}}</td>
+              <td class="amount-col">{{unit_rate}}</td>
+              <td class="amount-col">{{amount}}</td>
+            </tr>
+            {{/items}}
+          </tbody>
+        </table>
 
-      {{#notes}}
-      <div class="notes-section">
-        <div class="section-label">Special Instructions & Notes</div>
-        <p>{{notes}}</p>
-      </div>
-      {{/notes}}
+        <div class="summary-container">
+          <table class="summary-table">
+            <tr>
+              <td class="summary-label">Subtotal:</td>
+              <td class="summary-value">₹{{subtotal}}</td>
+            </tr>
+            <tr>
+              <td class="summary-label">CGST (9%):</td>
+              <td class="summary-value">₹{{cgst_total}}</td>
+            </tr>
+            <tr>
+              <td class="summary-label">SGST (9%):</td>
+              <td class="summary-value">₹{{sgst_total}}</td>
+            </tr>
+            <tr class="grand-total-row">
+              <td style="border-bottom: none;">Grand Total:</td>
+              <td class="summary-value" style="border-bottom: none;">₹{{total_amount}}</td>
+            </tr>
+          </table>
+        </div>
 
-      <div class="footer">
-        <p>This is a computer-generated document. No signature is required.<br>
-        SPTECHPIONEER PVT LTD | Confidential | Page 1 of 1</p>
+        {{#notes}}
+        <div class="notes-card">
+          <div class="notes-header">Special Instructions & Notes</div>
+          <div class="notes-content">{{notes}}</div>
+        </div>
+        {{/notes}}
+
+        <div class="footer">
+          <div class="footer-left">This is a computer-generated document. No signature is required.</div>
+          <div class="footer-right">SPTECHPIONEER PVT LTD | Confidential</div>
+        </div>
       </div>
     </body>
     </html>
@@ -1017,18 +1335,20 @@ const generatePurchaseOrderPDF = async (poId) => {
     vendor_email: vendor?.email || 'N/A',
     location: vendor?.location || 'N/A',
     phone: vendor?.phone || 'N/A',
-    project_ref: po.mr_number ? `MR: ${po.mr_number}` : 'Direct Procurement',
+    project_name: po.project_name,
+    project_ref: po.mr_number ? `MR: ${po.mr_number}` : (po.sales_order_id ? `SO: ${po.so_number || po.sales_order_id}` : 'Direct Procurement'),
     subtotal: subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
     cgst_total: cgst_total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
     sgst_total: sgst_total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
     total_amount: parseFloat(po.total_amount || (subtotal + cgst_total + sgst_total)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-    items: (po.items || []).map(i => {
+    items: (po.items || []).map((i, idx) => {
       const dQty = parseFloat(i.design_qty);
       const qty = parseFloat(i.quantity);
       const displayQty = (dQty && dQty !== 0) ? dQty : (qty || 0);
       
       return {
         ...i,
+        sr: idx + 1,
         drawing_no: i.drawing_no || i.item_code || '—',
         material_name: i.material_name || i.description || '—',
         material_type: i.material_type || '—',

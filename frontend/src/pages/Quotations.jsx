@@ -887,13 +887,15 @@ const Quotations = () => {
       });
 
       if (!response.ok) throw new Error('Failed to record quote details');
+      const result = await response.json();
+      const actualQuotationId = result.data?.id || recordData.quotationId;
 
       // 2. Upload file if present
       if (recordData.recordFile) {
         const fileFormData = new FormData();
         fileFormData.append('pdf', recordData.recordFile);
         
-        const uploadRes = await fetch(`${API_BASE}/quotations/${recordData.quotationId}/upload-response`, {
+        const uploadRes = await fetch(`${API_BASE}/quotations/${actualQuotationId}/upload-response`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`
@@ -904,7 +906,7 @@ const Quotations = () => {
         if (!uploadRes.ok) throw new Error('Failed to upload vendor PDF');
       } else {
         // If no file, manually update status to RECEIVED (upload endpoint does this automatically if file present)
-        await fetch(`${API_BASE}/quotations/${recordData.quotationId}/status`, {
+        await fetch(`${API_BASE}/quotations/${actualQuotationId}/status`, {
           method: 'PATCH',
           headers: {
             'Authorization': `Bearer ${token}`,

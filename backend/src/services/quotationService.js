@@ -194,10 +194,11 @@ const getQuotations = async (filters = {}) => {
   const { status, vendorId, latestOnly = true, baseQuoteNumber } = filters;
   
   let query = `
-    SELECT q.*, v.vendor_name,
+    SELECT q.*, v.vendor_name, so.so_number,
            COALESCE(
              so.project_name, 
-             (SELECT project_name FROM sales_orders WHERE id = (SELECT sales_order_id FROM production_plans WHERE id = mr.plan_id)),
+             (SELECT so2.project_name FROM sales_orders so2 JOIN production_plans pp ON so2.id = pp.sales_order_id WHERE pp.id = mr.plan_id),
+             (SELECT so3.project_name FROM sales_orders so3 WHERE mr.notes LIKE CONCAT('%', so3.project_name, '%') LIMIT 1),
              mr.purpose, 
              'General Procurement'
            ) as project_name,
@@ -232,7 +233,10 @@ const getQuotations = async (filters = {}) => {
 
   const [quotations] = await pool.query(query, params);
 
-  const [items] = await pool.query('SELECT * FROM quotation_items');
+  if (quotations.length === 0) return [];
+
+  const quotationIds = quotations.map(q => q.id);
+  const [items] = await pool.query('SELECT * FROM quotation_items WHERE quotation_id IN (?)', [quotationIds]);
 
   return quotations.map(q => ({
     ...q,
@@ -242,10 +246,11 @@ const getQuotations = async (filters = {}) => {
 
 const getQuotationById = async (quotationId) => {
   const [rows] = await pool.query(
-    `SELECT q.*, mr.mr_number, 
+    `SELECT q.*, mr.mr_number, so.so_number,
             COALESCE(
               so.project_name, 
-              (SELECT project_name FROM sales_orders WHERE id = (SELECT sales_order_id FROM production_plans WHERE id = mr.plan_id)),
+              (SELECT so2.project_name FROM sales_orders so2 JOIN production_plans pp ON so2.id = pp.sales_order_id WHERE pp.id = mr.plan_id),
+              (SELECT so3.project_name FROM sales_orders so3 WHERE mr.notes LIKE CONCAT('%', so3.project_name, '%') LIMIT 1),
               mr.purpose, 
               'General Procurement'
             ) as project_name, 
@@ -386,7 +391,7 @@ const updateQuotation = async (quotationId, payload) => {
         oldQuote.mr_id,
         oldQuote.rfq_id,
         oldQuote.rfq_group_id,
-        status || oldQuote.status,
+        status || 'RECEIVED',
         validUntil !== undefined ? validUntil : oldQuote.valid_until,
         notes !== undefined ? notes : oldQuote.notes,
         received_pdf_path !== undefined ? received_pdf_path : oldQuote.received_pdf_path
@@ -597,109 +602,410 @@ const generateQuotationPDF = async (quotationId) => {
     <!DOCTYPE html>
     <html>
     <head>
+      <meta charset="utf-8">
       <style>
-        body { font-family: 'roboto', sans-serif; color: #333; line-height: 1.6; margin: 40px; }
-        .header { display: flex; justify-content: space-between; border-bottom: 2px solid #2563eb; padding-bottom: 20px; margin-bottom: 30px; }
-        .company-info h1 { color: #2563eb; margin: 0; font-size: 24px; }
-        .quote-title { text-align: right; }
-        .quote-title h2 { margin: 0; color: #64748b; font-size: 18px; text-transform: ; }
-        .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-bottom: 40px; }
-        .section-label { font-weight: bold; color: #64748b; font-size: 12px; text-transform: ; margin-bottom: 8px; }
-        table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
-        th { background: #f8fafc; color: #64748b; text-align: left; padding: 12px 8px; font-size: 11px; text-transform: ; border-bottom: 1px solid #e2e8f0; }
-        td { padding: 12px 8px; border-bottom: 1px solid #f1f5f9; font-size: 12px; }
-        .notes-section { background: #f8fafc; padding: 20px; border-radius: 8px; border-left: 4px solid #cbd5e1; }
-        .footer { margin-top: 50px; text-align: center; color: #94a3b8; font-size: 10px; border-top: 1px solid #e2e8f0; padding-top: 20px; }
-        .total-row { font-weight: bold; background: #eff6ff; }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        
+        body { 
+          font-family: 'Inter', sans-serif; 
+          color: #1e293b; 
+          line-height: 1.5; 
+          margin: 0;
+          padding: 0;
+          background-color: #fff;
+        }
+        
+        .page {
+          padding: 40px;
+        }
+
+        .header-top {
+          text-align: center;
+          margin-bottom: 30px;
+        }
+
+        .company-name {
+          color: #1d4ed8;
+          font-size: 32px;
+          font-weight: 700;
+          margin: 0;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+        }
+
+        .company-address {
+          color: #64748b;
+          font-size: 14px;
+          margin: 5px 0;
+        }
+
+        .divider {
+          height: 2px;
+          background: linear-gradient(to right, transparent, #1d4ed8, transparent);
+          margin: 20px 0;
+        }
+
+        .rfq-header {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 20px;
+          margin-bottom: 30px;
+        }
+
+        .rfq-title {
+          font-size: 24px;
+          font-weight: 700;
+          color: #1e3a8a;
+          text-transform: uppercase;
+          letter-spacing: 2px;
+          margin: 0;
+        }
+
+        .dot {
+          width: 8px;
+          height: 8px;
+          background-color: #1d4ed8;
+          border-radius: 50%;
+        }
+
+        .info-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr 1fr;
+          gap: 15px;
+          margin-bottom: 30px;
+        }
+
+        .info-card {
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+          border-radius: 8px;
+          padding: 10px 12px;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+
+        .icon-box {
+          width: 32px;
+          height: 32px;
+          background: #fff;
+          border: 1px solid #e2e8f0;
+          border-radius: 6px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: #1d4ed8;
+          flex-shrink: 0;
+        }
+
+        .info-label {
+          font-size: 9px;
+          font-weight: 600;
+          color: #1d4ed8;
+          text-transform: uppercase;
+          margin-bottom: 1px;
+          letter-spacing: 0.5px;
+        }
+
+        .info-value {
+          font-size: 12px;
+          font-weight: 700;
+          color: #1e293b;
+          word-break: break-all;
+        }
+
+        .details-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 20px;
+          margin-bottom: 30px;
+        }
+
+        .section-card {
+          border: 1px solid #e2e8f0;
+          border-radius: 8px;
+          overflow: hidden;
+        }
+
+        .section-header {
+          background: #1e40af;
+          color: #fff;
+          padding: 8px 15px;
+          font-size: 12px;
+          font-weight: 600;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          text-transform: uppercase;
+        }
+
+        .section-content {
+          padding: 15px;
+          font-size: 13px;
+        }
+
+        .section-content p {
+          margin: 0;
+          line-height: 1.6;
+        }
+
+        table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-bottom: 20px;
+          border-radius: 8px;
+          overflow: hidden;
+          border: 1px solid #e2e8f0;
+        }
+
+        th {
+          background: #eff6ff;
+          color: #1e40af;
+          text-align: left;
+          padding: 12px 15px;
+          font-size: 11px;
+          font-weight: 700;
+          text-transform: uppercase;
+          border-bottom: 2px solid #dbeafe;
+        }
+
+        td {
+          padding: 10px 15px;
+          border-bottom: 1px solid #f1f5f9;
+          font-size: 12px;
+          color: #334155;
+        }
+
+        tr:nth-child(even) {
+          background-color: #fcfcfc;
+        }
+
+        .amount-col {
+          text-align: right;
+          font-weight: 500;
+        }
+
+        .summary-container {
+          display: flex;
+          justify-content: flex-end;
+          margin-bottom: 30px;
+        }
+
+        .summary-table {
+          width: 300px;
+          border: 1px solid #e2e8f0;
+          margin-bottom: 0;
+        }
+
+        .summary-table td {
+          padding: 8px 15px;
+        }
+
+        .summary-label {
+          color: #64748b;
+          font-weight: 500;
+        }
+
+        .summary-value {
+          text-align: right;
+          font-weight: 600;
+        }
+
+        .grand-total-row {
+          background: #eff6ff;
+          color: #1d4ed8;
+          font-size: 14px !important;
+          font-weight: 700 !important;
+        }
+
+        .notes-card {
+          border: 1px solid #e2e8f0;
+          border-radius: 8px;
+          margin-bottom: 40px;
+        }
+
+        .notes-header {
+          padding: 10px 15px;
+          font-size: 11px;
+          font-weight: 600;
+          color: #1d4ed8;
+          text-transform: uppercase;
+          border-bottom: 1px solid #f1f5f9;
+        }
+
+        .notes-content {
+          padding: 15px;
+          font-size: 12px;
+          color: #475569;
+          background: #fbfbfb;
+        }
+
+        .footer {
+          margin-top: auto;
+          padding-top: 20px;
+          border-top: 1px solid #e2e8f0;
+          display: flex;
+          justify-content: space-between;
+          color: #94a3b8;
+          font-size: 10px;
+        }
+
+        .footer-left {
+          font-style: italic;
+        }
+
+        .badge {
+          display: inline-block;
+          padding: 2px 6px;
+          border-radius: 4px;
+          font-size: 10px;
+          font-weight: 600;
+          background: #f1f5f9;
+          color: #64748b;
+          margin-top: 5px;
+        }
+
+        @media print {
+          body { margin: 0; }
+          .page { padding: 20px; }
+        }
       </style>
     </head>
     <body>
-      <div class="header">
-        <div class="company-info">
-          <h1>SPTECHPIONEER PVT LTD</h1>
-          <p>Industrial Area, Sector 5<br>Pune, Maharashtra - 411026</p>
+      <div class="page">
+        <div class="header-top">
+          <h1 class="company-name">SPTECHPIONEER PVT LTD</h1>
+          <p class="company-address">Industrial Area, Sector 5, Pune, Maharashtra - 411026</p>
         </div>
-        <div class="quote-title">
-          <h2>Request for Quotation</h2>
-          <p><strong>RFQ No:</strong> {{quote_number}}<br>
-          <strong>Date:</strong> {{created_at}}<br>
-          <strong>Valid Till:</strong> {{valid_until}}</p>
+
+        <div class="divider"></div>
+
+        <div class="rfq-header">
+          <div class="dot"></div>
+          <h2 class="rfq-title">Request for Quotation</h2>
+          <div class="dot"></div>
         </div>
-      </div>
 
-      <div class="details-grid">
-        <div>
-          <div class="section-label">Vendor Information</div>
-          <p><strong>{{vendor_name}}</strong><br>
-          {{location}}<br>
-          Email: {{vendor_email}}<br>
-          Phone: {{phone}}</p>
+        <div class="info-grid">
+          <div class="info-card">
+            <div class="icon-box">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+            </div>
+            <div>
+              <div class="info-label">RFQ No:</div>
+              <div class="info-value">{{quote_number}}</div>
+            </div>
+          </div>
+          <div class="info-card">
+            <div class="icon-box">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+            </div>
+            <div>
+              <div class="info-label">Date:</div>
+              <div class="info-value">{{created_at}}</div>
+            </div>
+          </div>
+          <div class="info-card">
+            <div class="icon-box">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+            </div>
+            <div>
+              <div class="info-label">Valid Till:</div>
+              <div class="info-value">{{valid_until}}</div>
+            </div>
+          </div>
         </div>
-        <div style="text-align: right;">
-          <div class="section-label">Project Reference</div>
-          <p>{{project_ref}}</p>
+
+        <div class="details-grid">
+          <div class="section-card">
+            <div class="section-header">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+              Vendor Information
+            </div>
+            <div class="section-content">
+              <p><strong>{{vendor_name}}</strong></p>
+              <p>{{location}}</p>
+              <p style="margin-top: 5px; color: #64748b;">Email: {{vendor_email}}</p>
+              <p style="color: #64748b;">Phone: {{phone}}</p>
+            </div>
+          </div>
+          <div class="section-card">
+            <div class="section-header">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+              Project Reference
+            </div>
+            <div class="section-content">
+              <p><strong>{{project_ref}}</strong></p>
+              {{#project_name}}
+              <p style="margin-top: 5px; color: #64748b; font-size: 11px;">Project: {{project_name}}</p>
+              {{/project_name}}
+            </div>
+          </div>
         </div>
-      </div>
 
-      <table>
-        <thead>
-          <tr>
-            <th style="width: 25%">Drawing No</th>
-            <th style="width: 40%">Material Name</th>
-            <th style="width: 20%">Type</th>
-            <th style="width: 15%">Design Qty</th>
-            {{^isRFQ}}
-            <th style="width: 15%">Rate (₹)</th>
-            <th style="width: 15%">Amount</th>
-            {{/isRFQ}}
-          </tr>
-        </thead>
-        <tbody>
-          {{#items}}
-          <tr>
-            <td>{{drawing_no}}</td>
-            <td>{{material_name}}</td>
-            <td>{{material_type}}</td>
-            <td>{{quantity}} {{unit}}</td>
-            {{^isRFQ}}
-            <td>{{unit_rate}}</td>
-            <td>{{amount}}</td>
-            {{/isRFQ}}
-          </tr>
-          {{/items}}
-        </tbody>
-        {{^isRFQ}}
-        <tfoot style="background: #f8fafc; font-weight: bold;">
-          <tr>
-            <td colspan="5" style="text-align: right; padding: 8px 8px;">Subtotal:</td>
-            <td style="padding: 8px 8px;">₹{{total_amount}}</td>
-          </tr>
-          <tr style="color: #64748b; font-size: 11px;">
-            <td colspan="5" style="text-align: right; padding: 4px 8px;">CGST (9%):</td>
-            <td style="padding: 4px 8px;">₹{{cgst_total}}</td>
-          </tr>
-          <tr style="color: #64748b; font-size: 11px;">
-            <td colspan="5" style="text-align: right; padding: 4px 8px;">SGST (9%):</td>
-            <td style="padding: 4px 8px;">₹{{sgst_total}}</td>
-          </tr>
-          <tr class="total-row">
-            <td colspan="5" style="text-align: right; padding: 12px 8px; font-size: 14px;">Grand Total:</td>
-            <td style="padding: 12px 8px; font-size: 14px; color: #2563eb;">₹{{grand_total}}</td>
-          </tr>
-        </tfoot>
-        {{/isRFQ}}
-      </table>
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 5%">#</th>
+              <th style="width: 20%">Drawing No</th>
+              <th style="width: 30%">Material Name</th>
+              <th style="width: 15%">Type</th>
+              <th style="width: 15%">Design Qty</th>
+              <th style="width: 15%" class="amount-col">Rate (₹)</th>
+              <th style="width: 15%" class="amount-col">Amount (₹)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{#items}}
+            <tr>
+              <td>{{sr}}</td>
+              <td style="font-family: monospace; font-weight: 500;">{{drawing_no}}</td>
+              <td>
+                {{material_name}}
+                {{#material_description}}<br><span style="font-size: 10px; color: #64748b;">{{material_description}}</span>{{/material_description}}
+              </td>
+              <td><span class="badge">{{material_type}}</span></td>
+              <td><strong>{{quantity}}</strong> {{unit}}</td>
+              <td class="amount-col">{{unit_rate}}</td>
+              <td class="amount-col">{{amount}}</td>
+            </tr>
+            {{/items}}
+          </tbody>
+        </table>
 
-      {{#notes}}
-      <div class="notes-section">
-        <div class="section-label">Special Instructions & Notes</div>
-        <p>{{notes}}</p>
-      </div>
-      {{/notes}}
+        <div class="summary-container">
+          <table class="summary-table">
+            <tr>
+              <td class="summary-label">Subtotal:</td>
+              <td class="summary-value">₹{{total_amount}}</td>
+            </tr>
+            <tr>
+              <td class="summary-label">CGST (9%):</td>
+              <td class="summary-value">₹{{cgst_total}}</td>
+            </tr>
+            <tr>
+              <td class="summary-label">SGST (9%):</td>
+              <td class="summary-value">₹{{sgst_total}}</td>
+            </tr>
+            <tr class="grand-total-row">
+              <td style="border-bottom: none;">Grand Total:</td>
+              <td class="summary-value" style="border-bottom: none;">₹{{grand_total}}</td>
+            </tr>
+          </table>
+        </div>
 
-      <div class="footer">
-        <p>This is a computer-generated document. No signature is required.<br>
-        SPTECHPIONEER PVT LTD | Confidential | Page 1 of 1</p>
+        {{#notes}}
+        <div class="notes-card">
+          <div class="notes-header">Special Instructions & Notes</div>
+          <div class="notes-content">{{notes}}</div>
+        </div>
+        {{/notes}}
+
+        <div class="footer">
+          <div class="footer-left">This is a computer-generated document. No signature is required.</div>
+          <div class="footer-right">SPTECHPIONEER PVT LTD | Confidential</div>
+        </div>
       </div>
     </body>
     </html>
@@ -716,20 +1022,23 @@ const generateQuotationPDF = async (quotationId) => {
     vendor_email: vendor?.email || 'N/A',
     location: vendor?.location || 'N/A',
     phone: vendor?.phone || 'N/A',
-    project_ref: quotation.mr_id ? `MR: ${quotation.mr_number}` : (quotation.sales_order_id ? `SO: ${quotation.project_name || quotation.sales_order_id}` : 'General Requirement'),
+    project_name: quotation.project_name,
+    project_ref: quotation.mr_id ? `MR: ${quotation.mr_number}` : (quotation.sales_order_id ? `SO: ${quotation.so_number || quotation.sales_order_id}` : 'General Requirement'),
     total_amount: parseFloat(quotation.total_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
     cgst_total: (parseFloat(quotation.tax_amount || 0) / 2).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
     sgst_total: (parseFloat(quotation.tax_amount || 0) / 2).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
     grand_total: parseFloat(quotation.grand_total || quotation.total_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-    items: (quotation.items || []).map(i => {
+    items: (quotation.items || []).map((i, idx) => {
       const qty = parseFloat(i.quantity || 0);
       const rate = parseFloat(i.unit_rate || 0);
       const amt = parseFloat(i.amount || qty * rate);
       
       return {
         ...i,
+        sr: idx + 1,
         drawing_no: i.drawing_no || i.item_code || '—',
         material_name: i.material_name || i.description || '—',
+        material_description: i.material_name ? i.description : null,
         material_type: i.material_type || '—',
         quantity: qty.toFixed(3),
         unit: i.unit || 'NOS',

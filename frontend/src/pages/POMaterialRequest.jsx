@@ -267,8 +267,11 @@ const POMaterialRequest = () => {
         confirmButtonColor: '#10b981'
       });
 
-      fetchRequests();
-      if (mr.id) fetchRfqs(mr.id);
+      await fetchRequests();
+      if (mr.id) {
+        await fetchRfqs(mr.id);
+        await handleViewRequest(mr.id); // Refresh the selected request to update status and hide button
+      }
 
     } catch (error) {
       console.error('Error initiating RFQ:', error);

@@ -189,7 +189,8 @@ const listCustomerPos = async (filters = {}) => {
   let query = `
     SELECT cp.*, c.company_name, 
            COALESCE(cp.project_name, (SELECT project_name FROM sales_orders WHERE customer_po_id = cp.id LIMIT 1)) as project_name,
-           (SELECT SUM(quantity) FROM customer_po_items WHERE customer_po_id = cp.id) as total_qty
+           (SELECT SUM(quantity) FROM customer_po_items WHERE customer_po_id = cp.id) as total_qty,
+           (SELECT email FROM contacts WHERE company_id = c.id ORDER BY contact_type = 'PRIMARY' DESC, id ASC LIMIT 1) as company_email
     FROM customer_pos cp
     JOIN companies c ON c.id = cp.company_id
     WHERE 1=1
@@ -211,7 +212,8 @@ const getCustomerPoById = async id => {
   const [rows] = await pool.query(
     `SELECT cp.*, c.company_name, c.customer_type, c.gstin, c.cin, c.pan,
             ba.line1 as billing_address_line1, ba.line2 as billing_address_line2, 
-            ba.city as billing_city, ba.state as billing_state, ba.pincode as billing_pincode
+            ba.city as billing_city, ba.state as billing_state, ba.pincode as billing_pincode,
+            (SELECT email FROM contacts WHERE company_id = c.id ORDER BY contact_type = 'PRIMARY' DESC, id ASC LIMIT 1) as company_email
      FROM customer_pos cp
      JOIN companies c ON c.id = cp.company_id
      LEFT JOIN company_addresses ba ON ba.company_id = c.id AND ba.address_type = 'BILLING'

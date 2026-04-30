@@ -554,7 +554,15 @@ const BOMCreation = () => {
       label: 'Client Name',
       key: 'client_name',
       sortable: true,
-      className: ' text-slate-900'
+      className: ' text-slate-900',
+      render: (val, row) => (
+        <div className="flex flex-col">
+          <span className="font-medium text-slate-900">{val}</span>
+          {row.items?.[0]?.project_name && (
+            <span className="text-[10px] text-slate-500 font-normal">{row.items[0].project_name}</span>
+          )}
+        </div>
+      )
     },
     {
       label: 'Total Drawings',
