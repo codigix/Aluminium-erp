@@ -119,10 +119,10 @@ const WorkOrder = () => {
       label: 'Specification',
       key: 'source_type',
       render: (val) => (
-        <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
-          val === 'SA' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-indigo-50 text-indigo-600 border-indigo-100'
+        <span className={`text-[10px] font-bold ${
+          val === 'SA' ? 'text-amber-600' : 'text-indigo-600'
         }`}>
-          {val === 'SA' ? 'SA' : 'FG'}
+          {val === 'SA' ? 'Sub-Assembly' : 'Finished Goods'}
         </span>
       )
     },
@@ -135,7 +135,7 @@ const WorkOrder = () => {
           <span className="text-xs font-semibold text-slate-900 leading-tight">{val || row.item_code}</span>
           {row.source_type === 'SA' && row.source_fg && (
             <span className="text-[9px] text-slate-500 italic mt-0.5">
-              Part of: <span className="text-indigo-600 not-italic font-bold">{row.source_fg}</span>
+              <span className="text-indigo-600 not-italic font-bold">{row.source_fg}</span>
             </span>
           )}
           <span className="text-[9px] text-slate-400 mt-0.5">BOM-{row.bom_no || 'NA'}</span>

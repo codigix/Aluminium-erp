@@ -3978,8 +3978,8 @@ const JobCard = () => {
         return (
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center gap-2">
-              <span className={`text-[10px] px-1.5 py-0.5 rounded border font-bold ${isSA ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-indigo-50 text-indigo-700 border-indigo-200'}`}>
-                {isSA ? 'SA' : 'FG'}
+              <span className={`text-[10px] font-bold ${isSA ? 'text-amber-700' : 'text-indigo-700'}`}>
+                {isSA ? 'Sub-Assembly' : 'Finished Goods'}
               </span>
               <span className={`text-[10px] font-bold uppercase tracking-tight ${isSubcontract ? 'text-amber-600' : 'text-blue-600'}`}>
                 ({isSubcontract ? 'Outsource' : 'In-house'})
@@ -3991,7 +3991,6 @@ const JobCard = () => {
               
               {isSA && row.source_fg && (
                 <div className="flex items-center gap-1 mt-0.5">
-                  <span className="text-[9px] text-slate-400 italic">Part of:</span>
                   <span className="text-[9px] text-indigo-600 font-bold leading-tight">{row.source_fg}</span>
                 </div>
               )}
