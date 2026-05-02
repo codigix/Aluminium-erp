@@ -59,6 +59,16 @@ const getAllGRNs = async () => {
          WHERE mr_inner.id = po.mr_id LIMIT 1),
         'Stock/Internal'
       ) as projectName,
+      COALESCE(
+        (SELECT c.company_name FROM companies c JOIN sales_orders so ON c.id = so.company_id WHERE so.id = po.sales_order_id),
+        (SELECT c.company_name 
+         FROM material_requests mr_inner
+         JOIN production_plans pp ON mr_inner.notes LIKE CONCAT('%', pp.plan_code, '%')
+         JOIN sales_orders so ON pp.sales_order_id = so.id
+         JOIN companies c ON c.id = so.company_id
+         WHERE mr_inner.id = po.mr_id LIMIT 1),
+        'N/A'
+      ) as clientName,
       (SELECT COUNT(*) FROM grn_items WHERE grn_id = g.id) AS items_count
     FROM grns g
     LEFT JOIN purchase_orders po ON g.po_number = po.po_number

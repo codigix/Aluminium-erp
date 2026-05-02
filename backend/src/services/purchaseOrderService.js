@@ -383,7 +383,7 @@ const createPurchaseOrder = async (data, existingConnection = null) => {
             totalItemAmount,
             item.material_name || null,
             item.material_type || null,
-            item.drawing_no || correctedItemCode,
+            item.drawing_no || null,
             item.drawing_id || null,
             item.length || 0,
             item.width || 0,

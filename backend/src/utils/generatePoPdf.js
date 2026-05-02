@@ -31,8 +31,13 @@ const generatePoPdf = async (data) => {
       }
     };
 
+    const logoPath = path.join(__dirname, '../../../frontend/src/assets/sptechpioneer logo.png');
+    const logoBase64 = fs.existsSync(logoPath) 
+      ? `data:image/png;base64,${fs.readFileSync(logoPath).toString('base64')}`
+      : null;
+
     let renderData = {
-      logoPath: path.join(__dirname, '../../assets/logo.png'),
+      logoBase64,
       isReceipt: type === 'receipt',
       isPO: type === 'po',
       isGRN: type === 'grn',
@@ -41,10 +46,19 @@ const generatePoPdf = async (data) => {
         const qty = parseFloat(item.quantity || item.po_qty || 0);
         const displayQty = (dQty && dQty !== 0) ? dQty : qty;
 
+        const itemCode = item.item_code || item.itemCode || '';
+        const rawDrawingNo = item.drawing_no || item.drawingNo || '';
+        
+        // Hide drawing no if it matches item code OR if it's a technical item code pattern (RM-, OTH-, etc.)
+        const isItemCodePattern = /^(RM-|OTH-|SFG-|FG-|GEN-|CAT-)/i.test(rawDrawingNo);
+        const cleanDrawingNo = (rawDrawingNo && rawDrawingNo !== itemCode && !isItemCodePattern && rawDrawingNo !== '—') ? rawDrawingNo : null;
+
         return {
           sr: idx + 1,
-          itemCode: item.item_code || item.itemCode || '—',
+          itemCode: itemCode || '—',
           description: item.description || '—',
+          materialName: item.material_name || item.materialName || '',
+          drawingNo: cleanDrawingNo,
           qty: `${displayQty.toFixed(3)} ${item.unit || item.uom || ''}`.trim(),
           receivedQty: parseFloat(item.received_quantity || item.accepted_qty || 0).toFixed(3),
           rate: formatCurrency(item.unit_rate || item.rate || 0),
@@ -54,6 +68,12 @@ const generatePoPdf = async (data) => {
     };
 
     if (type === 'grn' && grn) {
+      const totalAmount = items.reduce((sum, item) => {
+        const qty = parseFloat(item.accepted_qty || 0);
+        const rate = parseFloat(item.unit_rate || item.rate || 0);
+        return sum + (qty * rate);
+      }, 0);
+
       renderData = {
         ...renderData,
         poNumber: grn.poNumber || grn.po_number || '—',
@@ -63,8 +83,8 @@ const generatePoPdf = async (data) => {
         refNo: grn.poNumber || grn.po_number || '—',
         vendorName: grn.vendorName || grn.vendor_name || '—',
         notes: grn.notes || '',
-        subTotal: formatCurrency(0),
-        grandTotal: formatCurrency(0)
+        subTotal: formatCurrency(totalAmount),
+        grandTotal: formatCurrency(totalAmount)
       };
     } else if (type === 'receipt' && receipt) {
       renderData = {

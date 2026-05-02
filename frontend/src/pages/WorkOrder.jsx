@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast.js';
+import { cleanProjectName } from '../utils/formatters.js';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -105,12 +106,14 @@ const WorkOrder = () => {
       label: 'Project / Client',
       key: 'project_name',
       sortable: true,
-      render: (val, row) => (
-        <div className="flex flex-col">
-          {/* <span className="text-xs text-slate-900 leading-tight">{val || 'N/A'}</span> */}
-          <span className="text-xs  text-slate-900 mt-0.5">{row.client_name || '---'}</span>
-        </div>
-      )
+      render: (val, row) => {
+        const displayProject = cleanProjectName(row.project_name, row.client_name);
+        return (
+          <div className="flex flex-col">
+            <span className="text-xs text-slate-900 leading-tight font-medium" title={displayProject}>{displayProject}</span>
+          </div>
+        );
+      }
     },
     {
       label: 'Specification',
@@ -324,7 +327,7 @@ const WorkOrder = () => {
                 </div>
                 <div>
                   <h3 className="text-md  text-slate-900">{viewingWorkOrder.wo_number}</h3>
-                  <p className="text-xs text-slate-500 mt-0.5">{viewingWorkOrder.project_name} • {formatDisplayDate(viewingWorkOrder.created_at)}</p>
+                  <p className="text-xs text-slate-500 mt-0.5">{cleanProjectName(viewingWorkOrder.project_name, viewingWorkOrder.client_name)} • {formatDisplayDate(viewingWorkOrder.created_at)}</p>
                 </div>
               </div>
               <span className={`px-4 py-2 rounded text-xs  ${
@@ -393,7 +396,7 @@ const WorkOrder = () => {
                   {/* Sales Order Reference */}
                   <div className="border border-slate-200 rounded  p-5">
                     <label className="text-xs text-slate-500   ">Sales Order Reference</label>
-                    <p className="text-sm  text-slate-900 mt-2">{viewingWorkOrder.project_name || 'N/A'}</p>
+                    <p className="text-sm  text-slate-900 mt-2">{cleanProjectName(viewingWorkOrder.project_name, viewingWorkOrder.client_name)}</p>
                   </div>
                 </>
               )}

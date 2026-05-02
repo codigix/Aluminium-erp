@@ -211,6 +211,11 @@
       color: #666;
     }
 
+    .w-5 { width: 5%; }
+    .w-15 { width: 15%; }
+    .w-30 { width: 30%; }
+    .w-45 { width: 45%; }
+
     @media print {
       body {
         margin: 0;
@@ -225,13 +230,17 @@
   <table class="header-section">
     <tr>
       <td width="12%" style="text-align: center;">
-        {{#logoPath}}
-        <img src="{{logoPath}}" class="logo" />
-        {{/logoPath}}
+        {{#logoBase64}}
+        <img src="{{logoBase64}}" class="logo" />
+        {{/logoBase64}}
       </td>
       <td width="88%">
         <div class="title">SP TECHPIONEER PVT. LTD.</div>
-        <div class="subtitle">PURCHASE ORDER</div>
+        <div class="subtitle">
+          {{#isGRN}}GOODS RECEIVED NOTE{{/isGRN}}
+          {{#isReceipt}}PO RECEIPT{{/isReceipt}}
+          {{#isPO}}PURCHASE ORDER{{/isPO}}
+        </div>
         <div class="company-info">
           Plot No. 97, Sector 7, PCNTDA, Bhosari, Pune – 411026
         </div>
@@ -296,18 +305,31 @@
   <table class="item-table">
     <thead>
       <tr>
-        <th style="width: 5%;">Sr no</th>
-        <th style="width: 40%;">Description</th>
-        <th style="width: 15%;">Design Qty</th>
-        <th style="width: 15%;">Rate</th>
-        <th style="width: 15%;">Amount</th>
+        <th class="w-5">Sr no</th>
+        <th class="{{#isGRN}}w-45{{/isGRN}}{{^isGRN}}w-30{{/isGRN}}">Description</th>
+        {{^isGRN}}
+        <th class="w-15">Drawing No</th>
+        {{/isGRN}}
+        <th class="w-15">Design Qty</th>
+        <th class="w-15">Rate</th>
+        <th class="w-15">Amount</th>
       </tr>
     </thead>
     <tbody>
       {{#items}}
       <tr>
         <td class="center">{{sr}}</td>
-        <td>{{description}}</td>
+        <td>
+          {{#materialName}}<div class="bold">{{materialName}}</div>{{/materialName}}
+          <div style="font-size: 10px; color: #444; margin: 2px 0;">Item Code: <span class="bold">{{itemCode}}</span></div>
+          {{#isGRN}}
+          {{#drawingNo}}<div style="font-size: 10px; color: #444;">Drawing: <span class="bold">{{drawingNo}}</span></div>{{/drawingNo}}
+          {{/isGRN}}
+          <div style="font-style: italic; color: #666;">{{description}}</div>
+        </td>
+        {{^isGRN}}
+        <td class="center">{{drawingNo}}</td>
+        {{/isGRN}}
         <td class="center">{{qty}}</td>
         <td class="right">{{rate}}</td>
         <td class="right">{{amount}}</td>

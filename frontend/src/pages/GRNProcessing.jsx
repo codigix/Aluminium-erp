@@ -83,6 +83,31 @@ const GRNProcessing = () => {
   const [validationErrors, setValidationErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
 
+  const handleViewGRN = async (grnId) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const [detailsRes, itemsRes] = await Promise.all([
+        fetch(`${API_BASE}/grns/${grnId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }),
+        fetch(`${API_BASE}/grn-items/${grnId}/details`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+      ]);
+
+      if (!detailsRes.ok || !itemsRes.ok) throw new Error('Failed to fetch GRN details');
+      
+      const details = await detailsRes.json();
+      const itemsData = await itemsRes.json();
+      
+      setSelectedGRNForView({ ...details, ...itemsData });
+      setShowViewModal(true);
+    } catch (error) {
+      console.error('Error fetching GRN details:', error);
+      errorToast('Failed to load GRN details');
+    }
+  };
+
   useEffect(() => {
     const isNew = location.pathname.includes('/add');
     const viewId = searchParams.get('id');
@@ -91,37 +116,16 @@ const GRNProcessing = () => {
       setShowModal(true);
       setShowViewModal(false);
     } else if (viewId) {
-      const grn = grns.find(g => g.id === parseInt(viewId));
-      if (grn) {
-        setSelectedGRNForView(grn);
-        setShowViewModal(true);
-        setShowModal(false);
-      } else if (grns.length > 0) {
-        // Fetch single if not in list
-        const fetchSingle = async () => {
-          try {
-            const token = localStorage.getItem('authToken');
-            const response = await fetch(`${API_BASE}/grns/${viewId}`, {
-              headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (response.ok) {
-              const data = await response.json();
-              setSelectedGRNForView(data);
-              setShowViewModal(true);
-              setShowModal(false);
-            }
-          } catch (err) {
-            console.error(err);
-          }
-        };
-        fetchSingle();
+      const vid = parseInt(viewId);
+      if (!selectedGRNForView || selectedGRNForView.id !== vid) {
+        handleViewGRN(vid);
       }
     } else {
       setShowModal(false);
       setShowViewModal(false);
       setSelectedGRNForView(null);
     }
-  }, [location.pathname, searchParams, grns]);
+  }, [location.pathname, searchParams, grns, selectedGRNForView]);
 
   useEffect(() => {
     const storedUser = localStorage.getItem('authUser');
@@ -457,28 +461,6 @@ const GRNProcessing = () => {
     }
   };
 
-  const handleViewGRN = async (grnId) => {
-    try {
-      const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/grn-items/${grnId}/details`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) throw new Error('Failed to fetch GRN details');
-      
-      const data = await response.json();
-      const grn = grns.find(g => g.id === grnId);
-      setSelectedGRNForView({ ...grn, ...data });
-      setShowViewModal(true);
-    } catch (error) {
-      console.error('Error fetching GRN details:', error);
-      errorToast('Failed to load GRN details');
-    }
-  };
-
   const handlePrintGRN = async (grnId) => {
     try {
       const token = localStorage.getItem('authToken');
@@ -525,7 +507,19 @@ const GRNProcessing = () => {
       label: 'PO Number', 
       key: 'poNumber', 
       sortable: true,
-      render: (val) => <span className="text-slate-600">{val || '—'}</span>
+      render: (val) => <span className="text-slate-600 font-medium">{val || '—'}</span>
+    },
+    { 
+      label: 'Client', 
+      key: 'clientName', 
+      sortable: true,
+      render: (val) => <span className="text-slate-700 text-xs truncate max-w-[120px] block" title={val}>{val || '—'}</span>
+    },
+    { 
+      label: 'Project Name', 
+      key: 'projectName', 
+      sortable: true,
+      render: (val) => <span className="text-slate-600 text-[11px] truncate max-w-[150px] block italic" title={val}>{val || '—'}</span>
     },
     { 
       label: 'Supplier', 
@@ -1008,10 +1002,22 @@ const GRNProcessing = () => {
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {(selectedGRNForView.items || []).map((item, idx) => (
-                      <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                        <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
                         <td className="p-2">
-                          <div className="text-xs  text-slate-900">{item.material_name}</div>
-                          <div className="text-xs text-slate-500">{item.item_code} • {item.material_type}</div>
+                          <div className="text-xs  text-slate-900 font-bold">{item.material_name || item.item_code}</div>
+                          <div className="text-[10px] text-slate-500 mt-0.5">Item Code: <span className="font-semibold text-slate-700">{item.item_code}</span></div>
+                          <div className="text-[10px] text-slate-400 italic">{item.description}</div>
+                          <div className="flex items-center gap-2 mt-1.5 text-[10px]">
+                            {item.drawing_no && 
+                             item.drawing_no !== item.item_code && 
+                             item.drawing_no !== '—' &&
+                             !/^(RM-|OTH-|SFG-|FG-|GEN-|CAT-)/i.test(item.drawing_no) && (
+                              <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-600 rounded border border-indigo-100 font-medium">Drawing: {item.drawing_no}</span>
+                            )}
+                            {item.material_type && (
+                              <span className="px-1.5 py-0.5 bg-emerald-50 text-emerald-600 rounded border border-emerald-100">{item.material_type}</span>
+                            )}
+                          </div>
                         </td>
                         <td className="p-2 text-center text-sm  text-slate-600">{item.po_qty}</td>
                         <td className="p-2 text-center text-sm  text-indigo-600">{item.accepted_qty}</td>

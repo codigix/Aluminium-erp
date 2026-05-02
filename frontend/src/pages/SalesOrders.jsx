@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
+import { cleanProjectName } from '../utils/formatters';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -750,8 +751,8 @@ const SalesOrders = () => {
           </div>
           <div className="flex flex-col">
             <span className="font-semibold text-slate-900 leading-tight">{val}</span>
-            <span className="text-xs  text-slate-500 italic">
-              {row.project_name || 'General Project'}
+            <span className="text-xs  text-slate-500 italic" title={row.project_name}>
+              {cleanProjectName(row.project_name, 'General Project')}
             </span>
             {row.total_items_count > 0 && (
               <span className="text-xs  mt-1 px-1.5 py-0.5 bg-emerald-50 text-emerald-600 rounded-full border border-emerald-100 w-fit ">

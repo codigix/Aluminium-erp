@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
+import { cleanProjectName } from '../utils/formatters';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -3934,10 +3935,13 @@ const JobCard = () => {
       label: 'ID / Project',
       key: 'job_card_no',
       sortable: true,
-      render: (val, row) => (
-        <div className="flex flex-col">
-          <span className="font-medium text-slate-900 truncate max-w-[180px]">{row.project_name || row.client_name || 'Internal'}</span>
-          <span className="text-[10px] text-slate-500">WO: {row.work_order_no || row.wo_number}</span>
+      render: (val, row) => {
+        const displayProject = cleanProjectName(row.project_name, row.client_name);
+          
+        return (
+          <div className="flex flex-col">
+            <span className="font-medium text-slate-900 truncate max-w-[180px]" title={displayProject}>{displayProject}</span>
+            <span className="text-[10px] text-slate-500">WO: {row.work_order_no || row.wo_number}</span>
           <div className="flex items-center gap-1.5 mt-0.5">
             <span className="flex items-center justify-center w-5 h-5 rounded bg-slate-100 text-[10px] font-bold text-slate-700 border border-slate-200">
               {row.sequence_no || row.operation_sequence || '-'}
@@ -3945,8 +3949,9 @@ const JobCard = () => {
             <span className="text-xs font-semibold text-indigo-600">{val}</span>
           </div>
         </div>
-      )
-    },
+      );
+    }
+  },
     {
       label: 'Operation / Status',
       key: 'operation_name',
