@@ -710,6 +710,14 @@ const JobCard = () => {
     setExpandedWOs(newExpanded);
   };
 
+  const getSourcePriority = (type) => {
+    const t = (type || '').toLowerCase();
+    if (t.includes('assembly') || t === 'sa') return 1;
+    if (t.includes('semi') || t === 'sfg') return 2;
+    if (t.includes('finish') || t === 'fg') return 3;
+    return 4;
+  };
+
   const filteredJobCards = useMemo(() => {
     // Show Job Cards for Finished Goods (FG) and Sub-Assemblies (SA)
     const allowedSourceTypes = ['FG', 'SA', 'SFG', 'Sub Assembly', 'Finished Goods'];
@@ -726,20 +734,36 @@ const JobCard = () => {
       );
     }
 
-    return [...result].sort((a, b) => {
-      // Primary sort: Source Type (SA before FG)
-      const saTypes = ['SA', 'SFG', 'Sub Assembly'];
-      const aType = saTypes.includes(a.source_type) ? 0 : 1;
-      const bType = saTypes.includes(b.source_type) ? 0 : 1;
-      if (aType !== bType) return aType - bType;
-
-      // Secondary sort: Work Order (Descending - newest WOs first)
-      if (a.wo_number !== b.wo_number) {
-        return (b.wo_number || "").localeCompare(a.wo_number || "");
+    // 1. Group items by batch and find the latest ID in each batch
+    const groups = {};
+    result.forEach(jc => {
+      const groupKey = jc.plan_id ? `plan_${jc.plan_id}` : (jc.parent_wo_id ? `parent_${jc.parent_wo_id}` : `wo_${jc.work_order_id}`);
+      if (!groups[groupKey]) {
+        groups[groupKey] = { latestId: 0, items: [] };
       }
-      // Tertiary sort: Sequence Number (Ascending)
-      return (a.sequence_no || 0) - (b.sequence_no || 0);
+      groups[groupKey].items.push(jc);
+      const currentId = Number(jc.id) || 0;
+      if (currentId > groups[groupKey].latestId) {
+        groups[groupKey].latestId = currentId;
+      }
     });
+
+    // 2. Sort groups by their latest ID (newest batch first)
+    const sortedGroupKeys = Object.keys(groups).sort((a, b) => groups[b].latestId - groups[a].latestId);
+
+    // 3. Within each group, sort by SA first, then ID ASC
+    const finalResult = [];
+    sortedGroupKeys.forEach(key => {
+      const groupedItems = groups[key].items.sort((a, b) => {
+        const aPrio = getSourcePriority(a.source_type);
+        const bPrio = getSourcePriority(b.source_type);
+        if (aPrio !== bPrio) return aPrio - bPrio;
+        return (Number(a.id) || 0) - (Number(b.id) || 0);
+      });
+      finalResult.push(...groupedItems);
+    });
+
+    return finalResult;
   }, [jobCards, searchQuery]);
 
   const groupedJobCards = useMemo(() => {
@@ -747,15 +771,39 @@ const JobCard = () => {
     const allowedSourceTypes = ['FG', 'SA', 'SFG', 'Sub Assembly', 'Finished Goods'];
     const query = searchQuery.toLowerCase();
 
-    // 1. Initialize from Work Orders to show headers even with 0 JCs
+    // 1. Group Work Orders and find latest ID in each batch for sorting
+    const woGroups = {};
     workOrders.forEach(wo => {
       if (!allowedSourceTypes.includes(wo.source_type)) return;
-
       const matchesSearch = !searchQuery ||
         wo.wo_number?.toLowerCase().includes(query) ||
         wo.item_name?.toLowerCase().includes(query);
+      if (!matchesSearch) return;
 
-      if (matchesSearch) {
+      const groupKey = wo.plan_id ? `plan_${wo.plan_id}` : (wo.parent_wo_id ? `parent_${wo.parent_wo_id}` : `wo_${wo.id}`);
+      if (!woGroups[groupKey]) {
+        woGroups[groupKey] = { latestId: 0, items: [] };
+      }
+      woGroups[groupKey].items.push(wo);
+      const currentId = Number(wo.id) || 0;
+      if (currentId > woGroups[groupKey].latestId) {
+        woGroups[groupKey].latestId = currentId;
+      }
+    });
+
+    // 2. Sort WO groups by newest first
+    const sortedGroupKeys = Object.keys(woGroups).sort((a, b) => woGroups[b].latestId - woGroups[a].latestId);
+
+    // 3. Initialize headers in correct order
+    sortedGroupKeys.forEach(key => {
+      const sortedInGroup = woGroups[key].items.sort((a, b) => {
+        const aPrio = getSourcePriority(a.source_type);
+        const bPrio = getSourcePriority(b.source_type);
+        if (aPrio !== bPrio) return aPrio - bPrio;
+        return (Number(a.id) || 0) - (Number(b.id) || 0);
+      });
+
+      sortedInGroup.forEach(wo => {
         acc[wo.id] = {
           id: wo.id,
           wo_number: wo.wo_number,
@@ -768,7 +816,7 @@ const JobCard = () => {
           source_type: wo.source_type,
           cards: []
         };
-      }
+      });
     });
 
     // 2. Map Job Cards to their Work Orders
@@ -782,6 +830,7 @@ const JobCard = () => {
           id: woId,
           wo_number: jc.wo_number,
           item_name: jc.item_name,
+          item_code: jc.item_code,
           priority: jc.priority,
           wo_quantity: jc.wo_quantity,
           wo_status: jc.wo_status,
@@ -794,7 +843,11 @@ const JobCard = () => {
 
     // 3. Sort cards within each group by sequence_no
     Object.values(acc).forEach(group => {
-      group.cards.sort((a, b) => (a.sequence_no || 0) - (b.sequence_no || 0));
+      group.cards.sort((a, b) => {
+        const aSeq = parseInt(a.sequence_no || a.operation_sequence || 0);
+        const bSeq = parseInt(b.sequence_no || b.operation_sequence || 0);
+        return aSeq - bSeq;
+      });
     });
 
     return acc;
@@ -833,6 +886,14 @@ const JobCard = () => {
   const [activeTab, setActiveTab] = useState('time');
   const [viewTab, setViewTab] = useState('timeline');
   const [viewingJobCard, setViewingJobCard] = useState(null);
+
+  const workOrderOperations = useMemo(() => {
+    if (!selectedJC && !viewingJobCard) return [];
+    const woId = selectedJC?.work_order_id || viewingJobCard?.work_order_id;
+    return jobCards.filter(jc => String(jc.work_order_id) === String(woId))
+      .sort((a, b) => (a.sequence_no || 0) - (b.sequence_no || 0));
+  }, [jobCards, selectedJC, viewingJobCard]);
+
   const [progressData, setProgressData] = useState({
     producedQty: 0,
     acceptedQty: 0,
@@ -1616,10 +1677,15 @@ const JobCard = () => {
         <div className="flex justify-between items-start">
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl  text-slate-900">Production Entry</h1>
+              <span className="flex items-center justify-center w-6 h-6 rounded bg-indigo-50 text-xs font-bold text-indigo-600 border border-indigo-100">
+                {selectedJC.sequence_no || selectedJC.operation_sequence || '-'}
+              </span>
+              <h1 className="text-xl  text-slate-900">Production Entry: {selectedJC.operation_name}</h1>
             </div>
             <div className="flex items-center gap-2 mt-1">
               <span className="text-xs text-slate-500">{selectedJC.job_card_no}</span>
+              <span className="text-slate-300">•</span>
+              <span className="text-xs text-slate-500">WO: {selectedJC.work_order_no || selectedJC.wo_number}</span>
               <span className="text-slate-300">•</span>
               <span className="text-xs text-slate-500">{new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
             </div>
@@ -3870,25 +3936,14 @@ const JobCard = () => {
       sortable: true,
       render: (val, row) => (
         <div className="flex flex-col">
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs  text-slate-500 mt-0.5   ">{row.client_name || "Internal"}</span>
-            
-          </div>
-          <span className="text-xs  text-slate-400 mt-0.5 ">
-            WO: {row.wo_number}
-          </span>
-          <div className='flex items-center gap-1'>
-            {row.sequence_no > 0 && (
-              <span className="flex items-center justify-center w-2 h-2 bg-slate-100 text-slate-500 rounded text-xs   border border-slate-200">
-                {row.sequence_no}
-              </span>
-            )}
-            <span className="text-xs  text-indigo-600">
-              {val}
+          <span className="font-medium text-slate-900 truncate max-w-[180px]">{row.project_name || row.client_name || 'Internal'}</span>
+          <span className="text-[10px] text-slate-500">WO: {row.work_order_no || row.wo_number}</span>
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <span className="flex items-center justify-center w-5 h-5 rounded bg-slate-100 text-[10px] font-bold text-slate-700 border border-slate-200">
+              {row.sequence_no || row.operation_sequence || '-'}
             </span>
+            <span className="text-xs font-semibold text-indigo-600">{val}</span>
           </div>
-          
-          
         </div>
       )
     },
@@ -3912,19 +3967,35 @@ const JobCard = () => {
       key: 'item_name',
       render: (val, row) => {
         const isSubcontract = row.execution_type === 'Outsource' || row.execution_type === 'Subcontract' || row.execution_type === 'Sub-Contract' || row.outward_challan_id;
+        const sourceType = (row.source_type || '').toUpperCase();
+        const isSA = sourceType === 'SA' || sourceType === 'SUB ASSEMBLY' || sourceType === 'SFG';
+        
         return (
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center gap-2">
-              <span className={` w-fit ${row.source_type === 'SA' ? ' text-amber-700  ' : ' text-indigo-700  '}`}>
-                {row.source_type === 'SA' ? 'Sub Assembly' : 'Finished Good'}
+              <span className={`text-[10px] px-1.5 py-0.5 rounded border font-bold ${isSA ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-indigo-50 text-indigo-700 border-indigo-200'}`}>
+                {isSA ? 'SA' : 'FG'}
               </span>
-              <span className={`text-xs     ${isSubcontract ? 'text-amber-600 ' : 'text-blue-600'}`}>
+              <span className={`text-[10px] font-bold uppercase tracking-tight ${isSubcontract ? 'text-amber-600' : 'text-blue-600'}`}>
                 ({isSubcontract ? 'Outsource' : 'In-house'})
               </span>
             </div>
-            <span className="text-xs  text-slate-500" title={val}>
-              {val}
-            </span>
+            
+            <div className="flex flex-col">
+              <span className="text-[11px] font-bold text-slate-900 leading-tight" title={val}>{val}</span>
+              
+              {isSA && row.source_fg && (
+                <div className="flex items-center gap-1 mt-0.5">
+                  <span className="text-[10px] text-slate-400 italic">Part of:</span>
+                  <span className="text-[10px] text-indigo-600 font-bold leading-tight">{row.source_fg}</span>
+                </div>
+              )}
+              
+              <div className="flex items-center gap-1.5 mt-1 pt-1 border-t border-slate-100 border-dashed">
+                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Dwg No:</span>
+                <span className="text-[10px] text-slate-600 font-mono font-medium">{row.drawing_no || '---'}</span>
+              </div>
+            </div>
           </div>
         );
       }
@@ -3946,6 +4017,28 @@ const JobCard = () => {
       key: 'accepted_qty',
       className: 'text-center',
       render: (val) => <span className="text-xs  text-emerald-600">{parseFloat(val || 0).toFixed(2)}</span>
+    },
+    {
+      label: 'Time & Costing',
+      key: 'cycle_time',
+      render: (_, row) => {
+        const cycleTime = parseFloat(row.cycle_time || row.std_time || 0);
+        const hourlyRate = parseFloat(row.hourly_rate || 0);
+        const totalCost = (cycleTime / 60) * (row.wo_quantity || row.planned_qty || 1) * hourlyRate;
+        
+        return (
+          <div className="flex flex-col gap-0.5">
+            <div className="flex items-center gap-1 text-[10px] text-slate-500">
+              <Clock className="w-2.5 h-2.5" />
+              <span>{Math.round(cycleTime)} {row.time_uom || 'min'}/u</span>
+            </div>
+            <div className="flex items-center gap-1 text-[10px] text-slate-600">
+              <span className="font-medium text-emerald-600">₹{totalCost.toFixed(2)}</span>
+              <span className="text-slate-400">@ ₹{hourlyRate}/hr</span>
+            </div>
+          </div>
+        );
+      }
     },
     {
       label: 'Workstation',

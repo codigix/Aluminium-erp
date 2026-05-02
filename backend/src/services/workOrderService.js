@@ -6,12 +6,17 @@ const listWorkOrders = async () => {
   const [rows] = await pool.query(
     `SELECT wo.*, so.project_name, w.workstation_name, c.company_name as client_name,
             (SELECT COUNT(*) FROM job_cards WHERE work_order_id = wo.id) as total_job_cards,
-            (SELECT COUNT(*) FROM job_cards WHERE work_order_id = wo.id AND status = 'COMPLETED') as completed_job_cards
+            (SELECT COUNT(*) FROM job_cards WHERE work_order_id = wo.id AND status = 'COMPLETED') as completed_job_cards,
+            (SELECT MAX(id) FROM work_orders WHERE 
+               (plan_id = wo.plan_id AND plan_id IS NOT NULL) OR 
+               (parent_wo_id = wo.parent_wo_id AND parent_wo_id IS NOT NULL) OR 
+               (id = wo.id AND plan_id IS NULL AND parent_wo_id IS NULL)
+            ) as batch_latest_id
      FROM work_orders wo
      LEFT JOIN sales_orders so ON wo.sales_order_id = so.id
      LEFT JOIN companies c ON so.company_id = c.id
      LEFT JOIN workstations w ON wo.workstation_id = w.id
-     ORDER BY wo.sales_order_id DESC, CASE WHEN wo.source_type = 'SA' THEN 0 ELSE 1 END ASC, IFNULL(wo.source_fg, wo.item_code) ASC, IFNULL(wo.plan_id, 0) DESC, wo.created_at DESC`
+     ORDER BY batch_latest_id DESC, CASE WHEN wo.source_type = 'SA' THEN 0 ELSE 1 END ASC, wo.id ASC`
   );
   return rows;
 };
@@ -117,9 +122,13 @@ const createWorkOrdersFromPlan = async (planId) => {
 
     // 3. Link SAs to parent FG if applicable
     if (parentWoId && saWorkOrderIds.length > 0) {
+      // Fetch parent info to update SAs
+      const [parents] = await connection.query('SELECT item_name FROM work_orders WHERE id = ?', [parentWoId]);
+      const parentName = parents.length > 0 ? parents[0].item_name : null;
+
       await connection.query(
-        'UPDATE work_orders SET parent_wo_id = ? WHERE id IN (?)',
-        [parentWoId, saWorkOrderIds]
+        'UPDATE work_orders SET parent_wo_id = ?, source_fg = ? WHERE id IN (?) AND source_fg IS NULL',
+        [parentWoId, parentName, saWorkOrderIds]
       );
     }
 
@@ -394,8 +403,9 @@ const createJobCardsForWorkOrder = async (workOrderId, connection, initialStatus
       if (opSource === targetCode) return true;
       // Match by drawing
       if (targetDrawing && opSource === targetDrawing) return true;
-      // Match by type if it's the main FG
+      // Match by type if it's the main FG or an SA
       if (wo.source_type === 'FG' && (opType === 'FG' || opType === 'FINISHED GOOD')) return true;
+      if (wo.source_type === 'SA' && (opType === 'SA' || opType === 'SUB ASSEMBLY')) return true;
 
       return false;
     }).map(op => ({

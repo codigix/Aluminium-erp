@@ -82,7 +82,7 @@ const PurchaseOrders = () => {
       }
     } else if (path === '/purchase-orders/manual-add') {
       if (!showManualCreateModal) {
-        setManualFormData({ id: null, vendorId: '', expectedDeliveryDate: '', notes: '', currency: 'INR (Indian Rupee)', items: [] });
+        setManualFormData({ id: null, vendorId: '', mrId: '', expectedDeliveryDate: '', notes: '', currency: 'INR (Indian Rupee)', items: [] });
         setShowManualCreateModal(true);
         setShowCreateModal(false);
         setViewMode('list');
@@ -147,12 +147,14 @@ const PurchaseOrders = () => {
 
   const [vendors, setVendors] = useState([]);
   const [stockItems, setStockItems] = useState([]);
+  const [materialRequests, setMaterialRequests] = useState([]);
   const [showManualCreateModal, setShowManualCreateModal] = useState(false);
   const invoiceInputRef = useRef(null);
   const [uploadingPoId, setUploadingPoId] = useState(null);
   const [manualFormData, setManualFormData] = useState({
     id: null,
     vendorId: '',
+    mrId: '',
     expectedDeliveryDate: '',
     notes: '',
     currency: 'INR (Indian Rupee)',
@@ -170,6 +172,7 @@ const PurchaseOrders = () => {
         fetchApprovedQuotations();
         fetchVendors();
         fetchStockItems();
+        fetchMaterialRequests();
       }
     } else {
       fetchPOs();
@@ -177,6 +180,7 @@ const PurchaseOrders = () => {
       fetchApprovedQuotations();
       fetchVendors();
       fetchStockItems();
+      fetchMaterialRequests();
     }
   }, []);
 
@@ -211,6 +215,51 @@ const PurchaseOrders = () => {
       }
     } catch (error) {
       console.error('Error fetching items:', error);
+    }
+  };
+
+  const handleMRChange = async (mrId) => {
+    if (!mrId) {
+      setManualFormData(prev => ({ ...prev, mrId: '', items: [] }));
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/material-requests/${mrId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const mrData = await response.json();
+        const mrItems = (mrData.items || [])
+          .filter(item => (item.fulfillment_source === 'PURCHASE' || !item.fulfillment_source))
+          .map(item => ({
+            item_code: item.item_code,
+            description: item.item_name || item.description || item.item_code,
+            material_name: item.material_name,
+            quantity: item.quantity || 0,
+            unit: item.uom || 'NOS',
+            rate: item.unit_rate || 0,
+            amount: (item.quantity || 0) * (item.unit_rate || 0),
+            length: item.length || 0,
+            width: item.width || 0,
+            thickness: item.thickness || 0,
+            diameter: item.diameter || 0,
+            outer_diameter: item.outer_diameter || 0,
+            density: item.density || 0,
+            weight_per_unit: item.weight_per_unit || 0
+          }));
+        
+        setManualFormData(prev => ({
+          ...prev,
+          mrId: mrId,
+          items: mrItems,
+          notes: mrData.notes || prev.notes
+        }));
+      }
+    } catch (error) {
+      console.error('Error fetching MR details:', error);
+      errorToast('Failed to load MR details');
     }
   };
 
@@ -315,11 +364,27 @@ const PurchaseOrders = () => {
 
       successToast(`Purchase Order ${manualFormData.id ? 'updated' : 'created'} successfully`);
       setShowManualCreateModal(false);
-      setManualFormData({ id: null, vendorId: '', expectedDeliveryDate: '', notes: '', currency: 'INR (Indian Rupee)', items: [] });
+      setManualFormData({ id: null, vendorId: '', mrId: '', expectedDeliveryDate: '', notes: '', currency: 'INR (Indian Rupee)', items: [] });
       fetchPOs();
       fetchStats();
     } catch (error) {
       errorToast(error.message || 'Failed to create PO');
+    }
+  };
+
+  const fetchMaterialRequests = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/material-requests`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        // Only show APPROVED MRs
+        setMaterialRequests((Array.isArray(data) ? data : []).filter(mr => (mr.status || '').toUpperCase() === 'APPROVED'));
+      }
+    } catch (error) {
+      console.error('Error fetching MRs:', error);
     }
   };
 
@@ -1209,6 +1274,19 @@ const PurchaseOrders = () => {
                       <option value="">Select Supplier</option>
                       {vendors.map(v => (
                         <option key={v.id} value={v.id}>{v.vendor_name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs  text-slate-400   ml-1">Select Material Request</label>
+                    <select
+                      value={manualFormData.mrId}
+                      onChange={(e) => handleMRChange(e.target.value)}
+                      className="w-full p-2  bg-slate-50 border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                    >
+                      <option value="">Select MR (Optional)</option>
+                      {materialRequests.map(mr => (
+                        <option key={mr.id} value={mr.id}>{mr.mr_number} - {mr.project_name || 'General'}</option>
                       ))}
                     </select>
                   </div>

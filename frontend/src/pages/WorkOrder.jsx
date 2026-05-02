@@ -54,6 +54,46 @@ const WorkOrder = () => {
     navigate(`/work-order/edit-work?id=${id}`);
   };
 
+  const sortedWorkOrders = React.useMemo(() => {
+    const getSourcePriority = (type) => {
+      const t = (type || '').toLowerCase();
+      if (t.includes('assembly') || t === 'sa') return 1;
+      if (t.includes('finish') || t === 'fg') return 2;
+      return 3;
+    };
+
+    // 1. Group items by batch and find the latest ID in each batch
+    const groups = {};
+    workOrders.forEach(wo => {
+      const groupKey = wo.plan_id ? `plan_${wo.plan_id}` : (wo.parent_wo_id ? `parent_${wo.parent_wo_id}` : `wo_${wo.id}`);
+      if (!groups[groupKey]) {
+        groups[groupKey] = { latestId: 0, items: [] };
+      }
+      groups[groupKey].items.push(wo);
+      const currentId = Number(wo.id) || 0;
+      if (currentId > groups[groupKey].latestId) {
+        groups[groupKey].latestId = currentId;
+      }
+    });
+
+    // 2. Sort groups by their latest ID (newest batch first)
+    const sortedGroupKeys = Object.keys(groups).sort((a, b) => groups[b].latestId - groups[a].latestId);
+
+    // 3. Within each group, sort by SA first, then ID ASC
+    const result = [];
+    sortedGroupKeys.forEach(key => {
+      const groupedItems = groups[key].items.sort((a, b) => {
+        const aPrio = getSourcePriority(a.source_type);
+        const bPrio = getSourcePriority(b.source_type);
+        if (aPrio !== bPrio) return aPrio - bPrio;
+        return (Number(a.id) || 0) - (Number(b.id) || 0);
+      });
+      result.push(...groupedItems);
+    });
+
+    return result;
+  }, [workOrders]);
+
   const columns = [
     {
       label: 'Work Order ID',
@@ -76,10 +116,10 @@ const WorkOrder = () => {
       label: 'Specification',
       key: 'source_type',
       render: (val) => (
-        <span className={`px-2 py-0.5 rounded text-xs  ${
-          val === 'SA' ? ' text-rose-600 ' : ' text-indigo-600 '
+        <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+          val === 'SA' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-indigo-50 text-indigo-600 border-indigo-100'
         }`}>
-          {val === 'SA' ? 'Sub Assembly' : 'Finished Goods'}
+          {val === 'SA' ? 'SA' : 'FG'}
         </span>
       )
     },
@@ -89,8 +129,13 @@ const WorkOrder = () => {
       sortable: true,
       render: (val, row) => (
         <div className="flex flex-col">
-          <span className="text-xs text-slate-900 leading-tight">{val || row.item_code}</span>
-          <span className="text-xs  text-slate-400 mt-0.5">BOM-{row.bom_no || 'NA'}</span>
+          <span className="text-xs font-semibold text-slate-900 leading-tight">{val || row.item_code}</span>
+          {row.source_type === 'SA' && row.source_fg && (
+            <span className="text-[10px] text-slate-500 italic mt-0.5">
+              Part of: <span className="text-indigo-600 not-italic font-bold">{row.source_fg}</span>
+            </span>
+          )}
+          <span className="text-[10px] text-slate-400 mt-0.5">BOM-{row.bom_no || 'NA'}</span>
         </div>
       )
     },
@@ -254,7 +299,7 @@ const WorkOrder = () => {
        
           <DataTable
             columns={columns}
-            data={workOrders}
+            data={sortedWorkOrders}
             loading={loading}
             searchPlaceholder="Search by Work Order, Project, or Item..."
             searchKey="wo_number"

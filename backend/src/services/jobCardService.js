@@ -4,6 +4,9 @@ const generateJobCardQcPdf = require('../utils/generateJobCardQcPdf');
 const listJobCards = async () => {
   const [rows] = await pool.query(
     `SELECT jc.*, wo.wo_number, wo.item_name, wo.priority, wo.quantity as wo_quantity, wo.status as wo_status, wo.end_date as wo_end_date, wo.source_type,
+            wo.plan_id, wo.sales_order_id, wo.parent_wo_id,
+            COALESCE(wo.source_fg, wo_parent.item_name) as source_fg,
+            COALESCE(soi.drawing_no, soi_parent.drawing_no, wo_parent.item_code, wo.item_code) as drawing_no,
             so.project_name, c.company_name as client_name,
             COALESCE(o.operation_name, jc.operation_name) as operation_name, 
             COALESCE(NULLIF(jc.std_time, 0), o.std_time, 0) as std_time, 
@@ -17,16 +20,23 @@ const listJobCards = async () => {
             (SELECT SUM(dispatch_qty) FROM outward_challans WHERE job_card_id = jc.id) as dispatch_qty,
             COALESCE(jc.execution_mode, 'In-house') as execution_type,
             (SELECT start_time FROM job_card_time_logs WHERE job_card_id = jc.id ORDER BY log_date DESC, start_time DESC, id DESC LIMIT 1) as latest_log_start_time,
-            (SELECT end_time FROM job_card_time_logs WHERE job_card_id = jc.id ORDER BY log_date DESC, start_time DESC, id DESC LIMIT 1) as latest_log_end_time
+            (SELECT end_time FROM job_card_time_logs WHERE job_card_id = jc.id ORDER BY log_date DESC, start_time DESC, id DESC LIMIT 1) as latest_log_end_time,
+            (SELECT MAX(id) FROM work_orders WHERE 
+               (plan_id = wo.plan_id AND plan_id IS NOT NULL) OR 
+               (parent_wo_id = wo.parent_wo_id AND parent_wo_id IS NOT NULL) OR 
+               (id = wo.id AND plan_id IS NULL AND parent_wo_id IS NULL)
+            ) as batch_latest_id
      FROM job_cards jc
      JOIN work_orders wo ON jc.work_order_id = wo.id
+     LEFT JOIN work_orders wo_parent ON wo.parent_wo_id = wo_parent.id
+     LEFT JOIN sales_order_items soi_parent ON wo_parent.sales_order_item_id = soi_parent.id
      LEFT JOIN sales_orders so ON wo.sales_order_id = so.id
      LEFT JOIN companies c ON so.company_id = c.id
      LEFT JOIN sales_order_items soi ON wo.sales_order_item_id = soi.id
      LEFT JOIN operations o ON jc.operation_id = o.id
      LEFT JOIN workstations w ON jc.workstation_id = w.id
      LEFT JOIN users u ON jc.assigned_to = u.id
-     ORDER BY wo.sales_order_id DESC, CASE WHEN wo.source_type = 'SA' THEN 0 ELSE 1 END ASC, jc.job_card_no ASC, jc.sequence_no ASC`
+     ORDER BY batch_latest_id DESC, CASE WHEN wo.source_type = 'SA' THEN 0 ELSE 1 END ASC, wo.id ASC, jc.sequence_no ASC, jc.id ASC`
   );
   return rows;
 };
