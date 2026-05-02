@@ -6,7 +6,7 @@ const listJobCards = async () => {
     `SELECT jc.*, wo.wo_number, wo.item_name, wo.priority, wo.quantity as wo_quantity, wo.status as wo_status, wo.end_date as wo_end_date, wo.source_type,
             wo.plan_id, wo.sales_order_id, wo.parent_wo_id,
             COALESCE(wo.source_fg, wo_parent.item_name) as source_fg,
-            COALESCE(soi.drawing_no, soi_parent.drawing_no, wo_parent.item_code, wo.item_code) as drawing_no,
+            COALESCE(soi.drawing_no, soi_parent.drawing_no, wo.bom_no, wo_parent.bom_no, wo_parent.item_code, wo.item_code) as drawing_no,
             so.project_name, c.company_name as client_name,
             COALESCE(o.operation_name, jc.operation_name) as operation_name, 
             COALESCE(NULLIF(jc.std_time, 0), o.std_time, 0) as std_time, 
