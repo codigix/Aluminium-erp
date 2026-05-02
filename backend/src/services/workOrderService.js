@@ -5,6 +5,7 @@ const stockService = require('./stockService');
 const listWorkOrders = async () => {
   const [rows] = await pool.query(
     `SELECT wo.*, so.project_name, w.workstation_name, c.company_name as client_name,
+            COALESCE(soi_parent.description, oi_parent.description, soi_source.description, soi_fallback.description, oi_fallback.description, wo_parent.item_name, wo.source_fg) as source_fg,
             (SELECT COUNT(*) FROM job_cards WHERE work_order_id = wo.id) as total_job_cards,
             (SELECT COUNT(*) FROM job_cards WHERE work_order_id = wo.id AND status = 'COMPLETED') as completed_job_cards,
             (SELECT MAX(id) FROM work_orders WHERE 
@@ -13,6 +14,12 @@ const listWorkOrders = async () => {
                (id = wo.id AND plan_id IS NULL AND parent_wo_id IS NULL)
             ) as batch_latest_id
      FROM work_orders wo
+     LEFT JOIN work_orders wo_parent ON wo.parent_wo_id = wo_parent.id
+     LEFT JOIN sales_order_items soi_parent ON wo_parent.sales_order_item_id = soi_parent.id
+     LEFT JOIN order_items oi_parent ON wo_parent.sales_order_item_id = oi_parent.id AND wo_parent.sales_order_id = oi_parent.order_id
+     LEFT JOIN sales_order_items soi_fallback ON (wo_parent.item_code = soi_fallback.item_code OR wo_parent.bom_no = soi_fallback.drawing_no) AND soi_fallback.sales_order_id IS NULL
+     LEFT JOIN order_items oi_fallback ON (wo_parent.item_code = oi_fallback.item_code OR wo_parent.bom_no = oi_fallback.drawing_no) AND oi_fallback.order_id = wo_parent.sales_order_id
+     LEFT JOIN sales_order_items soi_source ON (wo.source_fg = soi_source.item_code OR wo.source_fg = soi_source.drawing_no) AND (soi_source.sales_order_id = wo.sales_order_id OR soi_source.sales_order_id IS NULL)
      LEFT JOIN sales_orders so ON wo.sales_order_id = so.id
      LEFT JOIN companies c ON so.company_id = c.id
      LEFT JOIN workstations w ON wo.workstation_id = w.id
@@ -77,7 +84,7 @@ const createWorkOrdersFromPlan = async (planId) => {
 
       // Ensure we have a valid sales_order_id if available
       const effectiveSalesOrderId = plan.sales_order_id || (itemData.sales_order_id) || null;
-      const sourceFg = itemData.source_fg || (sourceType === 'FG' ? itemCode : null);
+      const sourceFg = itemData.source_fg || (sourceType === 'FG' ? itemName : null);
 
       const woNumber = await generateWoNumber(connection);
       

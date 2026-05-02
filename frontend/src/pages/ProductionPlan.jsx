@@ -895,7 +895,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
             required_qty: plannedQty,
             bomQty: baseQty,
             bom_no: mat.bom_no || mat.bom_ref || item.bom_no || 'BOM-REF',
-            source_fg: item.itemCode
+            source_fg: item.description || item.itemCode
           });
         }
         processedMaterialSOItems.add(soItemMaterialKey);
@@ -943,7 +943,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
               requiredQty: totalQty,
               required_qty: totalQty,
               bomQty: baseQty,
-              source_fg: item.itemCode,
+              source_fg: item.description || item.itemCode,
               is_kg_material: isKg,
               total_wt: weight
             });
@@ -2150,6 +2150,95 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
     plan.order_no?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     plan.project_name?.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const mrColumns = [
+    {
+      label: 'Material Name',
+      key: 'material_name',
+      render: (val, row) => (
+        <div className="flex flex-col">
+          <span className="text-xs font-bold text-slate-800">{val}</span>
+          <span className="text-[10px] text-slate-400 uppercase tracking-tighter">{row.item_code}</span>
+          {renderDimensions(row.dimensions)}
+        </div>
+      )
+    },
+    {
+      label: 'Inventory',
+      key: 'inventory',
+      className: 'text-center',
+      render: (val, row) => (
+        <div className="flex flex-col items-center">
+          <span className={`text-xs font-semibold ${parseFloat(val || 0) > 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
+            {Number(val || 0).toFixed(2)}
+          </span>
+          <span className="text-[9px] text-slate-400 uppercase">{row.uom}</span>
+        </div>
+      )
+    },
+    {
+      label: 'Req. Qty',
+      key: 'quantity',
+      className: 'text-center',
+      render: (val, row) => (
+        <div className="flex flex-col items-center">
+          <span className="text-xs font-bold text-indigo-600">
+            {Number(val || 0).toFixed(2)}
+          </span>
+          <span className="text-[9px] text-slate-400 uppercase">{row.uom}</span>
+        </div>
+      )
+    },
+    {
+      label: 'Status',
+      key: 'request_exists',
+      render: (val, row) => {
+        if (val) {
+          return (
+            <div className="flex items-center gap-1 text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded text-[10px] font-bold border border-emerald-100">
+              <CheckCircle2 className="w-3 h-3" />
+              REQUESTED
+            </div>
+          );
+        }
+        
+        const inv = parseFloat(row.inventory || 0);
+        const req = parseFloat(row.quantity || 0);
+        
+        if (inv >= req) {
+          return (
+            <div className="flex items-center gap-1 text-blue-600 bg-blue-50 px-2 py-0.5 rounded text-[10px] font-bold border border-blue-100">
+              <Package className="w-3 h-3" />
+              IN STOCK
+            </div>
+          );
+        }
+        
+        return (
+          <div className="flex items-center gap-1 text-amber-600 bg-amber-50 px-2 py-0.5 rounded text-[10px] font-bold border border-amber-100">
+            <Clock className="w-3 h-3" />
+            PENDING
+          </div>
+        );
+      }
+    },
+    {
+      label: 'Actions',
+      key: 'actions',
+      className: 'text-right',
+      render: (_, row) => !row.request_exists && (
+        <button
+          onClick={() => {
+            setMrItems(prev => prev.filter(item => item.item_code !== row.item_code));
+          }}
+          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-full transition-all"
+          title="Remove from request"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      )
+    }
+  ];
 
   const columns = [
     {

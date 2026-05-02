@@ -131,11 +131,11 @@ const WorkOrder = () => {
         <div className="flex flex-col">
           <span className="text-xs font-semibold text-slate-900 leading-tight">{val || row.item_code}</span>
           {row.source_type === 'SA' && row.source_fg && (
-            <span className="text-[10px] text-slate-500 italic mt-0.5">
+            <span className="text-[9px] text-slate-500 italic mt-0.5">
               Part of: <span className="text-indigo-600 not-italic font-bold">{row.source_fg}</span>
             </span>
           )}
-          <span className="text-[10px] text-slate-400 mt-0.5">BOM-{row.bom_no || 'NA'}</span>
+          <span className="text-[9px] text-slate-400 mt-0.5">BOM-{row.bom_no || 'NA'}</span>
         </div>
       )
     },

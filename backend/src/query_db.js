@@ -9,25 +9,22 @@ async function run() {
       database: 'sales_erp'
     });
     
-    const drawingNos = ['900001104', '900001105', '900001106', '900001107'];
+    const query = `
+        SELECT jc.job_card_no, wo.item_name, wo.source_fg as raw_source_fg,
+            COALESCE(soi_parent.description, oi_parent.description, soi_source.description, soi_fallback.description, oi_fallback.description, wo_parent.item_name, wo.source_fg) as source_fg_desc
+        FROM job_cards jc
+        JOIN work_orders wo ON jc.work_order_id = wo.id
+        LEFT JOIN work_orders wo_parent ON wo.parent_wo_id = wo_parent.id
+        LEFT JOIN sales_order_items soi_parent ON wo_parent.sales_order_item_id = soi_parent.id
+        LEFT JOIN order_items oi_parent ON wo_parent.sales_order_item_id = oi_parent.id AND wo_parent.sales_order_id = oi_parent.order_id
+        LEFT JOIN sales_order_items soi_source ON (wo.source_fg = soi_source.item_code OR wo.source_fg = soi_source.drawing_no) AND (soi_source.sales_order_id = wo.sales_order_id OR soi_source.sales_order_id IS NULL)
+        LEFT JOIN sales_order_items soi_fallback ON (wo_parent.item_code = soi_fallback.item_code OR wo_parent.bom_no = soi_fallback.drawing_no) AND soi_fallback.sales_order_id IS NULL
+        LEFT JOIN order_items oi_fallback ON (wo_parent.item_code = oi_fallback.item_code OR wo_parent.bom_no = oi_fallback.drawing_no) AND oi_fallback.order_id = wo_parent.sales_order_id
+        WHERE jc.job_card_no = 'JC-0176-911'
+    `;
     
-    console.log('=== Sales Order Items ===');
-    const [items] = await conn.query(
-        "SELECT id, drawing_no, item_code, item_group, description, bom_cost FROM sales_order_items WHERE drawing_no IN (?)",
-        [drawingNos]
-    );
-    console.table(items);
-    
-    for (const item of items) {
-        const [components] = await conn.query(
-            "SELECT id, component_name, component_code, item_group, quantity, rate FROM sales_order_item_components WHERE sales_order_item_id = ?",
-            [item.id]
-        );
-        if (components.length > 0) {
-            console.log(`--- Components for Item ID ${item.id} (${item.drawing_no} - ${item.item_group} - ${item.description}) ---`);
-            console.table(components);
-        }
-    }
+    const [rows] = await conn.query(query);
+    console.log(JSON.stringify(rows, null, 2));
     
     await conn.end();
   } catch (err) {

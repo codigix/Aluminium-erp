@@ -5,8 +5,8 @@ const listJobCards = async () => {
   const [rows] = await pool.query(
     `SELECT jc.*, wo.wo_number, wo.item_name, wo.priority, wo.quantity as wo_quantity, wo.status as wo_status, wo.end_date as wo_end_date, wo.source_type,
             wo.plan_id, wo.sales_order_id, wo.parent_wo_id,
-            COALESCE(wo.source_fg, wo_parent.item_name) as source_fg,
-            COALESCE(soi.drawing_no, soi_parent.drawing_no, wo.bom_no, wo_parent.bom_no, wo_parent.item_code, wo.item_code) as drawing_no,
+            COALESCE(soi_parent.description, oi_parent.description, soi_source.description, soi_fallback.description, oi_fallback.description, wo_parent.item_name, wo.source_fg) as source_fg,
+            COALESCE(soi.drawing_no, oi.drawing_no, soi_parent.drawing_no, oi_parent.drawing_no, wo.bom_no, wo_parent.bom_no, wo_parent.item_code, wo.item_code) as drawing_no,
             so.project_name, c.company_name as client_name,
             COALESCE(o.operation_name, jc.operation_name) as operation_name, 
             COALESCE(NULLIF(jc.std_time, 0), o.std_time, 0) as std_time, 
@@ -14,7 +14,8 @@ const listJobCards = async () => {
             COALESCE(NULLIF(jc.setup_time, 0), 0) as setup_time,
             COALESCE(jc.time_uom, o.time_uom, 'Min') as time_uom, 
             COALESCE(NULLIF(jc.hourly_rate, 0), o.hourly_rate, 0) as hourly_rate, 
-            w.workstation_name, u.username as operator_name, soi.status as item_status,
+            w.workstation_name, u.username as operator_name, 
+            soi.status as item_status,
             (SELECT id FROM outward_challans WHERE job_card_id = jc.id ORDER BY created_at DESC LIMIT 1) as outward_challan_id,
             (SELECT challan_number FROM outward_challans WHERE job_card_id = jc.id ORDER BY created_at DESC LIMIT 1) as outward_challan_no,
             (SELECT SUM(dispatch_qty) FROM outward_challans WHERE job_card_id = jc.id) as dispatch_qty,
@@ -30,9 +31,14 @@ const listJobCards = async () => {
      JOIN work_orders wo ON jc.work_order_id = wo.id
      LEFT JOIN work_orders wo_parent ON wo.parent_wo_id = wo_parent.id
      LEFT JOIN sales_order_items soi_parent ON wo_parent.sales_order_item_id = soi_parent.id
+     LEFT JOIN order_items oi_parent ON wo_parent.sales_order_item_id = oi_parent.id AND wo_parent.sales_order_id = oi_parent.order_id
+     LEFT JOIN sales_order_items soi_source ON (wo.source_fg = soi_source.item_code OR wo.source_fg = soi_source.drawing_no) AND (soi_source.sales_order_id = wo.sales_order_id OR soi_source.sales_order_id IS NULL)
+     LEFT JOIN sales_order_items soi_fallback ON (wo_parent.item_code = soi_fallback.item_code OR wo_parent.bom_no = soi_fallback.drawing_no) AND soi_fallback.sales_order_id IS NULL
+     LEFT JOIN order_items oi_fallback ON (wo_parent.item_code = oi_fallback.item_code OR wo_parent.bom_no = oi_fallback.drawing_no) AND oi_fallback.order_id = wo_parent.sales_order_id
      LEFT JOIN sales_orders so ON wo.sales_order_id = so.id
      LEFT JOIN companies c ON so.company_id = c.id
      LEFT JOIN sales_order_items soi ON wo.sales_order_item_id = soi.id
+     LEFT JOIN order_items oi ON wo.sales_order_item_id = oi.id AND wo.sales_order_id = oi.order_id
      LEFT JOIN operations o ON jc.operation_id = o.id
      LEFT JOIN workstations w ON jc.workstation_id = w.id
      LEFT JOIN users u ON jc.assigned_to = u.id
