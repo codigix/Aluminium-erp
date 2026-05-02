@@ -3995,11 +3995,6 @@ const JobCard = () => {
                   <span className="text-[9px] text-indigo-600 font-bold leading-tight">{row.source_fg}</span>
                 </div>
               )}
-              
-              <div className="flex items-center gap-1.5 mt-1 pt-1 border-t border-slate-100 border-dashed">
-                <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Dwg No:</span>
-                <span className="text-[9px] text-slate-600 font-mono font-medium">{row.drawing_no || '---'}</span>
-              </div>
             </div>
           </div>
         );
