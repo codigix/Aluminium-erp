@@ -67,8 +67,8 @@ const WorkOrder = () => {
       sortable: true,
       render: (val, row) => (
         <div className="flex flex-col">
-          <span className="text-xs text-slate-900 leading-tight">{val || 'N/A'}</span>
-          <span className="text-xs  text-slate-400 mt-0.5">{row.client_name || '---'}</span>
+          {/* <span className="text-xs text-slate-900 leading-tight">{val || 'N/A'}</span> */}
+          <span className="text-xs  text-slate-900 mt-0.5">{row.client_name || '---'}</span>
         </div>
       )
     },
@@ -77,7 +77,7 @@ const WorkOrder = () => {
       key: 'source_type',
       render: (val) => (
         <span className={`px-2 py-0.5 rounded text-xs  ${
-          val === 'SA' ? 'bg-rose-50 text-rose-600 border border-rose-100' : 'bg-indigo-50 text-indigo-600 border border-indigo-100'
+          val === 'SA' ? ' text-rose-600 ' : ' text-indigo-600 '
         }`}>
           {val === 'SA' ? 'Sub Assembly' : 'Finished Goods'}
         </span>
@@ -117,16 +117,16 @@ const WorkOrder = () => {
       render: (_, row) => {
         const progress = row.total_job_cards > 0 ? Math.round((row.completed_job_cards / row.total_job_cards) * 100) : 0;
         return (
-          <div className="w-full max-w-[120px]">
+          <div className="w-full ">
             <div className="flex items-center justify-between mb-1">
               <span className="text-xs  text-slate-500">
                 {row.completed_job_cards || 0}/{row.total_job_cards || 0}
               </span>
               <span className="text-xs   text-blue-600">{progress}%</span>
             </div>
-            <div className="h-1 w-full bg-slate-100 rounded-full overflow-hidden">
+            <div className="h-1 w-full ">
               <div 
-                className="h-full bg-blue-500 rounded-full transition-all duration-500" 
+                className="h-full bg-blue-500  transition-all duration-500" 
                 style={{ width: `${progress}%` }}
               ></div>
             </div>
@@ -162,7 +162,7 @@ const WorkOrder = () => {
           </button>
           <button 
             onClick={() => handleDelete(row.id)}
-            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-all"
+            className="p-1.5 text-slate-400 hover:text-rose-600 hover: rounded transition-all"
             title="Delete"
           >
             <Trash2 className="w-3.5 h-3.5" />
@@ -303,7 +303,7 @@ const WorkOrder = () => {
                 <button
                   key={tab.id}
                   onClick={() => setWoViewTab(tab.id)}
-                  className={`p-2 text-xs  border-b-2 transition-colors ${
+                  className={`p-1 text-xs  border-b-2 transition-colors ${
                     woViewTab === tab.id
                       ? 'border-indigo-600 text-indigo-600'
                       : 'border-transparent text-slate-600 hover:text-slate-900'

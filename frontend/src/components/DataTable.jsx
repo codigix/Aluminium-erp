@@ -60,7 +60,7 @@ const DataTable = ({
           <select 
             value={pageSize} 
             onChange={handlePageSizeChange}
-            className="border border-slate-200 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500"
+            className="border border-slate-200 rounded p-1 text-xs focus:outline-none focus:ring-2 focus:ring-rose-500"
           >
             {[10, 25, 50, 100].map(size => (
               <option key={size} value={size}>{size}</option>

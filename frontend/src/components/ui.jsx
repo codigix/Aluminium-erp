@@ -372,7 +372,7 @@ export const StatusBadge = ({ status }) => {
       case 'RELEASED':
       case 'DISPATCHED':
         // Info style: Blue
-        return 'bg-blue-500 border-blue-600 text-white shadow-sm'
+        return 'text-blue-500 '
       
       case 'FULFILLED':
       case 'ACTIVE':
@@ -393,7 +393,7 @@ export const StatusBadge = ({ status }) => {
       case 'BLOCKED':
       case 'CANCELLED':
         // Danger style: Red
-        return 'bg-rose-500 border-rose-600 text-white shadow-sm'
+        return 'text-rose-500 '
       
       case 'RFQ_REQUESTED':
       case 'ON_HOLD':
@@ -403,15 +403,15 @@ export const StatusBadge = ({ status }) => {
       case 'IN_TRANSIT':
       case 'RETURN_IN_TRANSIT':
         // Warning style: Orange/Yellow
-        return 'bg-amber-500 border-amber-600 text-white shadow-sm'
+        return 'text-amber-500 '
       
       case 'RETURN_RECEIVED':
         // Secondary style: Sky/Cyan
-        return 'bg-sky-500 border-sky-600 text-white shadow-sm'
+        return 'text-sky-500 '
       
       default:
         // Dark style
-        return 'bg-slate-700 border-slate-800 text-white shadow-sm'
+        return 'text-slate-700 '
     }
   }
 
@@ -428,17 +428,17 @@ export const StatusBadge = ({ status }) => {
 
 export const Badge = ({ children, variant = 'default', className = '' }) => {
   const variants = {
-    default: 'bg-white text-slate-700 border-slate-200 shadow-sm',
-    success: 'text-emerald-500 text-white border-emerald-600 shadow-sm',
-    warning: 'bg-amber-500 text-white border-amber-600 shadow-sm',
-    danger: 'bg-rose-500 text-white border-rose-600 shadow-sm',
-    info: 'bg-blue-500 text-white border-blue-600 shadow-sm',
-    indigo: 'bg-rose-600 text-white border-rose-700 shadow-sm',
-    sky: 'bg-sky-500 text-white border-sky-600 shadow-sm'
+    default: ' text-slate-700 ',
+    success: 'text-emerald-500  ',
+    warning: 'text-amber-500 ',
+    danger: 'text-rose-500  ',
+    info: 'text-blue-500  ',
+    indigo: 'text-rose-600  ',
+    sky: 'text-sky-500  '
   };
 
   return (
-    <span className={`px-2 py-1 rounded-md text-xs    tracking-wide border ${variants[variant] || variants.default} ${className}`}>
+    <span className={` text-xs  ${variants[variant] || variants.default} ${className}`}>
       {children}
     </span>
   );
@@ -707,7 +707,7 @@ export const DataTable = ({
                 setPageSize(Number(e.target.value));
                 setCurrentPage(1);
               }}
-              className="border border-slate-200 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500/20 bg-white text-slate-900"
+              className="border border-slate-200 rounded p-1 text-xs focus:outline-none focus:ring-2 focus:ring-rose-500/20 bg-white text-slate-900"
             >
               {[10, 25, 50, 100].map(size => (
                 <option key={size} value={size}>{size}</option>
@@ -732,7 +732,7 @@ export const DataTable = ({
         </div>
       )}
 
-      <div className="overflow-x-auto custom-scrollbar bg-white relative max-h-[calc(100vh-320px)] min-h-[90vh]">
+      <div className="overflow-x-auto custom-scrollbar bg-white relative max-h-[90vh]">
         <table className="w-full text-left bg-white text-sm border-collapse">
           <thead className="sticky top-0 z-20 bg-white border-b border-slate-200 shadow-[0_2px_4px_rgba(0,0,0,0.02)]">
             <tr>

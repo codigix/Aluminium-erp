@@ -1943,10 +1943,10 @@ const BOMFormPage = () => {
                     : 'Create BOM')}
                 {productForm.revision && (
                   <span className={`p-1 rounded text-xs border  ${
-                    selectedItem?.status === 'Approved' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
-                    selectedItem?.status === 'Draft' ? 'bg-amber-50 text-amber-600 border-amber-100' :
-                    selectedItem?.status === 'Rejected' ? 'bg-rose-50 text-rose-600 border-rose-100' :
-                    'bg-blue-50 text-blue-600 border-blue-100'
+                    selectedItem?.status === 'Approved' ? 'text-emerald-50  ' :
+                    selectedItem?.status === 'Draft' ? 'text-amber-50 ' :
+                    selectedItem?.status === 'Rejected' ? 'text-rose-50 ' :
+                    ' text-blue-600 '
                   }`}>
                     {selectedItem?.status || 'Pending'}
                   </span>

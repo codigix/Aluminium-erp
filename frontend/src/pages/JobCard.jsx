@@ -4221,7 +4221,7 @@ const JobCard = () => {
           </div>
 
           {/* Stats Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-2 my-5">
+          {/* <div className="grid grid-cols-1 md:grid-cols-4 gap-2 my-5">
             {stats.map((stat, i) => (
               <div key={i} className="bg-white rounded  border border-slate-100 p-2 flex items-center justify-between  hover: transition-all group">
                 <div>
@@ -4242,7 +4242,7 @@ const JobCard = () => {
                 </div>
               </div>
             ))}
-          </div>
+          </div> */}
 
           <DataTable
             columns={jobCardColumns}
