@@ -12,8 +12,10 @@ import {
   ChevronDown,
   User,
   Search,
-  ArrowUpRight
+  ArrowUpRight,
+  FileText
 } from 'lucide-react';
+import { errorToast } from '../utils/toast';
 import { 
   PieChart, 
   Pie, 
@@ -53,7 +55,8 @@ const QualityReports = () => {
     monthlyTrend: [],
     defectBreakdown: [],
     supplierPerformance: [],
-    recentReports: []
+    recentReports: [],
+    recentRejections: []
   });
 
   useEffect(() => {
@@ -78,27 +81,54 @@ const QualityReports = () => {
     }
   };
 
-  const StatCard = ({ title, value, icon: Icon, colorClass, trend }) => (
-    <div className="bg-white rounded p-5 border border-slate-100 shadow-sm hover: transition-all">
-      <div className="flex items-center gap-2">
-        <div className={`p-2 rounded  ${colorClass}`}>
-          <Icon className="w-3 h-3" />
-        </div>
-        <div className="flex-1">
-          <p className="text-xs   text-slate-400   mb-1">{title}</p>
-          <div className="flex items-center justify-between">
-            <h3 className="text-xl  text-slate-900">{value}</h3>
-            {trend && (
-              <div className="flex items-center text-xs px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-600 ">
-                <TrendingUp className="w-3 h-3 mr-0.5" />
-                {trend}
-              </div>
-            )}
+  const handleDownloadPdf = async (qcId) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/qc-inspections/${qcId}/pdf`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!response.ok) throw new Error('Failed to generate PDF');
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `QC_Report_${qcId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading PDF:', error);
+      errorToast('Failed to download QC Report');
+    }
+  };
+
+  const StatCard = (props) => {
+    const { title, value, icon: Icon, colorClass, trend } = props;
+    return (
+      <div className="bg-white rounded p-5 border border-slate-100 shadow-sm hover: transition-all">
+        <div className="flex items-center gap-2">
+          <div className={`p-2 rounded  ${colorClass}`}>
+            <Icon className="w-3 h-3" />
+          </div>
+          <div className="flex-1">
+            <p className="text-xs   text-slate-400   mb-1">{title}</p>
+            <div className="flex items-center justify-between">
+              <h3 className="text-xl  text-slate-900">{value}</h3>
+              {trend && (
+                <div className="flex items-center text-xs px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-600 ">
+                  <TrendingUp className="w-3 h-3 mr-0.5" />
+                  {trend}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   if (loading) {
     return (
@@ -249,32 +279,32 @@ const QualityReports = () => {
       {/* Tables Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Supplier Performance */}
-        <div className="lg:col-span-1 bg-white p-8 rounded  border border-slate-100 shadow-sm flex flex-col">
-          <div className="flex items-center justify-between mb-8">
-            <h2 className="text-md  text-slate-900">Supplier Quality Performance</h2>
+        <div className="lg:col-span-1 bg-white p-6 rounded  border border-slate-100 shadow-sm flex flex-col max-h-[500px]">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-sm font-bold  text-slate-900 uppercase tracking-tight">Supplier Performance</h2>
           </div>
-          <div className="flex-1 overflow-x-auto">
+          <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
             <table className="w-full">
-              <thead className="text-left text-xs   text-slate-400  ">
+              <thead className="text-left text-[10px] font-bold text-slate-400 uppercase sticky top-0 bg-white z-10 pb-4">
                 <tr>
-                  <th className="pb-4">Supplier</th>
-                  <th className="pb-4 text-right">Quality Score</th>
+                  <th className="pb-3">Supplier</th>
+                  <th className="pb-3 text-right">Score</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {data.supplierPerformance.length > 0 ? data.supplierPerformance.map((row, idx) => (
                   <tr key={idx} className="group hover:bg-slate-50/50 transition-colors">
-                    <td className="py-4 text-sm  text-slate-600 group-hover:text-slate-900">{row.supplier}</td>
-                    <td className="py-4 text-right">
-                      <span className="text-xs  text-slate-900">{row.qualityScore}%</span>
+                    <td className="py-3 text-xs font-medium  text-slate-600 group-hover:text-slate-900">{row.supplier}</td>
+                    <td className="py-3 text-right">
+                      <span className="text-xs font-bold  text-slate-900">{row.qualityScore}%</span>
                     </td>
                   </tr>
                 )) : (
                   ['ABC Metals', 'Global Alloys', 'Sanika Industries'].map((name, idx) => (
                     <tr key={idx} className="group hover:bg-slate-50/50 transition-colors">
-                      <td className="py-4 text-sm  text-slate-600 group-hover:text-slate-900">{name}</td>
-                      <td className="py-4 text-right">
-                        <span className="text-xs  text-slate-900">{95 - (idx * 3)}%</span>
+                      <td className="py-3 text-xs font-medium  text-slate-600 group-hover:text-slate-900">{name}</td>
+                      <td className="py-3 text-right">
+                        <span className="text-xs font-bold  text-slate-900">{95 - (idx * 3)}%</span>
                       </td>
                     </tr>
                   ))
@@ -285,23 +315,31 @@ const QualityReports = () => {
         </div>
 
         {/* Supplier Quality Detail Table */}
-        <div className="lg:col-span-1 bg-white p-8 rounded  border border-slate-100 shadow-sm flex flex-col">
-          <h2 className="text-md  text-slate-900 mb-8">Supplier Quality Performance</h2>
-          <div className="flex-1 overflow-x-auto">
+        <div className="lg:col-span-1 bg-white p-6 rounded  border border-slate-100 shadow-sm flex flex-col max-h-[500px]">
+          <h2 className="text-sm font-bold  text-slate-900 mb-6 uppercase tracking-tight">Recent QC History</h2>
+          <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
             <table className="w-full">
-              <thead className="text-left text-xs   text-slate-400  ">
+              <thead className="text-left text-[10px] font-bold text-slate-400 uppercase sticky top-0 bg-white z-10 pb-4">
                 <tr>
-                  <th className="pb-4">Report ID</th>
-                  <th className="pb-4">GRN</th>
-                  <th className="pb-4">Inspector</th>
+                  <th className="pb-3">Report</th>
+                  <th className="pb-3">GRN</th>
+                  <th className="pb-3 text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {data.recentReports.map((report, idx) => (
                   <tr key={idx} className="group hover:bg-slate-50/50 transition-colors">
-                    <td className="py-4 text-xs  text-blue-600">QC-{2026}-00{idx+1}</td>
-                    <td className="py-4 text-xs  text-slate-600">{report.grn}</td>
-                    <td className="py-4 text-xs  text-slate-900">{report.inspector || 'John'}</td>
+                    <td className="py-3 text-[10px] font-bold text-blue-600">QC-{String(report.reportId).padStart(4, '0')}</td>
+                    <td className="py-3 text-[10px] font-medium text-slate-600">{report.grn}</td>
+                    <td className="py-3 text-right">
+                      <button 
+                        onClick={() => handleDownloadPdf(report.reportId)}
+                        className="p-1 text-orange-500 hover:text-orange-600 hover:bg-orange-50 rounded transition-all"
+                        title="QC Report"
+                      >
+                        <FileText className="w-3.5 h-3.5" />
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -310,39 +348,107 @@ const QualityReports = () => {
         </div>
 
         {/* Recent Inspection Reports */}
-        <div className="lg:col-span-1 bg-white p-8 rounded  border border-slate-100 shadow-sm flex flex-col">
-          <h2 className="text-md  text-slate-900 mb-8">Recent Inspection Reports</h2>
-          <div className="flex-1 overflow-x-auto">
+        <div className="lg:col-span-1 bg-white p-6 rounded  border border-slate-100 shadow-sm flex flex-col max-h-[500px]">
+          <h2 className="text-sm font-bold  text-slate-900 mb-6 uppercase tracking-tight">Inspection Results</h2>
+          <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
             <table className="w-full">
-              <thead className="text-left text-xs   text-slate-400  ">
+              <thead className="text-left text-[10px] font-bold text-slate-400 uppercase sticky top-0 bg-white z-10 pb-4">
                 <tr>
-                  <th className="pb-4">Report ID</th>
-                  <th className="pb-4">GRN</th>
-                  <th className="pb-4 text-right">Date</th>
-                  <th className="pb-4 text-right">Status</th>
+                  <th className="pb-3 text-left">Report</th>
+                  <th className="pb-3 text-right">Status</th>
+                  <th className="pb-3 text-right">PDF</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {data.recentReports.map((report, idx) => (
                   <tr key={idx} className="group hover:bg-slate-50/50 transition-colors">
-                    <td className="py-4 text-xs  text-blue-600">QC-{2026}-00{idx+1}</td>
-                    <td className="py-4 text-xs  text-slate-600">{report.grn}</td>
-                    <td className="py-4 text-right text-xs text-slate-400">
-                      {new Date(report.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+                    <td className="py-3">
+                      <div className="flex flex-col">
+                        <span className="text-[10px] font-bold text-blue-600 leading-none">QC-{String(report.reportId).padStart(4, '0')}</span>
+                        <span className="text-[9px] text-slate-400 mt-1">{report.grn}</span>
+                      </div>
                     </td>
-                    <td className="py-4 text-right">
+                    <td className="py-3 text-right">
                       <Badge 
                         variant={report.status === 'PASSED' || report.status === 'ACCEPTED' ? 'success' : 'danger'}
-                        className=" text-xs   px-2 py-0.5"
+                        className="text-[9px] font-bold px-1.5 py-0 rounded"
                       >
-                        {report.status === 'PASSED' || report.status === 'ACCEPTED' ? 'Passed' : 'Failed'}
+                        {report.status === 'PASSED' || report.status === 'ACCEPTED' ? 'PASS' : 'FAIL'}
                       </Badge>
+                    </td>
+                    <td className="py-3 text-right">
+                      <button 
+                        onClick={() => handleDownloadPdf(report.reportId)}
+                        className="p-1 text-orange-500 hover:text-orange-600 hover:bg-orange-50 rounded transition-all"
+                        title="QC Report"
+                      >
+                        <FileText className="w-3 h-3" />
+                      </button>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+        </div>
+      </div>
+
+      {/* Rejections Table Section */}
+      <div className="bg-white p-6 rounded border border-slate-100 shadow-sm mt-4 flex flex-col max-h-[500px]">
+        <h2 className="text-sm font-bold text-slate-900 mb-6 uppercase tracking-tight">Recent Quality Rejections</h2>
+        <div className="flex-1 overflow-y-auto custom-scrollbar">
+          <table className="w-full">
+            <thead className="text-left text-[10px] font-bold text-slate-400 uppercase sticky top-0 bg-white z-10 pb-4">
+              <tr className="border-b border-slate-50">
+                <th className="pb-3">Item Details</th>
+                <th className="pb-3">Reference</th>
+                <th className="pb-3 text-center">Rejected Qty</th>
+                <th className="pb-3">Reason</th>
+                <th className="pb-3 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {data.recentRejections.map((rejection, idx) => (
+                <tr key={idx} className="group hover:bg-slate-50/50 transition-colors">
+                  <td className="py-3">
+                    <div className="flex flex-col">
+                      <span className="text-xs font-bold text-slate-900 leading-tight">{rejection.material_name}</span>
+                      <span className="text-[10px] text-indigo-600 font-mono mt-0.5">{rejection.item_code}</span>
+                    </div>
+                  </td>
+                  <td className="py-3">
+                    <div className="flex flex-col">
+                      <span className="text-[10px] text-slate-600 font-bold">{rejection.reference_number}</span>
+                      <span className="text-[9px] text-slate-400">{rejection.source_name}</span>
+                    </div>
+                  </td>
+                  <td className="py-3 text-center">
+                    <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded border border-rose-100">
+                      {parseFloat(rejection.rejected_qty || 0).toFixed(3)}
+                    </span>
+                  </td>
+                  <td className="py-3 text-[10px] text-slate-500 italic">
+                    {rejection.item_remarks || 'No remarks'}
+                  </td>
+                  <td className="py-3 text-right">
+                    {rejection.ref_type === 'GRN' && rejection.qc_inspection_id && (
+                      <button 
+                        onClick={() => handleDownloadPdf(rejection.qc_inspection_id)}
+                        className="px-2 py-1 text-[9px] font-bold text-orange-600 bg-orange-50 border border-orange-100 rounded hover:bg-orange-100 transition-all active:scale-95"
+                      >
+                        QC Report
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+              {data.recentRejections.length === 0 && (
+                <tr>
+                  <td colSpan="5" className="py-8 text-center text-slate-400 italic text-xs">No recent rejections recorded.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

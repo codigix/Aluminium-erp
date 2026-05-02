@@ -1314,11 +1314,16 @@ const Quotations = () => {
       },
       {
         key: 'project_name',
-        label: 'Project Name',
+        label: 'Project / Customer',
         sortable: true,
-        render: (val) => (
-          <div className="text-slate-900 truncate max-w-[200px]" title={val}>
-            {val || '—'}
+        render: (val, q) => (
+          <div className="flex flex-col max-w-[200px]">
+            <span className="text-slate-900 font-medium truncate" title={val}>{val || '—'}</span>
+            {q.company_name && (
+              <span className="text-xs text-slate-500 truncate" title={q.company_name}>
+                {q.company_name}
+              </span>
+            )}
           </div>
         )
       },

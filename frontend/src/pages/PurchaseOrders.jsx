@@ -847,14 +847,38 @@ const PurchaseOrders = () => {
       )
     },
     {
-      label: 'Project Name',
+      label: 'Project / Customer',
       key: 'project_name',
       sortable: true,
-      render: (val) => (
-        <span className="text-xs  text-slate-700 truncate max-w-[150px] block">
-          {val || '—'}
-        </span>
-      )
+      render: (val, row) => {
+        if (!val) return '—';
+        // Intelligent split: break at " for " to keep drawing numbers on top line
+        const parts = val.split(/\s+for\s+/i);
+        return (
+          <div className="flex flex-col py-1 min-w-[260px] max-w-[380px]">
+            <div className="flex flex-col">
+              <span className="text-slate-900 font-bold text-[13px] leading-tight break-words">
+                {parts[0]}
+              </span>
+              {parts.length > 1 && (
+                <span className="text-[11px] text-slate-600 font-medium leading-relaxed mt-0.5 break-words">
+                  for {parts.slice(1).join(' for ')}
+                </span>
+              )}
+            </div>
+            {row.company_name && (
+              <div className="flex items-center gap-2 mt-2 pt-1.5 border-t border-slate-100/80">
+                <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-600 text-[9px] font-bold rounded border border-indigo-100 shrink-0 uppercase tracking-wider">
+                  Client
+                </span>
+                <span className="text-[11px] text-slate-500 font-medium italic truncate" title={row.company_name}>
+                  {row.company_name}
+                </span>
+              </div>
+            )}
+          </div>
+        );
+      }
     },
     {
       label: 'Order -- Expected',

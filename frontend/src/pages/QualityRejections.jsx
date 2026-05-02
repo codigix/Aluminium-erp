@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Card, DataTable } from '../components/ui.jsx';
 import { AlertCircle, FileText, Calendar, User, ShoppingBag, Hash, RefreshCw } from 'lucide-react';
+import { errorToast } from '../utils/toast';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -32,6 +33,30 @@ const QualityRejections = () => {
   useEffect(() => {
     fetchRejections();
   }, [fetchRejections]);
+
+  const handleDownloadPdf = async (qcId) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/qc-inspections/${qcId}/pdf`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!response.ok) throw new Error('Failed to generate PDF');
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `QC_Report_${qcId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading PDF:', error);
+      errorToast('Failed to download QC Report');
+    }
+  };
 
   const columns = [
     {
@@ -121,6 +146,24 @@ const QualityRejections = () => {
         <p className="text-xs text-slate-500 italic max-w-xs truncate">
           {val || 'No remarks provided'}
         </p>
+      )
+    },
+    {
+      label: 'Actions',
+      key: 'qc_inspection_id',
+      className: 'text-right',
+      render: (val, row) => (
+        <div className="flex justify-end">
+          {row.ref_type === 'GRN' && val && (
+            <button 
+              onClick={(e) => { e.stopPropagation(); handleDownloadPdf(val); }} 
+              className="px-2 py-1 text-[10px] font-medium text-orange-600 bg-orange-50 border border-orange-100 rounded hover:bg-orange-100 transition-all active:scale-95 flex items-center gap-1"
+            >
+              <FileText className="w-3 h-3" />
+              QC Report
+            </button>
+          )}
+        </div>
       )
     }
   ];

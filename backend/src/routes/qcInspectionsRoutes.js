@@ -124,6 +124,40 @@ router.post('/:qcId/invoice', authenticate, authorize(['QC_EDIT']), upload.singl
   }
 });
 
+router.post('/:qcId/attachments', authenticate, authorize(['QC_EDIT']), upload.array('attachments', 10), async (req, res) => {
+  try {
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ message: 'No files uploaded' });
+    }
+    const attachments = req.files.map(file => ({
+      file_name: file.originalname,
+      file_url: `uploads/${file.filename}`
+    }));
+    const result = await qcService.addQCAttachments(req.params.qcId, attachments);
+    res.json({ message: 'Attachments uploaded successfully', data: result });
+  } catch (error) {
+    res.status(error.statusCode || 500).json({ message: error.message });
+  }
+});
+
+router.get('/:qcId/attachments', authenticate, authorize(['QC_VIEW']), async (req, res) => {
+  try {
+    const attachments = await qcService.getQCAttachments(req.params.qcId);
+    res.json(attachments);
+  } catch (error) {
+    res.status(error.statusCode || 500).json({ message: error.message });
+  }
+});
+
+router.delete('/attachments/:attachmentId', authenticate, authorize(['QC_EDIT']), async (req, res) => {
+  try {
+    const result = await qcService.deleteQCAttachment(req.params.attachmentId);
+    res.json(result);
+  } catch (error) {
+    res.status(error.statusCode || 500).json({ message: error.message });
+  }
+});
+
 router.post('/:qcId/stock-entry', authenticate, authorize(['QC_EDIT']), async (req, res) => {
   try {
     const qc = await qcService.getQCWithDetails(req.params.qcId);
@@ -142,6 +176,19 @@ router.post('/:qcId/create-shipment', authenticate, authorize(['QC_EDIT']), asyn
   try {
     const result = await qcService.createShipmentFromQC(req.params.qcId);
     res.json(result);
+  } catch (error) {
+    res.status(error.statusCode || 500).json({ message: error.message });
+  }
+});
+
+router.get('/:qcId/pdf', authenticate, authorize(['QC_VIEW']), async (req, res) => {
+  try {
+    const pdfPath = await qcService.generateQcPdf(req.params.qcId);
+    res.download(pdfPath, `QC_Report_${req.params.qcId}.pdf`, (err) => {
+      if (err) {
+        console.error('Download error:', err);
+      }
+    });
   } catch (error) {
     res.status(error.statusCode || 500).json({ message: error.message });
   }

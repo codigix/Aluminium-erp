@@ -287,10 +287,6 @@ const getCustomerBalance = async (customerId) => {
 };
 
 const getOutstandingInvoices = async (customerId) => {
-  // Debug to check columns
-  const [columns] = await pool.query('SHOW COLUMNS FROM sales_orders');
-  console.log('[DEBUG] sales_orders columns:', columns.map(c => c.Field));
-
   const [invoices] = await pool.query(
     `SELECT * FROM (
       -- From sales_orders (Design based)
@@ -379,18 +375,15 @@ const getAllOutstandingInvoices = async () => {
 
 const updatePaymentStatus = async (paymentId, status) => {
   const validStatuses = ['PENDING', 'CONFIRMED', 'FAILED'];
-  
   if (!validStatuses.includes(status)) {
     const error = new Error('Invalid payment status');
     error.statusCode = 400;
     throw error;
   }
-
   await pool.execute(
     'UPDATE customer_payments SET status = ?, updated_at = NOW() WHERE id = ?',
     [status, paymentId]
   );
-
   return { id: paymentId, status };
 };
 
@@ -408,29 +401,73 @@ const generateCustomerPaymentReceiptPDF = async (paymentId) => {
   );
   const customer = customerRows[0];
 
+  // Fetch items based on source
+  let items = [];
+  let subtotal = 0;
+  let gst = 0;
+  let grand_total = 0;
+
+  if (payment.sales_order_id) {
+    if (payment.sales_order_source === 'DIRECT_ORDER') {
+      const [orderRows] = await pool.query('SELECT * FROM orders WHERE id = ?', [payment.sales_order_id]);
+      if (orderRows.length > 0) {
+        const order = orderRows[0];
+        subtotal = order.subtotal;
+        gst = order.gst;
+        grand_total = order.grand_total;
+        const [itemRows] = await pool.query('SELECT description, quantity, type as unit, rate, amount FROM order_items WHERE order_id = ?', [payment.sales_order_id]);
+        items = itemRows;
+      }
+    } else {
+      const [soRows] = await pool.query('SELECT * FROM sales_orders WHERE id = ?', [payment.sales_order_id]);
+      if (soRows.length > 0) {
+        const so = soRows[0];
+        const [itemRows] = await pool.query('SELECT description, quantity, unit, rate, tax_value FROM sales_order_items WHERE sales_order_id = ?', [payment.sales_order_id]);
+        items = itemRows.map(i => ({
+          description: i.description,
+          quantity: i.quantity,
+          unit: i.unit,
+          rate: i.rate,
+          amount: (i.quantity * i.rate) + i.tax_value
+        }));
+        subtotal = itemRows.reduce((sum, i) => sum + (i.quantity * i.rate), 0);
+        gst = itemRows.reduce((sum, i) => sum + i.tax_value, 0);
+        grand_total = subtotal + gst;
+      }
+    }
+  }
+
   const htmlTemplate = `
     <!DOCTYPE html>
     <html>
     <head>
       <style>
-        body { font-family: 'Helvetica', 'Arial', sans-serif; color: #333; line-height: 1.6; margin: 40px; }
-        .header { display: flex; justify-content: space-between; border-bottom: 2px solid #3b82f6; padding-bottom: 20px; margin-bottom: 30px; }
-        .company-info h1 { color: #1d4ed8; margin: 0; font-size: 24px; }
+        body { font-family: 'Helvetica', 'Arial', sans-serif; color: #333; line-height: 1.4; margin: 20px; font-size: 11px; }
+        .header { display: flex; justify-content: space-between; border-bottom: 2px solid #10b981; padding-bottom: 10px; margin-bottom: 20px; }
+        .company-info h1 { color: #065f46; margin: 0; font-size: 18px; }
+        .company-info p { margin: 2px 0; color: #6b7280; font-size: 10px; }
         .receipt-title { text-align: right; }
-        .receipt-title h2 { margin: 0; color: #64748b; font-size: 18px; }
-        .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-bottom: 40px; }
-        .section-label { font-weight: bold; color: #64748b; font-size: 12px; margin-bottom: 8px; text-transform: ; }
-        .payment-info { background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom: 30px; }
-        .info-row { display: flex; justify-content: space-between; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px dashed #e2e8f0; }
-        .info-row:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
-        .info-label { color: #64748b; font-size: 12px; }
-        .info-value { font-weight: 600; color: #1e293b; font-size: 13px; }
-        .amount-section { text-align: right; margin-top: 40px; padding-top: 20px; border-top: 2px solid #e2e8f0; }
-        .amount-label { font-size: 14px; color: #64748b; }
-        .amount-value { font-size: 24px; font-weight: 800; color: #1d4ed8; }
-        .footer { margin-top: 60px; text-align: center; color: #94a3b8; font-size: 10px; border-top: 1px solid #e2e8f0; padding-top: 20px; }
-        .signature-area { display: flex; justify-content: space-between; margin-top: 80px; }
-        .sig-box { border-top: 1px solid #cbd5e1; width: 200px; text-align: center; padding-top: 8px; font-size: 12px; color: #64748b; }
+        .receipt-title h2 { margin: 0; color: #10b981; font-size: 16px; text-transform: uppercase; }
+        
+        .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+        .section-label { font-weight: 700; color: #6b7280; font-size: 9px; margin-bottom: 5px; text-transform: uppercase; border-bottom: 1px solid #e5e7eb; padding-bottom: 2px; }
+        
+        .items-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        .items-table th { background: #f9fafb; color: #374151; text-align: left; padding: 6px 8px; font-weight: 700; border-bottom: 1px solid #e5e7eb; }
+        .items-table td { padding: 6px 8px; border-bottom: 1px solid #f3f4f6; }
+        .text-right { text-align: right; }
+        
+        .summary-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 30px; }
+        .payment-info { background: #f0fdf4; padding: 12px; border-radius: 6px; border: 1px solid #dcfce7; }
+        .info-row { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 10px; }
+        .info-label { color: #065f46; font-weight: 500; }
+        .info-value { font-weight: 700; color: #064e3b; }
+        
+        .totals { text-align: right; }
+        .total-row { display: flex; justify-content: space-between; margin-bottom: 2px; font-size: 10px; }
+        .grand-total { border-top: 1px solid #10b981; margin-top: 4px; padding-top: 4px; font-size: 14px; font-weight: 800; color: #065f46; }
+        
+        .footer { margin-top: 30px; text-align: center; color: #9ca3af; font-size: 8px; border-top: 1px solid #e5e7eb; padding-top: 10px; }
       </style>
     </head>
     <body>
@@ -441,7 +478,7 @@ const generateCustomerPaymentReceiptPDF = async (paymentId) => {
         </div>
         <div class="receipt-title">
           <h2>Payment Receipt</h2>
-          <p><strong>Receipt No:</strong> {{payment_receipt_no}}<br>
+          <p><strong>No:</strong> {{payment_receipt_no}}<br>
           <strong>Date:</strong> {{formatted_date}}</p>
         </div>
       </div>
@@ -456,74 +493,77 @@ const generateCustomerPaymentReceiptPDF = async (paymentId) => {
         </div>
         <div style="text-align: right;">
           <div class="section-label">Reference</div>
-          <p><strong>Sales Order:</strong> {{so_number}}<br>
+          <p><strong>Order No:</strong> {{so_number}}<br>
           <strong>Status:</strong> {{status}}</p>
         </div>
       </div>
 
-      <div class="payment-info">
-        <div class="section-label" style="margin-bottom: 15px;">Payment Details</div>
-        
-        <div class="info-row">
-          <span class="info-label">Payment Mode</span>
-          <span class="info-value">{{payment_mode}}</span>
+      <div class="section-label">Order Items</div>
+      <table class="items-table">
+        <thead>
+          <tr>
+            <th>Description</th>
+            <th class="text-right">Qty</th>
+            <th class="text-right">Rate</th>
+            <th class="text-right">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{#items}}
+          <tr>
+            <td>{{description}}</td>
+            <td class="text-right">{{quantity}} {{unit}}</td>
+            <td class="text-right">₹{{rate}}</td>
+            <td class="text-right">₹{{amount}}</td>
+          </tr>
+          {{/items}}
+        </tbody>
+      </table>
+
+      <div class="summary-grid">
+        <div class="payment-info">
+          <div class="section-label" style="color: #059669; border-color: #a7f3d0; margin-bottom: 8px;">Transaction Details</div>
+          <div class="info-row">
+            <span class="info-label">Payment Mode</span>
+            <span class="info-value">{{payment_mode}}</span>
+          </div>
+          {{#transaction_ref_no}}
+          <div class="info-row">
+            <span class="info-label">Ref No</span>
+            <span class="info-value">{{transaction_ref_no}}</span>
+          </div>
+          {{/transaction_ref_no}}
+          {{#bank_name}}
+          <div class="info-row">
+            <span class="info-label">Bank Info</span>
+            <span class="info-value">{{bank_name}}</span>
+          </div>
+          {{/bank_name}}
+          <div class="info-row" style="margin-top: 8px; border-top: 1px dashed #a7f3d0; padding-top: 5px;">
+            <span class="info-label">Amount Paid</span>
+            <span class="info-value" style="font-size: 13px;">₹{{formatted_amount}}</span>
+          </div>
         </div>
 
-        {{#cheque_number}}
-        <div class="info-row">
-          <span class="info-label">Cheque Number</span>
-          <span class="info-value">{{cheque_number}}</span>
+        <div class="totals">
+          <div class="total-row">
+            <span>Subtotal:</span>
+            <span>₹{{formatted_subtotal}}</span>
+          </div>
+          <div class="total-row">
+            <span>GST:</span>
+            <span>₹{{formatted_gst}}</span>
+          </div>
+          <div class="total-row grand-total">
+            <span>Total:</span>
+            <span>₹{{formatted_grand_total}}</span>
+          </div>
         </div>
-        <div class="info-row">
-          <span class="info-label">Bank Name</span>
-          <span class="info-value">{{cheque_bank_name}}</span>
-        </div>
-        <div class="info-row">
-          <span class="info-label">Cheque Date</span>
-          <span class="info-value">{{formatted_cheque_date}}</span>
-        </div>
-        {{/cheque_number}}
-
-        {{#transaction_ref_no}}
-        <div class="info-row">
-          <span class="info-label">Transaction Ref</span>
-          <span class="info-value">{{transaction_ref_no}}</span>
-        </div>
-        {{/transaction_ref_no}}
-
-        {{#bank_name}}
-        <div class="info-row">
-          <span class="info-label">Bank Account</span>
-          <span class="info-value">{{bank_name}} {{#account_number}}({{account_number}}){{/account_number}}</span>
-        </div>
-        {{/bank_name}}
-
-        {{#upi_transaction_id}}
-        <div class="info-row">
-          <span class="info-label">UPI ID / App</span>
-          <span class="info-value">{{upi_transaction_id}} ({{upi_app}})</span>
-        </div>
-        {{/upi_transaction_id}}
-
-        <div class="info-row">
-          <span class="info-label">Remarks</span>
-          <span class="info-value">{{remarks}}</span>
-        </div>
-      </div>
-
-      <div class="amount-section">
-        <div class="amount-label">Total Amount Received</div>
-        <div class="amount-value">₹{{formatted_amount}}</div>
-      </div>
-
-      <div class="signature-area">
-        <div class="sig-box">Customer's Signature</div>
-        <div class="sig-box">Authorized Signatory</div>
       </div>
 
       <div class="footer">
-        <p>This is a computer-generated payment receipt.<br>
-        SPTECHPIONEER PVT LTD | Confidential</p>
+        <p>This is a computer-generated payment receipt and does not require a physical signature.<br>
+        SPTECHPIONEER PVT LTD | Confidential | Generated on {{current_timestamp}}</p>
       </div>
     </body>
     </html>
@@ -540,8 +580,17 @@ const generateCustomerPaymentReceiptPDF = async (paymentId) => {
     formatted_date: formatDate(payment.payment_date),
     formatted_cheque_date: formatDate(payment.cheque_date),
     formatted_amount: parseFloat(payment.payment_amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    formatted_subtotal: subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    formatted_gst: gst.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    formatted_grand_total: grand_total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
     remarks: payment.remarks || '—',
-    so_number: payment.so_number || 'Advance Payment'
+    so_number: payment.so_number || 'Advance Payment',
+    current_timestamp: new Date().toLocaleString('en-IN'),
+    items: items.map(i => ({
+      ...i,
+      rate: parseFloat(i.rate).toLocaleString('en-IN', { minimumFractionDigits: 2 }),
+      amount: parseFloat(i.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })
+    }))
   };
 
   const html = mustache.render(htmlTemplate, viewData);

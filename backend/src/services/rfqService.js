@@ -70,7 +70,8 @@ const getRfqsByMrId = async (mrId) => {
     const [rfqs] = await pool.query(
         `SELECT r.*, u.username as requester_name, 
                 COALESCE(
-                  (SELECT project_name FROM sales_orders WHERE id = (SELECT sales_order_id FROM production_plans WHERE id = mr.plan_id)),
+                  (SELECT so.project_name FROM sales_orders so JOIN production_plans pp ON so.id = pp.sales_order_id WHERE pp.id = mr.plan_id),
+                  (SELECT COALESCE(NULLIF(o.project_name, ''), c.company_name) FROM orders o JOIN production_plans pp ON o.id = pp.sales_order_id JOIN companies c ON o.client_id = c.id WHERE pp.id = mr.plan_id),
                   mr.purpose, 
                   'General Procurement'
                 ) as project_name 
@@ -112,7 +113,8 @@ const getRfqs = async () => {
     const [rfqs] = await pool.query(
         `SELECT r.*, u.username as requester_name, mr.mr_number, 
                 COALESCE(
-                  (SELECT project_name FROM sales_orders WHERE id = (SELECT sales_order_id FROM production_plans WHERE id = mr.plan_id)),
+                  (SELECT so.project_name FROM sales_orders so JOIN production_plans pp ON so.id = pp.sales_order_id WHERE pp.id = mr.plan_id),
+                  (SELECT COALESCE(NULLIF(o.project_name, ''), c.company_name) FROM orders o JOIN production_plans pp ON o.id = pp.sales_order_id JOIN companies c ON o.client_id = c.id WHERE pp.id = mr.plan_id),
                   mr.purpose, 
                   'General Procurement'
                 ) as project_name
@@ -143,8 +145,34 @@ const getRfqs = async () => {
     }));
 };
 
+const deleteRfq = async (id) => {
+    const connection = await pool.getConnection();
+    try {
+        await connection.beginTransaction();
+
+        // 1. Delete items first
+        await connection.execute('DELETE FROM procurement_rfq_items WHERE rfq_id = ?', [id]);
+
+        // 2. Delete RFQ
+        const [result] = await connection.execute('DELETE FROM procurement_rfqs WHERE id = ?', [id]);
+
+        if (result.affectedRows === 0) {
+            throw new Error('RFQ not found');
+        }
+
+        await connection.commit();
+        return true;
+    } catch (error) {
+        await connection.rollback();
+        throw error;
+    } finally {
+        connection.release();
+    }
+};
+
 module.exports = {
     createRfq,
     getRfqsByMrId,
-    getRfqs
+    getRfqs,
+    deleteRfq
 };

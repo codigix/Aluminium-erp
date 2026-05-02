@@ -398,11 +398,11 @@ const CustomerPO = ({
 
     setEmailPoData({
       id: row.id,
-      poNumber: row.po_number,
       to: recipientEmail,
       subject: `Purchase Order: ${row.po_number}`,
       message: `Dear ${clientName},\n\nPlease find attached our Purchase Order ${row.po_number}.\n\nRegards,\nSPTECHPIONEER Procurement Team`,
-      attachmentName: `PurchaseOrder_${row.po_number}.pdf`
+      attachmentName: `PurchaseOrder_${row.po_number}.pdf`,
+      poNumber: row.po_number
     });
     setShowEmailModal(true);
   };
@@ -470,14 +470,14 @@ const CustomerPO = ({
         <div className="flex items-center justify-end gap-2">
           <button
             onClick={() => handleDownloadPdf(row.id, row.po_number)}
-            className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all border border-transparent hover:border-indigo-100  hover:"
+            className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all border border-transparent hover:border-indigo-100"
             title="View PDF"
           >
             <Download className="w-4 h-4" />
           </button>
           <button
             onClick={() => openPoInMode('VIEW', row.id)}
-            className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all border border-transparent hover:border-indigo-100  hover:"
+            className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all border border-transparent hover:border-indigo-100"
             title="View Details"
           >
             <Eye className="w-4 h-4" />
@@ -536,7 +536,7 @@ const CustomerPO = ({
         </div>
       </div>
 
-      {/* Stats Section (Optional - can be added later if needed) */}
+      {/* Stats Section */}
       <div className="grid grid-cols-1 my-4 md:grid-cols-4 gap-2">
         {[
           { label: 'Total Orders', value: customerPos.length, color: 'indigo', icon: FileText },
@@ -669,33 +669,23 @@ const CustomerPO = ({
                           {(() => {
                             const batches = [];
                             const processedIds = new Set();
-
-                            // First, filter only approved items
                             const approvedItems = quotationRequests.filter(q => q.status?.trim().toUpperCase() === 'APPROVED');
 
                             approvedItems.forEach(q => {
                               if (processedIds.has(q.id)) return;
-
-                              // Group items that belong to the SAME version of the SAME quotation revision set
                               const batchItems = approvedItems.filter(t =>
                                 t.company_id === q.company_id &&
                                 t.sales_order_id === q.sales_order_id &&
                                 t.version === q.version
                               );
-
-                              // Use the smallest ID as representative for the dropdown value
                               const representative = batchItems.reduce((min, cur) => cur.id < min.id ? cur : min, batchItems[0]);
-
-                              // Double check: don't add duplicate batches (same SO + same version)
                               const isAlreadyAdded = batches.some(b =>
                                 b.sales_order_id === representative.sales_order_id &&
                                 b.version === representative.version
                               );
-
                               if (!isAlreadyAdded) {
                                 batches.push(representative);
                               }
-
                               batchItems.forEach(item => processedIds.add(item.id));
                             });
 
@@ -734,6 +724,9 @@ const CustomerPO = ({
                         ))}
                       </select>
                     </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                     <div className="space-y-2">
                       <label className="text-xs  text-slate-400   ml-1">PO Number *</label>
                       <input
@@ -742,8 +735,7 @@ const CustomerPO = ({
                         disabled={formMode === 'VIEW'}
                         value={poForm.poNumber}
                         onChange={(e) => setPoForm(prev => ({ ...prev, poNumber: e.target.value }))}
-                        placeholder="e.g. PO/2026/001"
-                        className="w-full bg-slate-50 border-2 border-slate-100 rounded p-2 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all  text-slate-700"
+                        className="w-full bg-slate-50 border-2 border-slate-100 rounded p-2 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all  text-slate-900 font-bold"
                       />
                     </div>
                     <div className="space-y-2">
@@ -758,46 +750,34 @@ const CustomerPO = ({
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-xs  text-slate-400   ml-1">Payment Terms</label>
-                      <input
-                        type="text"
+                      <label className="text-xs  text-slate-400   ml-1">Order Type</label>
+                      <select
                         disabled={formMode === 'VIEW'}
-                        value={poForm.paymentTerms}
-                        onChange={(e) => setPoForm(prev => ({ ...prev, paymentTerms: e.target.value }))}
-                        placeholder="e.g. 30 Days Net"
+                        value={poForm.orderType}
+                        onChange={(e) => setPoForm(prev => ({ ...prev, orderType: e.target.value }))}
                         className="w-full bg-slate-50 border-2 border-slate-100 rounded p-2 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all  text-slate-700"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-xs  text-slate-400   ml-1">Credit Days</label>
-                      <input
-                        type="number"
-                        disabled={formMode === 'VIEW'}
-                        value={poForm.creditDays}
-                        onChange={(e) => setPoForm(prev => ({ ...prev, creditDays: e.target.value }))}
-                        placeholder="e.g. 30"
-                        className="w-full bg-slate-50 border-2 border-slate-100 rounded p-2 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all  text-slate-700"
-                      />
+                      >
+                        <option value="STANDARD">Standard</option>
+                        <option value="URGENT">Urgent</option>
+                        <option value="SERVICE">Service</option>
+                      </select>
                     </div>
                     <div className="space-y-2">
                       <label className="text-xs  text-slate-400   ml-1">Currency</label>
-                      <select
+                      <input
+                        type="text"
                         disabled={formMode === 'VIEW'}
                         value={poForm.currency}
                         onChange={(e) => setPoForm(prev => ({ ...prev, currency: e.target.value }))}
-                        className="w-full bg-slate-50 border-2 border-slate-100 rounded p-2 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all  text-slate-700 appearance-none"
-                      >
-                        <option value="INR">INR - Indian Rupee</option>
-                        <option value="USD">USD - US Dollar</option>
-                        <option value="EUR">EUR - Euro</option>
-                      </select>
+                        className="w-full bg-slate-50 border-2 border-slate-100 rounded p-2 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all  text-slate-700"
+                      />
                     </div>
                   </div>
                 </div>
 
-                {/* Line Items Section */}
+                {/* Items Table Section */}
                 <div className="space-y-2">
-                  <div className="flex justify-between items-center border-b border-slate-100 pb-4">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-4">
                     <div className="flex items-center gap-2">
                       <div className="p-2 bg-indigo-50 text-indigo-600 rounded ">
                         <Package className="w-5 h-5" />
@@ -837,10 +817,7 @@ const CustomerPO = ({
                           const subtotal = (parseFloat(item.quantity) || 0) * (parseFloat(item.rate) || 0);
                           const tax = subtotal * ((parseFloat(item.cgstPercent) || 0) + (parseFloat(item.sgstPercent) || 0) + (parseFloat(item.igstPercent) || 0)) / 100;
                           const total = subtotal + tax;
-
                           const rows = [];
-
-                          // Main FG Row
                           rows.push(
                             <tr key={`item-${index}`} className="group hover:bg-indigo-50/30 transition-all">
                               <td className="p-2">
@@ -941,13 +918,11 @@ const CustomerPO = ({
                             </tr>
                           );
 
-                          // Sub-Assembly Rows
                           if (item.sub_assemblies && item.sub_assemblies.length > 0) {
                             item.sub_assemblies.forEach((sa, saIdx) => {
                               const saQty = (parseFloat(sa.quantity || 0) * (parseFloat(item.quantity) || 0));
                               const saRate = parseFloat(sa.rate || 0);
                               const saTotal = saQty * saRate;
-                              
                               rows.push(
                                 <tr key={`item-${index}-sa-${saIdx}`} className="bg-slate-50/40">
                                   <td className="p-2 border-b border-slate-100">
@@ -982,7 +957,6 @@ const CustomerPO = ({
                               );
                             });
                           }
-
                           return rows;
                         })}
                       </tbody>

@@ -17,7 +17,12 @@ const getPOReceipts = async (filters = {}) => {
          JOIN sales_orders so ON pp.sales_order_id = so.id
          WHERE mr_inner.id = po.mr_id LIMIT 1),
         'Stock/Internal'
-      ) as project_name
+      ) as project_name,
+      COALESCE(
+        (SELECT c.company_name FROM companies c JOIN sales_orders so ON c.id = so.company_id WHERE so.id = po.sales_order_id),
+        (SELECT c.company_name FROM companies c JOIN sales_orders so ON c.id = so.company_id JOIN production_plans pp ON so.id = pp.sales_order_id JOIN material_requests mr_inner ON pp.id = mr_inner.plan_id WHERE mr_inner.id = po.mr_id LIMIT 1),
+        'Internal'
+      ) as company_name
     FROM po_receipts pr
     LEFT JOIN purchase_orders po ON po.id = pr.po_id
     LEFT JOIN vendors v ON v.id = po.vendor_id
@@ -52,7 +57,12 @@ const getPOReceiptById = async (receiptId) => {
         JOIN sales_orders so ON pp.sales_order_id = so.id
         WHERE mr_inner.id = po.mr_id LIMIT 1),
        'Stock/Internal'
-     ) as project_name
+     ) as project_name,
+     COALESCE(
+       (SELECT c.company_name FROM companies c JOIN sales_orders so ON c.id = so.company_id WHERE so.id = po.sales_order_id),
+       (SELECT c.company_name FROM companies c JOIN sales_orders so ON c.id = so.company_id JOIN production_plans pp ON so.id = pp.sales_order_id JOIN material_requests mr_inner ON pp.id = mr_inner.plan_id WHERE mr_inner.id = po.mr_id LIMIT 1),
+       'Internal'
+     ) as company_name
      FROM po_receipts pr
      LEFT JOIN purchase_orders po ON po.id = pr.po_id
      LEFT JOIN vendors v ON v.id = po.vendor_id

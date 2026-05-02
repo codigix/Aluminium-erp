@@ -32,8 +32,18 @@ const getRfqs = async (req, res, next) => {
     }
 };
 
+const deleteRfq = async (req, res, next) => {
+    try {
+        await rfqService.deleteRfq(req.params.id);
+        res.json({ message: 'RFQ deleted successfully' });
+    } catch (error) {
+        next(error);
+    }
+};
+
 module.exports = {
     createRfq,
     getRfqsByMrId,
-    getRfqs
+    getRfqs,
+    deleteRfq
 };

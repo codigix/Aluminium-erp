@@ -1,0 +1,9 @@
+USE sales_erp;
+CREATE TABLE IF NOT EXISTS qc_attachments (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  qc_id INT NOT NULL,
+  file_name VARCHAR(255) NOT NULL,
+  file_url VARCHAR(500) NOT NULL,
+  uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (qc_id) REFERENCES qc_inspections(id) ON DELETE CASCADE
+);

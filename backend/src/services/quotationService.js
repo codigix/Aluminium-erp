@@ -180,6 +180,11 @@ const createQuotation = async (payload) => {
       [totalAmount, totalTaxAmount, grandTotal, quotationId]
     );
 
+    // If status is RECEIVED, check for single vendor auto-approval
+    if (status === 'RECEIVED') {
+      await handleAutoApproval(quotationId, connection);
+    }
+
     await connection.commit();
     return { id: quotationId, quote_number: quoteNumber };
   } catch (error) {
@@ -202,10 +207,16 @@ const getQuotations = async (filters = {}) => {
              mr.purpose, 
              'General Procurement'
            ) as project_name,
+           COALESCE(
+             c.company_name,
+             (SELECT c2.company_name FROM companies c2 JOIN sales_orders so2 ON c2.id = so2.company_id JOIN production_plans pp ON so2.id = pp.sales_order_id WHERE pp.id = mr.plan_id),
+             'Internal'
+           ) as company_name,
            mr.mr_number, r.rfq_number
     FROM quotations q
     LEFT JOIN vendors v ON v.id = q.vendor_id
     LEFT JOIN sales_orders so ON so.id = q.sales_order_id
+    LEFT JOIN companies c ON c.id = so.company_id
     LEFT JOIN material_requests mr ON mr.id = q.mr_id
     LEFT JOIN procurement_rfqs r ON r.id = q.rfq_id
     WHERE 1=1
@@ -254,10 +265,16 @@ const getQuotationById = async (quotationId) => {
               mr.purpose, 
               'General Procurement'
             ) as project_name, 
+            COALESCE(
+              c.company_name,
+              (SELECT c2.company_name FROM companies c2 JOIN sales_orders so2 ON c2.id = so2.company_id JOIN production_plans pp ON so2.id = pp.sales_order_id WHERE pp.id = mr.plan_id),
+              'Internal'
+            ) as company_name,
             r.rfq_number
      FROM quotations q 
      LEFT JOIN material_requests mr ON mr.id = q.mr_id
      LEFT JOIN sales_orders so ON so.id = q.sales_order_id
+     LEFT JOIN companies c ON c.id = so.company_id
      LEFT JOIN procurement_rfqs r ON r.id = q.rfq_id
      WHERE q.id = ?`,
     [quotationId]
@@ -277,6 +294,58 @@ const getQuotationById = async (quotationId) => {
   return { ...rows[0], items };
 };
 
+const handleAutoApproval = async (quotationId, connection) => {
+  const [q] = await connection.query(
+    'SELECT rfq_group_id, rfq_id, sales_order_id, mr_id FROM quotations WHERE id = ?',
+    [quotationId]
+  );
+
+  if (q.length > 0) {
+    const { rfq_group_id, rfq_id, sales_order_id, mr_id } = q[0];
+    let whereClause = '';
+    let params = [];
+    
+    if (rfq_group_id) {
+      whereClause = 'rfq_group_id = ?';
+      params = [rfq_group_id];
+    } else if (rfq_id) {
+      whereClause = 'rfq_id = ?';
+      params = [rfq_id];
+    } else {
+      whereClause = 'sales_order_id <=> ? AND mr_id <=> ?';
+      params = [sales_order_id, mr_id];
+    }
+
+    const [countRows] = await connection.query(
+      `SELECT COUNT(DISTINCT vendor_id) as count FROM quotations WHERE ${whereClause} AND status != 'SUPERSEDED'`,
+      params
+    );
+
+    if (countRows[0].count === 1) {
+      console.log(`[AutoApprove] Single vendor detected for quotation ${quotationId}. Setting status to REVIEWED.`);
+      
+      await connection.execute(
+        'UPDATE quotations SET status = ? WHERE id = ?',
+        ['REVIEWED', quotationId]
+      );
+
+      // Check if PO already exists for this quotation to avoid duplicates
+      const [existingPO] = await connection.query(
+        'SELECT id FROM purchase_orders WHERE quotation_id = ?',
+        [quotationId]
+      );
+
+      if (existingPO.length === 0) {
+        await purchaseOrderService.createPurchaseOrder({
+          quotationId: quotationId
+        }, connection);
+      }
+      return true;
+    }
+  }
+  return false;
+};
+
 const updateQuotationStatus = async (quotationId, status) => {
   const validStatuses = ['DRAFT', 'SENT', 'EMAIL_RECEIVED', 'RECEIVED', 'REVIEWED', 'CLOSED', 'PENDING'];
   if (!validStatuses.includes(status)) {
@@ -289,47 +358,16 @@ const updateQuotationStatus = async (quotationId, status) => {
   try {
     await connection.beginTransaction();
 
-    let finalStatus = status;
-
-    // Check for single vendor auto-approval when marking as RECEIVED
-    if (status === 'RECEIVED') {
-      const [q] = await connection.query(
-        'SELECT rfq_group_id, sales_order_id, mr_id FROM quotations WHERE id = ?',
-        [quotationId]
-      );
-
-      if (q.length > 0) {
-        const { rfq_group_id, sales_order_id, mr_id } = q[0];
-        let whereClause = '';
-        let params = [];
-        
-        if (rfq_group_id) {
-          whereClause = 'rfq_group_id = ?';
-          params = [rfq_group_id];
-        } else {
-          whereClause = 'sales_order_id <=> ? AND mr_id <=> ?';
-          params = [sales_order_id, mr_id];
-        }
-
-        const [countRows] = await connection.query(
-          `SELECT COUNT(*) as count FROM quotations WHERE ${whereClause}`,
-          params
-        );
-
-        if (countRows[0].count === 1) {
-          console.log(`[AutoApprove] Single vendor detected for quotation ${quotationId}. Setting status to REVIEWED.`);
-          finalStatus = 'REVIEWED';
-        }
-      }
-    }
-
     await connection.execute(
       'UPDATE quotations SET status = ? WHERE id = ?',
-      [finalStatus, quotationId]
+      [status, quotationId]
     );
 
-    if (finalStatus === 'REVIEWED') {
-      // Check if PO already exists for this quotation to avoid duplicates
+    // If status is RECEIVED, check for auto-approval
+    if (status === 'RECEIVED') {
+      await handleAutoApproval(quotationId, connection);
+    } else if (status === 'REVIEWED') {
+      // Manual approval - create PO if not exists
       const [existingPO] = await connection.query(
         'SELECT id FROM purchase_orders WHERE quotation_id = ?',
         [quotationId]
@@ -343,7 +381,10 @@ const updateQuotationStatus = async (quotationId, status) => {
     }
 
     await connection.commit();
-    return finalStatus;
+    
+    // Get final status (might have changed to REVIEWED via auto-approval)
+    const [finalRow] = await connection.query('SELECT status FROM quotations WHERE id = ?', [quotationId]);
+    return finalRow[0].status;
   } catch (error) {
     await connection.rollback();
     throw error;
@@ -473,6 +514,12 @@ const updateQuotation = async (quotationId, payload) => {
       [quotationId]
     );
 
+    // If the new version is RECEIVED, check for single vendor auto-approval
+    const currentStatus = status || 'RECEIVED';
+    if (currentStatus === 'RECEIVED') {
+      await handleAutoApproval(newQuotationId, connection);
+    }
+
     await connection.commit();
     return { id: newQuotationId, quote_number: newQuoteNumber, version: newVersion };
   } catch (error) {
@@ -484,7 +531,14 @@ const updateQuotation = async (quotationId, payload) => {
 };
 
 const deleteQuotation = async (quotationId) => {
-  await getQuotationById(quotationId);
+  try {
+    await getQuotationById(quotationId);
+  } catch (error) {
+    if (error.statusCode === 404) {
+      return; // Already deleted, consider success
+    }
+    throw error;
+  }
 
   // Check if any purchase orders reference this quotation
   const [poRefs] = await pool.query('SELECT po_number FROM purchase_orders WHERE quotation_id = ?', [quotationId]);

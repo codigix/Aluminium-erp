@@ -1128,7 +1128,7 @@ function App() {
     { label: 'ACCOUNTS', isGroup: true, groupId: 'accounts-main-group' },
     { label: 'Vendor Invoices', moduleId: 'invoice-received', icon: 'receipt', indent: true },
     { label: 'Payment Processing', moduleId: 'payment-processing', icon: 'credit-card', indent: true },
-    { label: 'Payment History', moduleId: 'payment-history', icon: 'history', indent: true },
+    { label: 'Vendor Payment History', moduleId: 'payment-history', icon: 'history', indent: true },
     { label: 'Payment Received', moduleId: 'payment-received', icon: 'check-circle', indent: true },
     { label: 'Client History', moduleId: 'customer-payment-history', icon: 'contact', indent: true },
 

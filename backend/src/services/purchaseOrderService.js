@@ -445,8 +445,17 @@ const getPurchaseOrders = async (filters = {}) => {
          FROM material_requests mr_inner
          JOIN sales_orders so ON mr_inner.notes LIKE CONCAT('%', so.project_name, '%')
          WHERE mr_inner.id = po.mr_id LIMIT 1),
+        (SELECT so.project_name 
+         FROM material_requests mr_inner
+         JOIN sales_orders so ON mr_inner.notes REGEXP CONCAT('SO-[0-9]{4}-', LPAD(so.id, 4, '0'))
+         WHERE mr_inner.id = po.mr_id LIMIT 1),
         'Stock/Internal'
       ) as project_name,
+      COALESCE(
+        (SELECT c.company_name FROM companies c JOIN sales_orders so ON c.id = so.company_id WHERE so.id = po.sales_order_id),
+        (SELECT c.company_name FROM companies c JOIN sales_orders so ON c.id = so.company_id JOIN production_plans pp ON so.id = pp.sales_order_id JOIN material_requests mr_inner ON pp.id = mr_inner.plan_id WHERE mr_inner.id = po.mr_id LIMIT 1),
+        'Internal'
+      ) as company_name,
       COUNT(poi.id) as items_count,
       IFNULL(SUM(poi.quantity), 0) as total_quantity,
       (SELECT IFNULL(SUM(gi.accepted_qty), 0) 
@@ -525,7 +534,12 @@ const getPurchaseOrderById = async (poId) => {
         JOIN sales_orders so3 ON mr_inner.notes LIKE CONCAT('%', so3.project_name, '%')
         WHERE mr_inner.id = po.mr_id LIMIT 1),
        'Stock/Internal'
-     ) as project_name
+     ) as project_name,
+     COALESCE(
+       (SELECT c.company_name FROM companies c JOIN sales_orders so ON c.id = so.company_id WHERE so.id = po.sales_order_id),
+       (SELECT c.company_name FROM companies c JOIN sales_orders so ON c.id = so.company_id JOIN production_plans pp ON so.id = pp.sales_order_id JOIN material_requests mr_inner ON pp.id = mr_inner.plan_id WHERE mr_inner.id = po.mr_id LIMIT 1),
+       'Internal'
+     ) as company_name
      FROM purchase_orders po
      LEFT JOIN vendors v ON v.id = po.vendor_id
      LEFT JOIN material_requests mr ON mr.id = po.mr_id
@@ -934,7 +948,7 @@ const generatePurchaseOrderPDF = async (poId) => {
         }
 
         .company-name {
-          color: #4f46e5;
+          color: #059669;
           font-size: 32px;
           font-weight: 700;
           margin: 0;
@@ -950,7 +964,7 @@ const generatePurchaseOrderPDF = async (poId) => {
 
         .divider {
           height: 2px;
-          background: linear-gradient(to right, transparent, #4f46e5, transparent);
+          background: linear-gradient(to right, transparent, #059669, transparent);
           margin: 20px 0;
         }
 
@@ -965,7 +979,7 @@ const generatePurchaseOrderPDF = async (poId) => {
         .rfq-title {
           font-size: 24px;
           font-weight: 700;
-          color: #312e81;
+          color: #064e3b;
           text-transform: uppercase;
           letter-spacing: 2px;
           margin: 0;
@@ -974,7 +988,7 @@ const generatePurchaseOrderPDF = async (poId) => {
         .dot {
           width: 8px;
           height: 8px;
-          background-color: #4f46e5;
+          background-color: #059669;
           border-radius: 50%;
         }
 
@@ -1004,14 +1018,14 @@ const generatePurchaseOrderPDF = async (poId) => {
           display: flex;
           align-items: center;
           justify-content: center;
-          color: #4f46e5;
+          color: #059669;
           flex-shrink: 0;
         }
 
         .info-label {
           font-size: 9px;
           font-weight: 600;
-          color: #4f46e5;
+          color: #059669;
           text-transform: uppercase;
           margin-bottom: 1px;
           letter-spacing: 0.5px;
@@ -1038,7 +1052,7 @@ const generatePurchaseOrderPDF = async (poId) => {
         }
 
         .section-header {
-          background: #3730a3;
+          background: #065f46;
           color: #fff;
           padding: 8px 15px;
           font-size: 12px;
@@ -1069,14 +1083,14 @@ const generatePurchaseOrderPDF = async (poId) => {
         }
 
         th {
-          background: #f5f3ff;
-          color: #3730a3;
+          background: #ecfdf5;
+          color: #065f46;
           text-align: left;
           padding: 12px 15px;
           font-size: 11px;
           font-weight: 700;
           text-transform: uppercase;
-          border-bottom: 2px solid #ddd6fe;
+          border-bottom: 2px solid #d1fae5;
         }
 
         td {
@@ -1122,8 +1136,8 @@ const generatePurchaseOrderPDF = async (poId) => {
         }
 
         .grand-total-row {
-          background: #f5f3ff;
-          color: #4f46e5;
+          background: #ecfdf5;
+          color: #059669;
           font-size: 14px !important;
           font-weight: 700 !important;
         }
@@ -1138,7 +1152,7 @@ const generatePurchaseOrderPDF = async (poId) => {
           padding: 10px 15px;
           font-size: 11px;
           font-weight: 600;
-          color: #4f46e5;
+          color: #059669;
           text-transform: uppercase;
           border-bottom: 1px solid #f1f5f9;
         }

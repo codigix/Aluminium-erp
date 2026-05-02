@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const generateJobCardQcPdf = require('../utils/generateJobCardQcPdf');
 
 const listJobCards = async () => {
   const [rows] = await pool.query(
@@ -797,6 +798,33 @@ const sendVendorReceiptToPayment = async (logId) => {
   return { success: true };
 };
 
+const getQualityLogFullDetails = async (logId) => {
+  const [rows] = await pool.query(
+    `SELECT ql.*, 
+            jc.job_card_no, jc.planned_qty,
+            wo.wo_number, wo.item_name, wo.item_code,
+            so.project_name, c.company_name as client_name,
+            o.operation_name
+     FROM job_card_quality_logs ql
+     JOIN job_cards jc ON ql.job_card_id = jc.id
+     JOIN work_orders wo ON jc.work_order_id = wo.id
+     LEFT JOIN sales_orders so ON wo.sales_order_id = so.id
+     LEFT JOIN companies c ON so.company_id = c.id
+     LEFT JOIN operations o ON jc.operation_id = o.id
+     WHERE ql.id = ?`,
+    [logId]
+  );
+  return rows[0] || null;
+};
+
+const downloadJobCardQcPdf = async (logId) => {
+  const logDetails = await getQualityLogFullDetails(logId);
+  if (!logDetails) throw new Error('Quality inspection record not found');
+  
+  const pdfPath = await generateJobCardQcPdf({ log: logDetails });
+  return pdfPath;
+};
+
 module.exports = {
   listJobCards,
   createJobCard,
@@ -818,5 +846,7 @@ module.exports = {
   getWorkOrderLogs,
   getVendorReceipts,
   getVendorReceiptItems,
-  sendVendorReceiptToPayment
+  sendVendorReceiptToPayment,
+  getQualityLogFullDetails,
+  downloadJobCardQcPdf
 };
