@@ -1313,10 +1313,21 @@ const CustomerDrawing = () => {
     }
   };
 
-  const handleViewClientDrawings = (clientName) => {
+  const handleViewClientDrawings = (client) => {
+    // Handle both string (clientName) or object (row)
+    const name = typeof client === 'string' ? client : (client.client_name || client.company_name);
+    
+    // Use a case-insensitive search if direct match fails
+    let drawingsForClient = groupedDrawings[name] || [];
+    if (drawingsForClient.length === 0 && name) {
+      const lowerName = name.toLowerCase().trim();
+      const matchedKey = Object.keys(groupedDrawings).find(k => k.toLowerCase().trim() === lowerName);
+      if (matchedKey) drawingsForClient = groupedDrawings[matchedKey];
+    }
+
     const viewData = {
-      name: clientName,
-      drawings: groupedDrawings[clientName] || []
+      name: name,
+      drawings: drawingsForClient
     };
     setViewingClient(viewData);
     setShowClientDrawingsModal(true);

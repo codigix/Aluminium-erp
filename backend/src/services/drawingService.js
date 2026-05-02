@@ -47,22 +47,33 @@ const listDrawings = async (search = '', onlyShared = false, clientName = null) 
       MAX(soi.item_code) as item_code
     FROM customer_drawings d
     LEFT JOIN (
-      SELECT s1.id, s1.drawing_no, s1.status, s1.sales_order_id, s1.description, s1.bom_cost, s1.item_group, s1.unit, s1.drawing_id, s1.item_code
+      SELECT 
+        s1.id, 
+        s1.drawing_no, 
+        s1.status, 
+        s1.sales_order_id, 
+        s1.description, 
+        s1.bom_cost, 
+        s1.item_group, 
+        s1.unit, 
+        s1.drawing_id, 
+        s1.item_code
       FROM sales_order_items s1
-      INNER JOIN (
-        SELECT COALESCE(drawing_id, drawing_no) as identifier, MAX(id) as max_id
+      JOIN (
+        SELECT COALESCE(drawing_id, 0) as dwg_id, drawing_no as dwg_no, MAX(id) as max_id
         FROM sales_order_items
-        GROUP BY identifier
-      ) s2 ON s1.id = s2.max_id
-    ) soi ON (d.id = soi.drawing_id OR (soi.drawing_id IS NULL AND d.drawing_no = soi.drawing_no))
+        GROUP BY dwg_id, dwg_no
+      ) s2 ON (s1.drawing_id = s2.dwg_id AND s1.drawing_no = s2.dwg_no AND s1.id = s2.max_id)
+         OR (s1.drawing_id IS NULL AND s1.drawing_no = s2.dwg_no AND s1.id = s2.max_id)
+    ) soi ON (d.id = soi.drawing_id OR (d.drawing_no = soi.drawing_no AND (soi.drawing_id IS NULL OR soi.drawing_id = d.id)))
     WHERE 1=1
   `;
   const params = [];
 
   if (onlyShared) {
-    // Show drawings that are either explicitly SHARED or have an associated sales order item (meaning they are in progress)
-    // DESIGN_IN_REVIEW is the status when sales sends to design
-    query += ` AND (d.status IN ('SHARED', 'APPROVED', 'DESIGN_IN_REVIEW') OR soi.id IS NOT NULL OR soi.status IN ('SHARED', 'APPROVED', 'DESIGN_IN_REVIEW'))`;
+    // Only show drawings that have been explicitly shared or are in design review
+    // We remove "soi.id IS NOT NULL" because an item is created immediately even in CREATED status
+    query += ` AND (d.status IN ('SHARED', 'APPROVED', 'DESIGN_IN_REVIEW') OR soi.status IN ('SHARED', 'APPROVED', 'DESIGN_IN_REVIEW'))`;
   }
 
   if (clientName) {
