@@ -1,4 +1,4 @@
-const mysql = require('mysql2/promise');
+const mysql = require('mysql2');
 require('dotenv').config({ path: './backend/.env' });
 
 async function list() {
@@ -10,8 +10,12 @@ async function list() {
         database: process.env.DB_NAME || 'sales_erp'
     };
     const connection = await mysql.createConnection(config);
-    const [tables] = await connection.query('SHOW TABLES');
-    console.log(JSON.stringify(tables, null, 2));
+    const [wos] = await connection.promise().query('SELECT * FROM work_orders WHERE sales_order_id = 37');
+    console.log('Work Orders for SO 37:', JSON.stringify(wos, null, 2));
+    
+    const [jc] = await connection.promise().query('SELECT * FROM job_cards WHERE work_order_id IN (SELECT id FROM work_orders WHERE sales_order_id = 37)');
+    console.log('Job Cards for SO 37:', JSON.stringify(jc, null, 2));
+
     await connection.end();
   } catch (err) {
     console.error(err);

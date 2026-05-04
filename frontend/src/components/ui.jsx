@@ -377,6 +377,7 @@ export const StatusBadge = ({ status }) => {
       case 'FULFILLED':
       case 'ACTIVE':
       case 'COMPLETED':
+      case 'FULLY_CONSUMED':
       case 'PRODUCTION_COMPLETED':
       case 'DELIVERED':
       case 'RETURN_COMPLETED':
@@ -384,7 +385,7 @@ export const StatusBadge = ({ status }) => {
       case 'QC_APPROVED':
       case 'READY_TO_DISPATCH':
         // Success style: Green
-        return 'text-emerald-500'
+        return 'bg-emerald-50 border-emerald-100 text-emerald-600 shadow-sm border'
       
       case 'DESIGN_QUERY':
       case 'INACTIVE':
@@ -393,17 +394,19 @@ export const StatusBadge = ({ status }) => {
       case 'BLOCKED':
       case 'CANCELLED':
         // Danger style: Red
-        return 'text-rose-500 '
+        return 'bg-rose-50 border-rose-100 text-rose-600 shadow-sm border'
       
       case 'RFQ_REQUESTED':
       case 'ON_HOLD':
+      case 'PARTIALLY_CONSUMED':
+      case 'PENDING':
       case 'OUT_FOR_DELIVERY':
       case 'RETURN_PICKUP_ASSIGNED':
       case 'REVISED':
       case 'IN_TRANSIT':
       case 'RETURN_IN_TRANSIT':
         // Warning style: Orange/Yellow
-        return 'text-amber-500 '
+        return 'bg-amber-50 border-amber-100 text-amber-600 shadow-sm border'
       
       case 'RETURN_RECEIVED':
         // Secondary style: Sky/Cyan
