@@ -9,7 +9,7 @@ import {
   FileSpreadsheet, PackageSearch, Calendar, Wrench, FileSignature, Cpu, Activity, 
   FileQuestion, ShoppingBag, ClipboardPlus, ClipboardCheck, Move, BookOpen, Warehouse, 
   ShieldCheck, LogIn, FileBarChart, Receipt, CreditCard, History, CheckCircle2, Contact2,
-  Menu
+  Menu, Monitor
 } from 'lucide-react'
 import CompanyMaster from './pages/CompanyMaster'
 import ClientContacts from './pages/ClientContacts'
@@ -77,12 +77,15 @@ import DesignDashboard from "./pages/DesignDashboard";
 import ProductionDashboard from "./pages/ProductionDashboard";
 import ProcurementDashboard from "./pages/ProcurementDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
+import ProjectAnalysis from "./pages/ProjectAnalysis";
+import OEEAnalysis from "./pages/OEEAnalysis";
+import MachineAnalysis from "./pages/MachineAnalysis";
 import { FormControl, StatusBadge, Button } from "./components/ui.jsx";
 import './index.css'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 const API_HOST = API_BASE
-const MODULE_IDS = ['dashboard', 'admin-dashboard', 'sales-dashboard', 'design-dashboard', 'production-dashboard', 'procurement-dashboard', 'item-master', 'company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'quotation-form', 'vendor-management', 'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'quality-dashboard', 'accounts-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance', 'incoming-qc', 'quality-rejections', 'quality-reports', 'quality-rejection-entry', 'warehouses', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval', 'bom-form', 'workstation-master', 'operation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card', 'sub-contract-challans', 'stock-entries', 'incoming-orders', 'vendor-inward-challans', 'invoice-received', 'payment-processing', 'payment-received', 'payment-history', 'customer-payment-history', 'shipment-dashboard', 'shipment-orders', 'shipment-planning', 'dispatch-management', 'delivery-challan', 'shipment-tracking', 'shipment-returns', 'shipment-reports']
+const MODULE_IDS = ['dashboard', 'admin-dashboard', 'project-analysis', 'oee-analysis', 'machine-analysis', 'sales-dashboard', 'design-dashboard', 'production-dashboard', 'procurement-dashboard', 'item-master', 'company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'quotation-form', 'vendor-management', 'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'quality-dashboard', 'accounts-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance', 'incoming-qc', 'quality-rejections', 'quality-reports', 'quality-rejection-entry', 'warehouses', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval', 'bom-form', 'workstation-master', 'operation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card', 'sub-contract-challans', 'stock-entries', 'incoming-orders', 'vendor-inward-challans', 'invoice-received', 'payment-processing', 'payment-received', 'payment-history', 'customer-payment-history', 'shipment-dashboard', 'shipment-orders', 'shipment-planning', 'dispatch-management', 'delivery-challan', 'shipment-tracking', 'shipment-returns', 'shipment-reports']
 const DEFAULT_MODULE = 'dashboard'
 const HOME_PLANT_STATE = (import.meta.env.VITE_PLANT_STATE || 'maharashtra').toLowerCase()
 const currencyFormatter = new Intl.NumberFormat('en-IN', {
@@ -183,7 +186,7 @@ const DEPARTMENT_MODULES = {
   INVENTORY: ['dashboard', 'item-master', 'po-material-request', 'grn', 'stock-entries', 'stock-ledger', 'stock-balance', 'warehouses', 'suppliers'],
   PROCUREMENT: ['dashboard', 'item-master', 'quotations', 'purchase-orders', 'po-receipts', 'incoming-orders', 'suppliers'],
   ADMIN: [
-    'dashboard', 'item-master', 'company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'quotation-form',
+    'dashboard', 'admin-dashboard', 'project-analysis', 'oee-analysis', 'machine-analysis', 'item-master', 'company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'quotation-form',
     'design-orders', 'drawing-master', 'bom-creation', 'bom-approval', 'bom-form', 'routing-operations', 'process-sheet',
     'incoming-orders', 'operation-master', 'workstation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card', 'sub-contract-challans',
     'incoming-qc', 'quality-rejections', 'quality-reports', 'quality-rejection-entry', 'qc-inspections',
@@ -1072,12 +1075,16 @@ function App() {
     'credit-card': CreditCard,
     'history': History,
     'check-circle': CheckCircle2,
-    'contact': Contact2
+    'contact': Contact2,
+    'monitor': Monitor
   }
 
   const allNavigationItems = [
     { label: 'GENERAL', isGroup: true, groupId: 'general-group' },
     { label: 'Dashboard', moduleId: 'dashboard', icon: 'dashboard', indent: true },
+    { label: 'Project Analysis', moduleId: 'project-analysis', icon: 'chart', indent: true },
+    { label: 'OEE Analysis', moduleId: 'oee-analysis', icon: 'activity', indent: true },
+    { label: 'Machine Analysis', moduleId: 'machine-analysis', icon: 'monitor', indent: true },
     { label: 'Company Master', moduleId: 'company-master', icon: 'building', indent: true },
     { label: 'Client Contacts', moduleId: 'client-contacts', icon: 'users', indent: true },
 
@@ -1581,6 +1588,18 @@ function App() {
 
                 {activeModule === 'admin-dashboard' && (
                   <AdminDashboard />
+                )}
+
+                {activeModule === 'project-analysis' && (
+                  <ProjectAnalysis />
+                )}
+
+                {activeModule === 'oee-analysis' && (
+                  <OEEAnalysis />
+                )}
+
+                {activeModule === 'machine-analysis' && (
+                  <MachineAnalysis />
                 )}
 
                 {activeModule === 'sales-dashboard' && (
