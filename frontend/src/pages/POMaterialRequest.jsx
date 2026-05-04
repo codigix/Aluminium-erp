@@ -313,6 +313,46 @@ const POMaterialRequest = () => {
     }
   };
 
+  const handleApproveRequest = async (id) => {
+    try {
+      const result = await Swal.fire({
+        title: 'Approve Material Request?',
+        text: 'This will mark the request as approved for procurement/fulfillment.',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#6366f1',
+        cancelButtonColor: '#64748b',
+        confirmButtonText: 'Yes, approve it!'
+      });
+
+      if (result.isConfirmed) {
+        setLoading(true);
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE}/material-requests/${id}/status`, {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ status: 'APPROVED' })
+        });
+
+        if (response.ok) {
+          successToast("Request approved successfully");
+          setShowViewModal(false);
+          fetchRequests();
+        } else {
+          errorToast("Failed to approve request");
+        }
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      errorToast("Network error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleReleaseMaterial = async (id) => {
     try {
       const result = await Swal.fire({

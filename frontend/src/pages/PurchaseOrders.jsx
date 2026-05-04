@@ -82,7 +82,7 @@ const PurchaseOrders = () => {
       }
     } else if (path === '/purchase-orders/manual-add') {
       if (!showManualCreateModal) {
-        setManualFormData({ id: null, vendorId: '', mrId: '', expectedDeliveryDate: '', notes: '', currency: 'INR (Indian Rupee)', items: [] });
+        setManualFormData({ id: null, vendorId: '', quotationId: '', expectedDeliveryDate: '', notes: '', currency: 'INR (Indian Rupee)', items: [] });
         setShowManualCreateModal(true);
         setShowCreateModal(false);
         setViewMode('list');
@@ -154,7 +154,7 @@ const PurchaseOrders = () => {
   const [manualFormData, setManualFormData] = useState({
     id: null,
     vendorId: '',
-    mrId: '',
+    quotationId: '',
     expectedDeliveryDate: '',
     notes: '',
     currency: 'INR (Indian Rupee)',
@@ -218,29 +218,32 @@ const PurchaseOrders = () => {
     }
   };
 
-  const handleMRChange = async (mrId) => {
-    if (!mrId) {
-      setManualFormData(prev => ({ ...prev, mrId: '', items: [] }));
+  const handleManualQuotationChange = async (quotationId) => {
+    if (!quotationId) {
+      setManualFormData(prev => ({ ...prev, quotationId: '', vendorId: '', items: [] }));
       return;
     }
 
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/material-requests/${mrId}`, {
+      const response = await fetch(`${API_BASE}/quotations/${quotationId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
-        const mrData = await response.json();
-        const mrItems = (mrData.items || [])
-          .filter(item => (item.fulfillment_source === 'PURCHASE' || !item.fulfillment_source))
+        const quotationData = await response.json();
+        const quoteItems = (quotationData.items || [])
+          .filter(item => {
+            const type = (item.material_type || '').toUpperCase();
+            return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
+          })
           .map(item => ({
             item_code: item.item_code,
             description: item.item_name || item.description || item.item_code,
             material_name: item.material_name,
             quantity: item.quantity || 0,
-            unit: item.uom || 'NOS',
-            rate: item.unit_rate || 0,
-            amount: (item.quantity || 0) * (item.unit_rate || 0),
+            unit: item.uom || item.unit || 'NOS',
+            rate: item.unit_rate || item.rate || 0,
+            amount: (item.quantity || 0) * (item.unit_rate || item.rate || 0),
             length: item.length || 0,
             width: item.width || 0,
             thickness: item.thickness || 0,
@@ -252,14 +255,15 @@ const PurchaseOrders = () => {
         
         setManualFormData(prev => ({
           ...prev,
-          mrId: mrId,
-          items: mrItems,
-          notes: mrData.notes || prev.notes
+          quotationId: quotationId,
+          vendorId: quotationData.vendor_id || '',
+          items: quoteItems,
+          notes: quotationData.notes || prev.notes
         }));
       }
     } catch (error) {
-      console.error('Error fetching MR details:', error);
-      errorToast('Failed to load MR details');
+      console.error('Error fetching Quotation details:', error);
+      errorToast('Failed to load Quotation details');
     }
   };
 
@@ -309,6 +313,7 @@ const PurchaseOrders = () => {
 
   const handleCreateManualPO = async (e) => {
     e.preventDefault();
+    if (!manualFormData.quotationId) return errorToast('Please select an approved quote');
     if (!manualFormData.vendorId) return errorToast('Please select a vendor');
     if (manualFormData.items.length === 0) return errorToast('Please add at least one item');
 
@@ -319,6 +324,7 @@ const PurchaseOrders = () => {
       
       const payload = {
         vendorId: parseInt(manualFormData.vendorId),
+        quotationId: manualFormData.quotationId ? parseInt(manualFormData.quotationId) : null,
         expectedDeliveryDate: manualFormData.expectedDeliveryDate || null,
         notes: manualFormData.notes || null,
         currency: manualFormData.currency?.split(' ')[0] || 'INR',
@@ -380,8 +386,10 @@ const PurchaseOrders = () => {
       });
       if (response.ok) {
         const data = await response.json();
-        // Only show APPROVED MRs
-        setMaterialRequests((Array.isArray(data) ? data : []).filter(mr => (mr.status || '').toUpperCase() === 'APPROVED'));
+        // Only show relevant MRs (not fulfilled or already created as PO)
+        setMaterialRequests((Array.isArray(data) ? data : []).filter(mr => 
+          !['FULFILLED', 'PO_CREATED', 'CANCELLED', 'REJECTED'].includes((mr.status || '').toUpperCase())
+        ));
       }
     } catch (error) {
       console.error('Error fetching MRs:', error);
@@ -630,6 +638,7 @@ const PurchaseOrders = () => {
         setManualFormData({
           id: data.id,
           vendorId: data.vendor_id || '',
+          quotationId: data.quotation_id || '',
           expectedDeliveryDate: data.expected_delivery_date ? data.expected_delivery_date.split('T')[0] : '',
           notes: data.notes || '',
           currency: data.currency ? `${data.currency} (${data.currency === 'INR' ? 'Indian Rupee' : 'US Dollar'})` : 'INR (Indian Rupee)',
@@ -1264,6 +1273,20 @@ const PurchaseOrders = () => {
                 </div>
                 <div className="p-2 grid grid-cols-1 md:grid-cols-3 gap-2">
                   <div className="space-y-1.5">
+                    <label className="text-xs  text-slate-400   ml-1">Select Quote No. *</label>
+                    <select
+                      value={manualFormData.quotationId}
+                      onChange={(e) => handleManualQuotationChange(e.target.value)}
+                      className="w-full p-2  bg-slate-50 border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                      required
+                    >
+                      <option value="">Select Approved Quote</option>
+                      {quotations.map(q => (
+                        <option key={q.id} value={q.id}>{q.quote_number} - {q.vendor_name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
                     <label className="text-xs  text-slate-400   ml-1">Supplier *</label>
                     <select
                       value={manualFormData.vendorId}
@@ -1274,19 +1297,6 @@ const PurchaseOrders = () => {
                       <option value="">Select Supplier</option>
                       {vendors.map(v => (
                         <option key={v.id} value={v.id}>{v.vendor_name}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs  text-slate-400   ml-1">Select Material Request</label>
-                    <select
-                      value={manualFormData.mrId}
-                      onChange={(e) => handleMRChange(e.target.value)}
-                      className="w-full p-2  bg-slate-50 border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                    >
-                      <option value="">Select MR (Optional)</option>
-                      {materialRequests.map(mr => (
-                        <option key={mr.id} value={mr.id}>{mr.mr_number} - {mr.project_name || 'General'}</option>
                       ))}
                     </select>
                   </div>
