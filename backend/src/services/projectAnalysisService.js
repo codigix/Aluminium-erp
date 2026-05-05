@@ -144,7 +144,14 @@ const getProjectDetailAnalysis = async (salesOrderId) => {
     SELECT 
       so.*, 
       c.company_name,
-      cp.po_number as customer_po_no,
+      COALESCE(cp.po_number, (
+        SELECT p.po_number 
+        FROM customer_pos p
+        JOIN customer_po_items pi ON p.id = pi.customer_po_id
+        JOIN sales_order_items si ON (TRIM(pi.drawing_no) = TRIM(si.drawing_no) AND si.drawing_no IS NOT NULL)
+        WHERE si.sales_order_id = so.id
+        LIMIT 1
+      )) as customer_po_no,
       (SELECT COUNT(*) FROM work_orders WHERE sales_order_id = so.id) as total_work_orders,
       (SELECT COUNT(*) FROM work_orders WHERE sales_order_id = so.id AND status = 'COMPLETED') as completed_work_orders
     FROM sales_orders so
@@ -213,6 +220,7 @@ const getProjectDetailAnalysis = async (salesOrderId) => {
     FROM material_requests mr
     JOIN production_plans pp ON mr.plan_id = pp.id
     WHERE pp.sales_order_id = ?
+    ORDER BY mr.created_at DESC
   `, [salesOrderId]);
 
   // 6. Stock Movements for this project

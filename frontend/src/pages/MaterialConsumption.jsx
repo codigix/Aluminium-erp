@@ -131,14 +131,14 @@ const MaterialConsumption = () => {
       render: (val, row) => (
         <div className="flex flex-col items-end min-w-[140px]">
           <div className="flex items-center gap-2">
-            <div className="text-indigo-600 font-bold">{parseFloat(val || 0).toLocaleString()} units</div>
+            <div className="text-rose-600 font-bold">{parseFloat(val || 0).toLocaleString()} units</div>
             <div className="text-[10px] text-slate-400 font-bold">
               {row.allocated > 0 ? Math.round((val / row.allocated) * 100) : 0}%
             </div>
           </div>
           <div className="w-full h-1 bg-slate-100 rounded-full mt-1 overflow-hidden">
             <div 
-              className="h-full bg-indigo-500 transition-all duration-500" 
+              className="h-full bg-rose-500 transition-all duration-500" 
               style={{ width: `${Math.min(100, (val / (row.allocated || 1)) * 100)}%` }}
             />
           </div>
@@ -188,7 +188,7 @@ const MaterialConsumption = () => {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 bg-white p-2 rounded border border-slate-100 shadow-sm">
         <div className="flex items-center gap-2">
-          <div className="p-2 bg-indigo-600 rounded shadow-lg shadow-indigo-200">
+          <div className="p-2 bg-rose-500 rounded shadow-lg shadow-rose-200">
             <Layers className="w-8 h-8 text-white" />
           </div>
           <div>
@@ -206,7 +206,7 @@ const MaterialConsumption = () => {
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded text-[10px] font-black hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95 uppercase tracking-[0.1em]">
+          <button className="flex items-center gap-2 px-4 py-2 bg-rose-500 text-white rounded text-[10px] font-black hover:bg-rose-600 transition-all shadow-lg shadow-rose-100 active:scale-95 uppercase tracking-[0.1em]">
             <Download className="w-4 h-4" />
             GENERATE CSV
           </button>
@@ -227,7 +227,7 @@ const MaterialConsumption = () => {
           amount={stats.totalConsumed.toLocaleString()} 
           subtitle="Overall utilization index"
           icon={TrendingUp}
-          color="bg-indigo-500"
+          color="bg-rose-500"
           trendValue={`${Math.round((stats.totalConsumed / (stats.totalAllocated || 1)) * 100)}%`}
         />
         <StatCard 
@@ -259,7 +259,7 @@ const MaterialConsumption = () => {
             </div>
           </div>
           <div className="flex items-center gap-2 text-[9px] text-slate-400 font-black uppercase tracking-tighter">
-            <Info className="w-3.5 h-3.5 text-indigo-400" />
+            <Info className="w-3.5 h-3.5 text-rose-500" />
             Sync with Material Requests
           </div>
         </div>

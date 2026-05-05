@@ -88,8 +88,8 @@ const MachineAnalysis = () => {
     return (
       <div className="flex flex-col items-center justify-center p-22 space-y-2">
         <div className="relative">
-          <div className="w-16 h-16 border-4 border-slate-100 border-t-indigo-600 rounded animate-spin" />
-          <Monitor className="w-4 h-4 text-indigo-600 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
+          <div className="w-16 h-16 border-4 border-slate-100 border-t-rose-600 rounded animate-spin" />
+          <Monitor className="w-4 h-4 text-rose-600 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
         </div>
         <div className="text-center">
           <h3 className="text-slate-900 font-bold tracking-tight">Machine Pulse Sync</h3>
@@ -112,11 +112,11 @@ const MachineAnalysis = () => {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-3 rounded border border-slate-100 shadow-sm">
         <div className="flex items-center gap-3">
-          <div className="p-3 bg-indigo-600 rounded shadow-lg shadow-indigo-200">
+          <div className="p-3 bg-rose-600 rounded shadow-lg shadow-indigo-200">
             <Monitor className="w-6 h-6 text-white" />
           </div>
           <div>
-            <h1 className="text-xl text-slate-900 font-bold tracking-tight">Machine Analysis Matrix <span className="ml-2 text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded border border-indigo-100 uppercase tracking-widest">+ LIVE</span></h1>
+            <h1 className="text-xl text-slate-900 font-bold tracking-tight">Machine Analysis Matrix <span className="ml-2 text-[10px] bg-indigo-50 text-rose-600 px-1.5 py-0.5 rounded border border-indigo-100 uppercase tracking-widest">+ LIVE</span></h1>
             <div className="flex items-center gap-2 mt-1">
                <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold">
                  <Clock className="w-3.5 h-3.5" />
@@ -136,7 +136,7 @@ const MachineAnalysis = () => {
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded text-[11px] font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95 uppercase">
+          <button className="flex items-center gap-2 px-4 py-2 bg-rose-600 text-white rounded text-[11px] font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95 uppercase">
             <Download className="w-4 h-4" />
             GENERATE REPORT
           </button>
@@ -173,8 +173,8 @@ const MachineAnalysis = () => {
             onClick={() => setActiveTab(tab.id)}
             className={`flex items-center gap-2 px-4 py-2 rounded text-[11px] font-bold uppercase tracking-wider transition-all border ${
               activeTab === tab.id 
-                ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' 
-                : 'bg-white text-slate-500 border-slate-200 hover:text-indigo-600 hover:bg-slate-50'
+                ? 'bg-rose-600 text-white border-rose-600 shadow-md' 
+                : 'bg-white text-slate-500 border-slate-200 hover:text-rose-600 hover:bg-slate-50'
             }`}
           >
             <tab.icon className="w-3.5 h-3.5" />
@@ -189,7 +189,7 @@ const MachineAnalysis = () => {
               <div className="bg-white rounded border border-slate-100 p-6 shadow-sm h-[400px] flex flex-col items-center relative">
                  <div className="flex items-center justify-between w-full mb-4">
                     <h3 className="text-[10px] text-slate-400 uppercase tracking-widest font-bold flex items-center gap-2">
-                       <ShieldCheck className="w-3.5 h-3.5 text-indigo-600" />
+                       <ShieldCheck className="w-3.5 h-3.5 text-rose-600" />
                        Asset Health Spread
                     </h3>
                     <MoreHorizontal className="w-4 h-4 text-slate-300" />
@@ -199,8 +199,8 @@ const MachineAnalysis = () => {
                        <PieChart>
                           <Pie
                              data={[
-                                { name: 'Active', value: data?.assetHealth?.active },
-                                { name: 'Idle', value: data?.assetHealth?.idle }
+                                { name: 'Active', value: (data?.temporalAnalysis || []).filter(ws => ws.name.toLowerCase().includes('cutting')).length },
+                                { name: 'Idle', value: (data?.temporalAnalysis || []).filter(ws => !ws.name.toLowerCase().includes('cutting')).length }
                              ]}
                              innerRadius={80} outerRadius={110}
                              paddingAngle={5} dataKey="value" stroke="none"
@@ -211,16 +211,16 @@ const MachineAnalysis = () => {
                        </PieChart>
                     </ResponsiveContainer>
                     <div className="absolute inset-0 flex flex-col items-center justify-center pt-4">
-                       <span className="text-5xl font-black text-slate-900 tracking-tighter">{data?.assetHealth?.total}</span>
+                       <span className="text-5xl font-black text-slate-900 tracking-tighter">{(data?.temporalAnalysis || []).length}</span>
                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2">Total Units</span>
                        <div className="mt-4 flex items-center gap-2">
                           <div className="flex items-center gap-1">
                              <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                             <span className="text-[10px] text-slate-500 font-bold uppercase">{data?.assetHealth?.active} Active</span>
+                             <span className="text-[10px] text-slate-500 font-bold uppercase">{(data?.temporalAnalysis || []).filter(ws => ws.name.toLowerCase().includes('cutting')).length} Active</span>
                           </div>
                           <div className="flex items-center gap-1">
                              <div className="w-2 h-2 rounded-full bg-slate-200" />
-                             <span className="text-[10px] text-slate-500 font-bold uppercase">{data?.assetHealth?.idle} Idle</span>
+                             <span className="text-[10px] text-slate-500 font-bold uppercase">{(data?.temporalAnalysis || []).filter(ws => !ws.name.toLowerCase().includes('cutting')).length} Idle</span>
                           </div>
                        </div>
                     </div>
@@ -230,12 +230,12 @@ const MachineAnalysis = () => {
               <div className="xl:col-span-2 bg-white rounded border border-slate-100 p-6 shadow-sm h-[400px] flex flex-col relative">
                  <div className="flex items-center justify-between w-full mb-8">
                     <h3 className="text-[10px] text-slate-400 uppercase tracking-widest font-bold flex items-center gap-2">
-                       <Clock className="w-3.5 h-3.5 text-indigo-600" />
+                       <Clock className="w-3.5 h-3.5 text-rose-600" />
                        Temporal Asset Analysis
                     </h3>
                     <div className="flex items-center gap-4">
                        <div className="flex items-center gap-1.5">
-                          <div className="w-2.5 h-2.5 bg-indigo-600 rounded-sm" />
+                          <div className="w-2.5 h-2.5 bg-rose-600 rounded-sm" />
                           <span className="text-[9px] text-slate-500 font-bold uppercase">Productive</span>
                        </div>
                        <div className="flex items-center gap-1.5">
@@ -251,7 +251,7 @@ const MachineAnalysis = () => {
                           <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}} />
                           <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}} />
                           <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
-                          <Bar dataKey="productive" fill="#4f46e5" radius={[2, 2, 0, 0]} barSize={40} />
+                          <Bar dataKey="productive" fill="#818cf8" radius={[2, 2, 0, 0]} barSize={40} />
                           <Bar dataKey="idle" fill="#f1f5f9" radius={[2, 2, 0, 0]} barSize={40} />
                        </BarChart>
                     </ResponsiveContainer>
@@ -262,12 +262,12 @@ const MachineAnalysis = () => {
            <div className="bg-white rounded border border-slate-100 p-6 shadow-sm h-[400px] flex flex-col relative">
               <div className="flex items-center justify-between w-full mb-8">
                  <h3 className="text-[10px] text-slate-400 uppercase tracking-widest font-bold flex items-center gap-2">
-                    <Waves className="w-3.5 h-3.5 text-indigo-600" />
+                    <Waves className="w-3.5 h-3.5 text-rose-600" />
                     Multi-Factor Efficiency Stream
                  </h3>
                  <div className="flex items-center gap-4">
                     <div className="flex items-center gap-1.5">
-                       <div className="w-2.5 h-2.5 bg-indigo-600 rounded-sm" />
+                       <div className="w-2.5 h-2.5 bg-rose-600 rounded-sm" />
                        <span className="text-[9px] text-slate-500 font-bold uppercase">OEE Score</span>
                     </div>
                     <div className="flex items-center gap-1.5">
@@ -309,7 +309,7 @@ const MachineAnalysis = () => {
               <div className="xl:col-span-2 bg-white rounded border border-slate-100 p-4 shadow-sm h-[400px] flex flex-col relative">
                  <div className="flex items-center justify-between mb-8">
                     <h3 className="text-[10px] text-slate-400 uppercase tracking-widest font-bold flex items-center gap-2">
-                       <Activity className="w-3.5 h-3.5 text-indigo-600" />
+                       <Activity className="w-3.5 h-3.5 text-rose-600" />
                        Line Throughput Analysis
                     </h3>
                     <MoreHorizontal className="w-4 h-4 text-slate-300" />
@@ -333,13 +333,13 @@ const MachineAnalysis = () => {
                  </div>
                  <div className="mt-4 p-3 bg-indigo-50 rounded border border-indigo-100 flex items-center justify-between">
                     <span className="text-[10px] text-indigo-900 font-bold uppercase tracking-wider">Line Optimization Alert: Main Assembly is running at 94.2% capacity</span>
-                    <button className="text-[10px] text-indigo-600 font-black uppercase tracking-widest hover:underline">Re-balance Floor</button>
+                    <button className="text-[10px] text-rose-600 font-black uppercase tracking-widest hover:underline">Re-balance Floor</button>
                  </div>
               </div>
 
               <div className="bg-white rounded border border-slate-100 p-4 shadow-sm h-[400px] flex flex-col relative">
                  <h3 className="text-[10px] text-slate-400 uppercase tracking-widest font-bold flex items-center gap-2 mb-8">
-                    <Layers className="w-3.5 h-3.5 text-indigo-600" />
+                    <Layers className="w-3.5 h-3.5 text-rose-600" />
                     Line Availability Spread
                  </h3>
                  <div className="flex-1 flex flex-col justify-center gap-8">
@@ -367,7 +367,7 @@ const MachineAnalysis = () => {
                     <div className="space-y-4">
                        <div className="flex justify-between items-center px-4">
                           <div className="flex items-center gap-2">
-                             <div className="w-2.5 h-2.5 rounded-sm bg-indigo-600" />
+                             <div className="w-2.5 h-2.5 rounded-sm bg-rose-600" />
                              <span className="text-[11px] text-slate-500 font-bold uppercase">Main Line</span>
                           </div>
                           <span className="text-[11px] text-slate-900 font-extrabold tracking-tighter">88.5% OEE</span>
@@ -392,7 +392,7 @@ const MachineAnalysis = () => {
              <div key={idx} className="bg-white rounded border border-slate-100 p-4 shadow-sm hover:shadow-md transition-all group relative">
                 <div className="flex items-start justify-between mb-6">
                   <div className="flex items-center gap-3">
-                     <div className="w-10 h-10 border border-slate-100 rounded flex items-center justify-center text-slate-400 group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-colors shadow-sm">
+                     <div className="w-10 h-10 border border-slate-100 rounded flex items-center justify-center text-slate-400 group-hover:bg-indigo-50 group-hover:text-rose-600 transition-colors shadow-sm">
                         <Cpu className="w-5 h-5" />
                      </div>
                      <div>
@@ -400,9 +400,9 @@ const MachineAnalysis = () => {
                         <p className="text-[10px] text-slate-400 font-bold uppercase mt-1 tracking-widest">UNIT-{(idx + 101).toString()}</p>
                      </div>
                   </div>
-                  <div className={`flex items-center gap-1.5 px-2 py-1 ${ws.productive > 50 ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-amber-50 text-amber-600 border-amber-100'} rounded text-[9px] font-bold border uppercase tracking-tighter`}>
-                     <div className={`w-1.5 h-1.5 ${ws.productive > 50 ? 'bg-emerald-600' : 'bg-amber-600'} rounded-full animate-pulse`} />
-                     {ws.productive > 50 ? 'Running' : 'Idle'}
+                  <div className={`flex items-center gap-1.5 px-2 py-1 ${ws.name.toLowerCase().includes('cutting') ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-orange-50 text-orange-600 border-orange-100'} rounded text-[9px] font-bold border uppercase tracking-tighter`}>
+                     <div className={`w-1.5 h-1.5 ${ws.name.toLowerCase().includes('cutting') ? 'bg-emerald-600' : 'bg-orange-600'} rounded-full animate-pulse`} />
+                     {ws.name.toLowerCase().includes('cutting') ? 'Running' : 'Idle'}
                   </div>
                 </div>
 
@@ -412,7 +412,7 @@ const MachineAnalysis = () => {
                       <span className="text-[11px] text-slate-900 font-extrabold">{ws.productive}%</span>
                    </div>
                    <div className="h-2 w-full bg-slate-50 rounded-full overflow-hidden border border-slate-100">
-                      <div className="bg-indigo-600 h-full rounded-full transition-all duration-1000" style={{ width: `${ws.productive}%` }} />
+                      <div className="bg-indigo-400 h-full rounded-full transition-all duration-1000" style={{ width: `${ws.productive}%` }} />
                    </div>
                 </div>
 
@@ -421,7 +421,7 @@ const MachineAnalysis = () => {
                      <Activity className="w-3 h-3 text-indigo-400" />
                      Telemetry Active
                    </span>
-                   <button className="p-2 hover:bg-slate-50 rounded transition-colors text-slate-400 hover:text-indigo-600">
+                   <button className="p-2 hover:bg-slate-50 rounded transition-colors text-slate-400 hover:text-rose-600">
                       <Settings className="w-3.5 h-3.5" />
                    </button>
                 </div>
@@ -436,7 +436,7 @@ const MachineAnalysis = () => {
               <div className="bg-white rounded border border-slate-100 p-6 shadow-sm h-[450px] flex flex-col relative">
                  <div className="flex items-center justify-between w-full mb-8">
                     <h3 className="text-[10px] text-slate-400 uppercase tracking-widest font-bold flex items-center gap-2">
-                       <BarChart3 className="w-4 h-4 text-indigo-600" />
+                       <BarChart3 className="w-4 h-4 text-rose-600" />
                        Comparative Efficiency Index
                     </h3>
                     <MoreHorizontal className="w-4 h-4 text-slate-300" />
@@ -458,12 +458,12 @@ const MachineAnalysis = () => {
               <div className="bg-white rounded border border-slate-100 p-6 shadow-sm h-[450px] flex flex-col relative">
                  <div className="flex items-center justify-between w-full mb-8">
                     <h3 className="text-[10px] text-slate-400 uppercase tracking-widest font-bold flex items-center gap-2">
-                       <Gauge className="w-4 h-4 text-indigo-600" />
+                       <Gauge className="w-4 h-4 text-rose-600" />
                        OEE Component Decomposition
                     </h3>
                     <div className="flex items-center gap-4">
                        <div className="flex items-center gap-1.5">
-                          <div className="w-2.5 h-2.5 bg-indigo-600 rounded-sm" />
+                          <div className="w-2.5 h-2.5 bg-rose-600 rounded-sm" />
                           <span className="text-[9px] text-slate-500 font-bold uppercase">A</span>
                        </div>
                        <div className="flex items-center gap-1.5">
@@ -496,18 +496,18 @@ const MachineAnalysis = () => {
               <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500 opacity-[0.03] rounded-bl-full -mr-16 -mt-16 group-hover:scale-110 transition-transform" />
               <div className="p-4 rounded flex items-center justify-between relative z-10">
                  <div className="flex items-center gap-5">
-                    <div className="w-12 h-12 rounded bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-100 group-hover:rotate-6 transition-transform">
+                    <div className="w-12 h-12 rounded bg-rose-600 flex items-center justify-center shadow-lg shadow-indigo-100 group-hover:rotate-6 transition-transform">
                        <Target className="w-6 h-6 text-white" />
                     </div>
                     <div>
                        <h4 className="text-[12px] text-slate-900 font-black uppercase tracking-wider">Operational Efficiency Forecast</h4>
-                       <p className="text-[10px] text-indigo-600 font-bold uppercase tracking-widest mt-1 flex items-center gap-1.5">
+                       <p className="text-[10px] text-rose-600 font-bold uppercase tracking-widest mt-1 flex items-center gap-1.5">
                           <TrendingUp className="w-3.5 h-3.5" />
                           Predicted +4.2% Increase in next 72 hours
                        </p>
                     </div>
                  </div>
-                 <button className="px-5 py-2.5 bg-indigo-600 text-white rounded text-[10px] font-black uppercase hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95 tracking-widest">
+                 <button className="px-5 py-2.5 bg-rose-600 text-white rounded text-[10px] font-black uppercase hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95 tracking-widest">
                     View Optimization Plan
                  </button>
               </div>

@@ -1085,8 +1085,8 @@ function App() {
     { label: 'Dashboard', moduleId: 'dashboard', icon: 'dashboard', indent: true },
     { label: 'Project Analysis', moduleId: 'project-analysis', icon: 'chart', indent: true },
     { label: 'Material Consumption', moduleId: 'material-consumption', icon: 'layers', indent: true },
-    { label: 'OEE Analysis', moduleId: 'oee-analysis', icon: 'activity', indent: true },
     { label: 'Machine Analysis', moduleId: 'machine-analysis', icon: 'monitor', indent: true },
+    { label: 'OEE Analysis', moduleId: 'oee-analysis', icon: 'activity', indent: true },
     { label: 'Company Master', moduleId: 'company-master', icon: 'building', indent: true },
     { label: 'Client Contacts', moduleId: 'client-contacts', icon: 'users', indent: true },
 

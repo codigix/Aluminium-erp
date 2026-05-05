@@ -103,28 +103,35 @@ const ProjectAnalysis = () => {
     return Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
   };
 
-  const StatCard = ({ title, amount, subtitle, icon: Icon, color, trend, trendValue, animate, subColor }) => (
-    <div className="bg-white rounded p-2.5 border border-slate-100 shadow-sm relative overflow-hidden group">
+  const StatCard = ({ title, amount, subtitle, icon: Icon, color = 'bg-indigo-500', trend, trendValue, animate, subColor }) => (
+    <div className="bg-white rounded p-2.5 border border-slate-100 shadow-sm relative overflow-hidden group hover:shadow-md transition-all">
+      <div className={`absolute top-0 right-0 w-16 h-16 ${color} opacity-5 rounded -mr-6 -mt-6 transition-transform group-hover:scale-110`} />
+      
       <div className="flex flex-col h-full justify-between relative z-10">
-        <div>
-          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">{title}</p>
-          <div className="flex items-baseline gap-2">
-            <h3 className="text-xl text-slate-900 font-black tracking-tight">{amount}</h3>
-            {trendValue && (
-              <span className={`flex items-center text-[10px] font-bold ${trend === 'up' ? 'text-emerald-500' : 'text-rose-500'}`}>
-                {trend === 'up' ? <TrendingUp className="w-2.5 h-2.5 mr-0.5" /> : <AlertCircle className="w-2.5 h-2.5 mr-0.5" />}
-              </span>
-            )}
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">{title}</p>
+            <div className="flex items-baseline gap-2">
+              <h3 className="text-xl text-slate-900 font-black tracking-tight">{amount}</h3>
+              {trendValue && (
+                <span className={`flex items-center text-[10px] font-bold ${trend === 'up' ? 'text-emerald-500' : 'text-rose-500'}`}>
+                  {trend === 'up' ? <TrendingUp className="w-2.5 h-2.5 mr-0.5" /> : <AlertCircle className="w-2.5 h-2.5 mr-0.5" />}
+                  {trendValue}
+                </span>
+              )}
+            </div>
+          </div>
+          <div className={`p-1.5 rounded ${color.replace('bg-', 'bg-').replace('500', '100')} ${color.replace('bg-', 'text-').replace('500', '600')} transition-transform group-hover:rotate-12 shadow-sm`}>
+            {Icon && <Icon className={`w-3 h-3 ${animate ? 'animate-pulse' : ''}`} />}
           </div>
         </div>
-        <div className="mt-2 flex items-center justify-between">
+        <div className="mt-2">
            <p className={`text-[10px] font-bold uppercase ${subColor || 'text-slate-500'}`}>{subtitle}</p>
-           {Icon && <Icon className={`w-3.5 h-3.5 text-slate-300 group-hover:text-indigo-600 transition-colors ${animate ? 'animate-pulse' : ''}`} />}
         </div>
       </div>
       {title === 'Completion' && (
         <div className="absolute bottom-0 left-0 w-full h-1 bg-slate-50">
-           <div className="h-full bg-indigo-600" style={{width: amount}} />
+           <div className="h-full bg-indigo-600 transition-all duration-1000" style={{width: amount}} />
         </div>
       )}
     </div>
@@ -241,6 +248,15 @@ const ProjectAnalysis = () => {
                  </div>
               </div>
            </div>
+
+           <div className="flex items-center gap-2 px-2">
+              <div className="h-9 w-9 rounded-xl bg-rose-500 flex items-center justify-center shadow-lg shadow-rose-500/20">
+                <BarChart3 className="w-5 h-5 text-white" />
+              </div>
+              <button className="bg-rose-500 hover:bg-rose-600 text-white px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all shadow-lg shadow-rose-500/20 active:scale-95 flex items-center gap-2">
+                Generate Ledger
+              </button>
+           </div>
         </div>
 
         {/* Tabs */}
@@ -258,7 +274,7 @@ const ProjectAnalysis = () => {
                key={tab.id}
                onClick={() => setDetailTab(tab.id)}
                className={`flex items-center gap-2 px-4 py-1.5 rounded text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${
-                 detailTab === tab.id ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:text-indigo-600 hover:bg-white'
+                 detailTab === tab.id ? 'bg-rose-600 text-white shadow-md' : 'text-slate-500 hover:text-rose-600 hover:bg-white'
                }`}
              >
                <tab.icon className="w-3.5 h-3.5" />
@@ -349,16 +365,23 @@ const ProjectAnalysis = () => {
                          <span className="text-[10px] text-slate-400 font-black uppercase tracking-tight">Verified Stage Output</span>
                       </div>
                    </div>
-                   <div className="h-[350px] w-full">
-                      <ResponsiveContainer width="100%" height="100%">
-                         <BarChart data={productionFlow.map(p => ({ n: p.item_name, v: p.planned_qty > 0 ? (p.produced_qty / p.planned_qty) * 100 : 0 }))}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                            <XAxis dataKey="n" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 9, fontWeight: 700}} dy={10} />
-                            <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 9, fontWeight: 700}} />
-                            <Tooltip contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}} />
-                            <Bar dataKey="v" fill="#3b82f6" radius={[0, 0, 0, 0]} barSize={25} />
-                         </BarChart>
-                      </ResponsiveContainer>
+                   <div className="h-[350px] w-full flex items-center justify-center">
+                      {productionFlow.length > 0 ? (
+                        <ResponsiveContainer width="100%" height="100%">
+                           <BarChart data={productionFlow.map(p => ({ n: p.item_name, v: p.planned_qty > 0 ? (p.produced_qty / p.planned_qty) * 100 : 0 }))}>
+                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                              <XAxis dataKey="n" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 9, fontWeight: 700}} dy={10} />
+                              <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 9, fontWeight: 700}} />
+                              <Tooltip contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}} />
+                              <Bar dataKey="v" fill="#3b82f6" radius={[0, 0, 0, 0]} barSize={25} />
+                           </BarChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <div className="text-center">
+                           <GitBranch className="w-12 h-12 text-slate-100 mx-auto mb-4" />
+                           <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">No production stages defined</p>
+                        </div>
+                      )}
                    </div>
                 </div>
              </div>
@@ -514,7 +537,7 @@ const ProjectAnalysis = () => {
                          <div className="flex items-center gap-3 mt-3">
                             <div className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 text-slate-600 rounded border border-slate-100 text-[10px] font-black uppercase tracking-tighter">
                                <Calendar className="w-3 h-3 text-indigo-500" />
-                               {new Date(projectInfo.created_at).toLocaleDateString('en-GB')}
+                               {formatDate(projectInfo.created_at)}
                             </div>
                             <div className="flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 text-indigo-600 rounded border border-indigo-100 text-[10px] font-black uppercase tracking-tighter">
                                <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
@@ -581,7 +604,7 @@ const ProjectAnalysis = () => {
                               <td className="px-4 py-4">
                                  <div className="flex items-center gap-1.5 text-[10px] text-slate-500 font-bold">
                                     <Calendar className="w-3 h-3 text-slate-300" />
-                                    {new Date(wo.target_date).toLocaleDateString('en-GB')}
+                                    {formatDate(wo.target_date)}
                                  </div>
                               </td>
                            </tr>
@@ -701,7 +724,7 @@ const ProjectAnalysis = () => {
                                <td className="px-2 py-4">
                                   <span className="px-3 py-1 bg-indigo-50 text-indigo-600 rounded border border-indigo-100 uppercase text-[8px] font-black">{sc.status}</span>
                                </td>
-                               <td className="px-2 py-4 text-slate-400">{new Date(sc.created_at).toLocaleDateString('en-GB')}</td>
+                               <td className="px-2 py-4 text-slate-400">{formatDate(sc.created_at)}</td>
                             </tr>
                           ))}
                        </tbody>
@@ -828,7 +851,7 @@ const ProjectAnalysis = () => {
                          {(productionLogs || []).length > 0 ? productionLogs.map((log, i) => (
                            <tr key={i} className="hover:bg-slate-50/30 transition-colors text-slate-900 font-bold">
                               <td className="px-4 py-4 text-slate-400 font-black tracking-tighter uppercase">ENTRY-{log.id.toString().padStart(6, '0')}</td>
-                              <td className="px-4 py-4">{new Date(log.date).toLocaleDateString('en-GB')}</td>
+                              <td className="px-4 py-4">{formatDate(log.date)}</td>
                               <td className="px-4 py-4 uppercase tracking-tighter">{log.work_order}</td>
                               <td className="px-4 py-4">
                                  <span className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded text-[8px] font-black uppercase border border-blue-100 tracking-tighter">{log.operation}</span>
@@ -955,13 +978,13 @@ const ProjectAnalysis = () => {
       {/* List Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 bg-white p-2 rounded border border-slate-100 shadow-sm">
         <div className="flex items-center gap-2">
-          <div className="p-2 bg-indigo-600 rounded shadow-lg shadow-indigo-200">
+          <div className="p-2 bg-rose-500 rounded shadow-lg shadow-rose-200">
             <BarChart3 className="w-8 h-8 text-white" />
           </div>
           <div>
             <h1 className="text-xl text-slate-900 font-bold">Project Matrix Analytics</h1>
             <div className="flex items-center gap-2 mt-1">
-               <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-600 rounded text-[10px] border border-indigo-100 uppercase tracking-tighter font-bold">
+               <span className="px-1.5 py-0.5 bg-rose-50 text-rose-600 rounded text-[10px] border border-rose-100 uppercase tracking-tighter font-bold">
                   Intelligence Matrix
                </span>
                <div className="flex items-center gap-1.5 text-xs text-slate-400 font-medium">
@@ -975,7 +998,7 @@ const ProjectAnalysis = () => {
           <button onClick={fetchStats} className="p-2 bg-slate-50 text-slate-600 rounded hover:bg-slate-100 transition-all border border-slate-200">
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 font-black uppercase">
+          <button className="flex items-center gap-2 px-4 py-2 bg-rose-500 text-white rounded text-xs hover:bg-rose-600 transition-all shadow-lg shadow-rose-100 font-black uppercase">
             <Download className="w-4 h-4" />
             Generate Ledger
           </button>
