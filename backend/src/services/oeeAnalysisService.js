@@ -1,26 +1,39 @@
 const pool = require('../config/db');
 
 const getOEEMetrics = async (timeRange = 'Weekly') => {
-  // 1. Get detailed workstation stats with real OEE components
-  // We use job_card_time_logs to calculate Availability and Performance
-  // We use job_cards to calculate Quality
+  // Define date filters based on range
+  let tlFilter = '';
+  let jcFilter = '';
   
+  if (timeRange === 'Daily') {
+    tlFilter = 'AND tl.start_time >= DATE_SUB(NOW(), INTERVAL 1 DAY)';
+    jcFilter = 'AND jc.updated_at >= DATE_SUB(NOW(), INTERVAL 1 DAY)';
+  } else if (timeRange === 'Weekly') {
+    tlFilter = 'AND tl.start_time >= DATE_SUB(NOW(), INTERVAL 7 DAY)';
+    jcFilter = 'AND jc.updated_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)';
+  } else if (timeRange === 'Monthly') {
+    tlFilter = 'AND tl.start_time >= DATE_SUB(NOW(), INTERVAL 1 MONTH)';
+    jcFilter = 'AND jc.updated_at >= DATE_SUB(NOW(), INTERVAL 1 MONTH)';
+  } else if (timeRange === 'Yearly') {
+    tlFilter = 'AND tl.start_time >= DATE_SUB(NOW(), INTERVAL 1 YEAR)';
+    jcFilter = 'AND jc.updated_at >= DATE_SUB(NOW(), INTERVAL 1 YEAR)';
+  }
+
+  // 1. Get detailed workstation stats with real OEE components
   const [workstationStats] = await pool.query(`
     SELECT 
       w.id,
       w.workstation_code,
       w.workstation_name,
       -- Availability: (Actual Running Time / Total Planned Time)
-      -- Assuming 8 hours (480 mins) planned per log entry for now
       COALESCE(
         (SELECT (SUM(TIMESTAMPDIFF(MINUTE, tl.start_time, tl.end_time)) / (COUNT(tl.id) * 480)) * 100 
          FROM job_card_time_logs tl 
-         WHERE tl.workstation_id = w.id AND tl.start_time IS NOT NULL AND tl.end_time IS NOT NULL),
+         WHERE tl.workstation_id = w.id AND tl.start_time IS NOT NULL AND tl.end_time IS NOT NULL ${tlFilter}),
         85.5
       ) as availability,
       
       -- Performance: (Actual Output / Theoretical Output)
-      -- Theoretical = Running Time / Std Time
       COALESCE(
         (SELECT 
           CASE 
@@ -30,7 +43,7 @@ const getOEEMetrics = async (timeRange = 'Weekly') => {
           END
          FROM job_card_time_logs tl
          JOIN job_cards jc ON tl.job_card_id = jc.id
-         WHERE tl.workstation_id = w.id),
+         WHERE tl.workstation_id = w.id ${tlFilter}),
         78.2
       ) as performance,
       
@@ -38,7 +51,7 @@ const getOEEMetrics = async (timeRange = 'Weekly') => {
       COALESCE(
         (SELECT (SUM(jc.accepted_qty) / NULLIF(SUM(jc.produced_qty), 0)) * 100 
          FROM job_cards jc 
-         WHERE jc.workstation_id = w.id AND jc.produced_qty > 0),
+         WHERE jc.workstation_id = w.id AND jc.produced_qty > 0 ${jcFilter}),
         98.4
       ) as quality
     FROM workstations w
@@ -71,10 +84,10 @@ const getOEEMetrics = async (timeRange = 'Weekly') => {
     availability: avg('availability'),
     performance: avg('performance'),
     quality: avg('quality'),
-    utilization: (avg('availability') * 0.9).toFixed(1) // Rough estimation
+    utilization: (avg('availability') * 0.9).toFixed(1)
   };
 
-  // 2. Recent Floor Operations (Live Tracking)
+  // 2. Recent Floor Operations
   const [recentOperations] = await pool.query(`
     SELECT 
       jc.job_card_no as identifier,
@@ -91,19 +104,19 @@ const getOEEMetrics = async (timeRange = 'Weekly') => {
       DATE_FORMAT(jc.updated_at, '%H:%i:%s') as lastUpdated
     FROM job_cards jc
     LEFT JOIN workstations w ON jc.workstation_id = w.id
+    WHERE 1=1 ${jcFilter}
     ORDER BY jc.updated_at DESC
     LIMIT 10
   `);
 
-  // 3. Loss Category Distribution (Based on gaps in A, P, Q)
-  const totalLoss = 300 - (parseFloat(overall.availability) + parseFloat(overall.performance) + parseFloat(overall.quality));
+  // 3. Loss Category Distribution
   const lossDistribution = [
     { name: 'Availability Loss', value: (100 - parseFloat(overall.availability)).toFixed(1) },
     { name: 'Performance Loss', value: (100 - parseFloat(overall.performance)).toFixed(1) },
     { name: 'Quality Loss', value: (100 - parseFloat(overall.quality)).toFixed(1) }
   ];
 
-  // 4. Bottleneck Analysis (Workstations with lowest performance)
+  // 4. Bottleneck Analysis
   const bottlenecks = [...processedWS]
     .sort((a, b) => parseFloat(a.performance) - parseFloat(b.performance))
     .slice(0, 5)
@@ -121,7 +134,7 @@ const getOEEMetrics = async (timeRange = 'Weekly') => {
     bottlenecks,
     insights: [
       { text: `Overall OEE is currently ${overall.oee}%. Performance is the primary constraint.`, type: "performance" },
-      { text: `Availability at ${overall.availability}% indicates 14.5% idle time across the floor.`, type: "availability" },
+      { text: `Availability at ${overall.availability}% indicates idle time across the floor.`, type: "availability" },
       { text: `Quality remains high at ${overall.quality}%, maintaining standard yield targets.`, type: "quality" }
     ],
     kpis: [

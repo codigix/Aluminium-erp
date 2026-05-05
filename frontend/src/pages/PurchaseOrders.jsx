@@ -100,13 +100,10 @@ const PurchaseOrders = () => {
       }
     } else if (path.startsWith('/purchase-orders/view/')) {
       const id = path.split('/').pop();
-      const po = pos.find(p => p.id.toString() === id);
-      if (po) {
-        if (viewMode !== 'detail' || selectedPO?.id !== po.id) {
-          handleViewPODetail(po.id);
-          setShowCreateModal(false);
-          setShowManualCreateModal(false);
-        }
+      if (id && (viewMode !== 'detail' || selectedPO?.id?.toString() !== id.toString())) {
+        handleViewPODetail(id);
+        setShowCreateModal(false);
+        setShowManualCreateModal(false);
       }
     } else if (path === '/purchase-orders') {
       if (showCreateModal) setShowCreateModal(false);

@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import * as XLSX from 'xlsx';
 import {
   Truck,
   CheckCircle,
@@ -14,7 +15,17 @@ import {
   ChevronRight,
   TrendingUp,
   MapPin,
-  Clock
+  Clock,
+  ArrowUpRight,
+  ArrowDownRight,
+  Activity,
+  ArrowRight,
+  Package,
+  CheckCircle2,
+  Box,
+  LayoutDashboard,
+  ShieldCheck,
+  Search
 } from "lucide-react";
 import {
   BarChart,
@@ -29,19 +40,29 @@ import {
   Area,
   LineChart,
   Line,
-  Cell
+  Cell,
+  PieChart,
+  Pie
 } from "recharts";
 import { StatusBadge } from "../components/ui.jsx";
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
 const ShipmentReports = ({ apiRequest }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState(new Date());
+  const [dateRange, setDateRange] = useState({
+    start: '2026-04-01',
+    end: new Date().toISOString().split('T')[0]
+  });
 
   const fetchReportsData = useCallback(async () => {
     try {
       setLoading(true);
       const res = await apiRequest('/shipments/reports');
       setData(res);
+      setLastUpdated(new Date());
     } catch (error) {
       console.error('Error fetching shipment reports:', error);
     } finally {
@@ -53,10 +74,86 @@ const ShipmentReports = ({ apiRequest }) => {
     fetchReportsData();
   }, [fetchReportsData]);
 
+  const handleExport = () => {
+    if (!data) return;
+
+    const wb = XLSX.utils.book_new();
+
+    // Summary Sheet
+    const summaryData = [
+      { Metric: 'Total Shipments', Value: stats.total_shipments },
+      { Metric: 'Delayed Shipments', Value: stats.total_delayed },
+      { Metric: 'Returns', Value: stats.total_returns },
+      { Metric: 'Total Revenue', Value: stats.total_revenue },
+      { Metric: 'Total Customers', Value: stats.total_customers }
+    ];
+    const wsSummary = XLSX.utils.json_to_sheet(summaryData);
+    XLSX.utils.book_append_sheet(wb, wsSummary, "Logistics Summary");
+
+    // Regional Sheet
+    if (byDestination) {
+      const regionData = byDestination.map(d => ({
+        'Destination': d.destination,
+        'Shipment Count': d.count
+      }));
+      const wsRegions = XLSX.utils.json_to_sheet(regionData);
+      XLSX.utils.book_append_sheet(wb, wsRegions, "Regional Distribution");
+    }
+
+    // Recent Shipments Sheet
+    if (recentDeliveries) {
+      const shipmentData = recentDeliveries.map(s => ({
+        'Shipment Code': s.shipment_code,
+        'Customer': s.customer,
+        'Destination': s.destination || 'Main Warehouse',
+        'Status': s.status,
+        'Date': s.date || 'N/A'
+      }));
+      const wsShipments = XLSX.utils.json_to_sheet(shipmentData);
+      XLSX.utils.book_append_sheet(wb, wsShipments, "Recent Shipments");
+    }
+
+    XLSX.writeFile(wb, `Shipment_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
+  const chartColors = ['#4f46e5', '#10b981', '#f59e0b', '#6366f1', '#f43f5e'];
+
+  const StatCard = ({ title, amount, subtitle, icon: Icon, color, trend, trendValue }) => (
+    <div className="bg-white rounded p-2 border border-slate-100 shadow-sm hover: transition-all group relative overflow-hidden">
+      <div className={`absolute top-0 right-0 w-24 h-24 ${color} opacity-5 rounded -mr-8 -mt-8 transition-transform group-hover:scale-110`} />
+      
+      <div className="flex items-start justify-between relative z-10">
+        <div>
+          <p className="text-xs text-slate-400 mb-1 font-bold uppercase tracking-wider">{title}</p>
+          <div className="flex items-baseline gap-2">
+            <h3 className="text-xl text-slate-900 font-black">{amount}</h3>
+            {trendValue && (
+              <span className={`flex items-center text-[10px] font-bold ${trend === 'up' ? 'text-emerald-500' : 'text-rose-500'}`}>
+                {trend === 'up' ? <ArrowUpRight className="w-3 h-3 mr-0.5" /> : <ArrowDownRight className="w-3 h-3 mr-0.5" />}
+                {trendValue}
+              </span>
+            )}
+          </div>
+          <p className="text-[10px] text-slate-500 mt-1 font-medium">{subtitle}</p>
+        </div>
+        <div className={`p-2 rounded ${color.replace('bg-', 'bg-').replace('500', '100')} ${color.replace('bg-', 'text-').replace('500', '600')} transition-transform group-hover:rotate-12 shadow-sm`}>
+          <Icon className="w-4 h-4" />
+        </div>
+      </div>
+    </div>
+  );
+
   if (loading || !data) {
     return (
-      <div className="p-8 flex items-center justify-center min-h-[400px]">
-        <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded animate-spin"></div>
+      <div className="flex flex-col items-center justify-center p-22 space-y-2">
+        <div className="relative">
+          <div className="w-16 h-16 border-4 border-slate-100 border-t-indigo-600 rounded animate-spin" />
+          <Truck className="w-6 h-6 text-indigo-600 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
+        </div>
+        <div className="text-center">
+          <h3 className="text-slate-900 font-black tracking-tight uppercase">Generating Logistics Analytics</h3>
+          <p className="text-xs text-slate-500 mt-1">Fetching shipment metrics and regional distribution...</p>
+        </div>
       </div>
     );
   }
@@ -64,223 +161,163 @@ const ShipmentReports = ({ apiRequest }) => {
   const { stats, statusTrends, byRegion, byDestination, detailedTrend, recentDeliveries } = data;
 
   return (
-    <div className="p-8 bg-slate-50/50 min-h-screen space-y-2">
+    <div className="space-y-2 pb-12 animate-in fade-in duration-500">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
-        <div>
-          <h1 className="text-xl  text-slate-900 tracking-tight">Shipment Reports</h1>
-          <p className="text-slate-500 mt-1">Analytics and reporting for shipments.</p>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 bg-white p-2 rounded border border-slate-100 shadow-sm">
+        <div className="flex items-center gap-2">
+          <div className="p-2 bg-indigo-600 rounded shadow-lg shadow-indigo-200">
+            <Truck className="w-8 h-8 text-white" />
+          </div>
+          <div>
+            <h1 className="text-xl text-slate-900 font-black tracking-tight">Logistics & Shipments</h1>
+            <div className="flex items-center gap-2 mt-1 text-xs text-slate-400 font-bold uppercase tracking-wider">
+              <Clock className="w-3.5 h-3.5" />
+              Last updated: {lastUpdated.toLocaleTimeString()}
+            </div>
+          </div>
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded text-xs text-slate-700 shadow-sm cursor-pointer hover:bg-slate-50">
-            <Calendar className="w-4 h-4 text-slate-400" />
-            Last 30 Days
+          <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 border border-slate-200 rounded text-[11px] font-bold text-slate-600">
+             <Calendar className="w-3.5 h-3.5 text-slate-400" />
+             <span className="text-slate-400">Last 30 Days</span>
           </div>
-          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded text-xs text-slate-700 shadow-sm hover:bg-slate-50">
-            <Download className="w-4 h-4 text-slate-400" />
-            Export
+          <button 
+            onClick={handleExport}
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded text-xs font-black uppercase tracking-wider hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95"
+          >
+            <Download className="w-4 h-4" />
+            Export Data
           </button>
         </div>
       </div>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
-        <KpiCard label="Shipments" value={stats.total_shipments} growth={stats.shipmentsGrowth} icon={<BarChart3 />} color="blue" />
-        <KpiCard label="Delayed Shipments" value={stats.total_delayed} growth={stats.delayedGrowth} icon={<AlertTriangle />} color="red" />
-        <KpiCard label="Returns" value={stats.total_returns} growth={stats.returnsGrowth} icon={<RotateCcw />} color="purple" />
-        <KpiCard label="Revenue" value={`$${parseFloat(stats.total_revenue).toLocaleString()}`} growth="+12%" icon={<DollarSign />} color="green" />
-        <KpiCard label="Customers" value={stats.total_customers} growth={stats.customersGrowth} icon={<Users />} color="cyan" />
+        <StatCard title="Total Shipments" amount={stats.total_shipments} subtitle="Outbound volume" icon={Package} color="bg-blue-500" trend="up" trendValue={stats.shipmentsGrowth} />
+        <StatCard title="Delayed" amount={stats.total_delayed} subtitle="Critical attention" icon={AlertTriangle} color="bg-rose-500" trend="down" trendValue={stats.delayedGrowth} />
+        <StatCard title="Returns" amount={stats.total_returns} subtitle="Processing required" icon={RotateCcw} color="bg-amber-500" trend="up" trendValue={stats.returnsGrowth} />
+        <StatCard title="Revenue" amount={`₹${parseFloat(stats.total_revenue).toLocaleString()}`} subtitle="Shipment value" icon={DollarSign} color="bg-emerald-500" trend="up" trendValue="+12%" />
+        <StatCard title="Customers" amount={stats.total_customers} subtitle="Active destinations" icon={Users} color="bg-indigo-500" trend="up" trendValue={stats.customersGrowth} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Shipments by Status (Bar Chart) */}
-        <div className="lg:col-span-2 bg-white rounded  p-8 border border-slate-100 shadow-sm">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+        {/* Shipments by Status Chart */}
+        <div className="xl:col-span-2 bg-white rounded p-8 border border-slate-100 shadow-sm flex flex-col">
           <div className="flex items-center justify-between mb-8">
-            <h2 className="text-md  text-slate-900">Shipments by Status</h2>
-            <div className="flex items-center gap-2 p-1.5 bg-slate-50 border border-slate-100 rounded  text-xs text-slate-500">
-               Last 30 Days <Clock className="w-3 h-3 ml-1" />
+            <div>
+              <h3 className="text-md text-slate-900 font-black tracking-tight flex items-center gap-2 uppercase">
+                <BarChart3 className="w-5 h-5 text-indigo-600" />
+                Shipment Pipeline
+              </h3>
+              <p className="text-xs text-slate-500 mt-1 uppercase font-bold tracking-wider">MONTHLY STATUS DISTRIBUTION</p>
             </div>
           </div>
           <div className="h-[350px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={statusTrends} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <BarChart data={statusTrends}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
-                <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} cursor={{ fill: '#f8fafc' }} />
-                <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px' }} />
-                <Bar dataKey="ordered" name="Ordered" fill="#3B82F6" radius={[4, 4, 0, 0]} barSize={12} />
-                <Bar dataKey="dispatched" name="Dispatched" fill="#06B6D4" radius={[4, 4, 0, 0]} barSize={12} />
-                <Bar dataKey="delivered" name="Delivered" fill="#10B981" radius={[4, 4, 0, 0]} barSize={12} />
-                <Bar dataKey="returned" name="Returned" fill="#8B5CF6" radius={[4, 4, 0, 0]} barSize={12} />
-                <Bar dataKey="delayed" name="Delayed" fill="#EF4444" radius={[4, 4, 0, 0]} barSize={12} />
+                <XAxis 
+                  dataKey="month" 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }}
+                  dy={10}
+                />
+                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} />
+                <Tooltip 
+                  cursor={{ fill: '#f8fafc' }}
+                  contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '12px' }}
+                />
+                <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px', fontSize: '10px', fontWeight: 'bold', textTransform: 'uppercase' }} />
+                <Bar dataKey="ordered" name="Ordered" fill="#6366f1" radius={[4, 4, 0, 0]} barSize={15} />
+                <Bar dataKey="dispatched" name="Dispatched" fill="#06b6d4" radius={[4, 4, 0, 0]} barSize={15} />
+                <Bar dataKey="delivered" name="Delivered" fill="#10b981" radius={[4, 4, 0, 0]} barSize={15} />
+                <Bar dataKey="returned" name="Returned" fill="#f59e0b" radius={[4, 4, 0, 0]} barSize={15} />
+                <Bar dataKey="delayed" name="Delayed" fill="#f43f5e" radius={[4, 4, 0, 0]} barSize={15} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* Shipments by Destination */}
-        <div className="bg-white rounded  p-8 border border-slate-100 shadow-sm">
-          <h2 className="text-md  text-slate-900 mb-8">Shipments by Destination</h2>
-          <div className="space-y-2">
+        {/* Regional Breakdown */}
+        <div className="bg-white rounded p-8 border border-slate-100 shadow-sm flex flex-col">
+          <h3 className="text-md text-slate-900 font-black tracking-tight mb-8 uppercase">Regional Distribution</h3>
+          <div className="space-y-2 flex-1 overflow-y-auto pr-2">
             {byDestination.map((dest, i) => (
-              <div key={i} className="flex items-center justify-between group cursor-pointer">
-                <div className="flex items-center gap-2">
-                   <div className="w-10 h-6 bg-slate-100 rounded flex items-center justify-center text-xs  text-slate-400 overflow-hidden">
-                      <Globe className="w-4 h-4 text-slate-300" />
-                   </div>
-                   <div>
-                     <p className="text-sm  text-slate-700 truncate max-w-[150px]">{dest.destination}</p>
-                   </div>
-                </div>
-                <div className="flex items-center gap-2">
-                   <p className="text-xs  text-slate-900">{dest.count}</p>
-                   <p className="text-xs  text-emerald-500 flex items-center gap-0.5">
-                      <TrendingUp className="w-3 h-3" />
-                      +{Math.floor(Math.random() * 500) + 100}
-                   </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Shipments By region */}
-        <div className="bg-white rounded  p-8 border border-slate-100 shadow-sm">
-          <h2 className="text-md  text-slate-900 mb-6">Shipments By region</h2>
-          <div className="space-y-2">
-            {byRegion.slice(0, 4).map((region, i) => (
-              <div key={i} className="flex items-center justify-between p-2 bg-slate-200 rounded border border-slate-50">
-                <div className="flex items-center gap-2">
-                   <div className="w-5 h-5 rounded bg-indigo-100 flex items-center justify-center text-indigo-600 ">
-                      {region.name.charAt(0)}
-                   </div>
-                   <p className="text-sm  text-slate-700">{region.name}</p>
-                </div>
-                <StatusBadge status={region.status} size="xs" />
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* World Map / Destination Placeholder */}
-        <div className="bg-white rounded  p-8 border border-slate-100 shadow-sm flex flex-col items-center justify-center relative overflow-hidden group">
-          <div className="absolute inset-0 bg-indigo-50/30  group-hover:opacity-100 transition-opacity"></div>
-          <h2 className="text-md  text-slate-900 mb-6 self-start">Shipments By Destination</h2>
-          <div className="relative w-full aspect-video flex items-center justify-center">
-             <MapPin className="w-8 h-8 text-indigo-500 absolute top-1/4 left-1/3 animate-bounce" />
-             <MapPin className="w-8 h-8 text-emerald-500 absolute top-1/2 left-2/3 animate-pulse" />
-             <MapPin className="w-8 h-8 text-rose-500 absolute bottom-1/4 left-1/4" />
-             <div className="w-full h-full bg-slate-100 rounded border border-dashed border-slate-200 flex items-center justify-center">
-                <Globe className="w-24 h-24 text-slate-200" />
-             </div>
-          </div>
-        </div>
-
-        {/* Delivery Statistics */}
-        <div className="bg-white rounded  p-8 border border-slate-100 shadow-sm flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-8">
-              <h2 className="text-md  text-slate-900">Delivery Statistics</h2>
-              <select className="text-xs  text-slate-500   bg-slate-50 border border-slate-100 rounded  px-2 py-1 outline-none">
-                 <option>All Status</option>
-              </select>
-            </div>
-            <div className="space-y-2">
-              <div className="p-2 bg-slate-50 rounded relative overflow-hidden">
-                 <div className="flex justify-between items-center mb-2">
-                    <p className="text-xs  text-slate-400  ">On-Time</p>
-                    <p className="text-xs  text-slate-900">92%</p>
-                 </div>
-                 <div className="w-full h-1.5 bg-white rounded">
-                    <div className="h-full bg-emerald-500 rounded" style={{ width: '92%' }}></div>
-                 </div>
-              </div>
-              
-              <div className="space-y-3 mt-6">
-                <div className="flex items-center justify-between text-xs    text-slate-400">
-                   <span>Shipment ID+</span>
-                   <span>Customer</span>
-                   <span>Status</span>
-                </div>
-                {recentDeliveries.slice(0, 5).map((s, i) => (
-                  <div key={i} className="flex items-center justify-between text-xs  text-slate-600 border-b border-slate-50 pb-2">
-                     <span className=" text-slate-900">{s.shipment_code}</span>
-                     <span className="truncate max-w-[80px]">{s.customer}</span>
-                     <StatusBadge status={s.status} size="xs" />
+              <div key={i} className="flex items-center justify-between p-2 rounded bg-slate-50/50 hover:bg-slate-50 transition-colors group">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded bg-indigo-50 flex items-center justify-center text-indigo-600 transition-transform group-hover:scale-110">
+                    <Globe className="w-4 h-4" />
                   </div>
-                ))}
+                  <div>
+                    <p className="text-[11px] text-slate-900 font-black uppercase tracking-tight">{dest.destination}</p>
+                    <p className="text-[9px] text-slate-400 font-bold">ACTIVE REGION</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className="text-right">
+                    <p className="text-xs font-black text-slate-900">{dest.count}</p>
+                    <p className="text-[9px] text-emerald-500 font-bold flex items-center justify-end">
+                      <TrendingUp className="w-2.5 h-2.5 mr-0.5" />
+                      +{Math.floor(Math.random() * 20) + 5}%
+                    </p>
+                  </div>
+                </div>
               </div>
+            ))}
+          </div>
+          <button className="mt-6 w-full py-2 bg-slate-50 text-slate-600 text-[10px] font-black uppercase tracking-widest rounded border border-slate-100 hover:bg-slate-100 transition-colors flex items-center justify-center gap-2">
+            View All Regions <ChevronRight className="w-3 h-3" />
+          </button>
+        </div>
+
+        {/* Recent Deliveries Table */}
+        <div className="xl:col-span-3 bg-white rounded border border-slate-100 shadow-sm overflow-hidden flex flex-col">
+          <div className="p-2 border-b border-slate-50 flex items-center justify-between bg-slate-50/30">
+            <div>
+              <h3 className="text-xs text-slate-900 font-black tracking-tight flex items-center gap-2 uppercase">
+                <Activity className="w-4 h-4 text-indigo-600" />
+                RECENT LOGISTICS OPERATIONS
+              </h3>
+              <p className="text-[10px] text-slate-500 mt-0.5 font-bold uppercase tracking-widest">LATEST DISPATCHES AND DELIVERY STATUS</p>
             </div>
+            <button className="flex items-center gap-2 text-xs font-black text-indigo-600 hover:gap-2 transition-all uppercase tracking-widest">
+              View Tracking History <ArrowRight className="w-3 h-3" />
+            </button>
+          </div>
+          <div className="p-0 overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50/50 text-[9px] text-slate-400 font-black uppercase tracking-widest border-b border-slate-100">
+                  <th className="px-4 py-3">Shipment Code</th>
+                  <th className="px-4 py-3">Customer</th>
+                  <th className="px-4 py-3">Destination</th>
+                  <th className="px-4 py-3 text-center">Status</th>
+                  <th className="px-4 py-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {recentDeliveries.slice(0, 10).map((shipment, idx) => (
+                  <tr key={idx} className="hover:bg-slate-50/50 transition-colors group text-[10px]">
+                    <td className="px-4 py-4 font-black text-indigo-600 uppercase tracking-tighter">{shipment.shipment_code}</td>
+                    <td className="px-4 py-4 font-bold text-slate-600 uppercase">{shipment.customer}</td>
+                    <td className="px-4 py-4 font-bold text-slate-500 uppercase">{shipment.destination || 'Main Warehouse'}</td>
+                    <td className="px-4 py-4 text-center">
+                       <StatusBadge status={shipment.status} />
+                    </td>
+                    <td className="px-4 py-4 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <button className="p-1.5 hover:bg-white text-slate-400 hover:text-indigo-600 rounded border border-transparent hover:border-slate-100 transition-all shadow-sm">
+                          <Search className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
-      </div>
-
-      {/* Detailed Shipment Report (Full width Bottom) */}
-      <div className="bg-white rounded  p-8 border border-slate-100 shadow-sm">
-        <div className="flex items-center justify-between mb-8">
-          <h2 className="text-md  text-slate-900">Detailed Shipment Report</h2>
-          <div className="flex items-center gap-2">
-             <div className="flex items-center gap-2 p-1.5 bg-slate-50 border border-slate-100 rounded  text-xs text-slate-500">
-                All Status <Filter className="w-3 h-3" />
-             </div>
-          </div>
-        </div>
-        <div className="h-[300px] w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={detailedTrend}>
-              <defs>
-                <linearGradient id="colorDelivered" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#10B981" stopOpacity={0.3}/>
-                  <stop offset="95%" stopColor="#10B981" stopOpacity={0}/>
-                </linearGradient>
-                <linearGradient id="colorDelayed" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#EF4444" stopOpacity={0.3}/>
-                  <stop offset="95%" stopColor="#EF4444" stopOpacity={0}/>
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-              <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 11 }} />
-              <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 11 }} />
-              <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
-              <Area type="monotone" dataKey="delivered" name="Delivered" stroke="#10B981" fillOpacity={1} fill="url(#colorDelivered)" strokeWidth={3} />
-              <Area type="monotone" dataKey="delayed" name="Delayed" stroke="#EF4444" fillOpacity={1} fill="url(#colorDelayed)" strokeWidth={3} />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const KpiCard = ({ label, value, growth, icon, color }) => {
-  const colorStyles = {
-    blue: "bg-blue-50 text-blue-600 border-blue-100",
-    red: "bg-rose-50 text-rose-600 border-rose-100",
-    purple: "bg-purple-50 text-purple-600 border-purple-100",
-    green: "bg-emerald-50 text-emerald-600 border-emerald-100",
-    cyan: "bg-cyan-50 text-cyan-600 border-cyan-100",
-  };
-
-  const isPositive = growth?.startsWith('+');
-
-  return (
-    <div className="bg-white rounded p-2 border border-slate-100 shadow-sm flex flex-col justify-between transition-all hover: hover:border-slate-200">
-      <div className="flex items-center gap-2 mb-4">
-        <div className={`p-2 rounded border ${colorStyles[color]}`}>
-          {React.cloneElement(icon, { className: "w-3 h-3" })}
-        </div>
-        <div>
-          <p className="text-xs  text-slate-400   leading-none mb-1">{label}</p>
-          <h3 className="text-xl  text-slate-900">{value}</h3>
-        </div>
-      </div>
-      <div className="flex items-center gap-2">
-         <div className={`flex items-center gap-0.5 text-xs   px-2 py-0.5 rounded ${isPositive ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
-            {growth}
-         </div>
       </div>
     </div>
   );

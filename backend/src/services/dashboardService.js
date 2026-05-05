@@ -20,6 +20,14 @@ const getDashboardStats = async () => {
      WHERE status != 'CANCELLED'`
   );
 
+  const [[procurementCounts]] = await pool.query(
+    `SELECT 
+       (SELECT COUNT(*) FROM purchase_orders WHERE status NOT IN ('COMPLETED', 'CANCELLED', 'PAID')) as pendingPurchaseOrders,
+       (SELECT COUNT(*) FROM procurement_rfqs WHERE status = 'SENT') as openRfqs,
+       (SELECT COUNT(*) FROM material_requests WHERE status IN ('DRAFT', 'APPROVED', 'PROCESSING')) as pendingMaterialRequests,
+       (SELECT COALESCE(SUM(total_amount), 0) FROM purchase_orders WHERE status != 'CANCELLED') as totalProcurementSpend`
+  );
+
   const [[userCount]] = await pool.query('SELECT COUNT(*) as total FROM users');
 
   const [chartData] = await pool.query(`
@@ -49,6 +57,10 @@ const getDashboardStats = async () => {
     pendingDispatch: orderCounts.pendingDispatch || 0,
     pendingPayment: orderCounts.pendingPayment || 0,
     totalRevenue: orderCounts.totalRevenue || 0,
+    pendingPurchaseOrders: procurementCounts.pendingPurchaseOrders || 0,
+    openRfqs: procurementCounts.openRfqs || 0,
+    pendingMaterialRequests: procurementCounts.pendingMaterialRequests || 0,
+    totalProcurementSpend: procurementCounts.totalProcurementSpend || 0,
     totalUsers: userCount.total || 0,
     chartData,
     health: [
@@ -131,6 +143,7 @@ const getAccountsDashboardStats = async () => {
   const [recentActivity] = await pool.query(`
     (SELECT 
       'INVOICE' as type,
+      id,
       po_number as ref,
       status,
       total_amount as amount,
@@ -141,6 +154,7 @@ const getAccountsDashboardStats = async () => {
     UNION ALL
     (SELECT 
       'PAYMENT' as type,
+      id,
       payment_voucher_no as ref,
       status,
       payment_amount as amount,
@@ -192,6 +206,7 @@ const getProcurementDashboardStats = async () => {
 
   const [recentRfqs] = await pool.query(`
     SELECT 
+      id,
       rfq_number as rfq_code, 
       'Multiple Vendors' as vendor_name,
       (SELECT COUNT(*) FROM procurement_rfq_items WHERE rfq_id = pr.id) as item_count,
@@ -261,6 +276,7 @@ const getProductionDashboardStats = async () => {
 
   const [priorityOrders] = await pool.query(`
     SELECT 
+      id,
       wo_number as wo_code, 
       item_name,
       quantity,
@@ -317,6 +333,7 @@ const getDesignDashboardStats = async () => {
 
   const [pendingTasks] = await pool.query(`
     SELECT 
+      id,
       design_order_number as project_code,
       (SELECT company_name FROM companies WHERE id = (SELECT company_id FROM sales_orders WHERE id = sales_order_id)) as company_name,
       DATE_FORMAT(created_at, '%d %b') as deadline,
@@ -711,6 +728,7 @@ const getProcurementReportStats = async (filters = {}) => {
   const [recentActivity] = await pool.query(`
     (SELECT 
       'RFQ_SENT' as type,
+      id,
       rfq_number as ref,
       'Sent' as status,
       'General Procurement' as sub,
@@ -719,6 +737,7 @@ const getProcurementReportStats = async (filters = {}) => {
     UNION ALL
     (SELECT 
       'PO_CREATED' as type,
+      id,
       po_number as ref,
       'Created' as status,
       (SELECT vendor_name FROM vendors WHERE id = vendor_id) as sub,
@@ -727,6 +746,7 @@ const getProcurementReportStats = async (filters = {}) => {
     UNION ALL
     (SELECT 
       'GRN_COMPLETED' as type,
+      id,
       po_number as ref,
       'Completed' as status,
       (SELECT vendor_name FROM vendors WHERE id = (SELECT vendor_id FROM purchase_orders WHERE po_number = grns.po_number LIMIT 1)) as sub,
@@ -735,23 +755,27 @@ const getProcurementReportStats = async (filters = {}) => {
     ORDER BY time DESC LIMIT 5
   `);
 
-  // 6. Summary Table
-  const [summaryTable] = await pool.query(`
+  // 6. PO & GRN Summary Table
+  const [poGrnSummary] = await pool.query(`
     SELECT 
-      po.po_number as poNumber,
+      po.id,
+      po.po_number as poNo,
       v.vendor_name as supplier,
       COALESCE(so.project_name, 'General Procurement') as project,
       DATE_FORMAT(po.created_at, '%d %b %Y') as poDate,
-      po.total_amount as poAmount,
-      (SELECT status FROM grns WHERE po_number = po.po_number LIMIT 1) as grnStatus,
-      po.status as status
+      po.total_amount as amount,
+      (SELECT status FROM grns WHERE po_number = po.po_number ORDER BY created_at DESC LIMIT 1) as grnStatus,
+      (SELECT grn_date FROM grns WHERE po_number = po.po_number ORDER BY created_at DESC LIMIT 1) as grnDate,
+      po.status as status,
+      (SELECT SUM(received_quantity) FROM grns WHERE po_number = po.po_number) as receivedQty,
+      (SELECT SUM(quantity) FROM purchase_order_items WHERE purchase_order_id = po.id) as orderedQty
     FROM purchase_orders po
     JOIN vendors v ON po.vendor_id = v.id
     LEFT JOIN sales_orders so ON po.sales_order_id = so.id
     WHERE 1=1
     ${dateFilter.replace('created_at', 'po.created_at')}
     ${supplierFilter}
-    ORDER BY po.created_at DESC LIMIT 10
+    ORDER BY po.created_at DESC
   `, [...params, ...(supplier && supplier !== 'All' && supplier !== 'All Suppliers' ? [supplier] : [])]);
 
   return {
@@ -768,7 +792,7 @@ const getProcurementReportStats = async (filters = {}) => {
     purchaseTrend,
     vendorPerformance,
     recentActivity,
-    summaryTable
+    poGrnSummary
   };
 };
 
@@ -904,10 +928,13 @@ const getProductionReportStats = async (filters = {}) => {
   // 7. Summary Table
   const [summaryTable] = await pool.query(`
     SELECT 
+      wo.id,
       wo.wo_number as woNumber,
       so.project_name as project,
       c.company_name as client,
-      COALESCE((SELECT operation_name FROM operations WHERE workstation_id = wo.workstation_id LIMIT 1), 'N/A') as operation,
+      COALESCE(jc.operation_name, (SELECT operation_name FROM operations WHERE workstation_id = wo.workstation_id LIMIT 1), 'N/A') as operation,
+      jc.id as jobCardId,
+      jc.job_card_no as jobCardNo,
       wo.item_code as itemCode,
       wo.item_name as itemName,
       wo.quantity as plannedQty,
@@ -919,6 +946,7 @@ const getProductionReportStats = async (filters = {}) => {
     FROM work_orders wo
     JOIN sales_orders so ON wo.sales_order_id = so.id
     JOIN companies c ON so.company_id = c.id
+    LEFT JOIN job_cards jc ON jc.work_order_id = wo.id AND jc.id = (SELECT id FROM job_cards WHERE work_order_id = wo.id ORDER BY id DESC LIMIT 1)
     WHERE 1=1
     ${dateFilter.replace('created_at', 'wo.created_at')}
     ${projectFilter}
@@ -1242,6 +1270,7 @@ const getAccountsReportStats = async (filters = {}) => {
   // 7. Recent Transactions
   const [recentTransactions] = await pool.query(`
     (SELECT 
+      cp.id,
       'Payment Received' as type,
       cp.payment_receipt_no as reference,
       c.company_name as party,
@@ -1255,6 +1284,7 @@ const getAccountsReportStats = async (filters = {}) => {
     ORDER BY cp.payment_date DESC LIMIT 3)
     UNION ALL
     (SELECT 
+      p.id,
       'Vendor Payment' as type,
       p.payment_voucher_no as reference,
       v.vendor_name as party,
@@ -1268,6 +1298,7 @@ const getAccountsReportStats = async (filters = {}) => {
     ORDER BY p.payment_date DESC LIMIT 3)
     UNION ALL
     (SELECT 
+      po.id,
       'Vendor Invoice' as type,
       po.po_number as reference,
       v.vendor_name as party,

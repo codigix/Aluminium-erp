@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import { Card, DataTable, StatusBadge, Button } from '../components/ui.jsx';
 import { 
@@ -16,6 +17,7 @@ import {
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
 const ProductionReport = () => {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(new Date());
@@ -26,8 +28,8 @@ const ProductionReport = () => {
   const [selectedProject, setSelectedProject] = useState('All');
   const [summaryPage, setSummaryPage] = useState(1);
   const [projectsPage, setProjectsPage] = useState(1);
-  const itemsPerPage = 2;
-  const itemsPerSmallPage = 3;
+  const itemsPerPage = 10;
+  const itemsPerSmallPage = 5;
 
   useEffect(() => {
     fetchProductionReport();
@@ -146,6 +148,36 @@ const ProductionReport = () => {
     }
 
     XLSX.writeFile(wb, `Production_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
+  const handleViewJobCard = (jobCardId) => {
+    if (!jobCardId) return;
+    navigate(`/job-card?id=${jobCardId}`);
+  };
+
+  const handlePrintJobCard = async (jobCardId) => {
+    if (!jobCardId) return;
+    try {
+      const token = localStorage.getItem('authToken');
+      // For now, we assume print means QC report as it's the only one available
+      // In a real scenario, we might have a specific Job Card print endpoint
+      const response = await fetch(`${API_BASE}/job-cards/quality-logs/${jobCardId}/download`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (!response.ok) throw new Error('Failed to download report');
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `JobCard_Report_${jobCardId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error printing job card:', error);
+    }
   };
 
   const KPIStoreCard = ({ title, value, subtitle, icon: Icon, color, subColor }) => (
@@ -463,61 +495,69 @@ const ProductionReport = () => {
         <div className="p-0 overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-slate-50/50 text-[10px] text-slate-400 font-black uppercase tracking-widest border-b border-slate-100">
-                <th className="px-6 py-4">Work Order ID</th>
-                <th className="px-6 py-4">Project / Client</th>
-                <th className="px-6 py-4">Operation</th>
-                <th className="px-6 py-4">Item To Manufacture</th>
-                <th className="px-6 py-4 text-center">Planned Qty</th>
-                <th className="px-6 py-4 text-center">Produced Qty</th>
-                <th className="px-6 py-4">Progress</th>
-                <th className="px-6 py-4 text-center">Status</th>
-                <th className="px-6 py-4">Start Date</th>
-                <th className="px-6 py-4">Due Date</th>
-                <th className="px-6 py-4 text-right">Actions</th>
+              <tr className="bg-slate-50/50 text-[9px] text-slate-400 font-black uppercase tracking-widest border-b border-slate-100">
+                <th className="px-4 py-2">Work Order ID</th>
+                <th className="px-4 py-2">Project / Client</th>
+                <th className="px-4 py-2">Operation</th>
+                <th className="px-4 py-2">Item To Manufacture</th>
+                <th className="px-4 py-2 text-center">Planned</th>
+                <th className="px-4 py-2 text-center">Produced</th>
+                <th className="px-4 py-2">Progress</th>
+                <th className="px-4 py-2 text-center">Status</th>
+                <th className="px-4 py-2">Start Date</th>
+                <th className="px-4 py-2">Due Date</th>
+                <th className="px-4 py-2 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
               {paginatedSummary.map((row, idx) => (
-                <tr key={idx} className="hover:bg-slate-50/50 transition-colors group text-xs">
-                  <td className="px-6 py-4 font-black text-indigo-600">{row.woNumber}</td>
-                  <td className="px-6 py-4">
-                    <p className="font-black text-slate-900">{row.project}</p>
-                    <p className="text-[9px] text-slate-400 font-bold uppercase mt-0.5">{row.client}</p>
+                <tr key={idx} className="hover:bg-slate-50/50 transition-colors group text-[10px]">
+                  <td className="px-4 py-2 font-black text-indigo-600 whitespace-nowrap">{row.woNumber}</td>
+                  <td className="px-4 py-2 max-w-[150px]">
+                    <p className="font-black text-slate-900 truncate" title={row.project}>{row.project}</p>
+                    <p className="text-[8px] text-slate-400 font-bold uppercase truncate">{row.client}</p>
                   </td>
-                  <td className="px-6 py-4 font-bold text-slate-600">{row.operation}</td>
-                  <td className="px-6 py-4">
-                    <p className="font-black text-slate-900 uppercase tracking-tighter">{row.itemCode}</p>
-                    <p className="text-[9px] text-slate-500 font-bold mt-0.5">{row.itemName}</p>
+                  <td className="px-4 py-2 whitespace-nowrap">
+                    <p className="font-bold text-slate-600">{row.operation}</p>
+                    {row.jobCardNo && (
+                      <p className="text-[8px] text-indigo-500 font-bold uppercase mt-0.5">{row.jobCardNo}</p>
+                    )}
                   </td>
-                  <td className="px-6 py-4 text-center font-bold text-slate-600">{parseFloat(row.plannedQty).toFixed(3)}</td>
-                  <td className="px-6 py-4 text-center font-bold text-slate-900">{parseFloat(row.producedQty).toFixed(3)}</td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                       <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                  <td className="px-4 py-2 max-w-[150px]">
+                    <p className="font-black text-slate-900 uppercase tracking-tighter truncate" title={row.itemCode}>{row.itemCode}</p>
+                    <p className="text-[8px] text-slate-500 font-bold truncate">{row.itemName}</p>
+                  </td>
+                  <td className="px-4 py-2 text-center font-bold text-slate-600">{parseFloat(row.plannedQty).toFixed(2)}</td>
+                  <td className="px-4 py-2 text-center font-bold text-slate-900">{parseFloat(row.producedQty).toFixed(2)}</td>
+                  <td className="px-4 py-2">
+                    <div className="flex items-center gap-1.5">
+                       <div className="w-12 h-1 bg-slate-100 rounded-full overflow-hidden">
                          <div className={`h-full rounded-full ${
                            row.progress >= 100 ? 'bg-emerald-500' : 'bg-blue-500'
                          }`} style={{ width: `${row.progress}%` }} />
                        </div>
-                       <span className="text-[10px] font-black text-slate-900">{row.progress}%</span>
+                       <span className="text-[9px] font-black text-slate-900">{row.progress}%</span>
                     </div>
                   </td>
-                  <td className="px-6 py-4 text-center">
+                  <td className="px-4 py-2 text-center scale-90">
                     <StatusBadge status={row.status} />
                   </td>
-                  <td className="px-6 py-4 text-slate-500 font-bold whitespace-nowrap">
-                    {row.startDate ? new Date(row.startDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'}
+                  <td className="px-4 py-2 text-slate-500 font-bold whitespace-nowrap text-[9px]">
+                    {row.startDate ? new Date(row.startDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : '-'}
                   </td>
-                  <td className="px-6 py-4 text-slate-500 font-bold whitespace-nowrap">
-                    {row.dueDate ? new Date(row.dueDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'}
+                  <td className="px-4 py-2 text-slate-500 font-bold whitespace-nowrap text-[9px]">
+                    {row.dueDate ? new Date(row.dueDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : '-'}
                   </td>
-                  <td className="px-6 py-4 text-right">
-                    <div className="flex items-center justify-end gap-1">
-                       {[Eye, BarChart, Printer].map((Icon, i) => (
-                         <button key={i} className="p-2 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded-lg transition-all border border-transparent hover:border-slate-200">
-                           <Icon className="w-3.5 h-3.5" />
-                         </button>
-                       ))}
+                  <td className="px-4 py-2 text-right">
+                    <div className="flex items-center justify-end">
+                       <button 
+                         onClick={() => handlePrintJobCard(row.jobCardId)}
+                         disabled={!row.jobCardId}
+                         className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded-lg transition-all disabled:opacity-30"
+                         title="Print QC Report"
+                       >
+                         <Printer className="w-3 h-3" />
+                       </button>
                     </div>
                   </td>
                 </tr>

@@ -27,8 +27,8 @@ const InventoryReport = () => {
   const [selectedWarehouse, setSelectedWarehouse] = useState('All');
   const [movementsPage, setMovementsPage] = useState(1);
   const [lowStockPage, setLowStockPage] = useState(1);
-  const itemsPerPage = 3;
-  const itemsPerSmallPage = 3;
+  const itemsPerPage = 10;
+  const itemsPerSmallPage = 5;
 
   useEffect(() => {
     fetchInventoryReport();
@@ -435,40 +435,40 @@ const InventoryReport = () => {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50/50 text-[10px] text-slate-400 font-black uppercase tracking-widest border-b border-slate-100">
-                <th className="px-6 py-4">Date / Time</th>
-                <th className="px-6 py-4">Item Code</th>
-                <th className="px-6 py-4">Item Name</th>
-                <th className="px-6 py-4 text-center">Transaction Type</th>
-                <th className="px-6 py-4">Reference</th>
-                <th className="px-6 py-4 text-right">Quantity</th>
-                <th className="px-6 py-4 text-right">Balance</th>
-                <th className="px-6 py-4">Warehouse</th>
+                <th className="px-4 py-2">Date / Time</th>
+                <th className="px-4 py-2">Item Code</th>
+                <th className="px-4 py-2">Item Name</th>
+                <th className="px-4 py-2 text-center">Transaction Type</th>
+                <th className="px-4 py-2">Reference</th>
+                <th className="px-4 py-2 text-right">Quantity</th>
+                <th className="px-4 py-2 text-right">Balance</th>
+                <th className="px-4 py-2">Warehouse</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
               {paginatedMovements.map((movement, idx) => (
-                <tr key={idx} className="hover:bg-slate-50/50 transition-colors group text-xs">
-                  <td className="px-6 py-4 whitespace-nowrap">
+                <tr key={idx} className="hover:bg-slate-50/50 transition-colors group text-[10px] border-b border-slate-50">
+                  <td className="px-4 py-1.5 whitespace-nowrap">
                     <p className="font-black text-slate-900">{new Date(movement.time).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
-                    <p className="text-[9px] text-slate-400 font-bold mt-0.5">{new Date(movement.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</p>
+                    <p className="text-[8px] text-slate-400 font-bold mt-0.5">{new Date(movement.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</p>
                   </td>
-                  <td className="px-6 py-4 font-black text-indigo-600">{movement.itemCode}</td>
-                  <td className="px-6 py-4 font-bold text-slate-600">{movement.itemName}</td>
-                  <td className="px-6 py-4 text-center">
-                    <span className={`px-2 py-1 rounded text-[9px] font-black uppercase tracking-tighter ${
+                  <td className="px-4 py-1.5 font-black text-indigo-600">{movement.itemCode}</td>
+                  <td className="px-4 py-1.5 font-bold text-slate-600 truncate max-w-[150px]">{movement.itemName}</td>
+                  <td className="px-4 py-1.5 text-center">
+                    <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter ${
                       movement.type === 'IN' || movement.type === 'GRN_IN' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'
                     }`}>
                       {movement.type === 'IN' || movement.type === 'GRN_IN' ? 'Receipt' : 'Issue'}
                     </span>
                   </td>
-                  <td className="px-6 py-4 font-black text-slate-900">{movement.reference}</td>
-                  <td className={`px-6 py-4 text-right font-black ${
+                  <td className="px-4 py-1.5 font-black text-slate-900">{movement.reference}</td>
+                  <td className={`px-4 py-1.5 text-right font-black ${
                     movement.type === 'IN' || movement.type === 'GRN_IN' ? 'text-emerald-600' : 'text-rose-600'
                   }`}>
-                    {movement.type === 'IN' || movement.type === 'GRN_IN' ? '+' : '-'}{parseFloat(movement.quantity).toFixed(3)} {movement.uom}
+                    {movement.type === 'IN' || movement.type === 'GRN_IN' ? '+' : '-'}{parseFloat(movement.quantity).toFixed(3)}
                   </td>
-                  <td className="px-6 py-4 text-right font-black text-slate-900">{parseFloat(movement.balance).toFixed(3)} {movement.uom}</td>
-                  <td className="px-6 py-4 font-bold text-slate-500">{movement.warehouse}</td>
+                  <td className="px-4 py-1.5 text-right font-black text-slate-900">{parseFloat(movement.balance).toFixed(3)}</td>
+                  <td className="px-4 py-1.5 font-bold text-slate-500">{movement.warehouse}</td>
                 </tr>
               ))}
             </tbody>

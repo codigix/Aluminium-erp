@@ -173,6 +173,14 @@ const AdminDashboard = () => {
         <StatCard title="Total Users" count={stats.totalUsers || 0} subtitle="Active system users" color="bg-blue-500" icon={Users} />
       </div>
 
+      {/* Procurement Metrics */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <StatCard title="Procurement Spend" count={`₹${(parseFloat(stats.totalProcurementSpend || 0) / 100000).toFixed(1)}L`} subtitle="Total spend so far" color="bg-rose-500" icon={IndianRupee} />
+        <StatCard title="Pending Purchase Orders" count={stats.pendingPurchaseOrders || 0} subtitle="Orders to be fulfilled" color="bg-rose-500" icon={ShoppingCart} />
+        <StatCard title="Open RFQs" count={stats.openRfqs || 0} subtitle="Awaiting vendor quotes" color="bg-blue-600" icon={FileText} />
+        <StatCard title="Material Requests" count={stats.pendingMaterialRequests || 0} subtitle="Pending approval" color="bg-indigo-600" icon={Package} />
+      </div>
+
       {/* Main Charts Row */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
         <div className="xl:col-span-2 bg-white rounded] p-2 border border-slate-100 shadow-sm flex flex-col">

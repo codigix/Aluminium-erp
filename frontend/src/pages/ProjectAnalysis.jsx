@@ -293,7 +293,7 @@ const ProjectAnalysis = () => {
             <Projector className="w-3 h-3 text-slate-400" />
           </div>
           <div className="flex flex-col">
-            <span className="text-xs text-slate-900 font-bold uppercase tracking-tight">{row.project_name || 'N/A'}</span>
+            <span className="text-xs text-slate-900 font-bold uppercase tracking-tight">{row.project_name}</span>
             <span className="text-[10px] text-slate-400 font-bold">#SO-{row.id?.toString().padStart(6, '0')}</span>
           </div>
         </div>
@@ -1147,9 +1147,10 @@ const ProjectAnalysis = () => {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-2">
         <StatCard title="Total Projects" amount={data?.kpis?.totalProjects} subtitle="Active engagements" icon={Briefcase} trend="up" trendValue="12%" />
         <StatCard title="Estimated Revenue" amount={`₹${(data?.kpis?.estimatedRevenue / 100000).toFixed(1)}L`} subtitle="Projected value" icon={IndianRupee} trend="up" trendValue="8%" />
+        <StatCard title="Ready For Shipment" amount={data?.kpis?.readyForShipment} subtitle="Approved for dispatch" icon={Truck} color="bg-emerald-500" subColor="text-emerald-600" animate />
         <StatCard title="System Completion" amount={`${data?.kpis?.completionRate}%`} subtitle="Overall throughput" icon={Target} trend="up" trendValue="5%" />
         <StatCard title="Critical Assets" amount={data?.kpis?.atRiskProjects} subtitle="Requires attention" icon={Flame} trend="down" trendValue="2%" animate />
       </div>

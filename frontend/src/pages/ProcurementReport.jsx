@@ -1,6 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import { Card, DataTable, StatusBadge, Button } from '../components/ui.jsx';
+import PurchaseOrderDetail from './PurchaseOrderDetail.jsx';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   AreaChart, Area, Cell, PieChart, Pie
@@ -15,6 +17,8 @@ import {
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
 const ProcurementReport = () => {
+  const navigate = useNavigate();
+  const invoiceInputRef = useRef(null);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(new Date());
@@ -25,14 +29,116 @@ const ProcurementReport = () => {
   const [selectedSupplier, setSelectedSupplier] = useState('All');
   const [summaryPage, setSummaryPage] = useState(1);
   const [vendorsPage, setVendorsPage] = useState(1);
-  const itemsPerPage = 2;
-  const itemsPerSmallPage = 3;
+  const [uploadingPoId, setUploadingPoId] = useState(null);
+  const [selectedPODetail, setSelectedPODetail] = useState(null);
+  const [fetchingDetail, setFetchingDetail] = useState(false);
+  const itemsPerPage = 10;
+  const itemsPerSmallPage = 5;
 
   useEffect(() => {
     fetchProcurementReport();
     setSummaryPage(1);
     setVendorsPage(1);
   }, [dateRange, selectedSupplier]);
+
+  const handleViewPO = async (poId) => {
+    if (!poId) return;
+    try {
+      setFetchingDetail(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/purchase-orders/${poId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setSelectedPODetail(data);
+      }
+    } catch (error) {
+      console.error('Error fetching PO detail:', error);
+    } finally {
+      setFetchingDetail(false);
+    }
+  };
+
+  const handleViewPDF = async (poId) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/purchase-orders/${poId}/pdf`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        window.open(url, '_blank');
+      }
+    } catch (error) {
+      console.error('Error viewing PDF:', error);
+    }
+  };
+
+  const handleDownloadPDF = async (poId, poNumber) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/purchase-orders/${poId}/pdf`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `PO_${poNumber || poId}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+      }
+    } catch (error) {
+      console.error('Error downloading PDF:', error);
+    }
+  };
+
+  const handlePrintPO = async (poId) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/purchase-orders/${poId}/pdf`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const printWindow = window.open(url, '_blank');
+        printWindow.onload = () => {
+          printWindow.print();
+        };
+      }
+    } catch (error) {
+      console.error('Error printing PO:', error);
+    }
+  };
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file || !uploadingPoId) return;
+
+    try {
+      const formData = new FormData();
+      formData.append('invoice', file);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/purchase-orders/${uploadingPoId}/upload-invoice`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+      });
+
+      if (response.ok) {
+        fetchProcurementReport();
+      }
+    } catch (error) {
+      console.error('Error uploading invoice:', error);
+    } finally {
+      setUploadingPoId(null);
+    }
+  };
 
   const fetchProcurementReport = async () => {
     try {
@@ -60,12 +166,12 @@ const ProcurementReport = () => {
   };
 
   const paginatedSummary = useMemo(() => {
-    if (!stats?.summaryTable) return [];
+    if (!stats?.poGrnSummary) return [];
     const startIndex = (summaryPage - 1) * itemsPerPage;
-    return stats.summaryTable.slice(startIndex, startIndex + itemsPerPage);
-  }, [stats?.summaryTable, summaryPage]);
+    return stats.poGrnSummary.slice(startIndex, startIndex + itemsPerPage);
+  }, [stats?.poGrnSummary, summaryPage]);
 
-  const totalSummaryPages = Math.ceil((stats?.summaryTable?.length || 0) / itemsPerPage);
+  const totalSummaryPages = Math.ceil((stats?.poGrnSummary?.length || 0) / itemsPerPage);
 
   const paginatedVendors = useMemo(() => {
     if (!stats?.vendorPerformance) return [];
@@ -154,6 +260,25 @@ const ProcurementReport = () => {
         <div className="w-16 h-16 border-4 border-slate-100 border-t-rose-600 rounded animate-spin" />
         <h3 className="text-slate-900 font-black tracking-tight uppercase">Generating Procurement Report...</h3>
       </div>
+    );
+  }
+
+  if (fetchingDetail) {
+    return (
+      <div className="flex flex-col items-center justify-center p-22 space-y-4">
+        <div className="w-16 h-16 border-4 border-slate-100 border-t-indigo-600 rounded animate-spin" />
+        <h3 className="text-slate-900 font-black tracking-tight uppercase">Loading Purchase Order...</h3>
+      </div>
+    );
+  }
+
+  if (selectedPODetail) {
+    return (
+      <PurchaseOrderDetail 
+        po={selectedPODetail} 
+        onBack={() => setSelectedPODetail(null)} 
+        onRefresh={() => handleViewPO(selectedPODetail.id)}
+      />
     );
   }
 
@@ -404,50 +529,83 @@ const ProcurementReport = () => {
         <div className="p-0 overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-slate-50/50 text-[10px] text-slate-400 font-black uppercase tracking-widest border-b border-slate-100">
-                <th className="px-6 py-4">PO Number</th>
-                <th className="px-6 py-4">Supplier</th>
-                <th className="px-6 py-4">Project / Customer</th>
-                <th className="px-6 py-4">PO Date</th>
-                <th className="px-6 py-4 text-right">PO Amount</th>
-                <th className="px-6 py-4 text-center">GRN Status</th>
-                <th className="px-6 py-4 text-center">Status</th>
-                <th className="px-6 py-4 text-right">Actions</th>
+              <tr className="bg-slate-50/50 text-[9px] text-slate-400 font-black uppercase tracking-widest border-b border-slate-100">
+                <th className="px-4 py-2">PO Number</th>
+                <th className="px-4 py-2">Supplier</th>
+                <th className="px-4 py-2">Project / Customer</th>
+                <th className="px-4 py-2">PO Date</th>
+                <th className="px-4 py-2 text-right">PO Amount</th>
+                <th className="px-4 py-2 text-center">GRN Status</th>
+                <th className="px-4 py-2 text-center">Status</th>
+                <th className="px-4 py-2 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
               {paginatedSummary.map((row, idx) => (
-                <tr key={idx} className="hover:bg-slate-50/50 transition-colors group text-xs">
-                  <td className="px-6 py-4 font-black text-indigo-600">{row.poNumber}</td>
-                  <td className="px-6 py-4">
-                    <p className="font-black text-slate-900">{row.supplier}</p>
-                    <p className="text-[9px] text-blue-600 font-bold uppercase mt-0.5">Active Vendor</p>
+                <tr key={idx} className="hover:bg-slate-50/50 transition-colors group text-[10px]">
+                  <td className="px-4 py-2 font-black text-indigo-600 whitespace-nowrap">{row.poNumber}</td>
+                  <td className="px-4 py-2">
+                    <p className="font-black text-slate-900 truncate max-w-[150px]" title={row.supplier}>{row.supplier}</p>
+                    <p className="text-[8px] text-blue-600 font-bold uppercase mt-0.5">Active Vendor</p>
                   </td>
-                  <td className="px-6 py-4">
-                    <p className="font-bold text-slate-600">{row.project}</p>
+                  <td className="px-4 py-2">
+                    <p className="font-bold text-slate-600 truncate max-w-[200px]" title={row.project}>{row.project}</p>
                   </td>
-                  <td className="px-6 py-4 font-bold text-slate-500">{row.poDate}</td>
-                  <td className="px-6 py-4 text-right">
-                    <p className="font-black text-slate-900">₹{parseFloat(row.poAmount).toLocaleString('en-IN')}</p>
-                    <p className="text-[9px] text-slate-400 font-bold mt-0.5">Net Value</p>
+                  <td className="px-4 py-2 font-bold text-slate-500 whitespace-nowrap">{row.poDate}</td>
+                  <td className="px-4 py-2 text-right">
+                    <p className="font-black text-slate-900 whitespace-nowrap">₹{parseFloat(row.poAmount).toLocaleString('en-IN')}</p>
+                    <p className="text-[8px] text-slate-400 font-bold mt-0.5">Net Value</p>
                   </td>
-                  <td className="px-6 py-4 text-center">
-                    <span className={`px-2 py-1 rounded text-[9px] font-black uppercase tracking-tighter ${
+                  <td className="px-4 py-2 text-center">
+                    <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter ${
                       row.grnStatus ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'
                     }`}>
                       {row.grnStatus || 'Pending'}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-center">
+                  <td className="px-4 py-2 text-center scale-90">
                     <StatusBadge status={row.status} />
                   </td>
-                  <td className="px-6 py-4 text-right">
+                  <td className="px-4 py-2 text-right">
                     <div className="flex items-center justify-end gap-1">
-                       {[Eye, FileText, Download, Printer, MoreVertical].map((Icon, i) => (
-                         <button key={i} className="p-2 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded-lg transition-all border border-transparent hover:border-slate-200">
-                           <Icon className="w-3.5 h-3.5" />
-                         </button>
-                       ))}
+                       <button 
+                         onClick={() => handleViewPO(row.id)}
+                         className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded-lg transition-all"
+                         title="View Order"
+                       >
+                         <Eye className="w-3 h-3" />
+                       </button>
+                       <button 
+                         onClick={() => handleViewPDF(row.id)}
+                         className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded-lg transition-all"
+                         title="View PO PDF"
+                       >
+                         <FileText className="w-3 h-3" />
+                       </button>
+                       <button 
+                         onClick={() => handleDownloadPDF(row.id, row.poNumber)}
+                         className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded-lg transition-all"
+                         title="Download PDF"
+                       >
+                         <Download className="w-3 h-3" />
+                       </button>
+                       <button 
+                         onClick={() => handlePrintPO(row.id)}
+                         className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded-lg transition-all"
+                         title="Print PO"
+                       >
+                         <Printer className="w-3 h-3" />
+                       </button>
+                       <button 
+                         onClick={() => {
+                           setUploadingPoId(row.id);
+                           invoiceInputRef.current?.click();
+                         }}
+                         className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded-lg transition-all"
+                         title="Upload Invoice"
+                       >
+                         <MoreVertical className="w-3 h-3" />
+                       </button>
                     </div>
                   </td>
                 </tr>
@@ -490,6 +648,13 @@ const ProcurementReport = () => {
           </div>
         )}
       </div>
+      <input
+        type="file"
+        ref={invoiceInputRef}
+        className="hidden"
+        accept="application/pdf"
+        onChange={handleFileChange}
+      />
     </div>
   );
 };

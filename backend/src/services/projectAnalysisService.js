@@ -7,7 +7,8 @@ const getProjectAnalysisStats = async () => {
       COUNT(*) as totalProjects,
       COALESCE(SUM(CASE WHEN so.net_total > 0 THEN so.net_total ELSE cp.net_total END), 0) as estimatedRevenue,
       COALESCE(SUM(CASE WHEN so.status IN ('PRODUCTION_COMPLETED', 'QC_APPROVED', 'READY_FOR_SHIPMENT', 'SHIPPED', 'CLOSED') THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0) * 100, 0) as completionRate,
-      SUM(CASE WHEN so.status NOT IN ('SHIPPED', 'CLOSED', 'CANCELLED') AND so.target_dispatch_date < CURRENT_DATE THEN 1 ELSE 0 END) as atRiskProjects
+      SUM(CASE WHEN so.status NOT IN ('SHIPPED', 'CLOSED', 'CANCELLED') AND so.target_dispatch_date < CURRENT_DATE THEN 1 ELSE 0 END) as atRiskProjects,
+      SUM(CASE WHEN so.status = 'READY_FOR_SHIPMENT' THEN 1 ELSE 0 END) as readyForShipment
     FROM sales_orders so
     LEFT JOIN customer_pos cp ON so.customer_po_id = cp.id
     WHERE so.status != 'CANCELLED'
@@ -17,7 +18,7 @@ const getProjectAnalysisStats = async () => {
   const [projectList] = await pool.query(`
     SELECT 
       so.id,
-      so.project_name,
+      COALESCE(NULLIF(TRIM(so.project_name), ''), CONCAT('Project #', LPAD(so.id, 6, '0'))) as project_name,
       c.company_name,
       so.status,
       so.target_dispatch_date,
@@ -123,6 +124,7 @@ const getProjectAnalysisStats = async () => {
       estimatedRevenue: kpiStats.estimatedRevenue || 0,
       completionRate: Math.round(kpiStats.completionRate || 0),
       atRiskProjects: kpiStats.atRiskProjects || 0,
+      readyForShipment: kpiStats.readyForShipment || 0,
       oee: oeeMetrics.oee
     },
     projectList,

@@ -1,49 +1,35 @@
-import { useState, useEffect } from 'react';
-import { Card, DataTable, Badge } from '../components/ui.jsx';
+import React, { useState, useEffect, useMemo } from 'react';
+import * as XLSX from 'xlsx';
+import { Card, DataTable, StatusBadge, Button } from '../components/ui.jsx';
 import { 
-  ClipboardList, 
-  CheckCircle, 
-  AlertTriangle, 
-  TrendingUp, 
-  RotateCcw,
-  BarChart3,
-  Download,
-  Calendar,
-  ChevronDown,
-  User,
-  Search,
-  ArrowUpRight,
-  FileText
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
+  AreaChart, Area, Cell, PieChart, Pie, Legend
+} from 'recharts';
+import { 
+  TrendingUp, IndianRupee, ShoppingCart, Clock, CheckCircle2, 
+  Target, Filter, Download, RefreshCw, Calendar, ChevronRight,
+  FileText, Users, Eye, Printer, Share2, Trash2, Edit, Truck,
+  CheckCircle, XCircle, Send, Package, ArrowRight, MoreVertical,
+  Activity, Play, ClipboardList, Layers, Settings, Box, Warehouse,
+  AlertTriangle, Archive, Move, Search, ShieldCheck, RotateCcw
 } from 'lucide-react';
 import { errorToast } from '../utils/toast';
-import { 
-  PieChart, 
-  Pie, 
-  Cell, 
-  ResponsiveContainer, 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  Legend 
-} from 'recharts';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
-const COLORS = {
-  primary: '#2563eb',
-  success: '#16a34a',
-  danger: '#dc2626',
-  warning: '#f59e0b',
-  purple: '#7c3aed',
-  background: '#f8fafc',
-  chart: ['#ef4444', '#f59e0b', '#10b981', '#3b82f6']
-};
-
 const QualityReports = () => {
   const [loading, setLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState(new Date());
+  const [dateRange, setDateRange] = useState({
+    start: '2026-04-01',
+    end: new Date().toISOString().split('T')[0]
+  });
+  const [selectedSupplier, setSelectedSupplier] = useState('All');
+  const [inspectionsPage, setInspectionsPage] = useState(1);
+  const [suppliersPage, setSuppliersPage] = useState(1);
+  const itemsPerPage = 5;
+  const inspectionsPerPage = 10;
+
   const [data, setData] = useState({
     kpis: {
       totalInspections: 0,
@@ -61,24 +47,85 @@ const QualityReports = () => {
 
   useEffect(() => {
     fetchReportData();
-  }, []);
+    setInspectionsPage(1);
+    setSuppliersPage(1);
+  }, [dateRange, selectedSupplier]);
 
   const fetchReportData = async () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
-      const res = await fetch(`${API_BASE}/qc-inspections/reports`, {
+      let url = `${API_BASE}/qc-inspections/reports?start=${dateRange.start}&end=${dateRange.end}`;
+      if (selectedSupplier !== 'All') url += `&supplier=${selectedSupplier}`;
+
+      const res = await fetch(url, {
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
       });
       if (res.ok) {
         const result = await res.json();
         setData(result);
+        setLastUpdated(new Date());
       }
     } catch (error) {
       console.error('Error fetching quality reports:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const paginatedInspections = useMemo(() => {
+    if (!data?.recentReports) return [];
+    const startIndex = (inspectionsPage - 1) * inspectionsPerPage;
+    return data.recentReports.slice(startIndex, startIndex + inspectionsPerPage);
+  }, [data?.recentReports, inspectionsPage]);
+
+  const totalInspectionPages = Math.ceil((data?.recentReports?.length || 0) / inspectionsPerPage);
+
+  const paginatedSuppliers = useMemo(() => {
+    if (!data?.supplierPerformance) return [];
+    const startIndex = (suppliersPage - 1) * itemsPerPage;
+    return data.supplierPerformance.slice(startIndex, startIndex + itemsPerPage);
+  }, [data?.supplierPerformance, suppliersPage]);
+
+  const totalSupplierPages = Math.ceil((data?.supplierPerformance?.length || 0) / itemsPerPage);
+
+  const handleExport = () => {
+    if (!data) return;
+
+    const wb = XLSX.utils.book_new();
+
+    const summaryData = [
+      { Metric: 'Total Inspections', Value: data.kpis?.totalInspections || 0 },
+      { Metric: 'Pass Rate', Value: data.kpis?.passRate || '0%' },
+      { Metric: 'Rejection Rate', Value: data.kpis?.rejectionRate || '0%' },
+      { Metric: 'Quality Score', Value: data.kpis?.qualityScore || '0%' },
+      { Metric: 'Defect Score', Value: data.kpis?.defectScore || '0%' }
+    ];
+    const wsSummary = XLSX.utils.json_to_sheet(summaryData);
+    XLSX.utils.book_append_sheet(wb, wsSummary, "Quality Summary");
+
+    if (data.supplierPerformance) {
+      const supplierData = data.supplierPerformance.map(s => ({
+        'Supplier': s.supplier,
+        'Quality Score': s.qualityScore,
+        'Pass Rate': s.passRate || '0%'
+      }));
+      const wsSuppliers = XLSX.utils.json_to_sheet(supplierData);
+      XLSX.utils.book_append_sheet(wb, wsSuppliers, "Supplier Performance");
+    }
+
+    if (data.recentReports) {
+      const reportData = data.recentReports.map(r => ({
+        'Report ID': `QC-${String(r.reportId).padStart(4, '0')}`,
+        'GRN Number': r.grn,
+        'Status': r.status,
+        'Date': r.date
+      }));
+      const wsReports = XLSX.utils.json_to_sheet(reportData);
+      XLSX.utils.book_append_sheet(wb, wsReports, "Recent QC Reports");
+    }
+
+    XLSX.writeFile(wb, `Quality_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
   const handleDownloadPdf = async (qcId) => {
@@ -105,105 +152,93 @@ const QualityReports = () => {
     }
   };
 
-  const StatCard = (props) => {
-    const { title, value, icon: Icon, colorClass, trend } = props;
-    return (
-      <div className="bg-white rounded p-5 border border-slate-100 shadow-sm hover: transition-all">
-        <div className="flex items-center gap-2">
-          <div className={`p-2 rounded  ${colorClass}`}>
-            <Icon className="w-3 h-3" />
-          </div>
-          <div className="flex-1">
-            <p className="text-xs   text-slate-400   mb-1">{title}</p>
-            <div className="flex items-center justify-between">
-              <h3 className="text-xl  text-slate-900">{value}</h3>
-              {trend && (
-                <div className="flex items-center text-xs px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-600 ">
-                  <TrendingUp className="w-3 h-3 mr-0.5" />
-                  {trend}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+  const KPIStoreCard = ({ title, value, subtitle, icon: Icon, color, subColor }) => (
+    <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm flex items-center gap-4 relative overflow-hidden group">
+      <div className={`absolute top-0 right-0 w-16 h-16 ${subColor} opacity-10 rounded -mr-6 -mt-6 transition-transform group-hover:scale-110`} />
+      <div className={`p-3 rounded-xl ${subColor} ${color}`}>
+        <Icon className="w-5 h-5" />
       </div>
-    );
-  };
+      <div>
+        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{title}</p>
+        <h3 className="text-xl text-slate-900 font-black">{value}</h3>
+        <p className="text-[10px] text-slate-500 font-bold tracking-tight">{subtitle}</p>
+      </div>
+    </div>
+  );
 
-  if (loading) {
+  if (loading || !data) {
     return (
-      <div className="flex flex-col items-center justify-center p-22 bg-white rounded border border-slate-100">
-        <div className="w-5 h-5 border-4 border-blue-50 border-t-blue-600 rounded animate-spin mb-4" />
-        <p className="text-slate-500 animate-pulse">Generating Quality Analytics...</p>
+      <div className="flex flex-col items-center justify-center p-22 space-y-4">
+        <div className="w-16 h-16 border-4 border-slate-100 border-t-rose-600 rounded animate-spin" />
+        <h3 className="text-slate-900 font-black tracking-tight uppercase">Generating Quality Report...</h3>
       </div>
     );
   }
 
+  const chartColors = ['#6366f1', '#10b981', '#f59e0b', '#f43f5e', '#8b5cf6'];
+
   return (
-    <div className="p-6 bg-[#f8fafc] min-h-screen space-y-2">
+    <div className="space-y-6 pb-12 animate-in fade-in duration-500">
       {/* Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl  text-slate-900 ">Quality Reports</h1>
-          <p className="text-slate-500 mt-1">Advanced analytics and compliance reporting</p>
+          <h1 className="text-2xl text-slate-900 font-black tracking-tight">Quality Reports</h1>
+          <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-1">Advanced analytics and compliance reporting</p>
         </div>
-        <div className="flex items-center gap-2">
-          <button className="flex items-center gap-2 bg-white p-2  border border-slate-200 rounded  shadow-sm  text-slate-700 hover:bg-slate-50 transition-all group">
-            <Download className="w-4 h-4 text-slate-400 group-hover:text-blue-600" />
-            <span>Export Report</span>
-          </button>
-          <div className="flex items-center gap-2 pl-5 border-l border-slate-200">
-            <div className="text-right">
-              <p className="text-xs  text-slate-900">Alice</p>
-              <p className="text-xs text-slate-400   ">QA Inspector</p>
-            </div>
-            <div className="w-5 h-5 rounded bg-blue-600 flex items-center justify-center text-white  shadow-lg shadow-blue-200">
-              A
-            </div>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg text-[11px] font-bold text-slate-600">
+             <Calendar className="w-4 h-4 text-slate-400" />
+             <input 
+               type="date" 
+               value={dateRange.start} 
+               onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
+               className="bg-transparent border-none outline-none cursor-pointer"
+             />
+             <span className="text-slate-300 mx-1">—</span>
+             <input 
+               type="date" 
+               value={dateRange.end} 
+               onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
+               className="bg-transparent border-none outline-none cursor-pointer"
+             />
           </div>
+          <select 
+            value={selectedSupplier}
+            onChange={(e) => setSelectedSupplier(e.target.value)}
+            className="bg-white border border-slate-200 rounded-lg px-3 py-2 text-[11px] font-bold text-slate-600 outline-none"
+          >
+            <option value="All">All Suppliers</option>
+            {data.supplierPerformance?.map((s, idx) => (
+              <option key={idx} value={s.supplier}>{s.supplier}</option>
+            ))}
+          </select>
+          <button 
+            onClick={handleExport}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all flex items-center gap-2 shadow-lg shadow-indigo-100"
+          >
+            <Download className="w-4 h-4" />
+            Export Report
+          </button>
         </div>
       </div>
 
-      {/* KPI Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-2">
-        <StatCard 
-          title="Total Inspections" 
-          value={data.kpis.totalInspections} 
-          icon={ClipboardList}
-          colorClass="bg-blue-50 text-blue-600"
-          trend="+ 12%"
-        />
-        <StatCard 
-          title="Pass Rate" 
-          value={data.kpis.passRate} 
-          icon={CheckCircle}
-          colorClass="bg-emerald-50 text-emerald-600"
-        />
-        <StatCard 
-          title="Rejection Rate" 
-          value={data.kpis.rejectionRate} 
-          icon={AlertTriangle}
-          colorClass="bg-red-50 text-red-600"
-        />
-        <StatCard 
-          title="Quality Score" 
-          value={data.kpis.qualityScore} 
-          icon={TrendingUp}
-          colorClass="bg-orange-50 text-orange-600"
-        />
-        <StatCard 
-          title="Defect Score" 
-          value={data.kpis.defectScore} 
-          icon={RotateCcw}
-          colorClass="bg-purple-50 text-purple-600"
-        />
+      {/* KPIs Row */}
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+        <KPIStoreCard title="Total Inspections" value={data.kpis.totalInspections} subtitle="All Inspections" icon={ClipboardList} color="text-indigo-600" subColor="bg-indigo-50" />
+        <KPIStoreCard title="Pass Rate" value={data.kpis.passRate} subtitle="Success Ratio" icon={CheckCircle} color="text-emerald-600" subColor="bg-emerald-50" />
+        <KPIStoreCard title="Rejection Rate" value={data.kpis.rejectionRate} subtitle="Failure Ratio" icon={AlertTriangle} color="text-rose-600" subColor="bg-rose-50" />
+        <KPIStoreCard title="Quality Score" value={data.kpis.qualityScore} subtitle="Compliance Rating" icon={ShieldCheck} color="text-blue-600" subColor="bg-blue-50" />
+        <KPIStoreCard title="Defect Score" value={data.kpis.defectScore} subtitle="Issue Frequency" icon={RotateCcw} color="text-amber-600" subColor="bg-amber-50" />
       </div>
 
       {/* Main Charts Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Monthly Trend Chart */}
-        <div className="bg-white p-8 rounded  border border-slate-100 shadow-sm">
-          <h2 className="text-xl  text-slate-900 mb-8">Monthly Inspection Trend</h2>
+        <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+          <div className="mb-8">
+            <h3 className="text-sm text-slate-900 font-black uppercase tracking-widest">Monthly Inspection Trend</h3>
+            <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">Inspection outcomes over time</p>
+          </div>
           <div className="h-80">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={data.monthlyTrend}>
@@ -212,15 +247,15 @@ const QualityReports = () => {
                   dataKey="month" 
                   axisLine={false} 
                   tickLine={false} 
-                  tick={{ fill: '#94a3b8', fontSize: 12, fontWeight: 600 }}
+                  tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }}
                   dy={10}
                 />
-                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12 }} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} />
                 <Tooltip 
                   cursor={{ fill: '#f8fafc' }}
                   contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
                 />
-                <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px' }} />
+                <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px', fontSize: '10px', fontWeight: 'bold', textTransform: 'uppercase' }} />
                 <Bar dataKey="passed" name="Passed" fill="#10b981" radius={[4, 4, 0, 0]} barSize={20} />
                 <Bar dataKey="failed" name="Failed" fill="#ef4444" radius={[4, 4, 0, 0]} barSize={20} />
               </BarChart>
@@ -229,9 +264,12 @@ const QualityReports = () => {
         </div>
 
         {/* Defect Category Breakdown */}
-        <div className="bg-white p-8 rounded  border border-slate-100 shadow-sm">
-          <h2 className="text-xl  text-slate-900 mb-8">Defect Category Breakdown</h2>
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-8 h-80 lg:h-auto">
+        <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col">
+          <div className="mb-8">
+            <h3 className="text-sm text-slate-900 font-black uppercase tracking-widest">Defect Category Breakdown</h3>
+            <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">Primary defect drivers</p>
+          </div>
+          <div className="flex-1 flex flex-col sm:flex-row items-center justify-between gap-8">
             <div className="w-64 h-64 relative">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -245,28 +283,28 @@ const QualityReports = () => {
                     dataKey="value"
                   >
                     {data.defectBreakdown.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
+                      <Cell key={`cell-${index}`} fill={chartColors[index % chartColors.length]} stroke="none" />
                     ))}
                   </Pie>
-                  <Tooltip />
+                  <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
                 </PieChart>
               </ResponsiveContainer>
               <div className="absolute inset-0 flex items-center justify-center flex-col pointer-events-none">
-                <span className="text-xl  text-slate-900">30%</span>
-                <span className="text-xs text-slate-400   ">Average</span>
+                <span className="text-2xl font-black text-slate-900">{data.kpis.rejectionRate}</span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase">Avg Rejection</span>
               </div>
             </div>
-            <div className="flex-1 space-y-2 w-full">
+            <div className="flex-1 space-y-3 w-full">
               {data.defectBreakdown.map((item, index) => (
                 <div key={index} className="flex items-center justify-between group">
                   <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded shadow-sm" style={{ backgroundColor: item.color }}></div>
-                    <span className="text-sm  text-slate-500 group-hover:text-slate-900 transition-colors">{item.name}</span>
+                    <div className="w-2.5 h-2.5 rounded-full shadow-sm" style={{ backgroundColor: chartColors[index % chartColors.length] }}></div>
+                    <span className="text-[10px] font-bold text-slate-500 uppercase group-hover:text-slate-900 transition-colors">{item.name}</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs  text-slate-900">{item.value}%</span>
-                    <div className="w-12 h-1.5 bg-slate-50 rounded overflow-hidden">
-                      <div className="h-full rounded transition-all duration-1000" style={{ backgroundColor: item.color, width: `${item.value}%` }}></div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-[11px] font-black text-slate-900">{item.value}%</span>
+                    <div className="w-16 h-1.5 bg-slate-50 rounded-full overflow-hidden border border-slate-100">
+                      <div className="h-full rounded-full transition-all duration-1000" style={{ backgroundColor: chartColors[index % chartColors.length], width: `${item.value}%` }}></div>
                     </div>
                   </div>
                 </div>
@@ -279,162 +317,162 @@ const QualityReports = () => {
       {/* Tables Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Supplier Performance */}
-        <div className="lg:col-span-1 bg-white p-6 rounded  border border-slate-100 shadow-sm flex flex-col max-h-[500px]">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-sm font-bold  text-slate-900 uppercase tracking-tight">Supplier Performance</h2>
+        <div className="lg:col-span-1 bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
+          <div className="p-6 border-b border-slate-50">
+            <h3 className="text-sm text-slate-900 font-black uppercase tracking-widest">Supplier Performance</h3>
           </div>
-          <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
-            <table className="w-full">
-              <thead className="text-left text-[10px] font-bold text-slate-400 uppercase sticky top-0 bg-white z-10 pb-4">
-                <tr>
-                  <th className="pb-3">Supplier</th>
-                  <th className="pb-3 text-right">Score</th>
+          <div className="p-0">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50/50 text-[9px] text-slate-400 font-black uppercase tracking-widest border-b border-slate-100">
+                  <th className="px-4 py-2">Supplier</th>
+                  <th className="px-4 py-2 text-right">Score</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {data.supplierPerformance.length > 0 ? data.supplierPerformance.map((row, idx) => (
-                  <tr key={idx} className="group hover:bg-slate-50/50 transition-colors">
-                    <td className="py-3 text-xs font-medium  text-slate-600 group-hover:text-slate-900">{row.supplier}</td>
-                    <td className="py-3 text-right">
-                      <span className="text-xs font-bold  text-slate-900">{row.qualityScore}%</span>
-                    </td>
-                  </tr>
-                )) : (
-                  ['ABC Metals', 'Global Alloys', 'Sanika Industries'].map((name, idx) => (
-                    <tr key={idx} className="group hover:bg-slate-50/50 transition-colors">
-                      <td className="py-3 text-xs font-medium  text-slate-600 group-hover:text-slate-900">{name}</td>
-                      <td className="py-3 text-right">
-                        <span className="text-xs font-bold  text-slate-900">{95 - (idx * 3)}%</span>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Supplier Quality Detail Table */}
-        <div className="lg:col-span-1 bg-white p-6 rounded  border border-slate-100 shadow-sm flex flex-col max-h-[500px]">
-          <h2 className="text-sm font-bold  text-slate-900 mb-6 uppercase tracking-tight">Recent QC History</h2>
-          <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
-            <table className="w-full">
-              <thead className="text-left text-[10px] font-bold text-slate-400 uppercase sticky top-0 bg-white z-10 pb-4">
-                <tr>
-                  <th className="pb-3">Report</th>
-                  <th className="pb-3">GRN</th>
-                  <th className="pb-3 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {data.recentReports.map((report, idx) => (
-                  <tr key={idx} className="group hover:bg-slate-50/50 transition-colors">
-                    <td className="py-3 text-[10px] font-bold text-blue-600">QC-{String(report.reportId).padStart(4, '0')}</td>
-                    <td className="py-3 text-[10px] font-medium text-slate-600">{report.grn}</td>
-                    <td className="py-3 text-right">
-                      <button 
-                        onClick={() => handleDownloadPdf(report.reportId)}
-                        className="p-1 text-orange-500 hover:text-orange-600 hover:bg-orange-50 rounded transition-all"
-                        title="QC Report"
-                      >
-                        <FileText className="w-3.5 h-3.5" />
-                      </button>
+                {paginatedSuppliers.map((row, idx) => (
+                  <tr key={idx} className="hover:bg-slate-50/50 transition-colors group text-[10px]">
+                    <td className="px-4 py-3 font-black text-slate-900">{row.supplier}</td>
+                    <td className="px-4 py-3 text-right">
+                       <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-600 font-black">{row.qualityScore}%</span>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+          {totalSupplierPages > 1 && (
+            <div className="px-4 py-3 border-t border-slate-50 flex items-center justify-between">
+               <span className="text-[9px] font-bold text-slate-400">Page {suppliersPage} of {totalSupplierPages}</span>
+               <div className="flex gap-1">
+                 <button disabled={suppliersPage === 1} onClick={() => setSuppliersPage(p => p - 1)} className="p-1 rounded bg-slate-50 hover:bg-slate-100 disabled:opacity-50"><ChevronRight className="w-3 h-3 rotate-180" /></button>
+                 <button disabled={suppliersPage === totalSupplierPages} onClick={() => setSuppliersPage(p => p + 1)} className="p-1 rounded bg-slate-50 hover:bg-slate-100 disabled:opacity-50"><ChevronRight className="w-3 h-3" /></button>
+               </div>
+            </div>
+          )}
         </div>
 
-        {/* Recent Inspection Reports */}
-        <div className="lg:col-span-1 bg-white p-6 rounded  border border-slate-100 shadow-sm flex flex-col max-h-[500px]">
-          <h2 className="text-sm font-bold  text-slate-900 mb-6 uppercase tracking-tight">Inspection Results</h2>
-          <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
-            <table className="w-full">
-              <thead className="text-left text-[10px] font-bold text-slate-400 uppercase sticky top-0 bg-white z-10 pb-4">
-                <tr>
-                  <th className="pb-3 text-left">Report</th>
-                  <th className="pb-3 text-right">Status</th>
-                  <th className="pb-3 text-right">PDF</th>
+        {/* Recent QC Reports Table */}
+        <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
+          <div className="p-6 border-b border-slate-50 flex items-center justify-between">
+            <h3 className="text-sm text-slate-900 font-black uppercase tracking-widest">Recent QC Inspections</h3>
+            <button className="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-1">
+              View All History <ArrowRight className="w-3 h-3" />
+            </button>
+          </div>
+          <div className="p-0 overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50/50 text-[9px] text-slate-400 font-black uppercase tracking-widest border-b border-slate-100">
+                  <th className="px-4 py-2">Report ID</th>
+                  <th className="px-4 py-2">GRN Number</th>
+                  <th className="px-4 py-2 text-center">Status</th>
+                  <th className="px-4 py-2 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {data.recentReports.map((report, idx) => (
-                  <tr key={idx} className="group hover:bg-slate-50/50 transition-colors">
-                    <td className="py-3">
-                      <div className="flex flex-col">
-                        <span className="text-[10px] font-bold text-blue-600 leading-none">QC-{String(report.reportId).padStart(4, '0')}</span>
-                        <span className="text-[9px] text-slate-400 mt-1">{report.grn}</span>
+                {paginatedInspections.map((report, idx) => (
+                  <tr key={idx} className="hover:bg-slate-50/50 transition-colors group text-[10px]">
+                    <td className="px-4 py-3 font-black text-indigo-600">QC-{String(report.reportId).padStart(4, '0')}</td>
+                    <td className="px-4 py-3 font-bold text-slate-600">{report.grn}</td>
+                    <td className="px-4 py-3 text-center">
+                       <StatusBadge status={report.status} />
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <button 
+                          onClick={() => handleDownloadPdf(report.reportId)}
+                          className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded-lg transition-all"
+                          title="Download PDF"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     </td>
-                    <td className="py-3 text-right">
-                      <Badge 
-                        variant={report.status === 'PASSED' || report.status === 'ACCEPTED' ? 'success' : 'danger'}
-                        className="text-[9px] font-bold px-1.5 py-0 rounded"
-                      >
-                        {report.status === 'PASSED' || report.status === 'ACCEPTED' ? 'PASS' : 'FAIL'}
-                      </Badge>
-                    </td>
-                    <td className="py-3 text-right">
-                      <button 
-                        onClick={() => handleDownloadPdf(report.reportId)}
-                        className="p-1 text-orange-500 hover:text-orange-600 hover:bg-orange-50 rounded transition-all"
-                        title="QC Report"
-                      >
-                        <FileText className="w-3 h-3" />
-                      </button>
-                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+          {totalInspectionPages > 1 && (
+            <div className="px-6 py-4 border-t border-slate-50 bg-slate-50/20 flex items-center justify-between">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                Showing {(inspectionsPage - 1) * inspectionsPerPage + 1} to {Math.min(inspectionsPage * inspectionsPerPage, data.recentReports.length)} of {data.recentReports.length} entries
+              </p>
+              <div className="flex items-center gap-1">
+                <button 
+                  disabled={inspectionsPage === 1}
+                  onClick={() => setInspectionsPage(prev => prev - 1)}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:bg-white disabled:opacity-50"
+                >
+                  <ChevronRight className="w-4 h-4 rotate-180" />
+                </button>
+                {[...Array(totalInspectionPages)].map((_, i) => (
+                  <button 
+                    key={i}
+                    onClick={() => setInspectionsPage(i + 1)}
+                    className={`w-8 h-8 flex items-center justify-center rounded-lg font-black text-xs transition-all ${
+                      inspectionsPage === i + 1 ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'border border-slate-200 text-slate-400 hover:bg-white'
+                    }`}
+                  >
+                    {i + 1}
+                  </button>
+                ))}
+                <button 
+                  disabled={inspectionsPage === totalInspectionPages}
+                  onClick={() => setInspectionsPage(prev => prev + 1)}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:bg-white disabled:opacity-50"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Rejections Table Section */}
-      <div className="bg-white p-6 rounded border border-slate-100 shadow-sm mt-4 flex flex-col max-h-[500px]">
-        <h2 className="text-sm font-bold text-slate-900 mb-6 uppercase tracking-tight">Recent Quality Rejections</h2>
-        <div className="flex-1 overflow-y-auto custom-scrollbar">
-          <table className="w-full">
-            <thead className="text-left text-[10px] font-bold text-slate-400 uppercase sticky top-0 bg-white z-10 pb-4">
-              <tr className="border-b border-slate-50">
-                <th className="pb-3">Item Details</th>
-                <th className="pb-3">Reference</th>
-                <th className="pb-3 text-center">Rejected Qty</th>
-                <th className="pb-3">Reason</th>
-                <th className="pb-3 text-right">Action</th>
+      <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm mt-4 flex flex-col">
+        <h3 className="text-sm text-slate-900 font-black uppercase tracking-widest mb-6">Recent Quality Rejections</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50/50 text-[9px] text-slate-400 font-black uppercase tracking-widest border-b border-slate-100">
+                <th className="px-4 py-3">Item Details</th>
+                <th className="px-4 py-3">Reference</th>
+                <th className="px-4 py-3 text-center">Rejected Qty</th>
+                <th className="px-4 py-3">Reason</th>
+                <th className="px-4 py-3 text-right">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
               {data.recentRejections.map((rejection, idx) => (
-                <tr key={idx} className="group hover:bg-slate-50/50 transition-colors">
-                  <td className="py-3">
+                <tr key={idx} className="hover:bg-slate-50/50 transition-colors group text-[10px]">
+                  <td className="px-4 py-4">
                     <div className="flex flex-col">
-                      <span className="text-xs font-bold text-slate-900 leading-tight">{rejection.material_name}</span>
-                      <span className="text-[10px] text-indigo-600 font-mono mt-0.5">{rejection.item_code}</span>
+                      <span className="font-black text-slate-900 leading-tight">{rejection.material_name}</span>
+                      <span className="text-[9px] text-indigo-600 font-bold mt-0.5 uppercase tracking-tighter">{rejection.item_code}</span>
                     </div>
                   </td>
-                  <td className="py-3">
+                  <td className="px-4 py-4">
                     <div className="flex flex-col">
-                      <span className="text-[10px] text-slate-600 font-bold">{rejection.reference_number}</span>
-                      <span className="text-[9px] text-slate-400">{rejection.source_name}</span>
+                      <span className="font-bold text-slate-600">{rejection.reference_number}</span>
+                      <span className="text-[9px] text-slate-400 font-bold uppercase">{rejection.source_name}</span>
                     </div>
                   </td>
-                  <td className="py-3 text-center">
-                    <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded border border-rose-100">
+                  <td className="px-4 py-4 text-center">
+                    <span className="px-2 py-0.5 rounded bg-rose-50 text-rose-600 font-black border border-rose-100">
                       {parseFloat(rejection.rejected_qty || 0).toFixed(3)}
                     </span>
                   </td>
-                  <td className="py-3 text-[10px] text-slate-500 italic">
+                  <td className="px-4 py-4 text-slate-500 font-bold italic">
                     {rejection.item_remarks || 'No remarks'}
                   </td>
-                  <td className="py-3 text-right">
+                  <td className="px-4 py-4 text-right">
                     {rejection.ref_type === 'GRN' && rejection.qc_inspection_id && (
                       <button 
                         onClick={() => handleDownloadPdf(rejection.qc_inspection_id)}
-                        className="px-2 py-1 text-[9px] font-bold text-orange-600 bg-orange-50 border border-orange-100 rounded hover:bg-orange-100 transition-all active:scale-95"
+                        className="px-3 py-1.5 text-[9px] font-black text-white bg-rose-600 rounded-lg hover:bg-rose-700 transition-all shadow-sm"
                       >
                         QC Report
                       </button>
@@ -444,7 +482,7 @@ const QualityReports = () => {
               ))}
               {data.recentRejections.length === 0 && (
                 <tr>
-                  <td colSpan="5" className="py-8 text-center text-slate-400 italic text-xs">No recent rejections recorded.</td>
+                  <td colSpan="5" className="py-12 text-center text-slate-400 font-bold uppercase tracking-widest text-[10px]">No recent rejections recorded</td>
                 </tr>
               )}
             </tbody>

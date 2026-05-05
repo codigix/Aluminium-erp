@@ -12,6 +12,18 @@ async function run() {
     console.log('=== Schema of work_orders ===');
     const [rows] = await conn.query("DESC work_orders");
     console.table(rows);
+
+    console.log('=== Schema of operations ===');
+    const [opRows] = await conn.query("DESC operations");
+    console.table(opRows);
+
+    console.log('=== Schema of workstations ===');
+    const [wsRows] = await conn.query("DESC workstations");
+    console.table(wsRows);
+
+    console.log('=== Schema of job_cards ===');
+    const [jcRows] = await conn.query("DESC job_cards");
+    console.table(jcRows);
     
     await conn.end();
   } catch (err) {
