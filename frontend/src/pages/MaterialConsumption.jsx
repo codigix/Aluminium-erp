@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import * as XLSX from 'xlsx';
 import { Card, DataTable, StatusBadge, Button } from '../components/ui.jsx';
 import { 
   RefreshCw, 
@@ -86,6 +87,27 @@ const MaterialConsumption = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleGenerateCSV = () => {
+    if (!data || data.length === 0) return;
+
+    const exportData = data.map(item => ({
+      'Project Name': item.projectName,
+      'SO Number': item.soNumber,
+      'Customer': item.customer,
+      'Drawing Nos': item.drawingNos,
+      'Allocated': item.allocated,
+      'Consumed': item.consumed,
+      'Remaining': item.remaining,
+      'Status': item.status,
+      'Efficiency %': Math.round(item.efficiency)
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Consumption Report");
+    XLSX.writeFile(wb, `Material_Consumption_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
   const columns = [
@@ -206,7 +228,10 @@ const MaterialConsumption = () => {
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-rose-500 text-white rounded text-[10px] font-black hover:bg-rose-600 transition-all shadow-lg shadow-rose-100 active:scale-95 uppercase tracking-[0.1em]">
+          <button 
+            onClick={handleGenerateCSV}
+            className="flex items-center gap-2 px-4 py-2 bg-rose-500 text-white rounded text-[10px] font-black hover:bg-rose-600 transition-all shadow-lg shadow-rose-100 active:scale-95 uppercase tracking-[0.1em]"
+          >
             <Download className="w-4 h-4" />
             GENERATE CSV
           </button>

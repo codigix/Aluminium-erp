@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import * as XLSX from 'xlsx';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   LineChart, Line, AreaChart, Area, PieChart, Pie, Cell, Legend
@@ -101,6 +102,136 @@ const ProjectAnalysis = () => {
     const d2 = new Date(date2);
     const diffTime = d1 - d2;
     return Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+  };
+
+  const handleGenerateLedger = () => {
+    try {
+      if (!projectDetails) {
+        alert("Project details are not loaded yet.");
+        return;
+      }
+
+      const { projectInfo, workOrders, logistics, supplyChain, stockMovements, inventoryMatrix } = projectDetails;
+
+      // 1. Project Overview Sheet
+      const overviewData = [
+        { Field: 'Project Name', Value: projectInfo.project_name },
+        { Field: 'Customer', Value: projectInfo.company_name },
+        { Field: 'Status', Value: projectInfo.status },
+        { Field: 'Revenue', Value: projectInfo.net_total },
+        { Field: 'Order Date', Value: formatDate(projectInfo.created_at) },
+        { Field: 'Target Dispatch', Value: formatDate(projectInfo.target_dispatch_date) },
+        { Field: 'Total Work Orders', Value: projectInfo.total_work_orders },
+        { Field: 'Completed Work Orders', Value: projectInfo.completed_work_orders }
+      ];
+
+      // 2. Work Orders Sheet
+      const woData = (workOrders || []).map(wo => ({
+        'WO Number': wo.work_order_no,
+        'Item': wo.item_name,
+        'Quantity': wo.planned_qty,
+        'Produced': wo.produced_qty,
+        'Status': wo.status,
+        'Target Date': formatDate(wo.target_date)
+      }));
+
+      // 3. Supply Chain Sheet
+      const scData = (supplyChain || []).map(sc => ({
+        'MR Number': sc.mr_no,
+        'Item': sc.item_name,
+        'Quantity': sc.quantity,
+        'Status': sc.status,
+        'Requested By': sc.requested_by_name || 'N/A',
+        'Date': formatDate(sc.created_at)
+      }));
+
+      // 4. Stock Movements Sheet
+      const smData = (stockMovements || []).map(sm => ({
+        'Date': formatDate(sm.transaction_date || sm.created_at),
+        'Item': sm.item_name,
+        'Type': sm.transaction_type,
+        'Quantity': sm.quantity,
+        'Reference': sm.reference_no,
+        'Warehouse': sm.warehouse_name
+      }));
+
+      // 5. Inventory Matrix Sheet
+      const imData = (inventoryMatrix || []).map(im => ({
+        'Item Name': im.item_name,
+        'Item Code': im.item_code,
+        'Unit': im.unit,
+        'Available Qty': im.available_qty,
+        'Required Qty': im.required_qty
+      }));
+
+      const wb = XLSX.utils.book_new();
+      
+      const wsOverview = XLSX.utils.json_to_sheet(overviewData);
+      XLSX.utils.book_append_sheet(wb, wsOverview, "Overview");
+
+      if (woData.length > 0) {
+        const wsWO = XLSX.utils.json_to_sheet(woData);
+        XLSX.utils.book_append_sheet(wb, wsWO, "Work Orders");
+      }
+
+      if (scData.length > 0) {
+        const wsSC = XLSX.utils.json_to_sheet(scData);
+        XLSX.utils.book_append_sheet(wb, wsSC, "Supply Chain");
+      }
+
+      if (smData.length > 0) {
+        const wsSM = XLSX.utils.json_to_sheet(smData);
+        XLSX.utils.book_append_sheet(wb, wsSM, "Stock Movements");
+      }
+
+      if (imData.length > 0) {
+        const wsIM = XLSX.utils.json_to_sheet(imData);
+        XLSX.utils.book_append_sheet(wb, wsIM, "Inventory Matrix");
+      }
+
+      const safeFileName = (projectInfo.project_name || 'Project')
+        .replace(/[/\\?%*:|"<>]/g, '-')
+        .replace(/\s+/g, '_');
+
+      XLSX.writeFile(wb, `Ledger_${safeFileName}_${new Date().toISOString().split('T')[0]}.xlsx`);
+    } catch (error) {
+      console.error("Error generating ledger:", error);
+      alert("Failed to generate ledger. Please check the console for details.");
+    }
+  };
+
+  const handleGenerateGlobalLedger = () => {
+    try {
+      if (!data || !data.projectList) {
+        alert("Project data is not loaded yet.");
+        return;
+      }
+
+      const exportData = data.projectList.map(project => {
+        const progress = project.totalJobs > 0 ? (project.completedJobs / project.totalJobs) * 100 : 0;
+        return {
+          'Reference': project.project_name,
+          'SO Number': `SO-${project.id?.toString().padStart(6, '0')}`,
+          'Client': project.company_name,
+          'Status': project.status,
+          'Target Dispatch': project.target_dispatch_date ? new Date(project.target_dispatch_date).toLocaleDateString('en-GB') : 'N/A',
+          'Completion %': Math.round(progress),
+          'Revenue': project.revenue,
+          'Completed Jobs': project.completedJobs,
+          'Total Jobs': project.totalJobs,
+          'Yield %': project.yield ? Math.round(project.yield) : 100
+        };
+      });
+
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Project Summary");
+
+      XLSX.writeFile(wb, `Global_Project_Ledger_${new Date().toISOString().split('T')[0]}.xlsx`);
+    } catch (error) {
+      console.error("Error generating global ledger:", error);
+      alert("Failed to generate global ledger.");
+    }
   };
 
   const StatCard = ({ title, amount, subtitle, icon: Icon, color = 'bg-indigo-500', trend, trendValue, animate, subColor }) => (
@@ -249,11 +380,18 @@ const ProjectAnalysis = () => {
               </div>
            </div>
 
-           <div className="flex items-center gap-2 px-2">
+           <div className="flex items-center gap-2 px-2 relative z-50">
               <div className="h-9 w-9 rounded-xl bg-rose-500 flex items-center justify-center shadow-lg shadow-rose-500/20">
                 <BarChart3 className="w-5 h-5 text-white" />
               </div>
-              <button className="bg-rose-500 hover:bg-rose-600 text-white px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all shadow-lg shadow-rose-500/20 active:scale-95 flex items-center gap-2">
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleGenerateLedger();
+                }}
+                className="bg-rose-500 hover:bg-rose-600 text-white px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all shadow-lg shadow-rose-500/20 active:scale-95 flex items-center gap-2 cursor-pointer pointer-events-auto"
+              >
+                <Download className="w-4 h-4" />
                 Generate Ledger
               </button>
            </div>
@@ -998,7 +1136,10 @@ const ProjectAnalysis = () => {
           <button onClick={fetchStats} className="p-2 bg-slate-50 text-slate-600 rounded hover:bg-slate-100 transition-all border border-slate-200">
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-rose-500 text-white rounded text-xs hover:bg-rose-600 transition-all shadow-lg shadow-rose-100 font-black uppercase">
+          <button 
+            onClick={handleGenerateGlobalLedger}
+            className="flex items-center gap-2 px-4 py-2 bg-rose-500 text-white rounded text-xs hover:bg-rose-600 transition-all shadow-lg shadow-rose-100 font-black uppercase cursor-pointer pointer-events-auto relative z-10"
+          >
             <Download className="w-4 h-4" />
             Generate Ledger
           </button>

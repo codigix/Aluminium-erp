@@ -358,30 +358,54 @@ const getDesignDashboardStats = async () => {
   };
 };
 
-const getSalesDashboardStats = async () => {
+const getSalesDashboardStats = async (filters = {}) => {
+  const { start, end, customer } = filters;
+  let dateFilter = '';
+  let params = [];
+
+  if (start && end) {
+    dateFilter = ' AND DATE(created_at) BETWEEN ? AND ?';
+    params = [start, end];
+  }
+
+  let customerFilter = '';
+  if (customer && customer !== 'All') {
+    customerFilter = ' AND c.company_name = ?';
+  }
+
   // 1. Quotation Activity (KPIs)
   const [[quoteStats]] = await pool.query(`
     SELECT 
       COUNT(*) as totalQuotes,
-      SUM(CASE WHEN status = 'SENT' THEN 1 ELSE 0 END) as sentQuotes,
-      SUM(CASE WHEN status IN ('REVIEWED', 'CLOSED') THEN 1 ELSE 0 END) as approvedQuotes,
-      SUM(CASE WHEN status = 'CLOSED' AND total_amount = 0 THEN 1 ELSE 0 END) as rejectedQuotes
-    FROM quotations
-  `);
+      SUM(CASE WHEN qr.status IN ('SENT', 'RECEIVED') THEN 1 ELSE 0 END) as sentQuotes,
+      SUM(CASE WHEN qr.status IN ('Approved', 'Approved ', 'COMPLETED', 'Completed', 'ACCEPTED', 'Accepted') THEN 1 ELSE 0 END) as approvedQuotes,
+      SUM(CASE WHEN qr.status = 'REJECTED' THEN 1 ELSE 0 END) as rejectedQuotes
+    FROM quotation_requests qr
+    JOIN companies c ON qr.company_id = c.id
+    WHERE (qr.parent_id IS NULL OR qr.parent_id = 0)
+    ${dateFilter.replace('created_at', 'qr.created_at')}
+    ${customerFilter}
+  `, [...params, ...(customer && customer !== 'All' ? [customer] : [])]);
 
+  // 2. Converted Orders
   const [[orderStats]] = await pool.query(`
-    SELECT COUNT(*) as convertedOrders FROM sales_orders WHERE status != 'CANCELLED'
-  `);
+    SELECT COUNT(*) as convertedOrders 
+    FROM orders o
+    JOIN companies c ON o.client_id = c.id
+    WHERE o.status != 'CANCELLED'
+    ${dateFilter.replace('created_at', 'o.created_at')}
+    ${customerFilter}
+  `, [...params, ...(customer && customer !== 'All' ? [customer] : [])]);
 
   const conversionRate = quoteStats.totalQuotes > 0 
     ? Math.round((orderStats.convertedOrders / quoteStats.totalQuotes) * 100) 
     : 0;
 
-  // 2. Sales Trend (Last 30 days)
+  // 3. Sales Trend
   const [chartData] = await pool.query(`
     SELECT 
       DATE_FORMAT(date_list.date, '%d %b') as name,
-      COALESCE(SUM(so.net_total), 0) as value
+      COALESCE(SUM(o.grand_total), 0) as value
     FROM (
       SELECT CURRENT_DATE - INTERVAL 29 DAY as date UNION ALL
       SELECT CURRENT_DATE - INTERVAL 28 DAY UNION ALL
@@ -414,12 +438,14 @@ const getSalesDashboardStats = async () => {
       SELECT CURRENT_DATE - INTERVAL 1 DAY UNION ALL
       SELECT CURRENT_DATE
     ) date_list
-    LEFT JOIN sales_orders so ON DATE(so.created_at) = date_list.date AND so.status != 'CANCELLED'
+    LEFT JOIN orders o ON DATE(o.created_at) = date_list.date AND o.status != 'CANCELLED'
+    LEFT JOIN companies c ON o.client_id = c.id
+    WHERE 1=1 ${customerFilter}
     GROUP BY date_list.date
     ORDER BY date_list.date ASC
-  `);
+  `, customer && customer !== 'All' ? [customer] : []);
 
-  // 3. Funnel Data
+  // 4. Funnel Data
   const funnelData = [
     { name: 'Total Quotations', value: quoteStats.totalQuotes || 0, color: '#6366f1' },
     { name: 'Sent Quotations', value: quoteStats.sentQuotes || 0, color: '#3b82f6' },
@@ -427,73 +453,85 @@ const getSalesDashboardStats = async () => {
     { name: 'Converted Orders', value: orderStats.convertedOrders || 0, color: '#f43f5e' }
   ];
 
-  // 4. Recent Activity
+  // 5. Recent Activity
   const [recentActivity] = await pool.query(`
     (SELECT 
       'QUOTE_APPROVED' as type,
-      quote_number as ref,
+      CONCAT('QRT-', LPAD(qr.id, 4, '0')) as ref,
       'Approved' as status,
-      (SELECT company_name FROM companies WHERE id = vendor_id) as customer,
-      updated_at as time
-    FROM quotations WHERE status IN ('REVIEWED', 'CLOSED') ORDER BY updated_at DESC LIMIT 3)
+      c.company_name as customer,
+      qr.created_at as time
+    FROM quotation_requests qr
+    JOIN companies c ON c.id = qr.company_id
+    WHERE qr.status IN ('Approved', 'Approved ', 'COMPLETED', 'Completed')
+    ${customerFilter}
+    ORDER BY qr.created_at DESC LIMIT 3)
     UNION ALL
     (SELECT 
       'ORDER_CREATED' as type,
-      so_number as ref,
+      order_no as ref,
       'Created' as status,
-      (SELECT company_name FROM companies WHERE id = company_id) as customer,
-      created_at as time
-    FROM sales_orders ORDER BY created_at DESC LIMIT 2)
+      c.company_name as customer,
+      o.created_at as time
+    FROM orders o
+    JOIN companies c ON c.id = o.client_id
+    WHERE 1=1 ${customerFilter}
+    ORDER BY o.created_at DESC LIMIT 2)
     ORDER BY time DESC LIMIT 5
-  `);
+  `, [...(customer && customer !== 'All' ? [customer, customer] : [])]);
 
-  // 5. Approved Quotations Table
+  // 6. Approved Quotations Table
   const [approvedQuotes] = await pool.query(`
     SELECT 
-      q.quote_number as id,
+      CONCAT('QRT-', LPAD(qr.id, 4, '0')) as id,
       c.company_name as customer,
-      q.grand_total as amount,
-      DATE_FORMAT(q.updated_at, '%d %b %Y') as date
-    FROM quotations q
-    JOIN companies c ON q.vendor_id = c.id
-    WHERE q.status IN ('REVIEWED', 'CLOSED')
-    ORDER BY q.updated_at DESC LIMIT 5
-  `);
+      qr.total_amount as amount,
+      DATE_FORMAT(qr.created_at, '%d %b %Y') as date
+    FROM quotation_requests qr
+    JOIN companies c ON qr.company_id = c.id
+    WHERE qr.status IN ('Approved', 'Approved ', 'COMPLETED', 'Completed')
+    ${dateFilter.replace('created_at', 'qr.created_at')}
+    ${customerFilter}
+    ORDER BY qr.created_at DESC LIMIT 50
+  `, [...params, ...(customer && customer !== 'All' ? [customer] : [])]);
 
-  // 6. Active Clients
+  // 7. Active Clients
   const [activeClients] = await pool.query(`
     SELECT 
       c.id,
       c.company_name as name,
       LEFT(c.company_name, 2) as initials,
       c.company_code as sub,
-      COUNT(so.id) as orders,
-      SUM(so.net_total) as value,
-      DATE_FORMAT(MAX(so.created_at), '%d %b %Y') as lastDate
+      COUNT(o.id) as orders,
+      SUM(o.grand_total) as value,
+      DATE_FORMAT(MAX(o.created_at), '%d %b %Y') as lastDate
     FROM companies c
-    JOIN sales_orders so ON c.id = so.company_id
-    WHERE so.status != 'CANCELLED'
+    JOIN orders o ON c.id = o.client_id
+    WHERE o.status != 'CANCELLED'
+    ${dateFilter.replace('created_at', 'o.created_at')}
     GROUP BY c.id
-    ORDER BY value DESC LIMIT 5
-  `);
+    ORDER BY value DESC LIMIT 50
+  `, params);
 
-  // 7. Sales Orders Detailed Table
+  // 8. Sales Orders Detailed Table
   const [salesOrders] = await pool.query(`
     SELECT 
-      so.id as id_val,
-      so.so_number as id,
+      o.id as id_val,
+      o.order_no as id,
       c.company_name as customer,
       LEFT(c.company_name, 2) as initials,
       c.company_code as sub,
-      DATE_FORMAT(so.created_at, '%d %b %Y') as date,
-      DATE_FORMAT(so.target_dispatch_date, '%d %b %Y') as delivery,
-      so.net_total as total,
-      so.status
-    FROM sales_orders so
-    JOIN companies c ON so.company_id = c.id
-    WHERE so.status != 'CANCELLED'
-    ORDER BY so.created_at DESC LIMIT 10
-  `);
+      DATE_FORMAT(o.created_at, '%d %b %Y') as date,
+      DATE_FORMAT(o.delivery_date, '%d %b %Y') as delivery,
+      o.grand_total as total,
+      o.status
+    FROM orders o
+    JOIN companies c ON o.client_id = c.id
+    WHERE o.status != 'CANCELLED'
+    ${dateFilter.replace('created_at', 'o.created_at')}
+    ${customerFilter}
+    ORDER BY o.created_at DESC LIMIT 50
+  `, [...params, ...(customer && customer !== 'All' ? [customer] : [])]);
 
   return {
     kpis: {

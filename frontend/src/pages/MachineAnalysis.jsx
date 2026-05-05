@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import * as XLSX from 'xlsx';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   PieChart, Pie, Cell, LineChart, Line, AreaChart, Area, Legend,
@@ -57,6 +58,48 @@ const MachineAnalysis = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleExport = () => {
+    if (!data) return;
+
+    const wb = XLSX.utils.book_new();
+
+    // 1. System Overview
+    const systemData = [
+      { Metric: 'System OEE', Value: `${data.kpis?.oee || 0}%` },
+      { Metric: 'Performance', Value: `${data.kpis?.performance || 0}%` },
+      { Metric: 'Availability', Value: `${data.kpis?.availability || 0}%` },
+      { Metric: 'Active Units', Value: data.assetHealth?.active || 0 },
+      { Metric: 'System Alerts', Value: '5' }
+    ];
+    const wsSystem = XLSX.utils.json_to_sheet(systemData);
+    XLSX.utils.book_append_sheet(wb, wsSystem, "System Summary");
+
+    // 2. Temporal Asset Analysis
+    if (data.temporalAnalysis) {
+      const temporalData = data.temporalAnalysis.map(item => ({
+        'Workstation': item.name,
+        'Productive Time (Hrs)': item.productive,
+        'Idle Time (Hrs)': item.idle
+      }));
+      const wsTemporal = XLSX.utils.json_to_sheet(temporalData);
+      XLSX.utils.book_append_sheet(wb, wsTemporal, "Asset Analysis");
+    }
+
+    // 3. Efficiency Stream
+    if (data.efficiencyStream) {
+      const efficiencyData = data.efficiencyStream.map(item => ({
+        'Timestamp': item.name,
+        'OEE Score %': item.oeeScore,
+        'Availability %': item.availability,
+        'Performance %': item.performance
+      }));
+      const wsEfficiency = XLSX.utils.json_to_sheet(efficiencyData);
+      XLSX.utils.book_append_sheet(wb, wsEfficiency, "Efficiency Stream");
+    }
+
+    XLSX.writeFile(wb, `Machine_Analysis_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
   const StatCard = ({ title, amount, subtitle, icon: Icon, color, trend, trendValue, animate }) => (
@@ -136,7 +179,10 @@ const MachineAnalysis = () => {
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-rose-600 text-white rounded text-[11px] font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95 uppercase">
+          <button 
+            onClick={handleExport}
+            className="flex items-center gap-2 px-4 py-2 bg-rose-600 text-white rounded text-[11px] font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95 uppercase"
+          >
             <Download className="w-4 h-4" />
             GENERATE REPORT
           </button>

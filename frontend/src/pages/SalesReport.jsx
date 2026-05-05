@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import * as XLSX from 'xlsx';
 import { Card, DataTable, StatusBadge, Button } from '../components/ui.jsx';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
@@ -8,25 +10,42 @@ import {
   TrendingUp, IndianRupee, ShoppingCart, Clock, CheckCircle2, 
   Target, Filter, Download, RefreshCw, Calendar, ChevronRight,
   FileText, Users, Eye, Printer, Share2, Trash2, Edit, Truck,
-  CheckCircle, XCircle, Send
+  CheckCircle, XCircle, Send, ArrowRight
 } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
 const SalesReport = () => {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(new Date());
+  const [dateRange, setDateRange] = useState({
+    start: '2026-04-01',
+    end: new Date().toISOString().split('T')[0]
+  });
+  const [selectedCustomer, setSelectedCustomer] = useState('All');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [approvedPage, setApprovedPage] = useState(1);
+  const [clientsPage, setClientsPage] = useState(1);
+  const itemsPerPage = 3;
+  const itemsPerSmallPage = 3;
 
   useEffect(() => {
     fetchSalesReport();
-  }, []);
+    setCurrentPage(1);
+    setApprovedPage(1);
+    setClientsPage(1);
+  }, [dateRange, selectedCustomer]);
 
   const fetchSalesReport = async () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/dashboard/sales`, {
+      let url = `${API_BASE}/dashboard/sales?start=${dateRange.start}&end=${dateRange.end}`;
+      if (selectedCustomer !== 'All') url += `&customer=${selectedCustomer}`;
+
+      const response = await fetch(url, {
         headers: { 
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -44,8 +63,54 @@ const SalesReport = () => {
     }
   };
 
+  const handleExport = () => {
+    if (!stats || !stats.salesOrders) return;
+    
+    const exportData = stats.salesOrders.map(order => ({
+      'Order ID': order.id,
+      'Customer': order.customer,
+      'Order Date': order.date,
+      'Delivery Date': order.delivery,
+      'Total Amount': order.total,
+      'Status': order.status
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Sales Orders");
+    XLSX.writeFile(wb, `Sales_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
+  const filteredOrders = useMemo(() => {
+    if (!stats?.salesOrders) return [];
+    return stats.salesOrders;
+  }, [stats?.salesOrders]);
+
+  const paginatedOrders = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filteredOrders.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredOrders, currentPage]);
+
+  const totalPages = Math.ceil(filteredOrders.length / itemsPerPage);
+
+  const paginatedApprovedQuotes = useMemo(() => {
+    if (!stats?.approvedQuotes) return [];
+    const startIndex = (approvedPage - 1) * itemsPerSmallPage;
+    return stats.approvedQuotes.slice(startIndex, startIndex + itemsPerSmallPage);
+  }, [stats?.approvedQuotes, approvedPage]);
+
+  const totalApprovedPages = Math.ceil((stats?.approvedQuotes?.length || 0) / itemsPerSmallPage);
+
+  const paginatedActiveClients = useMemo(() => {
+    if (!stats?.activeClients) return [];
+    const startIndex = (clientsPage - 1) * itemsPerSmallPage;
+    return stats.activeClients.slice(startIndex, startIndex + itemsPerSmallPage);
+  }, [stats?.activeClients, clientsPage]);
+
+  const totalClientsPages = Math.ceil((stats?.activeClients?.length || 0) / itemsPerSmallPage);
+
   const KPIStoreCard = ({ title, value, subtitle, icon: Icon, color, subColor }) => (
-    <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm flex items-center gap-4 relative overflow-hidden group">
+    <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm flex items-center gap-4 relative overflow-hidden group hover:border-rose-100 transition-colors">
       <div className={`absolute top-0 right-0 w-16 h-16 ${subColor} opacity-10 rounded -mr-6 -mt-6 transition-transform group-hover:scale-110`} />
       <div className={`p-3 rounded-xl ${subColor} ${color}`}>
         <Icon className="w-5 h-5" />
@@ -82,13 +147,34 @@ const SalesReport = () => {
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg text-[11px] font-bold text-slate-600">
              <Calendar className="w-4 h-4 text-slate-400" />
-             01 Apr 2026 - 05 May 2026
-             <ChevronRight className="w-3 h-3 text-slate-400 rotate-90" />
+             <input 
+               type="date" 
+               value={dateRange.start} 
+               onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
+               className="bg-transparent border-none outline-none cursor-pointer"
+             />
+             <span className="text-slate-300 mx-1">—</span>
+             <input 
+               type="date" 
+               value={dateRange.end} 
+               onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
+               className="bg-transparent border-none outline-none cursor-pointer"
+             />
           </div>
-          <select className="bg-white border border-slate-200 rounded-lg px-3 py-2 text-[11px] font-bold text-slate-600 outline-none">
-            <option>All Customers</option>
+          <select 
+            value={selectedCustomer}
+            onChange={(e) => setSelectedCustomer(e.target.value)}
+            className="bg-white border border-slate-200 rounded-lg px-3 py-2 text-[11px] font-bold text-slate-600 outline-none"
+          >
+            <option value="All">All Customers</option>
+            {stats.activeClients?.map(client => (
+              <option key={client.id} value={client.name}>{client.name}</option>
+            ))}
           </select>
-          <button className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all flex items-center gap-2 shadow-lg shadow-indigo-100">
+          <button 
+            onClick={handleExport}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all flex items-center gap-2 shadow-lg shadow-indigo-100 active:scale-95"
+          >
             <Download className="w-4 h-4" />
             Export Report
           </button>
@@ -175,10 +261,11 @@ const SalesReport = () => {
                   axisLine={false} 
                   tickLine={false} 
                   tick={{fill: '#94a3b8', fontSize: 9, fontWeight: 700}}
-                  tickFormatter={(val) => `${val / 1000}K`}
+                  tickFormatter={(val) => `₹${val >= 1000 ? (val / 1000).toFixed(0) + 'k' : val}`}
                 />
                 <Tooltip 
                   contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
+                  formatter={(val) => [`₹${parseFloat(val).toLocaleString('en-IN')}`, 'Value']}
                 />
                 <Area type="monotone" dataKey="value" stroke="#4f46e5" strokeWidth={2} fillOpacity={1} fill="url(#colorSalesTrend)" />
               </AreaChart>
@@ -239,7 +326,10 @@ const SalesReport = () => {
         <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-sm text-slate-900 font-black uppercase tracking-widest">Recent Activity</h3>
-            <button className="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-1">
+            <button 
+              onClick={() => navigate('/dashboard')}
+              className="text-[10px] font-black text-indigo-600 hover:text-indigo-700 uppercase tracking-widest flex items-center gap-1 transition-colors"
+            >
               View all activity <ChevronRight className="w-3 h-3" />
             </button>
           </div>
@@ -280,7 +370,10 @@ const SalesReport = () => {
               <h3 className="text-sm text-slate-900 font-black uppercase tracking-widest">Approved Quotations</h3>
               <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">List of recently approved quotations</p>
             </div>
-            <button className="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-1">
+            <button 
+              onClick={() => navigate('/client-quotations')}
+              className="text-[10px] font-black text-indigo-600 hover:text-indigo-700 uppercase tracking-widest flex items-center gap-1 transition-colors"
+            >
               View all approved quotations <ChevronRight className="w-3 h-3" />
             </button>
           </div>
@@ -295,7 +388,7 @@ const SalesReport = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {stats.approvedQuotes.map((quote, idx) => (
+                {paginatedApprovedQuotes.map((quote, idx) => (
                   <tr key={idx} className="hover:bg-slate-50 transition-colors group">
                     <td className="py-3 text-xs font-black text-indigo-600">{quote.id}</td>
                     <td className="py-3 text-xs font-bold text-slate-600">{quote.customer}</td>
@@ -306,6 +399,29 @@ const SalesReport = () => {
               </tbody>
             </table>
           </div>
+          {totalApprovedPages > 1 && (
+            <div className="mt-4 flex items-center justify-between">
+              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                Page {approvedPage} of {totalApprovedPages}
+              </p>
+              <div className="flex items-center gap-1">
+                <button 
+                  disabled={approvedPage === 1}
+                  onClick={() => setApprovedPage(prev => prev - 1)}
+                  className="w-6 h-6 flex items-center justify-center rounded bg-slate-50 text-slate-400 hover:bg-slate-100 disabled:opacity-50"
+                >
+                  <ChevronRight className="w-3 h-3 rotate-180" />
+                </button>
+                <button 
+                  disabled={approvedPage === totalApprovedPages}
+                  onClick={() => setApprovedPage(prev => prev + 1)}
+                  className="w-6 h-6 flex items-center justify-center rounded bg-slate-50 text-slate-400 hover:bg-slate-100 disabled:opacity-50"
+                >
+                  <ChevronRight className="w-3 h-3" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Active Clients */}
@@ -315,7 +431,10 @@ const SalesReport = () => {
               <h3 className="text-sm text-slate-900 font-black uppercase tracking-widest">Active Clients</h3>
               <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">Top active clients based on orders</p>
             </div>
-            <button className="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-1">
+            <button 
+              onClick={() => navigate('/company-master')}
+              className="text-[10px] font-black text-indigo-600 hover:text-indigo-700 uppercase tracking-widest flex items-center gap-1 transition-colors"
+            >
               View all clients <ChevronRight className="w-3 h-3" />
             </button>
           </div>
@@ -326,7 +445,7 @@ const SalesReport = () => {
               <span className="text-right">Sales Value</span>
               <span className="text-right">Last Order Date</span>
             </div>
-            {stats.activeClients.map((client, idx) => (
+            {paginatedActiveClients.map((client, idx) => (
               <div key={idx} className="grid grid-cols-5 items-center">
                 <div className="col-span-2 flex items-center gap-3">
                   <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-xs ${
@@ -351,6 +470,29 @@ const SalesReport = () => {
               </div>
             ))}
           </div>
+          {totalClientsPages > 1 && (
+            <div className="mt-4 flex items-center justify-between">
+              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                Page {clientsPage} of {totalClientsPages}
+              </p>
+              <div className="flex items-center gap-1">
+                <button 
+                  disabled={clientsPage === 1}
+                  onClick={() => setClientsPage(prev => prev - 1)}
+                  className="w-6 h-6 flex items-center justify-center rounded bg-slate-50 text-slate-400 hover:bg-slate-100 disabled:opacity-50"
+                >
+                  <ChevronRight className="w-3 h-3 rotate-180" />
+                </button>
+                <button 
+                  disabled={clientsPage === totalClientsPages}
+                  onClick={() => setClientsPage(prev => prev + 1)}
+                  className="w-6 h-6 flex items-center justify-center rounded bg-slate-50 text-slate-400 hover:bg-slate-100 disabled:opacity-50"
+                >
+                  <ChevronRight className="w-3 h-3" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -375,7 +517,7 @@ const SalesReport = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {stats.salesOrders.map((order, idx) => (
+              {paginatedOrders.map((order, idx) => (
                 <tr key={idx} className="hover:bg-slate-50/50 transition-colors group">
                   <td className="px-6 py-4">
                     <p className="text-xs font-black text-indigo-600 tracking-tight">{order.id}</p>
@@ -400,7 +542,7 @@ const SalesReport = () => {
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2 text-xs font-bold text-slate-600">
-                      <div className={`w-2 h-2 rounded-full ${idx % 2 === 0 ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                      <div className={`w-2 h-2 rounded-full ${order.status === 'Paid' ? 'bg-emerald-500' : 'bg-rose-500'}`} />
                       {order.delivery}
                     </div>
                   </td>
@@ -415,28 +557,64 @@ const SalesReport = () => {
                   </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-1">
-                       {[FileText, Eye, Download, Printer, Edit, Trash2].map((Icon, i) => (
-                         <button key={i} className="p-2 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded-lg transition-all border border-transparent hover:border-slate-200">
-                           <Icon className="w-3.5 h-3.5" />
-                         </button>
-                       ))}
+                       <button 
+                         onClick={() => navigate('/sales-order')}
+                         className="p-2 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded-lg transition-all border border-transparent hover:border-slate-200"
+                         title="View Order"
+                       >
+                         <Eye className="w-3.5 h-3.5" />
+                       </button>
+                       <button className="p-2 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded-lg transition-all border border-transparent hover:border-slate-200">
+                         <Printer className="w-3.5 h-3.5" />
+                       </button>
                     </div>
                   </td>
                 </tr>
               ))}
+              {paginatedOrders.length === 0 && (
+                <tr>
+                  <td colSpan="7" className="px-6 py-12 text-center text-slate-400 text-xs font-bold uppercase tracking-widest">
+                    No sales orders found for selected period
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
-        <div className="px-6 py-4 border-t border-slate-50 bg-slate-50/20 flex items-center justify-between">
-           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-             Showing 1 to {stats.salesOrders.length} of {stats.salesOrders.length} entries
-           </p>
-           <div className="flex items-center gap-1">
-             <button className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:bg-white"><ChevronRight className="w-4 h-4 rotate-180" /></button>
-             <button className="w-8 h-8 flex items-center justify-center rounded-lg bg-indigo-600 text-white font-black text-xs shadow-lg shadow-indigo-100">1</button>
-             <button className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:bg-white"><ChevronRight className="w-4 h-4" /></button>
-           </div>
-        </div>
+        {totalPages > 1 && (
+          <div className="px-6 py-4 border-t border-slate-50 bg-slate-50/20 flex items-center justify-between">
+             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+               Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, filteredOrders.length)} of {filteredOrders.length} entries
+             </p>
+             <div className="flex items-center gap-1">
+               <button 
+                 disabled={currentPage === 1}
+                 onClick={() => setCurrentPage(prev => prev - 1)}
+                 className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:bg-white disabled:opacity-50"
+               >
+                 <ChevronRight className="w-4 h-4 rotate-180" />
+               </button>
+               {[...Array(totalPages)].map((_, i) => (
+                 <button 
+                   key={i}
+                   onClick={() => setCurrentPage(i + 1)}
+                   className={`w-8 h-8 flex items-center justify-center rounded-lg font-black text-xs transition-all ${
+                     currentPage === i + 1 ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'border border-slate-200 text-slate-400 hover:bg-white'
+                   }`}
+                 >
+                   {i + 1}
+                 </button>
+               ))}
+               <button 
+                 disabled={currentPage === totalPages}
+                 onClick={() => setCurrentPage(prev => prev + 1)}
+                 className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:bg-white disabled:opacity-50"
+               >
+                 <ChevronRight className="w-4 h-4" />
+               </button>
+             </div>
+          </div>
+        )}
       </div>
     </div>
   );

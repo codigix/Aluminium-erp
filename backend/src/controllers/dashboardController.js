@@ -47,7 +47,7 @@ const getDesignDashboard = async (req, res, next) => {
 
 const getSalesDashboard = async (req, res, next) => {
   try {
-    const stats = await dashboardService.getSalesDashboardStats();
+    const stats = await dashboardService.getSalesDashboardStats(req.query);
     res.json(stats);
   } catch (error) {
     next(error);

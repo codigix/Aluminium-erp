@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import * as XLSX from 'xlsx';
 import { Card, DataTable, StatusBadge, Button } from '../components/ui.jsx';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
@@ -44,6 +45,64 @@ const AccountsReport = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleExport = () => {
+    if (!stats) return;
+
+    const wb = XLSX.utils.book_new();
+
+    // 1. Financial Summary
+    const summaryData = [
+      { Metric: 'Total Receivables', Value: stats.kpis?.totalReceivables || 0 },
+      { Metric: 'Total Payables', Value: stats.kpis?.totalPayables || 0 },
+      { Metric: 'Cash Received', Value: stats.kpis?.cashReceived || 0 },
+      { Metric: 'Invoices Sent', Value: stats.kpis?.invoicesSent || 0 },
+      { Metric: 'Overdue Amount', Value: stats.kpis?.overdueAmount || 0 }
+    ];
+    const wsSummary = XLSX.utils.json_to_sheet(summaryData);
+    XLSX.utils.book_append_sheet(wb, wsSummary, "Financial Summary");
+
+    // 2. Top Customers
+    if (stats.topCustomers) {
+      const customerData = stats.topCustomers.map(c => ({
+        'Customer': c.name,
+        'Total Invoices': c.totalInvoices,
+        'Outstanding Amount': c.outstanding,
+        'Overdue Amount': c.overdue
+      }));
+      const wsCustomers = XLSX.utils.json_to_sheet(customerData);
+      XLSX.utils.book_append_sheet(wb, wsCustomers, "Top Customers");
+    }
+
+    // 3. Top Vendors
+    if (stats.topVendors) {
+      const vendorData = stats.topVendors.map(v => ({
+        'Vendor': v.name,
+        'Total Invoices': v.totalInvoices,
+        'Outstanding Amount': v.outstanding,
+        'Overdue Amount': v.overdue
+      }));
+      const wsVendors = XLSX.utils.json_to_sheet(vendorData);
+      XLSX.utils.book_append_sheet(wb, wsVendors, "Top Vendors");
+    }
+
+    // 4. Recent Transactions
+    if (stats.recentTransactions) {
+      const transactionsData = stats.recentTransactions.map(t => ({
+        'Type': t.type,
+        'Reference': t.reference,
+        'Customer / Vendor': t.party,
+        'Date': t.date,
+        'Due Date': t.dueDate || 'N/A',
+        'Amount': t.amount,
+        'Status': t.status
+      }));
+      const wsTransactions = XLSX.utils.json_to_sheet(transactionsData);
+      XLSX.utils.book_append_sheet(wb, wsTransactions, "Recent Transactions");
+    }
+
+    XLSX.writeFile(wb, `Accounts_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
   const KPIStoreCard = ({ title, value, subtitle, icon: Icon, color, subColor }) => (

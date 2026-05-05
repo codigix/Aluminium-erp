@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import * as XLSX from 'xlsx';
 import { Card, DataTable, StatusBadge, Button } from '../components/ui.jsx';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
@@ -46,6 +47,68 @@ const InventoryReport = () => {
     }
   };
 
+  const handleExport = () => {
+    if (!stats) return;
+
+    const wb = XLSX.utils.book_new();
+
+    // 1. Inventory Summary
+    const summaryData = [
+      { Metric: 'Total Items', Value: stats.kpis?.totalItems || 0 },
+      { Metric: 'Total Stock Value', Value: stats.kpis?.totalValue || 0 },
+      { Metric: 'Low Stock Items', Value: stats.kpis?.lowStockItems || 0 },
+      { Metric: 'Out of Stock Items', Value: stats.kpis?.outOfStockItems || 0 },
+      { Metric: 'Active Warehouses', Value: stats.kpis?.activeWarehouses || 0 }
+    ];
+    const wsSummary = XLSX.utils.json_to_sheet(summaryData);
+    XLSX.utils.book_append_sheet(wb, wsSummary, "Inventory Summary");
+
+    // 2. Stock by Warehouse
+    if (stats.stockByWarehouse) {
+      const warehouseData = stats.stockByWarehouse.map(w => ({
+        'Warehouse': w.name,
+        'Total Items': w.totalItems,
+        'Stock Value': w.stockValue,
+        'Low Stock': w.lowStock,
+        'Out of Stock': w.outOfStock,
+        'Status': w.status
+      }));
+      const wsWarehouse = XLSX.utils.json_to_sheet(warehouseData);
+      XLSX.utils.book_append_sheet(wb, wsWarehouse, "Stock by Warehouse");
+    }
+
+    // 3. Top Low Stock Items
+    if (stats.lowStockItems) {
+      const lowStockData = stats.lowStockItems.map(item => ({
+        'Item Code': item.code,
+        'Item Name': item.name,
+        'Current Stock': item.currentStock,
+        'Min Required': item.minRequired,
+        'Warehouse': item.warehouse
+      }));
+      const wsLowStock = XLSX.utils.json_to_sheet(lowStockData);
+      XLSX.utils.book_append_sheet(wb, wsLowStock, "Low Stock Items");
+    }
+
+    // 4. Recent Stock Movements
+    if (stats.recentMovements) {
+      const movementsData = stats.recentMovements.map(m => ({
+        'Date / Time': m.timestamp,
+        'Item Code': m.itemCode,
+        'Item Name': m.itemName,
+        'Transaction Type': m.type,
+        'Reference': m.reference,
+        'Quantity': m.quantity,
+        'Balance': m.balance,
+        'Warehouse': m.warehouse
+      }));
+      const wsMovements = XLSX.utils.json_to_sheet(movementsData);
+      XLSX.utils.book_append_sheet(wb, wsMovements, "Recent Movements");
+    }
+
+    XLSX.writeFile(wb, `Inventory_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
   const KPIStoreCard = ({ title, value, subtitle, icon: Icon, color, subColor }) => (
     <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm flex items-center gap-4 relative overflow-hidden group">
       <div className={`absolute top-0 right-0 w-16 h-16 ${subColor} opacity-10 rounded -mr-6 -mt-6 transition-transform group-hover:scale-110`} />
@@ -88,7 +151,10 @@ const InventoryReport = () => {
           <select className="bg-white border border-slate-200 rounded-lg px-3 py-2 text-[11px] font-bold text-slate-600 outline-none">
             <option>All Warehouses</option>
           </select>
-          <button className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all flex items-center gap-2 shadow-lg shadow-indigo-100">
+          <button 
+            onClick={handleExport}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all flex items-center gap-2 shadow-lg shadow-indigo-100"
+          >
             <Download className="w-4 h-4" />
             Export Report
           </button>
