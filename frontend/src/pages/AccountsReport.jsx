@@ -149,11 +149,29 @@ const AccountsReport = () => {
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg text-[11px] font-bold text-slate-600">
              <Calendar className="w-4 h-4 text-slate-400" />
-             01 Apr 2026 - 05 May 2026
-             <ChevronRight className="w-3 h-3 text-slate-400 rotate-90" />
+             <input 
+               type="date" 
+               value={dateRange.start} 
+               onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
+               className="bg-transparent border-none outline-none cursor-pointer"
+             />
+             <span className="text-slate-300 mx-1">—</span>
+             <input 
+               type="date" 
+               value={dateRange.end} 
+               onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
+               className="bg-transparent border-none outline-none cursor-pointer"
+             />
           </div>
-          <select className="bg-white border border-slate-200 rounded-lg px-3 py-2 text-[11px] font-bold text-slate-600 outline-none">
-            <option>All Customers</option>
+          <select 
+            value={selectedCustomer}
+            onChange={(e) => setSelectedCustomer(e.target.value)}
+            className="bg-white border border-slate-200 rounded-lg px-3 py-2 text-[11px] font-bold text-slate-600 outline-none"
+          >
+            <option value="All">All Customers</option>
+            {stats.topCustomers?.map((customer, idx) => (
+              <option key={idx} value={customer.name}>{customer.name}</option>
+            ))}
           </select>
           <button 
             onClick={handleExport}

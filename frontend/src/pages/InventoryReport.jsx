@@ -195,8 +195,8 @@ const InventoryReport = () => {
             className="bg-white border border-slate-200 rounded-lg px-3 py-2 text-[11px] font-bold text-slate-600 outline-none"
           >
             <option value="All">All Warehouses</option>
-            {stats.warehouseStock?.map(warehouse => (
-              <option key={warehouse.id} value={warehouse.name}>{warehouse.name}</option>
+            {stats.stockByWarehouse?.map((warehouse, idx) => (
+              <option key={idx} value={warehouse.name}>{warehouse.name}</option>
             ))}
           </select>
           <button 

@@ -188,8 +188,8 @@ const ProcurementReport = () => {
             className="bg-white border border-slate-200 rounded-lg px-3 py-2 text-[11px] font-bold text-slate-600 outline-none"
           >
             <option value="All">All Suppliers</option>
-            {stats.vendorPerformance?.map(vendor => (
-              <option key={vendor.id} value={vendor.name}>{vendor.name}</option>
+            {stats.vendorPerformance?.map((vendor, idx) => (
+              <option key={idx} value={vendor.supplier}>{vendor.supplier}</option>
             ))}
           </select>
           <button 
