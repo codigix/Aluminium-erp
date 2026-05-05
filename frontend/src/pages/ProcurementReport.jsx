@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import * as XLSX from 'xlsx';
 import { Card, DataTable, StatusBadge, Button } from '../components/ui.jsx';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
@@ -17,16 +18,30 @@ const ProcurementReport = () => {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(new Date());
+  const [dateRange, setDateRange] = useState({
+    start: '2026-04-01',
+    end: new Date().toISOString().split('T')[0]
+  });
+  const [selectedSupplier, setSelectedSupplier] = useState('All');
+  const [summaryPage, setSummaryPage] = useState(1);
+  const [vendorsPage, setVendorsPage] = useState(1);
+  const itemsPerPage = 2;
+  const itemsPerSmallPage = 3;
 
   useEffect(() => {
     fetchProcurementReport();
-  }, []);
+    setSummaryPage(1);
+    setVendorsPage(1);
+  }, [dateRange, selectedSupplier]);
 
   const fetchProcurementReport = async () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/dashboard/procurement-report`, {
+      let url = `${API_BASE}/dashboard/procurement-report?start=${dateRange.start}&end=${dateRange.end}`;
+      if (selectedSupplier !== 'All') url += `&supplier=${selectedSupplier}`;
+
+      const response = await fetch(url, {
         headers: { 
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -42,6 +57,81 @@ const ProcurementReport = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const paginatedSummary = useMemo(() => {
+    if (!stats?.summaryTable) return [];
+    const startIndex = (summaryPage - 1) * itemsPerPage;
+    return stats.summaryTable.slice(startIndex, startIndex + itemsPerPage);
+  }, [stats?.summaryTable, summaryPage]);
+
+  const totalSummaryPages = Math.ceil((stats?.summaryTable?.length || 0) / itemsPerPage);
+
+  const paginatedVendors = useMemo(() => {
+    if (!stats?.vendorPerformance) return [];
+    const startIndex = (vendorsPage - 1) * itemsPerSmallPage;
+    return stats.vendorPerformance.slice(startIndex, startIndex + itemsPerSmallPage);
+  }, [stats?.vendorPerformance, vendorsPage]);
+
+  const totalVendorsPages = Math.ceil((stats?.vendorPerformance?.length || 0) / itemsPerSmallPage);
+
+  const handleExport = () => {
+    if (!stats) return;
+
+    const wb = XLSX.utils.book_new();
+
+    // 1. Procurement Summary
+    const summaryData = [
+      { Metric: 'Total RFQs', Value: stats.kpis?.totalRfqs || 0 },
+      { Metric: 'RFQs Sent', Value: stats.kpis?.sentRfqs || 0 },
+      { Metric: 'RFQs Received', Value: stats.kpis?.receivedRfqs || 0 },
+      { Metric: 'POs Created', Value: stats.kpis?.posCreated || 0 },
+      { Metric: 'Completed Orders', Value: stats.kpis?.completedOrders || 0 },
+      { Metric: 'Pending Orders', Value: stats.kpis?.pendingOrders || 0 }
+    ];
+    const wsSummary = XLSX.utils.json_to_sheet(summaryData);
+    XLSX.utils.book_append_sheet(wb, wsSummary, "Procurement Summary");
+
+    // 2. Vendor Performance
+    if (stats.vendorPerformance) {
+      const vendorData = stats.vendorPerformance.map(v => ({
+        'Vendor': v.name,
+        'Total Orders': v.totalOrders,
+        'Fulfillment %': v.fulfillment,
+        'Avg Rating': v.rating,
+        'Delay %': v.delay
+      }));
+      const wsVendors = XLSX.utils.json_to_sheet(vendorData);
+      XLSX.utils.book_append_sheet(wb, wsVendors, "Vendor Performance");
+    }
+
+    // 3. Recent Procurement Activity
+    if (stats.recentActivity) {
+      const activityData = stats.recentActivity.map(a => ({
+        'Activity': a.text,
+        'Time': a.time,
+        'Date': a.date
+      }));
+      const wsActivity = XLSX.utils.json_to_sheet(activityData);
+      XLSX.utils.book_append_sheet(wb, wsActivity, "Recent Activity");
+    }
+
+    // 4. Purchase Orders & Goods Receipts Summary
+    if (stats.poGrnSummary) {
+      const poGrnData = stats.poGrnSummary.map(item => ({
+        'PO Number': item.poNo,
+        'Supplier': item.supplier,
+        'Project / Customer': item.project,
+        'PO Date': item.poDate,
+        'PO Amount': item.amount,
+        'GRN Status': item.grnStatus,
+        'Status': item.status
+      }));
+      const wsPoGrn = XLSX.utils.json_to_sheet(poGrnData);
+      XLSX.utils.book_append_sheet(wb, wsPoGrn, "PO & GRN Summary");
+    }
+
+    XLSX.writeFile(wb, `Procurement_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
   const KPIStoreCard = ({ title, value, subtitle, icon: Icon, color, subColor }) => (
@@ -78,13 +168,34 @@ const ProcurementReport = () => {
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg text-[11px] font-bold text-slate-600">
              <Calendar className="w-4 h-4 text-slate-400" />
-             01 Apr 2026 - 05 May 2026
-             <ChevronRight className="w-3 h-3 text-slate-400 rotate-90" />
+             <input 
+               type="date" 
+               value={dateRange.start} 
+               onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
+               className="bg-transparent border-none outline-none cursor-pointer"
+             />
+             <span className="text-slate-300 mx-1">—</span>
+             <input 
+               type="date" 
+               value={dateRange.end} 
+               onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
+               className="bg-transparent border-none outline-none cursor-pointer"
+             />
           </div>
-          <select className="bg-white border border-slate-200 rounded-lg px-3 py-2 text-[11px] font-bold text-slate-600 outline-none">
-            <option>All Suppliers</option>
+          <select 
+            value={selectedSupplier}
+            onChange={(e) => setSelectedSupplier(e.target.value)}
+            className="bg-white border border-slate-200 rounded-lg px-3 py-2 text-[11px] font-bold text-slate-600 outline-none"
+          >
+            <option value="All">All Suppliers</option>
+            {stats.vendorPerformance?.map(vendor => (
+              <option key={vendor.id} value={vendor.name}>{vendor.name}</option>
+            ))}
           </select>
-          <button className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all flex items-center gap-2 shadow-lg shadow-indigo-100">
+          <button 
+            onClick={handleExport}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all flex items-center gap-2 shadow-lg shadow-indigo-100"
+          >
             <Download className="w-4 h-4" />
             Export Report
           </button>
@@ -198,7 +309,7 @@ const ProcurementReport = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {stats.vendorPerformance.map((vendor, idx) => (
+                {paginatedVendors.map((vendor, idx) => (
                   <tr key={idx} className="hover:bg-slate-50 transition-colors group">
                     <td className="py-4 text-xs font-black text-slate-900">{vendor.supplier}</td>
                     <td className="py-4 text-xs font-bold text-slate-600 text-center">{vendor.totalOrders}</td>
@@ -224,6 +335,29 @@ const ProcurementReport = () => {
               </tbody>
             </table>
           </div>
+          {totalVendorsPages > 1 && (
+            <div className="mt-4 flex items-center justify-between">
+              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                Page {vendorsPage} of {totalVendorsPages}
+              </p>
+              <div className="flex items-center gap-1">
+                <button 
+                  disabled={vendorsPage === 1}
+                  onClick={() => setVendorsPage(prev => prev - 1)}
+                  className="w-6 h-6 flex items-center justify-center rounded bg-slate-50 text-slate-400 hover:bg-slate-100 disabled:opacity-50"
+                >
+                  <ChevronRight className="w-3 h-3 rotate-180" />
+                </button>
+                <button 
+                  disabled={vendorsPage === totalVendorsPages}
+                  onClick={() => setVendorsPage(prev => prev + 1)}
+                  className="w-6 h-6 flex items-center justify-center rounded bg-slate-50 text-slate-400 hover:bg-slate-100 disabled:opacity-50"
+                >
+                  <ChevronRight className="w-3 h-3" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Recent Activity */}
@@ -282,7 +416,7 @@ const ProcurementReport = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {stats.summaryTable.map((row, idx) => (
+              {paginatedSummary.map((row, idx) => (
                 <tr key={idx} className="hover:bg-slate-50/50 transition-colors group text-xs">
                   <td className="px-6 py-4 font-black text-indigo-600">{row.poNumber}</td>
                   <td className="px-6 py-4">
@@ -321,16 +455,40 @@ const ProcurementReport = () => {
             </tbody>
           </table>
         </div>
-        <div className="px-6 py-4 border-t border-slate-50 bg-slate-50/20 flex items-center justify-between">
-           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-             Showing 1 to {stats.summaryTable.length} of {stats.summaryTable.length} entries
-           </p>
-           <div className="flex items-center gap-1">
-             <button className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 text-slate-400"><ChevronRight className="w-4 h-4 rotate-180" /></button>
-             <button className="w-8 h-8 flex items-center justify-center rounded-lg bg-indigo-600 text-white font-black text-xs">1</button>
-             <button className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 text-slate-400"><ChevronRight className="w-4 h-4" /></button>
-           </div>
-        </div>
+        {totalSummaryPages > 1 && (
+          <div className="px-6 py-4 border-t border-slate-50 bg-slate-50/20 flex items-center justify-between">
+             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+               Showing {(summaryPage - 1) * itemsPerPage + 1} to {Math.min(summaryPage * itemsPerPage, stats.summaryTable.length)} of {stats.summaryTable.length} entries
+             </p>
+             <div className="flex items-center gap-1">
+               <button 
+                 disabled={summaryPage === 1}
+                 onClick={() => setSummaryPage(prev => prev - 1)}
+                 className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:bg-white disabled:opacity-50"
+               >
+                 <ChevronRight className="w-4 h-4 rotate-180" />
+               </button>
+               {[...Array(totalSummaryPages)].map((_, i) => (
+                 <button 
+                   key={i}
+                   onClick={() => setSummaryPage(i + 1)}
+                   className={`w-8 h-8 flex items-center justify-center rounded-lg font-black text-xs transition-all ${
+                     summaryPage === i + 1 ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'border border-slate-200 text-slate-400 hover:bg-white'
+                   }`}
+                 >
+                   {i + 1}
+                 </button>
+               ))}
+               <button 
+                 disabled={summaryPage === totalSummaryPages}
+                 onClick={() => setSummaryPage(prev => prev + 1)}
+                 className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:bg-white disabled:opacity-50"
+               >
+                 <ChevronRight className="w-4 h-4" />
+               </button>
+             </div>
+          </div>
+        )}
       </div>
     </div>
   );

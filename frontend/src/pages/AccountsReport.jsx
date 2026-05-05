@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import { Card, DataTable, StatusBadge, Button } from '../components/ui.jsx';
 import { 
@@ -20,16 +20,24 @@ const AccountsReport = () => {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(new Date());
+  const [dateRange, setDateRange] = useState({
+    start: '2026-04-01',
+    end: new Date().toISOString().split('T')[0]
+  });
+  const [selectedCustomer, setSelectedCustomer] = useState('All');
 
   useEffect(() => {
     fetchAccountsReport();
-  }, []);
+  }, [dateRange, selectedCustomer]);
 
   const fetchAccountsReport = async () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/dashboard/accounts-report`, {
+      let url = `${API_BASE}/dashboard/accounts-report?start=${dateRange.start}&end=${dateRange.end}`;
+      if (selectedCustomer !== 'All') url += `&customer=${selectedCustomer}`;
+
+      const response = await fetch(url, {
         headers: { 
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -147,7 +155,10 @@ const AccountsReport = () => {
           <select className="bg-white border border-slate-200 rounded-lg px-3 py-2 text-[11px] font-bold text-slate-600 outline-none">
             <option>All Customers</option>
           </select>
-          <button className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all flex items-center gap-2 shadow-lg shadow-indigo-100">
+          <button 
+            onClick={handleExport}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all flex items-center gap-2 shadow-lg shadow-indigo-100"
+          >
             <Download className="w-4 h-4" />
             Export Report
           </button>

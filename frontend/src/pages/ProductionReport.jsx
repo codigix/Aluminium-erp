@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import * as XLSX from 'xlsx';
 import { Card, DataTable, StatusBadge, Button } from '../components/ui.jsx';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
@@ -18,16 +19,30 @@ const ProductionReport = () => {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(new Date());
+  const [dateRange, setDateRange] = useState({
+    start: '2026-04-01',
+    end: new Date().toISOString().split('T')[0]
+  });
+  const [selectedProject, setSelectedProject] = useState('All');
+  const [summaryPage, setSummaryPage] = useState(1);
+  const [projectsPage, setProjectsPage] = useState(1);
+  const itemsPerPage = 2;
+  const itemsPerSmallPage = 3;
 
   useEffect(() => {
     fetchProductionReport();
-  }, []);
+    setSummaryPage(1);
+    setProjectsPage(1);
+  }, [dateRange, selectedProject]);
 
   const fetchProductionReport = async () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/dashboard/production-report`, {
+      let url = `${API_BASE}/dashboard/production-report?start=${dateRange.start}&end=${dateRange.end}`;
+      if (selectedProject !== 'All') url += `&project=${selectedProject}`;
+
+      const response = await fetch(url, {
         headers: { 
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -43,6 +58,94 @@ const ProductionReport = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const paginatedSummary = useMemo(() => {
+    if (!stats?.summaryTable) return [];
+    const startIndex = (summaryPage - 1) * itemsPerPage;
+    return stats.summaryTable.slice(startIndex, startIndex + itemsPerPage);
+  }, [stats?.summaryTable, summaryPage]);
+
+  const totalSummaryPages = Math.ceil((stats?.summaryTable?.length || 0) / itemsPerPage);
+
+  const paginatedProjects = useMemo(() => {
+    if (!stats?.topProjects) return [];
+    const startIndex = (projectsPage - 1) * itemsPerSmallPage;
+    return stats.topProjects.slice(startIndex, startIndex + itemsPerSmallPage);
+  }, [stats?.topProjects, projectsPage]);
+
+  const totalProjectsPages = Math.ceil((stats?.topProjects?.length || 0) / itemsPerSmallPage);
+
+  const handleExport = () => {
+    if (!stats) return;
+
+    const wb = XLSX.utils.book_new();
+
+    // 1. Production Summary
+    const summaryData = [
+      { Metric: 'Total Work Orders', Value: stats.kpis?.totalWorkOrders || 0 },
+      { Metric: 'In Progress', Value: stats.kpis?.inProgress || 0 },
+      { Metric: 'Completed', Value: stats.kpis?.completed || 0 },
+      { Metric: 'Planned Qty', Value: stats.kpis?.plannedQty || 0 },
+      { Metric: 'Produced Qty', Value: stats.kpis?.producedQty || 0 },
+      { Metric: 'Overall Efficiency %', Value: stats.kpis?.overallEfficiency || 0 }
+    ];
+    const wsSummary = XLSX.utils.json_to_sheet(summaryData);
+    XLSX.utils.book_append_sheet(wb, wsSummary, "Production Summary");
+
+    // 2. Operation Efficiency
+    if (stats.operationEfficiency) {
+      const operationData = stats.operationEfficiency.map(op => ({
+        'Operation': op.name,
+        'Efficiency %': op.efficiency,
+        'Status': op.status
+      }));
+      const wsOperations = XLSX.utils.json_to_sheet(operationData);
+      XLSX.utils.book_append_sheet(wb, wsOperations, "Operation Efficiency");
+    }
+
+    // 3. Top Projects by Production
+    if (stats.topProjects) {
+      const projectData = stats.topProjects.map(p => ({
+        'Project / Client': p.name,
+        'Planned Qty': p.planned,
+        'Produced Qty': p.produced,
+        'Efficiency %': p.efficiency
+      }));
+      const wsProjects = XLSX.utils.json_to_sheet(projectData);
+      XLSX.utils.book_append_sheet(wb, wsProjects, "Top Projects");
+    }
+
+    // 4. Recent Production Activity
+    if (stats.recentActivity) {
+      const activityData = stats.recentActivity.map(a => ({
+        'Activity': a.text,
+        'Time': a.time,
+        'Date': a.date
+      }));
+      const wsActivity = XLSX.utils.json_to_sheet(activityData);
+      XLSX.utils.book_append_sheet(wb, wsActivity, "Recent Activity");
+    }
+
+    // 5. Work Orders Summary
+    if (stats.workOrdersSummary) {
+      const woSummaryData = stats.workOrdersSummary.map(wo => ({
+        'Work Order ID': wo.woNo,
+        'Project / Client': wo.project,
+        'Operation': wo.operation,
+        'Item To Manufacture': wo.item,
+        'Planned Qty': wo.planned,
+        'Produced Qty': wo.produced,
+        'Progress %': wo.progress,
+        'Status': wo.status,
+        'Start Date': wo.startDate,
+        'Due Date': wo.dueDate
+      }));
+      const wsWO = XLSX.utils.json_to_sheet(woSummaryData);
+      XLSX.utils.book_append_sheet(wb, wsWO, "Work Orders Summary");
+    }
+
+    XLSX.writeFile(wb, `Production_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
   const KPIStoreCard = ({ title, value, subtitle, icon: Icon, color, subColor }) => (
@@ -87,7 +190,10 @@ const ProductionReport = () => {
           <select className="bg-white border border-slate-200 rounded-lg px-3 py-2 text-[11px] font-bold text-slate-600 outline-none">
             <option>All Projects</option>
           </select>
-          <button className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all flex items-center gap-2 shadow-lg shadow-indigo-100">
+          <button 
+            onClick={handleExport}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all flex items-center gap-2 shadow-lg shadow-indigo-100"
+          >
             <Download className="w-4 h-4" />
             Export Report
           </button>
@@ -242,7 +348,7 @@ const ProductionReport = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {stats.topProjects.map((project, idx) => (
+                {paginatedProjects.map((project, idx) => (
                   <tr key={idx} className="hover:bg-slate-50 transition-colors group">
                     <td className="py-4 pr-2">
                       <p className="text-xs font-black text-slate-900">{project.name}</p>
@@ -260,6 +366,29 @@ const ProductionReport = () => {
               </tbody>
             </table>
           </div>
+          {totalProjectsPages > 1 && (
+            <div className="mt-4 flex items-center justify-between">
+              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                Page {projectsPage} of {totalProjectsPages}
+              </p>
+              <div className="flex items-center gap-1">
+                <button 
+                  disabled={projectsPage === 1}
+                  onClick={() => setProjectsPage(prev => prev - 1)}
+                  className="w-6 h-6 flex items-center justify-center rounded bg-slate-50 text-slate-400 hover:bg-slate-100 disabled:opacity-50"
+                >
+                  <ChevronRight className="w-3 h-3 rotate-180" />
+                </button>
+                <button 
+                  disabled={projectsPage === totalProjectsPages}
+                  onClick={() => setProjectsPage(prev => prev + 1)}
+                  className="w-6 h-6 flex items-center justify-center rounded bg-slate-50 text-slate-400 hover:bg-slate-100 disabled:opacity-50"
+                >
+                  <ChevronRight className="w-3 h-3" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Recent Production Activity */}
@@ -331,7 +460,7 @@ const ProductionReport = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {stats.summaryTable.map((row, idx) => (
+              {paginatedSummary.map((row, idx) => (
                 <tr key={idx} className="hover:bg-slate-50/50 transition-colors group text-xs">
                   <td className="px-6 py-4 font-black text-indigo-600">{row.woNumber}</td>
                   <td className="px-6 py-4">
@@ -378,16 +507,40 @@ const ProductionReport = () => {
             </tbody>
           </table>
         </div>
-        <div className="px-6 py-4 border-t border-slate-50 bg-slate-50/20 flex items-center justify-between">
-           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-             Showing 1 to {stats.summaryTable.length} of {stats.summaryTable.length} entries
-           </p>
-           <div className="flex items-center gap-1">
-             <button className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 text-slate-400"><ChevronRight className="w-4 h-4 rotate-180" /></button>
-             <button className="w-8 h-8 flex items-center justify-center rounded-lg bg-indigo-600 text-white font-black text-xs">1</button>
-             <button className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 text-slate-400"><ChevronRight className="w-4 h-4" /></button>
-           </div>
-        </div>
+        {totalSummaryPages > 1 && (
+          <div className="px-6 py-4 border-t border-slate-50 bg-slate-50/20 flex items-center justify-between">
+             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+               Showing {(summaryPage - 1) * itemsPerPage + 1} to {Math.min(summaryPage * itemsPerPage, stats.summaryTable.length)} of {stats.summaryTable.length} entries
+             </p>
+             <div className="flex items-center gap-1">
+               <button 
+                 disabled={summaryPage === 1}
+                 onClick={() => setSummaryPage(prev => prev - 1)}
+                 className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:bg-white disabled:opacity-50"
+               >
+                 <ChevronRight className="w-4 h-4 rotate-180" />
+               </button>
+               {[...Array(totalSummaryPages)].map((_, i) => (
+                 <button 
+                   key={i}
+                   onClick={() => setSummaryPage(i + 1)}
+                   className={`w-8 h-8 flex items-center justify-center rounded-lg font-black text-xs transition-all ${
+                     summaryPage === i + 1 ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'border border-slate-200 text-slate-400 hover:bg-white'
+                   }`}
+                 >
+                   {i + 1}
+                 </button>
+               ))}
+               <button 
+                 disabled={summaryPage === totalSummaryPages}
+                 onClick={() => setSummaryPage(prev => prev + 1)}
+                 className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:bg-white disabled:opacity-50"
+               >
+                 <ChevronRight className="w-4 h-4" />
+               </button>
+             </div>
+          </div>
+        )}
       </div>
     </div>
   );

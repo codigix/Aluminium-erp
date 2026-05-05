@@ -28,7 +28,7 @@ const SalesReport = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [approvedPage, setApprovedPage] = useState(1);
   const [clientsPage, setClientsPage] = useState(1);
-  const itemsPerPage = 3;
+  const itemsPerPage = 2;
   const itemsPerSmallPage = 3;
 
   useEffect(() => {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import { Card, DataTable, StatusBadge, Button } from '../components/ui.jsx';
 import { 
@@ -20,16 +20,30 @@ const InventoryReport = () => {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(new Date());
+  const [dateRange, setDateRange] = useState({
+    start: '2026-04-01',
+    end: new Date().toISOString().split('T')[0]
+  });
+  const [selectedWarehouse, setSelectedWarehouse] = useState('All');
+  const [movementsPage, setMovementsPage] = useState(1);
+  const [lowStockPage, setLowStockPage] = useState(1);
+  const itemsPerPage = 3;
+  const itemsPerSmallPage = 3;
 
   useEffect(() => {
     fetchInventoryReport();
-  }, []);
+    setMovementsPage(1);
+    setLowStockPage(1);
+  }, [dateRange, selectedWarehouse]);
 
   const fetchInventoryReport = async () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/dashboard/inventory-report`, {
+      let url = `${API_BASE}/dashboard/inventory-report?start=${dateRange.start}&end=${dateRange.end}`;
+      if (selectedWarehouse !== 'All') url += `&warehouse=${selectedWarehouse}`;
+
+      const response = await fetch(url, {
         headers: { 
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -46,6 +60,22 @@ const InventoryReport = () => {
       setLoading(false);
     }
   };
+
+  const paginatedMovements = useMemo(() => {
+    if (!stats?.recentMovements) return [];
+    const startIndex = (movementsPage - 1) * itemsPerPage;
+    return stats.recentMovements.slice(startIndex, startIndex + itemsPerPage);
+  }, [stats?.recentMovements, movementsPage]);
+
+  const totalMovementsPages = Math.ceil((stats?.recentMovements?.length || 0) / itemsPerPage);
+
+  const paginatedLowStock = useMemo(() => {
+    if (!stats?.lowStockItems) return [];
+    const startIndex = (lowStockPage - 1) * itemsPerSmallPage;
+    return stats.lowStockItems.slice(startIndex, startIndex + itemsPerSmallPage);
+  }, [stats?.lowStockItems, lowStockPage]);
+
+  const totalLowStockPages = Math.ceil((stats?.lowStockItems?.length || 0) / itemsPerSmallPage);
 
   const handleExport = () => {
     if (!stats) return;
@@ -145,11 +175,29 @@ const InventoryReport = () => {
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg text-[11px] font-bold text-slate-600">
              <Calendar className="w-4 h-4 text-slate-400" />
-             01 Apr 2026 - 05 May 2026
-             <ChevronRight className="w-3 h-3 text-slate-400 rotate-90" />
+             <input 
+               type="date" 
+               value={dateRange.start} 
+               onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
+               className="bg-transparent border-none outline-none cursor-pointer"
+             />
+             <span className="text-slate-300 mx-1">—</span>
+             <input 
+               type="date" 
+               value={dateRange.end} 
+               onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
+               className="bg-transparent border-none outline-none cursor-pointer"
+             />
           </div>
-          <select className="bg-white border border-slate-200 rounded-lg px-3 py-2 text-[11px] font-bold text-slate-600 outline-none">
-            <option>All Warehouses</option>
+          <select 
+            value={selectedWarehouse}
+            onChange={(e) => setSelectedWarehouse(e.target.value)}
+            className="bg-white border border-slate-200 rounded-lg px-3 py-2 text-[11px] font-bold text-slate-600 outline-none"
+          >
+            <option value="All">All Warehouses</option>
+            {stats.warehouseStock?.map(warehouse => (
+              <option key={warehouse.id} value={warehouse.name}>{warehouse.name}</option>
+            ))}
           </select>
           <button 
             onClick={handleExport}
@@ -338,7 +386,7 @@ const InventoryReport = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {stats.lowStockItems.map((item, idx) => (
+                {paginatedLowStock.map((item, idx) => (
                   <tr key={idx} className="hover:bg-slate-50 transition-colors group">
                     <td className="py-4 text-xs font-black text-indigo-600">{item.itemCode}</td>
                     <td className="py-4 text-xs font-bold text-slate-600">{item.itemName}</td>
@@ -349,6 +397,29 @@ const InventoryReport = () => {
               </tbody>
             </table>
           </div>
+          {totalLowStockPages > 1 && (
+            <div className="mt-4 flex items-center justify-between">
+              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                Page {lowStockPage} of {totalLowStockPages}
+              </p>
+              <div className="flex items-center gap-1">
+                <button 
+                  disabled={lowStockPage === 1}
+                  onClick={() => setLowStockPage(prev => prev - 1)}
+                  className="w-6 h-6 flex items-center justify-center rounded bg-slate-50 text-slate-400 hover:bg-slate-100 disabled:opacity-50"
+                >
+                  <ChevronRight className="w-3 h-3 rotate-180" />
+                </button>
+                <button 
+                  disabled={lowStockPage === totalLowStockPages}
+                  onClick={() => setLowStockPage(prev => prev + 1)}
+                  className="w-6 h-6 flex items-center justify-center rounded bg-slate-50 text-slate-400 hover:bg-slate-100 disabled:opacity-50"
+                >
+                  <ChevronRight className="w-3 h-3" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -375,7 +446,7 @@ const InventoryReport = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {stats.recentMovements.map((movement, idx) => (
+              {paginatedMovements.map((movement, idx) => (
                 <tr key={idx} className="hover:bg-slate-50/50 transition-colors group text-xs">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <p className="font-black text-slate-900">{new Date(movement.time).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
@@ -403,6 +474,40 @@ const InventoryReport = () => {
             </tbody>
           </table>
         </div>
+        {totalMovementsPages > 1 && (
+          <div className="px-6 py-4 border-t border-slate-50 bg-slate-50/20 flex items-center justify-between">
+             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+               Showing {(movementsPage - 1) * itemsPerPage + 1} to {Math.min(movementsPage * itemsPerPage, stats.recentMovements.length)} of {stats.recentMovements.length} entries
+             </p>
+             <div className="flex items-center gap-1">
+               <button 
+                 disabled={movementsPage === 1}
+                 onClick={() => setMovementsPage(prev => prev - 1)}
+                 className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:bg-white disabled:opacity-50"
+               >
+                 <ChevronRight className="w-4 h-4 rotate-180" />
+               </button>
+               {[...Array(totalMovementsPages)].map((_, i) => (
+                 <button 
+                   key={i}
+                   onClick={() => setMovementsPage(i + 1)}
+                   className={`w-8 h-8 flex items-center justify-center rounded-lg font-black text-xs transition-all ${
+                     movementsPage === i + 1 ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'border border-slate-200 text-slate-400 hover:bg-white'
+                   }`}
+                 >
+                   {i + 1}
+                 </button>
+               ))}
+               <button 
+                 disabled={movementsPage === totalMovementsPages}
+                 onClick={() => setMovementsPage(prev => prev + 1)}
+                 className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:bg-white disabled:opacity-50"
+               >
+                 <ChevronRight className="w-4 h-4" />
+               </button>
+             </div>
+          </div>
+        )}
       </div>
     </div>
   );

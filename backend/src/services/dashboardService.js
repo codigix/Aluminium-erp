@@ -614,7 +614,21 @@ const getShipmentDashboardStats = async () => {
   };
 };
 
-const getProcurementReportStats = async () => {
+const getProcurementReportStats = async (filters = {}) => {
+  const { start, end, supplier } = filters;
+  let dateFilter = '';
+  let params = [];
+
+  if (start && end) {
+    dateFilter = ' AND DATE(created_at) BETWEEN ? AND ?';
+    params = [start, end];
+  }
+
+  let supplierFilter = '';
+  if (supplier && supplier !== 'All' && supplier !== 'All Suppliers') {
+    supplierFilter = ' AND v.vendor_name = ?';
+  }
+
   // 1. KPI Stats
   const [[rfqStats]] = await pool.query(`
     SELECT 
@@ -622,19 +636,31 @@ const getProcurementReportStats = async () => {
       SUM(CASE WHEN status = 'SENT' THEN 1 ELSE 0 END) as sentRfqs,
       SUM(CASE WHEN status = 'RECEIVED' THEN 1 ELSE 0 END) as receivedRfqs
     FROM procurement_rfqs
-  `);
+    WHERE 1=1 ${dateFilter}
+  `, params);
 
   const [[poStats]] = await pool.query(`
     SELECT 
       COUNT(*) as totalPos,
-      SUM(CASE WHEN status IN ('COMPLETED', 'FULFILLED', 'PAID') THEN 1 ELSE 0 END) as completedOrders,
-      SUM(CASE WHEN status NOT IN ('COMPLETED', 'FULFILLED', 'PAID', 'DRAFT') THEN 1 ELSE 0 END) as pendingOrders
-    FROM purchase_orders
-    WHERE status != 'DRAFT'
-  `);
+      SUM(CASE WHEN po.status IN ('COMPLETED', 'FULFILLED', 'PAID') THEN 1 ELSE 0 END) as completedOrders,
+      SUM(CASE WHEN po.status NOT IN ('COMPLETED', 'FULFILLED', 'PAID', 'DRAFT') THEN 1 ELSE 0 END) as pendingOrders
+    FROM purchase_orders po
+    JOIN vendors v ON po.vendor_id = v.id
+    WHERE po.status != 'DRAFT'
+    ${dateFilter.replace('created_at', 'po.created_at')}
+    ${supplierFilter}
+  `, [...params, ...(supplier && supplier !== 'All' && supplier !== 'All Suppliers' ? [supplier] : [])]);
 
   // 2. Funnel Data
-  const [[grnStats]] = await pool.query(`SELECT COUNT(*) as completedGrns FROM grns WHERE status = 'APPROVED'`);
+  const [[grnStats]] = await pool.query(`
+    SELECT COUNT(*) as completedGrns 
+    FROM grns g
+    JOIN purchase_orders po ON g.po_number = po.po_number
+    JOIN vendors v ON po.vendor_id = v.id
+    WHERE g.status = 'APPROVED'
+    ${dateFilter.replace('created_at', 'g.created_at')}
+    ${supplierFilter}
+  `, [...params, ...(supplier && supplier !== 'All' && supplier !== 'All Suppliers' ? [supplier] : [])]);
   
   const funnelData = [
     { name: 'RFQ Created', value: rfqStats.totalRfqs || 0, color: '#6366f1' },
@@ -720,8 +746,11 @@ const getProcurementReportStats = async () => {
     FROM purchase_orders po
     JOIN vendors v ON po.vendor_id = v.id
     LEFT JOIN sales_orders so ON po.sales_order_id = so.id
+    WHERE 1=1
+    ${dateFilter.replace('created_at', 'po.created_at')}
+    ${supplierFilter}
     ORDER BY po.created_at DESC LIMIT 10
-  `);
+  `, [...params, ...(supplier && supplier !== 'All' && supplier !== 'All Suppliers' ? [supplier] : [])]);
 
   return {
     kpis: {
@@ -741,24 +770,44 @@ const getProcurementReportStats = async () => {
   };
 };
 
-const getProductionReportStats = async () => {
+const getProductionReportStats = async (filters = {}) => {
+  const { start, end, project } = filters;
+  let dateFilter = '';
+  let params = [];
+
+  if (start && end) {
+    dateFilter = ' AND DATE(created_at) BETWEEN ? AND ?';
+    params = [start, end];
+  }
+
+  let projectFilter = '';
+  if (project && project !== 'All' && project !== 'All Projects') {
+    projectFilter = ' AND so.project_name = ?';
+  }
+
   // 1. KPI Stats
   const [[woStats]] = await pool.query(`
     SELECT 
       COUNT(*) as totalWorkOrders,
-      SUM(CASE WHEN status = 'IN_PROGRESS' THEN 1 ELSE 0 END) as inProgress,
-      SUM(CASE WHEN status = 'COMPLETED' THEN 1 ELSE 0 END) as completed,
-      COALESCE(SUM(quantity), 0) as plannedQty
-    FROM work_orders
-    WHERE status != 'CANCELLED'
-  `);
+      SUM(CASE WHEN wo.status = 'IN_PROGRESS' THEN 1 ELSE 0 END) as inProgress,
+      SUM(CASE WHEN wo.status = 'COMPLETED' THEN 1 ELSE 0 END) as completed,
+      COALESCE(SUM(wo.quantity), 0) as plannedQty
+    FROM work_orders wo
+    LEFT JOIN sales_orders so ON wo.sales_order_id = so.id
+    WHERE wo.status != 'CANCELLED'
+    ${dateFilter.replace('created_at', 'wo.created_at')}
+    ${projectFilter}
+  `, [...params, ...(project && project !== 'All' && project !== 'All Projects' ? [project] : [])]);
 
-  // Simple produced qty calculation (taking 100% of completed orders)
+  // Produced qty calculation
   const [[producedStats]] = await pool.query(`
-    SELECT COALESCE(SUM(quantity), 0) as producedQty 
-    FROM work_orders 
-    WHERE status = 'COMPLETED'
-  `);
+    SELECT COALESCE(SUM(wo.quantity), 0) as producedQty 
+    FROM work_orders wo
+    LEFT JOIN sales_orders so ON wo.sales_order_id = so.id
+    WHERE wo.status = 'COMPLETED'
+    ${dateFilter.replace('created_at', 'wo.created_at')}
+    ${projectFilter}
+  `, [...params, ...(project && project !== 'All' && project !== 'All Projects' ? [project] : [])]);
 
   const totalWO = woStats.totalWorkOrders || 1;
   const inProgressPercent = Math.round(((woStats.inProgress || 0) / totalWO) * 100);
@@ -821,10 +870,13 @@ const getProductionReportStats = async () => {
     FROM work_orders wo
     JOIN sales_orders so ON wo.sales_order_id = so.id
     JOIN companies c ON so.company_id = c.id
+    WHERE 1=1
+    ${dateFilter.replace('created_at', 'wo.created_at')}
+    ${projectFilter}
     GROUP BY so.id
     ORDER BY produced DESC
     LIMIT 3
-  `);
+  `, [...params, ...(project && project !== 'All' && project !== 'All Projects' ? [project] : [])]);
 
   const topProjectsFormatted = topProjects.map(p => ({
     ...p,
@@ -834,14 +886,18 @@ const getProductionReportStats = async () => {
   // 6. Recent Activity
   const [recentActivity] = await pool.query(`
     SELECT 
-      wo_number as wo,
-      status as type,
-      COALESCE((SELECT operation_name FROM operations WHERE workstation_id = work_orders.workstation_id LIMIT 1), 'General') as operation,
-      updated_at as time
-    FROM work_orders
-    ORDER BY updated_at DESC
+      wo.wo_number as wo,
+      wo.status as type,
+      COALESCE((SELECT operation_name FROM operations WHERE workstation_id = wo.workstation_id LIMIT 1), 'General') as operation,
+      wo.updated_at as time
+    FROM work_orders wo
+    LEFT JOIN sales_orders so ON wo.sales_order_id = so.id
+    WHERE 1=1
+    ${dateFilter.replace('created_at', 'wo.created_at')}
+    ${projectFilter}
+    ORDER BY wo.updated_at DESC
     LIMIT 4
-  `);
+  `, [...params, ...(project && project !== 'All' && project !== 'All Projects' ? [project] : [])]);
 
   // 7. Summary Table
   const [summaryTable] = await pool.query(`
@@ -861,9 +917,12 @@ const getProductionReportStats = async () => {
     FROM work_orders wo
     JOIN sales_orders so ON wo.sales_order_id = so.id
     JOIN companies c ON so.company_id = c.id
+    WHERE 1=1
+    ${dateFilter.replace('created_at', 'wo.created_at')}
+    ${projectFilter}
     ORDER BY wo.created_at DESC
     LIMIT 10
-  `);
+  `, [...params, ...(project && project !== 'All' && project !== 'All Projects' ? [project] : [])]);
 
   return {
     kpis: {
@@ -885,7 +944,21 @@ const getProductionReportStats = async () => {
   };
 };
 
-const getInventoryReportStats = async () => {
+const getInventoryReportStats = async (filters = {}) => {
+  const { start, end, warehouse } = filters;
+  let dateFilter = '';
+  let params = [];
+
+  if (start && end) {
+    dateFilter = ' AND DATE(created_at) BETWEEN ? AND ?';
+    params = [start, end];
+  }
+
+  let warehouseFilter = '';
+  if (warehouse && warehouse !== 'All' && warehouse !== 'All Warehouses') {
+    warehouseFilter = ' AND warehouse = ?';
+  }
+
   // 1. KPI Stats
   const [[itemCount]] = await pool.query('SELECT COUNT(*) as total FROM items');
   const [[valueStats]] = await pool.query(`
@@ -894,7 +967,8 @@ const getInventoryReportStats = async () => {
       SUM(CASE WHEN current_balance > 0 AND current_balance < 10 THEN 1 ELSE 0 END) as lowStockCount,
       SUM(CASE WHEN current_balance <= 0 THEN 1 ELSE 0 END) as outOfStockCount
     FROM stock_balance
-  `);
+    WHERE 1=1 ${warehouseFilter}
+  `, warehouse && warehouse !== 'All' && warehouse !== 'All Warehouses' ? [warehouse] : []);
   const [[warehouseCount]] = await pool.query("SELECT COUNT(*) as total FROM warehouses WHERE status = 'ACTIVE'");
 
   // 2. Category Distribution
@@ -903,10 +977,11 @@ const getInventoryReportStats = async () => {
       COALESCE(material_type, 'Uncategorized') as name,
       SUM(current_balance * valuation_rate) as value
     FROM stock_balance
+    WHERE 1=1 ${warehouseFilter}
     GROUP BY material_type
     HAVING value > 0
     ORDER BY value DESC
-  `);
+  `, warehouse && warehouse !== 'All' && warehouse !== 'All Warehouses' ? [warehouse] : []);
 
   const totalVal = parseFloat(valueStats.totalValue) || 1;
   const categoryDistribution = categoryData.map(c => ({
@@ -922,7 +997,8 @@ const getInventoryReportStats = async () => {
       SUM(CASE WHEN current_balance > 0 AND current_balance < 10 THEN 1 ELSE 0 END) as lowStock,
       SUM(CASE WHEN current_balance <= 0 THEN 1 ELSE 0 END) as outOfStock
     FROM stock_balance
-  `);
+    WHERE 1=1 ${warehouseFilter}
+  `, warehouse && warehouse !== 'All' && warehouse !== 'All Warehouses' ? [warehouse] : []);
 
   const statusSummary = [
     { name: 'Available', value: statusStats.available || 0 },
@@ -930,11 +1006,11 @@ const getInventoryReportStats = async () => {
     { name: 'Out of Stock', value: statusStats.outOfStock || 0 }
   ];
 
-  // 4. Stock Trend (Last 7 Days - mockup using ledger entries)
+  // 4. Stock Trend (Last 7 Days)
   const [stockTrend] = await pool.query(`
     SELECT 
       DATE_FORMAT(date_list.date, '%d %b') as name,
-      COALESCE((SELECT SUM(balance_after * valuation_rate) FROM stock_ledger sl WHERE DATE(sl.transaction_date) <= date_list.date ORDER BY sl.transaction_date DESC LIMIT 1), 0) as value
+      COALESCE((SELECT SUM(balance_after * valuation_rate) FROM stock_ledger sl WHERE DATE(sl.transaction_date) <= date_list.date ${warehouseFilter.replace('warehouse', 'sl.warehouse')} ORDER BY sl.transaction_date DESC LIMIT 1), 0) as value
     FROM (
       SELECT CURRENT_DATE - INTERVAL 6 DAY as date UNION ALL
       SELECT CURRENT_DATE - INTERVAL 5 DAY UNION ALL
@@ -946,7 +1022,7 @@ const getInventoryReportStats = async () => {
     ) date_list
     GROUP BY date_list.date
     ORDER BY date_list.date ASC
-  `);
+  `, warehouse && warehouse !== 'All' && warehouse !== 'All Warehouses' ? [warehouse] : []);
 
   // 5. Warehouse Stock
   const [warehouseStock] = await pool.query(`
@@ -957,9 +1033,10 @@ const getInventoryReportStats = async () => {
       SUM(CASE WHEN current_balance > 0 AND current_balance < 10 THEN 1 ELSE 0 END) as lowStock,
       SUM(CASE WHEN current_balance <= 0 THEN 1 ELSE 0 END) as outOfStock
     FROM stock_balance
+    WHERE 1=1 ${warehouseFilter}
     GROUP BY warehouse
     HAVING name IS NOT NULL
-  `);
+  `, warehouse && warehouse !== 'All' && warehouse !== 'All Warehouses' ? [warehouse] : []);
 
   // 6. Top Low Stock Items
   const [lowStockItems] = await pool.query(`
@@ -968,12 +1045,14 @@ const getInventoryReportStats = async () => {
       material_name as itemName,
       current_balance as currentStock,
       10 as minRequired,
-      unit as uom
+      unit as uom,
+      warehouse
     FROM stock_balance
     WHERE current_balance > 0 AND current_balance < 10
+    ${warehouseFilter}
     ORDER BY current_balance ASC
     LIMIT 5
-  `);
+  `, warehouse && warehouse !== 'All' && warehouse !== 'All Warehouses' ? [warehouse] : []);
 
   // 7. Recent Movements
   const [recentMovements] = await pool.query(`
@@ -988,9 +1067,12 @@ const getInventoryReportStats = async () => {
       warehouse,
       unit as uom
     FROM stock_ledger
+    WHERE 1=1
+    ${dateFilter.replace('created_at', 'transaction_date')}
+    ${warehouseFilter}
     ORDER BY transaction_date DESC
     LIMIT 10
-  `);
+  `, [...params, ...(warehouse && warehouse !== 'All' && warehouse !== 'All Warehouses' ? [warehouse] : [])]);
 
   return {
     kpis: {
@@ -1009,49 +1091,78 @@ const getInventoryReportStats = async () => {
   };
 };
 
-const getAccountsReportStats = async () => {
+const getAccountsReportStats = async (filters = {}) => {
+  const { start, end, customer } = filters;
+  let dateFilter = '';
+  let params = [];
+
+  if (start && end) {
+    dateFilter = ' AND DATE(created_at) BETWEEN ? AND ?';
+    params = [start, end];
+  }
+
+  let customerFilter = '';
+  if (customer && customer !== 'All' && customer !== 'All Customers') {
+    customerFilter = ' AND c.company_name = ?';
+  }
+
   // 1. KPI Stats
   // Receivables from Sales Orders (not fully paid)
   const [[receivableStats]] = await pool.query(`
     SELECT 
-      COALESCE(SUM(net_total), 0) as totalReceivables,
-      COUNT(DISTINCT company_id) as receivableCustomers
-    FROM sales_orders 
-    WHERE status NOT IN ('DRAFT', 'CANCELLED', 'CLOSED')
-  `);
+      COALESCE(SUM(so.net_total), 0) as totalReceivables,
+      COUNT(DISTINCT so.company_id) as receivableCustomers
+    FROM sales_orders so
+    JOIN companies c ON so.company_id = c.id
+    WHERE so.status NOT IN ('DRAFT', 'CANCELLED', 'CLOSED')
+    ${dateFilter.replace('created_at', 'so.created_at')}
+    ${customerFilter}
+  `, [...params, ...(customer && customer !== 'All' && customer !== 'All Customers' ? [customer] : [])]);
 
   // Payables from Purchase Orders (not fully paid)
   const [[payableStats]] = await pool.query(`
     SELECT 
-      COALESCE(SUM(total_amount), 0) as totalPayables,
-      COUNT(DISTINCT vendor_id) as payableVendors
-    FROM purchase_orders 
-    WHERE status NOT IN ('DRAFT', 'CANCELLED', 'PAID')
-  `);
+      COALESCE(SUM(po.total_amount), 0) as totalPayables,
+      COUNT(DISTINCT po.vendor_id) as payableVendors
+    FROM purchase_orders po
+    JOIN vendors v ON po.vendor_id = v.id
+    WHERE po.status NOT IN ('DRAFT', 'CANCELLED', 'PAID')
+    ${dateFilter.replace('created_at', 'po.created_at')}
+    ${customerFilter.replace('c.company_name', 'v.vendor_name')}
+  `, [...params, ...(customer && customer !== 'All' && customer !== 'All Customers' ? [customer] : [])]);
 
   // Cash Received this month
   const [[cashReceivedStats]] = await pool.query(`
-    SELECT COALESCE(SUM(payment_amount), 0) as cashReceived
-    FROM customer_payments
-    WHERE status = 'CONFIRMED' AND payment_date >= DATE_FORMAT(CURRENT_DATE, '%Y-%m-01')
-  `);
+    SELECT COALESCE(SUM(cp.payment_amount), 0) as cashReceived
+    FROM customer_payments cp
+    JOIN companies c ON cp.customer_id = c.id
+    WHERE cp.status = 'CONFIRMED'
+    ${dateFilter.replace('created_at', 'cp.payment_date')}
+    ${customerFilter}
+  `, [...params, ...(customer && customer !== 'All' && customer !== 'All Customers' ? [customer] : [])]);
 
   // Invoices Sent (Sales Orders converted from DRAFT)
   const [[invoiceSentStats]] = await pool.query(`
     SELECT COUNT(*) as invoicesSent
-    FROM sales_orders
-    WHERE status != 'DRAFT' AND created_at >= DATE_FORMAT(CURRENT_DATE, '%Y-%m-01')
-  `);
+    FROM sales_orders so
+    JOIN companies c ON so.company_id = c.id
+    WHERE so.status != 'DRAFT'
+    ${dateFilter.replace('created_at', 'so.created_at')}
+    ${customerFilter}
+  `, [...params, ...(customer && customer !== 'All' && customer !== 'All Customers' ? [customer] : [])]);
 
   // Overdue Amount (Sales orders past due date)
-  // Assuming delivery_date or similar as due date for now, or just dummy overdue for UI
   const [[overdueStats]] = await pool.query(`
     SELECT 
-      COALESCE(SUM(net_total), 0) as overdueAmount,
+      COALESCE(SUM(so.net_total), 0) as overdueAmount,
       COUNT(*) as overdueInvoices
-    FROM sales_orders
-    WHERE status NOT IN ('DRAFT', 'CANCELLED', 'CLOSED') AND created_at < DATE_SUB(CURRENT_DATE, INTERVAL 30 DAY)
-  `);
+    FROM sales_orders so
+    JOIN companies c ON so.company_id = c.id
+    WHERE so.status NOT IN ('DRAFT', 'CANCELLED', 'CLOSED') 
+    AND so.created_at < DATE_SUB(CURRENT_DATE, INTERVAL 30 DAY)
+    ${dateFilter.replace('created_at', 'so.created_at')}
+    ${customerFilter}
+  `, [...params, ...(customer && customer !== 'All' && customer !== 'All Customers' ? [customer] : [])]);
 
   // 2. Receivables vs Payables (Comparison)
   const totalReceivables = parseFloat(receivableStats.totalReceivables) || 0;
@@ -1101,10 +1212,12 @@ const getAccountsReportStats = async () => {
     FROM sales_orders so
     JOIN companies c ON so.company_id = c.id
     WHERE so.status NOT IN ('DRAFT', 'CANCELLED', 'CLOSED')
+    ${dateFilter.replace('created_at', 'so.created_at')}
+    ${customerFilter}
     GROUP BY c.id
     ORDER BY outstanding DESC
     LIMIT 3
-  `);
+  `, [...params, ...(customer && customer !== 'All' && customer !== 'All Customers' ? [customer] : [])]);
 
   // 6. Top Vendors
   const [topVendors] = await pool.query(`
@@ -1117,48 +1230,60 @@ const getAccountsReportStats = async () => {
     FROM purchase_orders po
     JOIN vendors v ON po.vendor_id = v.id
     WHERE po.status NOT IN ('DRAFT', 'CANCELLED', 'PAID')
+    ${dateFilter.replace('created_at', 'po.created_at')}
+    ${customerFilter.replace('c.company_name', 'v.vendor_name')}
     GROUP BY v.id
     ORDER BY outstanding DESC
     LIMIT 3
-  `);
+  `, [...params, ...(customer && customer !== 'All' && customer !== 'All Customers' ? [customer] : [])]);
 
   // 7. Recent Transactions
   const [recentTransactions] = await pool.query(`
     (SELECT 
       'Payment Received' as type,
-      payment_receipt_no as reference,
-      (SELECT company_name FROM companies WHERE id = customer_id) as party,
-      payment_date as date,
+      cp.payment_receipt_no as reference,
+      c.company_name as party,
+      cp.payment_date as date,
       NULL as dueDate,
-      payment_amount as amount,
-      status
-    FROM customer_payments
-    ORDER BY payment_date DESC LIMIT 3)
+      cp.payment_amount as amount,
+      cp.status
+    FROM customer_payments cp
+    JOIN companies c ON cp.customer_id = c.id
+    WHERE 1=1 ${dateFilter.replace('created_at', 'cp.payment_date')} ${customerFilter}
+    ORDER BY cp.payment_date DESC LIMIT 3)
     UNION ALL
     (SELECT 
       'Vendor Payment' as type,
-      payment_voucher_no as reference,
-      (SELECT vendor_name FROM vendors WHERE id = vendor_id) as party,
-      payment_date as date,
+      p.payment_voucher_no as reference,
+      v.vendor_name as party,
+      p.payment_date as date,
       NULL as dueDate,
-      payment_amount as amount,
-      status
-    FROM payments
-    ORDER BY payment_date DESC LIMIT 3)
+      p.payment_amount as amount,
+      p.status
+    FROM payments p
+    JOIN vendors v ON p.vendor_id = v.id
+    WHERE 1=1 ${dateFilter.replace('created_at', 'p.payment_date')} ${customerFilter.replace('c.company_name', 'v.vendor_name')}
+    ORDER BY p.payment_date DESC LIMIT 3)
     UNION ALL
     (SELECT 
       'Vendor Invoice' as type,
-      po_number as reference,
-      (SELECT vendor_name FROM vendors WHERE id = vendor_id) as party,
-      created_at as date,
-      expected_delivery_date as dueDate,
-      total_amount as amount,
-      status
-    FROM purchase_orders
-    ORDER BY created_at DESC LIMIT 3)
+      po.po_number as reference,
+      v.vendor_name as party,
+      po.created_at as date,
+      po.expected_delivery_date as dueDate,
+      po.total_amount as amount,
+      po.status
+    FROM purchase_orders po
+    JOIN vendors v ON po.vendor_id = v.id
+    WHERE 1=1 ${dateFilter.replace('created_at', 'po.created_at')} ${customerFilter.replace('c.company_name', 'v.vendor_name')}
+    ORDER BY po.created_at DESC LIMIT 3)
     ORDER BY date DESC
     LIMIT 10
-  `);
+  `, [
+    ...params, ...(customer && customer !== 'All' && customer !== 'All Customers' ? [customer] : []),
+    ...params, ...(customer && customer !== 'All' && customer !== 'All Customers' ? [customer] : []),
+    ...params, ...(customer && customer !== 'All' && customer !== 'All Customers' ? [customer] : [])
+  ]);
 
   return {
     kpis: {

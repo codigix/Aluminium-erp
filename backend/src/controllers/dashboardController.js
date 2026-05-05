@@ -65,7 +65,7 @@ const getShipmentDashboard = async (req, res, next) => {
 
 const getProcurementReport = async (req, res, next) => {
   try {
-    const stats = await dashboardService.getProcurementReportStats();
+    const stats = await dashboardService.getProcurementReportStats(req.query);
     res.json(stats);
   } catch (error) {
     next(error);
@@ -74,7 +74,7 @@ const getProcurementReport = async (req, res, next) => {
 
 const getProductionReport = async (req, res, next) => {
   try {
-    const stats = await dashboardService.getProductionReportStats();
+    const stats = await dashboardService.getProductionReportStats(req.query);
     res.json(stats);
   } catch (error) {
     next(error);
@@ -83,7 +83,7 @@ const getProductionReport = async (req, res, next) => {
 
 const getInventoryReport = async (req, res, next) => {
   try {
-    const stats = await dashboardService.getInventoryReportStats();
+    const stats = await dashboardService.getInventoryReportStats(req.query);
     res.json(stats);
   } catch (error) {
     next(error);
@@ -92,7 +92,7 @@ const getInventoryReport = async (req, res, next) => {
 
 const getAccountsReport = async (req, res, next) => {
   try {
-    const stats = await dashboardService.getAccountsReportStats();
+    const stats = await dashboardService.getAccountsReportStats(req.query);
     res.json(stats);
   } catch (error) {
     next(error);
