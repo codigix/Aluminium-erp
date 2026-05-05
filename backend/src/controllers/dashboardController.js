@@ -63,6 +63,42 @@ const getShipmentDashboard = async (req, res, next) => {
   }
 };
 
+const getProcurementReport = async (req, res, next) => {
+  try {
+    const stats = await dashboardService.getProcurementReportStats();
+    res.json(stats);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getProductionReport = async (req, res, next) => {
+  try {
+    const stats = await dashboardService.getProductionReportStats();
+    res.json(stats);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getInventoryReport = async (req, res, next) => {
+  try {
+    const stats = await dashboardService.getInventoryReportStats();
+    res.json(stats);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getAccountsReport = async (req, res, next) => {
+  try {
+    const stats = await dashboardService.getAccountsReportStats();
+    res.json(stats);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = { 
   getDashboard, 
   getAccountsDashboard,
@@ -70,5 +106,9 @@ module.exports = {
   getProductionDashboard,
   getDesignDashboard,
   getSalesDashboard,
-  getShipmentDashboard
+  getShipmentDashboard,
+  getProcurementReport,
+  getProductionReport,
+  getInventoryReport,
+  getAccountsReport
 };

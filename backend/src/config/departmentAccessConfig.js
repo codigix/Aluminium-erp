@@ -28,7 +28,7 @@ const DEPARTMENT_ACCESS_RULES = {
     canViewDocuments: ['customer_pos', 'sales_orders', 'companies'],
     canEditDocuments: ['customer_pos', 'sales_orders'],
     canChangeStatusTo: [DOCUMENT_STATUS_FLOW.DESIGN],
-    allowedModules: ['dashboard', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations'],
+    allowedModules: ['dashboard', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'sales-report'],
     permissions: [
       'PO_VIEW', 'PO_CREATE', 'PO_EDIT',
       'ORDER_VIEW', 'ORDER_CREATE', 'ORDER_EDIT',
@@ -69,7 +69,7 @@ const DEPARTMENT_ACCESS_RULES = {
     canViewDocuments: ['customer_pos', 'sales_orders', 'companies'],
     canEditDocuments: [],
     canChangeStatusTo: [],
-    allowedModules: ['dashboard', 'suppliers', 'vendor-management', 'quotations', 'purchase-orders', 'po-receipts', 'incoming-orders'],
+    allowedModules: ['dashboard', 'suppliers', 'vendor-management', 'quotations', 'purchase-orders', 'po-receipts', 'incoming-orders', 'procurement-report'],
     permissions: [
       'PO_VIEW',
       'ORDER_VIEW',
@@ -99,7 +99,7 @@ const DEPARTMENT_ACCESS_RULES = {
     canViewDocuments: ['sales_orders', 'customer_pos', 'companies'],
     canEditDocuments: ['sales_orders'],
     canChangeStatusTo: [DOCUMENT_STATUS_FLOW.DISPATCH_PENDING],
-    allowedModules: ['dashboard', 'incoming-orders', 'operation-master', 'workstation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card', 'sub-contract-challans'],
+    allowedModules: ['dashboard', 'incoming-orders', 'operation-master', 'workstation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card', 'sub-contract-challans', 'production-report'],
     permissions: [
       'ORDER_VIEW', 'ORDER_EDIT',
       'PO_VIEW',
@@ -161,7 +161,7 @@ const DEPARTMENT_ACCESS_RULES = {
     canViewDocuments: ['sales_orders', 'customer_pos', 'companies'],
     canEditDocuments: [],
     canChangeStatusTo: [DOCUMENT_STATUS_FLOW.CLOSED],
-    allowedModules: ['dashboard', 'accounts-dashboard', 'vendor-inward-challans', 'invoice-received', 'payment-processing', 'payment-history', 'payment-received', 'customer-payment-history'],
+    allowedModules: ['dashboard', 'accounts-dashboard', 'vendor-inward-challans', 'invoice-received', 'payment-processing', 'payment-history', 'payment-received', 'customer-payment-history', 'accounts-report'],
     permissions: [
       'ORDER_VIEW',
       'PO_VIEW',
@@ -185,7 +185,7 @@ const DEPARTMENT_ACCESS_RULES = {
     canViewDocuments: ['sales_orders', 'customer_pos', 'companies'],
     canEditDocuments: [],
     canChangeStatusTo: [],
-    allowedModules: ['dashboard', 'inventory-dashboard', 'po-material-request', 'grn', 'stock-entries', 'stock-ledger', 'stock-balance', 'warehouses', 'suppliers'],
+    allowedModules: ['dashboard', 'inventory-dashboard', 'po-material-request', 'grn', 'stock-entries', 'stock-ledger', 'stock-balance', 'warehouses', 'suppliers', 'inventory-report'],
     permissions: [
       'ORDER_VIEW',
       'PO_VIEW',
@@ -214,7 +214,12 @@ const DEPARTMENT_ACCESS_RULES = {
     canViewDocuments: ['customer_pos', 'sales_orders', 'companies'],
     canEditDocuments: ['customer_pos', 'sales_orders'],
     canChangeStatusTo: Object.values(DOCUMENT_STATUS_FLOW),
-    allowedModules: ['dashboard', 'item-master', 'customer-po', 'sales-order', 'customer-drawing', 'po-material-request', 'design-orders', 'drawing-master', 'bom-creation', 'bom-approval', 'client-quotations', 'bom-form', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'job-card', 'sub-contract-challans', 'suppliers', 'vendor-management', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'quality-dashboard', 'accounts-dashboard', 'incoming-qc', 'grn', 'stock-entries', 'stock-ledger', 'stock-balance', 'warehouses', 'vendor-inward-challans', 'invoice-received', 'payment-processing', 'payment-history', 'payment-received', 'customer-payment-history', 'shipment-dashboard', 'shipment-orders', 'shipment-planning', 'dispatch-management', 'delivery-challan', 'shipment-tracking', 'shipment-returns', 'shipment-reports', 'quality-rejection-entry', 'project-analysis', 'material-consumption', 'oee-analysis', 'machine-analysis'],
+    allowedModules: [
+      'dashboard', 'sales-report', 'procurement-report', 'production-report', 'inventory-report', 'quality-reports', 
+      'payment-history', 'customer-payment-history', 'accounts-report', 'shipment-tracking', 
+      'shipment-reports', 'project-analysis', 'material-consumption', 
+      'oee-analysis', 'machine-analysis'
+    ],
     permissions: [
       'PO_VIEW', 'PO_CREATE', 'PO_EDIT', 'PO_DELETE',
       'ORDER_VIEW', 'ORDER_CREATE', 'ORDER_EDIT',

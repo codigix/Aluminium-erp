@@ -1,28 +1,33 @@
-const mysql = require('mysql2');
-require('dotenv').config({ path: '.env' });
+const mysql = require('mysql2/promise');
+require('dotenv').config({ path: './.env' });
 
-async function test() {
-  try {
+async function describeTables() {
     const config = {
-      host: process.env.DB_HOST || 'localhost',
-      port: Number(process.env.DB_PORT || 3306),
-      user: process.env.DB_USER || 'root',
-      password: process.env.DB_PASSWORD || '',
-      database: process.env.DB_NAME || 'sales_erp'
+        host: process.env.DB_HOST,
+        user: process.env.DB_USER,
+        password: process.env.DB_PASSWORD,
+        database: process.env.DB_NAME,
+        port: process.env.DB_PORT
     };
-    console.log('Connecting with config:', { ...config, password: '***' });
-    const connection = await mysql.createConnection(config).promise();
-    const [vendors] = await connection.query('SELECT id, vendor_name, status FROM vendors');
-    console.log('Vendors found:', vendors.length);
-    console.log('Vendor sample:', vendors.slice(0, 5));
-    
-    const [items] = await connection.query('SELECT COUNT(*) as count FROM stock_balance');
-    console.log('Stock items count:', items[0].count);
 
-    await connection.end();
-  } catch (err) {
-    console.error('Test failed:', err.message);
-  }
+    const connection = await mysql.createConnection(config);
+
+    try {
+        const tables = ['procurement_rfqs', 'purchase_orders', 'grns', 'vendors'];
+        for (const table of tables) {
+            try {
+                const [cols] = await connection.query(`DESCRIBE ${table}`);
+                console.log(`\nTable: ${table}`);
+                console.table(cols.map(c => ({ Field: c.Field, Type: c.Type })));
+            } catch (e) {
+                console.log(`Table ${table} not found or error:`, e.message);
+            }
+        }
+    } catch (error) {
+        console.error('Error:', error);
+    } finally {
+        await connection.end();
+    }
 }
 
-test();
+describeTables();
