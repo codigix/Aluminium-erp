@@ -695,6 +695,8 @@ const getProcurementReportStats = async (filters = {}) => {
   // 4. Vendor Performance
   const [vendorPerformance] = await pool.query(`
     SELECT 
+      id,
+      vendor_name as name,
       vendor_name as supplier,
       total_orders as totalOrders,
       '100%' as fulfillment,
@@ -702,7 +704,7 @@ const getProcurementReportStats = async (filters = {}) => {
       '0%' as delay
     FROM vendors
     WHERE status = 'ACTIVE'
-    ORDER BY total_orders DESC LIMIT 5
+    ORDER BY total_orders DESC LIMIT 50
   `);
 
   // 5. Recent Activity
