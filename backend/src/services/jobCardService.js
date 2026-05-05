@@ -818,7 +818,7 @@ const getQualityLogFullDetails = async (logId) => {
   const [rows] = await pool.query(
     `SELECT ql.*, 
             jc.job_card_no, jc.planned_qty,
-            wo.wo_number, wo.item_name, wo.item_code,
+            wo.wo_number, wo.item_name, wo.item_code, wo.drawing_no,
             so.project_name, c.company_name as client_name,
             o.operation_name
      FROM job_card_quality_logs ql

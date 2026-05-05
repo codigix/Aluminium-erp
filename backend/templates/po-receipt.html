@@ -32,9 +32,12 @@
     }
 
     th {
-      background-color: #f0f0f0;
+      background-color: #4f46e5;
+      color: white;
       font-weight: bold;
       text-align: center;
+      text-transform: uppercase;
+      font-size: 10px;
     }
 
     .no-border {
@@ -60,14 +63,15 @@
 
     .header-section {
       width: 100%;
-      margin-bottom: 15px;
-      border: 1px solid #000;
+      margin-bottom: 20px;
+      border: none;
+      border-bottom: 2px solid #4f46e5;
     }
 
     .header-section td {
       border: none;
-      padding: 8px;
-      vertical-align: middle;
+      padding: 10px 0;
+      vertical-align: top;
     }
 
     .logo {
@@ -77,23 +81,26 @@
     }
 
     .title {
-      font-size: 20px;
+      font-size: 24px;
       font-weight: bold;
-      color: #f26522;
-      text-align: center;
+      color: #4f46e5;
+      text-align: left;
     }
 
     .subtitle {
-      font-size: 12px;
+      font-size: 16px;
       font-weight: bold;
-      text-align: center;
+      text-align: right;
+      color: #4f46e5;
       margin-top: 2px;
+      text-transform: uppercase;
     }
 
     .company-info {
       font-size: 10px;
-      text-align: center;
+      text-align: left;
       margin-top: 2px;
+      color: #666;
     }
 
     .party-details {
@@ -121,7 +128,7 @@
     }
 
     .item-table thead {
-      background-color: #e8e8e8;
+      background-color: #4f46e5;
     }
 
     .item-table th {
@@ -148,12 +155,12 @@
       width: 40%;
       margin-left: auto;
       margin-top: 10px;
-      border: 1px solid #000;
+      border: 1px solid #4f46e5;
     }
 
     .totals-box td {
       padding: 6px;
-      border: 1px solid #000;
+      border: 1px solid #4f46e5;
       font-size: 11px;
     }
 
@@ -165,11 +172,12 @@
     .totals-box .amount {
       text-align: right;
       font-weight: bold;
+      color: #4f46e5;
     }
 
     .terms-box {
       margin-top: 12px;
-      border: 1px solid #000;
+      border: 1px solid #4f46e5;
     }
 
     .terms-box td {
@@ -182,11 +190,12 @@
     .terms-title {
       font-weight: bold;
       margin-bottom: 4px;
+      color: #4f46e5;
     }
 
     .notes-box {
       margin-top: 8px;
-      border: 1px solid #000;
+      border: 1px solid #4f46e5;
       padding: 8px;
       font-size: 10px;
       line-height: 1.4;
@@ -229,77 +238,96 @@
   <!-- HEADER WITH LOGO -->
   <table class="header-section">
     <tr>
-      <td width="12%" style="text-align: center;">
+      <td width="10%">
         {{#logoBase64}}
         <img src="{{logoBase64}}" class="logo" />
         {{/logoBase64}}
       </td>
-      <td width="88%">
+      <td width="55%">
         <div class="title">SP TECHPIONEER PVT. LTD.</div>
+        <div class="company-info">
+          Industrial Area, Sector 5, Pune, Maharashtra - 411026
+        </div>
+      </td>
+      <td width="35%">
         <div class="subtitle">
           {{#isGRN}}GOODS RECEIVED NOTE{{/isGRN}}
-          {{#isReceipt}}PO RECEIPT{{/isReceipt}}
+          {{#isReceipt}}PAYMENT RECEIPT{{/isReceipt}}
           {{#isPO}}PURCHASE ORDER{{/isPO}}
-        </div>
-        <div class="company-info">
-          Plot No. 97, Sector 7, PCNTDA, Bhosari, Pune – 411026
         </div>
       </td>
     </tr>
   </table>
 
   <!-- PARTY DETAILS -->
-  <table class="party-details">
-    <tr>
-      <td width="50%">
-        <div class="party-label">To:</div>
-        <div class="party-info">
-          <strong>{{vendorName}}</strong><br />
-          {{#vendorAddress}}{{vendorAddress}}<br />{{/vendorAddress}}
-          {{#vendorGST}}GSTIN: {{vendorGST}}<br />{{/vendorGST}}
-          {{#vendorPhone}}Phone: {{vendorPhone}}{{/vendorPhone}}
-        </div>
-      </td>
-      <td width="50%">
-        <div class="party-label">From:</div>
-        <div class="party-info">
-          <strong>SP TECHPIONEER PVT.LTD.</strong><br />
-          PLOT NO. 97, SECT 7, PCNTDA,<br />
-          Bhosari, Pune - 411 026.
-        </div>
-      </td>
-    </tr>
-  </table>
+  <div class="po-info-grid">
+    <div class="po-info-card">
+      <div class="po-info-label" style="margin-bottom: 8px;">Vendor Information</div>
+      <div class="party-info">
+        <strong>{{vendorName}}</strong><br />
+        {{#vendorAddress}}{{vendorAddress}}<br />{{/vendorAddress}}
+        {{#vendorGST}}GSTIN: {{vendorGST}}<br />{{/vendorGST}}
+        {{#vendorPhone}}Phone: {{vendorPhone}}{{/vendorPhone}}
+      </div>
+    </div>
+    <div class="po-info-card">
+      <div class="po-info-label" style="margin-bottom: 8px;">Project Reference</div>
+      <div class="party-info">
+        <strong>SP TECHPIONEER PVT.LTD.</strong><br />
+        PLOT NO. 97, SECT 7, PCNTDA,<br />
+        Bhosari, Pune - 411 026.
+      </div>
+    </div>
+  </div>
+
+  <style>
+    .po-info-grid {
+      display: flex;
+      justify-content: space-between;
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+    .po-info-card {
+      flex: 1;
+      border: 1px solid #4f46e5;
+      border-radius: 8px;
+      padding: 10px;
+      background: #f8faff;
+    }
+    .po-info-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 4px;
+      border-bottom: 1px dashed #e0e7ff;
+    }
+    .po-info-row:last-child { border-bottom: none; }
+    .po-info-label { font-weight: bold; color: #4f46e5; font-size: 9px; text-transform: uppercase; }
+    .po-info-value { font-weight: bold; font-size: 11px; }
+  </style>
 
   <!-- PO DETAILS -->
-  <table class="party-details">
-    <tr>
-      <td width="50%">
-        <table class="no-border">
-          <tr>
-            <td width="40%" class="bold">PO No</td>
-            <td width="60%">{{poNumber}}</td>
-          </tr>
-          <tr>
-            <td class="bold">Date</td>
-            <td>{{poDate}}</td>
-          </tr>
-        </table>
-      </td>
-      <td width="50%">
-        <table class="no-border">
-          <tr>
-            <td width="40%" class="bold">Supplier Code -</td>
-            <td width="60%">{{supplierCode}}</td>
-          </tr>
-          <tr>
-            <td class="bold">Quotation Ref no -</td>
-            <td>{{quotationRef}}</td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
+  <div class="po-info-grid">
+    <div class="po-info-card">
+      <div class="po-info-row">
+        <span class="po-info-label">PO NO:</span>
+        <span class="po-info-value">{{poNumber}}</span>
+      </div>
+      <div class="po-info-row">
+        <span class="po-info-label">DATE:</span>
+        <span class="po-info-value">{{poDate}}</span>
+      </div>
+    </div>
+    <div class="po-info-card">
+      <div class="po-info-row">
+        <span class="po-info-label">EXPECTED DATE:</span>
+        <span class="po-info-value">{{deliveryDate}}</span>
+      </div>
+      <div class="po-info-row">
+        <span class="po-info-label">REF NO:</span>
+        <span class="po-info-value">{{quotationRef}}</span>
+      </div>
+    </div>
+  </div>
 
   <!-- ITEM TABLE -->
   <table class="item-table">

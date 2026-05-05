@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8" />
-  <title>Quality Inspection Report (Production)</title>
+  <title>Quality Control Report</title>
   <style>
     * {
       margin: 0;
@@ -11,350 +11,310 @@
     }
 
     body {
-      font-family: 'Inter', 'Helvetica', 'Arial', sans-serif;
+      font-family: 'Helvetica', 'Arial', sans-serif;
       font-size: 10px;
-      color: #334155;
-      line-height: 1.5;
+      color: #333;
+      line-height: 1.4;
       background: white;
-      padding: 40px;
+      padding: 20px;
     }
 
-    .report-wrapper {
-      max-width: 800px;
-      margin: 0 auto;
-      border: 1px solid #e2e8f0;
-      border-radius: 8px;
-      overflow: hidden;
-      box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+    .report-container {
+      width: 100%;
+      border: 1px solid #000;
     }
 
-    .header {
-      display: flex;
-      align-items: center;
-      padding: 24px;
-      border-bottom: 1px solid #e2e8f0;
-      background: #f8fafc;
+    table {
+      width: 100%;
+      border-collapse: collapse;
     }
 
-    .logo-placeholder {
-      width: 80px;
-      height: 80px;
-      background: #fff;
-      border: 1px solid #e2e8f0;
-      border-radius: 8px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 8px;
-      margin-right: 20px;
+    th, td {
+      border: 1px solid #000;
+      padding: 5px;
+      vertical-align: middle;
     }
 
-    .logo-text {
-      font-size: 8px;
-      font-weight: bold;
+    .header-section {
+      border-bottom: 2px solid #000;
+    }
+
+    .logo-container {
+      width: 120px;
       text-align: center;
-      color: #64748b;
+      padding: 5px;
     }
 
-    .company-info {
-      flex: 1;
+    .logo-img {
+      max-width: 110px;
+      max-height: 60px;
+      object-fit: contain;
+    }
+
+    .company-header {
       text-align: center;
+      padding: 10px;
     }
 
     .company-name {
-      font-size: 20px;
-      font-weight: 800;
-      color: #1e293b;
-      letter-spacing: -0.025em;
-      margin-bottom: 4px;
+      font-size: 24px;
+      font-weight: bold;
+      color: #f26522;
+      text-transform: uppercase;
+      letter-spacing: 2px;
     }
 
     .report-title {
-      font-size: 13px;
-      font-weight: 600;
-      color: #64748b;
+      font-size: 16px;
+      font-weight: bold;
+      margin-top: 5px;
       text-transform: uppercase;
-      letter-spacing: 0.05em;
     }
 
-    .info-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 0;
-      border-bottom: 1px solid #e2e8f0;
+    .company-address {
+      font-size: 10px;
+      margin-top: 2px;
     }
 
-    .info-item {
-      display: flex;
-      justify-content: space-between;
-      padding: 12px 24px;
-      border-bottom: 1px solid #f1f5f9;
+    .info-table td {
+      width: 25%;
+      border: 1px solid #ccc;
     }
 
-    .info-item:nth-child(even) {
-      border-left: 1px solid #f1f5f9;
+    .label {
+      font-weight: bold;
+      background-color: #f9f9f9;
     }
 
-    .info-label {
-      font-size: 9px;
-      font-weight: 700;
-      color: #94a3b8;
-      text-transform: uppercase;
-      letter-spacing: 0.025em;
-    }
-
-    .info-value {
-      font-size: 11px;
-      font-weight: 600;
-      color: #1e293b;
-    }
-
-    .full-row {
-      padding: 16px 24px;
-      border-bottom: 1px solid #f1f5f9;
-    }
-
-    .full-row-label {
-      font-size: 9px;
-      font-weight: 700;
-      color: #94a3b8;
-      text-transform: uppercase;
-      margin-bottom: 4px;
-    }
-
-    .full-row-value {
-      font-size: 11px;
-      font-weight: 600;
-      color: #1e293b;
-    }
-
-    .status-container {
-      padding: 32px;
-      display: flex;
-      justify-content: center;
-      background: #fff;
-    }
-
-    .status-box {
-      text-align: center;
-      width: 180px;
-    }
-
-    .status-header {
-      font-size: 9px;
-      font-weight: 800;
-      color: #94a3b8;
-      margin-bottom: 8px;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-    }
-
-    .status-pill {
-      padding: 10px 20px;
-      border-radius: 9999px;
-      font-size: 14px;
-      font-weight: 800;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      border: 2px solid;
-    }
-
-    .status-approved {
-      background: #f0fdf4;
+    .status-passed {
       color: #16a34a;
-      border-color: #bbf7d0;
+      font-weight: bold;
     }
 
-    .status-rejected {
-      background: #fef2f2;
+    .status-failed {
       color: #dc2626;
-      border-color: #fecaca;
+      font-weight: bold;
     }
 
-    .status-pending {
-      background: #fffbeb;
-      color: #d97706;
-      border-color: #fde68a;
+    .item-table {
+      margin-top: 10px;
     }
 
-    .table-section {
-      padding: 0 24px 24px;
+    .item-table th {
+      background-color: #f0f0f0;
+      font-weight: bold;
+      text-align: center;
     }
 
-    .data-table {
-      width: 100%;
-      border-collapse: collapse;
-      border: 1px solid #e2e8f0;
-      border-radius: 6px;
-      overflow: hidden;
+    .center {
+      text-align: center;
     }
 
-    .data-table th {
-      background: #f8fafc;
-      padding: 10px 12px;
-      text-align: left;
-      font-size: 9px;
-      font-weight: 700;
-      color: #64748b;
-      text-transform: uppercase;
-      border-bottom: 1px solid #e2e8f0;
+    .right {
+      text-align: right;
     }
 
-    .data-table td {
-      padding: 12px;
-      font-size: 11px;
-      color: #334155;
-      border-bottom: 1px solid #f1f5f9;
+    .item-code {
+      font-size: 8px;
+      color: #666;
+      display: block;
+      margin-top: 2px;
     }
 
-    .text-center { text-align: center; }
-    .text-right { text-align: right; }
-    .font-bold { font-weight: 700; }
+    .remarks-section {
+      margin-top: 10px;
+      padding: 8px;
+      border: 1px solid #000;
+    }
 
-    .footer {
-      padding: 24px;
-      background: #f8fafc;
-      border-top: 1px solid #e2e8f0;
+    .summary-section {
+      margin-top: 10px;
+      border: 1px solid #000;
+    }
+
+    .summary-section table td {
+      border: none;
+      padding: 3px 8px;
+    }
+
+    .footer-signatures {
+      margin-top: 30px;
       display: flex;
       justify-content: space-between;
+      align-items: flex-end;
+      padding: 0 20px;
     }
 
-    .signature-group {
+    .signature-box {
+      text-align: center;
       width: 200px;
     }
 
     .signature-line {
-      height: 1px;
-      background: #cbd5e1;
-      margin-bottom: 8px;
+      border-top: 1px solid #000;
+      margin-bottom: 5px;
     }
 
-    .signature-label {
-      font-size: 9px;
-      font-weight: 700;
-      color: #64748b;
-      text-transform: uppercase;
-    }
-
-    .system-note {
+    .seal-container {
       text-align: center;
-      padding: 16px;
+    }
+
+    .seal-circle {
+      border: 3px solid #16a34a; 
+      color: #16a34a; 
+      border-radius: 50%; 
+      width: 55px; 
+      height: 55px; 
+      margin: 0 auto; 
+      display: flex; 
+      align-items: center; 
+      justify-content: center;
+      position: relative;
+    }
+
+    .seal-text {
+      font-size: 8px; 
+      font-weight: bold; 
+      margin-bottom: 5px; 
+      text-transform: uppercase;
+      color: #16a34a;
+    }
+
+    .system-generated {
+      text-align: center;
       font-size: 8px;
-      color: #94a3b8;
+      color: #666;
+      margin-top: 20px;
       font-style: italic;
+    }
+
+    @media print {
+      body {
+        padding: 0;
+      }
     }
   </style>
 </head>
 <body>
-  <div class="report-wrapper">
+  <div class="report-container">
     <!-- Header -->
-    <div class="header">
-      <div class="logo-placeholder">
-        <div class="logo-text">SP</div>
-        <div class="logo-text">TECHPIONEER</div>
-      </div>
-      <div class="company-info">
-        <div class="company-name">SP TECHPIONEER PVT. LTD.</div>
-        <div class="report-title">QUALITY INSPECTION REPORT (PRODUCTION)</div>
-      </div>
+    <table>
+      <tr>
+        <td class="company-header" style="width: 100%;">
+          <div class="company-name">SP TECHPIONEER PVT. LTD.</div>
+          <div class="report-title">QUALITY CONTROL REPORT</div>
+          <div class="company-address">Plot No. 97, Sector 7, PCNTDA, Bhosari, Pune – 411026</div>
+        </td>
+      </tr>
+    </table>
+
+    <!-- Info Section -->
+    <table class="info-table">
+      <tr>
+        <td class="label">Report No.</td>
+        <td>: {{reportNo}}</td>
+        <td class="label">Report Date</td>
+        <td>: {{reportDate}}</td>
+      </tr>
+      <tr>
+        <td class="label">Job Card No.</td>
+        <td>: {{jobCardNo}}</td>
+        <td class="label">Inspector</td>
+        <td>: {{inspector}}</td>
+      </tr>
+      <tr>
+        <td class="label">Work Order No.</td>
+        <td>: {{woNo}}</td>
+        <td class="label">Department</td>
+        <td>: {{department}}</td>
+      </tr>
+      <tr>
+        <td class="label">Project</td>
+        <td>: {{project}}</td>
+        <td class="label">Report Status</td>
+        <td class="{{statusClass}}">: {{status}}</td>
+      </tr>
+    </table>
+
+    <!-- Item Table -->
+    <table class="item-table">
+      <thead>
+        <tr>
+          <th style="width: 40px;">Sr. No.</th>
+          <th>Item Description</th>
+          <th style="width: 100px;">Design Qty</th>
+          <th style="width: 100px;">Required</th>
+          <th style="width: 100px;">Received Qty</th>
+          <th style="width: 100px;">Item Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="center">1</td>
+          <td>
+            <strong>{{itemName}}</strong>
+            <span class="item-code">{{itemCode}}</span>
+            <span class="item-code">{{operationName}}</span>
+          </td>
+          <td class="center">{{designQty}}</td>
+          <td class="center">{{requiredQty}}</td>
+          <td class="center">{{receivedQty}}</td>
+          <td class="center">
+            <span class="{{statusClass}}">{{itemStatus}}</span>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- Remarks -->
+    <div class="remarks-section">
+      <strong>Remarks : </strong> {{remarks}}
     </div>
 
-    <!-- Info Grid -->
-    <div class="info-grid">
-      <div class="info-item">
-        <span class="info-label">Report No</span>
-        <span class="info-value">{{reportNo}}</span>
-      </div>
-      <div class="info-item">
-        <span class="info-label">Job Card No</span>
-        <span class="info-value">{{job_card_no}}</span>
-      </div>
-      <div class="info-item">
-        <span class="info-label">Inspection Date</span>
-        <span class="info-value">{{check_date}}</span>
-      </div>
-      <div class="info-item">
-        <span class="info-label">Work Order</span>
-        <span class="info-value">{{wo_number}}</span>
-      </div>
-      <div class="info-item">
-        <span class="info-label">Shift</span>
-        <span class="info-value">{{shift}}</span>
-      </div>
-      <div class="info-item">
-        <span class="info-label">Operation</span>
-        <span class="info-value">{{operation_name}}</span>
-      </div>
-    </div>
-
-    <!-- Full Width Details -->
-    <div class="full-row">
-      <div class="full-row-label">Project / Customer</div>
-      <div class="full-row-value">{{project_name}} / {{client_name}}</div>
-    </div>
-    <div class="full-row">
-      <div class="full-row-label">Item Details</div>
-      <div class="full-row-value">{{item_name}} ({{item_code}})</div>
-    </div>
-
-    <!-- Status Box -->
-    <div class="status-container">
-      <div class="status-box">
-        <div class="status-header">Status</div>
-        <div class="status-pill {{statusClass}}">{{status}}</div>
-      </div>
-    </div>
-
-    <!-- Parameters Table -->
-    <div class="table-section">
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>Parameters</th>
-            <th class="text-center" style="width: 100px;">Inspected Qty</th>
-            <th class="text-center" style="width: 100px;">Accepted Qty</th>
-            <th class="text-center" style="width: 100px;">Rejected Qty</th>
-            <th class="text-center" style="width: 100px;">Scrap Qty</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td class="font-bold">Production Quality Check</td>
-            <td class="text-center font-bold">{{inspected_qty}}</td>
-            <td class="text-center font-bold" style="color: #16a34a;">{{accepted_qty}}</td>
-            <td class="text-center font-bold" style="color: #dc2626;">{{rejected_qty}}</td>
-            <td class="text-center font-bold">{{scrap_qty}}</td>
-          </tr>
-        </tbody>
+    <!-- Summary -->
+    <div class="summary-section">
+      <div style="padding: 5px; border-bottom: 1px solid #000; font-weight: bold; background: #f0f0f0;">SUMMARY</div>
+      <table>
+        <tr>
+          <td style="width: 150px;">Total Items Inspected</td>
+          <td>: 1</td>
+        </tr>
+        <tr>
+          <td>Items Available</td>
+          <td>: {{availableCount}}</td>
+        </tr>
       </table>
     </div>
 
-    <!-- Remarks -->
-    {{#notes}}
-    <div class="full-row" style="border-top: 1px solid #e2e8f0; background: #f8fafc;">
-      <div class="full-row-label">Inspector Remarks</div>
-      <div class="full-row-value" style="font-weight: 500; font-style: italic;">"{{notes}}"</div>
-    </div>
-    {{/notes}}
-
-    <!-- Footer -->
-    <div class="footer">
-      <div class="signature-group">
+    <!-- Footer Signatures -->
+    <div class="footer-signatures">
+      <div class="signature-box">
         <div class="signature-line"></div>
-        <div class="signature-label">Inspector Signature</div>
-        <div style="font-size: 10px; margin-top: 4px; font-weight: 600;">QA Inspector</div>
+        <strong>Inspector Signature</strong><br/>
+        {{inspector}}<br/>
+        {{reportDate}}
       </div>
-      <div class="signature-group">
+      
+      {{#isApproved}}
+      <div class="seal-container">
+        <div class="seal-text">Quality Assured</div>
+        <div class="seal-circle">
+          <svg xmlns="http://www.w3.org/2000/svg" width="35" height="35" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        </div>
+      </div>
+      {{/isApproved}}
+
+      <div class="signature-box">
         <div class="signature-line"></div>
-        <div class="signature-label">Authorized Approval</div>
-        <div style="font-size: 10px; margin-top: 4px; color: #94a3b8;">Stamp/Seal Required</div>
+        <strong>Approved By</strong><br/>
+        (Name)<br/>
+        (Designation)
       </div>
     </div>
   </div>
 
   <div class="system-generated">
-    This is a system generated quality report and does not require a physical signature unless specified.
+    This is a system generated report and does not require physical signature.
   </div>
 </body>
 </html>
