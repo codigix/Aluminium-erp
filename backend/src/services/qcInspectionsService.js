@@ -684,8 +684,8 @@ const getQCStats = async (filters = {}) => {
       SUM(CASE WHEN failed = 1 THEN 1 ELSE 0 END) as failedQc
     FROM (
       SELECT inspection_date as date, 
-             CASE WHEN status IN ('PASSED', 'ACCEPTED', 'QC_APPROVED', 'COMPLETED') THEN 1 ELSE 0 END as passed,
-             CASE WHEN status IN ('FAILED', 'REJECTED', 'QC_REJECTED') THEN 1 ELSE 0 END as failed
+             CASE WHEN UPPER(TRIM(status)) IN ('PASSED', 'ACCEPTED', 'QC_APPROVED', 'COMPLETED') THEN 1 ELSE 0 END as passed,
+             CASE WHEN UPPER(TRIM(status)) IN ('FAILED', 'REJECTED', 'QC_REJECTED') THEN 1 ELSE 0 END as failed
       FROM qc_inspections
       UNION ALL
       SELECT check_date as date,
@@ -739,8 +739,8 @@ const getQCReports = async (filters = {}) => {
     ) month_list
     LEFT JOIN (
       SELECT inspection_date as date, 
-             CASE WHEN status IN ('PASSED', 'ACCEPTED', 'QC_APPROVED', 'COMPLETED') THEN 1 ELSE 0 END as passed,
-             CASE WHEN status IN ('FAILED', 'REJECTED', 'QC_REJECTED') THEN 1 ELSE 0 END as failed
+             CASE WHEN UPPER(TRIM(status)) IN ('PASSED', 'ACCEPTED', 'QC_APPROVED', 'COMPLETED') THEN 1 ELSE 0 END as passed,
+             CASE WHEN UPPER(TRIM(status)) IN ('FAILED', 'REJECTED', 'QC_REJECTED') THEN 1 ELSE 0 END as failed
       FROM qc_inspections
       UNION ALL
       SELECT check_date as date,
@@ -769,7 +769,7 @@ const getQCReports = async (filters = {}) => {
       UNION ALL
       SELECT defects as name, COUNT(*) as val
       FROM qc_inspections
-      WHERE status IN ('FAILED', 'REJECTED', 'QC_REJECTED') AND defects IS NOT NULL AND defects != ''
+      WHERE UPPER(TRIM(status)) IN ('FAILED', 'REJECTED', 'QC_REJECTED') AND defects IS NOT NULL AND defects != ''
       GROUP BY defects
     ) combined_defects
     GROUP BY name
@@ -796,7 +796,7 @@ const getQCReports = async (filters = {}) => {
   const [supplierPerformance] = await pool.query(`
     SELECT 
       v.vendor_name as supplier,
-      ROUND((SUM(CASE WHEN qc.status IN ('PASSED', 'ACCEPTED', 'QC_APPROVED', 'COMPLETED') THEN 1 ELSE 0 END) / COUNT(*)) * 100) as qualityScore
+      ROUND((SUM(CASE WHEN UPPER(TRIM(qc.status)) IN ('PASSED', 'ACCEPTED', 'QC_APPROVED', 'COMPLETED') THEN 1 ELSE 0 END) / COUNT(*)) * 100) as qualityScore
     FROM qc_inspections qc
     JOIN grns g ON qc.grn_id = g.id
     JOIN purchase_orders po ON g.po_number = po.po_number

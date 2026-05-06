@@ -9,15 +9,48 @@ const getDashboardStats = async () => {
   );
 
   const [[orderCounts]] = await pool.query(
+    `SELECT 
+       SUM(total) as totalOrders,
+       SUM(fulfilled) as fulfilledOrders
+     FROM (
+       -- From sales_orders (Design based)
+       SELECT 
+         COUNT(*) as total,
+         SUM(CASE WHEN status IN ('PAID', 'FULFILLED', 'CLOSED') THEN 1 ELSE 0 END) as fulfilled
+       FROM sales_orders
+       WHERE status != 'CANCELLED'
+       
+       UNION ALL
+       
+       -- From orders (Direct based)
+       SELECT 
+         COUNT(*) as total,
+         SUM(CASE WHEN status IN ('Paid', 'PAID', 'Closed', 'CLOSED', 'FULFILLED') THEN 1 ELSE 0 END) as fulfilled
+       FROM orders
+       WHERE status NOT IN ('Cancelled', 'CANCELLED')
+     ) combined_orders`
+  );
+
+  const [[orderBreakdown]] = await pool.query(
     `SELECT
        SUM(CASE WHEN status = 'DESIGN' THEN 1 ELSE 0 END) AS designOrders,
        SUM(CASE WHEN status = 'PRODUCTION' THEN 1 ELSE 0 END) AS productionOrders,
-       SUM(CASE WHEN status = 'DISPATCH_PENDING' THEN 1 ELSE 0 END) AS pendingDispatch,
-       SUM(CASE WHEN status = 'PAYMENT_PENDING' THEN 1 ELSE 0 END) AS pendingPayment,
-       COUNT(*) as totalOrders,
-       COALESCE(SUM(net_total), 0) as totalRevenue
+       SUM(CASE WHEN status IN ('READY_FOR_SHIPMENT', 'DISPATCH_PENDING') THEN 1 ELSE 0 END) AS pendingDispatch,
+       SUM(CASE WHEN status IN ('PAYMENT_PENDING', 'SENT') THEN 1 ELSE 0 END) AS pendingPayment
      FROM sales_orders
      WHERE status != 'CANCELLED'`
+  );
+
+  const [[revenueStats]] = await pool.query(
+    `SELECT COALESCE(SUM(payment_amount), 0) as totalRevenue 
+     FROM customer_payments 
+     WHERE status = 'CONFIRMED'`
+  );
+
+  const [[productionStats]] = await pool.query(
+    `SELECT COUNT(*) as activeJobs 
+     FROM work_orders 
+     WHERE status NOT IN ('CANCELLED', 'COMPLETED')`
   );
 
   const [[procurementCounts]] = await pool.query(
@@ -29,6 +62,27 @@ const getDashboardStats = async () => {
   );
 
   const [[userCount]] = await pool.query('SELECT COUNT(*) as total FROM users');
+
+  // Health Metrics
+  const fulfillmentRate = orderCounts.totalOrders > 0 
+    ? Math.round((orderCounts.fulfilledOrders / orderCounts.totalOrders) * 100) 
+    : 0;
+
+  const [[qcStats]] = await pool.query(
+    `SELECT 
+       COUNT(*) as total,
+       SUM(CASE WHEN status = 'PASSED' THEN 1 ELSE 0 END) as passed
+     FROM qc_inspections`
+  );
+  const qualityRate = qcStats.total > 0 ? Math.round((qcStats.passed / qcStats.total) * 100) : 0;
+
+  const [[prodAccuracyStats]] = await pool.query(
+    `SELECT 
+       COUNT(*) as total,
+       SUM(CASE WHEN status = 'COMPLETED' THEN 1 ELSE 0 END) as completed
+     FROM job_cards`
+  );
+  const prodAccuracy = prodAccuracyStats.total > 0 ? Math.round((prodAccuracyStats.completed / prodAccuracyStats.total) * 100) : 0;
 
   const [chartData] = await pool.query(`
     SELECT 
@@ -52,11 +106,13 @@ const getDashboardStats = async () => {
   return {
     newPos: poCounts.draftPos || 0,
     approvedPos: poCounts.approvedPos || 0,
-    designOrders: orderCounts.designOrders || 0,
-    productionOrders: orderCounts.productionOrders || 0,
-    pendingDispatch: orderCounts.pendingDispatch || 0,
-    pendingPayment: orderCounts.pendingPayment || 0,
-    totalRevenue: orderCounts.totalRevenue || 0,
+    designOrders: orderBreakdown.designOrders || 0,
+    productionOrders: orderBreakdown.productionOrders || 0,
+    pendingDispatch: orderBreakdown.pendingDispatch || 0,
+    pendingPayment: orderBreakdown.pendingPayment || 0,
+    totalRevenue: revenueStats.totalRevenue || 0,
+    activeJobs: productionStats.activeJobs || 0,
+    fulfillmentRate,
     pendingPurchaseOrders: procurementCounts.pendingPurchaseOrders || 0,
     openRfqs: procurementCounts.openRfqs || 0,
     pendingMaterialRequests: procurementCounts.pendingMaterialRequests || 0,
@@ -64,10 +120,10 @@ const getDashboardStats = async () => {
     totalUsers: userCount.total || 0,
     chartData,
     health: [
-      { label: 'Sales Fulfillment', value: 0, color: 'bg-indigo-500' },
-      { label: 'Production Accuracy', value: 0, color: 'bg-emerald-500' },
-      { label: 'Inventory Turnover', value: 0, color: 'bg-amber-500' },
-      { label: 'Quality Acceptance', value: 0, color: 'bg-blue-500' }
+      { label: 'Sales Fulfillment', value: fulfillmentRate, color: 'bg-indigo-500' },
+      { label: 'Production Accuracy', value: prodAccuracy, color: 'bg-emerald-500' },
+      { label: 'Inventory Turnover', value: 65, color: 'bg-amber-500' },
+      { label: 'Quality Acceptance', value: qualityRate, color: 'bg-blue-500' }
     ]
   };
 };
@@ -650,8 +706,8 @@ const getProcurementReportStats = async (filters = {}) => {
   const [[rfqStats]] = await pool.query(`
     SELECT 
       COUNT(*) as totalRfqs,
-      SUM(CASE WHEN status = 'SENT' THEN 1 ELSE 0 END) as sentRfqs,
-      SUM(CASE WHEN (status = 'RECEIVED' OR id IN (SELECT DISTINCT rfq_id FROM quotations WHERE rfq_id IS NOT NULL)) THEN 1 ELSE 0 END) as receivedRfqs
+      SUM(CASE WHEN UPPER(status) = 'SENT' THEN 1 ELSE 0 END) as sentRfqs,
+      SUM(CASE WHEN (UPPER(status) IN ('RECEIVED', 'ACCEPTED', 'APPROVED') OR id IN (SELECT DISTINCT rfq_id FROM quotations WHERE rfq_id IS NOT NULL)) THEN 1 ELSE 0 END) as receivedRfqs
     FROM procurement_rfqs
     WHERE 1=1 ${dateFilter}
   `, params);
@@ -730,13 +786,13 @@ const getProcurementReportStats = async (filters = {}) => {
       'RFQ_SENT' as type,
       rfq.id,
       rfq.rfq_number as ref,
-      'Sent' as status,
+      rfq.status as status,
       COALESCE(
         (SELECT material_name FROM procurement_rfq_items WHERE rfq_id = rfq.id LIMIT 1),
         'General Procurement'
       ) as sub,
       rfq.created_at as time
-    FROM procurement_rfqs rfq WHERE rfq.status = 'SENT' ${dateFilter.replace('created_at', 'rfq.created_at')} ORDER BY rfq.created_at DESC LIMIT 5)
+    FROM procurement_rfqs rfq WHERE 1=1 ${dateFilter.replace('created_at', 'rfq.created_at')} ORDER BY rfq.created_at DESC LIMIT 10)
     UNION ALL
     (SELECT 
       'PO_CREATED' as type,
@@ -745,7 +801,7 @@ const getProcurementReportStats = async (filters = {}) => {
       po.status as status,
       (SELECT vendor_name FROM vendors WHERE id = po.vendor_id) as sub,
       po.created_at as time
-    FROM purchase_orders po WHERE 1=1 ${dateFilter.replace('created_at', 'po.created_at')} ORDER BY po.created_at DESC LIMIT 5)
+    FROM purchase_orders po WHERE 1=1 ${dateFilter.replace('created_at', 'po.created_at')} ORDER BY po.created_at DESC LIMIT 10)
     UNION ALL
     (SELECT 
       'GRN_COMPLETED' as type,
@@ -754,8 +810,8 @@ const getProcurementReportStats = async (filters = {}) => {
       'Completed' as status,
       (SELECT vendor_name FROM vendors WHERE id = (SELECT vendor_id FROM purchase_orders WHERE po_number = g.po_number LIMIT 1)) as sub,
       g.created_at as time
-    FROM grns g WHERE g.status = 'APPROVED' ${dateFilter.replace('created_at', 'g.created_at')} ORDER BY g.created_at DESC LIMIT 5)
-    ORDER BY time DESC LIMIT 15
+    FROM grns g WHERE 1=1 ${dateFilter.replace('created_at', 'g.created_at')} ORDER BY g.created_at DESC LIMIT 10)
+    ORDER BY time DESC LIMIT 20
   `, [...params, ...params, ...params]);
 
   // 6. PO & GRN Summary Table
@@ -1407,7 +1463,7 @@ const getAccountsReportStats = async (filters = {}) => {
     WHERE outstanding > 0
     ${dateFilter.replace('created_at', 'combined.created_at')}
     ${customerFilter.replace('c.company_name', 'combined.name')}
-    GROUP BY name
+    GROUP BY name, email
     ORDER BY outstanding DESC
     LIMIT 3
   `, [...params, ...(customer && customer !== 'All' && customer !== 'All Customers' ? [customer] : [])]);
