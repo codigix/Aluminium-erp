@@ -925,33 +925,56 @@ const getProductionReportStats = async (filters = {}) => {
     LIMIT 4
   `, [...params, ...(project && project !== 'All' && project !== 'All Projects' ? [project] : [])]);
 
-  // 7. Summary Table
+  // 7. Summary Table - Updated to list Job Cards with same details as Job Card page
   const [summaryTable] = await pool.query(`
     SELECT 
-      wo.id,
+      jc.id,
+      jc.id as jobCardId,
+      jc.job_card_no as jobCardNo,
       wo.wo_number as woNumber,
       so.project_name as project,
       c.company_name as client,
-      COALESCE(jc.operation_name, (SELECT operation_name FROM operations WHERE workstation_id = wo.workstation_id LIMIT 1), 'N/A') as operation,
-      jc.id as jobCardId,
-      jc.job_card_no as jobCardNo,
+      COALESCE(o.operation_name, jc.operation_name) as operation,
+      jc.status,
       wo.item_code as itemCode,
       wo.item_name as itemName,
-      wo.quantity as plannedQty,
-      (CASE WHEN wo.status = 'COMPLETED' THEN wo.quantity ELSE 0 END) as producedQty,
-      (CASE WHEN wo.status = 'COMPLETED' THEN 100 WHEN wo.status = 'IN_PROGRESS' THEN 50 ELSE 0 END) as progress,
-      wo.status,
-      wo.start_date as startDate,
-      wo.end_date as dueDate
-    FROM work_orders wo
+      jc.planned_qty as plannedQty,
+      jc.produced_qty as producedQty,
+      jc.accepted_qty as acceptedQty,
+      jc.cycle_time as cycleTime,
+      jc.hourly_rate as hourlyRate,
+      COALESCE(jc.execution_mode, 'In-house') as execution_type,
+      jc.execution_mode,
+      wo.source_type,
+      COALESCE(soi_parent.description, oi_parent.description, soi_source.description, soi_fallback.description, oi_fallback.description, wo_parent.item_name, wo.source_fg) as source_fg,
+      jc.sequence_no,
+      w.workstation_name as workstationName,
+      u.username as operatorName,
+      wo.quantity as wo_quantity,
+      (SELECT start_time FROM job_card_time_logs WHERE job_card_id = jc.id ORDER BY log_date DESC, start_time DESC, id DESC LIMIT 1) as latest_log_start_time,
+      (SELECT end_time FROM job_card_time_logs WHERE job_card_id = jc.id ORDER BY log_date DESC, start_time DESC, id DESC LIMIT 1) as latest_log_end_time,
+      (SELECT MAX(id) FROM work_orders WHERE 
+          (plan_id = wo.plan_id AND plan_id IS NOT NULL) OR 
+          (parent_wo_id = wo.parent_wo_id AND parent_wo_id IS NOT NULL) OR 
+          (id = wo.id AND plan_id IS NULL AND parent_wo_id IS NULL)
+      ) as batch_latest_id
+    FROM job_cards jc
+    JOIN work_orders wo ON jc.work_order_id = wo.id
+    LEFT JOIN work_orders wo_parent ON wo.parent_wo_id = wo_parent.id
+    LEFT JOIN sales_order_items soi_parent ON wo_parent.sales_order_item_id = soi_parent.id
+    LEFT JOIN order_items oi_parent ON wo_parent.sales_order_item_id = oi_parent.id AND wo_parent.sales_order_id = oi_parent.order_id
+    LEFT JOIN sales_order_items soi_source ON (wo.source_fg = soi_source.item_code OR wo.source_fg = soi_source.drawing_no) AND (soi_source.sales_order_id = wo.sales_order_id OR soi_source.sales_order_id IS NULL)
+    LEFT JOIN sales_order_items soi_fallback ON (wo_parent.item_code = soi_fallback.item_code OR wo_parent.bom_no = soi_fallback.drawing_no) AND soi_fallback.sales_order_id IS NULL
+    LEFT JOIN order_items oi_fallback ON (wo_parent.item_code = oi_fallback.item_code OR wo_parent.bom_no = oi_fallback.drawing_no) AND oi_fallback.order_id = wo_parent.sales_order_id
     JOIN sales_orders so ON wo.sales_order_id = so.id
     JOIN companies c ON so.company_id = c.id
-    LEFT JOIN job_cards jc ON jc.work_order_id = wo.id AND jc.id = (SELECT id FROM job_cards WHERE work_order_id = wo.id ORDER BY id DESC LIMIT 1)
+    LEFT JOIN operations o ON jc.operation_id = o.id
+    LEFT JOIN workstations w ON jc.workstation_id = w.id
+    LEFT JOIN users u ON jc.assigned_to = u.id
     WHERE 1=1
-    ${dateFilter.replace('created_at', 'wo.created_at')}
+    ${dateFilter.replace('created_at', 'jc.created_at')}
     ${projectFilter}
-    ORDER BY wo.created_at DESC
-    LIMIT 10
+    ORDER BY batch_latest_id DESC, CASE WHEN wo.source_type = 'SA' THEN 0 ELSE 1 END ASC, wo.id ASC, jc.sequence_no ASC, jc.id ASC
   `, [...params, ...(project && project !== 'All' && project !== 'All Projects' ? [project] : [])]);
 
   return {

@@ -10,21 +10,21 @@ const getMachineAnalysisStats = async () => {
       AVG(quality) as avg_quality
     FROM (
       SELECT 
-        COALESCE((SELECT (SUM(TIMESTAMPDIFF(MINUTE, tl.start_time, tl.end_time)) / (COUNT(tl.id) * 480)) * 100 
+        COALESCE((SELECT (SUM(TIMESTAMPDIFF(MINUTE, tl.start_time, COALESCE(tl.end_time, NOW()))) / 480) * 100 
                   FROM job_card_time_logs tl 
-                  WHERE tl.workstation_id = w.id AND tl.start_time IS NOT NULL AND tl.end_time IS NOT NULL), 85.5) as availability,
+                  WHERE tl.workstation_id = w.id AND tl.start_time IS NOT NULL AND tl.log_date = CURRENT_DATE), 85.5) as availability,
         COALESCE((SELECT 
                     CASE 
-                      WHEN SUM(TIMESTAMPDIFF(MINUTE, tl.start_time, tl.end_time)) > 0 
-                      THEN (SUM(tl.produced_qty) / (SUM(TIMESTAMPDIFF(MINUTE, tl.start_time, tl.end_time)) / NULLIF(AVG(jc.cycle_time), 0))) * 100
+                      WHEN SUM(TIMESTAMPDIFF(MINUTE, tl.start_time, COALESCE(tl.end_time, NOW()))) > 0 
+                      THEN (SUM(tl.produced_qty) / (SUM(TIMESTAMPDIFF(MINUTE, tl.start_time, COALESCE(tl.end_time, NOW()))) / NULLIF(AVG(jc.cycle_time), 0))) * 100
                       ELSE 0 
                     END
                   FROM job_card_time_logs tl
                   JOIN job_cards jc ON tl.job_card_id = jc.id
-                  WHERE tl.workstation_id = w.id), 78.2) as performance,
+                  WHERE tl.workstation_id = w.id AND tl.log_date = CURRENT_DATE), 78.2) as performance,
         COALESCE((SELECT (SUM(jc.accepted_qty) / NULLIF(SUM(jc.produced_qty), 0)) * 100 
                   FROM job_cards jc 
-                  WHERE jc.workstation_id = w.id AND jc.produced_qty > 0), 98.4) as quality
+                  WHERE jc.workstation_id = w.id AND jc.produced_qty > 0 AND jc.updated_at >= CURRENT_DATE), 98.4) as quality
       FROM workstations w
       WHERE w.status = 'Active'
     ) as stats
@@ -49,10 +49,10 @@ const getMachineAnalysisStats = async () => {
     LEFT JOIN (
       SELECT 
         tl.workstation_id,
-        (SUM(TIMESTAMPDIFF(MINUTE, tl.start_time, tl.end_time)) / (COUNT(tl.id) * 480)) * 100 as productive,
+        (SUM(TIMESTAMPDIFF(MINUTE, tl.start_time, COALESCE(tl.end_time, NOW()))) / 480) * 100 as productive,
         CASE 
-          WHEN SUM(TIMESTAMPDIFF(MINUTE, tl.start_time, tl.end_time)) > 0 
-          THEN (SUM(tl.produced_qty) / (SUM(TIMESTAMPDIFF(MINUTE, tl.start_time, tl.end_time)) / NULLIF(AVG(jc.cycle_time), 0))) * 100
+          WHEN SUM(TIMESTAMPDIFF(MINUTE, tl.start_time, COALESCE(tl.end_time, NOW()))) > 0 
+          THEN (SUM(tl.produced_qty) / (SUM(TIMESTAMPDIFF(MINUTE, tl.start_time, COALESCE(tl.end_time, NOW()))) / NULLIF(AVG(jc.cycle_time), 0))) * 100
           ELSE 0 
         END as performance,
         (SELECT (SUM(jc2.accepted_qty) / NULLIF(SUM(jc2.produced_qty), 0)) * 100 
@@ -60,6 +60,7 @@ const getMachineAnalysisStats = async () => {
          WHERE jc2.workstation_id = tl.workstation_id AND jc2.produced_qty > 0) as quality
       FROM job_card_time_logs tl
       JOIN job_cards jc ON tl.job_card_id = jc.id
+      WHERE tl.log_date = CURRENT_DATE
       GROUP BY tl.workstation_id
     ) as metrics ON w.id = metrics.workstation_id
     LEFT JOIN (
@@ -171,10 +172,14 @@ const getMachineAnalysisStats = async () => {
     LEFT JOIN (
       SELECT 
         workstation_id,
-        (SUM(TIMESTAMPDIFF(MINUTE, start_time, end_time)) / (COUNT(id) * 480)) * 100 as availability,
+        -- Availability: (Actual / 480 mins)
+        (SUM(TIMESTAMPDIFF(MINUTE, start_time, COALESCE(end_time, NOW()))) / 480) * 100 as availability,
+        -- Performance fallback if no real metric
         78.0 as performance,
+        -- Quality fallback
         98.0 as quality
       FROM job_card_time_logs
+      WHERE log_date = CURRENT_DATE
       GROUP BY workstation_id
     ) as stats ON w.id = stats.workstation_id
     WHERE w.id IS NOT NULL

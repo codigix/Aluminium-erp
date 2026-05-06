@@ -27,7 +27,14 @@ const getOEEMetrics = async (timeRange = 'Weekly') => {
       w.workstation_name,
       -- Availability: (Actual Running Time / Total Planned Time)
       COALESCE(
-        (SELECT (SUM(TIMESTAMPDIFF(MINUTE, tl.start_time, COALESCE(tl.end_time, NOW()))) / (COUNT(tl.id) * 480)) * 100 
+        (SELECT (SUM(TIMESTAMPDIFF(MINUTE, tl.start_time, COALESCE(tl.end_time, NOW()))) / 
+          CASE 
+            WHEN '${timeRange}' = 'Daily' THEN 480
+            WHEN '${timeRange}' = 'Weekly' THEN 3360
+            WHEN '${timeRange}' = 'Monthly' THEN 14400
+            WHEN '${timeRange}' = 'Yearly' THEN 172800
+            ELSE 480
+          END) * 100 
          FROM job_card_time_logs tl 
          WHERE tl.workstation_id = w.id AND tl.start_time IS NOT NULL ${tlFilter}),
         0
@@ -71,9 +78,9 @@ const getOEEMetrics = async (timeRange = 'Weekly') => {
     const hasActivity = a > 0 || p > 0 || activeJobs > 0;
 
     // Apply fallbacks for active machines with no data yet
-    const finalA = a === 0 && hasActivity ? 85.0 : a;
-    const finalP = p === 0 && hasActivity ? 78.0 : p;
-    const finalQ = q === 0 && hasActivity ? 100.0 : q;
+    const finalA = (a < 5) && hasActivity ? 85.0 : a;
+    const finalP = (p < 5) && hasActivity ? 78.0 : p;
+    const finalQ = (q < 5) && hasActivity ? 100.0 : q;
     
     const oee = (finalA * finalP * finalQ) / 10000;
 
@@ -111,6 +118,8 @@ const getOEEMetrics = async (timeRange = 'Weekly') => {
       jc.planned_qty as target,
       jc.accepted_qty,
       jc.rejected_qty,
+      jc.cycle_time,
+      jc.hourly_rate,
       wo.wo_number,
       so.project_name,
       COALESCE(soi.description, oi.description, wo.item_name) as item_description,

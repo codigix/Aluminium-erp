@@ -10,7 +10,7 @@ import {
   Settings, Layers, List, Cpu, Info, ChevronRight,
   TrendingUp, Clock, LayoutDashboard, Target, Calendar,
   Flame, Award, Microscope, Wind, Monitor, BrainCircuit,
-  Lightbulb, ZapOff, CheckCircle2, User,
+  Lightbulb, ZapOff, CheckCircle2, User as UserIcon,
   Layout, AlertCircle, ArrowUpRight, ArrowDownRight, Database, ArrowRight,
   Pause, MoreHorizontal, HelpCircle, Wallet, ChevronDown
 } from 'lucide-react';
@@ -183,10 +183,17 @@ const OEEAnalysis = () => {
     { label: 'PRODUCED', key: 'produced', className: 'text-center', render: (val) => (
       <span className="text-[11px] font-black text-slate-900">{parseFloat(val || 0).toFixed(3)}</span>
     )},
+    { label: 'ACCEPTED', key: 'accepted_qty', className: 'text-center', render: (val) => (
+      <span className="text-[11px] font-black text-emerald-600">{parseFloat(val || 0).toFixed(3)}</span>
+    )},
     { label: 'TARGET', key: 'target', className: 'text-center', render: (val) => (
       <span className="text-[11px] font-black text-slate-400">{parseFloat(val || 0).toFixed(3)}</span>
     )},
     { label: 'TIME & COSTING', key: 'start_time', render: (val, row) => {
+      const cycleTime = parseFloat(row.cycle_time || 0);
+      const hourlyRate = parseFloat(row.hourly_rate || 0);
+      const totalCost = (cycleTime / 60) * (row.produced || row.target || 1) * hourlyRate;
+      
       const start = row.start_time ? new Date(row.start_time) : null;
       const end = row.end_time ? new Date(row.end_time) : (row.status === 'IN_PROGRESS' ? new Date() : null);
       let duration = '0m';
@@ -197,12 +204,15 @@ const OEEAnalysis = () => {
         duration = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
       }
       return (
-        <div className="flex flex-col">
-          <span className="text-[10px] font-black text-slate-900 uppercase flex items-center gap-1">
-            <Clock className="w-3 h-3 text-slate-400" />
-            {duration}
-          </span>
-          <span className="text-[9px] text-emerald-600 font-bold uppercase mt-0.5 tracking-tighter">Live Logged</span>
+        <div className="flex flex-col gap-0.5">
+          <div className="flex items-center gap-1 text-[10px] text-slate-500">
+            <Clock className="w-2.5 h-2.5" />
+            <span>{Math.round(cycleTime)} min/u • {duration}</span>
+          </div>
+          <div className="flex items-center gap-1 text-[10px] text-slate-600">
+            <span className="font-medium text-emerald-600">₹{totalCost.toFixed(2)}</span>
+            <span className="text-slate-400">@ ₹{hourlyRate}/hr</span>
+          </div>
         </div>
       );
     }},
@@ -225,7 +235,7 @@ const OEEAnalysis = () => {
         <div className="flex flex-col">
           <div className="flex items-center gap-2">
             <div className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200">
-               <User className="w-3 h-3 text-slate-400" />
+               <UserIcon className="w-3 h-3 text-slate-400" />
             </div>
             <span className="text-[10px] font-black text-slate-700 uppercase">{val || 'Unassigned'}</span>
           </div>
@@ -337,12 +347,12 @@ const OEEAnalysis = () => {
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
-                      data={[{v: Number(overall.oee)}, {v: 100 - Number(overall.oee)}]}
+                      data={[{v: parseFloat(overall.oee) || 0.1}, {v: 100 - (parseFloat(overall.oee) || 0.1)}]}
                       startAngle={210} endAngle={-30}
                       innerRadius={85} outerRadius={115}
                       paddingAngle={0} dataKey="v" stroke="none"
                     >
-                      <Cell fill="#4f46e5" />
+                      <Cell fill={overall.oee > 0 ? "#4f46e5" : "#f1f5f9"} />
                       <Cell fill="#f1f5f9" />
                     </Pie>
                   </PieChart>
@@ -361,7 +371,7 @@ const OEEAnalysis = () => {
               </h3>
               <div className="flex-1">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={(data?.workstationAnalysis || []).slice(0, 10)}>
+                  <BarChart data={data?.workstationAnalysis?.length > 0 ? data.workstationAnalysis.slice(0, 10) : [{workstation_code: 'WS-0001', oee: 0}, {workstation_code: 'WS-0002', oee: 0}, {workstation_code: 'WS-0003', oee: 0}]}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                     <XAxis 
                       dataKey="workstation_code" 
@@ -369,7 +379,7 @@ const OEEAnalysis = () => {
                       tickLine={false} 
                       tick={{fill: '#94a3b8', fontSize: 9, fontWeight: 700}}
                     />
-                    <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 9, fontWeight: 700}} />
+                    <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 9, fontWeight: 700}} domain={[0, 100]} />
                     <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
                     <Bar dataKey="oee" fill="#4f46e5" radius={[4, 4, 0, 0]} barSize={20} />
                   </BarChart>

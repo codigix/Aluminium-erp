@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import * as XLSX from 'xlsx';
+import { cleanProjectName } from '../utils/formatters';
 import { Card, DataTable, StatusBadge, Button } from '../components/ui.jsx';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
@@ -11,13 +12,45 @@ import {
   Target, Filter, Download, RefreshCw, Calendar, ChevronRight,
   FileText, Users, Eye, Printer, Share2, Trash2, Edit, Truck,
   CheckCircle, XCircle, Send, Package, ArrowRight, MoreVertical,
-  Activity, Play, ClipboardList, Layers, Settings
+  Activity, Play, ClipboardList, Layers, Settings, User
 } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
 const ProductionReport = () => {
   const navigate = useNavigate();
+
+  const formatLocalTime = (isoString) => {
+    if (!isoString) return '';
+    const date = new Date(String(isoString).replace(' ', 'T'));
+    if (isNaN(date.getTime())) return isoString;
+
+    let hours = date.getHours();
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12 || 12;
+
+    return `${hours.toString().padStart(2, '0')}:${minutes} ${ampm}`;
+  };
+
+  const getEstimatedEndTime = (jc) => {
+    const startTime = jc.latest_log_start_time || jc.start_time;
+    if (!startTime) return '--:--';
+
+    try {
+      const start = new Date(String(startTime).replace(' ', 'T'));
+      if (isNaN(start.getTime())) return '--:--';
+
+      let stdTimeInMinutes = parseFloat(jc.cycleTime || 0);
+      const totalPlannedTime = stdTimeInMinutes * parseFloat(jc.plannedQty || 0);
+      const estimatedEnd = new Date(start.getTime() + totalPlannedTime * 60000);
+
+      return formatLocalTime(estimatedEnd.toISOString());
+    } catch (e) {
+      return '--:--';
+    }
+  };
+
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(new Date());
@@ -28,7 +61,7 @@ const ProductionReport = () => {
   const [selectedProject, setSelectedProject] = useState('All');
   const [summaryPage, setSummaryPage] = useState(1);
   const [projectsPage, setProjectsPage] = useState(1);
-  const itemsPerPage = 10;
+  const itemsPerPage = 5;
   const itemsPerSmallPage = 5;
 
   useEffect(() => {
@@ -496,57 +529,118 @@ const ProductionReport = () => {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50/50 text-[9px] text-slate-400 font-black uppercase tracking-widest border-b border-slate-100">
-                <th className="px-4 py-2">Work Order ID</th>
-                <th className="px-4 py-2">Project / Client</th>
-                <th className="px-4 py-2">Operation</th>
-                <th className="px-4 py-2">Item To Manufacture</th>
-                <th className="px-4 py-2 text-center">Planned</th>
+                <th className="px-4 py-2">ID / Project</th>
+                <th className="px-4 py-2">Operation / Status</th>
+                <th className="px-4 py-2">Specification / Execution</th>
+                <th className="px-4 py-2 text-center">Target</th>
                 <th className="px-4 py-2 text-center">Produced</th>
-                <th className="px-4 py-2">Progress</th>
-                <th className="px-4 py-2 text-center">Status</th>
-                <th className="px-4 py-2">Start Date</th>
-                <th className="px-4 py-2">Due Date</th>
+                <th className="px-4 py-2 text-center">Accepted</th>
+                <th className="px-4 py-2">Time & Costing</th>
+                <th className="px-4 py-2">Workstation</th>
+                <th className="px-4 py-2">Assignee & Time</th>
                 <th className="px-4 py-2 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {paginatedSummary.map((row, idx) => (
+              {paginatedSummary.map((row, idx) => {
+                const totalCost = (parseFloat(row.cycleTime || 0) / 60) * (parseFloat(row.wo_quantity || row.plannedQty || 1)) * parseFloat(row.hourlyRate || 0);
+                const displayProject = cleanProjectName(row.project, row.client);
+                const isSubcontract = row.execution_type === 'Outsource' || row.execution_type === 'Subcontract' || row.execution_type === 'Sub-Contract' || row.execution_mode === 'Outsource';
+                const sourceType = (row.source_type || '').toUpperCase();
+                const isSA = sourceType === 'SA' || sourceType === 'SUB ASSEMBLY' || sourceType === 'SFG';
+
+                return (
                 <tr key={idx} className="hover:bg-slate-50/50 transition-colors group text-[10px]">
-                  <td className="px-4 py-2 font-black text-indigo-600 whitespace-nowrap">{row.woNumber}</td>
-                  <td className="px-4 py-2 max-w-[150px]">
-                    <p className="font-black text-slate-900 truncate" title={row.project}>{row.project}</p>
-                    <p className="text-[8px] text-slate-400 font-bold uppercase truncate">{row.client}</p>
-                  </td>
-                  <td className="px-4 py-2 whitespace-nowrap">
-                    <p className="font-bold text-slate-600">{row.operation}</p>
-                    {row.jobCardNo && (
-                      <p className="text-[8px] text-indigo-500 font-bold uppercase mt-0.5">{row.jobCardNo}</p>
-                    )}
-                  </td>
-                  <td className="px-4 py-2 max-w-[150px]">
-                    <p className="font-black text-slate-900 uppercase tracking-tighter truncate" title={row.itemCode}>{row.itemCode}</p>
-                    <p className="text-[8px] text-slate-500 font-bold truncate">{row.itemName}</p>
-                  </td>
-                  <td className="px-4 py-2 text-center font-bold text-slate-600">{parseFloat(row.plannedQty).toFixed(2)}</td>
-                  <td className="px-4 py-2 text-center font-bold text-slate-900">{parseFloat(row.producedQty).toFixed(2)}</td>
                   <td className="px-4 py-2">
-                    <div className="flex items-center gap-1.5">
-                       <div className="w-12 h-1 bg-slate-100 rounded-full overflow-hidden">
-                         <div className={`h-full rounded-full ${
-                           row.progress >= 100 ? 'bg-emerald-500' : 'bg-blue-500'
-                         }`} style={{ width: `${row.progress}%` }} />
-                       </div>
-                       <span className="text-[9px] font-black text-slate-900">{row.progress}%</span>
+                    <div className="flex flex-col">
+                      <span className="font-black text-slate-900 truncate max-w-[180px]" title={displayProject}>{displayProject}</span>
+                      <span className="text-[9px] text-slate-500 font-bold">WO: {row.woNumber}</span>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className="flex items-center justify-center w-4 h-4 rounded bg-slate-100 text-[8px] font-bold text-slate-700 border border-slate-200">
+                          {row.sequence_no || '-'}
+                        </span>
+                        <span className="text-[10px] font-black text-indigo-600">{row.jobCardNo}</span>
+                      </div>
                     </div>
                   </td>
-                  <td className="px-4 py-2 text-center scale-90">
-                    <StatusBadge status={row.status} />
+                  <td className="px-4 py-2">
+                    <div className="flex flex-col gap-1">
+                      <span className="font-black text-slate-900 uppercase">{row.operation}</span>
+                      <StatusBadge status={row.status} />
+                    </div>
                   </td>
-                  <td className="px-4 py-2 text-slate-500 font-bold whitespace-nowrap text-[9px]">
-                    {row.startDate ? new Date(row.startDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : '-'}
+                  <td className="px-4 py-2">
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className={`text-[8px] font-black ${isSA ? 'text-amber-700' : 'text-indigo-700'}`}>
+                          {isSA ? 'Sub-Assembly' : 'Finished Goods'}
+                        </span>
+                        <span className={`text-[8px] font-black uppercase tracking-tight ${isSubcontract ? 'text-amber-600' : 'text-blue-600'}`}>
+                          ({isSubcontract ? 'Outsource' : 'In-house'})
+                        </span>
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="font-black text-slate-900 uppercase tracking-tighter truncate max-w-[150px]" title={row.itemCode}>{row.itemCode}</span>
+                        <span className="text-[8px] text-slate-500 font-bold truncate max-w-[150px]">{row.itemName}</span>
+                      </div>
+                    </div>
                   </td>
-                  <td className="px-4 py-2 text-slate-500 font-bold whitespace-nowrap text-[9px]">
-                    {row.dueDate ? new Date(row.dueDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : '-'}
+                  <td className="px-4 py-2 text-center font-bold text-slate-400">{parseFloat(row.plannedQty || 0).toFixed(2)}</td>
+                  <td className="px-4 py-2 text-center font-black text-slate-900">{parseFloat(row.producedQty || 0).toFixed(2)}</td>
+                  <td className="px-4 py-2 text-center font-black text-emerald-600">{parseFloat(row.acceptedQty || 0).toFixed(2)}</td>
+                  <td className="px-4 py-2">
+                    <div className="flex flex-col gap-0.5">
+                      <div className="flex items-center gap-1 text-[9px] text-slate-500">
+                        <Clock className="w-2.5 h-2.5" />
+                        <span>{Math.round(row.cycleTime || 0)} min/u</span>
+                      </div>
+                      <div className="flex items-center gap-1 text-[9px] text-slate-600 font-bold">
+                        <span className="text-emerald-600">₹{totalCost.toFixed(2)}</span>
+                        <span className="text-slate-400 font-medium">@ ₹{row.hourlyRate}/hr</span>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-4 py-2">
+                    <div className="flex flex-col">
+                      <span className={`font-black uppercase ${isSubcontract ? 'text-purple-600' : 'text-slate-900'}`}>
+                        {isSubcontract ? 'Subcontract' : (row.workstationName || 'N/A')}
+                      </span>
+                      {!isSubcontract && row.status === 'IN_PROGRESS' && (
+                        <span className="flex items-center gap-1 mt-0.5">
+                          <span className="w-1.5 h-1.5 bg-rose-500 rounded-full animate-pulse"></span>
+                          <span className="text-[9px] text-rose-600 font-bold uppercase tracking-tight">RUNNING</span>
+                        </span>
+                      )}
+                      {!isSubcontract && row.status === 'COMPLETED' && (
+                        <span className="flex items-center gap-1 mt-0.5">
+                          <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
+                          <span className="text-[9px] text-emerald-600 font-bold uppercase tracking-tight">COMPLETED</span>
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-4 py-2">
+                    <div className="flex flex-col">
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
+                          <User size={10} />
+                        </div>
+                        <span className="text-[10px] font-black text-slate-700 uppercase">{row.operatorName || 'Unassigned'}</span>
+                      </div>
+                      {row.status === 'IN_PROGRESS' && row.latest_log_start_time && !row.latest_log_end_time ? (
+                        <div className="flex flex-col gap-0.5 mt-0.5">
+                          <span className="text-[9px] font-black text-indigo-500 animate-pulse uppercase">
+                            LIVE: {formatLocalTime(row.latest_log_start_time)} - NOW
+                          </span>
+                        </div>
+                      ) : row.latest_log_start_time && row.latest_log_end_time ? (
+                        <div className="flex flex-col gap-0.5 mt-0.5">
+                          <span className="text-[9px] text-slate-500 font-bold">
+                            {formatLocalTime(row.latest_log_start_time)} - {formatLocalTime(row.latest_log_end_time)}
+                          </span>
+                        </div>
+                      ) : null}
+                    </div>
                   </td>
                   <td className="px-4 py-2 text-right">
                     <div className="flex items-center justify-end">
@@ -556,12 +650,12 @@ const ProductionReport = () => {
                          className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded-lg transition-all disabled:opacity-30"
                          title="Print QC Report"
                        >
-                         <Printer className="w-3 h-3" />
+                         <Printer className="w-3.5 h-3.5" />
                        </button>
                     </div>
                   </td>
                 </tr>
-              ))}
+              )})}
             </tbody>
           </table>
         </div>
@@ -578,17 +672,32 @@ const ProductionReport = () => {
                >
                  <ChevronRight className="w-4 h-4 rotate-180" />
                </button>
-               {[...Array(totalSummaryPages)].map((_, i) => (
-                 <button 
-                   key={i}
-                   onClick={() => setSummaryPage(i + 1)}
-                   className={`w-8 h-8 flex items-center justify-center rounded-lg font-black text-xs transition-all ${
-                     summaryPage === i + 1 ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'border border-slate-200 text-slate-400 hover:bg-white'
-                   }`}
-                 >
-                   {i + 1}
-                 </button>
-               ))}
+               {totalSummaryPages <= 5 ? (
+                 [...Array(totalSummaryPages)].map((_, i) => (
+                   <button 
+                     key={i}
+                     onClick={() => setSummaryPage(i + 1)}
+                     className={`w-8 h-8 flex items-center justify-center rounded-lg font-black text-xs transition-all ${
+                       summaryPage === i + 1 ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'border border-slate-200 text-slate-400 hover:bg-white'
+                     }`}
+                   >
+                     {i + 1}
+                   </button>
+                 ))
+               ) : (
+                 <>
+                   <button className={`w-8 h-8 flex items-center justify-center rounded-lg font-black text-xs bg-indigo-600 text-white shadow-lg shadow-indigo-100`}>
+                     {summaryPage}
+                   </button>
+                   <span className="text-slate-400 font-bold px-1">/</span>
+                   <button 
+                     onClick={() => setSummaryPage(totalSummaryPages)}
+                     className={`w-8 h-8 flex items-center justify-center rounded-lg font-black text-xs border border-slate-200 text-slate-400 hover:bg-white`}
+                   >
+                     {totalSummaryPages}
+                   </button>
+                 </>
+               )}
                <button 
                  disabled={summaryPage === totalSummaryPages}
                  onClick={() => setSummaryPage(prev => prev + 1)}

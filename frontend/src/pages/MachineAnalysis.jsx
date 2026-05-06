@@ -294,11 +294,11 @@ const MachineAnalysis = () => {
                     <ResponsiveContainer width="100%" height="100%">
                        <BarChart data={data?.temporalAnalysis}>
                           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                          <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}} />
+                          <XAxis dataKey="workstation_code" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}} />
                           <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}} />
                           <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
-                          <Bar dataKey="productive" fill="#818cf8" radius={[2, 2, 0, 0]} barSize={40} />
-                          <Bar dataKey="idle" fill="#f1f5f9" radius={[2, 2, 0, 0]} barSize={40} />
+                          <Bar dataKey="productive" fill="#4f46e5" radius={[2, 2, 0, 0]} barSize={30} />
+                          <Bar dataKey="idle" fill="#f1f5f9" radius={[2, 2, 0, 0]} barSize={30} />
                        </BarChart>
                     </ResponsiveContainer>
                  </div>
