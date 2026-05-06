@@ -321,10 +321,10 @@ const QualityReports = () => {
           <div className="p-6 border-b border-slate-50">
             <h3 className="text-sm text-slate-900 font-black uppercase tracking-widest">Supplier Performance</h3>
           </div>
-          <div className="p-0">
-            <table className="w-full text-left border-collapse">
+          <div className="p-0 max-h-[280px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200">
+            <table className="w-full text-left border-collapse sticky-header">
               <thead>
-                <tr className="bg-slate-50/50 text-[9px] text-slate-400 font-black uppercase tracking-widest border-b border-slate-100">
+                <tr className="bg-slate-50/50 text-[9px] text-slate-400 font-black uppercase tracking-widest border-b border-slate-100 sticky top-0 z-10 backdrop-blur-sm">
                   <th className="px-4 py-2">Supplier</th>
                   <th className="px-4 py-2 text-right">Score</th>
                 </tr>
@@ -360,10 +360,10 @@ const QualityReports = () => {
               View All History <ArrowRight className="w-3 h-3" />
             </button>
           </div>
-          <div className="p-0 overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+          <div className="p-0 overflow-x-auto max-h-[280px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200">
+            <table className="w-full text-left border-collapse sticky-header">
               <thead>
-                <tr className="bg-slate-50/50 text-[9px] text-slate-400 font-black uppercase tracking-widest border-b border-slate-100">
+                <tr className="bg-slate-50/50 text-[9px] text-slate-400 font-black uppercase tracking-widest border-b border-slate-100 sticky top-0 z-10 backdrop-blur-sm">
                   <th className="px-4 py-2">Report ID</th>
                   <th className="px-4 py-2">GRN Number</th>
                   <th className="px-4 py-2 text-center">Status</th>
@@ -434,10 +434,10 @@ const QualityReports = () => {
       {/* Rejections Table Section */}
       <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm mt-4 flex flex-col">
         <h3 className="text-sm text-slate-900 font-black uppercase tracking-widest mb-6">Recent Quality Rejections</h3>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+        <div className="overflow-x-auto max-h-[350px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200">
+          <table className="w-full text-left border-collapse sticky-header">
             <thead>
-              <tr className="bg-slate-50/50 text-[9px] text-slate-400 font-black uppercase tracking-widest border-b border-slate-100">
+              <tr className="bg-slate-50/50 text-[9px] text-slate-400 font-black uppercase tracking-widest border-b border-slate-100 sticky top-0 z-10 backdrop-blur-sm">
                 <th className="px-4 py-3">Item Details</th>
                 <th className="px-4 py-3">Reference</th>
                 <th className="px-4 py-3 text-center">Rejected Qty</th>

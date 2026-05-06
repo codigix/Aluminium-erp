@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, DataTable, FormControl, StatusBadge, Badge, SearchableSelect, Tabs, Button } from '../components/ui.jsx';
-import { Truck } from 'lucide-react';
+import { Truck, User } from 'lucide-react';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
 import {
   Eye,
@@ -35,6 +36,7 @@ const warehouseOptions = [
 ];
 
 const SalesOrders = () => {
+  const navigate = useNavigate();
   const [viewMode, setViewMode] = useState('list'); // 'list' or 'form'
   const [formMode, setFormMode] = useState('create'); // 'create', 'edit', 'view'
   const [loading, setLoading] = useState(false);
@@ -823,46 +825,59 @@ const SalesOrders = () => {
       label: 'Actions',
       key: 'actions',
       className: 'text-right',
-      render: (_, row) => (
-        <div className="flex justify-end items-center gap-1.5" onClick={e => e.stopPropagation()}>
-          <button
-            onClick={() => handleCreateShipment(row)}
-            className="p-2 hover:bg-blue-50 rounded  text-slate-400 hover:text-blue-600 transition-all border border-transparent hover:border-blue-100 group shadow-sm"
-            title="Create Shipment"
-          >
-            <Truck className="w-4 h-4 group-hover:scale-110" />
-          </button>
-          <div className="h-4 w-[1px] bg-slate-100 mx-0.5" />
-          <button
-            onClick={() => handleViewOrder(row)}
-            className="p-2 hover:bg-indigo-50 rounded  text-slate-400 hover:text-indigo-600 transition-all border border-transparent hover:border-indigo-100 group shadow-sm"
-            title="View Details"
-          >
-            <Eye className="w-4 h-4 group-hover:scale-110" />
-          </button>
-          <button
-            onClick={() => handleDownloadInvoice(row.id)}
-            className="p-2 hover:bg-emerald-50 rounded  text-slate-400 hover:text-emerald-600 transition-all border border-transparent hover:border-emerald-100 group shadow-sm"
-            title="Download Invoice"
-          >
-            <Download className="w-4 h-4 group-hover:scale-110" />
-          </button>
-          <button
-            onClick={() => handleEditOrder(row)}
-            className="p-2 hover:bg-amber-50 rounded  text-slate-400 hover:text-amber-600 transition-all border border-transparent hover:border-amber-100 group shadow-sm"
-            title="Edit Order"
-          >
-            <Pencil className="w-4 h-4 group-hover:scale-110" />
-          </button>
-          <button
-            onClick={() => handleDeleteOrder(row.id)}
-            className="p-2 hover:bg-rose-50 rounded  text-slate-400 hover:text-rose-600 transition-all border border-transparent hover:border-rose-100 group shadow-sm"
-            title="Delete Order"
-          >
-            <Trash2 className="w-4 h-4 group-hover:scale-110" />
-          </button>
-        </div>
-      )
+      render: (_, row) => {
+        const isReadyForShipment = ['READY_FOR_SHIPMENT', 'SHIPPED', 'DELIVERED'].includes(row.status?.toUpperCase());
+        return (
+          <div className="flex justify-end items-center gap-1.5" onClick={e => e.stopPropagation()}>
+            {isReadyForShipment ? (
+              <button
+                onClick={() => navigate('/payment-received')}
+                className="p-2 hover:bg-rose-50 rounded text-slate-400 hover:text-rose-600 transition-all border border-transparent hover:border-rose-100 group shadow-sm"
+                title="Account / Payment"
+              >
+                <User className="w-4 h-4 group-hover:scale-110" />
+              </button>
+            ) : (
+              <button
+                onClick={() => handleCreateShipment(row)}
+                className="p-2 hover:bg-blue-50 rounded  text-slate-400 hover:text-blue-600 transition-all border border-transparent hover:border-blue-100 group shadow-sm"
+                title="Ready For Shipment"
+              >
+                <Truck className="w-4 h-4 group-hover:scale-110" />
+              </button>
+            )}
+            <div className="h-4 w-[1px] bg-slate-100 mx-0.5" />
+            <button
+              onClick={() => handleViewOrder(row)}
+              className="p-2 hover:bg-indigo-50 rounded  text-slate-400 hover:text-indigo-600 transition-all border border-transparent hover:border-indigo-100 group shadow-sm"
+              title="View Details"
+            >
+              <Eye className="w-4 h-4 group-hover:scale-110" />
+            </button>
+            <button
+              onClick={() => handleDownloadInvoice(row.id)}
+              className="p-2 hover:bg-emerald-50 rounded  text-slate-400 hover:text-emerald-600 transition-all border border-transparent hover:border-emerald-100 group shadow-sm"
+              title="Download Invoice"
+            >
+              <Download className="w-4 h-4 group-hover:scale-110" />
+            </button>
+            <button
+              onClick={() => handleEditOrder(row)}
+              className="p-2 hover:bg-amber-50 rounded  text-slate-400 hover:text-amber-600 transition-all border border-transparent hover:border-amber-100 group shadow-sm"
+              title="Edit Order"
+            >
+              <Pencil className="w-4 h-4 group-hover:scale-110" />
+            </button>
+            <button
+              onClick={() => handleDeleteOrder(row.id)}
+              className="p-2 hover:bg-rose-50 rounded  text-slate-400 hover:text-rose-600 transition-all border border-transparent hover:border-rose-100 group shadow-sm"
+              title="Delete Order"
+            >
+              <Trash2 className="w-4 h-4 group-hover:scale-110" />
+            </button>
+          </div>
+        );
+      }
     }
   ];
 

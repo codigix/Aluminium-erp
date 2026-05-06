@@ -16,7 +16,7 @@ router.get('/stats', authenticate, authorize(['QC_VIEW']), async (req, res) => {
 
 router.get('/reports', authenticate, authorize(['QC_VIEW']), async (req, res) => {
   try {
-    const reports = await qcService.getQCReports();
+    const reports = await qcService.getQCReports(req.query);
     res.json(reports);
   } catch (error) {
     res.status(error.statusCode || 500).json({ message: error.message });

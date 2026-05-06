@@ -1231,16 +1231,38 @@ const getAccountsReportStats = async (filters = {}) => {
   }
 
   // 1. KPI Stats
-  // Receivables from Sales Orders (not fully paid)
+  // Receivables from Sales Orders and Direct Orders (not fully paid)
   const [[receivableStats]] = await pool.query(`
     SELECT 
-      COALESCE(SUM(so.net_total), 0) as totalReceivables,
-      COUNT(DISTINCT so.company_id) as receivableCustomers
-    FROM sales_orders so
-    JOIN companies c ON so.company_id = c.id
-    WHERE so.status NOT IN ('DRAFT', 'CANCELLED', 'CLOSED')
-    ${dateFilter.replace('created_at', 'so.created_at')}
-    ${customerFilter}
+      COALESCE(SUM(outstanding), 0) as totalReceivables,
+      COUNT(DISTINCT company_id) as receivableCustomers
+    FROM (
+      -- From sales_orders (Design based)
+      SELECT 
+        so.company_id,
+        c.company_name,
+        (COALESCE(NULLIF(so.net_total, 0), NULLIF(cp_pos.net_total, 0), (SELECT SUM(quantity * rate + tax_value) FROM sales_order_items WHERE sales_order_id = so.id), 0) - COALESCE((SELECT SUM(payment_amount) FROM customer_payments WHERE sales_order_id = so.id AND sales_order_source = 'SALES_ORDER' AND status = 'CONFIRMED'), 0)) as outstanding,
+        so.created_at
+      FROM sales_orders so
+      LEFT JOIN customer_pos cp_pos ON so.customer_po_id = cp_pos.id
+      JOIN companies c ON so.company_id = c.id
+      WHERE so.status NOT IN ('DRAFT', 'CANCELLED', 'PAID', 'CLOSED')
+
+      UNION ALL
+
+      -- From orders (Direct based)
+      SELECT 
+        o.client_id as company_id,
+        c.company_name,
+        (o.grand_total - COALESCE((SELECT SUM(payment_amount) FROM customer_payments WHERE sales_order_id = o.id AND sales_order_source = 'DIRECT_ORDER' AND status = 'CONFIRMED'), 0)) as outstanding,
+        o.created_at
+      FROM orders o
+      JOIN companies c ON o.client_id = c.id
+      WHERE o.status NOT IN ('Closed', 'Cancelled', 'Paid', 'PAID', 'CANCELLED', 'CLOSED')
+    ) combined
+    WHERE outstanding > 0
+    ${dateFilter.replace('created_at', 'combined.created_at')}
+    ${customerFilter.replace('c.company_name', 'combined.company_name')}
   `, [...params, ...(customer && customer !== 'All' && customer !== 'All Customers' ? [customer] : [])]);
 
   // Payables from Purchase Orders (not fully paid)
@@ -1275,17 +1297,38 @@ const getAccountsReportStats = async (filters = {}) => {
     ${customerFilter}
   `, [...params, ...(customer && customer !== 'All' && customer !== 'All Customers' ? [customer] : [])]);
 
-  // Overdue Amount (Sales orders past due date)
+  // Overdue Amount (Sales orders past 30 days and not fully paid)
   const [[overdueStats]] = await pool.query(`
     SELECT 
-      COALESCE(SUM(so.net_total), 0) as overdueAmount,
+      COALESCE(SUM(outstanding), 0) as overdueAmount,
       COUNT(*) as overdueInvoices
-    FROM sales_orders so
-    JOIN companies c ON so.company_id = c.id
-    WHERE so.status NOT IN ('DRAFT', 'CANCELLED', 'CLOSED') 
-    AND so.created_at < DATE_SUB(CURRENT_DATE, INTERVAL 30 DAY)
-    ${dateFilter.replace('created_at', 'so.created_at')}
-    ${customerFilter}
+    FROM (
+      -- From sales_orders (Design based)
+      SELECT 
+        c.company_name,
+        (COALESCE(NULLIF(so.net_total, 0), NULLIF(cp_pos.net_total, 0), (SELECT SUM(quantity * rate + tax_value) FROM sales_order_items WHERE sales_order_id = so.id), 0) - COALESCE((SELECT SUM(payment_amount) FROM customer_payments WHERE sales_order_id = so.id AND sales_order_source = 'SALES_ORDER' AND status = 'CONFIRMED'), 0)) as outstanding,
+        so.created_at
+      FROM sales_orders so
+      LEFT JOIN customer_pos cp_pos ON so.customer_po_id = cp_pos.id
+      JOIN companies c ON so.company_id = c.id
+      WHERE so.status NOT IN ('DRAFT', 'CANCELLED', 'PAID', 'CLOSED')
+      AND so.created_at < DATE_SUB(CURRENT_DATE, INTERVAL 30 DAY)
+
+      UNION ALL
+
+      -- From orders (Direct based)
+      SELECT 
+        c.company_name,
+        (o.grand_total - COALESCE((SELECT SUM(payment_amount) FROM customer_payments WHERE sales_order_id = o.id AND sales_order_source = 'DIRECT_ORDER' AND status = 'CONFIRMED'), 0)) as outstanding,
+        o.created_at
+      FROM orders o
+      JOIN companies c ON o.client_id = c.id
+      WHERE o.status NOT IN ('Closed', 'Cancelled', 'Paid', 'PAID', 'CANCELLED', 'CLOSED')
+      AND o.created_at < DATE_SUB(CURRENT_DATE, INTERVAL 30 DAY)
+    ) combined
+    WHERE outstanding > 0
+    ${dateFilter.replace('created_at', 'combined.created_at')}
+    ${customerFilter.replace('c.company_name', 'combined.company_name')}
   `, [...params, ...(customer && customer !== 'All' && customer !== 'All Customers' ? [customer] : [])]);
 
   // 2. Receivables vs Payables (Comparison)
@@ -1328,17 +1371,43 @@ const getAccountsReportStats = async (filters = {}) => {
   // 5. Top Customers
   const [topCustomers] = await pool.query(`
     SELECT 
-      c.company_name as name,
-      '' as email,
-      COUNT(so.id) as totalInvoices,
-      SUM(so.net_total) as outstanding,
-      SUM(CASE WHEN so.created_at < DATE_SUB(CURRENT_DATE, INTERVAL 30 DAY) THEN so.net_total ELSE 0 END) as overdue
-    FROM sales_orders so
-    JOIN companies c ON so.company_id = c.id
-    WHERE so.status NOT IN ('DRAFT', 'CANCELLED', 'CLOSED')
-    ${dateFilter.replace('created_at', 'so.created_at')}
-    ${customerFilter}
-    GROUP BY c.id
+      name,
+      email,
+      COUNT(*) as totalInvoices,
+      SUM(outstanding) as outstanding,
+      SUM(overdue) as overdue
+    FROM (
+      -- From sales_orders (Design based)
+      SELECT 
+        c.company_name as name,
+        '' as email,
+        so.id,
+        (COALESCE(NULLIF(so.net_total, 0), NULLIF(cp_pos.net_total, 0), (SELECT SUM(quantity * rate + tax_value) FROM sales_order_items WHERE sales_order_id = so.id), 0) - COALESCE((SELECT SUM(payment_amount) FROM customer_payments WHERE sales_order_id = so.id AND sales_order_source = 'SALES_ORDER' AND status = 'CONFIRMED'), 0)) as outstanding,
+        CASE WHEN so.created_at < DATE_SUB(CURRENT_DATE, INTERVAL 30 DAY) THEN (COALESCE(NULLIF(so.net_total, 0), NULLIF(cp_pos.net_total, 0), (SELECT SUM(quantity * rate + tax_value) FROM sales_order_items WHERE sales_order_id = so.id), 0) - COALESCE((SELECT SUM(payment_amount) FROM customer_payments WHERE sales_order_id = so.id AND sales_order_source = 'SALES_ORDER' AND status = 'CONFIRMED'), 0)) ELSE 0 END as overdue,
+        so.created_at
+      FROM sales_orders so
+      JOIN companies c ON so.company_id = c.id
+      LEFT JOIN customer_pos cp_pos ON so.customer_po_id = cp_pos.id
+      WHERE so.status NOT IN ('DRAFT', 'CANCELLED', 'PAID', 'CLOSED')
+
+      UNION ALL
+
+      -- From orders (Direct based)
+      SELECT 
+        c.company_name as name,
+        '' as email,
+        o.id,
+        (o.grand_total - COALESCE((SELECT SUM(payment_amount) FROM customer_payments WHERE sales_order_id = o.id AND sales_order_source = 'DIRECT_ORDER' AND status = 'CONFIRMED'), 0)) as outstanding,
+        CASE WHEN o.created_at < DATE_SUB(CURRENT_DATE, INTERVAL 30 DAY) THEN (o.grand_total - COALESCE((SELECT SUM(payment_amount) FROM customer_payments WHERE sales_order_id = o.id AND sales_order_source = 'DIRECT_ORDER' AND status = 'CONFIRMED'), 0)) ELSE 0 END as overdue,
+        o.created_at
+      FROM orders o
+      JOIN companies c ON o.client_id = c.id
+      WHERE o.status NOT IN ('Closed', 'Cancelled', 'Paid', 'PAID', 'CANCELLED', 'CLOSED')
+    ) combined
+    WHERE outstanding > 0
+    ${dateFilter.replace('created_at', 'combined.created_at')}
+    ${customerFilter.replace('c.company_name', 'combined.name')}
+    GROUP BY name
     ORDER BY outstanding DESC
     LIMIT 3
   `, [...params, ...(customer && customer !== 'All' && customer !== 'All Customers' ? [customer] : [])]);

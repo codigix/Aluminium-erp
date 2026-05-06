@@ -295,6 +295,7 @@ const getOutstandingInvoices = async (customerId) => {
         so.company_id as company_id,
         CONVERT(COALESCE(so.so_number, cp_pos.po_number, CAST(so.id AS CHAR)) USING utf8mb4) as so_number,
         c.company_name as company_name,
+        COALESCE(NULLIF(so.project_name, ''), NULLIF(cp_pos.project_name, ''), 'General Project') as project_name,
         COALESCE(NULLIF(so.net_total, 0), NULLIF(cp_pos.net_total, 0), (SELECT SUM(quantity * rate + tax_value) FROM sales_order_items WHERE sales_order_id = so.id), 0) as total_amount,
         COALESCE((SELECT SUM(payment_amount) FROM customer_payments WHERE sales_order_id = so.id AND sales_order_source = 'SALES_ORDER' AND status = 'CONFIRMED'), 0) as paid_amount,
         (COALESCE(NULLIF(so.net_total, 0), NULLIF(cp_pos.net_total, 0), (SELECT SUM(quantity * rate + tax_value) FROM sales_order_items WHERE sales_order_id = so.id), 0) - COALESCE((SELECT SUM(payment_amount) FROM customer_payments WHERE sales_order_id = so.id AND sales_order_source = 'SALES_ORDER' AND status = 'CONFIRMED'), 0)) as outstanding,
@@ -313,6 +314,7 @@ const getOutstandingInvoices = async (customerId) => {
         o.client_id as company_id,
         CONVERT(o.order_no USING utf8mb4) as so_number,
         c.company_name as company_name,
+        COALESCE(NULLIF(o.project_name, ''), 'General Project') as project_name,
         o.grand_total as total_amount,
         COALESCE((SELECT SUM(payment_amount) FROM customer_payments WHERE sales_order_id = o.id AND sales_order_source = 'DIRECT_ORDER' AND status = 'CONFIRMED'), 0) as paid_amount,
         (o.grand_total - COALESCE((SELECT SUM(payment_amount) FROM customer_payments WHERE sales_order_id = o.id AND sales_order_source = 'DIRECT_ORDER' AND status = 'CONFIRMED'), 0)) as outstanding,
@@ -339,6 +341,7 @@ const getAllOutstandingInvoices = async () => {
         so.company_id as company_id,
         CONVERT(COALESCE(so.so_number, cp_pos.po_number, CAST(so.id AS CHAR)) USING utf8mb4) as so_number,
         c.company_name as company_name,
+        COALESCE(NULLIF(so.project_name, ''), NULLIF(cp_pos.project_name, ''), 'General Project') as project_name,
         COALESCE(NULLIF(so.net_total, 0), NULLIF(cp_pos.net_total, 0), (SELECT SUM(quantity * rate + tax_value) FROM sales_order_items WHERE sales_order_id = so.id), 0) as total_amount,
         COALESCE((SELECT SUM(payment_amount) FROM customer_payments WHERE sales_order_id = so.id AND sales_order_source = 'SALES_ORDER' AND status = 'CONFIRMED'), 0) as paid_amount,
         (COALESCE(NULLIF(so.net_total, 0), NULLIF(cp_pos.net_total, 0), (SELECT SUM(quantity * rate + tax_value) FROM sales_order_items WHERE sales_order_id = so.id), 0) - COALESCE((SELECT SUM(payment_amount) FROM customer_payments WHERE sales_order_id = so.id AND sales_order_source = 'SALES_ORDER' AND status = 'CONFIRMED'), 0)) as outstanding,
@@ -357,6 +360,7 @@ const getAllOutstandingInvoices = async () => {
         o.client_id as company_id,
         CONVERT(o.order_no USING utf8mb4) as so_number,
         c.company_name as company_name,
+        COALESCE(NULLIF(o.project_name, ''), 'General Project') as project_name,
         o.grand_total as total_amount,
         COALESCE((SELECT SUM(payment_amount) FROM customer_payments WHERE sales_order_id = o.id AND sales_order_source = 'DIRECT_ORDER' AND status = 'CONFIRMED'), 0) as paid_amount,
         (o.grand_total - COALESCE((SELECT SUM(payment_amount) FROM customer_payments WHERE sales_order_id = o.id AND sales_order_source = 'DIRECT_ORDER' AND status = 'CONFIRMED'), 0)) as outstanding,
@@ -396,7 +400,18 @@ const generateCustomerPaymentReceiptPDF = async (paymentId) => {
   const payment = await getPaymentReceivedById(paymentId);
   
   const [customerRows] = await pool.query(
-    'SELECT * FROM companies WHERE id = ?',
+    `SELECT 
+      c.*,
+      ct.email as contact_email,
+      ct.phone as contact_phone,
+      (SELECT CONCAT_WS(', ', line1, line2, city, state, pincode) FROM company_addresses WHERE company_id = c.id AND address_type = 'SHIPPING' LIMIT 1) as shipping_address
+    FROM companies c
+    LEFT JOIN (
+      SELECT company_id, email, phone,
+             ROW_NUMBER() OVER (PARTITION BY company_id ORDER BY contact_type = 'PRIMARY' DESC, id ASC) as rn
+      FROM contacts
+    ) ct ON ct.company_id = c.id AND ct.rn = 1
+    WHERE c.id = ?`,
     [payment.customer_id]
   );
   const customer = customerRows[0];
@@ -573,10 +588,10 @@ const generateCustomerPaymentReceiptPDF = async (paymentId) => {
 
   const viewData = {
     ...payment,
-    customer_name: customer?.company_name || customer?.vendor_name || 'N/A',
-    email: customer?.email || 'N/A',
-    location: customer?.address || customer?.location || 'N/A',
-    phone: customer?.phone || 'N/A',
+    customer_name: customer?.company_name || 'N/A',
+    email: customer?.contact_email || 'N/A',
+    location: customer?.shipping_address || 'N/A',
+    phone: customer?.contact_phone || 'N/A',
     formatted_date: formatDate(payment.payment_date),
     formatted_cheque_date: formatDate(payment.cheque_date),
     formatted_amount: parseFloat(payment.payment_amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),

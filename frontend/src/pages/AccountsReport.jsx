@@ -87,6 +87,99 @@ const AccountsReport = () => {
 
   const totalVendorPages = Math.ceil((stats?.topVendors?.length || 0) / itemsPerPage);
 
+  const handleViewPDF = async (transaction) => {
+    try {
+      let endpoint = '';
+      if (transaction.type === 'Payment Received') {
+        endpoint = `${API_BASE}/customer-payments/${transaction.id}/pdf`;
+      } else if (transaction.type === 'Vendor Payment') {
+        endpoint = `${API_BASE}/payments/${transaction.id}/pdf`;
+      } else if (transaction.type === 'Vendor Invoice') {
+        endpoint = `${API_BASE}/purchase-orders/${transaction.id}/pdf`;
+      }
+
+      if (!endpoint) return;
+
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(endpoint, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        window.open(url, '_blank');
+      }
+    } catch (error) {
+      console.error('Error viewing PDF:', error);
+    }
+  };
+
+  const handleDownloadPDF = async (transaction) => {
+    try {
+      let endpoint = '';
+      let filename = '';
+      if (transaction.type === 'Payment Received') {
+        endpoint = `${API_BASE}/customer-payments/${transaction.id}/pdf`;
+        filename = `Receipt_${transaction.reference}.pdf`;
+      } else if (transaction.type === 'Vendor Payment') {
+        endpoint = `${API_BASE}/payments/${transaction.id}/pdf`;
+        filename = `Voucher_${transaction.reference}.pdf`;
+      } else if (transaction.type === 'Vendor Invoice') {
+        endpoint = `${API_BASE}/purchase-orders/${transaction.id}/pdf`;
+        filename = `PO_${transaction.reference}.pdf`;
+      }
+
+      if (!endpoint) return;
+
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(endpoint, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+      }
+    } catch (error) {
+      console.error('Error downloading PDF:', error);
+    }
+  };
+
+  const handlePrintPDF = async (transaction) => {
+    try {
+      let endpoint = '';
+      if (transaction.type === 'Payment Received') {
+        endpoint = `${API_BASE}/customer-payments/${transaction.id}/pdf`;
+      } else if (transaction.type === 'Vendor Payment') {
+        endpoint = `${API_BASE}/payments/${transaction.id}/pdf`;
+      } else if (transaction.type === 'Vendor Invoice') {
+        endpoint = `${API_BASE}/purchase-orders/${transaction.id}/pdf`;
+      }
+
+      if (!endpoint) return;
+
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(endpoint, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const printWindow = window.open(url, '_blank');
+        printWindow.onload = () => {
+          printWindow.print();
+        };
+      }
+    } catch (error) {
+      console.error('Error printing PDF:', error);
+    }
+  };
+
   const handleExport = () => {
     if (!stats) return;
 
@@ -517,11 +610,20 @@ const AccountsReport = () => {
                   </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-1">
-                       {[Eye, Download, Printer].map((Icon, i) => (
-                         <button key={i} className="p-2 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded-lg transition-all border border-transparent hover:border-slate-200">
-                           <Icon className="w-3.5 h-3.5" />
-                         </button>
-                       ))}
+                      <button 
+                        onClick={() => handleDownloadPDF(transaction)}
+                        className="p-2 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded-lg transition-all border border-transparent hover:border-slate-200"
+                        title="Download PDF"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                      </button>
+                      <button 
+                        onClick={() => handlePrintPDF(transaction)}
+                        className="p-2 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded-lg transition-all border border-transparent hover:border-slate-200"
+                        title="Print PDF"
+                      >
+                        <Printer className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   </td>
                 </tr>
