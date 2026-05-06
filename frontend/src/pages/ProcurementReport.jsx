@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import * as XLSX from 'xlsx';
-import { Card, DataTable, StatusBadge, Button } from '../components/ui.jsx';
+import { Card, DataTable, StatusBadge, Button, Pagination } from '../components/ui.jsx';
 import PurchaseOrderDetail from './PurchaseOrderDetail.jsx';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
@@ -32,7 +32,7 @@ const ProcurementReport = () => {
   const [uploadingPoId, setUploadingPoId] = useState(null);
   const [selectedPODetail, setSelectedPODetail] = useState(null);
   const [fetchingDetail, setFetchingDetail] = useState(false);
-  const itemsPerPage = 10;
+  const itemsPerPage = 5;
   const itemsPerSmallPage = 5;
 
   useEffect(() => {
@@ -422,67 +422,46 @@ const ProcurementReport = () => {
               View all vendors <ChevronRight className="w-3 h-3" />
             </button>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="text-[10px] text-slate-400 font-black uppercase tracking-widest border-b border-slate-50">
-                  <th className="pb-3 pr-2">Supplier</th>
-                  <th className="pb-3 pr-2 text-center">Total Orders</th>
-                  <th className="pb-3 pr-2">Fulfillment %</th>
-                  <th className="pb-3 pr-2 text-center">Avg Rating</th>
-                  <th className="pb-3 text-right">Delay %</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {paginatedVendors.map((vendor, idx) => (
-                  <tr key={idx} className="hover:bg-slate-50 transition-colors group">
-                    <td className="py-4 text-xs font-black text-slate-900">{vendor.supplier}</td>
-                    <td className="py-4 text-xs font-bold text-slate-600 text-center">{vendor.totalOrders}</td>
-                    <td className="py-4 text-xs">
-                       <div className="flex items-center gap-2">
-                         <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                           <div className="h-full bg-emerald-500 rounded-full" style={{ width: vendor.fulfillment }} />
-                         </div>
-                         <span className="text-[10px] font-bold text-slate-500">{vendor.fulfillment}</span>
-                       </div>
-                    </td>
-                    <td className="py-4 text-center">
-                       <div className="flex items-center justify-center gap-1">
-                          {[1,2,3,4,5].map(s => (
-                            <span key={s} className={`text-xs ${s <= Math.floor(vendor.avgRating) ? 'text-amber-400' : 'text-slate-200'}`}>★</span>
-                          ))}
-                          <span className="text-[10px] font-bold text-slate-400 ml-1">{vendor.avgRating}</span>
-                       </div>
-                    </td>
-                    <td className="py-4 text-right text-xs font-bold text-rose-500">{vendor.delay}</td>
+          <div className="max-h-[350px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="text-[10px] text-slate-400 font-black uppercase tracking-widest border-b border-slate-50 sticky top-0 bg-white z-10">
+                    <th className="pb-3 pr-2">Supplier</th>
+                    <th className="pb-3 pr-2 text-center">Total Orders</th>
+                    <th className="pb-3 pr-2">Fulfillment %</th>
+                    <th className="pb-3 pr-2 text-center">Avg Rating</th>
+                    <th className="pb-3 text-right">Delay %</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {totalVendorsPages > 1 && (
-            <div className="mt-4 flex items-center justify-between">
-              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
-                Page {vendorsPage} of {totalVendorsPages}
-              </p>
-              <div className="flex items-center gap-1">
-                <button 
-                  disabled={vendorsPage === 1}
-                  onClick={() => setVendorsPage(prev => prev - 1)}
-                  className="w-6 h-6 flex items-center justify-center rounded bg-slate-50 text-slate-400 hover:bg-slate-100 disabled:opacity-50"
-                >
-                  <ChevronRight className="w-3 h-3 rotate-180" />
-                </button>
-                <button 
-                  disabled={vendorsPage === totalVendorsPages}
-                  onClick={() => setVendorsPage(prev => prev + 1)}
-                  className="w-6 h-6 flex items-center justify-center rounded bg-slate-50 text-slate-400 hover:bg-slate-100 disabled:opacity-50"
-                >
-                  <ChevronRight className="w-3 h-3" />
-                </button>
-              </div>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {stats.vendorPerformance?.map((vendor, idx) => (
+                    <tr key={idx} className="hover:bg-slate-50 transition-colors group">
+                      <td className="py-4 text-xs font-black text-slate-900">{vendor.supplier}</td>
+                      <td className="py-4 text-xs font-bold text-slate-600 text-center">{vendor.totalOrders}</td>
+                      <td className="py-4 text-xs">
+                         <div className="flex items-center gap-2">
+                           <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                             <div className="h-full bg-emerald-500 rounded-full" style={{ width: vendor.fulfillment }} />
+                           </div>
+                           <span className="text-[10px] font-bold text-slate-500">{vendor.fulfillment}</span>
+                         </div>
+                      </td>
+                      <td className="py-4 text-center">
+                         <div className="flex items-center justify-center gap-1">
+                            {[1,2,3,4,5].map(s => (
+                              <span key={s} className={`text-xs ${s <= Math.floor(vendor.avgRating) ? 'text-amber-400' : 'text-slate-200'}`}>★</span>
+                            ))}
+                            <span className="text-[10px] font-bold text-slate-400 ml-1">{vendor.avgRating}</span>
+                         </div>
+                      </td>
+                      <td className="py-4 text-right text-xs font-bold text-rose-500">{vendor.delay}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          )}
+          </div>
         </div>
 
         {/* Recent Activity */}
@@ -493,30 +472,32 @@ const ProcurementReport = () => {
               View all activity <ChevronRight className="w-3 h-3" />
             </button>
           </div>
-          <div className="space-y-4">
-            {stats.recentActivity.map((activity, idx) => (
-              <div key={idx} className="flex items-start gap-3 group">
-                <div className={`p-2 rounded-lg ${
-                  activity.type === 'RFQ_SENT' ? 'bg-blue-50 text-blue-600' : 
-                  activity.type === 'PO_CREATED' ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600'
-                }`}>
-                  {activity.type === 'RFQ_SENT' ? <Send className="w-3.5 h-3.5" /> : 
-                   activity.type === 'PO_CREATED' ? <ShoppingCart className="w-3.5 h-3.5" /> : <Package className="w-3.5 h-3.5" />}
-                </div>
-                <div className="flex-1 border-b border-slate-50 pb-3 last:border-0">
-                  <div className="flex justify-between items-start">
-                    <p className="text-xs font-black text-slate-900 tracking-tight">
-                      {activity.type === 'RFQ_SENT' ? `RFQ ${activity.ref} sent to vendors` : 
-                       activity.type === 'PO_CREATED' ? `PO ${activity.ref} created` : `GRN ${activity.ref} completed`}
-                    </p>
-                    <span className="text-[9px] text-slate-400 font-bold whitespace-nowrap">
-                      {new Date(activity.time).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
-                    </span>
+          <div className="max-h-[350px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
+            <div className="space-y-4">
+              {stats.recentActivity.map((activity, idx) => (
+                <div key={idx} className="flex items-start gap-3 group">
+                  <div className={`p-2 rounded-lg ${
+                    activity.type === 'RFQ_SENT' ? 'bg-blue-50 text-blue-600' : 
+                    activity.type === 'PO_CREATED' ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600'
+                  }`}>
+                    {activity.type === 'RFQ_SENT' ? <Send className="w-3.5 h-3.5" /> : 
+                     activity.type === 'PO_CREATED' ? <ShoppingCart className="w-3.5 h-3.5" /> : <Package className="w-3.5 h-3.5" />}
                   </div>
-                  <p className="text-[10px] text-slate-500 font-bold mt-0.5">{activity.sub}</p>
+                  <div className="flex-1 border-b border-slate-50 pb-3 last:border-0">
+                    <div className="flex justify-between items-start">
+                      <p className="text-xs font-black text-slate-900 tracking-tight">
+                        {activity.type === 'RFQ_SENT' ? `RFQ ${activity.ref} sent to vendors` : 
+                         activity.type === 'PO_CREATED' ? `PO ${activity.ref} created` : `GRN ${activity.ref} completed`}
+                      </p>
+                      <span className="text-[9px] text-slate-400 font-bold whitespace-nowrap">
+                        {new Date(activity.time).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-slate-500 font-bold mt-0.5">{activity.sub}</p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -613,40 +594,13 @@ const ProcurementReport = () => {
             </tbody>
           </table>
         </div>
-        {totalSummaryPages > 1 && (
-          <div className="px-6 py-4 border-t border-slate-50 bg-slate-50/20 flex items-center justify-between">
-             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-               Showing {(summaryPage - 1) * itemsPerPage + 1} to {Math.min(summaryPage * itemsPerPage, stats.poGrnSummary.length)} of {stats.poGrnSummary.length} entries
-             </p>
-             <div className="flex items-center gap-1">
-               <button 
-                 disabled={summaryPage === 1}
-                 onClick={() => setSummaryPage(prev => prev - 1)}
-                 className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:bg-white disabled:opacity-50"
-               >
-                 <ChevronRight className="w-4 h-4 rotate-180" />
-               </button>
-               {[...Array(totalSummaryPages)].map((_, i) => (
-                 <button 
-                   key={i}
-                   onClick={() => setSummaryPage(i + 1)}
-                   className={`w-8 h-8 flex items-center justify-center rounded-lg font-black text-xs transition-all ${
-                     summaryPage === i + 1 ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'border border-slate-200 text-slate-400 hover:bg-white'
-                   }`}
-                 >
-                   {i + 1}
-                 </button>
-               ))}
-               <button 
-                 disabled={summaryPage === totalSummaryPages}
-                 onClick={() => setSummaryPage(prev => prev + 1)}
-                 className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:bg-white disabled:opacity-50"
-               >
-                 <ChevronRight className="w-4 h-4" />
-               </button>
-             </div>
-          </div>
-        )}
+        <Pagination 
+          currentPage={summaryPage}
+          totalPages={totalSummaryPages}
+          onPageChange={setSummaryPage}
+          totalItems={stats.poGrnSummary.length}
+          pageSize={itemsPerPage}
+        />
       </div>
       <input
         type="file"

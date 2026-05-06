@@ -651,7 +651,7 @@ const getProcurementReportStats = async (filters = {}) => {
     SELECT 
       COUNT(*) as totalRfqs,
       SUM(CASE WHEN status = 'SENT' THEN 1 ELSE 0 END) as sentRfqs,
-      SUM(CASE WHEN status = 'RECEIVED' THEN 1 ELSE 0 END) as receivedRfqs
+      SUM(CASE WHEN (status = 'RECEIVED' OR id IN (SELECT DISTINCT rfq_id FROM quotations WHERE rfq_id IS NOT NULL)) THEN 1 ELSE 0 END) as receivedRfqs
     FROM procurement_rfqs
     WHERE 1=1 ${dateFilter}
   `, params);
@@ -728,32 +728,35 @@ const getProcurementReportStats = async (filters = {}) => {
   const [recentActivity] = await pool.query(`
     (SELECT 
       'RFQ_SENT' as type,
-      id,
-      rfq_number as ref,
+      rfq.id,
+      rfq.rfq_number as ref,
       'Sent' as status,
-      'General Procurement' as sub,
-      created_at as time
-    FROM procurement_rfqs WHERE status = 'SENT' LIMIT 2)
+      COALESCE(
+        (SELECT material_name FROM procurement_rfq_items WHERE rfq_id = rfq.id LIMIT 1),
+        'General Procurement'
+      ) as sub,
+      rfq.created_at as time
+    FROM procurement_rfqs rfq WHERE rfq.status = 'SENT' ${dateFilter.replace('created_at', 'rfq.created_at')} ORDER BY rfq.created_at DESC LIMIT 5)
     UNION ALL
     (SELECT 
       'PO_CREATED' as type,
-      id,
-      po_number as ref,
-      'Created' as status,
-      (SELECT vendor_name FROM vendors WHERE id = vendor_id) as sub,
-      created_at as time
-    FROM purchase_orders LIMIT 2)
+      po.id,
+      po.po_number as ref,
+      po.status as status,
+      (SELECT vendor_name FROM vendors WHERE id = po.vendor_id) as sub,
+      po.created_at as time
+    FROM purchase_orders po WHERE 1=1 ${dateFilter.replace('created_at', 'po.created_at')} ORDER BY po.created_at DESC LIMIT 5)
     UNION ALL
     (SELECT 
       'GRN_COMPLETED' as type,
-      id,
-      po_number as ref,
+      g.id,
+      g.po_number as ref,
       'Completed' as status,
-      (SELECT vendor_name FROM vendors WHERE id = (SELECT vendor_id FROM purchase_orders WHERE po_number = grns.po_number LIMIT 1)) as sub,
-      created_at as time
-    FROM grns WHERE status = 'APPROVED' LIMIT 1)
-    ORDER BY time DESC LIMIT 5
-  `);
+      (SELECT vendor_name FROM vendors WHERE id = (SELECT vendor_id FROM purchase_orders WHERE po_number = g.po_number LIMIT 1)) as sub,
+      g.created_at as time
+    FROM grns g WHERE g.status = 'APPROVED' ${dateFilter.replace('created_at', 'g.created_at')} ORDER BY g.created_at DESC LIMIT 5)
+    ORDER BY time DESC LIMIT 15
+  `, [...params, ...params, ...params]);
 
   // 6. PO & GRN Summary Table
   const [poGrnSummary] = await pool.query(`
