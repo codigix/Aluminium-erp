@@ -811,27 +811,29 @@ const getProductionReportStats = async (filters = {}) => {
     projectFilter = ' AND so.project_name = ?';
   }
 
-  // 1. KPI Stats
+  // 1. KPI Stats - Updated to count Job Cards
   const [[woStats]] = await pool.query(`
     SELECT 
       COUNT(*) as totalWorkOrders,
-      SUM(CASE WHEN wo.status = 'IN_PROGRESS' THEN 1 ELSE 0 END) as inProgress,
-      SUM(CASE WHEN wo.status = 'COMPLETED' THEN 1 ELSE 0 END) as completed,
-      COALESCE(SUM(wo.quantity), 0) as plannedQty
-    FROM work_orders wo
+      SUM(CASE WHEN jc.status = 'IN_PROGRESS' THEN 1 ELSE 0 END) as inProgress,
+      SUM(CASE WHEN jc.status = 'COMPLETED' THEN 1 ELSE 0 END) as completed,
+      COALESCE(SUM(jc.planned_qty), 0) as plannedQty
+    FROM job_cards jc
+    JOIN work_orders wo ON jc.work_order_id = wo.id
     LEFT JOIN sales_orders so ON wo.sales_order_id = so.id
-    WHERE wo.status != 'CANCELLED'
-    ${dateFilter.replace('created_at', 'wo.created_at')}
+    WHERE 1=1
+    ${dateFilter.replace('created_at', 'jc.created_at')}
     ${projectFilter}
   `, [...params, ...(project && project !== 'All' && project !== 'All Projects' ? [project] : [])]);
 
-  // Produced qty calculation
+  // Produced qty calculation - Updated to use Job Cards
   const [[producedStats]] = await pool.query(`
-    SELECT COALESCE(SUM(wo.quantity), 0) as producedQty 
-    FROM work_orders wo
+    SELECT COALESCE(SUM(jc.produced_qty), 0) as producedQty 
+    FROM job_cards jc
+    JOIN work_orders wo ON jc.work_order_id = wo.id
     LEFT JOIN sales_orders so ON wo.sales_order_id = so.id
-    WHERE wo.status = 'COMPLETED'
-    ${dateFilter.replace('created_at', 'wo.created_at')}
+    WHERE jc.status = 'COMPLETED'
+    ${dateFilter.replace('created_at', 'jc.created_at')}
     ${projectFilter}
   `, [...params, ...(project && project !== 'All' && project !== 'All Projects' ? [project] : [])]);
 
@@ -842,12 +844,12 @@ const getProductionReportStats = async (filters = {}) => {
     ? Math.round((producedStats.producedQty / woStats.plannedQty) * 100) 
     : 0;
 
-  // 2. Production Trend (Last 7 Days)
+  // 2. Production Trend (Last 7 Days) - Updated for Job Cards
   const [productionTrend] = await pool.query(`
     SELECT 
       DATE_FORMAT(date_list.date, '%d %b') as name,
-      COALESCE((SELECT SUM(quantity) FROM work_orders WHERE DATE(created_at) = date_list.date AND status != 'CANCELLED'), 0) as planned,
-      COALESCE((SELECT SUM(quantity) FROM work_orders WHERE DATE(updated_at) = date_list.date AND status = 'COMPLETED'), 0) as produced
+      COALESCE((SELECT SUM(planned_qty) FROM job_cards WHERE DATE(created_at) = date_list.date), 0) as planned,
+      COALESCE((SELECT SUM(produced_qty) FROM job_cards WHERE DATE(updated_at) = date_list.date AND status = 'COMPLETED'), 0) as produced
     FROM (
       SELECT CURRENT_DATE - INTERVAL 6 DAY as date UNION ALL
       SELECT CURRENT_DATE - INTERVAL 5 DAY UNION ALL
@@ -861,15 +863,19 @@ const getProductionReportStats = async (filters = {}) => {
     ORDER BY date_list.date ASC
   `);
 
-  // 3. Work Order Status Distribution
+  // 3. Work Order Status Distribution - Updated to Job Card Status
   const [statusCounts] = await pool.query(`
     SELECT 
-      status as name,
+      jc.status as name,
       COUNT(*) as value
-    FROM work_orders
-    WHERE status != 'CANCELLED'
-    GROUP BY status
-  `);
+    FROM job_cards jc
+    JOIN work_orders wo ON jc.work_order_id = wo.id
+    LEFT JOIN sales_orders so ON wo.sales_order_id = so.id
+    WHERE 1=1
+    ${dateFilter.replace('created_at', 'jc.created_at')}
+    ${projectFilter}
+    GROUP BY jc.status
+  `, [...params, ...(project && project !== 'All' && project !== 'All Projects' ? [project] : [])]);
 
   const statusDistribution = statusCounts.map(s => ({
     name: s.name,
@@ -877,16 +883,28 @@ const getProductionReportStats = async (filters = {}) => {
     percent: Math.round((s.value / totalWO) * 100)
   }));
 
-  // 4. Operation Efficiency (Mock data as per requirements since specific operation tracking table is not fully defined in core summary)
-  const operationEfficiency = [
-    { name: 'Cutting', efficiency: 75 },
-    { name: 'Deep Drawing', efficiency: 62 },
-    { name: 'Trimming', efficiency: 58 },
-    { name: 'Welding', efficiency: 66 },
-    { name: 'Polishing', efficiency: 50 }
-  ];
+  // 4. Operation Efficiency - Dynamic based on Job Cards
+  const [operationEfficiency] = await pool.query(`
+    SELECT 
+      COALESCE(o.operation_name, jc.operation_name) as name,
+      CASE 
+        WHEN SUM(jc.planned_qty) > 0 THEN ROUND((SUM(jc.accepted_qty) / SUM(jc.planned_qty)) * 100)
+        ELSE 0 
+      END as efficiency,
+      CASE 
+        WHEN SUM(jc.planned_qty) > 0 AND (SUM(jc.accepted_qty) / SUM(jc.planned_qty)) >= 0.8 THEN 'GOOD'
+        ELSE 'AVERAGE'
+      END as status
+    FROM job_cards jc
+    LEFT JOIN operations o ON jc.operation_id = o.id
+    WHERE 1=1
+    ${dateFilter.replace('created_at', 'jc.created_at')}
+    GROUP BY name
+    HAVING name IS NOT NULL
+    ORDER BY efficiency DESC
+  `, params);
 
-  // 5. Top Projects
+  // 5. Top Projects - Reverted to use Work Orders as base to show planned projects too
   const [topProjects] = await pool.query(`
     SELECT 
       so.project_name as name,
@@ -900,8 +918,8 @@ const getProductionReportStats = async (filters = {}) => {
     ${dateFilter.replace('created_at', 'wo.created_at')}
     ${projectFilter}
     GROUP BY so.id
-    ORDER BY produced DESC
-    LIMIT 3
+    ORDER BY MAX(wo.created_at) DESC
+    LIMIT 5
   `, [...params, ...(project && project !== 'All' && project !== 'All Projects' ? [project] : [])]);
 
   const topProjectsFormatted = topProjects.map(p => ({
@@ -909,20 +927,22 @@ const getProductionReportStats = async (filters = {}) => {
     efficiency: p.planned > 0 ? Math.round((p.produced / p.planned) * 100) : 0
   }));
 
-  // 6. Recent Activity
+  // 6. Recent Activity - Robust operation name
   const [recentActivity] = await pool.query(`
     SELECT 
       wo.wo_number as wo,
-      wo.status as type,
-      COALESCE((SELECT operation_name FROM operations WHERE workstation_id = wo.workstation_id LIMIT 1), 'General') as operation,
-      wo.updated_at as time
-    FROM work_orders wo
+      jc.status as type,
+      COALESCE(o.operation_name, jc.operation_name, 'Process') as operation,
+      jc.updated_at as time
+    FROM job_cards jc
+    JOIN work_orders wo ON jc.work_order_id = wo.id
     LEFT JOIN sales_orders so ON wo.sales_order_id = so.id
+    LEFT JOIN operations o ON jc.operation_id = o.id
     WHERE 1=1
-    ${dateFilter.replace('created_at', 'wo.created_at')}
+    ${dateFilter.replace('created_at', 'jc.created_at')}
     ${projectFilter}
-    ORDER BY wo.updated_at DESC
-    LIMIT 4
+    ORDER BY jc.updated_at DESC
+    LIMIT 10
   `, [...params, ...(project && project !== 'All' && project !== 'All Projects' ? [project] : [])]);
 
   // 7. Summary Table - Updated to list Job Cards with same details as Job Card page

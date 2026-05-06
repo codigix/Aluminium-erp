@@ -380,30 +380,32 @@ const ProductionReport = () => {
             <h3 className="text-sm text-slate-900 font-black uppercase tracking-widest">Operation Efficiency</h3>
             <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">Average efficiency by operations</p>
           </div>
-          <div className="space-y-4">
-            <div className="flex items-center text-[10px] text-slate-400 font-black uppercase tracking-widest border-b border-slate-50 pb-2">
-              <span className="flex-1">Operation</span>
-              <span className="w-20 text-center">Efficiency</span>
-              <span className="w-16 text-right">Status</span>
-            </div>
-            {stats.operationEfficiency.map((op, idx) => (
-              <div key={idx} className="flex items-center group">
-                <span className="flex-1 text-[11px] font-black text-slate-900">{op.name}</span>
-                <span className="w-20 text-center text-[11px] font-bold text-slate-600">{op.efficiency}%</span>
-                <span className="w-16 text-right">
-                  <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded ${
-                    op.efficiency >= 70 ? 'text-emerald-600 bg-emerald-50' : 
-                    op.efficiency >= 50 ? 'text-amber-600 bg-amber-50' : 'text-rose-600 bg-rose-50'
-                  }`}>
-                    {op.efficiency >= 70 ? 'Good' : op.efficiency >= 50 ? 'Average' : 'Low'}
-                  </span>
-                </span>
+          <div className="max-h-[350px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
+            <div className="space-y-4">
+              <div className="flex items-center text-[10px] text-slate-400 font-black uppercase tracking-widest border-b border-slate-50 pb-2 sticky top-0 bg-white z-10">
+                <span className="flex-1">Operation</span>
+                <span className="w-20 text-center">Efficiency</span>
+                <span className="w-16 text-right">Status</span>
               </div>
-            ))}
-            <button className="w-full text-center mt-4 text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center justify-center gap-1">
-              View all operations <ArrowRight className="w-3 h-3" />
-            </button>
+              {stats.operationEfficiency.map((op, idx) => (
+                <div key={idx} className="flex items-center group py-1">
+                  <span className="flex-1 text-[11px] font-black text-slate-900">{op.name}</span>
+                  <span className="w-20 text-center text-[11px] font-bold text-slate-600">{op.efficiency}%</span>
+                  <span className="w-16 text-right">
+                    <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded ${
+                      op.efficiency >= 70 ? 'text-emerald-600 bg-emerald-50' : 
+                      op.efficiency >= 50 ? 'text-amber-600 bg-amber-50' : 'text-rose-600 bg-rose-50'
+                    }`}>
+                      {op.efficiency >= 70 ? 'Good' : op.efficiency >= 50 ? 'Average' : 'Low'}
+                    </span>
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
+          <button className="w-full text-center mt-4 text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center justify-center gap-1">
+            View all operations <ArrowRight className="w-3 h-3" />
+          </button>
         </div>
       </div>
 
@@ -420,34 +422,36 @@ const ProductionReport = () => {
               View all projects <ChevronRight className="w-3 h-3" />
             </button>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="text-[10px] text-slate-400 font-black uppercase tracking-widest border-b border-slate-50">
-                  <th className="pb-3 pr-2">Project / Client</th>
-                  <th className="pb-3 pr-2 text-center">Planned Qty</th>
-                  <th className="pb-3 pr-2 text-center">Produced Qty</th>
-                  <th className="pb-3 text-right">Efficiency</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {paginatedProjects.map((project, idx) => (
-                  <tr key={idx} className="hover:bg-slate-50 transition-colors group">
-                    <td className="py-4 pr-2">
-                      <p className="text-xs font-black text-slate-900">{project.name}</p>
-                      <p className="text-[9px] text-slate-400 font-bold mt-0.5 uppercase tracking-tighter">{project.client}</p>
-                    </td>
-                    <td className="py-4 text-xs font-bold text-slate-600 text-center">{parseFloat(project.planned).toFixed(2)}</td>
-                    <td className="py-4 text-xs font-bold text-slate-600 text-center">{parseFloat(project.produced).toFixed(2)}</td>
-                    <td className="py-4 text-right">
-                       <span className={`text-[10px] font-black ${
-                         project.efficiency >= 60 ? 'text-emerald-600' : 'text-amber-600'
-                       }`}>{project.efficiency}%</span>
-                    </td>
+          <div className="max-h-[350px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="text-[10px] text-slate-400 font-black uppercase tracking-widest border-b border-slate-50 sticky top-0 bg-white z-10">
+                    <th className="pb-3 pr-2">Project / Client</th>
+                    <th className="pb-3 pr-2 text-center">Planned Qty</th>
+                    <th className="pb-3 pr-2 text-center">Produced Qty</th>
+                    <th className="pb-3 text-right">Efficiency</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {paginatedProjects.map((project, idx) => (
+                    <tr key={idx} className="hover:bg-slate-50 transition-colors group">
+                      <td className="py-4 pr-2">
+                        <p className="text-xs font-black text-slate-900">{project.name}</p>
+                        <p className="text-[9px] text-slate-400 font-bold mt-0.5 uppercase tracking-tighter">{project.client}</p>
+                      </td>
+                      <td className="py-4 text-xs font-bold text-slate-600 text-center">{parseFloat(project.planned).toFixed(2)}</td>
+                      <td className="py-4 text-xs font-bold text-slate-600 text-center">{parseFloat(project.produced).toFixed(2)}</td>
+                      <td className="py-4 text-right">
+                         <span className={`text-[10px] font-black ${
+                           project.efficiency >= 60 ? 'text-emerald-600' : 'text-amber-600'
+                         }`}>{project.efficiency}%</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
           {totalProjectsPages > 1 && (
             <div className="mt-4 flex items-center justify-between">
@@ -482,40 +486,42 @@ const ProductionReport = () => {
               View all activity <ChevronRight className="w-3 h-3" />
             </button>
           </div>
-          <div className="space-y-4">
-            {stats.recentActivity.map((activity, idx) => (
-              <div key={idx} className="flex items-start gap-3 group">
-                <div className={`p-2 rounded-lg ${
-                  activity.type === 'COMPLETED' ? 'bg-emerald-50 text-emerald-600' : 
-                  activity.type === 'IN_PROGRESS' ? 'bg-blue-50 text-blue-600' : 
-                  activity.type === 'PENDING' ? 'bg-amber-50 text-amber-600' : 'bg-slate-50 text-slate-400'
-                }`}>
-                  {activity.type === 'COMPLETED' ? <CheckCircle className="w-3.5 h-3.5" /> : 
-                   activity.type === 'IN_PROGRESS' ? <Activity className="w-3.5 h-3.5" /> : 
-                   activity.type === 'PENDING' ? <Clock className="w-3.5 h-3.5" /> : <Settings className="w-3.5 h-3.5" />}
-                </div>
-                <div className="flex-1 border-b border-slate-50 pb-3 last:border-0">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <p className="text-xs font-black text-slate-900 tracking-tight">
-                        Work Order {activity.wo} {activity.type === 'COMPLETED' ? 'completed' : 
-                                               activity.type === 'IN_PROGRESS' ? 'in progress' : 
-                                               activity.type === 'PENDING' ? 'pending' : 'on hold'}
-                      </p>
-                      <p className="text-[10px] text-slate-500 font-bold mt-0.5">Operation: {activity.operation}</p>
-                    </div>
-                    <div className="text-right">
-                      <span className="block text-[9px] text-slate-400 font-bold whitespace-nowrap">
-                        {new Date(activity.time).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
-                      </span>
-                      <span className="block text-[9px] text-slate-400 font-bold mt-1">
-                        {new Date(activity.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
-                      </span>
+          <div className="max-h-[350px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
+            <div className="space-y-4">
+              {stats.recentActivity.map((activity, idx) => (
+                <div key={idx} className="flex items-start gap-3 group">
+                  <div className={`p-2 rounded-lg ${
+                    activity.type === 'COMPLETED' ? 'bg-emerald-50 text-emerald-600' : 
+                    activity.type === 'IN_PROGRESS' ? 'bg-blue-50 text-blue-600' : 
+                    activity.type === 'PENDING' ? 'bg-amber-50 text-amber-600' : 'bg-slate-50 text-slate-400'
+                  }`}>
+                    {activity.type === 'COMPLETED' ? <CheckCircle className="w-3.5 h-3.5" /> : 
+                     activity.type === 'IN_PROGRESS' ? <Activity className="w-3.5 h-3.5" /> : 
+                     activity.type === 'PENDING' ? <Clock className="w-3.5 h-3.5" /> : <Settings className="w-3.5 h-3.5" />}
+                  </div>
+                  <div className="flex-1 border-b border-slate-50 pb-3 last:border-0">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="text-xs font-black text-slate-900 tracking-tight">
+                          Work Order {activity.wo} {activity.type === 'COMPLETED' ? 'completed' : 
+                                                 activity.type === 'IN_PROGRESS' ? 'in progress' : 
+                                                 activity.type === 'PENDING' ? 'pending' : 'on hold'}
+                        </p>
+                        <p className="text-[10px] text-slate-500 font-bold mt-0.5">Operation: {activity.operation}</p>
+                      </div>
+                      <div className="text-right">
+                        <span className="block text-[9px] text-slate-400 font-bold whitespace-nowrap">
+                          {new Date(activity.time).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
+                        </span>
+                        <span className="block text-[9px] text-slate-400 font-bold mt-1">
+                          {new Date(activity.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
       </div>
