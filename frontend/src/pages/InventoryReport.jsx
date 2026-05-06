@@ -327,45 +327,47 @@ const InventoryReport = () => {
       {/* Warehouse & Low Stock Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Stock by Warehouse */}
-        <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
+        <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm flex flex-col">
           <div className="flex items-center justify-between mb-6">
             <div>
               <h3 className="text-sm text-slate-900 font-black uppercase tracking-widest">Stock by Warehouse</h3>
               <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">Current stock summary by warehouse</p>
             </div>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="text-[10px] text-slate-400 font-black uppercase tracking-widest border-b border-slate-50">
-                  <th className="pb-3 pr-2">Warehouse</th>
-                  <th className="pb-3 pr-2 text-center">Total Items</th>
-                  <th className="pb-3 pr-2 text-center">Stock Value</th>
-                  <th className="pb-3 pr-2 text-center">Low Stock</th>
-                  <th className="pb-3 pr-2 text-center">Out of Stock</th>
-                  <th className="pb-3 text-right">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {stats.warehouseStock.map((warehouse, idx) => (
-                  <tr key={idx} className="hover:bg-slate-50 transition-colors group">
-                    <td className="py-4 pr-2 text-xs font-black text-slate-900">{warehouse.name}</td>
-                    <td className="py-4 text-xs font-bold text-slate-600 text-center">{warehouse.totalItems}</td>
-                    <td className="py-4 text-xs font-bold text-slate-600 text-center">₹{parseFloat(warehouse.stockValue).toLocaleString('en-IN')}</td>
-                    <td className="py-4 text-xs font-bold text-amber-600 text-center">{warehouse.lowStock}</td>
-                    <td className="py-4 text-xs font-bold text-rose-600 text-center">{warehouse.outOfStock}</td>
-                    <td className="py-4 text-right">
-                       <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-emerald-50 text-emerald-600">Active</span>
-                    </td>
+          <div className="flex-1 max-h-[300px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="text-[10px] text-slate-400 font-black uppercase tracking-widest border-b border-slate-50 sticky top-0 bg-white z-10">
+                    <th className="pb-3 pr-2">Warehouse</th>
+                    <th className="pb-3 pr-2 text-center">Total Items</th>
+                    <th className="pb-3 pr-2 text-center">Stock Value</th>
+                    <th className="pb-3 pr-2 text-center">Low Stock</th>
+                    <th className="pb-3 pr-2 text-center">Out of Stock</th>
+                    <th className="pb-3 text-right">Status</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {stats.warehouseStock.map((warehouse, idx) => (
+                    <tr key={idx} className="hover:bg-slate-50 transition-colors group">
+                      <td className="py-4 pr-2 text-xs font-black text-slate-900">{warehouse.name}</td>
+                      <td className="py-4 text-xs font-bold text-slate-600 text-center">{warehouse.totalItems}</td>
+                      <td className="py-4 text-xs font-bold text-slate-600 text-center">₹{parseFloat(warehouse.stockValue).toLocaleString('en-IN')}</td>
+                      <td className="py-4 text-xs font-bold text-amber-600 text-center">{warehouse.lowStock}</td>
+                      <td className="py-4 text-xs font-bold text-rose-600 text-center">{warehouse.outOfStock}</td>
+                      <td className="py-4 text-right">
+                         <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-emerald-50 text-emerald-600">Active</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 
         {/* Top Low Stock Items */}
-        <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
+        <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm flex flex-col">
           <div className="flex items-center justify-between mb-6">
             <div>
               <h3 className="text-sm text-slate-900 font-black uppercase tracking-widest">Top Low Stock Items</h3>
@@ -375,27 +377,29 @@ const InventoryReport = () => {
               View all low stock items <ArrowRight className="w-3 h-3" />
             </button>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="text-[10px] text-slate-400 font-black uppercase tracking-widest border-b border-slate-50">
-                  <th className="pb-3 pr-2">Item Code</th>
-                  <th className="pb-3 pr-2">Item Name</th>
-                  <th className="pb-3 pr-2 text-center">Current Stock</th>
-                  <th className="pb-3 text-right">Min. Required</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {paginatedLowStock.map((item, idx) => (
-                  <tr key={idx} className="hover:bg-slate-50 transition-colors group">
-                    <td className="py-4 text-xs font-black text-indigo-600">{item.itemCode}</td>
-                    <td className="py-4 text-xs font-bold text-slate-600">{item.itemName}</td>
-                    <td className="py-4 text-xs font-black text-rose-600 text-center">{parseFloat(item.currentStock).toFixed(0)} {item.uom}</td>
-                    <td className="py-4 text-right text-xs font-bold text-slate-400">{parseFloat(item.minRequired).toFixed(0)} {item.uom}</td>
+          <div className="flex-1 max-h-[300px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="text-[10px] text-slate-400 font-black uppercase tracking-widest border-b border-slate-50 sticky top-0 bg-white z-10">
+                    <th className="pb-3 pr-2">Item Code</th>
+                    <th className="pb-3 pr-2">Item Name</th>
+                    <th className="pb-3 pr-2 text-center">Current Stock</th>
+                    <th className="pb-3 text-right">Min. Required</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {paginatedLowStock.map((item, idx) => (
+                    <tr key={idx} className="hover:bg-slate-50 transition-colors group">
+                      <td className="py-4 text-xs font-black text-indigo-600">{item.itemCode}</td>
+                      <td className="py-4 text-xs font-bold text-slate-600">{item.itemName}</td>
+                      <td className="py-4 text-xs font-black text-rose-600 text-center">{parseFloat(item.currentStock).toFixed(0)} {item.uom}</td>
+                      <td className="py-4 text-right text-xs font-bold text-slate-400">{parseFloat(item.minRequired).toFixed(0)} {item.uom}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
           {totalLowStockPages > 1 && (
             <div className="mt-4 flex items-center justify-between">
