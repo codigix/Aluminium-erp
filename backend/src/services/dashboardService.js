@@ -759,11 +759,11 @@ const getProcurementReportStats = async (filters = {}) => {
   const [poGrnSummary] = await pool.query(`
     SELECT 
       po.id,
-      po.po_number as poNo,
+      po.po_number as poNumber,
       v.vendor_name as supplier,
       COALESCE(so.project_name, 'General Procurement') as project,
       DATE_FORMAT(po.created_at, '%d %b %Y') as poDate,
-      po.total_amount as amount,
+      po.total_amount as poAmount,
       (SELECT status FROM grns WHERE po_number = po.po_number ORDER BY created_at DESC LIMIT 1) as grnStatus,
       (SELECT grn_date FROM grns WHERE po_number = po.po_number ORDER BY created_at DESC LIMIT 1) as grnDate,
       po.status as status,

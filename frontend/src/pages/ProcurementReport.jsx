@@ -225,11 +225,11 @@ const ProcurementReport = () => {
     // 4. Purchase Orders & Goods Receipts Summary
     if (stats.poGrnSummary) {
       const poGrnData = stats.poGrnSummary.map(item => ({
-        'PO Number': item.poNo,
+        'PO Number': item.poNumber,
         'Supplier': item.supplier,
         'Project / Customer': item.project,
         'PO Date': item.poDate,
-        'PO Amount': item.amount,
+        'PO Amount': item.poAmount,
         'GRN Status': item.grnStatus,
         'Status': item.status
       }));
@@ -616,7 +616,7 @@ const ProcurementReport = () => {
         {totalSummaryPages > 1 && (
           <div className="px-6 py-4 border-t border-slate-50 bg-slate-50/20 flex items-center justify-between">
              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-               Showing {(summaryPage - 1) * itemsPerPage + 1} to {Math.min(summaryPage * itemsPerPage, stats.summaryTable.length)} of {stats.summaryTable.length} entries
+               Showing {(summaryPage - 1) * itemsPerPage + 1} to {Math.min(summaryPage * itemsPerPage, stats.poGrnSummary.length)} of {stats.poGrnSummary.length} entries
              </p>
              <div className="flex items-center gap-1">
                <button 
