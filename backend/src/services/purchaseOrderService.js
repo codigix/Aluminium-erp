@@ -919,442 +919,256 @@ const handleStoreAcceptance = async (poId, payload) => {
 const generatePurchaseOrderPDF = async (poId) => {
   const po = await getPurchaseOrderById(poId);
   const [vendorRows] = await pool.query('SELECT * FROM vendors WHERE id = ?', [po.vendor_id]);
-  const vendor = vendorRows[0];
+  const vendor = vendorRows[0] || {};
+
+  // Fallback for contact info from contacts table
+  let phone = vendor.phone;
+  let email = vendor.email;
+  if (!phone || phone === 'N/A' || !email || email === 'N/A') {
+    const [contactRows] = await pool.query(
+      "SELECT phone, email FROM contacts WHERE company_id = ? AND contact_type = 'PRIMARY' LIMIT 1",
+      [po.vendor_id]
+    );
+    if (contactRows.length > 0) {
+      if (!phone || phone === 'N/A') phone = contactRows[0].phone;
+      if (!email || email === 'N/A') email = contactRows[0].email;
+    }
+  }
+
+  // Fallback for location from company_addresses
+  let location = vendor.location;
+  if (!location || location === 'N/A' || location === '') {
+    const [addressRows] = await pool.query(
+      "SELECT line1, line2, city, state, pincode FROM company_addresses WHERE company_id = ? AND address_type = 'BILLING' LIMIT 1",
+      [po.vendor_id]
+    );
+    if (addressRows.length > 0) {
+      const addr = addressRows[0];
+      location = [addr.line1, addr.line2, addr.city, addr.state, addr.pincode]
+        .filter(part => part && String(part).trim() !== '')
+        .join(', ');
+    }
+  }
 
   const htmlTemplate = `
     <!DOCTYPE html>
     <html>
     <head>
-      <meta charset="utf-8">
       <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        @page { size: A4; margin: 10mm; }
+        body { font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #000; line-height: 1.3; margin: 0; font-size: 10px; }
+        .invoice-container { border: 1px solid #000; min-height: 270mm; position: relative; }
         
-        body { 
-          font-family: 'Inter', sans-serif; 
-          color: #1e293b; 
-          line-height: 1.5; 
-          margin: 0;
-          padding: 0;
-          background-color: #fff;
-        }
+        .header-section { display: flex; border-bottom: 1px solid #000; }
+        .header-left { flex: 1.5; padding: 10px; border-right: 1px solid #000; }
+        .header-right { flex: 1; padding: 10px; }
         
-        .page {
-          padding: 40px;
-        }
-
-        .header-top {
-          text-align: center;
-          margin-bottom: 30px;
-        }
-
-        .company-name {
-          color: #059669;
-          font-size: 32px;
-          font-weight: 700;
-          margin: 0;
-          text-transform: uppercase;
-          letter-spacing: 1px;
-        }
-
-        .company-address {
-          color: #64748b;
-          font-size: 14px;
-          margin: 5px 0;
-        }
-
-        .divider {
-          height: 2px;
-          background: linear-gradient(to right, transparent, #059669, transparent);
-          margin: 20px 0;
-        }
-
-        .rfq-header {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 20px;
-          margin-bottom: 30px;
-        }
-
-        .rfq-title {
-          font-size: 24px;
-          font-weight: 700;
-          color: #064e3b;
-          text-transform: uppercase;
-          letter-spacing: 2px;
-          margin: 0;
-        }
-
-        .dot {
-          width: 8px;
-          height: 8px;
-          background-color: #059669;
-          border-radius: 50%;
-        }
-
-        .info-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr 1fr;
-          gap: 15px;
-          margin-bottom: 30px;
-        }
-
-        .info-card {
-          background: #f8fafc;
-          border: 1px solid #e2e8f0;
-          border-radius: 8px;
-          padding: 10px 12px;
-          display: flex;
-          align-items: center;
-          gap: 10px;
-        }
-
-        .icon-box {
-          width: 32px;
-          height: 32px;
-          background: #fff;
-          border: 1px solid #e2e8f0;
-          border-radius: 6px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: #059669;
-          flex-shrink: 0;
-        }
-
-        .info-label {
-          font-size: 9px;
-          font-weight: 600;
-          color: #059669;
-          text-transform: uppercase;
-          margin-bottom: 1px;
-          letter-spacing: 0.5px;
-        }
-
-        .info-value {
-          font-size: 12px;
-          font-weight: 700;
-          color: #1e293b;
-          word-break: break-all;
-        }
-
-        .details-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 20px;
-          margin-bottom: 30px;
-        }
-
-        .section-card {
-          border: 1px solid #e2e8f0;
-          border-radius: 8px;
-          overflow: hidden;
-        }
-
-        .section-header {
-          background: #065f46;
-          color: #fff;
-          padding: 8px 15px;
-          font-size: 12px;
-          font-weight: 600;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          text-transform: uppercase;
-        }
-
-        .section-content {
-          padding: 15px;
-          font-size: 13px;
-        }
-
-        .section-content p {
-          margin: 0;
-          line-height: 1.6;
-        }
-
-        table {
-          width: 100%;
-          border-collapse: collapse;
-          margin-bottom: 20px;
-          border-radius: 8px;
-          overflow: hidden;
-          border: 1px solid #e2e8f0;
-        }
-
-        th {
-          background: #ecfdf5;
-          color: #065f46;
-          text-align: left;
-          padding: 12px 15px;
-          font-size: 11px;
-          font-weight: 700;
-          text-transform: uppercase;
-          border-bottom: 2px solid #d1fae5;
-        }
-
-        td {
-          padding: 10px 15px;
-          border-bottom: 1px solid #f1f5f9;
-          font-size: 12px;
-          color: #334155;
-        }
-
-        tr:nth-child(even) {
-          background-color: #fcfcfc;
-        }
-
-        .amount-col {
-          text-align: right;
-          font-weight: 500;
-        }
-
-        .summary-container {
-          display: flex;
-          justify-content: flex-end;
-          margin-bottom: 30px;
-        }
-
-        .summary-table {
-          width: 300px;
-          border: 1px solid #e2e8f0;
-          margin-bottom: 0;
-        }
-
-        .summary-table td {
-          padding: 8px 15px;
-        }
-
-        .summary-label {
-          color: #64748b;
-          font-weight: 500;
-        }
-
-        .summary-value {
-          text-align: right;
-          font-weight: 600;
-        }
-
-        .grand-total-row {
-          background: #ecfdf5;
-          color: #059669;
-          font-size: 14px !important;
-          font-weight: 700 !important;
-        }
-
-        .notes-card {
-          border: 1px solid #e2e8f0;
-          border-radius: 8px;
-          margin-bottom: 40px;
-        }
-
-        .notes-header {
-          padding: 10px 15px;
-          font-size: 11px;
-          font-weight: 600;
-          color: #059669;
-          text-transform: uppercase;
-          border-bottom: 1px solid #f1f5f9;
-        }
-
-        .notes-content {
-          padding: 15px;
-          font-size: 12px;
-          color: #475569;
-          background: #fbfbfb;
-        }
-
-        .footer {
-          margin-top: auto;
-          padding-top: 20px;
-          border-top: 1px solid #e2e8f0;
-          display: flex;
-          justify-content: space-between;
-          color: #94a3b8;
-          font-size: 10px;
-        }
-
-        .footer-left {
-          font-style: italic;
-        }
-
-        .badge {
-          display: inline-block;
-          padding: 2px 6px;
-          border-radius: 4px;
-          font-size: 10px;
-          font-weight: 600;
-          background: #f3f4f6;
-          color: #64748b;
-          margin-top: 5px;
-        }
-
-        @media print {
-          body { margin: 0; }
-          .page { padding: 20px; }
-        }
+        .tax-invoice-label { text-align: center; border-bottom: 1px solid #000; font-weight: bold; font-size: 14px; padding: 5px; text-transform: uppercase; }
+        
+        .company-name { font-size: 16px; font-weight: bold; margin-bottom: 5px; }
+        .address-text { font-size: 9px; margin-bottom: 2px; }
+        
+        .info-grid { display: grid; grid-template-columns: 1fr 1fr; width: 100%; border-bottom: 1px solid #000; }
+        .info-box { padding: 8px; border-right: 1px solid #000; min-height: 80px; }
+        .info-box:last-child { border-right: none; }
+        .label { font-weight: bold; text-decoration: underline; margin-bottom: 5px; display: block; font-size: 11px; }
+        
+        .meta-table { width: 100%; border-collapse: collapse; }
+        .meta-table td { padding: 4px; border: 1px solid #000; }
+        .meta-label { font-weight: bold; width: 40%; }
+        
+        .items-table { width: 100%; border-collapse: collapse; border-bottom: 1px solid #000; }
+        .items-table th { border: 1px solid #000; padding: 6px; background: #f0f0f0; font-weight: bold; text-align: center; font-size: 9px; }
+        .items-table td { border-left: 1px solid #000; border-right: 1px solid #000; padding: 6px; vertical-align: top; }
+        .items-table tr.item-row { min-height: 30px; }
+        
+        .total-section { display: flex; border-bottom: 1px solid #000; }
+        .words-section { flex: 1.5; padding: 10px; border-right: 1px solid #000; }
+        .calc-section { flex: 1; }
+        
+        .calc-table { width: 100%; border-collapse: collapse; }
+        .calc-table td { padding: 5px; border-bottom: 1px solid #000; text-align: right; }
+        .calc-table td:first-child { text-align: left; font-weight: bold; border-right: 1px solid #000; }
+        .calc-table tr:last-child td { border-bottom: none; font-size: 12px; font-weight: bold; }
+        
+        .footer-section { display: flex; padding: 20px 10px; border-top: 1px solid #000; position: absolute; bottom: 0; width: 100%; box-sizing: border-box; }
+        .footer-col { flex: 1; text-align: center; }
+        .signature-box { margin-top: 40px; border-top: 1px dashed #000; display: inline-block; min-width: 150px; padding-top: 5px; }
       </style>
     </head>
     <body>
-      <div class="page">
-        <div class="header-top">
-          <h1 class="company-name">SPTECHPIONEER PVT LTD</h1>
-          <p class="company-address">Industrial Area, Sector 5, Pune, Maharashtra - 411026</p>
+      <div class="invoice-container">
+        <div class="tax-invoice-label">PURCHASE ORDER</div>
+        
+        <div class="header-section">
+          <div class="header-left">
+            <div class="company-name">SP TECHPIONEER PVT LTD</div>
+            <div class="address-text">PLOT NO.97, SECTOR NO 07, PCNDTA</div>
+            <div class="address-text">BHOSARI, PUNE-411026</div>
+            <div class="address-text">GSTIN/UIN: 27AAPCS1193L1ZQ</div>
+            <div class="address-text">State Name: Maharashtra, Code: 27</div>
+          </div>
+          <div class="header-right">
+            <table class="meta-table">
+              <tr>
+                <td class="meta-label">PO No.</td>
+                <td>{{po_number}}</td>
+              </tr>
+              <tr>
+                <td class="meta-label">Dated</td>
+                <td>{{created_at}}</td>
+              </tr>
+              <tr>
+                <td class="meta-label">Reference</td>
+                <td>{{project_ref}}</td>
+              </tr>
+            </table>
+          </div>
         </div>
-
-        <div class="divider"></div>
-
-        <div class="rfq-header">
-          <div class="dot"></div>
-          <h2 class="rfq-title">Purchase Order</h2>
-          <div class="dot"></div>
-        </div>
-
+        
         <div class="info-grid">
-          <div class="info-card">
-            <div class="icon-box">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-            </div>
-            <div>
-              <div class="info-label">PO No:</div>
-              <div class="info-value">{{po_number}}</div>
-            </div>
+          <div class="info-box">
+            <span class="label">Vendor Information</span>
+            <div style="font-weight: bold; font-size: 11px;">{{vendor_name}}</div>
+            <div class="address-text">{{location}}</div>
+            <div class="address-text">Email: {{vendor_email}}</div>
+            <div class="address-text">Phone: {{phone}}</div>
           </div>
-          <div class="info-card">
-            <div class="icon-box">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-            </div>
-            <div>
-              <div class="info-label">Date:</div>
-              <div class="info-value">{{created_at}}</div>
-            </div>
-          </div>
-          <div class="info-card">
-            <div class="icon-box">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-            </div>
-            <div>
-              <div class="info-label">Expected Date:</div>
-              <div class="info-value">{{expected_delivery_date}}</div>
-            </div>
+          <div class="info-box">
+            <span class="label">Ship To</span>
+            <div style="font-weight: bold; font-size: 11px;">SP TECHPIONEER PVT LTD</div>
+            <div class="address-text">PLOT NO.97, SECTOR NO 07, PCNDTA</div>
+            <div class="address-text">BHOSARI, PUNE-411026</div>
+            <div class="address-text">Project: {{project_name}}</div>
           </div>
         </div>
 
-        <div class="details-grid">
-          <div class="section-card">
-            <div class="section-header">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-              Vendor Information
-            </div>
-            <div class="section-content">
-              <p><strong>{{vendor_name}}</strong></p>
-              <p>{{location}}</p>
-              <p style="margin-top: 5px; color: #64748b;">Email: {{vendor_email}}</p>
-              <p style="color: #64748b;">Phone: {{phone}}</p>
-            </div>
-          </div>
-          <div class="section-card">
-            <div class="section-header">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
-              Project Reference
-            </div>
-            <div class="section-content">
-              <p><strong>{{project_ref}}</strong></p>
-              {{#project_name}}
-              <p style="margin-top: 5px; color: #64748b; font-size: 11px;">Project: {{project_name}}</p>
-              {{/project_name}}
-            </div>
-          </div>
-        </div>
-
-        <table>
+        <table class="items-table">
           <thead>
             <tr>
-              <th style="width: 5%">#</th>
-              <th style="width: 50%">Item Details</th>
-              <th style="width: 15%">Quantity</th>
-              <th style="width: 15%" class="amount-col">Rate (₹)</th>
-              <th style="width: 15%" class="amount-col">Amount (₹)</th>
+              <th style="width: 30px;">Sl No.</th>
+              <th>Description of Goods</th>
+              <th style="width: 70px;">Item Code</th>
+              <th style="width: 60px;">Quantity</th>
+              <th style="width: 80px;">Rate</th>
+              <th style="width: 40px;">per</th>
+              <th style="width: 90px;">Amount</th>
             </tr>
           </thead>
           <tbody>
             {{#items}}
-            <tr>
-              <td>{{sr}}</td>
+            <tr class="item-row">
+              <td style="text-align: center;">{{sr}}</td>
               <td>
-                <div style="font-weight: 600; font-size: 13px; color: #1e293b;">{{material_name}}</div>
-                <div style="font-size: 10px; color: #64748b; margin-top: 2px;">
-                  {{drawing_no}} {{#material_type}}• <span class="badge">{{material_type}}</span>{{/material_type}}
-                </div>
-                {{#description}}
-                <div style="font-size: 10px; color: #94a3b8; margin-top: 2px; font-style: italic;">{{description}}</div>
-                {{/description}}
+                <div style="font-weight: bold;">{{material_name}}</div>
+                <div style="font-size: 8px; color: #444;">{{description}}</div>
               </td>
-              <td><strong>{{quantity}}</strong> {{unit}}</td>
-              <td class="amount-col">{{unit_rate}}</td>
-              <td class="amount-col">{{amount}}</td>
+              <td style="text-align: center;">{{drawing_no}}</td>
+              <td style="text-align: center;">{{quantity}} {{unit}}</td>
+              <td style="text-align: right;">{{unit_rate}}</td>
+              <td style="text-align: center;">{{unit}}</td>
+              <td style="text-align: right; font-weight: bold;">{{amount}}</td>
             </tr>
             {{/items}}
+            {{#empty_rows}}
+            <tr style="height: 25px;">
+              <td></td><td></td><td></td><td></td><td></td><td></td><td></td>
+            </tr>
+            {{/empty_rows}}
           </tbody>
         </table>
 
-        <div class="summary-container">
-          <table class="summary-table">
-            <tr>
-              <td class="summary-label">Subtotal:</td>
-              <td class="summary-value">₹{{subtotal}}</td>
-            </tr>
-            <tr>
-              <td class="summary-label">CGST (9%):</td>
-              <td class="summary-value">₹{{cgst_total}}</td>
-            </tr>
-            <tr>
-              <td class="summary-label">SGST (9%):</td>
-              <td class="summary-value">₹{{sgst_total}}</td>
-            </tr>
-            <tr class="grand-total-row">
-              <td style="border-bottom: none;">Grand Total:</td>
-              <td class="summary-value" style="border-bottom: none;">₹{{total_amount}}</td>
-            </tr>
-          </table>
+        <div class="total-section">
+          <div class="words-section">
+            <div style="font-style: italic; margin-bottom: 10px;">Amount Chargeable (in words)</div>
+            <div style="font-weight: bold; font-size: 11px;">INR {{total_amount_words}} Only</div>
+          </div>
+          <div class="calc-section">
+            <table class="calc-table">
+              <tr>
+                <td>Subtotal</td>
+                <td>{{subtotal}}</td>
+              </tr>
+              {{#cgst_total}}
+              <tr>
+                <td>CGST (9%)</td>
+                <td>{{cgst_total}}</td>
+              </tr>
+              {{/cgst_total}}
+              {{#sgst_total}}
+              <tr>
+                <td>SGST (9%)</td>
+                <td>{{sgst_total}}</td>
+              </tr>
+              {{/sgst_total}}
+              <tr>
+                <td>Grand Total</td>
+                <td>₹ {{total_amount}}</td>
+              </tr>
+            </table>
+          </div>
         </div>
 
-        {{#notes}}
-        <div class="notes-card">
-          <div class="notes-header">Special Instructions & Notes</div>
-          <div class="notes-content">{{notes}}</div>
+        <div style="padding: 10px; font-size: 9px;">
+          <div style="font-weight: bold; text-decoration: underline; margin-bottom: 5px;">Declaration:</div>
+          This is a computer-generated document. No signature is required.
         </div>
-        {{/notes}}
 
-        <div class="footer">
-          <div class="footer-left">This is a computer-generated document. No signature is required.</div>
-          <div class="footer-right">SPTECHPIONEER PVT LTD | Confidential</div>
+        <div class="footer-section">
+          <div class="footer-col">
+            <div style="margin-bottom: 50px;">Vendor's Acknowledgement</div>
+            <div class="signature-box">Seal and Signature</div>
+          </div>
+          <div class="footer-col" style="text-align: right;">
+            <div style="font-weight: bold;">for SP TECHPIONEER PVT LTD</div>
+            <div class="signature-box">Authorized Signatory</div>
+          </div>
         </div>
       </div>
     </body>
     </html>
   `;
 
-  const formatDate = (date) => date ? new Date(date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+  const formatDate = (date) => date ? new Date(date).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-') : '—';
 
   const subtotal = po.items.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
   const cgst_total = po.items.reduce((sum, item) => sum + (parseFloat(item.cgst_amount) || 0), 0);
   const sgst_total = po.items.reduce((sum, item) => sum + (parseFloat(item.sgst_amount) || 0), 0);
+  const grand_total = parseFloat(po.total_amount || (subtotal + cgst_total + sgst_total));
+
+  // Basic number to words for the words section
+  const numberToWords = (num) => {
+    const a = ['', 'one ', 'two ', 'three ', 'four ', 'five ', 'six ', 'seven ', 'eight ', 'nine ', 'ten ', 'eleven ', 'twelve ', 'thirteen ', 'fourteen ', 'fifteen ', 'sixteen ', 'seventeen ', 'eighteen ', 'nineteen '];
+    const b = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+    const inWords = (num) => {
+        if ((num = num.toString()).length > 9) return 'overflow';
+        let n = ('000000000' + num).substr(-9).match(/^(\d{2})(\d{2})(\d{2})(\d{1})(\d{2})$/);
+        if (!n) return; let str = '';
+        str += (Number(n[1]) != 0) ? (a[Number(n[1])] || b[n[1][0]] + ' ' + a[n[1][1]]) + 'crore ' : '';
+        str += (Number(n[2]) != 0) ? (a[Number(n[2])] || b[n[2][0]] + ' ' + a[n[2][1]]) + 'lakh ' : '';
+        str += (Number(n[3]) != 0) ? (a[Number(n[3])] || b[n[3][0]] + ' ' + a[n[3][1]]) + 'thousand ' : '';
+        str += (Number(n[4]) != 0) ? (a[Number(n[4])] || b[n[4][0]] + ' ' + a[n[4][1]]) + 'hundred ' : '';
+        str += (Number(n[5]) != 0) ? ((str != '') ? 'and ' : '') + (a[Number(n[5])] || b[n[5][0]] + ' ' + a[n[5][1]]) : '';
+        return str.toUpperCase();
+    };
+    return inWords(Math.floor(num));
+  };
 
   const viewData = {
     ...po,
     created_at: formatDate(po.created_at),
     expected_delivery_date: formatDate(po.expected_delivery_date),
     vendor_name: vendor?.vendor_name || 'N/A',
-    vendor_email: vendor?.email || 'N/A',
-    location: vendor?.location || 'N/A',
-    phone: vendor?.phone || 'N/A',
-    project_name: po.project_name,
+    vendor_email: email || 'N/A',
+    location: location || 'N/A',
+    phone: phone || 'N/A',
+    project_name: po.project_name || 'General Procurement',
     project_ref: po.mr_number ? `MR: ${po.mr_number}` : (po.sales_order_id ? `SO: ${po.so_number || po.sales_order_id}` : 'Direct Procurement'),
     subtotal: subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-    cgst_total: cgst_total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-    sgst_total: sgst_total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-    total_amount: parseFloat(po.total_amount || (subtotal + cgst_total + sgst_total)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    cgst_total: cgst_total > 0 ? cgst_total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : null,
+    sgst_total: sgst_total > 0 ? sgst_total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : null,
+    total_amount: grand_total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    total_amount_words: numberToWords(grand_total),
     items: (po.items || []).map((i, idx) => {
       const dQty = parseFloat(i.design_qty);
       const qty = parseFloat(i.quantity);
@@ -1371,7 +1185,8 @@ const generatePurchaseOrderPDF = async (poId) => {
         unit_rate: parseFloat(i.unit_rate || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
         amount: parseFloat(i.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
       };
-    })
+    }),
+    empty_rows: Array.from({ length: Math.max(0, 10 - (po.items || []).length) })
   };
 
   const html = mustache.render(htmlTemplate, viewData);

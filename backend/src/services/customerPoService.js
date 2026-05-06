@@ -226,14 +226,33 @@ const getCustomerPoById = async id => {
   
   // Format billing address string
   const po = rows[0];
-  const addrParts = [
+  let addrParts = [
     po.billing_address_line1,
     po.billing_address_line2,
     po.billing_city,
     po.billing_state,
     po.billing_pincode ? `Pincode: ${po.billing_pincode}` : null
-  ].filter(Boolean);
-  po.billing_address = addrParts.join(', ');
+  ].filter(part => part && String(part).trim() !== '' && String(part).toUpperCase() !== 'N/A');
+
+  if (addrParts.length === 0) {
+    // Fallback: try to get any address for this company if billing address is missing
+    const [anyAddress] = await pool.query(
+      'SELECT line1, line2, city, state, pincode FROM company_addresses WHERE company_id = ? LIMIT 1',
+      [po.company_id]
+    );
+    if (anyAddress.length > 0) {
+      const addr = anyAddress[0];
+      addrParts = [
+        addr.line1,
+        addr.line2,
+        addr.city,
+        addr.state,
+        addr.pincode ? `Pincode: ${addr.pincode}` : null
+      ].filter(part => part && String(part).trim() !== '' && String(part).toUpperCase() !== 'N/A');
+    }
+  }
+  
+  po.billing_address = addrParts.join(', ') || 'N/A';
   po.billing_state_code = ''; // Fallback since state_code is missing in schema
 
   const [items] = await pool.query(
