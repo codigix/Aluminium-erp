@@ -114,7 +114,6 @@ const getOEEMetrics = async (timeRange = 'Weekly') => {
     LEFT JOIN order_items oi ON wo.sales_order_item_id = oi.id AND wo.sales_order_id = oi.order_id
     WHERE 1=1 ${jcFilter}
     ORDER BY jc.updated_at DESC
-    LIMIT 10
   `);
 
   // 3. Loss Category Distribution

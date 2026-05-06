@@ -351,6 +351,7 @@ const OEEAnalysis = () => {
               columns={recentOpsColumns} 
               data={data?.recentOperations || []} 
               loading={loading}
+              pageSize={10}
             />
           </Card>
         </div>

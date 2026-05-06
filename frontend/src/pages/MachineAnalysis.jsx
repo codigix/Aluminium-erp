@@ -245,8 +245,8 @@ const MachineAnalysis = () => {
                        <PieChart>
                           <Pie
                              data={[
-                                { name: 'Active', value: (data?.temporalAnalysis || []).filter(ws => ws.name.toLowerCase().includes('cutting')).length },
-                                { name: 'Idle', value: (data?.temporalAnalysis || []).filter(ws => !ws.name.toLowerCase().includes('cutting')).length }
+                                { name: 'Active', value: data?.assetHealth?.active || 0 },
+                                { name: 'Idle', value: data?.assetHealth?.idle || 0 }
                              ]}
                              innerRadius={80} outerRadius={110}
                              paddingAngle={5} dataKey="value" stroke="none"
@@ -257,16 +257,16 @@ const MachineAnalysis = () => {
                        </PieChart>
                     </ResponsiveContainer>
                     <div className="absolute inset-0 flex flex-col items-center justify-center pt-4">
-                       <span className="text-5xl font-black text-slate-900 tracking-tighter">{(data?.temporalAnalysis || []).length}</span>
+                       <span className="text-5xl font-black text-slate-900 tracking-tighter">{data?.assetHealth?.total || 0}</span>
                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2">Total Units</span>
                        <div className="mt-4 flex items-center gap-2">
                           <div className="flex items-center gap-1">
                              <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                             <span className="text-[10px] text-slate-500 font-bold uppercase">{(data?.temporalAnalysis || []).filter(ws => ws.name.toLowerCase().includes('cutting')).length} Active</span>
+                             <span className="text-[10px] text-slate-500 font-bold uppercase">{data?.assetHealth?.active || 0} Active</span>
                           </div>
                           <div className="flex items-center gap-1">
                              <div className="w-2 h-2 rounded-full bg-slate-200" />
-                             <span className="text-[10px] text-slate-500 font-bold uppercase">{(data?.temporalAnalysis || []).filter(ws => !ws.name.toLowerCase().includes('cutting')).length} Idle</span>
+                             <span className="text-[10px] text-slate-500 font-bold uppercase">{data?.assetHealth?.idle || 0} Idle</span>
                           </div>
                        </div>
                     </div>
@@ -362,7 +362,7 @@ const MachineAnalysis = () => {
                  </div>
                  <div className="flex-1">
                     <ResponsiveContainer width="100%" height="100%">
-                       <AreaChart data={data?.temporalAnalysis || []} margin={{ top: 0, right: 10, left: -20, bottom: 0 }}>
+                       <AreaChart data={data?.lineAnalysis || []} margin={{ top: 0, right: 10, left: -20, bottom: 0 }}>
                           <defs>
                              <linearGradient id="colorLines" x1="0" y1="0" x2="0" y2="1">
                                 <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.1}/>
@@ -370,15 +370,15 @@ const MachineAnalysis = () => {
                              </linearGradient>
                           </defs>
                           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                          <XAxis dataKey="name" hide />
+                          <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}} />
                           <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}} />
                           <Tooltip contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
-                          <Area type="monotone" dataKey="productive" stroke="#4f46e5" strokeWidth={3} fillOpacity={1} fill="url(#colorLines)" />
+                          <Area type="monotone" dataKey="performance" name="Performance" stroke="#4f46e5" strokeWidth={3} fillOpacity={1} fill="url(#colorLines)" />
                        </AreaChart>
                     </ResponsiveContainer>
                  </div>
                  <div className="mt-4 p-3 bg-indigo-50 rounded border border-indigo-100 flex items-center justify-between">
-                    <span className="text-[10px] text-indigo-900 font-bold uppercase tracking-wider">Line Optimization Alert: Main Assembly is running at 94.2% capacity</span>
+                    <span className="text-[10px] text-indigo-900 font-bold uppercase tracking-wider">Line Optimization Alert: {data?.lineAnalysis?.[0]?.name || 'Main Line'} is running at {data?.lineAnalysis?.[0]?.oee || '0'}% capacity</span>
                     <button className="text-[10px] text-rose-600 font-black uppercase tracking-widest hover:underline">Re-balance Floor</button>
                  </div>
               </div>
@@ -393,38 +393,34 @@ const MachineAnalysis = () => {
                        <ResponsiveContainer width="100%" height="100%">
                           <PieChart>
                              <Pie
-                                data={[
-                                  { name: 'ACTIVE', value: data?.assetHealth?.active },
-                                  { name: 'IDLE', value: data?.assetHealth?.idle }
-                                ]}
+                                data={data?.lineAnalysis?.map((line, idx) => ({
+                                  name: line.name,
+                                  value: parseFloat(line.availability)
+                                })) || []}
                                 innerRadius={65} outerRadius={90}
                                 paddingAngle={8} dataKey="value" stroke="none"
                              >
-                                <Cell fill="#4f46e5" />
-                                <Cell fill="#f1f5f9" />
+                                {data?.lineAnalysis?.map((entry, index) => (
+                                  <Cell key={`cell-${index}`} fill={COLORS.chart[index % COLORS.chart.length]} />
+                                ))}
                              </Pie>
                           </PieChart>
                        </ResponsiveContainer>
                        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                          <span className="text-xl font-bold text-slate-900">{(data?.assetHealth?.active / data?.assetHealth?.total * 100).toFixed(0)}%</span>
-                          <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-1">Active Floor</span>
+                          <span className="text-xl font-bold text-slate-900">{data?.kpis?.availability}%</span>
+                          <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-1">Plant Availability</span>
                        </div>
                     </div>
-                    <div className="space-y-4">
-                       <div className="flex justify-between items-center px-4">
-                          <div className="flex items-center gap-2">
-                             <div className="w-2.5 h-2.5 rounded-sm bg-rose-600" />
-                             <span className="text-[11px] text-slate-500 font-bold uppercase">Main Line</span>
-                          </div>
-                          <span className="text-[11px] text-slate-900 font-extrabold tracking-tighter">88.5% OEE</span>
-                       </div>
-                       <div className="flex justify-between items-center px-4">
-                          <div className="flex items-center gap-2">
-                             <div className="w-2.5 h-2.5 rounded-sm bg-indigo-200" />
-                             <span className="text-[11px] text-slate-500 font-bold uppercase">Assembly B</span>
-                          </div>
-                          <span className="text-[11px] text-slate-900 font-extrabold tracking-tighter">74.2% OEE</span>
-                       </div>
+                    <div className="space-y-4 max-h-[120px] overflow-y-auto pr-2">
+                       {data?.lineAnalysis?.map((line, idx) => (
+                         <div key={idx} className="flex justify-between items-center px-4">
+                            <div className="flex items-center gap-2">
+                               <div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: COLORS.chart[idx % COLORS.chart.length] }} />
+                               <span className="text-[11px] text-slate-500 font-bold uppercase truncate max-w-[100px]">{line.name}</span>
+                            </div>
+                            <span className="text-[11px] text-slate-900 font-extrabold tracking-tighter">{line.oee}% OEE</span>
+                         </div>
+                       ))}
                     </div>
                  </div>
               </div>
@@ -446,9 +442,9 @@ const MachineAnalysis = () => {
                         <p className="text-[10px] text-slate-400 font-bold uppercase mt-1 tracking-widest">UNIT-{(idx + 101).toString()}</p>
                      </div>
                   </div>
-                  <div className={`flex items-center gap-1.5 px-2 py-1 ${ws.name.toLowerCase().includes('cutting') ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-orange-50 text-orange-600 border-orange-100'} rounded text-[9px] font-bold border uppercase tracking-tighter`}>
-                     <div className={`w-1.5 h-1.5 ${ws.name.toLowerCase().includes('cutting') ? 'bg-emerald-600' : 'bg-orange-600'} rounded-full animate-pulse`} />
-                     {ws.name.toLowerCase().includes('cutting') ? 'Running' : 'Idle'}
+                  <div className={`flex items-center gap-1.5 px-2 py-1 ${ws.status === 'RUNNING' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-orange-50 text-orange-600 border-orange-100'} rounded text-[9px] font-bold border uppercase tracking-tighter`}>
+                     <div className={`w-1.5 h-1.5 ${ws.status === 'RUNNING' ? 'bg-emerald-600' : 'bg-orange-600'} rounded-full animate-pulse`} />
+                     {ws.status === 'RUNNING' ? 'Running' : 'Idle'}
                   </div>
                 </div>
 
@@ -458,7 +454,7 @@ const MachineAnalysis = () => {
                       <span className="text-[11px] text-slate-900 font-extrabold">{ws.productive}%</span>
                    </div>
                    <div className="h-2 w-full bg-slate-50 rounded-full overflow-hidden border border-slate-100">
-                      <div className="bg-indigo-400 h-full rounded-full transition-all duration-1000" style={{ width: `${ws.productive}%` }} />
+                      <div className={`${ws.status === 'RUNNING' ? 'bg-emerald-400' : 'bg-orange-400'} h-full rounded-full transition-all duration-1000`} style={{ width: `${ws.productive}%` }} />
                    </div>
                 </div>
 
