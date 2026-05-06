@@ -92,10 +92,14 @@ const getOEEMetrics = async (timeRange = 'Weekly') => {
     SELECT 
       jc.job_card_no as identifier,
       w.workstation_name as assetContext,
+      jc.operation_name,
       jc.produced_qty as produced,
       jc.planned_qty as target,
       jc.accepted_qty,
       jc.rejected_qty,
+      wo.wo_number,
+      so.project_name,
+      COALESCE(soi.description, oi.description, wo.item_name) as item_description,
       CASE 
         WHEN jc.produced_qty > 0 THEN (jc.accepted_qty / jc.produced_qty) * 100 
         ELSE 0 
@@ -104,6 +108,10 @@ const getOEEMetrics = async (timeRange = 'Weekly') => {
       DATE_FORMAT(jc.updated_at, '%H:%i:%s') as lastUpdated
     FROM job_cards jc
     LEFT JOIN workstations w ON jc.workstation_id = w.id
+    LEFT JOIN work_orders wo ON jc.work_order_id = wo.id
+    LEFT JOIN sales_orders so ON wo.sales_order_id = so.id
+    LEFT JOIN sales_order_items soi ON wo.sales_order_item_id = soi.id
+    LEFT JOIN order_items oi ON wo.sales_order_item_id = oi.id AND wo.sales_order_id = oi.order_id
     WHERE 1=1 ${jcFilter}
     ORDER BY jc.updated_at DESC
     LIMIT 10

@@ -150,28 +150,58 @@ const OEEAnalysis = () => {
   const overall = data?.overall || { oee: 0, availability: 0, performance: 0, quality: 0, utilization: 0 };
 
   const recentOpsColumns = [
-    { label: 'WORKSTATION', key: 'assetContext', render: (val, row) => (
+    { label: 'ID / PROJECT', key: 'identifier', render: (val, row) => (
       <div className="flex flex-col">
-        <span className="text-[11px] font-black text-slate-900 uppercase">{val}</span>
-        <span className="text-[9px] text-slate-400 font-bold">{row.identifier}</span>
+        <span className="text-[10px] font-black text-slate-900 uppercase truncate max-w-[180px]">
+          {row.project_name || 'Project Name'}
+        </span>
+        <span className="text-[9px] text-slate-400 font-bold">WO: {row.wo_number || 'N/A'}</span>
+        <div className="flex items-center gap-1.5 mt-1">
+          <span className="flex items-center justify-center w-4 h-4 rounded-full bg-slate-100 text-[8px] font-black text-slate-500 border border-slate-200">
+            {data?.recentOperations?.indexOf(row) + 1}
+          </span>
+          <span className="text-[10px] font-black text-indigo-600">{val}</span>
+        </div>
       </div>
     )},
-    { label: 'PRODUCED', key: 'produced', render: (val) => (
-      <span className="text-[11px] font-black text-slate-900">{val}</span>
+    { label: 'OPERATION / STATUS', key: 'operation_name', render: (val, row) => (
+      <div className="flex flex-col">
+        <span className="text-[10px] font-black text-slate-900 uppercase">
+          {val || 'Operation'}
+        </span>
+        <div className="mt-1">
+          <StatusBadge status={row.status === 'COMPLETED' ? 'ACTIVE' : (row.status === 'IN_PROGRESS' ? 'CRITICAL' : row.status)} />
+        </div>
+      </div>
     )},
-    { label: 'TARGET', key: 'target', render: (val) => (
-      <span className="text-[11px] font-black text-slate-900">{val}</span>
+    { label: 'SPECIFICATION', key: 'item_description', render: (val) => (
+      <div className="flex flex-col max-w-[200px]">
+        <span className="text-[9px] font-black text-indigo-600 uppercase tracking-tight">Main Process</span>
+        <span className="text-[10px] font-bold text-slate-600 truncate">{val || 'Item Description'}</span>
+      </div>
     )},
-    { label: 'REJECT RATE', key: 'rejected_qty', render: (val, row) => (
-      <span className={`text-[10px] font-black ${val > 0 ? 'text-rose-500' : 'text-emerald-500'}`}>
-        {val > 0 ? ((val / row.produced) * 100).toFixed(1) : '0.0'}%
-      </span>
+    { label: 'PRODUCED', key: 'produced', className: 'text-center', render: (val) => (
+      <span className="text-[11px] font-black text-slate-900">{parseFloat(val || 0).toFixed(3)}</span>
     )},
-    { label: 'STATUS', key: 'status', render: (val) => (
-      <StatusBadge status={val === 'COMPLETED' ? 'ACTIVE' : (val === 'IN_PROGRESS' ? 'CRITICAL' : val)} />
+    { label: 'TARGET', key: 'target', className: 'text-center', render: (val) => (
+      <span className="text-[11px] font-black text-slate-400">{parseFloat(val || 0).toFixed(3)}</span>
     )},
-    { label: 'UPDATED', key: 'lastUpdated', render: (val) => (
-      <span className="text-[10px] text-slate-400 font-bold uppercase">{val}</span>
+    { label: 'QUALITY', key: 'rejected_qty', className: 'text-center', render: (val, row) => (
+      <div className="flex flex-col items-center">
+        <span className={`text-[10px] font-black ${val > 0 ? 'text-rose-500' : 'text-emerald-500'}`}>
+          {val > 0 ? ((1 - (val / row.produced)) * 100).toFixed(1) : '100'}%
+        </span>
+        <span className="text-[8px] text-slate-400 font-bold uppercase">Yield Index</span>
+      </div>
+    )},
+    { label: 'WORKSTATION', key: 'assetContext', render: (val) => (
+      <div className="flex flex-col">
+        <span className="text-[10px] font-black text-slate-900 uppercase">{val}</span>
+        <div className="flex items-center gap-1 mt-0.5">
+          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+          <span className="text-[8px] text-slate-400 font-bold uppercase">Online</span>
+        </div>
+      </div>
     )}
   ];
 
