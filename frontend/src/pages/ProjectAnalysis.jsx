@@ -398,7 +398,7 @@ const ProjectAnalysis = () => {
         </div>
 
         {/* Tabs */}
-        <div className="flex items-center gap-2 bg-white/50 border border-slate-100 p-1 rounded w-fit overflow-x-auto max-w-full no-scrollbar">
+        <div className="flex items-center gap-1 bg-white/50 border border-slate-100 p-0.5 rounded w-fit overflow-x-auto max-w-full no-scrollbar mb-2">
            {[
              { id: 'Overview', icon: LayoutDashboard },
              { id: 'Production Flow', icon: GitBranch },
@@ -411,11 +411,11 @@ const ProjectAnalysis = () => {
              <button
                key={tab.id}
                onClick={() => setDetailTab(tab.id)}
-               className={`flex items-center gap-2 px-4 py-1.5 rounded text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${
-                 detailTab === tab.id ? 'bg-rose-600 text-white shadow-md' : 'text-slate-500 hover:text-rose-600 hover:bg-white'
+               className={`flex items-center gap-1.5 px-3 py-1 rounded text-[9px] font-black uppercase tracking-tight transition-all whitespace-nowrap ${
+                 detailTab === tab.id ? 'bg-rose-600 text-white shadow-sm' : 'text-slate-500 hover:text-rose-600 hover:bg-white'
                }`}
              >
-               <tab.icon className="w-3.5 h-3.5" />
+               <tab.icon className="w-3 h-3" />
                {tab.id}
              </button>
            ))}

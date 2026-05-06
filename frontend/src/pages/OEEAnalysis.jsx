@@ -314,7 +314,7 @@ const OEEAnalysis = () => {
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2 rounded text-[11px] font-black transition-all uppercase tracking-widest ${
+            className={`px-3 py-1.5 rounded text-[10px] font-black transition-all uppercase tracking-widest ${
               activeTab === tab 
                 ? 'bg-rose-600 text-white shadow-lg shadow-rose-100' 
                 : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
