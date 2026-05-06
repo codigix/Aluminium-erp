@@ -841,6 +841,169 @@ const downloadJobCardQcPdf = async (logId) => {
   return pdfPath;
 };
 
+const getJobCardDetailAnalysis = async (idOrNo) => {
+  try {
+    // 1. Get Job Card Basic Info
+    const query = `SELECT jc.*, wo.wo_number, wo.item_name, wo.item_code, wo.priority, wo.quantity as wo_total_qty,
+            COALESCE(o.operation_name, jc.operation_name) as op_name,
+            w.workstation_name, u.username as operator_name,
+            so.project_name, c.company_name as client_name,
+            so.target_dispatch_date,
+            (SELECT SUM(produced_qty) FROM job_card_time_logs WHERE job_card_id = jc.id) as actual_produced,
+            (SELECT SUM(inspected_qty) FROM job_card_quality_logs WHERE job_card_id = jc.id AND status = 'APPROVED') as actual_accepted,
+            (SELECT SUM(rejected_qty) FROM job_card_quality_logs WHERE job_card_id = jc.id AND status = 'APPROVED') as actual_rejected
+     FROM job_cards jc
+     LEFT JOIN work_orders wo ON jc.work_order_id = wo.id
+     LEFT JOIN sales_orders so ON wo.sales_order_id = so.id
+     LEFT JOIN companies c ON so.company_id = c.id
+     LEFT JOIN operations o ON jc.operation_id = o.id
+     LEFT JOIN workstations w ON jc.workstation_id = w.id
+     LEFT JOIN users u ON jc.assigned_to = u.id
+     WHERE jc.id = :id OR TRIM(jc.job_card_no) = :no OR jc.job_card_no LIKE :likeNo`;
+    
+    const params = { 
+      id: isNaN(idOrNo) ? 0 : Number(idOrNo), 
+      no: String(idOrNo).trim(), 
+      likeNo: `%${idOrNo}%` 
+    };
+
+    const [jcRows] = await pool.query(query, params);
+
+    if (jcRows.length === 0) {
+      throw new Error('Job Card not found');
+    }
+
+    const jc = jcRows[0];
+
+  // 2. Get Logs
+  const [timeLogs] = await pool.query(
+    `SELECT tl.*, u.username as operator_name, w.workstation_name 
+     FROM job_card_time_logs tl
+     LEFT JOIN users u ON tl.operator_id = u.id
+     LEFT JOIN workstations w ON tl.workstation_id = w.id
+     WHERE tl.job_card_id = ? ORDER BY tl.log_date ASC, tl.start_time ASC`,
+    [jc.id]
+  );
+
+  const [qualityLogs] = await pool.query(
+    `SELECT ql.*, NULL as inspector_name
+     FROM job_card_quality_logs ql
+     WHERE ql.job_card_id = ? ORDER BY ql.created_at ASC`,
+    [jc.id]
+  );
+
+  const [downtimeLogs] = await pool.query(
+    `SELECT * FROM job_card_downtime_logs WHERE job_card_id = ? ORDER BY start_time ASC`,
+    [jc.id]
+  );
+
+  // 3. Operational Timeline
+  const timeline = [];
+  
+  // Work Order Created
+  timeline.push({
+    title: 'Work Order Created',
+    desc: `${jc.wo_number} created for ${jc.item_name}`,
+    time: jc.created_at,
+    type: 'CREATED',
+    completed: true
+  });
+
+  // Operation Started
+  if (jc.actual_start_date || timeLogs.length > 0) {
+    timeline.push({
+      title: 'Operation Started',
+      desc: `${jc.op_name} operation started at ${jc.workstation_name || 'Workstation'}`,
+      time: jc.actual_start_date || (timeLogs[0] ? timeLogs[0].log_date : null),
+      type: 'STARTED',
+      completed: true
+    });
+  }
+
+  // Production Running
+  if (jc.status === 'IN_PROGRESS') {
+    timeline.push({
+      title: 'Production Running',
+      desc: 'Production execution in progress',
+      time: timeLogs.length > 0 ? timeLogs[timeLogs.length - 1].updated_at : new Date(),
+      type: 'RUNNING',
+      completed: false,
+      current: true
+    });
+  }
+
+  // Production Completed
+  if (jc.status === 'COMPLETED' || jc.produced_qty >= jc.planned_qty) {
+    timeline.push({
+      title: 'Production Completed',
+      desc: 'Production completed for planned quantity',
+      time: jc.updated_at,
+      type: 'COMPLETED',
+      completed: true
+    });
+  }
+
+  // Awaiting Quality / Quality Inspection
+  if (qualityLogs.length > 0) {
+    const allApproved = qualityLogs.every(l => l.status === 'APPROVED');
+    timeline.push({
+      title: allApproved ? 'Quality Inspection Completed' : 'Awaiting Quality',
+      desc: allApproved ? 'Quality inspection & acceptance finished' : 'Pending quality inspection & acceptance',
+      time: qualityLogs[qualityLogs.length - 1].created_at,
+      type: 'QUALITY',
+      completed: allApproved,
+      current: !allApproved
+    });
+  }
+
+  // 4. Performance Metrics
+  const totalActualTimeMinutes = timeLogs.reduce((sum, log) => {
+    if (log.start_time && log.end_time) {
+      const start = new Date(String(log.start_time).replace(' ', 'T'));
+      const end = new Date(String(log.end_time).replace(' ', 'T'));
+      if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+        return sum + (end - start) / 60000;
+      }
+    }
+    return sum;
+  }, 0);
+
+  const totalDowntimeMinutes = downtimeLogs.reduce((sum, log) => {
+    if (log.start_time && log.end_time) {
+      const start = new Date(String(log.start_time).replace(' ', 'T'));
+      const end = new Date(String(log.end_time).replace(' ', 'T'));
+      if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+        return sum + (end - start) / 60000;
+      }
+    }
+    return sum;
+  }, 0);
+
+  const stdTimeTotal = (jc.cycle_time || 0) * (jc.planned_qty || 0);
+  const efficiency = totalActualTimeMinutes > 0 ? (stdTimeTotal / totalActualTimeMinutes) * 100 : 0;
+
+  return {
+    jobCard: jc,
+    logs: {
+      time: timeLogs,
+      quality: qualityLogs,
+      downtime: downtimeLogs
+    },
+    timeline,
+    metrics: {
+      standardTime: stdTimeTotal,
+      actualTime: totalActualTimeMinutes,
+      downtime: totalDowntimeMinutes,
+      efficiency: Math.round(efficiency),
+      variance: Math.max(0, totalActualTimeMinutes - stdTimeTotal),
+      performance: efficiency > 90 ? 'High' : efficiency > 70 ? 'Optimal' : 'Needs Attention'
+    }
+  };
+  } catch (error) {
+    throw error;
+  }
+};
+
 module.exports = {
   listJobCards,
   createJobCard,
@@ -864,5 +1027,6 @@ module.exports = {
   getVendorReceiptItems,
   sendVendorReceiptToPayment,
   getQualityLogFullDetails,
-  downloadJobCardQcPdf
+  downloadJobCardQcPdf,
+  getJobCardDetailAnalysis
 };

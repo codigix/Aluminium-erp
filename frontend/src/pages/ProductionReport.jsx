@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import { cleanProjectName } from '../utils/formatters';
 import { Card, DataTable, StatusBadge, Button } from '../components/ui.jsx';
@@ -649,7 +649,14 @@ const ProductionReport = () => {
                     </div>
                   </td>
                   <td className="p-2 text-right">
-                    <div className="flex items-center justify-end">
+                    <div className="flex items-center justify-end gap-1">
+                       <Link 
+                         to={`/work-order-details/${row.jobCardNo}`}
+                         className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded transition-all"
+                         title="View Details"
+                       >
+                         <Eye className="w-3.5 h-3.5" />
+                       </Link>
                        <button 
                          onClick={() => handlePrintJobCard(row.jobCardId)}
                          disabled={!row.jobCardId}

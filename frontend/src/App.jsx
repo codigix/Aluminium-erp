@@ -86,12 +86,13 @@ import InventoryReport from "./pages/InventoryReport";
 import OEEAnalysis from "./pages/OEEAnalysis";
 import MachineAnalysis from "./pages/MachineAnalysis";
 import MaterialConsumption from "./pages/MaterialConsumption";
+import WorkOrderDetail from "./pages/WorkOrderDetail";
 import { FormControl, StatusBadge, Button } from "./components/ui.jsx";
 import './index.css'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 const API_HOST = API_BASE
-const MODULE_IDS = ['dashboard', 'admin-dashboard', 'project-analysis', 'sales-report', 'procurement-report', 'production-report', 'inventory-report', 'accounts-report', 'oee-analysis', 'machine-analysis', 'material-consumption', 'sales-dashboard', 'design-dashboard', 'production-dashboard', 'procurement-dashboard', 'item-master', 'company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'quotation-form', 'vendor-management', 'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'quality-dashboard', 'accounts-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance', 'incoming-qc', 'quality-rejections', 'quality-reports', 'quality-rejection-entry', 'warehouses', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval', 'bom-form', 'workstation-master', 'operation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card', 'sub-contract-challans', 'stock-entries', 'incoming-orders', 'vendor-inward-challans', 'invoice-received', 'payment-processing', 'payment-received', 'payment-history', 'customer-payment-history', 'shipment-dashboard', 'shipment-orders', 'shipment-planning', 'dispatch-management', 'delivery-challan', 'shipment-tracking', 'shipment-returns', 'shipment-reports']
+const MODULE_IDS = ['dashboard', 'admin-dashboard', 'project-analysis', 'sales-report', 'procurement-report', 'production-report', 'inventory-report', 'accounts-report', 'oee-analysis', 'machine-analysis', 'material-consumption', 'sales-dashboard', 'design-dashboard', 'production-dashboard', 'procurement-dashboard', 'item-master', 'company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'quotation-form', 'vendor-management', 'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'quality-dashboard', 'accounts-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance', 'incoming-qc', 'quality-rejections', 'quality-reports', 'quality-rejection-entry', 'warehouses', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval', 'bom-form', 'workstation-master', 'operation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card', 'sub-contract-challans', 'stock-entries', 'incoming-orders', 'vendor-inward-challans', 'invoice-received', 'payment-processing', 'payment-received', 'payment-history', 'customer-payment-history', 'shipment-dashboard', 'shipment-orders', 'shipment-planning', 'dispatch-management', 'delivery-challan', 'shipment-tracking', 'shipment-returns', 'shipment-reports', 'work-order-details']
 const DEFAULT_MODULE = 'dashboard'
 const HOME_PLANT_STATE = (import.meta.env.VITE_PLANT_STATE || 'maharashtra').toLowerCase()
 const currencyFormatter = new Intl.NumberFormat('en-IN', {
@@ -185,7 +186,7 @@ const getContactStatusActionLabel = status => {
 const DEPARTMENT_MODULES = {
   SALES: ['dashboard', 'item-master', 'company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'quotation-form', 'sales-report'],
   DESIGN_ENG: ['dashboard', 'item-master', 'design-orders', 'drawing-master', 'bom-creation', 'bom-approval', 'bom-form', 'routing-operations', 'process-sheet'],
-  PRODUCTION: ['dashboard', 'item-master', 'project-requests', 'incoming-orders', 'operation-master', 'workstation-master', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card', 'sub-contract-challans', 'routing-operations', 'process-sheet'],
+  PRODUCTION: ['dashboard', 'item-master', 'project-requests', 'incoming-orders', 'operation-master', 'workstation-master', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card', 'sub-contract-challans', 'routing-operations', 'process-sheet', 'production-report', 'work-order-details'],
   QUALITY: ['dashboard', 'item-master', 'incoming-qc', 'quality-rejections', 'quality-reports', 'quality-rejection-entry', 'qc-inspections'],
   SHIPMENT: ['dashboard', 'item-master', 'shipment-orders', 'shipment-planning', 'dispatch-management', 'delivery-challan', 'shipment-tracking', 'shipment-returns', 'shipment-reports'],
   ACCOUNTS: ['dashboard', 'payment-history', 'customer-payment-history'],
@@ -195,7 +196,7 @@ const DEPARTMENT_MODULES = {
     'dashboard', 'admin-dashboard', 'project-analysis', 'sales-report', 'procurement-report', 'production-report', 'inventory-report', 'accounts-report', 'oee-analysis', 'machine-analysis', 'material-consumption',
     'quality-reports',
     'payment-history', 'customer-payment-history',
-    'shipment-tracking', 'shipment-reports'
+    'shipment-tracking', 'shipment-reports', 'work-order-details'
   ]
 }
 
@@ -214,6 +215,9 @@ function App() {
     // Handle special cases for dash-separated module names that might have subpaths
     // For example /item-master/add-items should map to item-master
     if (MODULE_IDS.includes(firstSegment)) {
+      if (firstSegment === 'work-order-details') {
+        return 'work-order-details';
+      }
       if (firstSegment === 'work-order' && segments[1] === 'edit-work') {
         return 'work-order-form';
       }
@@ -297,6 +301,9 @@ function App() {
     }
     if (modules.includes('bom-creation') && !modules.includes('bom-form')) {
       modules.push('bom-form')
+    }
+    if ((modules.includes('production-report') || modules.includes('work-order') || modules.includes('job-card')) && !modules.includes('work-order-details')) {
+      modules.push('work-order-details')
     }
     
     return modules
@@ -1471,7 +1478,12 @@ function App() {
             
             <div className="flex-1 overflow-y-auto overflow-x-hidden p-2 space-y-1.5 custom-scrollbar">
               {navigationItems.map((item, index) => {
-                const isActive = item.moduleId ? (activeModule === item.moduleId || (item.moduleId === 'bom-creation' && activeModule === 'bom-form') || (item.moduleId === 'client-quotations' && activeModule === 'quotation-form')) : Boolean(item.active)
+                const isActive = item.moduleId ? (
+                  activeModule === item.moduleId || 
+                  (item.moduleId === 'bom-creation' && activeModule === 'bom-form') || 
+                  (item.moduleId === 'client-quotations' && activeModule === 'quotation-form') ||
+                  (item.moduleId === 'production-report' && activeModule === 'work-order-details')
+                ) : Boolean(item.active)
                 const isDisabled = item.isGroup || !item.moduleId
                 
                 if (item.isGroup) {
@@ -1574,6 +1586,8 @@ function App() {
           <div className="flex-1 p-4 min-w-0 overflow-y-auto custom-scrollbar">
             {location.pathname.startsWith('/receipt-details/') ? (
               <POReceiptDetails />
+            ) : location.pathname.startsWith('/work-order-details/') ? (
+              <WorkOrderDetail />
             ) : !allowedModules.includes(activeModule) && user.department_code !== 'ADMIN' ? (
               <div className="flex flex-col items-center justify-center h-full text-slate-500">
                 <XCircle className="w-16 h-16 mb-4 text-rose-500" />

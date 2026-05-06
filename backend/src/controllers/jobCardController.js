@@ -195,6 +195,16 @@ const downloadQualityReport = async (req, res) => {
   }
 };
 
+const getJobCardDetails = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const details = await jobCardService.getJobCardDetailAnalysis(id);
+    res.json(details);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 module.exports = {
   listJobCards,
   createJobCard,
@@ -214,5 +224,6 @@ module.exports = {
   getVendorReceipts,
   getVendorReceiptItems,
   sendVendorReceiptToPayment,
-  downloadQualityReport
+  downloadQualityReport,
+  getJobCardDetails
 };

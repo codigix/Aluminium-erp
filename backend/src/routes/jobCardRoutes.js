@@ -12,6 +12,7 @@ router.get('/vendor-receipts/:logId/items', authorize(['PAYMENT_VIEW', 'PO_VIEW'
 router.patch('/vendor-receipts/:logId/send-to-payment', authorize(['PAYMENT_MANAGE', 'PAYMENT_PROCESS']), jobCardController.sendVendorReceiptToPayment);
 
 router.get('/', authorize(['PROD_VIEW']), jobCardController.listJobCards);
+router.get('/:id/details', authorize(['PROD_VIEW']), jobCardController.getJobCardDetails);
 router.post('/', authorize(['PROD_MANAGE']), jobCardController.createJobCard);
 router.put('/:id', authorize(['PROD_MANAGE']), jobCardController.updateJobCard);
 router.delete('/:id', authorize(['PROD_MANAGE', 'QC_EDIT']), jobCardController.deleteJobCard);
