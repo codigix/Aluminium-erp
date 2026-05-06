@@ -10,7 +10,7 @@ import {
   Settings, Layers, List, Cpu, Info, ChevronRight,
   TrendingUp, Clock, LayoutDashboard, Target, Calendar,
   Flame, Award, Microscope, Wind, Monitor, BrainCircuit,
-  Lightbulb, ZapOff, CheckCircle2,
+  Lightbulb, ZapOff, CheckCircle2, User,
   Layout, AlertCircle, ArrowUpRight, ArrowDownRight, Database, ArrowRight,
   Pause, MoreHorizontal, HelpCircle, Wallet, ChevronDown
 } from 'lucide-react';
@@ -170,7 +170,7 @@ const OEEAnalysis = () => {
           {val || 'Operation'}
         </span>
         <div className="mt-1">
-          <StatusBadge status={row.status === 'COMPLETED' ? 'ACTIVE' : (row.status === 'IN_PROGRESS' ? 'CRITICAL' : row.status)} />
+          <StatusBadge status={row.status === 'IN_PROGRESS' ? 'CRITICAL' : (row.status === 'COMPLETED' ? 'SUCCESS' : row.status)} />
         </div>
       </div>
     )},
@@ -186,14 +186,26 @@ const OEEAnalysis = () => {
     { label: 'TARGET', key: 'target', className: 'text-center', render: (val) => (
       <span className="text-[11px] font-black text-slate-400">{parseFloat(val || 0).toFixed(3)}</span>
     )},
-    { label: 'QUALITY', key: 'rejected_qty', className: 'text-center', render: (val, row) => (
-      <div className="flex flex-col items-center">
-        <span className={`text-[10px] font-black ${val > 0 ? 'text-rose-500' : 'text-emerald-500'}`}>
-          {val > 0 ? ((1 - (val / row.produced)) * 100).toFixed(1) : '100'}%
-        </span>
-        <span className="text-[8px] text-slate-400 font-bold uppercase">Yield Index</span>
-      </div>
-    )},
+    { label: 'TIME & COSTING', key: 'start_time', render: (val, row) => {
+      const start = row.start_time ? new Date(row.start_time) : null;
+      const end = row.end_time ? new Date(row.end_time) : (row.status === 'IN_PROGRESS' ? new Date() : null);
+      let duration = '0m';
+      if (start && end) {
+        const diff = Math.floor((end - start) / (1000 * 60));
+        const hrs = Math.floor(diff / 60);
+        const mins = diff % 60;
+        duration = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+      }
+      return (
+        <div className="flex flex-col">
+          <span className="text-[10px] font-black text-slate-900 uppercase flex items-center gap-1">
+            <Clock className="w-3 h-3 text-slate-400" />
+            {duration}
+          </span>
+          <span className="text-[9px] text-emerald-600 font-bold uppercase mt-0.5 tracking-tighter">Live Logged</span>
+        </div>
+      );
+    }},
     { label: 'WORKSTATION', key: 'assetContext', render: (val) => (
       <div className="flex flex-col">
         <span className="text-[10px] font-black text-slate-900 uppercase">{val}</span>
@@ -202,7 +214,27 @@ const OEEAnalysis = () => {
           <span className="text-[8px] text-slate-400 font-bold uppercase">Online</span>
         </div>
       </div>
-    )}
+    )},
+    { label: 'ASSIGNEE & TIME', key: 'operator_name', render: (val, row) => {
+      const formatTime = (iso) => {
+        if (!iso) return '--:--';
+        const d = new Date(iso);
+        return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+      };
+      return (
+        <div className="flex flex-col">
+          <div className="flex items-center gap-2">
+            <div className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200">
+               <User className="w-3 h-3 text-slate-400" />
+            </div>
+            <span className="text-[10px] font-black text-slate-700 uppercase">{val || 'Unassigned'}</span>
+          </div>
+          <span className="text-[9px] text-slate-400 font-bold mt-1">
+            {formatTime(row.start_time)} - {row.status === 'COMPLETED' ? formatTime(row.end_time) : 'LIVE'}
+          </span>
+        </div>
+      );
+    }}
   ];
 
   return (
@@ -329,7 +361,7 @@ const OEEAnalysis = () => {
               </h3>
               <div className="flex-1">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={data?.workstationAnalysis?.slice(0, 10) || []}>
+                  <BarChart data={(data?.workstationAnalysis || []).slice(0, 10)}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                     <XAxis 
                       dataKey="workstation_code" 
@@ -372,7 +404,7 @@ const OEEAnalysis = () => {
                         <p className="text-[10px] text-slate-400 font-bold uppercase mt-1 tracking-widest">{ws.workstation_code}</p>
                      </div>
                   </div>
-                  <StatusBadge status="ACTIVE" />
+                  <StatusBadge status={ws.hasActivity ? "ACTIVE" : "PENDING"} />
                 </div>
 
                 <div className="grid grid-cols-3 gap-2 mb-6 relative z-10">
@@ -414,7 +446,7 @@ const OEEAnalysis = () => {
                     <ResponsiveContainer width="100%" height="100%">
                        <PieChart>
                           <Pie
-                             data={data?.lossDistribution || []}
+                             data={(data?.lossDistribution && data.lossDistribution.some(l => parseFloat(l.value) > 0)) ? data.lossDistribution : [{name: 'No Loss', value: 100}]}
                              innerRadius={75}
                              outerRadius={105}
                              paddingAngle={5}
@@ -422,14 +454,15 @@ const OEEAnalysis = () => {
                              stroke="none"
                           >
                              {data?.lossDistribution?.map((entry, index) => (
-                               <Cell key={`cell-${index}`} fill={COLORS.chart[index % COLORS.chart.length]} />
+                               <Cell key={`cell-${index}`} fill={parseFloat(entry.value) > 0 ? COLORS.chart[index % COLORS.chart.length] : '#f1f5f9'} />
                              ))}
+                             {(!data?.lossDistribution || !data.lossDistribution.some(l => parseFloat(l.value) > 0)) && <Cell fill="#f1f5f9" />}
                           </Pie>
                        </PieChart>
                     </ResponsiveContainer>
                     <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                        <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Aggregate</span>
-                       <span className="text-2xl text-slate-900 font-black">100%</span>
+                       <span className="text-2xl text-slate-900 font-black">{(data?.lossDistribution?.reduce((acc, curr) => acc + parseFloat(curr.value), 0) || 0).toFixed(0)}%</span>
                     </div>
                  </div>
                  <div className="space-y-3 flex-1">

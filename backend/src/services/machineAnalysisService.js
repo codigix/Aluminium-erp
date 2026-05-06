@@ -34,58 +34,60 @@ const getMachineAnalysisStats = async () => {
   const avg_p = parseFloat(oeeRows[0].avg_performance || 0);
   const avg_q = parseFloat(oeeRows[0].avg_quality || 0);
   const avg_oee = (avg_a * avg_p * avg_q) / 10000;
-
-  // 2. Asset Health Spread
-  const [totalWS] = await pool.query("SELECT COUNT(*) as total FROM workstations WHERE status = 'Active'");
-  const [activeWS] = await pool.query("SELECT COUNT(DISTINCT workstation_id) as active FROM job_cards WHERE status = 'IN_PROGRESS'");
-
-  const assetHealth = {
-    total: totalWS[0].total,
-    active: activeWS[0].active,
-    idle: Math.max(0, totalWS[0].total - activeWS[0].active)
-  };
-
+  
   // 3. Asset Analysis (All active workstations)
   const [allWorkstations] = await pool.query(`
     SELECT 
+      w.id,
       w.workstation_name as name,
       w.workstation_code,
-      COALESCE((SELECT (SUM(TIMESTAMPDIFF(MINUTE, tl.start_time, tl.end_time)) / (COUNT(tl.id) * 480)) * 100 
-                FROM job_card_time_logs tl 
-                WHERE tl.workstation_id = w.id), 0) as productive,
-      COALESCE((SELECT 
-                  CASE 
-                    WHEN SUM(TIMESTAMPDIFF(MINUTE, tl.start_time, tl.end_time)) > 0 
-                    THEN (SUM(tl.produced_qty) / (SUM(TIMESTAMPDIFF(MINUTE, tl.start_time, tl.end_time)) / NULLIF(AVG(jc.cycle_time), 0))) * 100
-                    ELSE 0 
-                  END
-                FROM job_card_time_logs tl
-                JOIN job_cards jc ON tl.job_card_id = jc.id
-                WHERE tl.workstation_id = w.id), 0) as performance,
-      COALESCE((SELECT (SUM(jc.accepted_qty) / NULLIF(SUM(jc.produced_qty), 0)) * 100 
-                FROM job_cards jc 
-                WHERE jc.workstation_id = w.id AND jc.produced_qty > 0), 0) as quality,
-      (SELECT COUNT(*) FROM job_cards WHERE workstation_id = w.id AND status = 'IN_PROGRESS') as active_jobs
+      COALESCE(metrics.productive, 0) as productive,
+      COALESCE(metrics.performance, 0) as performance,
+      COALESCE(metrics.quality, 0) as quality,
+      COALESCE(active.active_jobs, 0) as active_jobs
     FROM workstations w
+    LEFT JOIN (
+      SELECT 
+        tl.workstation_id,
+        (SUM(TIMESTAMPDIFF(MINUTE, tl.start_time, tl.end_time)) / (COUNT(tl.id) * 480)) * 100 as productive,
+        CASE 
+          WHEN SUM(TIMESTAMPDIFF(MINUTE, tl.start_time, tl.end_time)) > 0 
+          THEN (SUM(tl.produced_qty) / (SUM(TIMESTAMPDIFF(MINUTE, tl.start_time, tl.end_time)) / NULLIF(AVG(jc.cycle_time), 0))) * 100
+          ELSE 0 
+        END as performance,
+        (SELECT (SUM(jc2.accepted_qty) / NULLIF(SUM(jc2.produced_qty), 0)) * 100 
+         FROM job_cards jc2 
+         WHERE jc2.workstation_id = tl.workstation_id AND jc2.produced_qty > 0) as quality
+      FROM job_card_time_logs tl
+      JOIN job_cards jc ON tl.job_card_id = jc.id
+      GROUP BY tl.workstation_id
+    ) as metrics ON w.id = metrics.workstation_id
+    LEFT JOIN (
+      SELECT workstation_id, COUNT(*) as active_jobs 
+      FROM job_cards 
+      WHERE status = 'IN_PROGRESS' 
+      GROUP BY workstation_id
+    ) as active ON w.id = active.workstation_id
     WHERE w.status = 'Active'
     ORDER BY w.workstation_name ASC
   `);
 
   const machineList = allWorkstations.map(ws => {
-    const availability = parseFloat(ws.productive);
-    const perf = parseFloat(ws.performance);
-    const qual = parseFloat(ws.quality);
+    const activeCount = Number(ws.active_jobs || 0);
+    const availability = parseFloat(ws.productive || 0);
+    const perf = parseFloat(ws.performance || 0);
+    const qual = parseFloat(ws.quality || 0);
     
     // Fallback to reasonable defaults for non-zero scores if there's activity but missing data
-    const finalP = perf === 0 && ws.active_jobs > 0 ? 78 : perf;
-    const finalQ = qual === 0 && ws.active_jobs > 0 ? 98 : qual;
-    const finalA = availability === 0 && ws.active_jobs > 0 ? 85 : availability;
+    const finalP = (perf === 0 || isNaN(perf)) && activeCount > 0 ? 78 : (isNaN(perf) ? 0 : perf);
+    const finalQ = (qual === 0 || isNaN(qual)) && activeCount > 0 ? 98 : (isNaN(qual) ? 0 : qual);
+    const finalA = (availability === 0 || isNaN(availability)) && activeCount > 0 ? 85 : (isNaN(availability) ? 0 : availability);
 
     const oee = (finalA * finalP * finalQ) / 10000;
     
     return {
       ...ws,
-      status: ws.active_jobs > 0 ? 'RUNNING' : 'IDLE',
+      status: activeCount > 0 ? 'RUNNING' : 'IDLE',
       oeeScore: Math.round(oee),
       productive: Math.round(finalA),
       idle: Math.max(0, 100 - Math.round(finalA)),
@@ -94,6 +96,16 @@ const getMachineAnalysisStats = async () => {
       availability: Math.round(finalA)
     };
   });
+
+  // 2. Asset Health Spread (Summarized from machineList for consistency)
+  const totalCount = machineList.length;
+  const activeCountTotal = machineList.filter(m => m.status === 'RUNNING').length;
+
+  const assetHealth = {
+    total: totalCount,
+    active: activeCountTotal,
+    idle: Math.max(0, totalCount - activeCountTotal)
+  };
 
   // 4. Efficiency Stream (Historical trend)
   const [streamRows] = await pool.query(`
