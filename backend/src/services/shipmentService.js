@@ -161,9 +161,26 @@ const getShipmentOrderById = async (id) => {
       FROM sales_order_items soi
       LEFT JOIN stock_balance sb ON sb.item_code = soi.item_code
       WHERE soi.sales_order_id = ? 
-      AND (sb.material_type = 'FG' OR soi.item_type = 'FG' OR soi.description LIKE '%FG%')
     `, [shipment.sales_order_id]);
-    items = soItems;
+    
+    if (soItems.length > 0) {
+      items = soItems;
+    } else if (shipment.shipment_code && shipment.shipment_code.includes('-ORD')) {
+      // Fallback to order_items if it's an ORD-based shipment
+      const [orderItems] = await pool.query(`
+        SELECT 
+          oi.item_code,
+          oi.drawing_no,
+          oi.description,
+          oi.quantity,
+          'PCS' as unit,
+          COALESCE(sb.warehouse, 'MAIN STORE') as warehouse
+        FROM order_items oi
+        LEFT JOIN stock_balance sb ON sb.item_code = oi.item_code
+        WHERE oi.order_id = ?
+      `, [shipment.sales_order_id]);
+      items = orderItems;
+    }
     
     shipment.po_number = shipment.customer_po_number;
     shipment.so_number = shipment.customer_po_number || (shipment.so_id ? `SO-${String(shipment.so_id).padStart(4, '0')}` : null);
@@ -235,11 +252,23 @@ const updateShipmentStatus = async (shipmentOrderId, status) => {
             soi.quantity,
             soi.unit
           FROM sales_order_items soi
-          LEFT JOIN stock_balance sb ON sb.item_code = soi.item_code
           WHERE soi.sales_order_id = ?
-          AND (sb.material_type = 'FG' OR soi.item_type = 'FG' OR soi.description LIKE '%FG%')
         `, [shipment.sales_order_id]);
-        items = soItems;
+        
+        if (soItems.length > 0) {
+          items = soItems;
+        } else if (shipment.shipment_code && shipment.shipment_code.includes('-ORD')) {
+          const [orderItems] = await connection.query(`
+            SELECT 
+              COALESCE(NULLIF(TRIM(oi.item_code), ''), oi.drawing_no) as item_code,
+              oi.description,
+              oi.quantity,
+              'PCS' as unit
+            FROM order_items oi
+            WHERE oi.order_id = ?
+          `, [shipment.sales_order_id]);
+          items = orderItems;
+        }
       }
 
       if (items.length > 0) {
