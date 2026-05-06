@@ -118,7 +118,7 @@ const MachineAnalysis = () => {
               </span>
             )}
           </div>
-          <p className="text-xs text-slate-500 mt-1 ">{subtitle}</p>
+          <p className="text-xs text-slate-500 mt-1 font-medium">{subtitle}</p>
         </div>
         <div className={`p-2 rounded ${color.replace('bg-', 'bg-').replace('500', '100')} ${color.replace('bg-', 'text-').replace('500', '600')} transition-transform group-hover:rotate-12 shadow-sm`}>
           <Icon className={`w-4 h-4 ${animate ? 'animate-pulse' : ''}`} />
@@ -217,21 +217,13 @@ const MachineAnalysis = () => {
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-<<<<<<< Updated upstream
-            className={`flex items-center gap-2 px-3 py-1.5 rounded text-[10px] font-bold uppercase tracking-wider transition-all border ${
-=======
-<<<<<<< HEAD
             className={`flex items-center gap-2 p-2 rounded text-xs    transition-all border ${
-=======
-            className={`flex items-center gap-2 px-3 py-1.5 rounded text-[10px] font-bold uppercase tracking-wider transition-all border ${
->>>>>>> cca9023b61ada16bf798ca1df8a8b822f8431698
->>>>>>> Stashed changes
               activeTab === tab.id 
                 ? 'bg-rose-600 text-white border-rose-600 shadow-md' 
                 : 'bg-white text-slate-500 border-slate-200 hover:text-rose-600 hover:bg-slate-50'
             }`}
           >
-            <tab.icon className="w-3 h-3" />
+            <tab.icon className="w-3.5 h-3.5" />
             {tab.label}
           </button>
         ))}
@@ -269,11 +261,11 @@ const MachineAnalysis = () => {
                        <span className="text-xs  text-slate-400   mt-2">Total Units</span>
                        <div className="mt-4 flex items-center gap-2">
                           <div className="flex items-center gap-1">
-                             <div className="w-2 h-2 rounded bg-emerald-500" />
+                             <div className="w-2 h-2 rounded-full bg-emerald-500" />
                              <span className="text-xs text-slate-500  ">{data?.assetHealth?.active || 0} Active</span>
                           </div>
                           <div className="flex items-center gap-1">
-                             <div className="w-2 h-2 rounded bg-slate-200" />
+                             <div className="w-2 h-2 rounded-full bg-slate-200" />
                              <span className="text-xs text-slate-500  ">{data?.assetHealth?.idle || 0} Idle</span>
                           </div>
                        </div>
@@ -451,7 +443,7 @@ const MachineAnalysis = () => {
                      </div>
                   </div>
                   <div className={`flex items-center gap-1.5 px-2 py-1 ${ws.status === 'RUNNING' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-orange-50 text-orange-600 border-orange-100'} rounded text-[9px]  border  er`}>
-                     <div className={`w-1.5 h-1.5 ${ws.status === 'RUNNING' ? 'bg-emerald-600' : 'bg-orange-600'} rounded animate-pulse`} />
+                     <div className={`w-1.5 h-1.5 ${ws.status === 'RUNNING' ? 'bg-emerald-600' : 'bg-orange-600'} rounded-full animate-pulse`} />
                      {ws.status === 'RUNNING' ? 'Running' : 'Idle'}
                   </div>
                 </div>
@@ -461,8 +453,8 @@ const MachineAnalysis = () => {
                       <span className="text-xs text-slate-400   ">Efficiency</span>
                       <span className="text-xs text-slate-900 font-extrabold">{ws.productive}%</span>
                    </div>
-                   <div className="h-2 w-full bg-slate-50 rounded overflow-hidden border border-slate-100">
-                      <div className={`${ws.status === 'RUNNING' ? 'bg-emerald-400' : 'bg-orange-400'} h-full rounded transition-all duration-1000`} style={{ width: `${ws.productive}%` }} />
+                   <div className="h-2 w-full bg-slate-50 rounded-full overflow-hidden border border-slate-100">
+                      <div className={`${ws.status === 'RUNNING' ? 'bg-emerald-400' : 'bg-orange-400'} h-full rounded-full transition-all duration-1000`} style={{ width: `${ws.productive}%` }} />
                    </div>
                 </div>
 

@@ -610,16 +610,6 @@ const AccountsReport = () => {
                   </td>
                   <td className="p-2 text-right">
                     <div className="flex items-center justify-end gap-1">
-<<<<<<< Updated upstream
-=======
-<<<<<<< HEAD
-                       {[Eye, Download, Printer].map((Icon, i) => (
-                         <button key={i} className="p-2 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded transition-all border border-transparent hover:border-slate-200">
-                           <Icon className="w-3.5 h-3.5" />
-                         </button>
-                       ))}
-=======
->>>>>>> Stashed changes
                       <button 
                         onClick={() => handleDownloadPDF(transaction)}
                         className="p-2 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded-lg transition-all border border-transparent hover:border-slate-200"
@@ -634,10 +624,6 @@ const AccountsReport = () => {
                       >
                         <Printer className="w-3.5 h-3.5" />
                       </button>
-<<<<<<< Updated upstream
-=======
->>>>>>> cca9023b61ada16bf798ca1df8a8b822f8431698
->>>>>>> Stashed changes
                     </div>
                   </td>
                 </tr>

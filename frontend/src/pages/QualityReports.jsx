@@ -298,13 +298,13 @@ const QualityReports = () => {
               {data.defectBreakdown.map((item, index) => (
                 <div key={index} className="flex items-center justify-between group">
                   <div className="flex items-center gap-2">
-                    <div className="w-2.5 h-2.5 rounded shadow-sm" style={{ backgroundColor: chartColors[index % chartColors.length] }}></div>
+                    <div className="w-2.5 h-2.5 rounded-full shadow-sm" style={{ backgroundColor: chartColors[index % chartColors.length] }}></div>
                     <span className="text-xs  text-slate-500  group-hover:text-slate-900 transition-colors">{item.name}</span>
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="text-xs  text-slate-900">{item.value}%</span>
-                    <div className="w-16 h-1.5 bg-slate-50 rounded overflow-hidden border border-slate-100">
-                      <div className="h-full rounded transition-all duration-1000" style={{ backgroundColor: chartColors[index % chartColors.length], width: `${item.value}%` }}></div>
+                    <div className="w-16 h-1.5 bg-slate-50 rounded-full overflow-hidden border border-slate-100">
+                      <div className="h-full rounded-full transition-all duration-1000" style={{ backgroundColor: chartColors[index % chartColors.length], width: `${item.value}%` }}></div>
                     </div>
                   </div>
                 </div>
@@ -321,21 +321,12 @@ const QualityReports = () => {
           <div className="p-2 border-b border-slate-50">
             <h3 className="text-sm text-slate-900   ">Supplier Performance</h3>
           </div>
-          <div className="p-0 max-h-[280px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200">
-            <table className="w-full text-left border-collapse sticky-header">
+          <div className="p-0">
+            <table className="w-full text-left border-collapse">
               <thead>
-<<<<<<< Updated upstream
-=======
-<<<<<<< HEAD
                 <tr className="bg-slate-50/50 text-xs text-slate-400    border-b border-slate-100">
                   <th className="p-2">Supplier</th>
                   <th className="p-2 text-right">Score</th>
-=======
->>>>>>> Stashed changes
-                <tr className="bg-slate-50/50 text-[9px] text-slate-400 font-black uppercase tracking-widest border-b border-slate-100 sticky top-0 z-10 backdrop-blur-sm">
-                  <th className="px-4 py-2">Supplier</th>
-                  <th className="px-4 py-2 text-right">Score</th>
->>>>>>> cca9023b61ada16bf798ca1df8a8b822f8431698
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
@@ -369,25 +360,14 @@ const QualityReports = () => {
               View All History <ArrowRight className="w-3 h-3" />
             </button>
           </div>
-          <div className="p-0 overflow-x-auto max-h-[280px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200">
-            <table className="w-full text-left border-collapse sticky-header">
+          <div className="p-0 overflow-x-auto">
+            <table className="w-full text-left border-collapse">
               <thead>
-<<<<<<< Updated upstream
-=======
-<<<<<<< HEAD
                 <tr className="bg-slate-50/50 text-xs text-slate-400    border-b border-slate-100">
                   <th className="p-2">Report ID</th>
                   <th className="p-2">GRN Number</th>
                   <th className="p-2 text-center">Status</th>
                   <th className="p-2 text-right">Actions</th>
-=======
->>>>>>> Stashed changes
-                <tr className="bg-slate-50/50 text-[9px] text-slate-400 font-black uppercase tracking-widest border-b border-slate-100 sticky top-0 z-10 backdrop-blur-sm">
-                  <th className="px-4 py-2">Report ID</th>
-                  <th className="px-4 py-2">GRN Number</th>
-                  <th className="px-4 py-2 text-center">Status</th>
-                  <th className="px-4 py-2 text-right">Actions</th>
->>>>>>> cca9023b61ada16bf798ca1df8a8b822f8431698
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
@@ -452,14 +432,6 @@ const QualityReports = () => {
       </div>
 
       {/* Rejections Table Section */}
-<<<<<<< Updated upstream
-      <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm mt-4 flex flex-col">
-        <h3 className="text-sm text-slate-900 font-black uppercase tracking-widest mb-6">Recent Quality Rejections</h3>
-        <div className="overflow-x-auto max-h-[350px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200">
-          <table className="w-full text-left border-collapse sticky-header">
-            <thead>
-=======
-<<<<<<< HEAD
       <div className="bg-white p-2 rounded border border-slate-100 shadow-sm mt-4 flex flex-col">
         <h3 className="text-sm text-slate-900    mb-6">Recent Quality Rejections</h3>
         <div className="overflow-x-auto">
@@ -471,20 +443,6 @@ const QualityReports = () => {
                 <th className="p-2 text-center">Rejected Qty</th>
                 <th className="p-2">Reason</th>
                 <th className="p-2 text-right">Action</th>
-=======
-      <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm mt-4 flex flex-col">
-        <h3 className="text-sm text-slate-900 font-black uppercase tracking-widest mb-6">Recent Quality Rejections</h3>
-        <div className="overflow-x-auto max-h-[350px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200">
-          <table className="w-full text-left border-collapse sticky-header">
-            <thead>
->>>>>>> Stashed changes
-              <tr className="bg-slate-50/50 text-[9px] text-slate-400 font-black uppercase tracking-widest border-b border-slate-100 sticky top-0 z-10 backdrop-blur-sm">
-                <th className="px-4 py-3">Item Details</th>
-                <th className="px-4 py-3">Reference</th>
-                <th className="px-4 py-3 text-center">Rejected Qty</th>
-                <th className="px-4 py-3">Reason</th>
-                <th className="px-4 py-3 text-right">Action</th>
->>>>>>> cca9023b61ada16bf798ca1df8a8b822f8431698
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">

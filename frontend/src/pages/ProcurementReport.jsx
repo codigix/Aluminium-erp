@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import * as XLSX from 'xlsx';
-import { Card, DataTable, StatusBadge, Button, Pagination } from '../components/ui.jsx';
+import { Card, DataTable, StatusBadge, Button } from '../components/ui.jsx';
 import PurchaseOrderDetail from './PurchaseOrderDetail.jsx';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
@@ -32,7 +32,7 @@ const ProcurementReport = () => {
   const [uploadingPoId, setUploadingPoId] = useState(null);
   const [selectedPODetail, setSelectedPODetail] = useState(null);
   const [fetchingDetail, setFetchingDetail] = useState(false);
-  const itemsPerPage = 5;
+  const itemsPerPage = 10;
   const itemsPerSmallPage = 5;
 
   useEffect(() => {
@@ -422,20 +422,6 @@ const ProcurementReport = () => {
               View all vendors <ChevronRight className="w-3 h-3" />
             </button>
           </div>
-<<<<<<< Updated upstream
-          <div className="max-h-[350px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="text-[10px] text-slate-400 font-black uppercase tracking-widest border-b border-slate-50 sticky top-0 bg-white z-10">
-                    <th className="pb-3 pr-2">Supplier</th>
-                    <th className="pb-3 pr-2 text-center">Total Orders</th>
-                    <th className="pb-3 pr-2">Fulfillment %</th>
-                    <th className="pb-3 pr-2 text-center">Avg Rating</th>
-                    <th className="pb-3 text-right">Delay %</th>
-                  </tr>
-=======
-<<<<<<< HEAD
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
@@ -495,52 +481,8 @@ const ProcurementReport = () => {
                   <ChevronRight className="w-3 h-3" />
                 </button>
               </div>
-=======
-          <div className="max-h-[350px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="text-[10px] text-slate-400 font-black uppercase tracking-widest border-b border-slate-50 sticky top-0 bg-white z-10">
-                    <th className="pb-3 pr-2">Supplier</th>
-                    <th className="pb-3 pr-2 text-center">Total Orders</th>
-                    <th className="pb-3 pr-2">Fulfillment %</th>
-                    <th className="pb-3 pr-2 text-center">Avg Rating</th>
-                    <th className="pb-3 text-right">Delay %</th>
-                  </tr>
->>>>>>> Stashed changes
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                  {stats.vendorPerformance?.map((vendor, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50 transition-colors group">
-                      <td className="py-4 text-xs font-black text-slate-900">{vendor.supplier}</td>
-                      <td className="py-4 text-xs font-bold text-slate-600 text-center">{vendor.totalOrders}</td>
-                      <td className="py-4 text-xs">
-                         <div className="flex items-center gap-2">
-                           <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                             <div className="h-full bg-emerald-500 rounded-full" style={{ width: vendor.fulfillment }} />
-                           </div>
-                           <span className="text-[10px] font-bold text-slate-500">{vendor.fulfillment}</span>
-                         </div>
-                      </td>
-                      <td className="py-4 text-center">
-                         <div className="flex items-center justify-center gap-1">
-                            {[1,2,3,4,5].map(s => (
-                              <span key={s} className={`text-xs ${s <= Math.floor(vendor.avgRating) ? 'text-amber-400' : 'text-slate-200'}`}>★</span>
-                            ))}
-                            <span className="text-[10px] font-bold text-slate-400 ml-1">{vendor.avgRating}</span>
-                         </div>
-                      </td>
-                      <td className="py-4 text-right text-xs font-bold text-rose-500">{vendor.delay}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-<<<<<<< Updated upstream
-=======
->>>>>>> cca9023b61ada16bf798ca1df8a8b822f8431698
->>>>>>> Stashed changes
             </div>
-          </div>
+          )}
         </div>
 
         {/* Recent Activity */}
@@ -551,32 +493,6 @@ const ProcurementReport = () => {
               View all activity <ChevronRight className="w-3 h-3" />
             </button>
           </div>
-<<<<<<< Updated upstream
-          <div className="max-h-[350px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
-            <div className="space-y-4">
-              {stats.recentActivity.map((activity, idx) => (
-                <div key={idx} className="flex items-start gap-3 group">
-                  <div className={`p-2 rounded-lg ${
-                    activity.type === 'RFQ_SENT' ? 'bg-blue-50 text-blue-600' : 
-                    activity.type === 'PO_CREATED' ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600'
-                  }`}>
-                    {activity.type === 'RFQ_SENT' ? <Send className="w-3.5 h-3.5" /> : 
-                     activity.type === 'PO_CREATED' ? <ShoppingCart className="w-3.5 h-3.5" /> : <Package className="w-3.5 h-3.5" />}
-                  </div>
-                  <div className="flex-1 border-b border-slate-50 pb-3 last:border-0">
-                    <div className="flex justify-between items-start">
-                      <p className="text-xs font-black text-slate-900 tracking-tight">
-                        {activity.type === 'RFQ_SENT' ? `RFQ ${activity.ref} sent to vendors` : 
-                         activity.type === 'PO_CREATED' ? `PO ${activity.ref} created` : `GRN ${activity.ref} completed`}
-                      </p>
-                      <span className="text-[9px] text-slate-400 font-bold whitespace-nowrap">
-                        {new Date(activity.time).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
-                      </span>
-                    </div>
-                    <p className="text-[10px] text-slate-500 font-bold mt-0.5">{activity.sub}</p>
-                  </div>
-=======
-<<<<<<< HEAD
           <div className="space-y-4">
             {stats.recentActivity.map((activity, idx) => (
               <div key={idx} className="flex items-start gap-3 group">
@@ -598,35 +514,9 @@ const ProcurementReport = () => {
                     </span>
                   </div>
                   <p className="text-xs text-slate-500  mt-0.5">{activity.sub}</p>
-=======
-          <div className="max-h-[350px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
-            <div className="space-y-4">
-              {stats.recentActivity.map((activity, idx) => (
-                <div key={idx} className="flex items-start gap-3 group">
-                  <div className={`p-2 rounded-lg ${
-                    activity.type === 'RFQ_SENT' ? 'bg-blue-50 text-blue-600' : 
-                    activity.type === 'PO_CREATED' ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600'
-                  }`}>
-                    {activity.type === 'RFQ_SENT' ? <Send className="w-3.5 h-3.5" /> : 
-                     activity.type === 'PO_CREATED' ? <ShoppingCart className="w-3.5 h-3.5" /> : <Package className="w-3.5 h-3.5" />}
-                  </div>
-                  <div className="flex-1 border-b border-slate-50 pb-3 last:border-0">
-                    <div className="flex justify-between items-start">
-                      <p className="text-xs font-black text-slate-900 tracking-tight">
-                        {activity.type === 'RFQ_SENT' ? `RFQ ${activity.ref} sent to vendors` : 
-                         activity.type === 'PO_CREATED' ? `PO ${activity.ref} created` : `GRN ${activity.ref} completed`}
-                      </p>
-                      <span className="text-[9px] text-slate-400 font-bold whitespace-nowrap">
-                        {new Date(activity.time).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
-                      </span>
-                    </div>
-                    <p className="text-[10px] text-slate-500 font-bold mt-0.5">{activity.sub}</p>
-                  </div>
->>>>>>> cca9023b61ada16bf798ca1df8a8b822f8431698
->>>>>>> Stashed changes
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
@@ -723,9 +613,6 @@ const ProcurementReport = () => {
             </tbody>
           </table>
         </div>
-<<<<<<< Updated upstream
-=======
-<<<<<<< HEAD
         {totalSummaryPages > 1 && (
           <div className="px-6 py-4 border-t border-slate-50 bg-slate-50/20 flex items-center justify-between">
              <p className="text-xs  text-slate-400  ">
@@ -760,19 +647,6 @@ const ProcurementReport = () => {
              </div>
           </div>
         )}
-=======
->>>>>>> Stashed changes
-        <Pagination 
-          currentPage={summaryPage}
-          totalPages={totalSummaryPages}
-          onPageChange={setSummaryPage}
-          totalItems={stats.poGrnSummary.length}
-          pageSize={itemsPerPage}
-        />
-<<<<<<< Updated upstream
-=======
->>>>>>> cca9023b61ada16bf798ca1df8a8b822f8431698
->>>>>>> Stashed changes
       </div>
       <input
         type="file"
