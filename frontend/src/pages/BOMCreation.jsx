@@ -271,8 +271,8 @@ const BOMCreation = () => {
         width: '380px',
         padding: '1rem',
         customClass: {
-          confirmButton: 'text-[11px]  px-4 py-2 rounded shadow-lg shadow-rose-100  ',
-          cancelButton: 'text-[11px]  px-4 py-2 rounded  '
+          confirmButton: 'text-[11px]  p-2 rounded shadow-lg shadow-rose-100  ',
+          cancelButton: 'text-[11px]  p-2 rounded  '
         }
       });
 
@@ -319,8 +319,8 @@ const BOMCreation = () => {
         width: '380px',
         padding: '1rem',
         customClass: {
-          confirmButton: 'text-[11px]  px-4 py-2 rounded shadow-lg shadow-rose-100  ',
-          cancelButton: 'text-[11px]  px-4 py-2 rounded  '
+          confirmButton: 'text-[11px]  p-2 rounded shadow-lg shadow-rose-100  ',
+          cancelButton: 'text-[11px]  p-2 rounded  '
         }
       });
 
@@ -373,8 +373,8 @@ const BOMCreation = () => {
         width: '380px',
         padding: '1rem',
         customClass: {
-          confirmButton: 'text-[11px]  px-4 py-2 rounded shadow-lg shadow-rose-100  ',
-          cancelButton: 'text-[11px]  px-4 py-2 rounded  '
+          confirmButton: 'text-[11px]  p-2 rounded shadow-lg shadow-rose-100  ',
+          cancelButton: 'text-[11px]  p-2 rounded  '
         }
       });
 
@@ -433,8 +433,8 @@ const BOMCreation = () => {
         width: '380px',
         padding: '1rem',
         customClass: {
-          confirmButton: 'text-[11px]  px-4 py-2 rounded shadow-lg shadow-emerald-100  ',
-          cancelButton: 'text-[11px]  px-4 py-2 rounded  '
+          confirmButton: 'text-[11px]  p-2 rounded shadow-lg shadow-emerald-100  ',
+          cancelButton: 'text-[11px]  p-2 rounded  '
         }
       });
 
@@ -758,7 +758,7 @@ const BOMCreation = () => {
                     <Link 
                       to={`/bom-form?drawing_no=${encodeURIComponent(dwgNo)}&drawing_id=${drawingId}&drawing_name=${encodeURIComponent(drawingName)}&sales_order_id=${dwgItems[0].sales_order_id}`}
                       onClick={(e) => e.stopPropagation()}
-                      className="px-4 py-2 rounded text-xs transition-all shadow-sm flex items-center gap-1.5 bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-100"
+                      className="p-2 rounded text-xs transition-all shadow-sm flex items-center gap-1.5 bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-100"
                     >
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M12 4v16m8-8H4" />
@@ -937,7 +937,7 @@ const BOMCreation = () => {
               </div>
               <div className="flex-1">
                 <p className="text-xs  text-slate-400   leading-none mb-1">{stat.label}</p>
-                <p className="text-xl  text-slate-900 tracking-tight">{stat.value}</p>
+                <p className="text-xl  text-slate-900 ">{stat.value}</p>
                 {stat.progress !== undefined && (
                   <div className="mt-2 w-full h-1 bg-slate-50 rounded overflow-hidden">
                     <div className="h-full bg-emerald-500 rounded" style={{ width: `${stat.progress}%` }} />
@@ -974,7 +974,7 @@ const BOMCreation = () => {
                     <Eye size={20} className="drop-shadow-sm" />
                   </div>
                   <div>
-                    <h3 className="text-md  text-slate-900 tracking-tight leading-none ">BOM Details: {selectedBOMOrder?.po_number}</h3>
+                    <h3 className="text-md  text-slate-900  leading-none ">BOM Details: {selectedBOMOrder?.po_number}</h3>
                     <div className="flex items-center gap-2 mt-1.5">
                       <span className="text-xs  text-slate-400  ">{selectedBOMOrder?.company_name}</span>
                       <span className="w-1 h-1 bg-slate-200 rounded" />
@@ -1018,7 +1018,7 @@ const BOMCreation = () => {
                           <p className="text-xs  text-indigo-200/80   mb-1">Aggregate Estimated Manufacturing Cost</p>
                           <div className="flex items-baseline gap-2">
                             <span className="text-indigo-200 text-sm ">₹</span>
-                            <span className="text-xl  text-white tracking-tighter">
+                            <span className="text-xl  text-white er">
                               {bomOrderItems.reduce((total, item) => {
                                 if (item.status === 'REJECTED') return total;
                                 const mat = item.materials?.reduce((sum, m) => sum + (parseFloat(m.qty_per_pc || 0) * parseFloat(item.quantity) * parseFloat(m.rate || 0)), 0) || 0;
@@ -1037,7 +1037,7 @@ const BOMCreation = () => {
                         </div>
                         <div className="p-2 bg-white/10 text-white/50 rounded backdrop-blur-md border border-white/5 flex flex-col items-center">
                            <Check size={15} className="text-emerald-400" />
-                           <span className="text-[8px]   tracking-tighter mt-1 text-emerald-400/80">Validated</span>
+                           <span className="text-[8px]   er mt-1 text-emerald-400/80">Validated</span>
                         </div>
                       </div>
                     </div>
@@ -1067,7 +1067,7 @@ const BOMCreation = () => {
                                 </div>
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2 mb-1">
-                                    <h4 className="text-xs  text-slate-900 truncate tracking-tight">{item.item_code}</h4>
+                                    <h4 className="text-xs  text-slate-900 truncate ">{item.item_code}</h4>
                                     <span className="px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded text-xs    ">{item.item_group || 'FINISHED_GOOD'}</span>
                                   </div>
                                   <div className="flex items-center gap-3 text-xs  text-slate-500 ">
@@ -1108,7 +1108,7 @@ const BOMCreation = () => {
                                       <p className="text-xs  text-slate-400   mb-1">Item Total</p>
                                       <p className="text-sm  text-indigo-600">₹{itemTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
                                     </div>
-                                    <div className="p-1.5 bg-emerald-100 text-emerald-600 rounded-full">
+                                    <div className="p-1.5 bg-emerald-100 text-emerald-600 rounded">
                                       <Check size={14} strokeWidth={3} />
                                     </div>
                                     <button 
@@ -1128,8 +1128,8 @@ const BOMCreation = () => {
                                     {/* Materials */}
                                     <div className="bg-slate-50/50 p-2 rounded border border-slate-100">
                                       <div className="flex items-center justify-between mb-3 px-1">
-                                        <h5 className="text-xs   text-indigo-600  tracking-widest flex items-center gap-2">
-                                          <div className="w-1 h-3 bg-indigo-600 rounded-full" />
+                                        <h5 className="text-xs   text-indigo-600   flex items-center gap-2">
+                                          <div className="w-1 h-3 bg-indigo-600 rounded" />
                                           Raw Materials
                                         </h5>
                                         <span className="text-xs   text-slate-400">₹{matCost.toLocaleString('en-IN')}</span>
@@ -1152,8 +1152,8 @@ const BOMCreation = () => {
                                     {/* Components */}
                                     <div className="bg-slate-50/50 p-2 rounded border border-slate-100">
                                       <div className="flex items-center justify-between mb-3 px-1">
-                                        <h5 className="text-xs   text-blue-600  tracking-widest flex items-center gap-2">
-                                          <div className="w-1 h-3 bg-blue-600 rounded-full" />
+                                        <h5 className="text-xs   text-blue-600   flex items-center gap-2">
+                                          <div className="w-1 h-3 bg-blue-600 rounded" />
                                           Components
                                         </h5>
                                         <span className="text-xs   text-slate-400">₹{compCost.toLocaleString('en-IN')}</span>
@@ -1176,8 +1176,8 @@ const BOMCreation = () => {
                                     {/* Operations */}
                                     <div className="bg-slate-50/50 p-2 rounded border border-slate-100">
                                       <div className="flex items-center justify-between mb-3 px-1">
-                                        <h5 className="text-xs   text-amber-600  tracking-widest flex items-center gap-2">
-                                          <div className="w-1 h-3 bg-amber-600 rounded-full" />
+                                        <h5 className="text-xs   text-amber-600   flex items-center gap-2">
+                                          <div className="w-1 h-3 bg-amber-600 rounded" />
                                           Operations
                                         </h5>
                                         <span className="text-xs   text-slate-400">₹{laborCost.toLocaleString('en-IN')}</span>
@@ -1214,7 +1214,7 @@ const BOMCreation = () => {
               <div className="bg-slate-50 p-3 border-t border-slate-100 flex justify-end">
                 <button 
                   onClick={() => setShowBOMDetails(false)}
-                  className="px-6 py-2 bg-white text-slate-600 border border-slate-200 rounded text-xs  hover:bg-slate-50 transition-all  tracking-widest"
+                  className="px-6 py-2 bg-white text-slate-600 border border-slate-200 rounded text-xs  hover:bg-slate-50 transition-all  "
                 >
                   Close
                 </button>

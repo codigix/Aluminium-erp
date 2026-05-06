@@ -161,7 +161,7 @@ const RecursiveBOMRow = ({
             </div>
           </td>
           <td className="p-2 text-center">
-            <span className="px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-600 ">
+            <span className="px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-600 ">
               {isConsumable ? 'Consumable' : 'Assembly'}
             </span>
           </td>
@@ -1998,7 +1998,7 @@ const BOMFormPage = () => {
                 <Info className="w-5 h-5" />
               </div>
               <div>
-                <h4 className="text-sm  text-slate-800 tracking-tight">Product Information</h4>
+                <h4 className="text-sm  text-slate-800 ">Product Information</h4>
                 <p className="text-xs text-slate-400   ">Primary Configuration</p>
               </div>
             </div>
@@ -2306,7 +2306,7 @@ const BOMFormPage = () => {
                 <Layers className="w-5 h-5" />
               </div>
               <div>
-                <h4 className="text-sm  text-slate-800 tracking-tight">Components/Sub-Assemblies</h4>
+                <h4 className="text-sm  text-slate-800 ">Components/Sub-Assemblies</h4>
                 <p className="text-xs text-slate-400   ">{bomData.components.length} items • Total ₹{componentsCost.toFixed(2)}</p>
               </div>
             </div>
@@ -2542,7 +2542,7 @@ const BOMFormPage = () => {
                 <Package className="w-5 h-5" />
               </div>
               <div>
-                <h4 className="text-sm  text-slate-800 tracking-tight">Raw Materials</h4>
+                <h4 className="text-sm  text-slate-800 ">Raw Materials</h4>
                 <p className="text-xs text-slate-400   ">{bomData.materials.length} items • Total ₹{rawMaterialsCost.toFixed(2)}</p>
               </div>
             </div>
@@ -2877,7 +2877,7 @@ const BOMFormPage = () => {
                 <Settings className="w-5 h-5" />
               </div>
               <div>
-                <h4 className="text-sm  text-slate-800 tracking-tight">Process Routing</h4>
+                <h4 className="text-sm  text-slate-800 ">Process Routing</h4>
                 <p className="text-xs text-slate-400   ">{bomData.operations.length} operations • Total ₹{operationsCost.toFixed(2)}</p>
               </div>
             </div>
@@ -2916,7 +2916,7 @@ const BOMFormPage = () => {
                       <p className="text-xs text-slate-400  mt-0.5">Define manufacturing sequence and standard times</p>
                     </div>
                     <div className="bg-white px-2.5 py-1.5 rounded  border border-slate-200  flex items-center gap-2 ">
-                      <span className="text-xs  text-slate-400  tracking-tighter">Cost Formula:</span>
+                      <span className="text-xs  text-slate-400  er">Cost Formula:</span>
                       <code className="text-xs text-purple-600   ">((Cycle + Setup) / 60) * Rate</code>
                     </div>
                   </div>
@@ -3165,7 +3165,7 @@ const BOMFormPage = () => {
                 <RefreshCw className="w-5 h-5" />
               </div>
               <div>
-                <h4 className="text-sm  text-slate-800 tracking-tight">Scrap & Recoveries</h4>
+                <h4 className="text-sm  text-slate-800 ">Scrap & Recoveries</h4>
                 <p className="text-xs text-slate-400   ">{bomData.scrap.length} scrap items • Value ₹{scrapLoss.toFixed(2)}</p>
               </div>
             </div>
@@ -3314,7 +3314,7 @@ const BOMFormPage = () => {
                             <td className="p-2  whitespace-nowrap">
                               <div className="flex flex-col">
                                 <span className="text-xs  text-slate-800">{s.item_name || 'N/A'}</span>
-                                <span className="text-xs text-slate-400   tracking-tight">
+                                <span className="text-xs text-slate-400   ">
                                   {s.item_code} {s.parent_id || s.parentId ? `[Ref: Component]` : ''}
                                 </span>
                               </div>
@@ -3389,7 +3389,7 @@ const BOMFormPage = () => {
                       <td className="p-2  whitespace-nowrap">
                         <div className="flex flex-col">
                           <span className="text-sm  text-slate-800">{s.item_name || 'N/A'}</span>
-                          <span className="text-xs text-slate-500  tracking-tight">{s.item_code || 'N/A'}</span>
+                          <span className="text-xs text-slate-500  ">{s.item_code || 'N/A'}</span>
                           {stockItem?.drawing_no && stockItem.drawing_no !== 'N/A' && (
                             <span className="inline-flex items-center gap-1 mt-1 text-xs  text-blue-600 bg-blue-50 p-1 rounded-md border border-blue-100 w-fit">
                               <Search className="w-2.5 h-2.5" />
@@ -3566,7 +3566,7 @@ const BOMFormPage = () => {
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                          <div className={`w-4 h-4 p-1 rounded-full flex items-center justify-center  text-xs ${
+                          <div className={`w-4 h-4 p-1 rounded flex items-center justify-center  text-xs ${
                             isViewing ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'bg-slate-100 text-slate-600 group-hover:bg-indigo-50 group-hover:text-indigo-600'
                           }`}>
                             V{v.version || '1'}
@@ -3635,7 +3635,7 @@ const BOMFormPage = () => {
               </div>
             ) : (
               <div className="py-2 text-center">
-                <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-3">
+                <div className="w-12 h-12 bg-slate-50 rounded flex items-center justify-center mx-auto mb-3">
                   <History className="w-6 h-6 text-slate-300" />
                 </div>
                 <p className="text-xs text-slate-400 ">No version history found for this item</p>

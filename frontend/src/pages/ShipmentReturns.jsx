@@ -163,11 +163,11 @@ const ShipmentReturns = ({ apiRequest }) => {
           <p className="text-slate-500 text-xs ">Manage sales returns and RTOs (Reverse Logistics).</p>
         </div>
         <div className="flex items-center gap-2">
-          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded text-xs text-slate-700 hover:bg-slate-50 transition-colors">
+          <button className="flex items-center gap-2 p-2 bg-white border border-slate-200 rounded text-xs text-slate-700 hover:bg-slate-50 transition-colors">
             <Filter className="w-4 h-4 text-slate-400" />
             Filter
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded text-xs text-slate-700 hover:bg-slate-50 transition-colors">
+          <button className="flex items-center gap-2 p-2 bg-white border border-slate-200 rounded text-xs text-slate-700 hover:bg-slate-50 transition-colors">
             <Download className="w-4 h-4 text-slate-400" />
             Export
           </button>
@@ -226,7 +226,7 @@ const ShipmentReturns = ({ apiRequest }) => {
                 {selectedReturn.status === 'RETURN_INITIATED' && (
                   <button 
                     onClick={() => handleUpdateStatus(selectedReturn.id, 'RETURN_PICKUP_ASSIGNED', 'Assign Pickup')}
-                    className="px-4 py-2 bg-indigo-600 text-white rounded  text-xs  hover:bg-indigo-700 transition-all"
+                    className="p-2 bg-indigo-600 text-white rounded  text-xs  hover:bg-indigo-700 transition-all"
                   >
                     Assign Pickup
                   </button>
@@ -234,7 +234,7 @@ const ShipmentReturns = ({ apiRequest }) => {
                 {selectedReturn.status === 'RETURN_PICKUP_ASSIGNED' && (
                   <button 
                     onClick={() => handleUpdateStatus(selectedReturn.id, 'RETURN_IN_TRANSIT', 'Start Transit')}
-                    className="px-4 py-2 bg-orange-600 text-white rounded  text-xs  hover:bg-orange-700 transition-all"
+                    className="p-2 bg-orange-600 text-white rounded  text-xs  hover:bg-orange-700 transition-all"
                   >
                     Mark In-Transit
                   </button>
@@ -242,7 +242,7 @@ const ShipmentReturns = ({ apiRequest }) => {
                 {selectedReturn.status === 'RETURN_IN_TRANSIT' && (
                   <button 
                     onClick={() => handleUpdateStatus(selectedReturn.id, 'RETURN_RECEIVED', 'Receive Items')}
-                    className="px-4 py-2 bg-purple-600 text-white rounded  text-xs  hover:bg-purple-700 transition-all"
+                    className="p-2 bg-purple-600 text-white rounded  text-xs  hover:bg-purple-700 transition-all"
                   >
                     Receive & Inspect
                   </button>
@@ -250,7 +250,7 @@ const ShipmentReturns = ({ apiRequest }) => {
                 {selectedReturn.status === 'RETURN_RECEIVED' && (
                   <button 
                     onClick={() => handleUpdateStatus(selectedReturn.id, 'RETURN_COMPLETED', 'Complete Return')}
-                    className="px-4 py-2 bg-green-600 text-white rounded  text-xs  hover:bg-green-700 transition-all"
+                    className="p-2 bg-green-600 text-white rounded  text-xs  hover:bg-green-700 transition-all"
                   >
                     Complete Process
                   </button>

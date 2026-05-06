@@ -1148,7 +1148,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
               <Package className="w-4 h-4" />
             </div>
             <div>
-              <div className="text-slate-800 text-xs font-medium">{item.itemCode || item.item_code}</div>
+              <div className="text-slate-800 text-xs ">{item.itemCode || item.item_code}</div>
               <div className="text-[10px] text-slate-400 truncate max-w-[200px]">{item.description}</div>
             </div>
           </div>
@@ -1174,7 +1174,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
       {
         label: 'Planned Qty',
         key: 'plannedQty',
-        className: 'text-center text-indigo-600 font-medium',
+        className: 'text-center text-indigo-600 ',
         render: (val) => val
       },
       {
@@ -1242,7 +1242,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
               <Layers className="w-4 h-4" />
             </div>
             <div>
-              <div className="text-slate-800 text-xs font-medium">{sa.itemCode || sa.item_code}</div>
+              <div className="text-slate-800 text-xs ">{sa.itemCode || sa.item_code}</div>
               <div className="text-[10px] text-slate-400 truncate max-w-[200px]">{sa.description || 'Sub-Assembly'}</div>
             </div>
           </div>
@@ -1280,7 +1280,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
         className: 'text-center',
         render: (val, sa) => (
           <div>
-            <div className="text-rose-600 font-medium">{Number(isViewing ? sa.required_qty : (val || 0)).toFixed(3)}</div>
+            <div className="text-rose-600 ">{Number(isViewing ? sa.required_qty : (val || 0)).toFixed(3)}</div>
             <div className="text-[8px] text-slate-400 uppercase">Nos</div>
           </div>
         )
@@ -1339,7 +1339,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
         key: 'material_name',
         render: (val, mat) => (
           <div>
-            <div className="text-slate-800 text-xs font-medium">{val}</div>
+            <div className="text-slate-800 text-xs ">{val}</div>
             <div className="text-[10px] text-slate-500 mt-0.5">
               {renderDimensions(mat.dimensions) || (mat.description || mat.item_code || mat.itemCode || 'Direct Material')}
             </div>
@@ -1358,7 +1358,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
         className: 'text-right',
         render: (val, mat) => (
           <div>
-            <div className="text-amber-600 font-medium">
+            <div className="text-amber-600 ">
               {Number(isViewing ? val : mat.totalPlannedQty).toFixed(3)}
             </div>
             <div className="text-[10px] text-slate-400">
@@ -1403,7 +1403,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
         key: 'material_name',
         render: (val, mat) => (
           <div>
-            <div className="text-slate-800 text-xs font-medium">{val || mat.materialName}</div>
+            <div className="text-slate-800 text-xs ">{val || mat.materialName}</div>
             <div className="text-[10px] text-slate-500 mt-0.5">
               {mat.dimensions ? (
                 <div className="flex flex-wrap gap-1">
@@ -1429,7 +1429,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
         className: 'text-right',
         render: (val, mat) => (
           <div>
-            <div className="text-rose-600 font-medium">
+            <div className="text-rose-600 ">
               {Number(isViewing ? val : mat.totalPlannedQty).toFixed(3)}
             </div>
             <div className="text-[10px] text-slate-400">{mat.uom || mat.unit || 'Nos'}</div>
@@ -2157,8 +2157,8 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
       key: 'material_name',
       render: (val, row) => (
         <div className="flex flex-col">
-          <span className="text-xs font-bold text-slate-800">{val}</span>
-          <span className="text-[10px] text-slate-400 uppercase tracking-tighter">{row.item_code}</span>
+          <span className="text-xs  text-slate-800">{val}</span>
+          <span className="text-[10px] text-slate-400 uppercase er">{row.item_code}</span>
           {renderDimensions(row.dimensions)}
         </div>
       )
@@ -2182,7 +2182,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
       className: 'text-center',
       render: (val, row) => (
         <div className="flex flex-col items-center">
-          <span className="text-xs font-bold text-indigo-600">
+          <span className="text-xs  text-indigo-600">
             {Number(val || 0).toFixed(2)}
           </span>
           <span className="text-[9px] text-slate-400 uppercase">{row.uom}</span>
@@ -2195,7 +2195,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
       render: (val, row) => {
         if (val) {
           return (
-            <div className="flex items-center gap-1 text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded text-[10px] font-bold border border-emerald-100">
+            <div className="flex items-center gap-1 text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded text-[10px]  border border-emerald-100">
               <CheckCircle2 className="w-3 h-3" />
               REQUESTED
             </div>
@@ -2207,7 +2207,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
         
         if (inv >= req) {
           return (
-            <div className="flex items-center gap-1 text-blue-600 bg-blue-50 px-2 py-0.5 rounded text-[10px] font-bold border border-blue-100">
+            <div className="flex items-center gap-1 text-blue-600 bg-blue-50 px-2 py-0.5 rounded text-[10px]  border border-blue-100">
               <Package className="w-3 h-3" />
               IN STOCK
             </div>
@@ -2215,7 +2215,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
         }
         
         return (
-          <div className="flex items-center gap-1 text-amber-600 bg-amber-50 px-2 py-0.5 rounded text-[10px] font-bold border border-amber-100">
+          <div className="flex items-center gap-1 text-amber-600 bg-amber-50 px-2 py-0.5 rounded text-[10px]  border border-amber-100">
             <Clock className="w-3 h-3" />
             PENDING
           </div>
@@ -2231,7 +2231,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
           onClick={() => {
             setMrItems(prev => prev.filter(item => item.item_code !== row.item_code));
           }}
-          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-full transition-all"
+          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-all"
           title="Remove from request"
         >
           <Trash2 className="w-3.5 h-3.5" />
@@ -2542,7 +2542,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                   <button
                     onClick={handleAddNewMrItem}
                     disabled={!selectedNewItem || !newItemQty}
-                    className="flex-1 h-8 bg-indigo-600 text-white rounded text-xs font-medium hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400 transition-all shadow-sm"
+                    className="flex-1 h-8 bg-indigo-600 text-white rounded text-xs  hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400 transition-all shadow-sm"
                   >
                     Add to Request
                   </button>
@@ -2555,7 +2555,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                 </div>
                 {selectedNewItem && (
                   <div className="col-span-12 mt-1 flex gap-3 items-center bg-white/50 p-1.5 rounded border border-indigo-50/50">
-                    <span className="text-[10px] text-indigo-600 font-bold uppercase">{selectedNewItem.material_name}</span>
+                    <span className="text-[10px] text-indigo-600  uppercase">{selectedNewItem.material_name}</span>
                     <div className="h-3 w-px bg-slate-200" />
                     <span className="text-[10px] text-slate-500">
                       Current Stock: <span className="font-semibold text-slate-700">{Number(selectedNewItem.current_balance || 0).toFixed(2)}</span> {selectedNewItem.uom}

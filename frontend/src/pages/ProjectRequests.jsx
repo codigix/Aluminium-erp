@@ -245,12 +245,12 @@ const ProjectRequests = () => {
     <div className="space-y-2 min-h-screen bg-slate-50/50">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl  text-slate-900 tracking-tight">Project Requests</h1>
+          <h1 className="text-xl  text-slate-900 ">Project Requests</h1>
           <p className="text-xs text-slate-500 mt-1">Review and initiate production for new project requests from Sales</p>
         </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded shadow-sm">
-            <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+            <div className="w-2 h-2 bg-emerald-500 rounded animate-pulse" />
             <span className="text-xs  text-slate-700  ">{requests.length} Requests Pending</span>
           </div>
           <button 

@@ -333,7 +333,7 @@ const ProcessPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
               </div>
               <div>
                 <span className="text-slate-500 text-xs">Outstanding</span>
-                <p className="text-rose-600 mt-1 font-bold text-sm">{formatCurrency(outstanding)}</p>
+                <p className="text-rose-600 mt-1  text-sm">{formatCurrency(outstanding)}</p>
               </div>
             </div>
           </div>
@@ -353,7 +353,7 @@ const ProcessPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-400">Incoterm:</span>
-                      <span className="text-blue-600 font-medium">{fullPODetail.incoterm || 'EXW'}</span>
+                      <span className="text-blue-600 ">{fullPODetail.incoterm || 'EXW'}</span>
                     </div>
                   </div>
                 </div>
@@ -424,31 +424,31 @@ const ProcessPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                             {filteredItems.map((item, idx) => (
                               <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
                                 <td className="p-2">
-                                  <p className="text-[11px] font-medium text-slate-800 leading-tight">{item.material_name || item.description || 'N/A'}</p>
+                                  <p className="text-[11px]  text-slate-800 leading-tight">{item.material_name || item.description || 'N/A'}</p>
                                 </td>
                                 <td className="p-2 text-[11px] text-slate-600 text-center">
                                   {item.quantity} {item.unit}
                                 </td>
-                                <td className="p-2 text-[11px] font-medium text-slate-900 text-right">
+                                <td className="p-2 text-[11px]  text-slate-900 text-right">
                                   {formatCurrency((item.quantity || 0) * (item.unit_rate || item.rate || 0), fullPODetail.currency)}
                                 </td>
                               </tr>
                             ))}
                             <tr className="bg-slate-50/30">
-                              <td colSpan="2" className="p-1.5 text-[10px] font-medium text-slate-500 text-right">Subtotal</td>
-                              <td className="p-1.5 text-[10px] font-medium text-slate-900 text-right">{formatCurrency(subtotal, fullPODetail.currency)}</td>
+                              <td colSpan="2" className="p-1.5 text-[10px]  text-slate-500 text-right">Subtotal</td>
+                              <td className="p-1.5 text-[10px]  text-slate-900 text-right">{formatCurrency(subtotal, fullPODetail.currency)}</td>
                             </tr>
                             <tr className="bg-slate-50/30">
-                              <td colSpan="2" className="p-1.5 text-[10px] font-medium text-slate-500 text-right">CGST (9%)</td>
-                              <td className="p-1.5 text-[10px] font-medium text-slate-900 text-right">{formatCurrency(totalCGST, fullPODetail.currency)}</td>
+                              <td colSpan="2" className="p-1.5 text-[10px]  text-slate-500 text-right">CGST (9%)</td>
+                              <td className="p-1.5 text-[10px]  text-slate-900 text-right">{formatCurrency(totalCGST, fullPODetail.currency)}</td>
                             </tr>
                             <tr className="bg-slate-50/30">
-                              <td colSpan="2" className="p-1.5 text-[10px] font-medium text-slate-500 text-right">SGST (9%)</td>
-                              <td className="p-1.5 text-[10px] font-medium text-slate-900 text-right">{formatCurrency(totalSGST, fullPODetail.currency)}</td>
+                              <td colSpan="2" className="p-1.5 text-[10px]  text-slate-500 text-right">SGST (9%)</td>
+                              <td className="p-1.5 text-[10px]  text-slate-900 text-right">{formatCurrency(totalSGST, fullPODetail.currency)}</td>
                             </tr>
                             <tr className="bg-blue-50/50">
-                              <td colSpan="2" className="p-1.5 text-xs font-bold text-blue-700 text-right">Grand Total</td>
-                              <td className="p-1.5 text-xs font-bold text-blue-700 text-right">{formatCurrency(grandTotal, fullPODetail.currency)}</td>
+                              <td colSpan="2" className="p-1.5 text-xs  text-blue-700 text-right">Grand Total</td>
+                              <td className="p-1.5 text-xs  text-blue-700 text-right">{formatCurrency(grandTotal, fullPODetail.currency)}</td>
                             </tr>
                           </>
                         );
@@ -671,7 +671,7 @@ const ProcessPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
             <button
               onClick={handleSubmit}
               disabled={loading}
-              className="px-8 py-2.5 bg-blue-600 text-white rounded text-sm font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 disabled:opacity-50"
+              className="px-8 py-2.5 bg-blue-600 text-white rounded text-sm  hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 disabled:opacity-50"
             >
               {loading ? 'Processing...' : 'Complete Payment'}
             </button>

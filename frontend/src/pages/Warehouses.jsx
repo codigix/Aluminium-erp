@@ -366,7 +366,7 @@ const Warehouses = () => {
             </svg>
           </div>
           <div>
-            <h1 className="text-2xl text-slate-900 ">Warehouses</h1>
+            <h1 className="text-xl  text-slate-900 ">Warehouses</h1>
             <p className="text-slate-500 mt-1">Manage storage locations and inventory warehouses</p>
           </div>
         </div>
@@ -441,7 +441,7 @@ const Warehouses = () => {
                     <tr key={item.grn_item_id} className="group hover:bg-slate-50/50 transition-colors">
                       <td className="px-6 py-5">
                         <div className=" text-orange-600 ">#{item.grn_number}</div>
-                        <div className="text-xs text-slate-400 tracking-tight mt-0.5">PO: {item.po_number}</div>
+                        <div className="text-xs text-slate-400  mt-0.5">PO: {item.po_number}</div>
                       </td>
                       <td className="px-6 py-5">
                         <div className=" text-slate-900 ">{item.item_code}</div>

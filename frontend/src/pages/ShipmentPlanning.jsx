@@ -265,11 +265,11 @@ const ShipmentPlanning = ({ apiRequest }) => {
           <p className="text-slate-500 text-xs ">Plan and prepare shipments for dispatch.</p>
         </div>
         <div className="flex items-center gap-2">
-          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded text-xs text-slate-700 hover:bg-slate-50 transition-colors">
+          <button className="flex items-center gap-2 p-2 bg-white border border-slate-200 rounded text-xs text-slate-700 hover:bg-slate-50 transition-colors">
             <Filter className="w-4 h-4 text-slate-400" />
             Filter
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded text-xs text-slate-700 hover:bg-slate-50 transition-colors">
+          <button className="flex items-center gap-2 p-2 bg-white border border-slate-200 rounded text-xs text-slate-700 hover:bg-slate-50 transition-colors">
             <Download className="w-4 h-4 text-slate-400" />
             Export
           </button>
@@ -291,7 +291,7 @@ const ShipmentPlanning = ({ apiRequest }) => {
                 />
               </div>
               <select
-                className="px-4 py-2 rounded  border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white transition-all"
+                className="p-2 rounded  border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white transition-all"
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
               >
@@ -335,7 +335,7 @@ const ShipmentPlanning = ({ apiRequest }) => {
               <FormControl label="Customer Name">
                 <input
                   type="text"
-                  className="w-full px-4 py-2 rounded  border border-slate-200 text-sm bg-white text-slate-500"
+                  className="w-full p-2 rounded  border border-slate-200 text-sm bg-white text-slate-500"
                   value={planningForm.customer_name}
                   readOnly
                 />
@@ -343,7 +343,7 @@ const ShipmentPlanning = ({ apiRequest }) => {
               <FormControl label="Contact Number">
                 <input
                   type="text"
-                  className="w-full px-4 py-2 rounded  border border-slate-200 text-sm bg-white text-slate-500"
+                  className="w-full p-2 rounded  border border-slate-200 text-sm bg-white text-slate-500"
                   value={planningForm.customer_phone}
                   readOnly
                 />
@@ -351,7 +351,7 @@ const ShipmentPlanning = ({ apiRequest }) => {
               <FormControl label="Email Address">
                 <input
                   type="text"
-                  className="w-full px-4 py-2 rounded  border border-slate-200 text-sm bg-white text-slate-500"
+                  className="w-full p-2 rounded  border border-slate-200 text-sm bg-white text-slate-500"
                   value={planningForm.customer_email}
                   readOnly
                 />
@@ -360,7 +360,7 @@ const ShipmentPlanning = ({ apiRequest }) => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               <FormControl label="Shipping Address">
                 <textarea
-                  className="w-full px-4 py-2 rounded  border border-slate-200 text-sm bg-white text-slate-500"
+                  className="w-full p-2 rounded  border border-slate-200 text-sm bg-white text-slate-500"
                   rows="2"
                   value={planningForm.shipping_address}
                   readOnly
@@ -368,7 +368,7 @@ const ShipmentPlanning = ({ apiRequest }) => {
               </FormControl>
               <FormControl label="Billing Address">
                 <textarea
-                  className="w-full px-4 py-2 rounded  border border-slate-200 text-sm bg-white text-slate-500"
+                  className="w-full p-2 rounded  border border-slate-200 text-sm bg-white text-slate-500"
                   rows="2"
                   value={planningForm.billing_address}
                   readOnly
@@ -387,7 +387,7 @@ const ShipmentPlanning = ({ apiRequest }) => {
                 <FormControl label="Planned Dispatch Date" required>
                   <input
                     type="date"
-                    className="w-full px-4 py-2 rounded  border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full p-2 rounded  border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     value={planningForm.planned_dispatch_date}
                     onChange={(e) => setPlanningForm({ ...planningForm, planned_dispatch_date: e.target.value })}
                     required
@@ -396,7 +396,7 @@ const ShipmentPlanning = ({ apiRequest }) => {
                 <FormControl label="Est. Delivery Date">
                   <input
                     type="date"
-                    className="w-full px-4 py-2 rounded  border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full p-2 rounded  border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     value={planningForm.estimated_delivery_date}
                     onChange={(e) => setPlanningForm({ ...planningForm, estimated_delivery_date: e.target.value })}
                   />
@@ -413,14 +413,14 @@ const ShipmentPlanning = ({ apiRequest }) => {
                 <input
                   type="text"
                   placeholder="Ex: BlueDart, FedEx, etc."
-                  className="w-full px-4 py-2 rounded  border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full p-2 rounded  border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   value={planningForm.transporter}
                   onChange={(e) => setPlanningForm({ ...planningForm, transporter: e.target.value })}
                 />
               </FormControl>
               <FormControl label="Packing Status">
                 <select
-                  className="w-full px-4 py-2 rounded  border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                  className="w-full p-2 rounded  border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
                   value={planningForm.packing_status}
                   onChange={(e) => setPlanningForm({ ...planningForm, packing_status: e.target.value })}
                 >
@@ -437,7 +437,7 @@ const ShipmentPlanning = ({ apiRequest }) => {
               <input
                 type="text"
                 placeholder="MH-12-AB-1234"
-                className="w-full px-4 py-2 rounded  border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full p-2 rounded  border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 value={planningForm.vehicle_number}
                 onChange={(e) => setPlanningForm({ ...planningForm, vehicle_number: e.target.value })}
               />
@@ -445,7 +445,7 @@ const ShipmentPlanning = ({ apiRequest }) => {
             <FormControl label="Driver Name">
               <input
                 type="text"
-                className="w-full px-4 py-2 rounded  border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full p-2 rounded  border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 value={planningForm.driver_name}
                 onChange={(e) => setPlanningForm({ ...planningForm, driver_name: e.target.value })}
               />
@@ -453,7 +453,7 @@ const ShipmentPlanning = ({ apiRequest }) => {
             <FormControl label="Driver Contact">
               <input
                 type="text"
-                className="w-full px-4 py-2 rounded  border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full p-2 rounded  border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 value={planningForm.driver_contact}
                 onChange={(e) => setPlanningForm({ ...planningForm, driver_contact: e.target.value })}
               />
@@ -462,7 +462,7 @@ const ShipmentPlanning = ({ apiRequest }) => {
 
           <FormControl label="Special Instructions">
             <textarea
-              className="w-full px-4 py-2 rounded  border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full p-2 rounded  border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
               rows="2"
               placeholder="Any specific delivery instructions..."
               value={planningForm.special_instructions}

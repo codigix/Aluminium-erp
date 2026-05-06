@@ -309,7 +309,7 @@ const Challans = () => {
                 Close
               </button>
               <button 
-                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded text-sm  hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
+                className="flex items-center gap-2 p-2 bg-indigo-600 text-white rounded text-sm  hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
               >
                 <Download className="w-4 h-4" />
                 Download PDF

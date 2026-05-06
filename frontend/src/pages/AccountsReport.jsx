@@ -239,15 +239,15 @@ const AccountsReport = () => {
   };
 
   const KPIStoreCard = ({ title, value, subtitle, icon: Icon, color, subColor }) => (
-    <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm flex items-center gap-4 relative overflow-hidden group">
+    <div className="bg-white rounded p-2 border border-slate-100 shadow-sm flex items-center gap-4 relative overflow-hidden group">
       <div className={`absolute top-0 right-0 w-16 h-16 ${subColor} opacity-10 rounded -mr-6 -mt-6 transition-transform group-hover:scale-110`} />
-      <div className={`p-3 rounded-xl ${subColor} ${color}`}>
+      <div className={`p-2 rounded ${subColor} ${color}`}>
         <Icon className="w-5 h-5" />
       </div>
       <div>
-        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{title}</p>
-        <h3 className="text-xl text-slate-900 font-black">{value}</h3>
-        <p className="text-[10px] text-slate-500 font-bold tracking-tight">{subtitle}</p>
+        <p className="text-xs text-slate-400   tracking-wider">{title}</p>
+        <h3 className="text-xl text-slate-900 ">{value}</h3>
+        <p className="text-xs text-slate-500  ">{subtitle}</p>
       </div>
     </div>
   );
@@ -256,7 +256,7 @@ const AccountsReport = () => {
     return (
       <div className="flex flex-col items-center justify-center p-22 space-y-4">
         <div className="w-16 h-16 border-4 border-slate-100 border-t-rose-600 rounded animate-spin" />
-        <h3 className="text-slate-900 font-black tracking-tight uppercase">Generating Accounts Report...</h3>
+        <h3 className="text-slate-900   ">Generating Accounts Report...</h3>
       </div>
     );
   }
@@ -264,15 +264,15 @@ const AccountsReport = () => {
   const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#f43f5e'];
 
   return (
-    <div className="space-y-6 pb-12 animate-in fade-in duration-500">
+    <div className=" pb-12 animate-in fade-in duration-500">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl text-slate-900 font-black tracking-tight">Accounts Report</h1>
-          <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-1">Overview of financial performance and account activities</p>
+          <h1 className="text-xl  text-slate-900  ">Accounts Report</h1>
+          <p className="text-xs text-slate-500    mt-1">Overview of financial performance and account activities</p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg text-[11px] font-bold text-slate-600">
+          <div className="flex items-center gap-2 p-2 bg-white border border-slate-200 rounded text-xs  text-slate-600">
              <Calendar className="w-4 h-4 text-slate-400" />
              <input 
                type="date" 
@@ -291,7 +291,7 @@ const AccountsReport = () => {
           <select 
             value={selectedCustomer}
             onChange={(e) => setSelectedCustomer(e.target.value)}
-            className="bg-white border border-slate-200 rounded-lg px-3 py-2 text-[11px] font-bold text-slate-600 outline-none"
+            className="bg-white border border-slate-200 rounded p-2 text-xs  text-slate-600 outline-none"
           >
             <option value="All">All Customers</option>
             {stats.topCustomers?.map((customer, idx) => (
@@ -300,7 +300,7 @@ const AccountsReport = () => {
           </select>
           <button 
             onClick={handleExport}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all flex items-center gap-2 shadow-lg shadow-indigo-100"
+            className="bg-indigo-600 hover:bg-indigo-700 text-white p-2 rounded text-xs   tracking-wider transition-all flex items-center gap-2 shadow-lg shadow-indigo-100"
           >
             <Download className="w-4 h-4" />
             Export Report
@@ -309,7 +309,7 @@ const AccountsReport = () => {
       </div>
 
       {/* KPIs Row */}
-      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 my-5 gap-4">
         <KPIStoreCard title="Total Receivables" value={`₹${parseFloat(stats.kpis.totalReceivables).toLocaleString('en-IN')}`} subtitle={`From ${stats.kpis.receivableCustomers} Customers`} icon={FileText} color="text-indigo-600" subColor="bg-indigo-50" />
         <KPIStoreCard title="Total Payables" value={`₹${parseFloat(stats.kpis.totalPayables).toLocaleString('en-IN')}`} subtitle={`To ${stats.kpis.payableVendors} Vendors`} icon={ShoppingCart} color="text-emerald-600" subColor="bg-emerald-50" />
         <KPIStoreCard title="Cash Received" value={`₹${parseFloat(stats.kpis.cashReceived).toLocaleString('en-IN')}`} subtitle="This Period" icon={IndianRupee} color="text-amber-600" subColor="bg-amber-50" />
@@ -318,12 +318,12 @@ const AccountsReport = () => {
       </div>
 
       {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 my-5 gap-2">
         {/* Receivables vs Payables */}
-        <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm flex flex-col">
+        <div className="bg-white rounded p-2 border border-slate-100 shadow-sm flex flex-col">
           <div className="mb-8">
-            <h3 className="text-sm text-slate-900 font-black uppercase tracking-widest">Receivables vs Payables</h3>
-            <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">Outstanding comparison</p>
+            <h3 className="text-sm text-slate-900   ">Receivables vs Payables</h3>
+            <p className="text-xs text-slate-400   mt-1">Outstanding comparison</p>
           </div>
           <div className="flex-1 flex flex-col items-center justify-center relative">
             <div className="h-[200px] w-full">
@@ -344,16 +344,16 @@ const AccountsReport = () => {
                 </PieChart>
               </ResponsiveContainer>
             </div>
-            <div className="w-full mt-6 space-y-3">
+            <div className="w-full mt-3 ">
               {stats.receivablesPayables.map((item, idx) => (
                 <div key={idx} className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COLORS[idx % COLORS.length] }} />
-                    <span className="text-[10px] font-bold text-slate-500 uppercase">{item.name}</span>
+                    <div className="w-2.5 h-2.5 rounded" style={{ backgroundColor: COLORS[idx % COLORS.length] }} />
+                    <span className="text-xs  text-slate-500 ">{item.name}</span>
                   </div>
                   <div className="text-right">
-                    <p className="text-[10px] font-black text-slate-900">₹{parseFloat(item.value).toLocaleString('en-IN')}</p>
-                    <p className="text-[9px] text-slate-400 font-bold">{item.percent}%</p>
+                    <p className="text-xs  text-slate-900">₹{parseFloat(item.value).toLocaleString('en-IN')}</p>
+                    <p className="text-xs text-slate-400 ">{item.percent}%</p>
                   </div>
                 </div>
               ))}
@@ -362,11 +362,11 @@ const AccountsReport = () => {
         </div>
 
         {/* Cash Flow Trend */}
-        <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm flex flex-col">
+        <div className="bg-white rounded p-2 border border-slate-100 shadow-sm flex flex-col">
           <div className="flex items-center justify-between mb-8">
             <div>
-              <h3 className="text-sm text-slate-900 font-black uppercase tracking-widest">Cash Flow Trend</h3>
-              <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">Cash inflow and outflow over time</p>
+              <h3 className="text-sm text-slate-900   ">Cash Flow Trend</h3>
+              <p className="text-xs text-slate-400   mt-1">Cash inflow and outflow over time</p>
             </div>
           </div>
           <div className="h-[250px] w-full">
@@ -386,7 +386,7 @@ const AccountsReport = () => {
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 9, fontWeight: 700}} />
                 <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 9, fontWeight: 700}} tickFormatter={(val) => `₹${val / 1000}K`} />
                 <Tooltip contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} formatter={(val) => `₹${parseFloat(val).toLocaleString('en-IN')}`} />
-                <Legend iconType="circle" wrapperStyle={{fontSize: '10px', fontWeight: 'bold', textTransform: 'uppercase', paddingTop: '20px'}} />
+                <Legend iconType="circle" wrapperStyle={{fontSize: '10px', fontWeight: 'bold', textTransform: '', paddingTop: '20px'}} />
                 <Area name="Cash Inflow" type="monotone" dataKey="inflow" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorInflow)" />
                 <Area name="Cash Outflow" type="monotone" dataKey="outflow" stroke="#f43f5e" strokeWidth={2} fillOpacity={1} fill="url(#colorOutflow)" />
               </AreaChart>
@@ -395,31 +395,31 @@ const AccountsReport = () => {
         </div>
 
         {/* Aging Summary */}
-        <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
+        <div className="bg-white rounded p-2 border border-slate-100 shadow-sm">
           <div className="mb-6">
-            <h3 className="text-sm text-slate-900 font-black uppercase tracking-widest">Aging Summary (Receivables)</h3>
-            <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">Outstanding by aging buckets</p>
+            <h3 className="text-sm text-slate-900   ">Aging Summary (Receivables)</h3>
+            <p className="text-xs text-slate-400   mt-1">Outstanding by aging buckets</p>
           </div>
-          <div className="space-y-4">
+          <div className="">
             {stats.agingSummary.map((bucket, idx) => (
-              <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100 group hover:bg-white hover:shadow-md transition-all">
+              <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded border border-slate-100 group hover:bg-white hover:shadow-md transition-all">
                 <div className="flex items-center gap-3">
-                  <div className={`p-2 rounded-lg ${
+                  <div className={`p-2 rounded ${
                     idx === 0 ? 'bg-emerald-50 text-emerald-600' : 
                     idx === 1 ? 'bg-amber-50 text-amber-600' : 'bg-rose-50 text-rose-600'
                   }`}>
                     <Clock className="w-3.5 h-3.5" />
                   </div>
-                  <span className="text-[10px] font-black text-slate-900 uppercase tracking-tighter">{bucket.range}</span>
+                  <span className="text-xs  text-slate-900  er">{bucket.range}</span>
                 </div>
                 <div className="text-right">
-                   <p className="text-[11px] font-black text-slate-900">₹{parseFloat(bucket.amount).toLocaleString('en-IN')}</p>
-                   <span className="text-[9px] font-bold text-slate-400 uppercase">{bucket.invoiceCount} Invoice</span>
+                   <p className="text-xs  text-slate-900">₹{parseFloat(bucket.amount).toLocaleString('en-IN')}</p>
+                   <span className="text-xs  text-slate-400 ">{bucket.invoiceCount} Invoice</span>
                 </div>
               </div>
             ))}
-            <div className="pt-4 mt-2 border-t border-slate-50 flex items-center justify-between font-black">
-              <span className="text-[10px] text-slate-500 uppercase tracking-widest">Total Outstanding</span>
+            <div className="pt-4 mt-2 border-t border-slate-50 flex items-center justify-between ">
+              <span className="text-xs text-slate-500  ">Total Outstanding</span>
               <span className="text-sm text-indigo-600">₹{parseFloat(stats.kpis.totalReceivables).toLocaleString('en-IN')}</span>
             </div>
           </div>
@@ -429,37 +429,37 @@ const AccountsReport = () => {
       {/* Top Customers & Vendors Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Top Customers */}
-        <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
+        <div className="bg-white rounded p-2 border border-slate-100 shadow-sm">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h3 className="text-sm text-slate-900 font-black uppercase tracking-widest">Top Customers</h3>
-              <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">By outstanding amount</p>
+              <h3 className="text-sm text-slate-900   ">Top Customers</h3>
+              <p className="text-xs text-slate-400   mt-1">By outstanding amount</p>
             </div>
-            <button className="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-1">
+            <button className="text-xs  text-indigo-600   flex items-center gap-1">
               View all customers <ChevronRight className="w-3 h-3" />
             </button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="text-[10px] text-slate-400 font-black uppercase tracking-widest border-b border-slate-50">
-                  <th className="pb-3 pr-2">Customer</th>
-                  <th className="pb-3 pr-2 text-center">Total Invoices</th>
-                  <th className="pb-3 pr-2 text-center">Outstanding Amount</th>
-                  <th className="pb-3 text-right">Overdue Amount</th>
+                <tr className="text-xs text-slate-400    border-b border-slate-50">
+                  <th className="p-2">Customer</th>
+                  <th className="p-2 text-center">Total Invoices</th>
+                  <th className="p-2 text-center">Outstanding Amount</th>
+                  <th className="p-2 text-right">Overdue Amount</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {paginatedCustomers.map((customer, idx) => (
                   <tr key={idx} className="hover:bg-slate-50 transition-colors group">
-                    <td className="py-4 pr-2">
-                       <p className="text-xs font-black text-slate-900">{customer.name}</p>
-                       <p className="text-[9px] text-slate-400 font-bold mt-0.5">{customer.email}</p>
+                    <td className="p-2">
+                       <p className="text-xs  text-slate-900">{customer.name}</p>
+                       <p className="text-xs text-slate-400  mt-0.5">{customer.email}</p>
                     </td>
-                    <td className="py-4 text-xs font-bold text-slate-600 text-center">{customer.totalInvoices}</td>
-                    <td className="py-4 text-xs font-black text-slate-900 text-center">₹{parseFloat(customer.outstanding).toLocaleString('en-IN')}</td>
-                    <td className="py-4 text-right">
-                       <span className={`text-[10px] font-black ${
+                    <td className="p-2 text-xs  text-slate-600 text-center">{customer.totalInvoices}</td>
+                    <td className="p-2 text-xs  text-slate-900 text-center">₹{parseFloat(customer.outstanding).toLocaleString('en-IN')}</td>
+                    <td className="p-2 text-right">
+                       <span className={`text-xs  ${
                          parseFloat(customer.overdue) > 0 ? 'text-rose-600' : 'text-slate-400'
                        }`}>₹{parseFloat(customer.overdue).toLocaleString('en-IN')}</span>
                     </td>
@@ -470,7 +470,7 @@ const AccountsReport = () => {
           </div>
           {totalCustomerPages > 1 && (
             <div className="mt-4 flex items-center justify-between">
-              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+              <p className="text-xs  text-slate-400  ">
                 Page {customersPage} of {totalCustomerPages}
               </p>
               <div className="flex items-center gap-1">
@@ -494,37 +494,37 @@ const AccountsReport = () => {
         </div>
 
         {/* Top Vendors */}
-        <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
+        <div className="bg-white rounded p-2 border border-slate-100 shadow-sm">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h3 className="text-sm text-slate-900 font-black uppercase tracking-widest">Top Vendors</h3>
-              <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">By outstanding amount</p>
+              <h3 className="text-sm text-slate-900   ">Top Vendors</h3>
+              <p className="text-xs text-slate-400   mt-1">By outstanding amount</p>
             </div>
-            <button className="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-1">
+            <button className="text-xs  text-indigo-600   flex items-center gap-1">
               View all vendors <ChevronRight className="w-3 h-3" />
             </button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="text-[10px] text-slate-400 font-black uppercase tracking-widest border-b border-slate-50">
-                  <th className="pb-3 pr-2">Vendor</th>
-                  <th className="pb-3 pr-2 text-center">Total Invoices</th>
-                  <th className="pb-3 pr-2 text-center">Outstanding Amount</th>
-                  <th className="pb-3 text-right">Overdue Amount</th>
+                <tr className="text-xs text-slate-400    border-b border-slate-50">
+                  <th className="p-2">Vendor</th>
+                  <th className="p-2 text-center">Total Invoices</th>
+                  <th className="p-2 text-center">Outstanding Amount</th>
+                  <th className="p-2 text-right">Overdue Amount</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {paginatedVendors.map((vendor, idx) => (
                   <tr key={idx} className="hover:bg-slate-50 transition-colors group">
-                    <td className="py-4 pr-2">
-                       <p className="text-xs font-black text-slate-900">{vendor.name}</p>
-                       <p className="text-[9px] text-slate-400 font-bold mt-0.5">{vendor.email}</p>
+                    <td className="p-2">
+                       <p className="text-xs  text-slate-900">{vendor.name}</p>
+                       <p className="text-xs text-slate-400  mt-0.5">{vendor.email}</p>
                     </td>
-                    <td className="py-4 text-xs font-bold text-slate-600 text-center">{vendor.totalInvoices}</td>
-                    <td className="py-4 text-xs font-black text-slate-900 text-center">₹{parseFloat(vendor.outstanding).toLocaleString('en-IN')}</td>
-                    <td className="py-4 text-right">
-                       <span className={`text-[10px] font-black ${
+                    <td className="p-2 text-xs  text-slate-600 text-center">{vendor.totalInvoices}</td>
+                    <td className="p-2 text-xs  text-slate-900 text-center">₹{parseFloat(vendor.outstanding).toLocaleString('en-IN')}</td>
+                    <td className="p-2 text-right">
+                       <span className={`text-xs  ${
                          parseFloat(vendor.overdue) > 0 ? 'text-rose-600' : 'text-slate-400'
                        }`}>₹{parseFloat(vendor.overdue).toLocaleString('en-IN')}</span>
                     </td>
@@ -535,7 +535,7 @@ const AccountsReport = () => {
           </div>
           {totalVendorPages > 1 && (
             <div className="mt-4 flex items-center justify-between">
-              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+              <p className="text-xs  text-slate-400  ">
                 Page {vendorsPage} of {totalVendorPages}
               </p>
               <div className="flex items-center gap-1">
@@ -560,56 +560,66 @@ const AccountsReport = () => {
       </div>
 
       {/* Recent Transactions */}
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-        <div className="p-6 border-b border-slate-50 flex items-center justify-between">
-           <h3 className="text-sm text-slate-900 font-black uppercase tracking-widest">Recent Transactions</h3>
-           <button className="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-1">
+      <div className="mt-5">
+        <div className="border-b border-slate-50 flex items-center justify-between">
+           <h3 className="text-sm text-slate-900   ">Recent Transactions</h3>
+           <button className="text-xs  text-indigo-600   flex items-center gap-1">
              View all transactions <ArrowRight className="w-3 h-3" />
            </button>
         </div>
         <div className="p-0 overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+          <table className="w-full text-left bg-white border-collapse">
             <thead>
-              <tr className="bg-slate-50/50 text-[10px] text-slate-400 font-black uppercase tracking-widest border-b border-slate-100">
-                <th className="px-6 py-4">Type</th>
-                <th className="px-6 py-4">Reference</th>
-                <th className="px-6 py-4">Customer / Vendor</th>
-                <th className="px-6 py-4">Date</th>
-                <th className="px-6 py-4">Due Date</th>
-                <th className="px-6 py-4 text-right">Amount</th>
-                <th className="px-6 py-4 text-center">Status</th>
-                <th className="px-6 py-4 text-right">Actions</th>
+              <tr className="bg-slate-50/50 text-xs text-slate-400    border-b border-slate-100">
+                <th className="p-2">Type</th>
+                <th className="p-2">Reference</th>
+                <th className="p-2">Customer / Vendor</th>
+                <th className="p-2">Date</th>
+                <th className="p-2">Due Date</th>
+                <th className="p-2 text-right">Amount</th>
+                <th className="p-2 text-center">Status</th>
+                <th className="p-2 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
               {paginatedTransactions.map((transaction, idx) => (
                 <tr key={idx} className="hover:bg-slate-50/50 transition-colors group text-xs">
-                  <td className="px-6 py-4">
-                    <span className={`px-2 py-1 rounded text-[9px] font-black uppercase tracking-tighter ${
+                  <td className="p-2">
+                    <span className={`p-1 rounded text-xs   er ${
                       transaction.type === 'Payment Received' ? 'bg-emerald-50 text-emerald-600' : 
                       transaction.type === 'Vendor Payment' ? 'bg-amber-50 text-amber-600' : 'bg-blue-50 text-blue-600'
                     }`}>
                       {transaction.type}
                     </span>
                   </td>
-                  <td className="px-6 py-4 font-black text-indigo-600">{transaction.reference}</td>
-                  <td className="px-6 py-4 font-bold text-slate-900">{transaction.party}</td>
-                  <td className="px-6 py-4 text-slate-500 font-bold whitespace-nowrap">
+                  <td className="p-2  text-indigo-600">{transaction.reference}</td>
+                  <td className="p-2  text-slate-900">{transaction.party}</td>
+                  <td className="p-2 text-slate-500  whitespace-nowrap">
                     {new Date(transaction.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
                   </td>
-                  <td className="px-6 py-4 text-slate-500 font-bold whitespace-nowrap">
+                  <td className="p-2 text-slate-500  whitespace-nowrap">
                     {transaction.dueDate ? new Date(transaction.dueDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'}
                   </td>
-                  <td className="px-6 py-4 text-right font-black text-slate-900">₹{parseFloat(transaction.amount).toLocaleString('en-IN')}</td>
-                  <td className="px-6 py-4 text-center">
-                    <span className={`px-2 py-1 rounded text-[9px] font-black uppercase tracking-tighter ${
+                  <td className="p-2 text-right  text-slate-900">₹{parseFloat(transaction.amount).toLocaleString('en-IN')}</td>
+                  <td className="p-2 text-center">
+                    <span className={`p-1 rounded text-xs   er ${
                       transaction.status === 'Confirmed' || transaction.status === 'Paid' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'
                     }`}>
                       {transaction.status}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-right">
+                  <td className="p-2 text-right">
                     <div className="flex items-center justify-end gap-1">
+<<<<<<< Updated upstream
+=======
+<<<<<<< HEAD
+                       {[Eye, Download, Printer].map((Icon, i) => (
+                         <button key={i} className="p-2 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded transition-all border border-transparent hover:border-slate-200">
+                           <Icon className="w-3.5 h-3.5" />
+                         </button>
+                       ))}
+=======
+>>>>>>> Stashed changes
                       <button 
                         onClick={() => handleDownloadPDF(transaction)}
                         className="p-2 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded-lg transition-all border border-transparent hover:border-slate-200"
@@ -624,13 +634,17 @@ const AccountsReport = () => {
                       >
                         <Printer className="w-3.5 h-3.5" />
                       </button>
+<<<<<<< Updated upstream
+=======
+>>>>>>> cca9023b61ada16bf798ca1df8a8b822f8431698
+>>>>>>> Stashed changes
                     </div>
                   </td>
                 </tr>
               ))}
               {paginatedTransactions.length === 0 && (
                 <tr>
-                  <td colSpan="8" className="px-6 py-12 text-center text-slate-400 text-xs font-bold uppercase tracking-widest">
+                  <td colSpan="8" className="p-2 text-center text-slate-400 text-xs   ">
                     No transactions found for selected period
                   </td>
                 </tr>
@@ -639,15 +653,15 @@ const AccountsReport = () => {
           </table>
         </div>
         {totalTransactionPages > 1 && (
-          <div className="px-6 py-4 border-t border-slate-50 bg-slate-50/20 flex items-center justify-between">
-             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+          <div className="p-2 border-t border-slate-50 bg-slate-50/20 flex items-center justify-between">
+             <p className="text-xs  text-slate-400  ">
                Showing {(transactionsPage - 1) * transactionsPerPage + 1} to {Math.min(transactionsPage * transactionsPerPage, stats.recentTransactions.length)} of {stats.recentTransactions.length} entries
              </p>
              <div className="flex items-center gap-1">
                <button 
                  disabled={transactionsPage === 1}
                  onClick={() => setTransactionsPage(prev => prev - 1)}
-                 className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:bg-white disabled:opacity-50"
+                 className="w-8 h-8 flex items-center justify-center rounded border border-slate-200 text-slate-400 hover:bg-white disabled:opacity-50"
                >
                  <ChevronRight className="w-4 h-4 rotate-180" />
                </button>
@@ -655,7 +669,7 @@ const AccountsReport = () => {
                  <button 
                    key={i}
                    onClick={() => setTransactionsPage(i + 1)}
-                   className={`w-8 h-8 flex items-center justify-center rounded-lg font-black text-xs transition-all ${
+                   className={`w-8 h-8 flex items-center justify-center rounded  text-xs transition-all ${
                      transactionsPage === i + 1 ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'border border-slate-200 text-slate-400 hover:bg-white'
                    }`}
                  >
@@ -665,7 +679,7 @@ const AccountsReport = () => {
                <button 
                  disabled={transactionsPage === totalTransactionPages}
                  onClick={() => setTransactionsPage(prev => prev + 1)}
-                 className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:bg-white disabled:opacity-50"
+                 className="w-8 h-8 flex items-center justify-center rounded border border-slate-200 text-slate-400 hover:bg-white disabled:opacity-50"
                >
                  <ChevronRight className="w-4 h-4" />
                </button>

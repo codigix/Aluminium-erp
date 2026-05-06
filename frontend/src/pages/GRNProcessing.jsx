@@ -507,7 +507,7 @@ const GRNProcessing = () => {
       label: 'PO Number', 
       key: 'poNumber', 
       sortable: true,
-      render: (val) => <span className="text-slate-600 font-medium">{val || '—'}</span>
+      render: (val) => <span className="text-slate-600 ">{val || '—'}</span>
     },
     { 
       label: 'Client', 
@@ -1004,7 +1004,7 @@ const GRNProcessing = () => {
                     {(selectedGRNForView.items || []).map((item, idx) => (
                         <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
                         <td className="p-2">
-                          <div className="text-xs  text-slate-900 font-bold">{item.material_name || item.item_code}</div>
+                          <div className="text-xs  text-slate-900 ">{item.material_name || item.item_code}</div>
                           <div className="text-[10px] text-slate-500 mt-0.5">Item Code: <span className="font-semibold text-slate-700">{item.item_code}</span></div>
                           <div className="text-[10px] text-slate-400 italic">{item.description}</div>
                           <div className="flex items-center gap-2 mt-1.5 text-[10px]">
@@ -1012,7 +1012,7 @@ const GRNProcessing = () => {
                              item.drawing_no !== item.item_code && 
                              item.drawing_no !== '—' &&
                              !/^(RM-|OTH-|SFG-|FG-|GEN-|CAT-)/i.test(item.drawing_no) && (
-                              <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-600 rounded border border-indigo-100 font-medium">Drawing: {item.drawing_no}</span>
+                              <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-600 rounded border border-indigo-100 ">Drawing: {item.drawing_no}</span>
                             )}
                             {item.material_type && (
                               <span className="px-1.5 py-0.5 bg-emerald-50 text-emerald-600 rounded border border-emerald-100">{item.material_type}</span>

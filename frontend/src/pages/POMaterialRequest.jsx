@@ -1239,7 +1239,7 @@ const POMaterialRequest = () => {
                                       <span className=" text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">
                                         {Number(it.quantity || 0).toFixed(3)} {it.uom}
                                       </span>
-                                      <span className="text-[9px] text-slate-400 mt-0.5 uppercase tracking-tighter">Required</span>
+                                      <span className="text-[9px] text-slate-400 mt-0.5 uppercase er">Required</span>
                                     </div>
                                     
                                     {Number(it.planned_qty || 0) > 0 && (
@@ -1247,7 +1247,7 @@ const POMaterialRequest = () => {
                                         <span className="text-xs  font-semibold text-slate-700">
                                           {Number(it.planned_qty).toFixed(3)} {it.uom}
                                         </span>
-                                        <span className="text-[8px] text-slate-400 uppercase tracking-tighter">Design Qty</span>
+                                        <span className="text-[8px] text-slate-400 uppercase er">Design Qty</span>
                                       </div>
                                     )}
                                   </div>
@@ -1258,7 +1258,7 @@ const POMaterialRequest = () => {
                           
                           {rfq.quotations && rfq.quotations.length > 0 ? (
                             <div className="space-y-2">
-                              <p className="text-xs    text-slate-400 uppercase tracking-widest">RECEIVED QUOTES</p>
+                              <p className="text-xs    text-slate-400 uppercase ">RECEIVED QUOTES</p>
                               {rfq.quotations.map((q, qidx) => (
                                 <div key={qidx} className="flex justify-between items-center bg-slate-50/50 p-1.5 rounded border border-slate-100/50">
                                   <span className="text-xs  text-slate-600 truncate max-w-[120px]">{q.vendor_name}</span>

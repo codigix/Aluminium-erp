@@ -249,13 +249,13 @@ const MaterialRequirements = () => {
         <Card className="bg-white">
           <div className="p-2">
             <p className="text-xs text-slate-500   ">Items with Shortage</p>
-            <p className="text-2xl  text-rose-600 mt-1">{withShortage}</p>
+            <p className="text-xl   text-rose-600 mt-1">{withShortage}</p>
           </div>
         </Card>
         <Card className="bg-white">
           <div className="p-2">
             <p className="text-xs text-slate-500   ">Stock Health</p>
-            <p className="text-2xl  text-emerald-600 mt-1">
+            <p className="text-xl   text-emerald-600 mt-1">
               {totalRequired ? Math.round(((totalRequired - withShortage) / totalRequired) * 100) : 100}%
             </p>
           </div>
@@ -263,7 +263,7 @@ const MaterialRequirements = () => {
         <Card className="bg-white">
           <div className="p-2">
             <p className="text-xs text-slate-500   ">Active Plans</p>
-            <p className="text-2xl  text-indigo-600 mt-1">
+            <p className="text-xl   text-indigo-600 mt-1">
               {[...new Set(requirements.flatMap(r => r.details.map(d => d.plan_code)))].length}
             </p>
           </div>

@@ -124,7 +124,7 @@ const CustomerPaymentHistory = () => {
       sortable: true,
       render: (val, row) => (
         <div className="flex flex-col py-1">
-          <span className=" text-rose-600 tracking-tight font-mono font-medium">
+          <span className=" text-rose-600  font-mono ">
             {val}
           </span>
           <div className="flex items-center gap-1 mt-0.5">
@@ -141,7 +141,7 @@ const CustomerPaymentHistory = () => {
       sortable: true,
       render: (val, row) => (
         <div className="flex items-center gap-2 py-1">
-          <div className="w-8 h-8 rounded bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600 font-bold text-xs shadow-sm">
+          <div className="w-8 h-8 rounded bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600  text-xs shadow-sm">
             {val ? val.substring(0, 2).toUpperCase() : 'C'}
           </div>
           <div className="flex flex-col">
@@ -170,7 +170,7 @@ const CustomerPaymentHistory = () => {
       sortable: true,
       render: (val) => (
         <div className="flex flex-col py-1">
-          <div className="flex items-center gap-1 font-bold text-slate-900">
+          <div className="flex items-center gap-1  text-slate-900">
             <span className="text-rose-600">₹</span>
             <span>{Number(val).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
           </div>
@@ -185,7 +185,7 @@ const CustomerPaymentHistory = () => {
       key: 'status',
       render: (val) => (
         <div className="flex items-center justify-center">
-          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border bg-emerald-50 text-emerald-700 border-emerald-100`}>
+          <span className={`px-2 py-0.5 rounded text-[10px]  border bg-emerald-50 text-emerald-700 border-emerald-100`}>
             {val || 'CONFIRMED'}
           </span>
         </div>
@@ -227,14 +227,14 @@ const CustomerPaymentHistory = () => {
             <History size={24} />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Client Payment History</h1>
+            <h1 className="text-xl   text-slate-900 ">Client Payment History</h1>
             <div className="flex items-center gap-3 mt-1">
-              <span className="text-xs font-medium text-slate-500 flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+              <span className="text-xs  text-slate-500 flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded bg-slate-400" />
                 {totalTransactions} Transactions
               </span>
-              <span className="text-xs font-medium text-emerald-600 flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              <span className="text-xs  text-emerald-600 flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded bg-emerald-500" />
                 {formatCurrency(totalReceived)} Total Collected
               </span>
             </div>

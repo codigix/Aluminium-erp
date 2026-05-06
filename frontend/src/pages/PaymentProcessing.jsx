@@ -146,7 +146,7 @@ const PaymentProcessing = () => {
       sortable: true,
       render: (val, row) => (
         <div className="flex flex-col py-1">
-          <span className=" text-rose-600 tracking-tight font-medium">
+          <span className=" text-rose-600  ">
             {val}
           </span>
           <div className="flex items-center gap-1 mt-0.5">
@@ -163,7 +163,7 @@ const PaymentProcessing = () => {
       sortable: true,
       render: (val, row) => (
         <div className="flex items-center gap-2 py-1">
-          <div className="w-8 h-8 rounded bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600 font-bold text-xs shadow-sm">
+          <div className="w-8 h-8 rounded bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600  text-xs shadow-sm">
             {val ? val.substring(0, 2).toUpperCase() : 'V'}
           </div>
           <div className="flex flex-col">
@@ -192,7 +192,7 @@ const PaymentProcessing = () => {
       sortable: true,
       render: (val) => (
         <div className="flex flex-col py-1">
-          <div className="flex items-center gap-1 font-bold text-slate-900">
+          <div className="flex items-center gap-1  text-slate-900">
             <span className="text-rose-600">₹</span>
             <span>{Number(val).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
           </div>
@@ -207,7 +207,7 @@ const PaymentProcessing = () => {
       key: 'status',
       render: (val) => (
         <div className="flex items-center justify-center">
-          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border bg-amber-50 text-amber-700 border-amber-100`}>
+          <span className={`px-2 py-0.5 rounded text-[10px]  border bg-amber-50 text-amber-700 border-amber-100`}>
             {val === 'Sent ' ? 'PENDING' : val}
           </span>
         </div>
@@ -259,14 +259,14 @@ const PaymentProcessing = () => {
             <Clock size={24} />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Payment Processing</h1>
+            <h1 className="text-xl   text-slate-900 ">Payment Processing</h1>
             <div className="flex items-center gap-3 mt-1">
-              <span className="text-xs font-medium text-slate-500 flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+              <span className="text-xs  text-slate-500 flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded bg-slate-400" />
                 {totalPayments} Pending Payments
               </span>
-              <span className="text-xs font-medium text-rose-600 flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+              <span className="text-xs  text-rose-600 flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded bg-rose-500" />
                 {formatCurrency(totalValue)} Total Outstanding
               </span>
             </div>

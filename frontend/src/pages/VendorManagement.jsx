@@ -60,7 +60,7 @@ const Vendors = ({ onAddVendor }) => {
           <button
             type="button"
             onClick={onAddVendor}
-            className="flex items-center gap-2 mx-auto px-4 py-2 rounded  bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 transition-all  active:scale-95"
+            className="flex items-center gap-2 mx-auto p-2 rounded  bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 transition-all  active:scale-95"
           >
             <Plus size={15} />
             Add Vendor
@@ -121,7 +121,7 @@ const Quotations = ({ onCreateRFQ }) => {
           <button
             type="button"
             onClick={onCreateRFQ}
-            className="flex items-center gap-2 mx-auto px-4 py-2 rounded  bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 transition-all  active:scale-95"
+            className="flex items-center gap-2 mx-auto p-2 rounded  bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 transition-all  active:scale-95"
           >
             <Plus size={15} />
             Create RFQ
@@ -184,7 +184,7 @@ const PurchaseOrders = ({ onCreatePO }) => {
           <button
             type="button"
             onClick={onCreatePO}
-            className="flex items-center gap-2 mx-auto px-4 py-2 rounded  bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 transition-all  active:scale-95"
+            className="flex items-center gap-2 mx-auto p-2 rounded  bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 transition-all  active:scale-95"
           >
             <Plus size={15} />
             Create PO

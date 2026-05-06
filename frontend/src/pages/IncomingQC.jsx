@@ -659,7 +659,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       sortable: true,
       width: '8%',
       render: (val) => (
-        <span className="text-indigo-600 font-medium">
+        <span className="text-indigo-600 ">
           {val ? `GRN-${String(val).padStart(4, '0')}` : '—'}
         </span>
       )
@@ -671,7 +671,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       width: '12%',
       render: (val, row) => (
         <div className="flex flex-col">
-          <div className="text-slate-900 font-medium text-[11px]">{val || '—'}</div>
+          <div className="text-slate-900  text-[11px]">{val || '—'}</div>
           <div className="text-[10px] text-slate-500 truncate max-w-[120px]" title={row.vendor_name}>{row.vendor_name || '—'}</div>
         </div>
       )
@@ -689,21 +689,21 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
         return (
           <div className="flex flex-col py-0.5 pr-2 max-w-[250px]">
             <div className="flex flex-col">
-              <span className="text-slate-900 font-bold text-[11px] leading-tight">
+              <span className="text-slate-900  text-[11px] leading-tight">
                 {parts[0]}
               </span>
               {parts.length > 1 && (
-                <span className="text-[10px] text-slate-500 font-medium leading-tight mt-0.5">
+                <span className="text-[10px] text-slate-500  leading-tight mt-0.5">
                   for {parts.slice(1).join(' for ')}
                 </span>
               )}
             </div>
             {row.company_name && (
               <div className="flex items-center gap-1.5 mt-1 pt-1 border-t border-slate-100/50">
-                <span className="px-1 py-0.5 bg-slate-100 text-slate-600 text-[7px] font-bold rounded uppercase tracking-tighter">
+                <span className="px-1 py-0.5 bg-slate-100 text-slate-600 text-[7px]  rounded uppercase er">
                   CLIENT
                 </span>
-                <span className="text-[9px] text-slate-400 font-medium italic truncate max-w-[150px]" title={row.company_name}>
+                <span className="text-[9px] text-slate-400  italic truncate max-w-[150px]" title={row.company_name}>
                   {row.company_name}
                 </span>
               </div>
@@ -719,10 +719,10 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       className: 'text-center align-middle',
       render: (val, row) => (
         <div className="flex flex-col items-center justify-center">
-          <span className={`font-bold text-[11px] leading-tight ${row.status === 'PENDING' ? 'text-amber-600' : 'text-emerald-600'}`}>
+          <span className={` text-[11px] leading-tight ${row.status === 'PENDING' ? 'text-amber-600' : 'text-emerald-600'}`}>
             {row.status === 'PENDING' ? 'Pending' : parseFloat(val || row.accepted_quantity || 0).toFixed(3)}
           </span>
-          <span className="text-rose-500 text-[9px] font-medium leading-tight">Fail: {parseFloat(row.fail_quantity || 0).toFixed(3)}</span>
+          <span className="text-rose-500 text-[9px]  leading-tight">Fail: {parseFloat(row.fail_quantity || 0).toFixed(3)}</span>
         </div>
       )
     },
@@ -734,7 +734,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       className: 'text-center align-middle',
       render: (val) => (
         <div className="flex items-center justify-center">
-          <span className={`inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold border uppercase tracking-tighter ${qcStatusColors[val]?.badge}`}>
+          <span className={`inline-flex items-center px-2 py-0.5 rounded text-[9px]  border uppercase er ${qcStatusColors[val]?.badge}`}>
             {qcStatusColors[val]?.label || val}
           </span>
         </div>
@@ -793,7 +793,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
               </button>
               <button 
                 onClick={(e) => { e.stopPropagation(); handleDownloadPdf(row); }} 
-                className="px-2 py-1 text-[10px] font-medium text-orange-600 bg-orange-50 border border-orange-100 rounded hover:bg-orange-100 transition-all active:scale-95"
+                className="px-2 py-1 text-[10px]  text-orange-600 bg-orange-50 border border-orange-100 rounded hover:bg-orange-100 transition-all active:scale-95"
               >
                 QC Report
               </button>
@@ -813,7 +813,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
           {['PASSED', 'FAILED', 'ACCEPTED', 'SHORTAGE', 'OVERAGE'].includes(row.status) && activeTab === 'final' && (
             <button 
               onClick={(e) => { e.stopPropagation(); handleDownloadPdf(row); }} 
-              className="px-2 py-1 text-[10px] font-medium text-orange-600 bg-orange-50 border border-orange-100 rounded hover:bg-orange-100 transition-all active:scale-95"
+              className="px-2 py-1 text-[10px]  text-orange-600 bg-orange-50 border border-orange-100 rounded hover:bg-orange-100 transition-all active:scale-95"
             >
               QC Report
             </button>
@@ -833,7 +833,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       render: (val, item) => (
         <div className="flex flex-col gap-0.5">
           <div className=" text-slate-900 text-xs ">{val || 'Unnamed Item'}</div>
-          <div className="inline-flex items-center p-1 rounded-md bg-slate-100 text-slate-600 text-xs  w-fit tracking-tight border border-slate-200">
+          <div className="inline-flex items-center p-1 rounded-md bg-slate-100 text-slate-600 text-xs  w-fit  border border-slate-200">
             {item.item_code}
           </div>
           {(item.length || item.width || item.thickness || item.diameter || item.outer_diameter) && (
@@ -917,7 +917,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       render: (val, item) => (
         <div className="flex flex-col gap-0.5">
           <div className=" text-slate-900 text-xs ">{val || item.item_code || 'Unnamed Item'}</div>
-          <div className="inline-flex items-center p-1 rounded-md bg-slate-100 text-slate-600 text-xs  w-fit tracking-tight border border-slate-200">
+          <div className="inline-flex items-center p-1 rounded-md bg-slate-100 text-slate-600 text-xs  w-fit  border border-slate-200">
             {item.item_code}
           </div>
           {(item.length || item.width || item.thickness || item.diameter || item.outer_diameter) && (
@@ -1064,15 +1064,15 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
               </div>
               <div className="bg-white p-2 rounded  border border-slate-200 ">
                 <p className="text-xs  text-emerald-500   mb-1">Passed</p>
-                <p className="text-2xl  text-emerald-600">{stats?.passed || 0}</p>
+                <p className="text-xl   text-emerald-600">{stats?.passed || 0}</p>
               </div>
               <div className="bg-white p-2 rounded  border border-slate-200 ">
                 <p className="text-xs  text-red-500   mb-1">Failed</p>
-                <p className="text-2xl  text-red-600">{stats?.failed || 0}</p>
+                <p className="text-xl   text-red-600">{stats?.failed || 0}</p>
               </div>
               <div className="bg-white p-2 rounded  border border-slate-200 ">
                 <p className="text-xs  text-amber-500   mb-1">Pending</p>
-                <p className="text-2xl  text-amber-600">{stats?.pending || 0}</p>
+                <p className="text-xl   text-amber-600">{stats?.pending || 0}</p>
               </div>
             </div>
 
@@ -1103,7 +1103,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
               <div className="flex justify-end items-center gap-2 mb-4">
                 <button 
                   onClick={() => handleBulkDownload(inProgressInspections)}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-orange-600 text-white rounded text-[10px] font-bold hover:bg-orange-700 transition-all active:scale-95 shadow-lg shadow-orange-100 uppercase tracking-wider"
+                  className="flex items-center gap-2 px-3 py-1.5 bg-orange-600 text-white rounded text-[10px]  hover:bg-orange-700 transition-all active:scale-95 shadow-lg shadow-orange-100 uppercase tracking-wider"
                 >
                   <FileText className="w-3 h-3" />
                   Generate QC Reports
@@ -1135,7 +1135,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
                 <div className="flex justify-end items-center gap-2 mb-4">
                   <button 
                     onClick={() => handleBulkDownload(finalInspections)}
-                    className="flex items-center gap-2 px-3 py-1.5 bg-orange-600 text-white rounded text-[10px] font-bold hover:bg-orange-700 transition-all active:scale-95 shadow-lg shadow-orange-100 uppercase tracking-wider"
+                    className="flex items-center gap-2 px-3 py-1.5 bg-orange-600 text-white rounded text-[10px]  hover:bg-orange-700 transition-all active:scale-95 shadow-lg shadow-orange-100 uppercase tracking-wider"
                   >
                     <FileText className="w-3 h-3" />
                     Generate QC Reports
@@ -1467,7 +1467,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
                   <Mail className="w-5 h-5" />
                 </div>
                 <div>
-                  <h2 className="text-xl  text-slate-800 tracking-tight">Send QC Alert to Vendor</h2>
+                  <h2 className="text-xl  text-slate-800 ">Send QC Alert to Vendor</h2>
                   <p className="text-xs text-slate-400   ">GRN-{String(selectedQC.grn_id).padStart(4, '0')} • {selectedQC.vendor_name || 'Vendor'}</p>
                 </div>
               </div>

@@ -173,7 +173,7 @@ const POReceiptDetails = () => {
               </div>
               <div className="bg-slate-50 p-2 rounded">
                 <p className="text-xs text-slate-500    mb-1">Received Quantity</p>
-                <p className="text-2xl  text-emerald-600">{receipt.received_quantity || 0}</p>
+                <p className="text-xl   text-emerald-600">{receipt.received_quantity || 0}</p>
               </div>
               <div className="bg-slate-50 p-2 rounded">
                 <p className="text-xs text-slate-500    mb-1">Created</p>

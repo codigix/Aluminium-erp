@@ -163,7 +163,7 @@ const ProcurementDashboard = () => {
         <div className="xl:col-span-2 bg-white rounded] p-2 border border-slate-100 shadow-sm">
           <div className="flex items-center justify-between mb-10">
             <div>
-              <h3 className="text-md  text-slate-900 tracking-tight flex items-center gap-2">
+              <h3 className="text-md  text-slate-900  flex items-center gap-2">
                 <TrendingUp className="w-3 h-3 text-indigo-600" />
                 Procurement Analytics
               </h3>
@@ -254,7 +254,7 @@ const ProcurementDashboard = () => {
         <div className="bg-white rounded  border border-slate-100 shadow-sm overflow-hidden flex flex-col p-8">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h3 className="text-xs  text-slate-900 tracking-tight flex items-center gap-2">
+              <h3 className="text-xs  text-slate-900  flex items-center gap-2">
                 <ClipboardList className="w-4 h-4 text-indigo-600" />
                 RECENT RFQ PIPELINE
               </h3>

@@ -175,8 +175,8 @@ const DrawingMaster = () => {
       width: '400px',
       padding: '1.25rem',
       customClass: {
-        confirmButton: 'text-[11px]  px-4 py-2 rounded shadow-lg shadow-rose-100  ',
-        cancelButton: 'text-[11px]  px-4 py-2 rounded  ',
+        confirmButton: 'text-[11px]  p-2 rounded shadow-lg shadow-rose-100  ',
+        cancelButton: 'text-[11px]  p-2 rounded  ',
         input: 'text-xs'
       }
     });
@@ -235,8 +235,8 @@ const DrawingMaster = () => {
         width: '350px',
         padding: '1.25rem',
         customClass: {
-          confirmButton: 'text-xs   px-4 py-2 rounded shadow-lg shadow-emerald-100  ',
-          cancelButton: 'text-xs   px-4 py-2 rounded  ',
+          confirmButton: 'text-xs   p-2 rounded shadow-lg shadow-emerald-100  ',
+          cancelButton: 'text-xs   p-2 rounded  ',
           title: 'mt-2'
         }
     });
@@ -304,8 +304,8 @@ const DrawingMaster = () => {
         }
       },
       customClass: {
-        confirmButton: 'text-xs  px-4 py-2 rounded shadow-lg shadow-rose-100',
-        cancelButton: 'text-xs  px-4 py-2 rounded',
+        confirmButton: 'text-xs  p-2 rounded shadow-lg shadow-rose-100',
+        cancelButton: 'text-xs  p-2 rounded',
         title: 'mt-2',
         input: 'text-xs'
       }
@@ -660,7 +660,7 @@ const DrawingMaster = () => {
                 <button
                   onClick={handleApproveGroup}
                   disabled={bulkOperationLoading}
-                  className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded text-xs  hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-50 disabled:opacity-50 border-none"
+                  className="flex items-center gap-2 p-2 bg-emerald-600 text-white rounded text-xs  hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-50 disabled:opacity-50 border-none"
                 >
                   {bulkOperationLoading ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} />}
                   Approve Selective ({drawings.filter(d => selectedRows.has(d.drawing_master_id) && (d.item_status || '').trim().toUpperCase() !== 'APPROVED' && (d.item_status || '').trim().toUpperCase() !== 'REJECTED').length})
@@ -668,7 +668,7 @@ const DrawingMaster = () => {
                 <button
                   onClick={handleRejectGroup}
                   disabled={bulkOperationLoading}
-                  className="flex items-center gap-2 px-4 py-2 bg-rose-600 text-white rounded text-xs  hover:bg-rose-700 transition-all shadow-lg shadow-rose-50 disabled:opacity-50 border-none"
+                  className="flex items-center gap-2 p-2 bg-rose-600 text-white rounded text-xs  hover:bg-rose-700 transition-all shadow-lg shadow-rose-50 disabled:opacity-50 border-none"
                 >
                   {bulkOperationLoading ? <RefreshCw size={14} className="animate-spin" /> : <X size={14} />}
                   Reject Selective ({drawings.filter(d => selectedRows.has(d.drawing_master_id) && (d.item_status || '').trim().toUpperCase() !== 'APPROVED' && (d.item_status || '').trim().toUpperCase() !== 'REJECTED').length})

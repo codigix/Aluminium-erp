@@ -211,11 +211,11 @@ const Tracking = ({ apiRequest }) => {
           <p className="text-slate-500 text-xs ">Real-time location and status monitoring.</p>
         </div>
         <div className="flex items-center gap-2">
-          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded text-xs text-slate-700 hover:bg-slate-50 transition-colors">
+          <button className="flex items-center gap-2 p-2 bg-white border border-slate-200 rounded text-xs text-slate-700 hover:bg-slate-50 transition-colors">
             <Filter className="w-4 h-4 text-slate-400" />
             Filter
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded text-xs text-slate-700 hover:bg-slate-50 transition-colors">
+          <button className="flex items-center gap-2 p-2 bg-white border border-slate-200 rounded text-xs text-slate-700 hover:bg-slate-50 transition-colors">
             <Download className="w-4 h-4 text-slate-400" />
             Export
           </button>
@@ -240,7 +240,7 @@ const Tracking = ({ apiRequest }) => {
         {/* Left Sidebar */}
         <MapCard className="col-span-3 flex flex-col h-full overflow-hidden">
           <div className="p-2 border-b border-slate-50">
-            <h3 className=" text-slate-900 mb-4 tracking-tighter  text-sm">Active Shipments</h3>
+            <h3 className=" text-slate-900 mb-4 er  text-sm">Active Shipments</h3>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input 
@@ -265,7 +265,7 @@ const Tracking = ({ apiRequest }) => {
               >
                 <div className="flex justify-between items-center mb-3">
                   <div className="flex items-center gap-2">
-                    <p className="text-xs  text-slate-900  tracking-tighter">{s.code}</p>
+                    <p className="text-xs  text-slate-900  er">{s.code}</p>
                     {selectedShipment?.id === s.id && (
                       <div className="w-1.5 h-1.5 bg-indigo-500 rounded animate-pulse" />
                     )}
@@ -278,7 +278,7 @@ const Tracking = ({ apiRequest }) => {
                   <div className="w-3 h-3 rounded  bg-slate-100 flex items-center justify-center text-[8px]  text-slate-400 ">
                     {s.customer.charAt(0)}
                   </div>
-                  <p className="text-xs  text-slate-700 truncate  tracking-tighter">{s.customer}</p>
+                  <p className="text-xs  text-slate-700 truncate  er">{s.customer}</p>
                 </div>
               </div>
             ))}
@@ -320,7 +320,7 @@ const Tracking = ({ apiRequest }) => {
             <div className="flex flex-col h-full overflow-hidden">
               <div className="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
                 <div>
-                  <h3 className="text-md  text-slate-900 mb-6 tracking-tight">{selectedShipment.code}</h3>
+                  <h3 className="text-md  text-slate-900 mb-6 ">{selectedShipment.code}</h3>
                   <div className="space-y-2">
                     <div className="flex items-center gap-2 p-2 bg-slate-50/50 rounded border border-slate-100">
                       <div className="w-5 h-5 rounded  bg-indigo-50 flex items-center justify-center text-indigo-600">

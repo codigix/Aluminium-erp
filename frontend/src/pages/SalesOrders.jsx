@@ -731,7 +731,7 @@ const SalesOrders = () => {
       sortable: true,
       render: (val, row) => (
         <div className="flex flex-col py-1">
-          <span className=" text-indigo-600 tracking-tight">
+          <span className=" text-indigo-600 ">
             {val || `ORD-${String(row.id).padStart(4, '0')}`}
           </span>
           <div className="flex items-center gap-1">
@@ -757,7 +757,7 @@ const SalesOrders = () => {
               {cleanProjectName(row.project_name, 'General Project')}
             </span>
             {row.total_items_count > 0 && (
-              <span className="text-xs  mt-1 px-1.5 py-0.5 bg-emerald-50 text-emerald-600 rounded-full border border-emerald-100 w-fit ">
+              <span className="text-xs  mt-1 px-1.5 py-0.5 bg-emerald-50 text-emerald-600 rounded border border-emerald-100 w-fit ">
                 {row.approved_items_count} / {row.total_items_count} Approved Designs
               </span>
             )}
@@ -894,18 +894,18 @@ const SalesOrders = () => {
               <Package size={24} />
             </div>
             <div>
-              <h1 className="text-2xl  text-slate-900 tracking-tight">Sales Orders</h1>
+              <h1 className="text-xl   text-slate-900 ">Sales Orders</h1>
               <div className="flex items-center gap-3 mt-1">
                 <span className="text-xs  text-slate-500 flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                  <span className="w-1.5 h-1.5 rounded bg-slate-400" />
                   {totalOrders} Total
                 </span>
                 <span className="text-xs  text-amber-600 flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                  <span className="w-1.5 h-1.5 rounded bg-amber-500 animate-pulse" />
                   {pendingOrders} Processing
                 </span>
                 <span className="text-xs  text-emerald-600 flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                  <span className="w-1.5 h-1.5 rounded bg-emerald-500" />
                   {completedOrders} Finalized
                 </span>
               </div>
@@ -1205,13 +1205,13 @@ const SalesOrders = () => {
                               <td className="p-2 border-b border-slate-100">
                                 <div className="flex items-center gap-2 pl-4">
                                   <GitBranch size={10} className="text-blue-400 rotate-180" />
-                                  <span className="text-xs  text-slate-500 font-mono font-bold">{sa.drawingNo || sa.drawing_no}</span>
+                                  <span className="text-xs  text-slate-500 font-mono ">{sa.drawingNo || sa.drawing_no}</span>
                                 </div>
                               </td>
                               <td className="p-2 border-b border-slate-100">
                                 <div className="flex items-center gap-2 pl-4">
                                   <span className="text-xs  text-slate-700 ">{sa.description}</span>
-                                  <span className="px-1 py-0.5 rounded-[2px] text-[8px] font-bold bg-blue-50 text-blue-600 border border-blue-100/50">SA</span>
+                                  <span className="px-1 py-0.5 rounded-[2px] text-[8px]  bg-blue-50 text-blue-600 border border-blue-100/50">SA</span>
                                 </div>
                               </td>
                               <td className="p-2 border-b border-slate-100 text-center text-xs  text-slate-600">
@@ -1220,7 +1220,7 @@ const SalesOrders = () => {
                               <td className="p-2 border-b border-slate-100 text-right text-xs  text-slate-500">
                                 ₹ {saRate.toFixed(2)}
                               </td>
-                              <td className="p-2 border-b border-slate-100 text-right pr-2 text-xs  text-slate-900 font-bold">
+                              <td className="p-2 border-b border-slate-100 text-right pr-2 text-xs  text-slate-900 ">
                                 ₹ {saTotal.toFixed(2)}
                               </td>
                             </tr>

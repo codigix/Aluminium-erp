@@ -327,7 +327,7 @@ const Suppliers = () => {
             </div>
             <div>
               <p className="text-xs text-slate-500 ">Total Suppliers</p>
-              <p className="text-2xl text-slate-900 ">{stats?.total_vendors || suppliers.length}</p>
+              <p className="text-xl  text-slate-900 ">{stats?.total_vendors || suppliers.length}</p>
             </div>
           </div>
         </Card>
@@ -338,7 +338,7 @@ const Suppliers = () => {
             </div>
             <div>
               <p className="text-xs text-slate-500 ">Active</p>
-              <p className="text-2xl text-slate-900 ">{stats?.active_vendors || suppliers.filter(v => v.status === 'ACTIVE').length}</p>
+              <p className="text-xl  text-slate-900 ">{stats?.active_vendors || suppliers.filter(v => v.status === 'ACTIVE').length}</p>
             </div>
           </div>
         </Card>
@@ -349,7 +349,7 @@ const Suppliers = () => {
             </div>
             <div>
               <p className="text-xs text-slate-500 ">Avg Rating</p>
-              <p className="text-2xl text-slate-900 ">
+              <p className="text-xl  text-slate-900 ">
                 {parseFloat(stats?.avg_rating || 0).toFixed(1)}
               </p>
             </div>
@@ -362,7 +362,7 @@ const Suppliers = () => {
             </div>
             <div>
               <p className="text-xs text-slate-500 ">Total Orders</p>
-              <p className="text-2xl text-slate-900 ">{stats?.total_orders || 0}</p>
+              <p className="text-xl  text-slate-900 ">{stats?.total_orders || 0}</p>
             </div>
           </div>
         </Card>

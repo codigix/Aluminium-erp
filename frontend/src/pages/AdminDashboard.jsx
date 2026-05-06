@@ -106,7 +106,7 @@ const AdminDashboard = () => {
           <LayoutDashboard className="w-3 h-3 text-indigo-600 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
         </div>
         <div className="text-center">
-          <h3 className="text-slate-900  tracking-tight">Aggregating Enterprise Data</h3>
+          <h3 className="text-slate-900  ">Aggregating Enterprise Data</h3>
           <p className="text-xs text-slate-500 mt-1">Fetching operational metrics across all departments...</p>
         </div>
       </div>
@@ -124,7 +124,7 @@ const AdminDashboard = () => {
           <div>
             <h1 className="text-xl text-slate-900">{getGreeting()}, {user?.first_name || 'Admin'}</h1>
             <div className="flex items-center gap-2 mt-1">
-              <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-600 rounded text-[10px] border border-indigo-100 uppercase tracking-wider font-bold">
+              <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-600 rounded text-xs border border-indigo-100   ">
                 System Administrator
               </span>
               <div className="flex items-center gap-1.5 text-xs text-slate-400">
@@ -137,8 +137,33 @@ const AdminDashboard = () => {
         <div className="flex items-center gap-2">
           <button 
             onClick={() => window.location.href = '/project-analysis'}
+<<<<<<< Updated upstream
             className="flex items-center gap-2 px-2 py-1.5 bg-rose-600 text-white rounded text-[10px] font-bold hover:bg-rose-700 transition-all shadow-md shadow-rose-100 uppercase"
           >
+=======
+<<<<<<< HEAD
+            className="flex items-center gap-2 p-2 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
+          >
+            <BarChart3 className="w-4 h-4" />
+            Project Analysis
+          </button>
+          <button 
+            onClick={() => window.location.href = '/oee-analysis'}
+            className="flex items-center gap-2 p-2 bg-blue-700 text-white rounded text-xs hover:bg-blue-800 transition-all shadow-lg shadow-blue-100"
+          >
+            <Activity className="w-4 h-4" />
+            OEE Analysis
+          </button>
+          <button 
+            onClick={() => window.location.href = '/machine-analysis'}
+            className="flex items-center gap-2 p-2 bg-emerald-700 text-white rounded text-xs hover:bg-emerald-800 transition-all shadow-lg shadow-emerald-100"
+          >
+            <Monitor className="w-4 h-4" />
+            Machine Analysis
+=======
+            className="flex items-center gap-2 px-2 py-1.5 bg-rose-600 text-white rounded text-[10px] font-bold hover:bg-rose-700 transition-all shadow-md shadow-rose-100 uppercase"
+          >
+>>>>>>> Stashed changes
             <BarChart3 className="w-3.5 h-3.5" />
             PROJECT ANALYSIS
           </button>
@@ -155,6 +180,7 @@ const AdminDashboard = () => {
           >
             <Monitor className="w-3.5 h-3.5" />
             MACHINE ANALYSIS
+>>>>>>> cca9023b61ada16bf798ca1df8a8b822f8431698
           </button>
           <button 
             onClick={fetchDashboardData}
@@ -186,7 +212,7 @@ const AdminDashboard = () => {
         <div className="xl:col-span-2 bg-white rounded] p-2 border border-slate-100 shadow-sm flex flex-col">
           <div className="flex items-center justify-between mb-10">
             <div>
-              <h3 className="text-md  text-slate-900 tracking-tight flex items-center gap-2">
+              <h3 className="text-md  text-slate-900  flex items-center gap-2">
                 <TrendingUp className="w-3 h-3 text-indigo-600" />
                 Enterprise velocity
               </h3>

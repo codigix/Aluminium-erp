@@ -213,7 +213,7 @@ const StockLedger = () => {
       render: (_, row) => (
         <div className="space-y-1">
           {row.reference_doc_type && row.reference_doc_number ? (
-            <div className="inline-flex items-center gap-1.5 px-2 py-1 bg-white border border-slate-200 rounded text-xs  text-slate-600  tracking-tighter">
+            <div className="inline-flex items-center gap-1.5 px-2 py-1 bg-white border border-slate-200 rounded text-xs  text-slate-600  er">
               <span className="text-slate-400">{row.reference_doc_type}:</span>
               {row.reference_doc_number}
             </div>
@@ -326,7 +326,7 @@ const StockLedger = () => {
         action={
           <button
             onClick={() => navigate('/stock-ledger/new-entry')}
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded text-xs  hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95"
+            className="flex items-center gap-2 p-2 bg-indigo-600 text-white rounded text-xs  hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95"
           >
             <Plus className="w-4 h-4" />
             Add Entry
@@ -366,7 +366,7 @@ const StockLedger = () => {
             <div className="flex gap-2">
               <button
                 onClick={handleFilter}
-                className="flex-1 px-4 py-2 bg-slate-900 text-white rounded text-xs  hover:bg-slate-800 transition-all flex items-center justify-center gap-2 shadow-lg shadow-slate-200 active:scale-95"
+                className="flex-1 p-2 bg-slate-900 text-white rounded text-xs  hover:bg-slate-800 transition-all flex items-center justify-center gap-2 shadow-lg shadow-slate-200 active:scale-95"
               >
                 <Filter className="w-4 h-4" />
                 Apply Filter

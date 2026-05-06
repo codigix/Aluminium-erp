@@ -110,7 +110,7 @@ const WorkOrder = () => {
         const displayProject = cleanProjectName(row.project_name, row.client_name);
         return (
           <div className="flex flex-col">
-            <span className="text-xs text-slate-900 leading-tight font-medium" title={displayProject}>{displayProject}</span>
+            <span className="text-xs text-slate-900 leading-tight " title={displayProject}>{displayProject}</span>
           </div>
         );
       }
@@ -119,7 +119,7 @@ const WorkOrder = () => {
       label: 'Specification',
       key: 'source_type',
       render: (val) => (
-        <span className={`text-[10px] font-bold ${
+        <span className={`text-[10px]  ${
           val === 'SA' ? 'text-amber-600' : 'text-indigo-600'
         }`}>
           {val === 'SA' ? 'Sub-Assembly' : 'Finished Goods'}
@@ -135,7 +135,7 @@ const WorkOrder = () => {
           <span className="text-xs font-semibold text-slate-900 leading-tight">{val || row.item_code}</span>
           {row.source_type === 'SA' && row.source_fg && (
             <span className="text-[9px] text-slate-500 italic mt-0.5">
-              <span className="text-indigo-600 not-italic font-bold">{row.source_fg}</span>
+              <span className="text-indigo-600 not-italic ">{row.source_fg}</span>
             </span>
           )}
           <span className="text-[9px] text-slate-400 mt-0.5">BOM-{row.bom_no || 'NA'}</span>
@@ -330,7 +330,7 @@ const WorkOrder = () => {
                   <p className="text-xs text-slate-500 mt-0.5">{cleanProjectName(viewingWorkOrder.project_name, viewingWorkOrder.client_name)} • {formatDisplayDate(viewingWorkOrder.created_at)}</p>
                 </div>
               </div>
-              <span className={`px-4 py-2 rounded text-xs  ${
+              <span className={`p-2 rounded text-xs  ${
                 viewingWorkOrder.status === 'IN_PROGRESS' ? 'bg-amber-100 text-amber-700' :
                 viewingWorkOrder.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-700' :
                 'bg-slate-100 text-slate-700'
@@ -449,19 +449,19 @@ const WorkOrder = () => {
                       <table className="w-full text-sm">
                         <thead className="bg-slate-50 border-b border-slate-100">
                           <tr>
-                            <th className="px-4 py-2 text-left text-xs  text-slate-500">Phase</th>
-                            <th className="px-4 py-2 text-left text-xs  text-slate-500">Assignment</th>
-                            <th className="px-4 py-2 text-left text-xs  text-slate-500">Status</th>
-                            <th className="px-4 py-2 text-left text-xs  text-slate-500">Time & Cost</th>
-                            <th className="px-4 py-2 text-left text-xs  text-slate-500">Progress</th>
+                            <th className="p-2 text-left text-xs  text-slate-500">Phase</th>
+                            <th className="p-2 text-left text-xs  text-slate-500">Assignment</th>
+                            <th className="p-2 text-left text-xs  text-slate-500">Status</th>
+                            <th className="p-2 text-left text-xs  text-slate-500">Time & Cost</th>
+                            <th className="p-2 text-left text-xs  text-slate-500">Progress</th>
                           </tr>
                         </thead>
                         <tbody>
                           <tr className="border-b border-slate-100 hover:bg-slate-50">
-                            <td className="px-4 py-2">
+                            <td className="p-2">
                               <span className="text-slate-900 ">No operations defined yet</span>
                             </td>
-                            <td colSpan="4" className="px-4 py-2 text-center text-slate-500">Create job cards from this work order to define operations</td>
+                            <td colSpan="4" className="p-2 text-center text-slate-500">Create job cards from this work order to define operations</td>
                           </tr>
                         </tbody>
                       </table>
@@ -509,14 +509,14 @@ const WorkOrder = () => {
                       <table className="w-full text-sm">
                         <thead className="bg-slate-50 border-b border-slate-100">
                           <tr>
-                            <th className="px-4 py-2 text-left text-xs  text-slate-500">Date</th>
-                            <th className="px-4 py-2 text-left text-xs  text-slate-500">Shift</th>
-                            <th className="px-4 py-2 text-left text-xs  text-slate-500">Operation</th>
-                            <th className="px-4 py-2 text-left text-xs  text-slate-500">Operator</th>
-                            <th className="px-4 py-2 text-left text-xs  text-slate-500">Produced</th>
-                            <th className="px-4 py-2 text-left text-xs  text-slate-500">Accepted</th>
-                            <th className="px-4 py-2 text-left text-xs  text-slate-500">Rejected</th>
-                            <th className="px-4 py-2 text-left text-xs  text-slate-500">Downtime</th>
+                            <th className="p-2 text-left text-xs  text-slate-500">Date</th>
+                            <th className="p-2 text-left text-xs  text-slate-500">Shift</th>
+                            <th className="p-2 text-left text-xs  text-slate-500">Operation</th>
+                            <th className="p-2 text-left text-xs  text-slate-500">Operator</th>
+                            <th className="p-2 text-left text-xs  text-slate-500">Produced</th>
+                            <th className="p-2 text-left text-xs  text-slate-500">Accepted</th>
+                            <th className="p-2 text-left text-xs  text-slate-500">Rejected</th>
+                            <th className="p-2 text-left text-xs  text-slate-500">Downtime</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -546,7 +546,7 @@ const WorkOrder = () => {
                   setViewingWorkOrder(null);
                   handleEdit(viewingWorkOrder.id);
                 }}
-                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded  hover:bg-indigo-700  text-sm"
+                className="flex items-center gap-2 p-2 bg-indigo-600 text-white rounded  hover:bg-indigo-700  text-sm"
               >
                 <Edit2 className="w-4 h-4" />
                 Edit Work Order

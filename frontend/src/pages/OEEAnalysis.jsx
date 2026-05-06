@@ -113,17 +113,17 @@ const OEEAnalysis = () => {
       <div className={`absolute top-0 right-0 w-24 h-24 ${color} opacity-5 rounded -mr-8 -mt-8 transition-transform group-hover:scale-110`} />
       <div className="flex items-start justify-between relative z-10">
         <div>
-          <p className="text-[10px] uppercase font-bold tracking-widest text-slate-400 mb-1">{title}</p>
+          <p className="text-xs    text-slate-400 mb-1">{title}</p>
           <div className="flex items-baseline gap-2">
-            <h3 className="text-xl font-black text-slate-900">{count}</h3>
+            <h3 className="text-xl  text-slate-900">{count}</h3>
             {trendValue && (
-              <span className={`flex items-center text-[10px] font-bold ${trend === 'up' ? 'text-emerald-500' : 'text-rose-500'}`}>
+              <span className={`flex items-center text-xs  ${trend === 'up' ? 'text-emerald-500' : 'text-rose-500'}`}>
                 {trend === 'up' ? <ArrowUpRight className="w-3 h-3 mr-0.5" /> : <ArrowDownRight className="w-3 h-3 mr-0.5" />}
                 {trendValue}
               </span>
             )}
           </div>
-          <p className="text-[10px] text-slate-500 mt-1 font-medium">{subtitle}</p>
+          <p className="text-xs text-slate-500 mt-1 ">{subtitle}</p>
         </div>
         <div className={`p-2 rounded ${color.replace('bg-', 'bg-').replace('500', '100').replace('600', '100')} ${color.replace('bg-', 'text-').replace('500', '600')} transition-transform group-hover:rotate-12 shadow-sm`}>
           <Icon className={`w-4 h-4 ${animate ? 'animate-pulse' : ''}`} />
@@ -140,7 +140,7 @@ const OEEAnalysis = () => {
           <BrainCircuit className="w-6 h-6 text-rose-600 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
         </div>
         <div className="text-center">
-          <h3 className="text-slate-900 font-black tracking-tight uppercase">OEE Intelligence Matrix Syncing</h3>
+          <h3 className="text-slate-900   ">OEE Intelligence Matrix Syncing</h3>
           <p className="text-xs text-slate-500 mt-1">Synchronizing real-time telemetry and workstation metrics...</p>
         </div>
       </div>
@@ -152,21 +152,21 @@ const OEEAnalysis = () => {
   const recentOpsColumns = [
     { label: 'ID / PROJECT', key: 'identifier', render: (val, row) => (
       <div className="flex flex-col">
-        <span className="text-[10px] font-black text-slate-900 uppercase truncate max-w-[180px]">
+        <span className="text-xs  text-slate-900  truncate max-w-[180px]">
           {row.project_name || 'Project Name'}
         </span>
-        <span className="text-[9px] text-slate-400 font-bold">WO: {row.wo_number || 'N/A'}</span>
+        <span className="text-[9px] text-slate-400 ">WO: {row.wo_number || 'N/A'}</span>
         <div className="flex items-center gap-1.5 mt-1">
-          <span className="flex items-center justify-center w-4 h-4 rounded-full bg-slate-100 text-[8px] font-black text-slate-500 border border-slate-200">
+          <span className="flex items-center justify-center w-4 h-4 rounded bg-slate-100 text-[8px]  text-slate-500 border border-slate-200">
             {data?.recentOperations?.indexOf(row) + 1}
           </span>
-          <span className="text-[10px] font-black text-indigo-600">{val}</span>
+          <span className="text-xs  text-indigo-600">{val}</span>
         </div>
       </div>
     )},
     { label: 'OPERATION / STATUS', key: 'operation_name', render: (val, row) => (
       <div className="flex flex-col">
-        <span className="text-[10px] font-black text-slate-900 uppercase">
+        <span className="text-xs  text-slate-900 ">
           {val || 'Operation'}
         </span>
         <div className="mt-1">
@@ -176,18 +176,18 @@ const OEEAnalysis = () => {
     )},
     { label: 'SPECIFICATION', key: 'item_description', render: (val) => (
       <div className="flex flex-col max-w-[200px]">
-        <span className="text-[9px] font-black text-indigo-600 uppercase tracking-tight">Main Process</span>
-        <span className="text-[10px] font-bold text-slate-600 truncate">{val || 'Item Description'}</span>
+        <span className="text-[9px]  text-indigo-600  ">Main Process</span>
+        <span className="text-xs  text-slate-600 truncate">{val || 'Item Description'}</span>
       </div>
     )},
     { label: 'PRODUCED', key: 'produced', className: 'text-center', render: (val) => (
-      <span className="text-[11px] font-black text-slate-900">{parseFloat(val || 0).toFixed(3)}</span>
+      <span className="text-[11px]  text-slate-900">{parseFloat(val || 0).toFixed(3)}</span>
     )},
     { label: 'ACCEPTED', key: 'accepted_qty', className: 'text-center', render: (val) => (
-      <span className="text-[11px] font-black text-emerald-600">{parseFloat(val || 0).toFixed(3)}</span>
+      <span className="text-[11px]  text-emerald-600">{parseFloat(val || 0).toFixed(3)}</span>
     )},
     { label: 'TARGET', key: 'target', className: 'text-center', render: (val) => (
-      <span className="text-[11px] font-black text-slate-400">{parseFloat(val || 0).toFixed(3)}</span>
+      <span className="text-[11px]  text-slate-400">{parseFloat(val || 0).toFixed(3)}</span>
     )},
     { label: 'TIME & COSTING', key: 'start_time', render: (val, row) => {
       const cycleTime = parseFloat(row.cycle_time || 0);
@@ -205,12 +205,12 @@ const OEEAnalysis = () => {
       }
       return (
         <div className="flex flex-col gap-0.5">
-          <div className="flex items-center gap-1 text-[10px] text-slate-500">
+          <div className="flex items-center gap-1 text-xs text-slate-500">
             <Clock className="w-2.5 h-2.5" />
             <span>{Math.round(cycleTime)} min/u • {duration}</span>
           </div>
-          <div className="flex items-center gap-1 text-[10px] text-slate-600">
-            <span className="font-medium text-emerald-600">₹{totalCost.toFixed(2)}</span>
+          <div className="flex items-center gap-1 text-xs text-slate-600">
+            <span className=" text-emerald-600">₹{totalCost.toFixed(2)}</span>
             <span className="text-slate-400">@ ₹{hourlyRate}/hr</span>
           </div>
         </div>
@@ -218,10 +218,10 @@ const OEEAnalysis = () => {
     }},
     { label: 'WORKSTATION', key: 'assetContext', render: (val) => (
       <div className="flex flex-col">
-        <span className="text-[10px] font-black text-slate-900 uppercase">{val}</span>
+        <span className="text-xs  text-slate-900 ">{val}</span>
         <div className="flex items-center gap-1 mt-0.5">
-          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-          <span className="text-[8px] text-slate-400 font-bold uppercase">Online</span>
+          <div className="w-1.5 h-1.5 rounded bg-emerald-500" />
+          <span className="text-[8px] text-slate-400  ">Online</span>
         </div>
       </div>
     )},
@@ -234,12 +234,12 @@ const OEEAnalysis = () => {
       return (
         <div className="flex flex-col">
           <div className="flex items-center gap-2">
-            <div className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200">
+            <div className="w-5 h-5 rounded bg-slate-100 flex items-center justify-center border border-slate-200">
                <UserIcon className="w-3 h-3 text-slate-400" />
             </div>
-            <span className="text-[10px] font-black text-slate-700 uppercase">{val || 'Unassigned'}</span>
+            <span className="text-xs  text-slate-700 ">{val || 'Unassigned'}</span>
           </div>
-          <span className="text-[9px] text-slate-400 font-bold mt-1">
+          <span className="text-[9px] text-slate-400  mt-1">
             {formatTime(row.start_time)} - {row.status === 'COMPLETED' ? formatTime(row.end_time) : 'LIVE'}
           </span>
         </div>
@@ -250,15 +250,15 @@ const OEEAnalysis = () => {
   return (
     <div className="space-y-4 pb-12 animate-in fade-in duration-500">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-3 rounded border border-slate-100 shadow-sm">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 ">
         <div className="flex items-center gap-3">
-          <div className="p-3 bg-rose-600 rounded shadow-lg shadow-rose-100">
-            <Activity className="w-6 h-6 text-white" />
+          <div className="p-2 bg-rose-600 rounded shadow-lg shadow-rose-100">
+            <Activity size={15} className="text-white" />
           </div>
           <div>
-            <h1 className="text-xl text-slate-900 font-black tracking-tight uppercase">OEE Intelligence Matrix</h1>
+            <h1 className="text-xl text-slate-900   ">OEE Intelligence Matrix</h1>
             <div className="flex items-center gap-2 mt-1">
-              <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-black uppercase tracking-widest">
+              <div className="flex items-center gap-1.5 text-xs text-slate-400   ">
                 <Clock className="w-3.5 h-3.5" />
                 Real-time stream: {lastUpdated.toLocaleTimeString()}
               </div>
@@ -266,7 +266,7 @@ const OEEAnalysis = () => {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 border border-slate-200 rounded text-[10px] font-bold text-slate-600">
+          <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 border border-slate-200 rounded text-xs  text-slate-600">
             <Calendar className="w-3.5 h-3.5 text-slate-400" />
             {dateRangeLabel}
           </div>
@@ -274,7 +274,7 @@ const OEEAnalysis = () => {
           <div className="relative">
             <button 
               onClick={() => setShowRangeDropdown(!showRangeDropdown)}
-              className="flex items-center gap-2 px-3 py-2 bg-slate-50 border border-slate-200 rounded text-[10px] font-black uppercase text-slate-600 hover:bg-slate-100 transition-colors"
+              className="flex items-center gap-2 px-3 py-2 bg-slate-50 border border-slate-200 rounded text-xs   text-slate-600 hover:bg-slate-100 transition-colors"
             >
               {timeRange}
               <ChevronDown className={`w-3 h-3 transition-transform ${showRangeDropdown ? 'rotate-180' : ''}`} />
@@ -288,7 +288,7 @@ const OEEAnalysis = () => {
                       setTimeRange(opt);
                       setShowRangeDropdown(false);
                     }}
-                    className={`w-full text-left px-3 py-1.5 text-[10px] font-black uppercase tracking-widest transition-colors ${
+                    className={`w-full text-left px-3 py-1.5 text-xs    transition-colors ${
                       timeRange === opt ? 'bg-rose-50 text-rose-600' : 'text-slate-600 hover:bg-slate-50'
                     }`}
                   >
@@ -301,7 +301,7 @@ const OEEAnalysis = () => {
 
           <button 
             onClick={handleExport}
-            className="flex items-center gap-2 px-4 py-2 bg-rose-600 text-white rounded text-[11px] font-black uppercase tracking-wider hover:bg-rose-700 transition-all shadow-lg shadow-rose-100 active:scale-95"
+            className="flex items-center gap-2 p-2 bg-rose-600 text-white rounded text-[11px]   tracking-wider hover:bg-rose-700 transition-all shadow-lg shadow-rose-100 active:scale-95"
           >
             <Download className="w-4 h-4" />
             Export Data
@@ -314,7 +314,15 @@ const OEEAnalysis = () => {
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
+<<<<<<< Updated upstream
             className={`px-3 py-1.5 rounded text-[10px] font-black transition-all uppercase tracking-widest ${
+=======
+<<<<<<< HEAD
+            className={`p-2 rounded text-[11px]  transition-all   ${
+=======
+            className={`px-3 py-1.5 rounded text-[10px] font-black transition-all uppercase tracking-widest ${
+>>>>>>> cca9023b61ada16bf798ca1df8a8b822f8431698
+>>>>>>> Stashed changes
               activeTab === tab 
                 ? 'bg-rose-600 text-white shadow-lg shadow-rose-100' 
                 : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
@@ -338,7 +346,7 @@ const OEEAnalysis = () => {
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             <div className="bg-white rounded p-6 border border-slate-100 shadow-sm flex flex-col items-center relative h-[400px]">
               <div className="flex items-center justify-between w-full mb-8">
-                <h3 className="text-xs text-slate-900 font-black tracking-tight uppercase flex items-center gap-2">
+                <h3 className="text-xs text-slate-900    flex items-center gap-2">
                   <Activity className="w-4 h-4 text-rose-600" />
                   Effectiveness Index
                 </h3>
@@ -358,14 +366,14 @@ const OEEAnalysis = () => {
                   </PieChart>
                 </ResponsiveContainer>
                 <div className="absolute inset-0 flex flex-col items-center justify-center pt-8">
-                  <span className="text-6xl text-slate-900 font-black tracking-tighter">{overall.oee}%</span>
-                  <span className="text-[10px] text-slate-400 uppercase mt-2 font-black tracking-widest">OEE PERFORMANCE</span>
+                  <span className="text-6xl text-slate-900  er">{overall.oee}%</span>
+                  <span className="text-xs text-slate-400  mt-2  ">OEE PERFORMANCE</span>
                 </div>
               </div>
             </div>
 
             <div className="bg-white rounded border border-slate-100 shadow-sm p-6 flex flex-col h-[400px]">
-              <h3 className="text-xs text-slate-900 font-black tracking-tight uppercase mb-8 flex items-center gap-2">
+              <h3 className="text-xs text-slate-900    mb-8 flex items-center gap-2">
                 <Target className="w-4 h-4 text-rose-600" />
                 Workstation Efficiency Gradient
               </h3>
@@ -410,8 +418,8 @@ const OEEAnalysis = () => {
                         <Cpu className="w-5 h-5" />
                      </div>
                      <div>
-                        <h4 className="text-xs text-slate-900 font-black uppercase leading-tight">{ws.workstation_name}</h4>
-                        <p className="text-[10px] text-slate-400 font-bold uppercase mt-1 tracking-widest">{ws.workstation_code}</p>
+                        <h4 className="text-xs text-slate-900   leading-tight">{ws.workstation_name}</h4>
+                        <p className="text-xs text-slate-400   mt-1 ">{ws.workstation_code}</p>
                      </div>
                   </div>
                   <StatusBadge status={ws.hasActivity ? "ACTIVE" : "PENDING"} />
@@ -424,16 +432,16 @@ const OEEAnalysis = () => {
                      { label: 'Qual.', value: ws.quality }
                    ].map((f, i) => (
                      <div key={i} className="bg-slate-50/50 p-2 rounded text-center border border-slate-50">
-                        <p className="text-[8px] text-slate-400 font-black uppercase mb-1">{f.label}</p>
-                        <p className="text-[11px] text-slate-900 font-black">{Number(f.value || 0).toFixed(1)}%</p>
+                        <p className="text-[8px] text-slate-400   mb-1">{f.label}</p>
+                        <p className="text-[11px] text-slate-900 ">{Number(f.value || 0).toFixed(1)}%</p>
                      </div>
                    ))}
                 </div>
 
                 <div className="flex items-end justify-between pt-4 border-t border-slate-50 relative z-10">
                    <div>
-                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest mb-1">OEE SCORE</p>
-                      <p className="text-2xl text-slate-900 font-black tracking-tighter leading-none">{Number(ws.oee || 0).toFixed(1)}%</p>
+                      <p className="text-[9px] text-slate-400    mb-1">OEE SCORE</p>
+                      <p className="text-xl  text-slate-900  er leading-none">{Number(ws.oee || 0).toFixed(1)}%</p>
                    </div>
                    <button className="p-2 bg-slate-50 rounded hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-all">
                       <ArrowUpRight className="w-4 h-4" />
@@ -447,7 +455,7 @@ const OEEAnalysis = () => {
       {activeTab === 'Loss Analysis' && (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
            <div className="bg-white rounded border border-slate-100 p-6 shadow-sm h-[400px] flex flex-col">
-              <h3 className="text-xs text-slate-900 font-black uppercase tracking-widest mb-8 flex items-center gap-2">
+              <h3 className="text-xs text-slate-900    mb-8 flex items-center gap-2">
                  <Clock className="w-4 h-4 text-rose-600" />
                  Loss Vector Distribution
               </h3>
@@ -471,18 +479,18 @@ const OEEAnalysis = () => {
                        </PieChart>
                     </ResponsiveContainer>
                     <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                       <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Aggregate</span>
-                       <span className="text-2xl text-slate-900 font-black">{(data?.lossDistribution?.reduce((acc, curr) => acc + parseFloat(curr.value), 0) || 0).toFixed(0)}%</span>
+                       <span className="text-xs text-slate-400   ">Aggregate</span>
+                       <span className="text-xl  text-slate-900 ">{(data?.lossDistribution?.reduce((acc, curr) => acc + parseFloat(curr.value), 0) || 0).toFixed(0)}%</span>
                     </div>
                  </div>
                  <div className="space-y-3 flex-1">
                     {(data?.lossDistribution || []).map((loss, i) => (
                       <div key={i} className="flex items-center justify-between p-3 bg-slate-50/50 rounded border border-slate-100 hover:bg-slate-50 transition-all">
                          <div className="flex items-center gap-3">
-                            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS.chart[i % COLORS.chart.length] }} />
-                            <span className="text-[11px] text-slate-600 font-black uppercase tracking-widest">{loss.name}</span>
+                            <div className="w-3 h-3 rounded" style={{ backgroundColor: COLORS.chart[i % COLORS.chart.length] }} />
+                            <span className="text-[11px] text-slate-600   ">{loss.name}</span>
                          </div>
-                         <span className="text-xs text-slate-900 font-black">{loss.value}%</span>
+                         <span className="text-xs text-slate-900 ">{loss.value}%</span>
                       </div>
                     ))}
                  </div>
@@ -490,7 +498,7 @@ const OEEAnalysis = () => {
            </div>
 
            <div className="bg-white rounded border border-slate-100 p-6 shadow-sm h-[400px] flex flex-col">
-              <h3 className="text-xs text-slate-900 font-black uppercase tracking-widest mb-8 flex items-center gap-2">
+              <h3 className="text-xs text-slate-900    mb-8 flex items-center gap-2">
                  <AlertTriangle className="w-4 h-4 text-rose-500" />
                  Operational Bottlenecks
               </h3>
@@ -503,17 +511,17 @@ const OEEAnalysis = () => {
                                 <AlertCircle className="w-5 h-5 text-rose-500" />
                              </div>
                              <div>
-                                <p className="text-xs text-slate-900 font-black uppercase">{b.name}</p>
-                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Critical Asset</p>
+                                <p className="text-xs text-slate-900  ">{b.name}</p>
+                                <p className="text-xs text-slate-400   ">Critical Asset</p>
                              </div>
                           </div>
                           <div className="text-right">
-                             <p className="text-xs font-black text-rose-600">{b.gap}%</p>
-                             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Gap to Target</p>
+                             <p className="text-xs  text-rose-600">{b.gap}%</p>
+                             <p className="text-xs text-slate-400   ">Gap to Target</p>
                           </div>
                        </div>
-                       <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                          <div className="h-full bg-rose-500 rounded-full" style={{ width: `${b.gap}%` }} />
+                       <div className="w-full h-1.5 bg-slate-200 rounded overflow-hidden">
+                          <div className="h-full bg-rose-500 rounded" style={{ width: `${b.gap}%` }} />
                        </div>
                     </div>
                  ))}

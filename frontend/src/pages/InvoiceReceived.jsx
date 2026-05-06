@@ -126,7 +126,7 @@ const VendorInvoices = () => {
       sortable: true,
       render: (val, row) => (
         <div className="flex flex-col py-1">
-          <span className=" text-rose-600 tracking-tight font-medium">
+          <span className=" text-rose-600  ">
             {val}
           </span>
           <div className="flex items-center gap-1 mt-0.5">
@@ -143,7 +143,7 @@ const VendorInvoices = () => {
       sortable: true,
       render: (val, row) => (
         <div className="flex items-center gap-2 py-1">
-          <div className="w-8 h-8 rounded bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600 font-bold text-xs shadow-sm">
+          <div className="w-8 h-8 rounded bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600  text-xs shadow-sm">
             {val ? val.substring(0, 2).toUpperCase() : 'V'}
           </div>
           <div className="flex flex-col">
@@ -172,7 +172,7 @@ const VendorInvoices = () => {
       sortable: true,
       render: (val) => (
         <div className="flex flex-col py-1">
-          <div className="flex items-center gap-1 font-bold text-slate-900">
+          <div className="flex items-center gap-1  text-slate-900">
             <span className="text-rose-600">₹</span>
             <span>{Number(val).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
           </div>
@@ -188,7 +188,7 @@ const VendorInvoices = () => {
       sortable: true,
       render: (val) => (
         <div className="flex items-center justify-center">
-          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+          <span className={`px-2 py-0.5 rounded text-[10px]  border ${
             val === 'APPROVED' || val === 'FULFILLED' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-rose-50 text-rose-700 border-rose-100'
           }`}>
             {val}
@@ -253,18 +253,18 @@ const VendorInvoices = () => {
             <Package size={24} />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Vendor Invoices</h1>
+            <h1 className="text-xl   text-slate-900 ">Vendor Invoices</h1>
             <div className="flex items-center gap-3 mt-1">
-              <span className="text-xs font-medium text-slate-500 flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+              <span className="text-xs  text-slate-500 flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded bg-slate-400" />
                 {totalInvoices} Received
               </span>
-              <span className="text-xs font-medium text-emerald-600 flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              <span className="text-xs  text-emerald-600 flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded bg-emerald-500" />
                 {approvedInvoices} Approved
               </span>
-              <span className="text-xs font-medium text-rose-600 flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+              <span className="text-xs  text-rose-600 flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded bg-rose-500" />
                 {formatCurrency(totalValue)} Total Value
               </span>
             </div>
@@ -400,7 +400,7 @@ const VendorInvoices = () => {
                           {filteredItems.map((item, idx) => (
                             <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
                               <td className="p-2">
-                                <p className="text-xs font-medium text-slate-800">{item.material_name || item.description || 'N/A'}</p>
+                                <p className="text-xs  text-slate-800">{item.material_name || item.description || 'N/A'}</p>
                                 {(item.item_code) && (
                                   <span className="text-[10px] text-slate-400">{item.item_code}</span>
                                 )}
@@ -411,26 +411,26 @@ const VendorInvoices = () => {
                               <td className="p-2 text-xs text-slate-600 text-center">
                                 {formatCurrency(item.unit_rate || item.rate, selectedPO.currency)}
                               </td>
-                              <td className="p-2 text-xs font-medium text-slate-900 text-right">
+                              <td className="p-2 text-xs  text-slate-900 text-right">
                                 {formatCurrency((item.quantity || 0) * (item.unit_rate || item.rate || 0), selectedPO.currency)}
                               </td>
                             </tr>
                           ))}
                           <tr className="bg-slate-50/30">
-                            <td colSpan="3" className="p-2 text-xs font-medium text-slate-500 text-right">Subtotal</td>
-                            <td className="p-2 text-xs font-medium text-slate-900 text-right">{formatCurrency(subtotal, selectedPO.currency)}</td>
+                            <td colSpan="3" className="p-2 text-xs  text-slate-500 text-right">Subtotal</td>
+                            <td className="p-2 text-xs  text-slate-900 text-right">{formatCurrency(subtotal, selectedPO.currency)}</td>
                           </tr>
                           <tr className="bg-slate-50/30">
-                            <td colSpan="3" className="p-2 text-xs font-medium text-slate-500 text-right">CGST (9%)</td>
-                            <td className="p-2 text-xs font-medium text-slate-900 text-right">{formatCurrency(totalCGST, selectedPO.currency)}</td>
+                            <td colSpan="3" className="p-2 text-xs  text-slate-500 text-right">CGST (9%)</td>
+                            <td className="p-2 text-xs  text-slate-900 text-right">{formatCurrency(totalCGST, selectedPO.currency)}</td>
                           </tr>
                           <tr className="bg-slate-50/30">
-                            <td colSpan="3" className="p-2 text-xs font-medium text-slate-500 text-right">SGST (9%)</td>
-                            <td className="p-2 text-xs font-medium text-slate-900 text-right">{formatCurrency(totalSGST, selectedPO.currency)}</td>
+                            <td colSpan="3" className="p-2 text-xs  text-slate-500 text-right">SGST (9%)</td>
+                            <td className="p-2 text-xs  text-slate-900 text-right">{formatCurrency(totalSGST, selectedPO.currency)}</td>
                           </tr>
                           <tr className="bg-rose-50/50">
-                            <td colSpan="3" className="p-2 text-sm font-bold text-rose-700 text-right">Total with GST</td>
-                            <td className="p-2 text-sm font-bold text-rose-700 text-right">{formatCurrency(grandTotal, selectedPO.currency)}</td>
+                            <td colSpan="3" className="p-2 text-sm  text-rose-700 text-right">Total with GST</td>
+                            <td className="p-2 text-sm  text-rose-700 text-right">{formatCurrency(grandTotal, selectedPO.currency)}</td>
                           </tr>
                         </>
                       );

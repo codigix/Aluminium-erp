@@ -7,7 +7,7 @@ const Sidebar = ({ items = [] }) => (
         <span className="text-white  text-lg">I</span>
       </div>
       <div className="min-w-0">
-        <p className="text-sm  text-slate-900 tracking-tight leading-none">ILLUMIUM</p>
+        <p className="text-sm  text-slate-900  leading-none">ILLUMIUM</p>
         <p className="text-[9px] text-rose-500  uppercase tracking-[0.15em] mt-1.5 truncate">Aluminium Systems</p>
       </div>
     </div>
@@ -26,7 +26,7 @@ const Sidebar = ({ items = [] }) => (
           <item.icon className={`w-[18px] h-[18px] transition-transform duration-200 group-hover:scale-110`} />
           <span className="flex-1 truncate">{item.label}</span>
           {({ isActive }) => isActive && (
-            <div className="absolute right-2 w-1.5 h-1.5 rounded-full bg-rose-500" />
+            <div className="absolute right-2 w-1.5 h-1.5 rounded bg-rose-500" />
           )}
         </NavLink>
       ))}

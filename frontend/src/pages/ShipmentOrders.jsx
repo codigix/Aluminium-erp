@@ -194,11 +194,11 @@ const ShipmentOrders = ({ apiRequest }) => {
           <p className="text-slate-500 text-xs ">Manage and track shipment-ready sales orders.</p>
         </div>
         <div className="flex items-center gap-2">
-          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded text-xs text-slate-700 hover:bg-slate-50 transition-colors">
+          <button className="flex items-center gap-2 p-2 bg-white border border-slate-200 rounded text-xs text-slate-700 hover:bg-slate-50 transition-colors">
             <Filter className="w-4 h-4 text-slate-400" />
             Filter
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded text-xs text-slate-700 hover:bg-slate-50 transition-colors">
+          <button className="flex items-center gap-2 p-2 bg-white border border-slate-200 rounded text-xs text-slate-700 hover:bg-slate-50 transition-colors">
             <Download className="w-4 h-4 text-slate-400" />
             Export
           </button>

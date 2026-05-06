@@ -597,7 +597,7 @@ const POReceipts = () => {
       width: '20%',
       render: (val) => (
         <div className="flex flex-col">
-          <span className=" text-slate-900 text-xs font-medium">{val}</span>
+          <span className=" text-slate-900 text-xs ">{val}</span>
         </div>
       )
     },
@@ -614,21 +614,21 @@ const POReceipts = () => {
         return (
           <div className="flex flex-col min-w-[150px] max-w-[320px]">
             <div className="flex flex-col">
-              <span className="text-slate-900 font-bold text-[13px] leading-tight break-words">
+              <span className="text-slate-900  text-[13px] leading-tight break-words">
                 {parts[0]}
               </span>
               {parts.length > 1 && (
-                <span className="text-[11px] text-slate-600 font-medium leading-relaxed mt-0.5 break-words">
+                <span className="text-[11px] text-slate-600  leading-relaxed mt-0.5 break-words">
                   for {parts.slice(1).join(' for ')}
                 </span>
               )}
             </div>
             {row.company_name && (
               <div className="flex items-center gap-2 mt-1.5 pt-1 border-t border-slate-100/80">
-                <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-600 text-[9px] font-bold rounded border border-indigo-100 shrink-0 uppercase tracking-wider">
+                <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-600 text-[9px]  rounded border border-indigo-100 shrink-0 uppercase tracking-wider">
                   Client
                 </span>
-                <span className="text-[11px] text-slate-500 font-medium italic truncate" title={row.company_name}>
+                <span className="text-[11px] text-slate-500  italic truncate" title={row.company_name}>
                   {row.company_name}
                 </span>
               </div>
@@ -994,7 +994,7 @@ const POReceipts = () => {
                       <Building2 className="w-5 h-5 text-emerald-600" />
                     </div>
                     <div className="flex flex-col">
-                      <span className="text-xs  text-slate-900 font-medium ">{selectedReceiptForView.project_name}</span>
+                      <span className="text-xs  text-slate-900  ">{selectedReceiptForView.project_name}</span>
                       {selectedReceiptForView.company_name && (
                         <span className="text-[10px] text-slate-400">{selectedReceiptForView.company_name}</span>
                       )}
@@ -1162,7 +1162,7 @@ const POReceipts = () => {
                       {formData.project_name && (
                         <div>
                           <p className="text-xs text-slate-500   ">Project</p>
-                          <p className="text-xs  text-slate-900 mt-0.5 font-medium">{formData.project_name}</p>
+                          <p className="text-xs  text-slate-900 mt-0.5 ">{formData.project_name}</p>
                         </div>
                       )}
                       {formData.company_name && (

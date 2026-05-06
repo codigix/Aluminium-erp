@@ -257,7 +257,7 @@ const DispatchManagement = ({ apiRequest }) => {
       render: (val, item) => (
         <div className="flex flex-col">
           <span className=" text-slate-900 text-xs">{val}</span>
-          <span className="text-xs text-slate-400 tracking-tight">Code: {item.item_code}</span>
+          <span className="text-xs text-slate-400 ">Code: {item.item_code}</span>
         </div>
       )
     },
@@ -383,15 +383,15 @@ const DispatchManagement = ({ apiRequest }) => {
           <p className="text-slate-500 text-xs ">Coordinate vehicle dispatch and loading.</p>
         </div>
         <div className="flex items-center gap-2">
-          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded text-xs text-slate-700 hover:bg-slate-50 transition-colors">
+          <button className="flex items-center gap-2 p-2 bg-white border border-slate-200 rounded text-xs text-slate-700 hover:bg-slate-50 transition-colors">
             <Filter className="w-4 h-4 text-slate-400" />
             Filter
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded text-xs text-slate-700 hover:bg-slate-50 transition-colors">
+          <button className="flex items-center gap-2 p-2 bg-white border border-slate-200 rounded text-xs text-slate-700 hover:bg-slate-50 transition-colors">
             <Download className="w-4 h-4 text-slate-400" />
             Export
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700 transition-all shadow-sm shadow-indigo-200 active:scale-95">
+          <button className="flex items-center gap-2 p-2 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700 transition-all shadow-sm shadow-indigo-200 active:scale-95">
             <Plus className="w-4 h-4" />
             Create Dispatch
           </button>

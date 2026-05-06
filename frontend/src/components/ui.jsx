@@ -484,7 +484,7 @@ export const Modal = ({ isOpen, onClose, title, children, className = '', size =
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-start bg-black/60 backdrop-blur-sm overflow-y-auto py-4 sm:py-8" onClick={onClose}>
       <div className={`rounded  shadow-2xl ${maxWidth} w-full ${isFull ? 'min-h-full mx-0 rounded-none !my-0' : 'mx-4 h-fit max-h-[85vh] flex flex-col overflow-hidden'} border ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} ${className}`} onClick={(e) => e.stopPropagation()}>
         <div className={`sticky top-0 z-10 border-b p-2 flex items-center justify-between ${isDark ? 'bg-slate-900/95 border-slate-800 text-white' : 'bg-white/95 border-slate-100 text-slate-900 '}`}>
-          <h2 className="text-lg  tracking-tight">{title}</h2>
+          <h2 className="text-lg  ">{title}</h2>
           <button onClick={onClose} className={`p-2 rounded  transition-colors ${isDark ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-slate-100 text-slate-600'}`}>
             <X className="w-3 h-3" />
           </button>
@@ -783,7 +783,7 @@ export const DataTable = ({
               <tr>
                 <td colSpan={columns.length + (renderExpanded && !hideExpander ? 1 : 0) + (selectable ? 1 : 0)} className="p-16 text-center">
                   <div className="flex flex-col items-center gap-3">
-                    <div className="p-4 bg-slate-50 rounded-full">
+                    <div className="p-4 bg-slate-50 rounded">
                       <FileText className="w-8 h-8 text-slate-300" />
                     </div>
                     <p className="text-slate-500 ">{emptyMessage}</p>

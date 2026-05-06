@@ -113,14 +113,14 @@ const DeliveryChallan = () => {
           <div class="print-container flex flex-col">
             <!-- Header -->
             <div class="bg-[#4f6ebc] text-white p-8 text-center">
-              <h1 class="text-2xl    mb-1">SPTECHPIONEER PRIVATE LIMITED</h1>
+              <h1 class="text-xl     mb-1">SPTECHPIONEER PRIVATE LIMITED</h1>
               <p class="text-xs opacity-90 ">MIDC Bhosari, Pune – 411026, Maharashtra</p>
               <p class="text-xs opacity-80 mt-1">GSTIN: 27ABCDE1234F1Z5 | Phone: +91-9876543210 | Email: info@sptech.com</p>
             </div>
 
             <!-- Title Section -->
             <div class="px-10 py-6 flex justify-between items-end border-b-2 border-slate-100">
-              <h2 class="text-xl  text-[#1e3a8a] tracking-tight">DELIVERY CHALLAN</h2>
+              <h2 class="text-xl  text-[#1e3a8a] ">DELIVERY CHALLAN</h2>
               <div class="text-right space-y-1">
                 <p class="text-xs  text-slate-400  ">Challan No: <span class="text-slate-900 ml-2">${challan.challan_number}</span></p>
                 <p class="text-xs  text-slate-400  ">Date: <span class="text-slate-900 ml-2">${dispatchDate}</span></p>
@@ -133,7 +133,7 @@ const DeliveryChallan = () => {
               <div class="grid grid-cols-2 gap-8">
                 <div class="space-y-2">
                   <div class="border border-slate-100 rounded overflow-hidden bg-slate-50/30">
-                    <div class="bg-slate-50 px-4 py-2 text-xs  text-slate-500   border-b border-slate-100">Bill To:</div>
+                    <div class="bg-slate-50 p-2 text-xs  text-slate-500   border-b border-slate-100">Bill To:</div>
                     <div class="p-5 space-y-3">
                       <p class="text-lg  text-[#1e3a8a] leading-none mb-2">${challan.snapshot_customer_name || challan.customer_name}</p>
                       <div class="space-y-1 text-xs  text-slate-600">
@@ -148,14 +148,14 @@ const DeliveryChallan = () => {
                     </div>
                   </div>
                   <div class="border border-slate-100 rounded overflow-hidden bg-slate-50/30">
-                    <div class="bg-slate-50 px-4 py-2 text-xs  text-slate-500   border-b border-slate-100">Ship To:</div>
+                    <div class="bg-slate-50 p-2 text-xs  text-slate-500   border-b border-slate-100">Ship To:</div>
                     <div class="p-5 text-xs  text-slate-600 leading-relaxed">${challan.snapshot_shipping_address || 'Address not set'}</div>
                   </div>
                 </div>
 
                 <div class="space-y-2">
                   <div class="border border-slate-100 rounded overflow-hidden bg-slate-50/30">
-                    <div class="bg-slate-50 px-4 py-2 text-xs  text-slate-500   border-b border-slate-100">Transport Details:</div>
+                    <div class="bg-slate-50 p-2 text-xs  text-slate-500   border-b border-slate-100">Transport Details:</div>
                     <div class="p-5 space-y-3">
                       <div class="flex justify-between items-center text-xs  text-slate-600">
                         <span class="text-xs text-slate-400  ">Transporter:</span>
@@ -237,7 +237,7 @@ const DeliveryChallan = () => {
                   <h4 class="text-xs  text-slate-400  ">For SPTECHPIONEER PVT LTD</h4>
                   <div class="py-8 opacity-10">
                     <div class="w-5 h-5 border-4 border-indigo-200 rounded flex items-center justify-center">
-                      <span class="text-2xl  text-indigo-200">SP</span>
+                      <span class="text-xl   text-indigo-200">SP</span>
                     </div>
                   </div>
                   <div class="space-y-1">
@@ -337,7 +337,7 @@ const DeliveryChallan = () => {
       render: (val, item) => (
         <div className="flex flex-col">
           <span className=" text-slate-900 text-xs">{val}</span>
-          <span className="text-xs text-slate-400 tracking-tight">Code: {item.item_code}</span>
+          <span className="text-xs text-slate-400 ">Code: {item.item_code}</span>
         </div>
       )
     },
@@ -364,7 +364,7 @@ const DeliveryChallan = () => {
           <p className="text-slate-500 text-xs ">Generate and manage delivery challans.</p>
         </div>
         <div className="flex items-center gap-2">
-          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded text-xs text-slate-700 hover:bg-slate-50 transition-colors">
+          <button className="flex items-center gap-2 p-2 bg-white border border-slate-200 rounded text-xs text-slate-700 hover:bg-slate-50 transition-colors">
             <Download className="w-4 h-4 text-slate-400" />
             Export
           </button>

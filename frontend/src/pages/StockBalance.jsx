@@ -354,7 +354,7 @@ const StockBalance = () => {
           <div className="bg-indigo-600 border border-indigo-700 rounded p-5 flex items-center justify-between shadow-xl shadow-indigo-100">
             <div>
               <p className="text-xs text-indigo-100    mb-1">Total Items</p>
-              <p className="text-2xl  text-white">{stats.totalItems}</p>
+              <p className="text-xl   text-white">{stats.totalItems}</p>
             </div>
             <div className="p-2 bg-indigo-500/50 backdrop-blur-sm rounded  text-white ">
               <Box className="w-3 h-3" />
@@ -374,7 +374,7 @@ const StockBalance = () => {
           <div className="bg-white border border-slate-200 rounded p-5 flex items-center justify-between hover: transition-all">
             <div>
               <p className="text-xs text-slate-500    mb-1">Low Stock Items</p>
-              <p className="text-2xl  text-rose-600">{stats.lowStock}</p>
+              <p className="text-xl   text-rose-600">{stats.lowStock}</p>
             </div>
             <div className="p-2 bg-rose-50 rounded  text-rose-600 border border-rose-100">
               <AlertTriangle className="w-3 h-3" />
@@ -385,7 +385,7 @@ const StockBalance = () => {
 
       <div className="flex justify-between items-center bg-white p-2 rounded border border-slate-200">
         <div>
-          <h2 className="text-xl  text-slate-900 tracking-tight">Inventory Status</h2>
+          <h2 className="text-xl  text-slate-900 ">Inventory Status</h2>
           <p className="text-xs text-slate-500">Manage master items and monitor stock levels</p>
         </div>
         <button

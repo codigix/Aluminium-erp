@@ -57,7 +57,7 @@ const DrawingPreviewModal = ({ isOpen, onClose, drawing }) => {
               <div className="p-1 bg-white/20 rounded  backdrop-blur-sm">
                 <FileText size={15} />
               </div>
-              <h3 className=" text-sm tracking-tight truncate">{previewFile.name}</h3>
+              <h3 className=" text-sm  truncate">{previewFile.name}</h3>
             </div>
             <div className="flex items-center gap-1.5 px-2 py-1 bg-white/10 rounded  w-fit border border-white/10 backdrop-blur-sm">
               <History size={12} />

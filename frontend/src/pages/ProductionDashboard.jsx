@@ -149,7 +149,7 @@ const ProductionDashboard = ({ apiRequest }) => {
         <div className="xl:col-span-2 bg-white rounded] p-2 border border-slate-100 shadow-sm">
           <div className="flex items-center justify-between mb-10">
             <div>
-              <h3 className="text-md  text-slate-900 tracking-tight flex items-center gap-2">
+              <h3 className="text-md  text-slate-900  flex items-center gap-2">
                 <TrendingUp className="w-3 h-3 text-indigo-600" />
                 Production Velocity
               </h3>
@@ -203,7 +203,7 @@ const ProductionDashboard = ({ apiRequest }) => {
       <div className="bg-white/50 backdrop-blur-sm rounded-xl border border-slate-100 shadow-xl overflow-hidden">
         <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-white/50">
           <div>
-            <h3 className="text-sm  text-slate-900 tracking-tight flex items-center gap-2">
+            <h3 className="text-sm  text-slate-900  flex items-center gap-2">
               <Activity className="w-4 h-4 text-indigo-600" />
               PRIORITY WORK ORDERS
             </h3>

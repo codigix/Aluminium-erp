@@ -250,7 +250,7 @@ const BOMApproval = () => {
         </div>
         <button 
           onClick={fetchOrders}
-          className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded text-xs  text-slate-600 hover:bg-slate-50 transition-all shadow-sm active:scale-95"
+          className="flex items-center gap-2 p-2 bg-white border border-slate-200 rounded text-xs  text-slate-600 hover:bg-slate-50 transition-all shadow-sm active:scale-95"
         >
           <RotateCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           Refresh
@@ -293,7 +293,7 @@ const BOMApproval = () => {
                     <Eye size={20} className="drop-shadow-sm" />
                   </div>
                   <div>
-                    <h3 className="text-md  text-slate-900 tracking-tight leading-none ">BOM Details: {selectedOrder?.po_number || (selectedOrder?.customer_po_id ? `PO-${selectedOrder.customer_po_id}` : `SO-${selectedOrder?.id}`)}</h3>
+                    <h3 className="text-md  text-slate-900  leading-none ">BOM Details: {selectedOrder?.po_number || (selectedOrder?.customer_po_id ? `PO-${selectedOrder.customer_po_id}` : `SO-${selectedOrder?.id}`)}</h3>
                     <div className="flex items-center gap-2 mt-1.5">
                       <span className="text-xs  text-slate-400  ">{selectedOrder?.company_name}</span>
                       <span className="w-1 h-1 bg-slate-200 rounded" />
@@ -337,7 +337,7 @@ const BOMApproval = () => {
                           <p className="text-xs  text-indigo-200/80   mb-1">Aggregate Estimated Manufacturing Cost</p>
                           <div className="flex items-baseline gap-2">
                             <span className="text-indigo-200 text-sm ">₹</span>
-                            <span className="text-xl  text-white tracking-tighter">
+                            <span className="text-xl  text-white er">
                               {orderItems.reduce((total, item) => {
                                 if (item.status === 'REJECTED') return total;
                                 const mat = item.materials?.reduce((sum, m) => sum + (parseFloat(m.qty_per_pc || 0) * parseFloat(item.quantity) * parseFloat(m.rate || 0)), 0) || 0;
@@ -356,7 +356,7 @@ const BOMApproval = () => {
                         </div>
                         <div className="p-2 bg-white/10 text-white/50 rounded backdrop-blur-md border border-white/5 flex flex-col items-center">
                            <Check size={15} className="text-emerald-400" />
-                           <span className="text-[8px]   tracking-tighter mt-1 text-emerald-400/80">Validated</span>
+                           <span className="text-[8px]   er mt-1 text-emerald-400/80">Validated</span>
                         </div>
                       </div>
                     </div>
@@ -387,7 +387,7 @@ const BOMApproval = () => {
                                 </div>
                                 <div>
                                   <div className="flex items-center gap-2">
-                                    <h4 className={`text-[13px]  tracking-tight  ${item.status === 'REJECTED' ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
+                                    <h4 className={`text-[13px]    ${item.status === 'REJECTED' ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
                                       {item.item_code || item.drawing_no}
                                     </h4>
                                     <span className={`px-2 py-0.5 rounded-md text-[8px]    ${item.item_group === 'FG' ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-100 text-slate-500'}`}>
@@ -434,7 +434,7 @@ const BOMApproval = () => {
                               <div className="flex items-center gap-2 pl-4 lg:border-l lg:border-slate-100">
                                 <div className="text-right min-w-[100px]">
                                   <p className="text-[8px]  text-slate-400   mb-0.5">Item Total</p>
-                                  <p className="text-sm  text-indigo-600 tracking-tighter">₹{totalItemCost.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+                                  <p className="text-sm  text-indigo-600 er">₹{totalItemCost.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
                                 </div>
                                 <div className={`w-8 h-8 rounded  flex items-center justify-center border ${item.status === 'REJECTED' ? 'bg-rose-50 border-rose-100 text-rose-500' : 'bg-emerald-50 border-emerald-100 text-emerald-500'} shadow-sm`}>
                                   {item.status === 'REJECTED' ? <X size={14} /> : <Check size={14} />}

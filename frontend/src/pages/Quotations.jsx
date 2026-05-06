@@ -1295,7 +1295,7 @@ const Quotations = () => {
         sortable: true,
         render: (val, q) => (
           <div className=" text-slate-900">
-            <div className="text-sm  tracking-tight flex items-center gap-2">
+            <div className="text-sm   flex items-center gap-2">
               {val}
               {q.version && (
                 <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded text-xs  ">
@@ -1318,7 +1318,7 @@ const Quotations = () => {
         sortable: true,
         render: (val, q) => (
           <div className="flex flex-col max-w-[200px]">
-            <span className="text-slate-900 font-medium truncate" title={val}>{val || '—'}</span>
+            <span className="text-slate-900  truncate" title={val}>{val || '—'}</span>
             {q.company_name && (
               <span className="text-xs text-slate-500 truncate" title={q.company_name}>
                 {q.company_name}
@@ -1644,7 +1644,7 @@ const Quotations = () => {
                     <stat.icon className="w-4 h-4" />
                   </div>
                 </div>
-                <p className={`text-2xl  ${stat.text} tracking-tight`}>{stat.value || 0}</p>
+                <p className={`text-xl   ${stat.text} `}>{stat.value || 0}</p>
                 <p className={`text-xs ${stat.subText} mt-1 `}>{stat.sub}</p>
               </div>
             </div>
@@ -1664,7 +1664,7 @@ const Quotations = () => {
                   <p className="text-xs text-slate-500 mt-1">Record details from vendor response</p>
                 )}
               </div>
-              <button onClick={() => navigate('/quotations')} className="text-slate-500 text-2xl leading-none">&times;</button>
+              <button onClick={() => navigate('/quotations')} className="text-slate-500 text-xl  leading-none">&times;</button>
             </div>
 
             <form onSubmit={activeTab === 'sent' ? handleCreateQuotation : handleRecordQuote} className="">
@@ -2085,7 +2085,7 @@ const Quotations = () => {
                         </div>
                         <div className="flex justify-between items-center border-t-2 border-blue-200 pt-2">
                           <span className="text-sm  text-blue-800  ">Grand Total</span>
-                          <span className="text-2xl  text-blue-900">{recordData.amount > 0 ? formatCurrency(recordData.amount * 1.18) : '—'}</span>
+                          <span className="text-xl   text-blue-900">{recordData.amount > 0 ? formatCurrency(recordData.amount * 1.18) : '—'}</span>
                         </div>
                       </div>
                     )}
@@ -2146,7 +2146,7 @@ const Quotations = () => {
                   fetchQuotations();
                   fetchStats();
                 }} 
-                className="text-slate-500 text-2xl"
+                className="text-slate-500 text-xl "
               >
                 ✕
               </button>
@@ -2224,7 +2224,7 @@ const Quotations = () => {
           <div className="bg-white rounded  p-2 max-w-5xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-md text-slate-900 text-xs">Edit Quotation</h3>
-              <button onClick={() => setShowEditModal(false)} className="text-slate-500 text-2xl">✕</button>
+              <button onClick={() => setShowEditModal(false)} className="text-slate-500 text-xl ">✕</button>
             </div>
             
             <form onSubmit={handleEditQuotation} className="">

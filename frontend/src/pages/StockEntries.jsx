@@ -455,7 +455,7 @@ const StockEntries = () => {
                 <tr key={entry.id} className="hover:bg-slate-50 transition-colors group">
                   <td className="p-2 ">
                     <div className=" text-slate-900">{entry.entry_no}</div>
-                    <div className="text-xs text-slate-400  tracking-tighter">ID: {entry.id}</div>
+                    <div className="text-xs text-slate-400  er">ID: {entry.id}</div>
                   </td>
                   <td className="p-2 ">
                     <div className="flex items-center gap-2   text-slate-700">

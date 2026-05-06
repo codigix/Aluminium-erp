@@ -548,7 +548,7 @@ const WorkOrderForm = ({ workOrderId: propWorkOrderId, salesOrderId: propSalesOr
                 <h1 className="text-xl  text-slate-900">
                   {workOrderId ? 'Edit Manufacturing Order' : 'Create Manufacturing Order'}
                 </h1>
-                <span className={`px-2 py-0.5 text-xs   rounded-full border   ${
+                <span className={`px-2 py-0.5 text-xs   rounded border   ${
                   formData.status === 'RELEASED' ? 'bg-green-50 text-green-600 border-green-200' : 'bg-slate-100 text-slate-500 border-slate-200'
                 }`}>
                   {formData.status}
@@ -601,7 +601,7 @@ const WorkOrderForm = ({ workOrderId: propWorkOrderId, salesOrderId: propSalesOr
                     <div className="p-2 bg-indigo-50 text-indigo-600 rounded flex items-center justify-center">
                       <Settings className="w-4 h-4" />
                     </div>
-                    <h2 className="text-sm  text-slate-800  tracking-tight">01 Foundation Setup</h2>
+                    <h2 className="text-sm  text-slate-800  ">01 Foundation Setup</h2>
                   </div>
                   
                   <Card className=" border-slate-200/60 ">
@@ -701,7 +701,7 @@ const WorkOrderForm = ({ workOrderId: propWorkOrderId, salesOrderId: propSalesOr
                     <div className="p-2 bg-indigo-50 text-indigo-600 rounded flex items-center justify-center">
                       <Clock className="w-4 h-4" />
                     </div>
-                    <h2 className="text-sm  text-slate-800  tracking-tight">02 Production Timeline</h2>
+                    <h2 className="text-sm  text-slate-800  ">02 Production Timeline</h2>
                   </div>
 
                   <div className="grid grid-cols-3 gap-4">
@@ -743,7 +743,7 @@ const WorkOrderForm = ({ workOrderId: propWorkOrderId, salesOrderId: propSalesOr
                       <FormControl label="Delivery Commitment">
                         <div className="flex items-center justify-between py-1">
                           <span className="text-sm  text-slate-700">{formData.deliveryCommitment}</span>
-                          <span className="px-2 py-1 bg-amber-50 text-amber-600 text-xs   rounded-full border border-amber-100  ">Target</span>
+                          <span className="px-2 py-1 bg-amber-50 text-amber-600 text-xs   rounded border border-amber-100  ">Target</span>
                         </div>
                       </FormControl>
                     </Card>
@@ -756,7 +756,7 @@ const WorkOrderForm = ({ workOrderId: propWorkOrderId, salesOrderId: propSalesOr
                     <div className="p-2 bg-indigo-50 text-indigo-600 rounded flex items-center justify-center">
                       <List className="w-4 h-4" />
                     </div>
-                    <h2 className="text-sm  text-slate-800  tracking-tight">03 Operation Sequence</h2>
+                    <h2 className="text-sm  text-slate-800  ">03 Operation Sequence</h2>
                   </div>
 
                   {operations.length > 0 ? (
@@ -808,16 +808,16 @@ const WorkOrderForm = ({ workOrderId: propWorkOrderId, salesOrderId: propSalesOr
                       <div className="p-2 bg-indigo-50 text-indigo-600 rounded flex items-center justify-center">
                         <Package className="w-4 h-4" />
                       </div>
-                      <h2 className="text-sm  text-slate-800  tracking-tight">04 Required Inventory</h2>
+                      <h2 className="text-sm  text-slate-800  ">04 Required Inventory</h2>
                     </div>
                     {inventory.length > 0 && (
                       <button 
                         onClick={commitConsumption}
                         disabled={consumptionLoading}
-                        className="px-4 py-2 bg-indigo-600 text-white text-xs  rounded hover:bg-indigo-700 transition-all shadow-sm shadow-indigo-100 disabled:bg-indigo-400 disabled:shadow-none flex items-center gap-2"
+                        className="p-2 bg-indigo-600 text-white text-xs  rounded hover:bg-indigo-700 transition-all shadow-sm shadow-indigo-100 disabled:bg-indigo-400 disabled:shadow-none flex items-center gap-2"
                       >
                         {consumptionLoading ? (
-                          <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded animate-spin" />
                         ) : (
                           <CheckCircle2 className="w-3.5 h-3.5" />
                         )}
@@ -872,7 +872,7 @@ const WorkOrderForm = ({ workOrderId: propWorkOrderId, salesOrderId: propSalesOr
                               </td>
                               <td className="p-3">
                                 <span className="flex items-center gap-1.5   text-xs ">
-                                  <div className={`w-1.5 h-1.5 ${parseFloat(inv.total_stock) >= parseFloat(inv.required_qty) ? 'bg-emerald-500' : 'bg-amber-500'} rounded-full`} />
+                                  <div className={`w-1.5 h-1.5 ${parseFloat(inv.total_stock) >= parseFloat(inv.required_qty) ? 'bg-emerald-500' : 'bg-amber-500'} rounded`} />
                                   <span className={parseFloat(inv.total_stock) >= parseFloat(inv.required_qty) ? 'text-emerald-600' : 'text-amber-600'}>
                                     {parseFloat(inv.total_stock) >= parseFloat(inv.required_qty) ? 'Ready' : 'Incomplete'}
                                   </span>
@@ -1016,7 +1016,7 @@ const WorkOrderForm = ({ workOrderId: propWorkOrderId, salesOrderId: propSalesOr
                 </div>
               </div>
               <div className="mt-8 flex items-baseline gap-2">
-                <span className="text-xl  text-white tracking-tighter">{stats.actualHours.toFixed(1)}h</span>
+                <span className="text-xl  text-white er">{stats.actualHours.toFixed(1)}h</span>
               </div>
               <p className="text-xs  text-slate-500   mt-2">
                 Cumulative machine hours logged against this order.

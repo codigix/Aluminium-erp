@@ -157,7 +157,7 @@ const QualityRejections = () => {
           {row.ref_type === 'GRN' && val && (
             <button 
               onClick={(e) => { e.stopPropagation(); handleDownloadPdf(val); }} 
-              className="px-2 py-1 text-[10px] font-medium text-orange-600 bg-orange-50 border border-orange-100 rounded hover:bg-orange-100 transition-all active:scale-95 flex items-center gap-1"
+              className="px-2 py-1 text-[10px]  text-orange-600 bg-orange-50 border border-orange-100 rounded hover:bg-orange-100 transition-all active:scale-95 flex items-center gap-1"
             >
               <FileText className="w-3 h-3" />
               QC Report

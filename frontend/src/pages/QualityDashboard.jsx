@@ -164,7 +164,7 @@ const QualityDashboard = () => {
           <Beaker className="w-3 h-3 text-indigo-600 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
         </div>
         <div className="text-center">
-          <h3 className="text-slate-900  tracking-tight">Gathering Quality Metrics</h3>
+          <h3 className="text-slate-900  ">Gathering Quality Metrics</h3>
           <p className="text-xs text-slate-500 mt-1">Analyzing inspection results and rejection trends...</p>
         </div>
       </div>
@@ -190,12 +190,12 @@ const QualityDashboard = () => {
         <div className="flex items-center gap-2">
           <button 
             onClick={fetchDashboardData}
-            className="flex items-center gap-2 px-4 py-2 bg-slate-50 text-slate-600 rounded  text-xs  hover:bg-slate-100 transition-all border border-slate-200 active:scale-95"
+            className="flex items-center gap-2 p-2 bg-slate-50 text-slate-600 rounded  text-xs  hover:bg-slate-100 transition-all border border-slate-200 active:scale-95"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             REFRESH
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded  text-xs  hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95">
+          <button className="flex items-center gap-2 p-2 bg-indigo-600 text-white rounded  text-xs  hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95">
             <Download className="w-4 h-4" />
             EXPORT REPORT
           </button>
@@ -248,7 +248,7 @@ const QualityDashboard = () => {
         <div className="xl:col-span-2 bg-white rounded  p-8 border border-slate-100 shadow-sm flex flex-col">
           <div className="flex items-center justify-between mb-8">
             <div>
-              <h3 className="text-md  text-slate-900 tracking-tight flex items-center gap-2">
+              <h3 className="text-md  text-slate-900  flex items-center gap-2">
                 <TrendingUp className="w-5 h-5 text-indigo-600" />
                 Inspection Performance
               </h3>
@@ -291,7 +291,7 @@ const QualityDashboard = () => {
 
         {/* Rejection Reasons Pie */}
         <div className="bg-white rounded  p-8 border border-slate-100 shadow-sm flex flex-col">
-          <h3 className="text-md  text-slate-900 tracking-tight mb-8">Defect Distribution</h3>
+          <h3 className="text-md  text-slate-900  mb-8">Defect Distribution</h3>
           <div className="flex-1 flex flex-col">
             <div className="h-64 w-full relative">
               <ResponsiveContainer width="100%" height="100%">
@@ -322,7 +322,7 @@ const QualityDashboard = () => {
                 <div key={index} className="flex items-center justify-between p-2 rounded bg-slate-50/50 hover:bg-slate-50 transition-colors">
                   <div className="flex items-center gap-2">
                     <div className="w-2.5 h-2.5 rounded" style={{ backgroundColor: item.color }}></div>
-                    <span className="text-xs   text-slate-600  tracking-tight">{item.name}</span>
+                    <span className="text-xs   text-slate-600  ">{item.name}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs  text-slate-900">{item.value}</span>
@@ -338,7 +338,7 @@ const QualityDashboard = () => {
         <div className="xl:col-span-3 bg-white rounded  border border-slate-100 shadow-sm overflow-hidden flex flex-col">
           <div className="p-2 border-b border-slate-50 flex items-center justify-between bg-slate-50/30">
             <div>
-              <h3 className="text-xs  text-slate-900 tracking-tight flex items-center gap-2">
+              <h3 className="text-xs  text-slate-900  flex items-center gap-2">
                 <Clock className="w-4 h-4 text-amber-600" />
                 CRITICAL QC QUEUE
               </h3>

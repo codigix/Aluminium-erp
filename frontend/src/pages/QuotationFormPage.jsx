@@ -895,7 +895,7 @@ const QuotationFormPage = () => {
           <div className="flex items-center gap-2 text-slate-500 mb-0.5">
             <button 
               onClick={() => navigate('/client-quotations')}
-              className="p-1 hover:bg-slate-100 rounded-full transition-colors"
+              className="p-1 hover:bg-slate-100 rounded transition-colors"
             >
               <ChevronLeft size={16} />
             </button>
@@ -903,7 +903,7 @@ const QuotationFormPage = () => {
           </div>
           <h1 className="text-lg  text-slate-900 flex items-center gap-2">
             {mode === 'received' ? 'Received Quotation' : (version > 1 ? 'Revise Quotation' : 'Create Quotation')}
-            <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full text-xs  border border-indigo-200">
+            <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded text-xs  border border-indigo-200">
               V{version}
             </span>
           </h1>
@@ -1379,8 +1379,8 @@ const QuotationFormPage = () => {
                                   <div className="flex flex-col">
                                     <span className="text-[11px] text-slate-700 font-semibold">{sa.description}</span>
                                     <div className="flex items-center gap-2 mt-0.5">
-                                      <span className="text-[9px] text-slate-500 font-mono font-bold">{sa.drawing_no}</span>
-                                      <span className="px-1 py-0.5 rounded-[3px] text-[8px] font-bold bg-blue-50 text-blue-600 border border-blue-100/50">SA</span>
+                                      <span className="text-[9px] text-slate-500 font-mono ">{sa.drawing_no}</span>
+                                      <span className="px-1 py-0.5 rounded-[3px] text-[8px]  bg-blue-50 text-blue-600 border border-blue-100/50">SA</span>
                                     </div>
                                   </div>
                                 </div>
@@ -1388,13 +1388,13 @@ const QuotationFormPage = () => {
                               <td className="p-2 border-b border-slate-100 text-[11px] text-slate-600 ">
                                 {(parseFloat(sa.quantity || 0) * (parseFloat(item.quantity) || 0)).toFixed(3)} {sa.unit || 'Nos'}
                               </td>
-                              <td className="p-2 border-b border-slate-100 text-[11px] text-indigo-600 font-bold bg-indigo-50/30">
+                              <td className="p-2 border-b border-slate-100 text-[11px] text-indigo-600  bg-indigo-50/30">
                                 {formatCurrency(sa.bom_cost)}
                               </td>
                               <td className="p-2 border-b border-slate-100 text-[11px] text-slate-700 ">
                                 {formatCurrency(sa.rate || sa.bom_cost)}
                               </td>
-                              <td className="p-2 border-b border-slate-100 text-[11px] text-slate-900 font-bold">
+                              <td className="p-2 border-b border-slate-100 text-[11px] text-slate-900 ">
                                 {formatCurrency((parseFloat(sa.rate || sa.bom_cost) || 0) * (parseFloat(sa.quantity || 0) * (parseFloat(item.quantity) || 0)))}
                               </td>
                               {!isLocked && <td className="p-2 border-b border-slate-100"></td>}
@@ -1463,7 +1463,7 @@ const QuotationFormPage = () => {
                 <div className="flex justify-between items-end">
                   <div>
                     <p className="text-[9px]  text-slate-400   mb-0.5">Total Amount</p>
-                    <p className="text-xl font-black text-indigo-600 tracking-tight">{formatCurrency(summary.totalAmount)}</p>
+                    <p className="text-xl  text-indigo-600 ">{formatCurrency(summary.totalAmount)}</p>
                   </div>
                 </div>
               </div>
@@ -1495,13 +1495,13 @@ const QuotationFormPage = () => {
                       >
                         <div className="flex items-center justify-between mb-1.5">
                           <div className="flex items-center gap-2">
-                            <div className={`w-1.5 h-1.5 rounded-full ${v.id === selectedVersionId ? 'bg-indigo-500 animate-pulse' : 'bg-slate-300'}`} />
-                            <span className={`text-[11px] font-bold ${v.id === selectedVersionId ? 'text-indigo-700' : 'text-slate-700'}`}>
+                            <div className={`w-1.5 h-1.5 rounded ${v.id === selectedVersionId ? 'bg-indigo-500 animate-pulse' : 'bg-slate-300'}`} />
+                            <span className={`text-[11px]  ${v.id === selectedVersionId ? 'text-indigo-700' : 'text-slate-700'}`}>
                               Version {v.version}
                             </span>
                             <StatusBadge status={v.status} size="xs" />
                           </div>
-                          <span className="text-xs  font-bold text-slate-900">{formatCurrency(parseFloat(v.received_amount) || parseFloat(v.total_amount) * 1.18)}</span>
+                          <span className="text-xs   text-slate-900">{formatCurrency(parseFloat(v.received_amount) || parseFloat(v.total_amount) * 1.18)}</span>
                         </div>
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-1.5 text-[9px] text-slate-400">

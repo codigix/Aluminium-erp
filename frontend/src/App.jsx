@@ -1452,11 +1452,11 @@ function App() {
         } lg:translate-x-0 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
             <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-white sticky top-0 z-10">
               <div className="flex items-center gap-3.5 flex-1 overflow-hidden">
-                <div className="h-9 w-9 rounded-xl bg-rose-500 flex items-center justify-center shadow-lg shadow-rose-500/20 flex-shrink-0 transition-transform duration-300">
+                <div className="h-9 w-9 rounded bg-rose-500 flex items-center justify-center shadow-lg shadow-rose-500/20 flex-shrink-0 transition-transform duration-300">
                   <Building2 className="h-5 w-5 text-white" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm  text-slate-900 tracking-tight leading-none">ILLUMIUM</p>
+                  <p className="text-sm  text-slate-900  leading-none">ILLUMIUM</p>
                   <p className="text-[9px] text-rose-500   tracking-[0.15em] mt-1.5 truncate">{user?.department_code || 'ERP System'}</p>
                 </div>
               </div>
@@ -1469,15 +1469,15 @@ function App() {
               </button>
             </div>
             
-            <div className="flex-1 overflow-y-auto overflow-x-hidden py-6 px-4 space-y-1.5 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden p-2 space-y-1.5 custom-scrollbar">
               {navigationItems.map((item, index) => {
                 const isActive = item.moduleId ? (activeModule === item.moduleId || (item.moduleId === 'bom-creation' && activeModule === 'bom-form') || (item.moduleId === 'client-quotations' && activeModule === 'quotation-form')) : Boolean(item.active)
                 const isDisabled = item.isGroup || !item.moduleId
                 
                 if (item.isGroup) {
                   return (
-                    <div key={`group-${item.groupId || item.label}-${index}`} className="pt-5 pb-2 px-3">
-                      <p className="text-xs   text-slate-400  tracking-[0.2em]">{item.label}</p>
+                    <div key={`group-${item.groupId || item.label}-${index}`} className="p-2">
+                      <p className="text-xs   text-slate-400  ">{item.label}</p>
                     </div>
                   )
                 }
@@ -1492,7 +1492,7 @@ function App() {
                         setMobileMenuOpen(false)
                       }
                     }}
-                    className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-[13px]  transition-all duration-200 group relative ${
+                    className={`flex items-center gap-3 w-full p-2 rounded text-xs  transition-all duration-200 group relative ${
                       isActive 
                         ? 'bg-rose-50 text-rose-600 shadow-sm' 
                         : isDisabled 
@@ -1513,18 +1513,18 @@ function App() {
                     })()}
                     <span className="flex-1 text-left truncate">{item.label}</span>
                     {isActive && (
-                      <div className="absolute right-2 w-1.5 h-1.5 rounded-full bg-rose-500" />
+                      <div className="absolute right-2 w-1.5 h-1.5 rounded bg-rose-500" />
                     )}
                   </button>
                 )
               })}
             </div>
 
-            <div className="p-4 border-t border-slate-100 bg-slate-50/50">
+            <div className="p-2 border-t border-slate-100 bg-slate-50/50">
               <button
                 type="button"
                 onClick={handleLogout}
-                className="flex items-center justify-center gap-2 w-full p-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 text-[13px]  hover:bg-rose-50 hover:text-rose-600 hover:border-rose-100 transition-all duration-300"
+                className="flex items-center justify-center gap-2 w-full p-2.5 rounded border border-slate-200 bg-white text-slate-500 text-xs  hover:bg-rose-50 hover:text-rose-600 hover:border-rose-100 transition-all duration-300"
               >
                 <LogOut className="w-4 h-4" />
                 <span>Logout</span>
@@ -1545,7 +1545,7 @@ function App() {
                 <button
                   type="button"
                   onClick={() => setMobileMenuOpen(true)}
-                  className="lg:hidden p-2 text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+                  className="lg:hidden p-2 text-slate-600 hover:bg-slate-100 rounded transition-colors"
                 >
                   <Menu className="w-6 h-6" />
                 </button>

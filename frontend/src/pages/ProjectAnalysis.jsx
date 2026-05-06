@@ -235,17 +235,17 @@ const ProjectAnalysis = () => {
   };
 
   const StatCard = ({ title, amount, subtitle, icon: Icon, color = 'bg-indigo-500', trend, trendValue, animate, subColor }) => (
-    <div className="bg-white rounded p-2.5 border border-slate-100 shadow-sm relative overflow-hidden group hover:shadow-md transition-all">
+    <div className="bg-white rounded p-2 border border-slate-100 shadow-sm relative overflow-hidden group hover:shadow-md transition-all">
       <div className={`absolute top-0 right-0 w-16 h-16 ${color} opacity-5 rounded -mr-6 -mt-6 transition-transform group-hover:scale-110`} />
       
       <div className="flex flex-col h-full justify-between relative z-10">
         <div className="flex items-start justify-between">
           <div>
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">{title}</p>
+            <p className="text-xs text-slate-400    mb-1">{title}</p>
             <div className="flex items-baseline gap-2">
-              <h3 className="text-xl text-slate-900 font-black tracking-tight">{amount}</h3>
+              <h3 className="text-xl text-slate-900  ">{amount}</h3>
               {trendValue && (
-                <span className={`flex items-center text-[10px] font-bold ${trend === 'up' ? 'text-emerald-500' : 'text-rose-500'}`}>
+                <span className={`flex items-center text-xs  ${trend === 'up' ? 'text-emerald-500' : 'text-rose-500'}`}>
                   {trend === 'up' ? <TrendingUp className="w-2.5 h-2.5 mr-0.5" /> : <AlertCircle className="w-2.5 h-2.5 mr-0.5" />}
                   {trendValue}
                 </span>
@@ -257,7 +257,7 @@ const ProjectAnalysis = () => {
           </div>
         </div>
         <div className="mt-2">
-           <p className={`text-[10px] font-bold uppercase ${subColor || 'text-slate-500'}`}>{subtitle}</p>
+           <p className={`text-xs   ${subColor || 'text-slate-500'}`}>{subtitle}</p>
         </div>
       </div>
       {title === 'Completion' && (
@@ -276,7 +276,7 @@ const ProjectAnalysis = () => {
           <BarChart3 className="w-4 h-4 text-indigo-600 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
         </div>
         <div className="text-center">
-          <h3 className="text-slate-900 font-bold tracking-tight">Analyzing Project Matrix</h3>
+          <h3 className="text-slate-900  ">Analyzing Project Matrix</h3>
           <p className="text-xs text-slate-500 mt-1">Processing intelligence, timelines and resource yields...</p>
         </div>
       </div>
@@ -293,8 +293,8 @@ const ProjectAnalysis = () => {
             <Projector className="w-3 h-3 text-slate-400" />
           </div>
           <div className="flex flex-col">
-            <span className="text-xs text-slate-900 font-bold uppercase tracking-tight">{row.project_name}</span>
-            <span className="text-[10px] text-slate-400 font-bold">#SO-{row.id?.toString().padStart(6, '0')}</span>
+            <span className="text-xs text-slate-900   ">{row.project_name}</span>
+            <span className="text-xs text-slate-400 ">#SO-{row.id?.toString().padStart(6, '0')}</span>
           </div>
         </div>
       )
@@ -302,7 +302,7 @@ const ProjectAnalysis = () => {
     {
       label: 'CLIENT',
       key: 'company_name',
-      render: (val) => <span className="text-xs text-slate-600 uppercase font-bold tracking-tighter">{val}</span>
+      render: (val) => <span className="text-xs text-slate-600   ">{val}</span>
     },
     {
       label: 'STATUS',
@@ -317,10 +317,10 @@ const ProjectAnalysis = () => {
         return (
           <div className="w-full max-w-[100px] space-y-1">
             <div className="flex justify-between items-center">
-              <span className="text-[10px] font-bold text-slate-900">{Math.round(progress)}%</span>
+              <span className="text-xs  text-slate-900">{Math.round(progress)}%</span>
             </div>
-            <div className="w-full bg-slate-50 rounded-full h-1.5 overflow-hidden border border-slate-100">
-              <div className="bg-indigo-600 h-full rounded-full transition-all duration-1000" style={{ width: `${progress}%` }} />
+            <div className="w-full bg-slate-50 rounded h-1.5 overflow-hidden border border-slate-100">
+              <div className="bg-indigo-600 h-full rounded transition-all duration-1000" style={{ width: `${progress}%` }} />
             </div>
           </div>
         );
@@ -330,7 +330,7 @@ const ProjectAnalysis = () => {
       label: 'REVENUE',
       key: 'revenue',
       className: 'text-right',
-      render: (val) => <span className="text-xs font-black text-indigo-600">₹{parseFloat(val || 0).toLocaleString('en-IN')}</span>
+      render: (val) => <span className="text-xs  text-indigo-600">₹{parseFloat(val || 0).toLocaleString('en-IN')}</span>
     },
     {
       label: 'ACTION',
@@ -349,7 +349,7 @@ const ProjectAnalysis = () => {
       return (
         <div className="flex flex-col items-center justify-center p-22 space-y-2">
            <div className="w-16 h-16 border-4 border-slate-100 border-t-indigo-600 rounded animate-spin" />
-           <p className="text-xs text-slate-500 mt-1 uppercase font-black tracking-widest">Hydrating Intelligence Matrix...</p>
+           <p className="text-xs text-slate-500 mt-1   ">Hydrating Intelligence Matrix...</p>
         </div>
       );
     }
@@ -357,22 +357,22 @@ const ProjectAnalysis = () => {
     const { projectInfo, productionFlow, workOrders: woDetails, logistics: logData, supplyChain: scData, stockMovements, inventoryMatrix, machineUtilization, productionLogs, machineEfficiency } = projectDetails;
 
     return (
-      <div className="space-y-2 pb-12 animate-in fade-in slide-in-from-bottom-2 duration-500">
+      <div className=" pb-12 animate-in fade-in slide-in-from-bottom-2 duration-500">
         {/* Detail Header */}
-        <div className="bg-white p-2 rounded border border-slate-100 shadow-sm flex items-center justify-between">
+        <div className="flex items-center justify-between">
            <div className="flex items-center gap-4">
               <button onClick={() => { setSelectedProject(null); setProjectDetails(null); }} className="p-2 hover:bg-slate-50 text-slate-400 rounded border border-slate-100">
-                 <ArrowLeft className="w-4 h-4" />
+                 <ArrowLeft size={15} />
               </button>
               <div>
                  <div className="flex items-center gap-2">
-                    <h1 className="text-xl text-slate-900 font-black tracking-tight">{projectInfo.project_name}</h1>
-                    <div className="flex items-center gap-1.5 px-2 py-0.5 bg-blue-50 text-blue-600 rounded text-[10px] font-black border border-blue-100 uppercase">
-                       <Cpu className="w-3 h-3" />
+                    <h1 className="text-xl text-slate-900  ">{projectInfo.project_name}</h1>
+                    <div className="flex items-center gap-1.5 p-1 bg-blue-50 text-blue-600 rounded text-xs  border border-blue-100 ">
+                       <Cpu size={15}/>
                        {projectInfo.status}
                     </div>
                  </div>
-                 <div className="flex items-center gap-6 mt-1 text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
+                 <div className="flex items-center gap-6 mt-1 text-xs  text-slate-400  ">
                     <span>Customer: <span className="text-slate-900">{projectInfo.company_name}</span></span>
                     <span>Project ID: <span className="text-indigo-600">SO-{projectInfo.id.toString().padStart(6, '0')}</span></span>
                     <span>PO: <span className="text-slate-900">{projectInfo.customer_po_no || 'N/A'}</span></span>
@@ -380,16 +380,16 @@ const ProjectAnalysis = () => {
               </div>
            </div>
 
-           <div className="flex items-center gap-2 px-2 relative z-50">
-              <div className="h-9 w-9 rounded-xl bg-rose-500 flex items-center justify-center shadow-lg shadow-rose-500/20">
-                <BarChart3 className="w-5 h-5 text-white" />
+           <div className="flex mt-5 items-center gap-2 px-2 relative z-50">
+              <div className=" rounded p-2 bg-rose-500 flex items-center justify-center shadow-lg shadow-rose-500/20">
+                <BarChart3 size={15} className=" text-white" />
               </div>
               <button 
                 onClick={(e) => {
                   e.stopPropagation();
                   handleGenerateLedger();
                 }}
-                className="bg-rose-500 hover:bg-rose-600 text-white px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all shadow-lg shadow-rose-500/20 active:scale-95 flex items-center gap-2 cursor-pointer pointer-events-auto"
+                className="bg-rose-500 hover:bg-rose-600 text-white p-2 rounded text-[11px]    transition-all shadow-lg shadow-rose-500/20 active:scale-95 flex items-center gap-2 cursor-pointer pointer-events-auto"
               >
                 <Download className="w-4 h-4" />
                 Generate Ledger
@@ -398,7 +398,15 @@ const ProjectAnalysis = () => {
         </div>
 
         {/* Tabs */}
+<<<<<<< Updated upstream
         <div className="flex items-center gap-1 bg-white/50 border border-slate-100 p-0.5 rounded w-fit overflow-x-auto max-w-full no-scrollbar mb-2">
+=======
+<<<<<<< HEAD
+        <div className="flex items-center mt-5 gap-2 bg-white/50 border border-slate-100 p-1 rounded w-fit overflow-x-auto max-w-full no-scrollbar">
+=======
+        <div className="flex items-center gap-1 bg-white/50 border border-slate-100 p-0.5 rounded w-fit overflow-x-auto max-w-full no-scrollbar mb-2">
+>>>>>>> cca9023b61ada16bf798ca1df8a8b822f8431698
+>>>>>>> Stashed changes
            {[
              { id: 'Overview', icon: LayoutDashboard },
              { id: 'Production Flow', icon: GitBranch },
@@ -411,8 +419,18 @@ const ProjectAnalysis = () => {
              <button
                key={tab.id}
                onClick={() => setDetailTab(tab.id)}
+<<<<<<< Updated upstream
                className={`flex items-center gap-1.5 px-3 py-1 rounded text-[9px] font-black uppercase tracking-tight transition-all whitespace-nowrap ${
                  detailTab === tab.id ? 'bg-rose-600 text-white shadow-sm' : 'text-slate-500 hover:text-rose-600 hover:bg-white'
+=======
+<<<<<<< HEAD
+               className={`flex items-center gap-2 px-4 py-1.5 rounded text-xs    transition-all whitespace-nowrap ${
+                 detailTab === tab.id ? 'bg-rose-600 text-white shadow-md' : 'text-slate-500 hover:text-rose-600 hover:bg-white'
+=======
+               className={`flex items-center gap-1.5 px-3 py-1 rounded text-[9px] font-black uppercase tracking-tight transition-all whitespace-nowrap ${
+                 detailTab === tab.id ? 'bg-rose-600 text-white shadow-sm' : 'text-slate-500 hover:text-rose-600 hover:bg-white'
+>>>>>>> cca9023b61ada16bf798ca1df8a8b822f8431698
+>>>>>>> Stashed changes
                }`}
              >
                <tab.icon className="w-3 h-3" />
@@ -439,20 +457,20 @@ const ProjectAnalysis = () => {
 
                 <div className="grid grid-cols-2 gap-2">
                    <div className="bg-white rounded border border-slate-100 p-4 h-[250px] flex flex-col">
-                      <h3 className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-4">Supply Chain Health</h3>
+                      <h3 className="text-xs text-slate-400    mb-4">Supply Chain Health</h3>
                       <div className="space-y-4">
                          <div>
-                            <div className="flex justify-between items-center mb-1 text-[10px] font-bold">
-                               <span className="text-slate-500 uppercase">Material Requests</span>
+                            <div className="flex justify-between items-center mb-1 text-xs ">
+                               <span className="text-slate-500 ">Material Requests</span>
                                <span className="text-slate-900">{scData.filter(r => r.status === 'APPROVED' || r.status === 'COMPLETED').length} / {scData.length} Approved</span>
                             </div>
-                            <div className="h-1.5 w-full bg-slate-50 rounded-full overflow-hidden border border-slate-100">
+                            <div className="h-1.5 w-full bg-slate-50 rounded overflow-hidden border border-slate-100">
                                <div className="h-full bg-emerald-500" style={{width: `${scData.length > 0 ? (scData.filter(r => r.status === 'APPROVED' || r.status === 'COMPLETED').length / scData.length) * 100 : 0}%`}} />
                             </div>
                          </div>
                          <div>
-                            <div className="flex justify-between items-center mb-1 text-[10px] font-bold">
-                               <span className="text-slate-500 uppercase">Stock Logistics</span>
+                            <div className="flex justify-between items-center mb-1 text-xs ">
+                               <span className="text-slate-500 ">Stock Logistics</span>
                                <span className="text-slate-900">{stockMovements.length} Transactions</span>
                             </div>
                             <div className="flex gap-1 overflow-hidden">
@@ -466,18 +484,18 @@ const ProjectAnalysis = () => {
                                <Truck className="w-4 h-4" />
                             </div>
                             <div>
-                               <p className="text-[8px] text-slate-400 font-bold uppercase tracking-tighter leading-none">Last Request</p>
-                               <p className="text-[10px] text-slate-900 font-black uppercase tracking-tighter">{scData[0]?.mr_no || 'N/A'}</p>
+                               <p className="text-[8px] text-slate-400    leading-none">Last Request</p>
+                               <p className="text-xs text-slate-900   ">{scData[0]?.mr_no || 'N/A'}</p>
                             </div>
                          </div>
-                         <button onClick={() => setDetailTab('Supply Chain')} className="text-[10px] text-indigo-600 font-black uppercase hover:underline flex items-center gap-1">
+                         <button onClick={() => setDetailTab('Supply Chain')} className="text-xs text-indigo-600   hover:underline flex items-center gap-1">
                             View Details <ArrowRight className="w-2.5 h-2.5" />
                          </button>
                       </div>
                    </div>
 
                    <div className="bg-white rounded border border-slate-100 p-4 h-[250px] flex flex-col">
-                      <h3 className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-4">Machine Utilization</h3>
+                      <h3 className="text-xs text-slate-400    mb-4">Machine Utilization</h3>
                       <div className="flex-1">
                          <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={machineUtilization}>
@@ -488,7 +506,7 @@ const ProjectAnalysis = () => {
                             </BarChart>
                          </ResponsiveContainer>
                       </div>
-                      <div className="flex gap-4 mt-4 text-[10px] font-bold uppercase">
+                      <div className="flex gap-4 mt-4 text-xs  ">
                          <span className="text-slate-400">Nodes: <span className="text-slate-900">{machineUtilization.length}</span></span>
                          <span className="text-slate-400">Avg Eff: <span className="text-slate-900">{Math.round(machineUtilization.reduce((acc, curr) => acc + parseFloat(curr.v || 0), 0) / (machineUtilization.length || 1))}%</span></span>
                       </div>
@@ -497,10 +515,10 @@ const ProjectAnalysis = () => {
 
                 <div className="bg-white rounded border border-slate-100 p-6 shadow-sm">
                    <div className="flex items-center justify-between mb-8">
-                      <h3 className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Verified Progress by Stage</h3>
+                      <h3 className="text-xs text-slate-400   ">Verified Progress by Stage</h3>
                       <div className="flex items-center gap-2">
                          <div className="w-2.5 h-2.5 rounded bg-blue-500" />
-                         <span className="text-[10px] text-slate-400 font-black uppercase tracking-tight">Verified Stage Output</span>
+                         <span className="text-xs text-slate-400   ">Verified Stage Output</span>
                       </div>
                    </div>
                    <div className="h-[350px] w-full flex items-center justify-center">
@@ -517,7 +535,7 @@ const ProjectAnalysis = () => {
                       ) : (
                         <div className="text-center">
                            <GitBranch className="w-12 h-12 text-slate-100 mx-auto mb-4" />
-                           <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">No production stages defined</p>
+                           <p className="text-xs text-slate-400   ">No production stages defined</p>
                         </div>
                       )}
                    </div>
@@ -526,36 +544,36 @@ const ProjectAnalysis = () => {
 
              <div className="bg-slate-900 rounded p-6 shadow-xl flex flex-col text-white">
                 <div className="flex items-center justify-between mb-8">
-                   <h3 className="text-[10px] text-indigo-400 font-black uppercase tracking-widest">Delivery Intelligence</h3>
+                   <h3 className="text-xs text-indigo-400   ">Delivery Intelligence</h3>
                    <Calendar className="w-6 h-6 text-slate-700" />
                 </div>
                 <div className="mb-8">
-                   <p className="text-[10px] text-slate-500 font-black uppercase mb-1">Estimated Delivery</p>
-                   <p className="text-2xl font-black tracking-tighter">{formatDate(projectInfo.target_dispatch_date)}</p>
+                   <p className="text-xs text-slate-500   mb-1">Estimated Delivery</p>
+                   <p className="text-xl   ">{formatDate(projectInfo.target_dispatch_date)}</p>
                 </div>
                 
                 {new Date(projectInfo.target_dispatch_date) < new Date() && projectInfo.status !== 'SHIPPED' && (
                   <div className="bg-rose-900/30 border border-rose-500/30 rounded p-4 mb-8">
                     <div className="flex items-center gap-2 text-rose-500 mb-2">
                         <AlertTriangle className="w-4 h-4" />
-                        <span className="text-xs font-black uppercase">At Risk</span>
+                        <span className="text-xs  ">At Risk</span>
                     </div>
-                    <p className="text-[10px] text-slate-300 leading-relaxed font-bold">Project is currently behind schedule. target delivery date has passed.</p>
+                    <p className="text-xs text-slate-300 leading-relaxed ">Project is currently behind schedule. target delivery date has passed.</p>
                   </div>
                 )}
 
                 <div className="space-y-6">
-                   <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Key Milestones</p>
+                   <p className="text-xs text-slate-500   ">Key Milestones</p>
                    {[
                      { l: 'Project Kickoff', d: formatDate(projectInfo.created_at), c: 'indigo-500' },
                      { l: 'Target Delivery', d: formatDate(projectInfo.target_dispatch_date), c: 'slate-700' }
                    ].map((m, i) => (
                      <div key={i} className="flex gap-4 relative">
                         {i < 1 && <div className="absolute left-[3px] top-4 bottom-[-16px] w-[2px] bg-slate-800" />}
-                        <div className={`w-2 h-2 rounded-full bg-${m.c} mt-1`} />
+                        <div className={`w-2 h-2 rounded bg-${m.c} mt-1`} />
                         <div>
-                           <p className="text-[10px] font-black uppercase leading-none mb-1">{m.l}</p>
-                           <p className="text-[10px] text-slate-500 font-bold uppercase">{m.d}</p>
+                           <p className="text-xs   leading-none mb-1">{m.l}</p>
+                           <p className="text-xs text-slate-500  ">{m.d}</p>
                         </div>
                      </div>
                    ))}
@@ -568,8 +586,8 @@ const ProjectAnalysis = () => {
           <div className="space-y-2">
              <div className="bg-white rounded border border-slate-100 p-4 flex items-center justify-between shadow-sm">
                 <div>
-                   <h3 className="text-sm text-slate-900 font-black tracking-tight">Production Workflow Analysis</h3>
-                   <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">Status of operations across all manufacturing phases</p>
+                   <h3 className="text-sm text-slate-900  ">Production Workflow Analysis</h3>
+                   <p className="text-xs text-slate-400   mt-0.5">Status of operations across all manufacturing phases</p>
                 </div>
              </div>
 
@@ -583,7 +601,7 @@ const ProjectAnalysis = () => {
                   <button 
                     key={i} 
                     onClick={() => setFlowFilter(s.id)}
-                    className={`bg-white rounded border p-2.5 flex items-center justify-between shadow-sm transition-all ${
+                    className={`bg-white rounded border p-2 flex items-center justify-between shadow-sm transition-all ${
                       flowFilter === s.id ? 'border-indigo-600 ring-1 ring-indigo-600' : 'border-slate-100'
                     }`}
                   >
@@ -591,9 +609,9 @@ const ProjectAnalysis = () => {
                         <div className={`w-8 h-8 rounded ${s.bg} flex items-center justify-center text-white`}>
                            <s.icon className="w-4 h-4" />
                         </div>
-                        <span className="text-[11px] text-slate-600 font-black uppercase tracking-tight">{s.l}</span>
+                        <span className="text-[11px] text-slate-600   ">{s.l}</span>
                      </div>
-                     <span className="px-2 py-0.5 bg-slate-50 text-slate-900 rounded text-[10px] font-black border border-slate-200">{s.c}</span>
+                     <span className="p-1 bg-slate-50 text-slate-900 rounded text-xs  border border-slate-200">{s.c}</span>
                   </button>
                 ))}
              </div>
@@ -605,48 +623,48 @@ const ProjectAnalysis = () => {
                   <div key={idx} className="bg-white rounded border border-slate-100 p-4 shadow-sm hover:border-indigo-200 transition-all">
                     <div className="flex justify-between items-start mb-4">
                         <div>
-                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest leading-none mb-1">Node {idx + 1}</p>
-                          <h4 className="text-xs text-slate-900 font-black tracking-tight uppercase">{stage.item_name}</h4>
+                          <p className="text-xs text-slate-400    leading-none mb-1">Node {idx + 1}</p>
+                          <h4 className="text-xs text-slate-900   ">{stage.item_name}</h4>
                           <div className="flex items-center gap-1.5 mt-1">
                               <Calendar className="w-3 h-3 text-slate-300" />
-                              <span className="text-[9px] text-slate-400 font-bold tracking-tight">Target: {formatDate(stage.target_date)}</span>
+                              <span className="text-[9px] text-slate-400  ">Target: {formatDate(stage.target_date)}</span>
                           </div>
                         </div>
-                        <span className={`text-[10px] font-black uppercase ${stage.produced_qty / stage.planned_qty > 0.9 ? 'text-emerald-500' : 'text-amber-500'}`}>
+                        <span className={`text-xs   ${stage.produced_qty / stage.planned_qty > 0.9 ? 'text-emerald-500' : 'text-amber-500'}`}>
                           {stage.planned_qty > 0 ? Math.round((stage.produced_qty / stage.planned_qty) * 100) : 0}% Yield
                         </span>
                     </div>
                     <div className="space-y-4">
                         <div>
-                          <div className="flex justify-between items-center mb-1 text-[9px] font-black uppercase">
+                          <div className="flex justify-between items-center mb-1 text-[9px]  ">
                               <span className="text-slate-400">Execution Progress</span>
                               <span className="text-slate-900">{stage.produced_qty} / {stage.planned_qty}</span>
                           </div>
-                          <div className="h-1.5 w-full bg-slate-50 rounded-full border border-slate-100 overflow-hidden relative">
+                          <div className="h-1.5 w-full bg-slate-50 rounded border border-slate-100 overflow-hidden relative">
                               <div className="h-full bg-indigo-600 transition-all duration-1000" style={{width: `${stage.planned_qty > 0 ? (stage.produced_qty / stage.planned_qty) * 100 : 0}%`}} />
                           </div>
                         </div>
                         <div className="grid grid-cols-3 gap-2 py-2 border-y border-slate-50">
                            <div>
-                              <p className="text-[8px] text-slate-400 font-bold uppercase tracking-tighter">Net</p>
-                              <p className="text-[10px] text-slate-900 font-black">{Math.round(stage.accepted_qty)}</p>
+                              <p className="text-[8px] text-slate-400   ">Net</p>
+                              <p className="text-xs text-slate-900 ">{Math.round(stage.accepted_qty)}</p>
                            </div>
                            <div>
-                              <p className="text-[8px] text-slate-400 font-bold uppercase tracking-tighter">Gross</p>
-                              <p className="text-[10px] text-slate-900 font-black">{Math.round(stage.produced_qty)}</p>
+                              <p className="text-[8px] text-slate-400   ">Gross</p>
+                              <p className="text-xs text-slate-900 ">{Math.round(stage.produced_qty)}</p>
                            </div>
                            <div className="text-right">
-                              <p className="text-[8px] text-slate-400 font-bold uppercase tracking-tighter">Target</p>
-                              <p className="text-[10px] text-slate-900 font-black">{Math.round(stage.planned_qty)}</p>
+                              <p className="text-[8px] text-slate-400   ">Target</p>
+                              <p className="text-xs text-slate-900 ">{Math.round(stage.planned_qty)}</p>
                            </div>
                         </div>
-                        <div className="flex items-center justify-between text-[9px] font-black uppercase border-b border-slate-50 pb-2">
-                          <span className="text-slate-400 tracking-tighter">Status: <span className="text-slate-900">{stage.status}</span></span>
-                          <span className="text-slate-400 tracking-tighter">Jobs: <span className="text-slate-900">{stage.completed_job_cards} / {stage.total_job_cards}</span></span>
+                        <div className="flex items-center justify-between text-[9px]   border-b border-slate-50 pb-2">
+                          <span className="text-slate-400 ">Status: <span className="text-slate-900">{stage.status}</span></span>
+                          <span className="text-slate-400 ">Jobs: <span className="text-slate-900">{stage.completed_job_cards} / {stage.total_job_cards}</span></span>
                         </div>
                         {stage.rejected_qty > 0 && (
-                           <div className="flex items-center gap-1.5 text-rose-500 font-black text-[9px] uppercase">
-                              <AlertCircle className="w-3 h-3" />
+                           <div className="flex items-center gap-1.5 text-rose-500  text-[9px] ">
+                              <AlertCircle size={15}/>
                               {Math.round(stage.rejected_qty)} Loss Detected
                            </div>
                         )}
@@ -661,7 +679,7 @@ const ProjectAnalysis = () => {
           <div className="space-y-2">
              <div className="bg-white rounded border border-slate-100 p-5 shadow-sm relative overflow-hidden group">
                 {/* Decorative Background Elements */}
-                <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50/50 rounded-full -mr-32 -mt-32 transition-transform group-hover:scale-110" />
+                <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50/50 rounded -mr-32 -mt-32 transition-transform group-hover:scale-110" />
                 <div className="absolute bottom-0 left-0 w-1/2 h-1 bg-gradient-to-r from-transparent via-indigo-500/20 to-transparent" />
                 
                 <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -670,27 +688,27 @@ const ProjectAnalysis = () => {
                          <Layers className="w-6 h-6 text-white" />
                       </div>
                       <div>
-                         <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] mb-1">Production Planning & Control</p>
-                         <h3 className="text-xl font-black tracking-tight text-slate-900 uppercase">{projectInfo.project_name}</h3>
+                         <p className="text-xs text-slate-400   tracking-[0.2em] mb-1">Production Planning & Control</p>
+                         <h3 className="text-xl   text-slate-900 ">{projectInfo.project_name}</h3>
                          <div className="flex items-center gap-3 mt-3">
-                            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 text-slate-600 rounded border border-slate-100 text-[10px] font-black uppercase tracking-tighter">
+                            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 text-slate-600 rounded border border-slate-100 text-xs   ">
                                <Calendar className="w-3 h-3 text-indigo-500" />
                                {formatDate(projectInfo.created_at)}
                             </div>
-                            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 text-indigo-600 rounded border border-indigo-100 text-[10px] font-black uppercase tracking-tighter">
-                               <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+                            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 text-indigo-600 rounded border border-indigo-100 text-xs   ">
+                               <div className="w-1.5 h-1.5 rounded bg-indigo-500 animate-pulse" />
                                Status: {projectInfo.status}
                             </div>
                          </div>
                       </div>
                    </div>
                    
-                   <div className="flex items-center gap-8 pr-4 border-l border-slate-100 pl-8">
+                   <div className="flex items-center gap-2 pr-4 border-l border-slate-100 pl-8">
                       <div className="text-right">
-                         <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">Total Operations</p>
+                         <p className="text-xs text-slate-400    mb-1">Total Operations</p>
                          <div className="flex items-baseline gap-1 justify-end">
-                            <span className="text-4xl font-black tracking-tighter text-slate-900">{woDetails.length}</span>
-                            <span className="text-[10px] text-indigo-500 font-black uppercase">Nodes</span>
+                            <span className="text-4xl   text-slate-900">{woDetails.length}</span>
+                            <span className="text-xs text-indigo-500  ">Nodes</span>
                          </div>
                       </div>
                    </div>
@@ -700,15 +718,15 @@ const ProjectAnalysis = () => {
              <div className="bg-white rounded border border-slate-100 shadow-sm overflow-hidden">
                 <div className="p-4 border-b border-slate-50 flex items-center justify-between">
                    <div>
-                      <h4 className="text-sm text-slate-900 font-black tracking-tight">Manufacturing Work Orders</h4>
-                      <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">Detailed tracking of item production status</p>
+                      <h4 className="text-sm text-slate-900  ">Manufacturing Work Orders</h4>
+                      <p className="text-xs text-slate-400   mt-0.5">Detailed tracking of item production status</p>
                    </div>
-                   <span className="px-2 py-0.5 bg-slate-50 text-slate-900 rounded text-[10px] font-black border border-slate-200">{woDetails.length} Orders</span>
+                   <span className="p-1 bg-slate-50 text-slate-900 rounded text-xs  border border-slate-200">{woDetails.length} Orders</span>
                 </div>
                 <div className="overflow-x-auto">
                    <table className="w-full text-left">
                       <thead className="bg-slate-50/50 border-b border-slate-50">
-                         <tr className="text-[9px] text-slate-400 font-black uppercase tracking-widest">
+                         <tr className="text-[9px] text-slate-400   ">
                             <th className="px-4 py-3">Work Order</th>
                             <th className="px-4 py-3">Item</th>
                             <th className="px-4 py-3">Qty</th>
@@ -721,26 +739,26 @@ const ProjectAnalysis = () => {
                          {woDetails.map((wo, i) => (
                            <tr key={i} className="hover:bg-slate-50/30 transition-colors">
                               <td className="px-4 py-4">
-                                 <p className="text-[10px] text-slate-900 font-black leading-none">{wo.work_order_no}</p>
-                                 <p className="text-[8px] text-slate-400 font-bold uppercase mt-1">SO: SO-{wo.sales_order_id}</p>
+                                 <p className="text-xs text-slate-900  leading-none">{wo.work_order_no}</p>
+                                 <p className="text-[8px] text-slate-400   mt-1">SO: SO-{wo.sales_order_id}</p>
                               </td>
                               <td className="px-4 py-4">
-                                 <p className="text-[10px] text-slate-900 font-bold leading-none">{wo.item_name}</p>
+                                 <p className="text-xs text-slate-900  leading-none">{wo.item_name}</p>
                               </td>
-                              <td className="px-4 py-4 text-[10px] text-slate-900 font-black">{wo.planned_qty}</td>
+                              <td className="px-4 py-4 text-xs text-slate-900 ">{wo.planned_qty}</td>
                               <td className="px-4 py-4">
                                  <div className="flex items-center gap-3">
-                                    <div className="flex-1 h-1 bg-slate-50 rounded-full border border-slate-100 overflow-hidden min-w-[60px]">
+                                    <div className="flex-1 h-1 bg-slate-50 rounded border border-slate-100 overflow-hidden min-w-[60px]">
                                        <div className="h-full bg-indigo-600" style={{width: `${wo.planned_qty > 0 ? (wo.produced_qty / wo.planned_qty) * 100 : 0}%`}} />
                                     </div>
-                                    <span className="text-[10px] text-slate-900 font-black">{wo.produced_qty}</span>
+                                    <span className="text-xs text-slate-900 ">{wo.produced_qty}</span>
                                  </div>
                               </td>
                               <td className="px-4 py-4">
                                  <StatusBadge status={wo.status} />
                               </td>
                               <td className="px-4 py-4">
-                                 <div className="flex items-center gap-1.5 text-[10px] text-slate-500 font-bold">
+                                 <div className="flex items-center gap-1.5 text-xs text-slate-500 ">
                                     <Calendar className="w-3 h-3 text-slate-300" />
                                     {formatDate(wo.target_date)}
                                  </div>
@@ -758,7 +776,7 @@ const ProjectAnalysis = () => {
            <div className="space-y-2">
               <div className="bg-white rounded border border-slate-100 p-5 shadow-sm relative overflow-hidden group">
                  {/* Decorative Background Elements */}
-                 <div className="absolute top-0 right-0 w-64 h-64 bg-blue-50/50 rounded-full -mr-32 -mt-32 transition-transform group-hover:scale-110" />
+                 <div className="absolute top-0 right-0 w-64 h-64 bg-blue-50/50 rounded -mr-32 -mt-32 transition-transform group-hover:scale-110" />
                  <div className="absolute bottom-0 left-0 w-1/3 h-1 bg-gradient-to-r from-transparent via-blue-500/20 to-transparent" />
 
                  <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -767,27 +785,27 @@ const ProjectAnalysis = () => {
                           <Truck className="w-6 h-6 text-white" />
                        </div>
                        <div>
-                          <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] mb-1">Logistics & Final Delivery</p>
-                          <h3 className="text-xl font-black tracking-tight text-slate-900 uppercase">Shipment Status for SO-{projectInfo.id.toString().padStart(6, '0')}</h3>
+                          <p className="text-xs text-slate-400   tracking-[0.2em] mb-1">Logistics & Final Delivery</p>
+                          <h3 className="text-xl   text-slate-900 ">Shipment Status for SO-{projectInfo.id.toString().padStart(6, '0')}</h3>
                           <div className="flex items-center gap-3 mt-3">
-                             <div className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 text-slate-600 rounded border border-slate-100 text-[10px] font-black uppercase tracking-tighter">
+                             <div className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 text-slate-600 rounded border border-slate-100 text-xs   ">
                                 <MapPin className="w-3 h-3 text-blue-500" />
                                 {projectInfo.company_name}
                              </div>
-                             <div className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 text-blue-600 rounded border border-blue-100 text-[10px] font-black uppercase tracking-tighter">
-                                <Box className="w-3 h-3" />
+                             <div className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 text-blue-600 rounded border border-blue-100 text-xs   ">
+                                <Box size={15}/>
                                 {logData.length} Shipments Found
                              </div>
                           </div>
                        </div>
                     </div>
 
-                    <div className="flex items-center gap-8 pr-4 border-l border-slate-100 pl-8">
+                    <div className="flex items-center gap-2 pr-4 border-l border-slate-100 pl-8">
                        <div className="text-right">
-                          <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">Total Dispatched</p>
+                          <p className="text-xs text-slate-400    mb-1">Total Dispatched</p>
                           <div className="flex items-baseline gap-1 justify-end">
-                             <span className="text-4xl font-black tracking-tighter text-slate-900">{logData.reduce((acc, curr) => acc + parseFloat(curr.shipped_qty || 0), 0)}</span>
-                             <span className="text-[10px] text-blue-500 font-black uppercase">Units</span>
+                             <span className="text-4xl   text-slate-900">{logData.reduce((acc, curr) => acc + parseFloat(curr.shipped_qty || 0), 0)}</span>
+                             <span className="text-xs text-blue-500  ">Units</span>
                           </div>
                        </div>
                     </div>
@@ -796,13 +814,13 @@ const ProjectAnalysis = () => {
 
               <div className="grid grid-cols-1 gap-2">
                  <div className="bg-white rounded border border-slate-100 shadow-sm p-4 min-h-[400px] flex flex-col overflow-hidden">
-                    <h4 className="text-[10px] text-slate-900 font-black uppercase tracking-widest mb-6 flex items-center gap-2">
+                    <h4 className="text-xs text-slate-900    mb-6 flex items-center gap-2">
                        <Box className="w-3.5 h-3.5 text-indigo-600" />
                        Delivery Challans / Official Orders
                     </h4>
                     <div className="overflow-x-auto">
-                       <table className="w-full text-left text-[10px]">
-                          <thead className="bg-slate-50/50 border-b border-slate-50 font-black uppercase tracking-tighter text-slate-400">
+                       <table className="w-full text-left text-xs">
+                          <thead className="bg-slate-50/50 border-b border-slate-50    text-slate-400">
                              <tr>
                                 <th className="px-4 py-3">Shipment ID</th>
                                 <th className="px-4 py-3">Challan</th>
@@ -813,18 +831,18 @@ const ProjectAnalysis = () => {
                           </thead>
                           <tbody>
                              {logData.length > 0 ? logData.map((log, i) => (
-                               <tr key={i} className="border-b border-slate-50 font-bold text-slate-900">
+                               <tr key={i} className="border-b border-slate-50  text-slate-900">
                                   <td className="px-4 py-4 text-indigo-600">SHIP-{log.id.toString().padStart(6, '0')}</td>
-                                  <td className="px-4 py-4 uppercase">{log.challan_no || 'N/A'}</td>
+                                  <td className="px-4 py-4 ">{log.challan_no || 'N/A'}</td>
                                   <td className="px-4 py-4 text-slate-400 italic">{log.courier_name || '--'}</td>
                                   <td className="px-4 py-4">{log.shipped_qty}</td>
                                   <td className="px-4 py-4">
-                                     <span className="text-emerald-500 font-black uppercase tracking-tighter">{log.status}</span>
+                                     <span className="text-emerald-500   ">{log.status}</span>
                                   </td>
                                </tr>
                              )) : (
                                <tr>
-                                  <td colSpan="5" className="px-4 py-20 text-center text-slate-400 italic font-black uppercase">No shipment records found</td>
+                                  <td colSpan="5" className="p-20 text-center text-slate-400 italic  ">No shipment records found</td>
                                </tr>
                              )}
                           </tbody>
@@ -839,12 +857,12 @@ const ProjectAnalysis = () => {
            <div className="space-y-2">
               <div className="bg-white rounded border border-slate-100 p-4 shadow-sm relative overflow-hidden">
                  <div className="flex items-center justify-between mb-8 relative z-10">
-                    <h3 className="text-[11px] text-slate-900 font-black uppercase tracking-widest">Supply Chain Activity</h3>
-                    <span className="px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded text-[9px] font-black border border-indigo-100">{scData.length} Requests</span>
+                    <h3 className="text-[11px] text-slate-900   ">Supply Chain Activity</h3>
+                    <span className="p-1 bg-indigo-50 text-indigo-600 rounded text-[9px]  border border-indigo-100">{scData.length} Requests</span>
                  </div>
                  <div className="overflow-x-auto">
-                    <table className="w-full text-[10px] text-left">
-                       <thead className="text-slate-400 font-black uppercase tracking-tighter border-b border-slate-50">
+                    <table className="w-full text-xs text-left">
+                       <thead className="text-slate-400    border-b border-slate-50">
                           <tr>
                              <th className="px-2 py-3">MR ID</th>
                              <th className="px-2 py-3">Dept</th>
@@ -855,12 +873,12 @@ const ProjectAnalysis = () => {
                        </thead>
                        <tbody>
                           {scData.map((sc, i) => (
-                            <tr key={i} className="font-bold text-slate-900">
+                            <tr key={i} className=" text-slate-900">
                                <td className="px-2 py-4">{sc.mr_no}</td>
                                <td className="px-2 py-4">{sc.department_name}</td>
                                <td className="px-2 py-4">{sc.purpose}</td>
                                <td className="px-2 py-4">
-                                  <span className="px-3 py-1 bg-indigo-50 text-indigo-600 rounded border border-indigo-100 uppercase text-[8px] font-black">{sc.status}</span>
+                                  <span className="px-3 py-1 bg-indigo-50 text-indigo-600 rounded border border-indigo-100  text-[8px] ">{sc.status}</span>
                                </td>
                                <td className="px-2 py-4 text-slate-400">{formatDate(sc.created_at)}</td>
                             </tr>
@@ -872,12 +890,12 @@ const ProjectAnalysis = () => {
 
               <div className="bg-white rounded border border-slate-100 p-4 shadow-sm relative overflow-hidden">
                  <div className="flex items-center justify-between mb-8 relative z-10">
-                    <h3 className="text-[11px] text-slate-900 font-black uppercase tracking-widest">Stock Logistics</h3>
-                    <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded text-[9px] font-black border border-emerald-100 uppercase">{stockMovements.length} Movements</span>
+                    <h3 className="text-[11px] text-slate-900   ">Stock Logistics</h3>
+                    <span className="p-1 bg-emerald-50 text-emerald-600 rounded text-[9px]  border border-emerald-100 ">{stockMovements.length} Movements</span>
                  </div>
                  <div className="overflow-x-auto">
-                    <table className="w-full text-[10px] text-left">
-                       <thead className="text-slate-400 font-black uppercase tracking-tighter border-b border-slate-50">
+                    <table className="w-full text-xs text-left">
+                       <thead className="text-slate-400    border-b border-slate-50">
                           <tr>
                              <th className="px-2 py-3">Transaction</th>
                              <th className="px-2 py-3">Item Details</th>
@@ -888,21 +906,21 @@ const ProjectAnalysis = () => {
                        </thead>
                        <tbody className="divide-y divide-slate-50">
                           {stockMovements.map((stk, i) => (
-                            <tr key={i} className="font-bold text-slate-900">
+                            <tr key={i} className=" text-slate-900">
                                <td className="px-2 py-4">
                                   <p>STK-{stk.id.toString().padStart(6, '0')}</p>
                                </td>
                                <td className="px-2 py-4">
                                   <p>{stk.item_name}</p>
                                </td>
-                               <td className="px-2 py-4 font-black">
-                                  <span className={`px-2 py-0.5 rounded border text-[8px] uppercase ${stk.transaction_type === 'IN' ? 'bg-emerald-50 text-emerald-500 border-emerald-100' : 'bg-rose-50 text-rose-500 border-rose-100'}`}>
+                               <td className="px-2 py-4 ">
+                                  <span className={`p-1 rounded border text-[8px]  ${stk.transaction_type === 'IN' ? 'bg-emerald-50 text-emerald-500 border-emerald-100' : 'bg-rose-50 text-rose-500 border-rose-100'}`}>
                                     {stk.transaction_type}
                                   </span>
                                </td>
-                               <td className="px-2 py-4 text-right font-black">{stk.quantity}</td>
+                               <td className="px-2 py-4 text-right ">{stk.quantity}</td>
                                <td className="px-2 py-4 text-right">
-                                  <span className="px-2 py-1 bg-emerald-50 text-emerald-600 rounded border border-emerald-100 text-[8px] uppercase font-black tracking-widest">Approved</span>
+                                  <span className="px-2 py-1 bg-emerald-50 text-emerald-600 rounded border border-emerald-100 text-[8px]   ">Approved</span>
                                </td>
                             </tr>
                           ))}
@@ -935,15 +953,15 @@ const ProjectAnalysis = () => {
 
               <div className="bg-white rounded border border-slate-100 p-6 shadow-sm">
                  <div className="flex items-center justify-between mb-12">
-                    <h3 className="text-[11px] text-slate-900 font-black uppercase tracking-widest">Global Production Tracking</h3>
+                    <h3 className="text-[11px] text-slate-900   ">Global Production Tracking</h3>
                     <div className="flex items-center gap-6">
                        <div className="flex items-center gap-2">
                           <div className="w-2.5 h-2.5 rounded bg-emerald-500" />
-                          <span className="text-[9px] text-slate-400 font-black uppercase">Plan</span>
+                          <span className="text-[9px] text-slate-400  ">Plan</span>
                        </div>
                        <div className="flex items-center gap-2">
                           <div className="w-2.5 h-2.5 rounded bg-rose-500" />
-                          <span className="text-[9px] text-slate-400 font-black uppercase">Actual</span>
+                          <span className="text-[9px] text-slate-400  ">Actual</span>
                        </div>
                     </div>
                  </div>
@@ -968,15 +986,15 @@ const ProjectAnalysis = () => {
                          <History className="w-4 h-4" />
                       </div>
                       <div>
-                         <h4 className="text-[11px] text-slate-900 font-black uppercase tracking-widest leading-none">Recent Production Logs</h4>
-                         <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter mt-1 italic">Audit log of all production transactions</p>
+                         <h4 className="text-[11px] text-slate-900    leading-none">Recent Production Logs</h4>
+                         <p className="text-xs text-slate-400    mt-1 italic">Audit log of all production transactions</p>
                       </div>
                    </div>
-                   <span className="px-2 py-0.5 bg-slate-50 text-slate-900 rounded text-[9px] font-black border border-slate-200 uppercase tracking-tighter">{productionLogs?.length || 0} Records</span>
+                   <span className="p-1 bg-slate-50 text-slate-900 rounded text-[9px]  border border-slate-200  ">{productionLogs?.length || 0} Records</span>
                 </div>
                 <div className="overflow-x-auto">
-                   <table className="w-full text-[10px] text-left">
-                      <thead className="bg-slate-50/50 border-b border-slate-50 text-slate-400 uppercase tracking-widest font-black">
+                   <table className="w-full text-xs text-left">
+                      <thead className="bg-slate-50/50 border-b border-slate-50 text-slate-400   ">
                          <tr>
                             <th className="px-4 py-3">ID</th>
                             <th className="px-4 py-3">Date</th>
@@ -987,18 +1005,18 @@ const ProjectAnalysis = () => {
                       </thead>
                       <tbody className="divide-y divide-slate-50">
                          {(productionLogs || []).length > 0 ? productionLogs.map((log, i) => (
-                           <tr key={i} className="hover:bg-slate-50/30 transition-colors text-slate-900 font-bold">
-                              <td className="px-4 py-4 text-slate-400 font-black tracking-tighter uppercase">ENTRY-{log.id.toString().padStart(6, '0')}</td>
+                           <tr key={i} className="hover:bg-slate-50/30 transition-colors text-slate-900 ">
+                              <td className="px-4 py-4 text-slate-400   ">ENTRY-{log.id.toString().padStart(6, '0')}</td>
                               <td className="px-4 py-4">{formatDate(log.date)}</td>
-                              <td className="px-4 py-4 uppercase tracking-tighter">{log.work_order}</td>
+                              <td className="px-4 py-4  ">{log.work_order}</td>
                               <td className="px-4 py-4">
-                                 <span className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded text-[8px] font-black uppercase border border-blue-100 tracking-tighter">{log.operation}</span>
+                                 <span className="p-1 bg-blue-50 text-blue-600 rounded text-[8px]   border border-blue-100 ">{log.operation}</span>
                               </td>
-                              <td className="px-4 py-4 text-right font-black tracking-widest">{log.quantity}</td>
+                              <td className="px-4 py-4 text-right  ">{log.quantity}</td>
                            </tr>
                          )) : (
                            <tr>
-                              <td colSpan="5" className="px-4 py-20 text-center text-slate-400 font-black uppercase tracking-widest italic">No production logs found for this project</td>
+                              <td colSpan="5" className="p-20 text-center text-slate-400    italic">No production logs found for this project</td>
                            </tr>
                          )}
                       </tbody>
@@ -1016,13 +1034,13 @@ const ProjectAnalysis = () => {
                        <Layers className="w-4 h-4" />
                     </div>
                     <div>
-                       <h4 className="text-[11px] text-slate-900 font-black uppercase tracking-widest leading-none">Resource & Component Readiness</h4>
-                       <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter mt-1 italic">Tracking inventory requirements across all production stages</p>
+                       <h4 className="text-[11px] text-slate-900    leading-none">Resource & Component Readiness</h4>
+                       <p className="text-xs text-slate-400    mt-1 italic">Tracking inventory requirements across all production stages</p>
                     </div>
                  </div>
                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-[10px] font-bold">
-                       <thead className="bg-slate-50/50 border-b border-slate-50 text-slate-400 uppercase tracking-tighter">
+                    <table className="w-full text-left text-xs ">
+                       <thead className="bg-slate-50/50 border-b border-slate-50 text-slate-400  ">
                           <tr>
                              <th className="px-4 py-3">Item Details</th>
                              <th className="px-4 py-3 text-right">Required</th>
@@ -1033,14 +1051,14 @@ const ProjectAnalysis = () => {
                        <tbody className="divide-y divide-slate-50">
                           {inventoryMatrix.map((item, i) => (
                              <tr key={i} className="hover:bg-slate-50/30 transition-colors">
-                                <td className="px-4 py-4 uppercase tracking-tighter">
+                                <td className="px-4 py-4  ">
                                    <p className="text-slate-900">{item.item_name}</p>
-                                   <p className="text-slate-400 font-black text-[8px]">{item.item_code}</p>
+                                   <p className="text-slate-400  text-[8px]">{item.item_code}</p>
                                 </td>
                                 <td className="px-4 py-4 text-right text-slate-900">{item.required_qty} {item.unit}</td>
-                                <td className="px-4 py-4 text-right text-emerald-600 font-black tracking-widest">{item.available_qty || 0} {item.unit}</td>
-                                <td className="px-4 py-4 text-right font-black uppercase">
-                                   <span className={`px-2 py-0.5 rounded border text-[8px] tracking-widest ${item.available_qty >= item.required_qty ? 'text-emerald-500 bg-emerald-50 border-emerald-100' : 'text-rose-500 bg-rose-50 border-rose-100'}`}>
+                                <td className="px-4 py-4 text-right text-emerald-600  ">{item.available_qty || 0} {item.unit}</td>
+                                <td className="px-4 py-4 text-right  ">
+                                   <span className={`p-1 rounded border text-[8px]  ${item.available_qty >= item.required_qty ? 'text-emerald-500 bg-emerald-50 border-emerald-100' : 'text-rose-500 bg-rose-50 border-rose-100'}`}>
                                      {item.available_qty >= item.required_qty ? 'Ready' : 'Shortage'}
                                    </span>
                                 </td>
@@ -1057,13 +1075,13 @@ const ProjectAnalysis = () => {
                        <Cpu className="w-4 h-4" />
                     </div>
                     <div>
-                       <h4 className="text-[11px] text-slate-900 font-black uppercase tracking-widest leading-none">Machine Efficiency</h4>
-                       <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter mt-1 italic">Real-time utilization and downtime analysis</p>
+                       <h4 className="text-[11px] text-slate-900    leading-none">Machine Efficiency</h4>
+                       <p className="text-xs text-slate-400    mt-1 italic">Real-time utilization and downtime analysis</p>
                     </div>
                  </div>
                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-[10px] font-bold">
-                       <thead className="bg-slate-50/50 border-b border-slate-50 text-slate-400 uppercase tracking-tighter">
+                    <table className="w-full text-left text-xs ">
+                       <thead className="bg-slate-50/50 border-b border-slate-50 text-slate-400  ">
                           <tr>
                              <th className="px-4 py-3">Machine</th>
                              <th className="px-4 py-3 text-right">Working</th>
@@ -1075,22 +1093,22 @@ const ProjectAnalysis = () => {
                        <tbody className="divide-y divide-slate-50">
                           {(machineEfficiency || []).map((m, i) => (
                              <tr key={i} className="hover:bg-slate-50/30 transition-colors">
-                                <td className="px-4 py-4 uppercase tracking-tighter">
+                                <td className="px-4 py-4  ">
                                    <p className="text-slate-900">{m.name}</p>
-                                   <p className="text-slate-400 font-black text-[8px]">{m.workstation_code}</p>
+                                   <p className="text-slate-400  text-[8px]">{m.workstation_code}</p>
                                 </td>
                                 <td className="px-4 py-4 text-right text-slate-900">{Number(m.working_hrs).toFixed(1)} hrs</td>
-                                <td className="px-4 py-4 text-right text-slate-400 font-black tracking-widest">{Number(m.downtime_hrs).toFixed(1)} hrs</td>
+                                <td className="px-4 py-4 text-right text-slate-400  ">{Number(m.downtime_hrs).toFixed(1)} hrs</td>
                                 <td className="px-4 py-4 text-right">
                                    <div className="flex flex-col items-end gap-1">
-                                      <span className="text-slate-900 font-black">{Math.round(m.efficiency)}%</span>
-                                      <div className="w-24 h-1 bg-slate-50 rounded-full overflow-hidden border border-slate-100">
+                                      <span className="text-slate-900 ">{Math.round(m.efficiency)}%</span>
+                                      <div className="w-24 h-1 bg-slate-50 rounded overflow-hidden border border-slate-100">
                                          <div className={`h-full ${m.efficiency > 90 ? 'bg-emerald-500' : m.efficiency > 70 ? 'bg-amber-500' : 'bg-rose-500'}`} style={{width: `${m.efficiency}%`}} />
                                       </div>
                                    </div>
                                 </td>
-                                <td className="px-4 py-4 text-right font-black uppercase">
-                                   <span className={`px-2 py-0.5 rounded border text-[8px] tracking-widest ${m.efficiency > 90 ? 'text-emerald-500 bg-emerald-50 border-emerald-100' : m.efficiency > 70 ? 'text-amber-500 bg-amber-50 border-amber-100' : 'text-rose-500 bg-rose-50 border-rose-100'}`}>
+                                <td className="px-4 py-4 text-right  ">
+                                   <span className={`p-1 rounded border text-[8px]  ${m.efficiency > 90 ? 'text-emerald-500 bg-emerald-50 border-emerald-100' : m.efficiency > 70 ? 'text-amber-500 bg-amber-50 border-amber-100' : 'text-rose-500 bg-rose-50 border-rose-100'}`}>
                                      {m.efficiency > 90 ? 'Optimal' : m.efficiency > 70 ? 'Warning' : 'Critical'}
                                    </span>
                                 </td>
@@ -1117,15 +1135,15 @@ const ProjectAnalysis = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 bg-white p-2 rounded border border-slate-100 shadow-sm">
         <div className="flex items-center gap-2">
           <div className="p-2 bg-rose-500 rounded shadow-lg shadow-rose-200">
-            <BarChart3 className="w-8 h-8 text-white" />
+            <BarChart3 size={15} className=" text-white" />
           </div>
           <div>
-            <h1 className="text-xl text-slate-900 font-bold">Project Matrix Analytics</h1>
+            <h1 className="text-xl text-slate-900 ">Project Matrix Analytics</h1>
             <div className="flex items-center gap-2 mt-1">
-               <span className="px-1.5 py-0.5 bg-rose-50 text-rose-600 rounded text-[10px] border border-rose-100 uppercase tracking-tighter font-bold">
+               <span className="px-1.5 py-0.5 bg-rose-50 text-rose-600 rounded text-xs border border-rose-100   ">
                   Intelligence Matrix
                </span>
-               <div className="flex items-center gap-1.5 text-xs text-slate-400 font-medium">
+               <div className="flex items-center gap-1.5 text-xs text-slate-400 ">
                  <Clock className="w-3.5 h-3.5" />
                  Matrix Sync: {lastUpdated.toLocaleTimeString()}
                </div>
@@ -1138,7 +1156,7 @@ const ProjectAnalysis = () => {
           </button>
           <button 
             onClick={handleGenerateGlobalLedger}
-            className="flex items-center gap-2 px-4 py-2 bg-rose-500 text-white rounded text-xs hover:bg-rose-600 transition-all shadow-lg shadow-rose-100 font-black uppercase cursor-pointer pointer-events-auto relative z-10"
+            className="flex items-center gap-2 p-2 bg-rose-500 text-white rounded text-xs hover:bg-rose-600 transition-all shadow-lg shadow-rose-100   cursor-pointer pointer-events-auto relative z-10"
           >
             <Download className="w-4 h-4" />
             Generate Ledger
@@ -1156,8 +1174,8 @@ const ProjectAnalysis = () => {
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-2">
-        <div className="xl:col-span-2 bg-white rounded p-8 border border-slate-100 shadow-sm flex flex-col">
-          <h3 className="text-xs text-slate-400 uppercase tracking-widest font-black flex items-center gap-2 mb-8">
+        <div className="xl:col-span-2 bg-white rounded p-2 border border-slate-100 shadow-sm flex flex-col">
+          <h3 className="text-xs text-slate-400    flex items-center gap-2 mb-8">
             <TrendingUp className="w-4 h-4 text-indigo-600" />
             Timeline Analytics
           </h3>
@@ -1181,8 +1199,8 @@ const ProjectAnalysis = () => {
           </div>
         </div>
 
-        <div className="bg-white rounded p-8 border border-slate-100 shadow-sm flex flex-col">
-          <h3 className="text-xs text-slate-400 uppercase tracking-widest mb-8 font-black">Status Distribution</h3>
+        <div className="bg-white rounded p-2 border border-slate-100 shadow-sm flex flex-col">
+          <h3 className="text-xs text-slate-400   mb-8 ">Status Distribution</h3>
           <div className="flex-1 flex flex-col items-center">
             <div className="h-64 w-full relative">
               <ResponsiveContainer width="100%" height="100%">
@@ -1200,16 +1218,16 @@ const ProjectAnalysis = () => {
                 </PieChart>
               </ResponsiveContainer>
               <div className="absolute inset-0 flex flex-col items-center justify-center pt-4">
-                 <span className="text-3xl font-black text-slate-900">{data?.kpis?.completionRate}%</span>
-                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">Throughput</span>
+                 <span className="text-3xl  text-slate-900">{data?.kpis?.completionRate}%</span>
+                 <span className="text-xs  text-slate-400  ">Throughput</span>
               </div>
             </div>
             <div className="mt-8 space-y-1 w-full">
               {(data?.statusBreakdown || []).map((item, index) => (
-                <div key={index} className="flex items-center justify-between p-2 rounded bg-slate-50/50 border border-transparent hover:border-slate-100 transition-all font-black text-[10px] uppercase">
+                <div key={index} className="flex items-center justify-between p-2 rounded bg-slate-50/50 border border-transparent hover:border-slate-100 transition-all  text-xs ">
                   <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS.chart[index % COLORS.chart.length] }} />
-                    <span className="text-slate-600 tracking-tight">{item.name}</span>
+                    <div className="w-2 h-2 rounded" style={{ backgroundColor: COLORS.chart[index % COLORS.chart.length] }} />
+                    <span className="text-slate-600 ">{item.name}</span>
                   </div>
                   <span className="text-slate-900">{item.value}</span>
                 </div>
@@ -1219,8 +1237,8 @@ const ProjectAnalysis = () => {
         </div>
 
         <div className="xl:col-span-3 bg-white rounded border border-slate-100 shadow-sm overflow-hidden flex flex-col h-[500px]">
-          <div className="p-2 border-b border-slate-50 flex items-center justify-between bg-slate-50/30 font-black">
-            <h3 className="text-[10px] text-slate-900 tracking-widest flex items-center gap-2 uppercase">
+          <div className="p-2 border-b border-slate-50 flex items-center justify-between bg-slate-50/30 ">
+            <h3 className="text-xs text-slate-900  flex items-center gap-2 ">
               <BarChart3 className="w-4 h-4 text-indigo-600" />
               Live Project Operations
             </h3>

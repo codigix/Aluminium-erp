@@ -928,21 +928,21 @@ const PurchaseOrders = () => {
         return (
           <div className="flex flex-col py-1 min-w-[260px] max-w-[380px]">
             <div className="flex flex-col">
-              <span className="text-slate-900 font-bold text-[13px] leading-tight break-words">
+              <span className="text-slate-900  text-[13px] leading-tight break-words">
                 {parts[0]}
               </span>
               {parts.length > 1 && (
-                <span className="text-[11px] text-slate-600 font-medium leading-relaxed mt-0.5 break-words">
+                <span className="text-[11px] text-slate-600  leading-relaxed mt-0.5 break-words">
                   for {parts.slice(1).join(' for ')}
                 </span>
               )}
             </div>
             {row.company_name && (
               <div className="flex items-center gap-2 mt-2 pt-1.5 border-t border-slate-100/80">
-                <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-600 text-[9px] font-bold rounded border border-indigo-100 shrink-0 uppercase tracking-wider">
+                <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-600 text-[9px]  rounded border border-indigo-100 shrink-0 uppercase tracking-wider">
                   Client
                 </span>
-                <span className="text-[11px] text-slate-500 font-medium italic truncate" title={row.company_name}>
+                <span className="text-[11px] text-slate-500  italic truncate" title={row.company_name}>
                   {row.company_name}
                 </span>
               </div>
@@ -1131,7 +1131,7 @@ const PurchaseOrders = () => {
             <Package size={24} />
           </div>
           <div>
-            <h1 className="text-2xl  text-slate-900 tracking-tight">Purchase Orders</h1>
+            <h1 className="text-xl   text-slate-900 ">Purchase Orders</h1>
             <p className="text-sm text-slate-500 ">Manage procurement cycles and supplier orders</p>
           </div>
         </div>
@@ -1192,7 +1192,7 @@ const PurchaseOrders = () => {
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={stat.icon} /></svg>
                   </div>
                 </div>
-                <p className={`text-2xl  ${stat.text} `}>{stat.value || 0}</p>
+                <p className={`text-xl   ${stat.text} `}>{stat.value || 0}</p>
                 <p className={`text-xs ${stat.subText} mt-1 `}>{stat.sub}</p>
               </div>
             </div>
@@ -1356,7 +1356,7 @@ const PurchaseOrders = () => {
                             <select
                               value={item.item_code}
                               onChange={(e) => handleManualItemChange(idx, 'item_code', e.target.value)}
-                              className="w-full px-4 py-2 bg-white border border-slate-200 rounded text-xs text-slate-700 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all appearance-none cursor-pointer"
+                              className="w-full p-2 bg-white border border-slate-200 rounded text-xs text-slate-700 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all appearance-none cursor-pointer"
                             >
                               <option value="">Select Item</option>
                               {stockItems.map(si => (
@@ -1761,11 +1761,11 @@ const PurchaseOrders = () => {
                   <table className="w-full text-left border-collapse">
                     <thead className="bg-slate-50/50">
                       <tr>
-                        <th className="px-4 py-2 text-xs  text-slate-400  ">Item</th>
-                        <th className="px-4 py-2 text-xs  text-slate-400   text-center">Design Qty</th>
-                        <th className="px-4 py-2 text-xs  text-slate-400   text-center">Required Qty</th>
-                        <th className="px-4 py-2 text-xs  text-slate-400   text-center">Rate</th>
-                        <th className="px-4 py-2 text-xs  text-slate-400   text-right">Amount</th>
+                        <th className="p-2 text-xs  text-slate-400  ">Item</th>
+                        <th className="p-2 text-xs  text-slate-400   text-center">Design Qty</th>
+                        <th className="p-2 text-xs  text-slate-400   text-center">Required Qty</th>
+                        <th className="p-2 text-xs  text-slate-400   text-center">Rate</th>
+                        <th className="p-2 text-xs  text-slate-400   text-right">Amount</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">

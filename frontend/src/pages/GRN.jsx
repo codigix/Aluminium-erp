@@ -289,7 +289,7 @@ const GRN = () => {
       label: 'GRN #',
       sortable: true,
       render: (val) => (
-        <div className=" text-slate-900 tracking-tight">
+        <div className=" text-slate-900 ">
           GRN-{String(val).padStart(4, '0')}
         </div>
       )

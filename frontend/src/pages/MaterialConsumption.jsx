@@ -116,25 +116,25 @@ const MaterialConsumption = () => {
       key: 'projectName',
       render: (val, row) => (
         <div>
-          <div className="font-medium text-slate-900">{val}</div>
-          <div className="text-[10px] text-slate-400 mt-0.5 uppercase tracking-wider">SO: {row.soNumber}</div>
+          <div className=" text-slate-900">{val}</div>
+          <div className="text-xs text-slate-400 mt-0.5  ">SO: {row.soNumber}</div>
         </div>
       )
     },
     {
       label: 'CUSTOMER',
       key: 'customer',
-      render: (val) => <span className="text-slate-600 font-medium">{val}</span>
+      render: (val) => <span className="text-slate-600 ">{val}</span>
     },
     {
       label: 'DRAWING NO & DESCRIPTION',
       key: 'drawingNos',
       render: (val, row) => (
         <div className="max-w-xs">
-          <div className="text-slate-900 font-medium truncate" title={val || 'N/A'}>
+          <div className="text-slate-900  truncate" title={val || 'N/A'}>
             {val || 'N/A'}
           </div>
-          <div className="text-[10px] text-slate-500 truncate" title={row.itemDescriptions || 'No description'}>
+          <div className="text-xs text-slate-500 truncate" title={row.itemDescriptions || 'No description'}>
             {row.itemDescriptions || 'No description'}
           </div>
         </div>
@@ -144,7 +144,7 @@ const MaterialConsumption = () => {
       label: 'ALLOCATED',
       key: 'allocated',
       className: 'text-right',
-      render: (val) => <span className="text-slate-900 font-medium">{parseFloat(val || 0).toFixed(1)} units</span>
+      render: (val) => <span className="text-slate-900 ">{parseFloat(val || 0).toFixed(1)} units</span>
     },
     {
       label: 'CONSUMED',
@@ -153,12 +153,12 @@ const MaterialConsumption = () => {
       render: (val, row) => (
         <div className="flex flex-col items-end min-w-[140px]">
           <div className="flex items-center gap-2">
-            <div className="text-rose-600 font-bold">{parseFloat(val || 0).toLocaleString()} units</div>
-            <div className="text-[10px] text-slate-400 font-bold">
+            <div className="text-rose-600 ">{parseFloat(val || 0).toLocaleString()} units</div>
+            <div className="text-xs text-slate-400 ">
               {row.allocated > 0 ? Math.round((val / row.allocated) * 100) : 0}%
             </div>
           </div>
-          <div className="w-full h-1 bg-slate-100 rounded-full mt-1 overflow-hidden">
+          <div className="w-full h-1 bg-slate-100 rounded mt-1 overflow-hidden">
             <div 
               className="h-full bg-rose-500 transition-all duration-500" 
               style={{ width: `${Math.min(100, (val / (row.allocated || 1)) * 100)}%` }}
@@ -182,21 +182,21 @@ const MaterialConsumption = () => {
 
   const StatCard = ({ title, amount, subtitle, icon: Icon, color, trend, trendValue }) => (
     <div className="bg-white rounded p-2 border border-slate-100 shadow-sm hover: transition-all group relative overflow-hidden">
-      <div className={`absolute top-0 right-0 w-24 h-24 ${color} opacity-5 rounded -mr-8 -mt-8 transition-transform group-hover:scale-110`} />
+      <div className={`absolute top-0 right-0 w-24 h-24 ${color} opacity-5 rounded  transition-transform group-hover:scale-110`} />
       
       <div className="flex items-start justify-between relative z-10">
         <div>
-          <p className="text-xs text-slate-400 mb-1 font-bold uppercase tracking-wider">{title}</p>
+          <p className="text-xs text-slate-400 mb-1   ">{title}</p>
           <div className="flex items-baseline gap-2">
-            <h3 className="text-xl font-black text-slate-900 tracking-tight">{amount}</h3>
+            <h3 className="text-xl  text-slate-900 ">{amount}</h3>
             {trendValue && (
-              <span className="flex items-center text-[10px] font-bold text-emerald-500">
+              <span className="flex items-center text-xs  text-emerald-500">
                 <TrendingUp className="w-2.5 h-2.5 mr-0.5" />
                 {trendValue}
               </span>
             )}
           </div>
-          <p className="text-[10px] text-slate-500 mt-1 font-bold uppercase tracking-tighter">{subtitle}</p>
+          <p className="text-xs text-slate-500 mt-1   ">{subtitle}</p>
         </div>
         <div className={`p-2 rounded ${color.replace('bg-', 'bg-').replace('500', '100')} ${color.replace('bg-', 'text-').replace('500', '600')} transition-transform group-hover:rotate-12 shadow-sm`}>
           <Icon className="w-3.5 h-3.5" />
@@ -208,14 +208,14 @@ const MaterialConsumption = () => {
   return (
     <div className="space-y-2 pb-12">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 bg-white p-2 rounded border border-slate-100 shadow-sm">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 ">
         <div className="flex items-center gap-2">
           <div className="p-2 bg-rose-500 rounded shadow-lg shadow-rose-200">
-            <Layers className="w-8 h-8 text-white" />
+            <Layers size={15} className="text-white" />
           </div>
           <div>
-            <h1 className="text-xl font-black text-slate-900 tracking-tight uppercase">Material Consumption</h1>
-            <div className="flex items-center gap-2 mt-1 text-[10px] text-slate-400 font-black uppercase tracking-widest">
+            <h1 className="text-xl  text-slate-900  ">Material Consumption</h1>
+            <div className="flex items-center gap-2 mt-1 text-xs text-slate-400   ">
               <Clock className="w-3 h-3" />
               Last sync: {lastUpdated.toLocaleTimeString()}
             </div>
@@ -230,10 +230,10 @@ const MaterialConsumption = () => {
           </button>
           <button 
             onClick={handleGenerateCSV}
-            className="flex items-center gap-2 px-4 py-2 bg-rose-500 text-white rounded text-[10px] font-black hover:bg-rose-600 transition-all shadow-lg shadow-rose-100 active:scale-95 uppercase tracking-[0.1em]"
+            className="flex items-center gap-2 p-2 bg-rose-500 text-white rounded text-xs  hover:bg-rose-600 transition-all shadow-lg shadow-rose-100 active:scale-95  tracking-[0.1em]"
           >
             <Download className="w-4 h-4" />
-            GENERATE CSV
+            Generate CSV
           </button>
         </div>
       </div>
@@ -272,18 +272,18 @@ const MaterialConsumption = () => {
       </div>
 
       {/* Main Content Table */}
-      <div className="bg-white rounded border border-slate-100 shadow-sm overflow-hidden flex flex-col">
+      <div className="flex flex-col">
         <div className="p-2 border-b border-slate-50 flex items-center justify-between bg-slate-50/30">
           <div className="flex items-center gap-2">
             <div className="p-1.5 bg-slate-100 rounded text-slate-500">
               <LayoutGrid className="w-3.5 h-3.5" />
             </div>
             <div>
-              <h3 className="text-[10px] font-black text-slate-900 tracking-[0.15em] uppercase">Project Consumption Matrix</h3>
-              <p className="text-[8px] text-slate-400 font-bold tracking-tighter uppercase">Monitor allocation vs actual usage across all production lines</p>
+              <h3 className="text-xs  text-slate-900  ">Project Consumption Matrix</h3>
+              <p className="text-xs text-slate-400   ">Monitor allocation vs actual usage across all production lines</p>
             </div>
           </div>
-          <div className="flex items-center gap-2 text-[9px] text-slate-400 font-black uppercase tracking-tighter">
+          <div className="flex items-center gap-2 text-xs text-slate-400   ">
             <Info className="w-3.5 h-3.5 text-rose-500" />
             Sync with Material Requests
           </div>

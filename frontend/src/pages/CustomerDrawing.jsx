@@ -1650,7 +1650,7 @@ const CustomerDrawing = () => {
                   window.history.pushState({}, '', '/customer-drawing');
                 }
               }}
-              className="px-4 py-2 text-xs text-slate-600 hover:bg-slate-100 rounded transition-colors"
+              className="p-2 text-xs text-slate-600 hover:bg-slate-100 rounded transition-colors"
             >
               Close
             </button>
@@ -1681,7 +1681,7 @@ const CustomerDrawing = () => {
                   <h3 className="text-md text-slate-900">Revision History</h3>
                   <p className="text-slate-600 text-xs mt-0.5">Drawing: <span className=" text-indigo-600">{selectedDrawing?.drawing_no}</span></p>
                 </div>
-                <button onClick={() => setShowRevisions(false)} className="text-slate-400 hover:text-slate-600 text-2xl leading-none font-light">
+                <button onClick={() => setShowRevisions(false)} className="text-slate-400 hover:text-slate-600 text-xl  leading-none font-light">
                   ✕
                 </button>
               </div>
@@ -1720,7 +1720,7 @@ const CustomerDrawing = () => {
                   <h3 className="text-md text-slate-900">Approved Drawings</h3>
                   <p className="text-slate-600 text-xs mt-0.5">Design-approved drawings ready for quotation</p>
                 </div>
-                <button onClick={() => setShowApprovedDrawings(false)} className="text-slate-400 hover:text-slate-600 text-2xl leading-none font-light">
+                <button onClick={() => setShowApprovedDrawings(false)} className="text-slate-400 hover:text-slate-600 text-xl  leading-none font-light">
                   ✕
                 </button>
               </div>
@@ -2265,7 +2265,7 @@ const CustomerDrawing = () => {
                 setEditingRequirementId(null);
                 setEditingRequirementData(null);
               }}
-              className="px-4 py-2 text-xs text-slate-600 hover:bg-slate-100 rounded transition-colors"
+              className="p-2 text-xs text-slate-600 hover:bg-slate-100 rounded transition-colors"
             >
               {formMode === 'edit' ? 'Cancel' : 'Clear Form'}
             </button>

@@ -187,7 +187,7 @@ const QualityRejectionEntry = () => {
       <div className="bg-white rounded border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-3 py-2 border-b border-slate-100 bg-slate-50/30 flex items-center justify-between">
           <h3 className="font-semibold text-slate-900 flex items-center gap-2 text-xs">
-            <span className="bg-indigo-100 text-indigo-700 w-5 h-5 rounded-full flex items-center justify-center text-xs ">1</span>
+            <span className="bg-indigo-100 text-indigo-700 w-5 h-5 rounded flex items-center justify-center text-xs ">1</span>
             Pending Quality Inspection Records
           </h3>
           <button 
@@ -295,7 +295,7 @@ const QualityRejectionEntry = () => {
       <div className="bg-white rounded border border-slate-200 shadow-sm overflow-hidden mt-6">
         <div className="px-3 py-2 border-b border-slate-100 bg-slate-50/30 flex items-center justify-between">
           <h3 className="font-semibold text-slate-900 flex items-center gap-2 text-xs">
-            <span className="bg-emerald-100 text-emerald-700 w-5 h-5 rounded-full flex items-center justify-center text-xs ">2</span>
+            <span className="bg-emerald-100 text-emerald-700 w-5 h-5 rounded flex items-center justify-center text-xs ">2</span>
             Approved Inspection Records
           </h3>
           <div className="flex items-center gap-2 text-xs  text-slate-400">

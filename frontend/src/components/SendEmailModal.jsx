@@ -52,7 +52,7 @@ const SendEmailModal = ({ isOpen, onClose, data, onSend, title, subTitle, attach
               </svg>
             </div>
             <div>
-              <h2 className="text-xl  text-slate-800 tracking-tight">{title || 'Send Email'}</h2>
+              <h2 className="text-xl  text-slate-800 ">{title || 'Send Email'}</h2>
               <p className="text-xs text-slate-400   ">{subTitle}</p>
             </div>
           </div>
@@ -64,7 +64,7 @@ const SendEmailModal = ({ isOpen, onClose, data, onSend, title, subTitle, attach
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+        <form onSubmit={handleSubmit} className="p-2 space-y-5">
           <div className="space-y-2">
             <div className="space-y-1.5">
               <label className="text-xs  text-slate-400   ml-1">Recipient Email *</label>
@@ -127,14 +127,14 @@ const SendEmailModal = ({ isOpen, onClose, data, onSend, title, subTitle, attach
             <button
               type="button"
               onClick={onClose}
-              className="px-6 py-2.5 border border-slate-200 text-slate-600 rounded text-xs  hover:bg-slate-50 transition-all shadow-sm"
+              className="p-2 border border-slate-200 text-slate-600 rounded text-xs  hover:bg-slate-50 transition-all shadow-sm"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="flex items-center gap-2 px-8 py-2.5 bg-blue-600 text-white rounded text-xs  hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 p-2 bg-blue-600 text-white rounded text-xs  hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? (
                 <>

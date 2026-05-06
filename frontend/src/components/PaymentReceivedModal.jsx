@@ -467,7 +467,7 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                   </div>
                   <div>
                     <span className="text-slate-500 ">Outstanding</span>
-                    <p className=" text-rose-600 mt-1 font-bold">{formatCurrency(currentOutstanding)}</p>
+                    <p className=" text-rose-600 mt-1 ">{formatCurrency(currentOutstanding)}</p>
                   </div>
                 </div>
               </div>
@@ -491,8 +491,8 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                         {(fullSODetail.items || fullSODetail.order_items || []).map((item, idx) => (
                           <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
                             <td className="p-2">
-                              <p className="text-[11px] font-medium text-slate-800 leading-tight">{item.description || item.material_name || 'N/A'}</p>
-                              {item.item_code && <span className="text-[9px] text-slate-400 uppercase tracking-tighter">{item.item_code}</span>}
+                              <p className="text-[11px]  text-slate-800 leading-tight">{item.description || item.material_name || 'N/A'}</p>
+                              {item.item_code && <span className="text-[9px] text-slate-400 uppercase er">{item.item_code}</span>}
                             </td>
                             <td className="p-2 text-[11px] text-slate-600 text-center">
                               {item.quantity} {item.unit || item.type || 'Nos'}
@@ -500,7 +500,7 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                             <td className="p-2 text-[11px] text-slate-600 text-right">
                               {formatCurrency(item.rate || item.unit_rate)}
                             </td>
-                            <td className="p-2 text-[11px] font-medium text-slate-900 text-right">
+                            <td className="p-2 text-[11px]  text-slate-900 text-right">
                               {formatCurrency(item.total_amount || item.amount || (item.quantity || 0) * (item.rate || item.unit_rate || 0))}
                             </td>
                           </tr>
@@ -511,13 +511,13 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                           <>
                             <tr>
                               <td colSpan="3" className="p-2 text-[10px] font-semibold text-slate-500 text-right">Subtotal</td>
-                              <td className="p-2 text-[11px] font-medium text-slate-700 text-right">
+                              <td className="p-2 text-[11px]  text-slate-700 text-right">
                                 {formatCurrency(fullSODetail.subtotal)}
                               </td>
                             </tr>
                             <tr>
                               <td colSpan="3" className="p-2 text-[10px] font-semibold text-slate-500 text-right">GST</td>
-                              <td className="p-2 text-[11px] font-medium text-slate-700 text-right">
+                              <td className="p-2 text-[11px]  text-slate-700 text-right">
                                 {formatCurrency(fullSODetail.gst)}
                               </td>
                             </tr>
@@ -525,7 +525,7 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                         )}
                         <tr>
                           <td colSpan="3" className="p-2 text-[10px] font-semibold text-slate-500 text-right">Total Amount (Incl. Taxes)</td>
-                          <td className="p-2 text-[11px] font-bold text-slate-900 text-right">
+                          <td className="p-2 text-[11px]  text-slate-900 text-right">
                             {formatCurrency(fullSODetail.grand_total || fullSODetail.total_amount || fullSODetail.net_total || fullSODetail.po_net_total)}
                           </td>
                         </tr>
@@ -547,17 +547,17 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
           <div className="grid grid-cols-1 gap-4">
             <FormControl label="Payment Amount *">
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-bold">₹</span>
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 ">₹</span>
                 <input
                   type="number"
                   step="0.01"
                   value={formData.paymentAmount}
                   onChange={(e) => handleInputChange('paymentAmount', e.target.value)}
-                  className={`w-full pl-7 pr-3 py-2.5 border rounded text-sm font-bold focus:outline-none focus:ring-2 transition-all ${errors.paymentAmount ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-emerald-500/30 focus:border-emerald-500'}`}
+                  className={`w-full pl-7 pr-3 py-2.5 border rounded text-sm  focus:outline-none focus:ring-2 transition-all ${errors.paymentAmount ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-emerald-500/30 focus:border-emerald-500'}`}
                   placeholder="0.00"
                 />
               </div>
-              {errors.paymentAmount && <span className="text-xs text-rose-600 mt-1 block font-medium">{errors.paymentAmount}</span>}
+              {errors.paymentAmount && <span className="text-xs text-rose-600 mt-1 block ">{errors.paymentAmount}</span>}
             </FormControl>
 
             <div className="grid grid-cols-2 gap-4">
@@ -566,21 +566,21 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                   type="date"
                   value={formData.paymentDate}
                   onChange={(e) => handleInputChange('paymentDate', e.target.value)}
-                  className={`w-full p-2 border rounded text-sm font-medium focus:outline-none focus:ring-2 transition-all ${errors.paymentDate ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-emerald-500/30 focus:border-emerald-500'}`}
+                  className={`w-full p-2 border rounded text-sm  focus:outline-none focus:ring-2 transition-all ${errors.paymentDate ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-emerald-500/30 focus:border-emerald-500'}`}
                 />
-                {errors.paymentDate && <span className="text-xs text-rose-600 mt-1 block font-medium">{errors.paymentDate}</span>}
+                {errors.paymentDate && <span className="text-xs text-rose-600 mt-1 block ">{errors.paymentDate}</span>}
               </FormControl>
 
               <FormControl label="Payment Mode *">
                 <select
                   value={formData.paymentMode}
                   onChange={(e) => handleInputChange('paymentMode', e.target.value)}
-                  className={`w-full p-2 border rounded text-sm font-medium focus:outline-none focus:ring-2 transition-all cursor-pointer ${errors.paymentMode ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-emerald-500/30 focus:border-emerald-500'}`}
+                  className={`w-full p-2 border rounded text-sm  focus:outline-none focus:ring-2 transition-all cursor-pointer ${errors.paymentMode ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-emerald-500/30 focus:border-emerald-500'}`}
                 >
                   <option value="">Select Mode</option>
                   {paymentModes.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
                 </select>
-                {errors.paymentMode && <span className="text-xs text-rose-600 mt-1 block font-medium">{errors.paymentMode}</span>}
+                {errors.paymentMode && <span className="text-xs text-rose-600 mt-1 block ">{errors.paymentMode}</span>}
               </FormControl>
             </div>
 
@@ -590,10 +590,10 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                   type="text"
                   value={formData.bankAccount}
                   onChange={(e) => handleInputChange('bankAccount', e.target.value)}
-                  className={`w-full p-2 border rounded text-sm font-medium focus:outline-none focus:ring-2 transition-all ${errors.bankAccount ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-emerald-500/30 focus:border-emerald-500'}`}
+                  className={`w-full p-2 border rounded text-sm  focus:outline-none focus:ring-2 transition-all ${errors.bankAccount ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-emerald-500/30 focus:border-emerald-500'}`}
                   placeholder="Enter bank name or account details"
                 />
-                {errors.bankAccount && <span className="text-xs text-rose-600 mt-1 block font-medium">{errors.bankAccount}</span>}
+                {errors.bankAccount && <span className="text-xs text-rose-600 mt-1 block ">{errors.bankAccount}</span>}
               </FormControl>
             )}
 
@@ -603,7 +603,7 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                   <select
                     value={formData.upiApp}
                     onChange={(e) => handleInputChange('upiApp', e.target.value)}
-                    className="w-full p-2 border border-slate-300 rounded text-sm font-medium"
+                    className="w-full p-2 border border-slate-300 rounded text-sm "
                   >
                     <option value="">Select App</option>
                     {upiApps.map(a => <option key={a.value} value={a.value}>{a.label}</option>)}
@@ -614,7 +614,7 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                     type="text"
                     value={formData.upiTransactionId}
                     onChange={(e) => handleInputChange('upiTransactionId', e.target.value)}
-                    className="w-full p-2 border border-slate-300 rounded text-sm font-medium"
+                    className="w-full p-2 border border-slate-300 rounded text-sm "
                     placeholder="Ref ID"
                   />
                 </FormControl>
@@ -628,7 +628,7 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                     type="text"
                     value={formData.chequeNumber}
                     onChange={(e) => handleInputChange('chequeNumber', e.target.value)}
-                    className={`w-full p-2 border rounded text-sm font-medium ${errors.chequeNumber ? 'border-rose-500' : 'border-slate-300'}`}
+                    className={`w-full p-2 border rounded text-sm  ${errors.chequeNumber ? 'border-rose-500' : 'border-slate-300'}`}
                   />
                 </FormControl>
                 <FormControl label="Bank Name *">
@@ -636,7 +636,7 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                     type="text"
                     value={formData.bankName}
                     onChange={(e) => handleInputChange('bankName', e.target.value)}
-                    className={`w-full p-2 border rounded text-sm font-medium ${errors.bankName ? 'border-rose-500' : 'border-slate-300'}`}
+                    className={`w-full p-2 border rounded text-sm  ${errors.bankName ? 'border-rose-500' : 'border-slate-300'}`}
                   />
                 </FormControl>
                 <FormControl label="Date *">
@@ -644,7 +644,7 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                     type="date"
                     value={formData.chequeDate}
                     onChange={(e) => handleInputChange('chequeDate', e.target.value)}
-                    className={`w-full p-2 border rounded text-sm font-medium ${errors.chequeDate ? 'border-rose-500' : 'border-slate-300'}`}
+                    className={`w-full p-2 border rounded text-sm  ${errors.chequeDate ? 'border-rose-500' : 'border-slate-300'}`}
                   />
                 </FormControl>
               </div>
@@ -656,7 +656,7 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                   type="text"
                   value={formData.transactionRefNo}
                   onChange={(e) => handleInputChange('transactionRefNo', e.target.value)}
-                  className="w-full p-2 border border-slate-300 rounded text-sm font-medium focus:ring-2 focus:ring-emerald-200 outline-none"
+                  className="w-full p-2 border border-slate-300 rounded text-sm  focus:ring-2 focus:ring-emerald-200 outline-none"
                   placeholder="UTR / Ref Number"
                 />
               </FormControl>
@@ -666,7 +666,7 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
               <textarea
                 value={formData.remarks}
                 onChange={(e) => handleInputChange('remarks', e.target.value)}
-                className="w-full p-2 border border-slate-300 rounded text-sm font-medium"
+                className="w-full p-2 border border-slate-300 rounded text-sm "
                 rows="2"
                 placeholder="Optional notes about this payment"
               />
@@ -676,14 +676,14 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
           <div className="flex gap-3 pt-4 border-t border-slate-100">
             <button 
               onClick={onClose} 
-              className="flex-1 px-4 py-2.5 bg-slate-100 text-slate-600 rounded text-sm font-bold hover:bg-slate-200 transition-all"
+              className="flex-1 p-2.5 bg-slate-100 text-slate-600 rounded text-sm  hover:bg-slate-200 transition-all"
             >
               Cancel
             </button>
             <button 
               onClick={handleSubmit} 
               disabled={loading} 
-              className="flex-1 px-4 py-2.5 bg-emerald-600 text-white rounded text-sm font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 disabled:opacity-50"
+              className="flex-1 p-2.5 bg-emerald-600 text-white rounded text-sm  hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 disabled:opacity-50"
             >
               {loading ? 'Processing...' : 'Complete Record'}
             </button>

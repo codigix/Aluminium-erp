@@ -674,7 +674,7 @@ const ItemsMaster = () => {
         return (
           <div className="flex flex-col gap-0.5">
             <div className="flex items-center gap-2">
-              <div className={`w-2 h-2 rounded-full ${isLow ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+              <div className={`w-2 h-2 rounded ${isLow ? 'bg-amber-500' : 'bg-emerald-500'}`} />
               <div className="flex items-center gap-1.5">
                 <span className={`text-sm font-semibold ${isLow ? 'text-amber-700' : 'text-slate-700'}`}>
                   {balance.toLocaleString('en-IN', { minimumFractionDigits: row.weight_per_unit > 0 ? 3 : 2 })}
@@ -829,7 +829,7 @@ const ItemsMaster = () => {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl  text-slate-900 tracking-tight">Items Master</h1>
+          <h1 className="text-xl   text-slate-900 ">Items Master</h1>
           <p className="text-sm text-slate-500">Manage your products, materials, and categories</p>
         </div>
         
@@ -1040,7 +1040,7 @@ const ItemsMaster = () => {
                       {selectedShape && (
                         <div className="md:col-span-3 p-4 bg-indigo-50/50 rounded border border-indigo-100 space-y-3">
                           <div className="flex items-center gap-2 text-indigo-700  text-sm">
-                            <div className="w-1.5 h-1.5 rounded-full bg-indigo-500"></div>
+                            <div className="w-1.5 h-1.5 rounded bg-indigo-500"></div>
                             {selectedShape} Dimensions (All in mm)
                           </div>
                           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">

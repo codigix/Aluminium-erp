@@ -706,7 +706,7 @@ const ClientQuotations = () => {
               </div>
             )}
             {hasUpdate && (
-              <span className="p-1 bg-rose-50 text-rose-600 rounded text-[9px] border border-rose-100 w-fit animate-pulse font-bold">
+              <span className="p-1 bg-rose-50 text-rose-600 rounded text-[9px] border border-rose-100 w-fit animate-pulse ">
                 BOM UPDATE REQUESTED
               </span>
             )}
@@ -1012,7 +1012,7 @@ const ClientQuotations = () => {
                     return (
                       <React.Fragment key={dNo}>
                         <tr className="bg-slate-50/50 border-y border-slate-100">
-                          <td colSpan={isPending ? 7 : 4} className="px-4 py-1.5 text-xs  font-bold text-slate-500 uppercase tracking-wider bg-slate-100/30">
+                          <td colSpan={isPending ? 7 : 4} className="px-4 py-1.5 text-xs   text-slate-500 uppercase tracking-wider bg-slate-100/30">
                             Drawing: {dNo}
                           </td>
                         </tr>
@@ -1062,7 +1062,7 @@ const ClientQuotations = () => {
                                     <div className="flex items-center gap-1.5 animate-in slide-in-from-left duration-300">
                                       <div className="p-1 bg-rose-50 text-rose-600 rounded border border-rose-100 flex items-center gap-1" title="New BOM Update Requested">
                                         <ArrowUpRight size={10} className={item.pending_bom_cost > (item.bom_cost || item.latest_bom_cost) ? 'text-rose-500' : 'rotate-90 text-emerald-500'} />
-                                        <span className="text-xs  font-bold">{formatCurrency(item.pending_bom_cost)}</span>
+                                        <span className="text-xs  ">{formatCurrency(item.pending_bom_cost)}</span>
                                       </div>
                                       <button
                                         onClick={() => handleApplyPendingBOM(group, item)}
@@ -1208,7 +1208,7 @@ const ClientQuotations = () => {
                                     <div className="flex items-center gap-1.5 animate-in slide-in-from-left duration-300">
                                       <div className="p-0.5 bg-rose-50 text-rose-600 rounded border border-rose-100 flex items-center gap-1" title="New BOM Update Requested">
                                         <ArrowUpRight size={8} className={sa.pending_bom_cost > (sa.rate || sa.bom_cost) ? 'text-rose-500' : 'rotate-90 text-emerald-500'} />
-                                        <span className="text-[9px] font-bold">{formatCurrency(sa.pending_bom_cost)}</span>
+                                        <span className="text-[9px] ">{formatCurrency(sa.pending_bom_cost)}</span>
                                       </div>
                                       <button
                                         onClick={() => handleApplyPendingBOM(group, sa)}
@@ -2001,11 +2001,11 @@ const ClientQuotations = () => {
                   </div>
                   <div className="space-y-4">
                     <div>
-                      <p className="text-xs   text-slate-400  tracking-widest mb-1">Client</p>
+                      <p className="text-xs   text-slate-400   mb-1">Client</p>
                       <p className="text-sm font-semibold text-slate-700">{selectedQuoteForComm?.company_name}</p>
                     </div>
                     <div>
-                      <p className="text-xs   text-slate-400  tracking-widest mb-1">Reference</p>
+                      <p className="text-xs   text-slate-400   mb-1">Reference</p>
                       <p className="text-sm font-mono text-indigo-600 bg-indigo-50 px-2 py-1 rounded-md w-fit">
                         QRT-{String(selectedQuoteForComm?.id).padStart(4, '0')}
                       </p>
@@ -2014,7 +2014,7 @@ const ClientQuotations = () => {
                 </div>
                 
                 <div className="flex-1 p-6 overflow-y-auto">
-                  <h4 className="text-xs  text-slate-400  tracking-widest mb-4">Quick Actions</h4>
+                  <h4 className="text-xs  text-slate-400   mb-4">Quick Actions</h4>
                   <div className="space-y-2">
                     <button 
                       onClick={handleRefreshMessages}
@@ -2039,7 +2039,7 @@ const ClientQuotations = () => {
                     <div>
                       <h3 className=" text-slate-900">{selectedQuoteForComm?.company_name}</h3>
                       <div className="flex items-center gap-2">
-                        <span className={`w-2 h-2 rounded-full ${commType === 'CLIENT' ? 'bg-emerald-500' : 'bg-amber-500'} animate-pulse`} />
+                        <span className={`w-2 h-2 rounded ${commType === 'CLIENT' ? 'bg-emerald-500' : 'bg-amber-500'} animate-pulse`} />
                         <span className="text-xs   text-slate-400 ">
                           {commType === 'CLIENT' ? 'Active Channel (Client)' : 'Internal Requests'}
                         </span>
@@ -2069,7 +2069,7 @@ const ClientQuotations = () => {
                     >
                       Internal
                       {internalUnreadCounts[selectedQuoteForComm?.id] > 0 && (
-                        <span className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 text-white text-[8px] flex items-center justify-center rounded-full border-2 border-white">
+                        <span className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 text-white text-[8px] flex items-center justify-center rounded border-2 border-white">
                           {internalUnreadCounts[selectedQuoteForComm?.id]}
                         </span>
                       )}
@@ -2078,7 +2078,7 @@ const ClientQuotations = () => {
 
                   <button 
                     onClick={() => setShowCommDrawer(false)}
-                    className="p-2 hover:bg-slate-100 text-slate-400 hover:text-slate-600 rounded-full transition-all"
+                    className="p-2 hover:bg-slate-100 text-slate-400 hover:text-slate-600 rounded transition-all"
                   >
                     <X size={20} />
                   </button>

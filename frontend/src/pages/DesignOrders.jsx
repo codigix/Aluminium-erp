@@ -781,7 +781,7 @@ const DesignOrders = () => {
                 <FileText className="w-3 h-3" />
               </div>
               <div>
-                <h1 className="text-xl  text-slate-900 tracking-tight leading-none">Design Engineering Hub</h1>
+                <h1 className="text-xl  text-slate-900  leading-none">Design Engineering Hub</h1>
                 <p className="text-xs  text-slate-500 mt-1 italic">Review customer drawings and create technical specifications</p>
               </div>
             </div>
@@ -824,7 +824,7 @@ const DesignOrders = () => {
                       </svg>
                     </div>
                     <div>
-                      <h2 className="text-lg  text-white tracking-tight flex items-center gap-2">
+                      <h2 className="text-lg  text-white  flex items-center gap-2">
                         Incoming Design Requests
                         {incomingOrders.length > 0 && (
                           <span className="px-2 py-0.5 bg-white/20 rounded text-xs    border border-white/30 backdrop-blur-sm">
@@ -872,7 +872,7 @@ const DesignOrders = () => {
                           <div className="w-2 h-2 bg-emerald-400 rounded animate-ping absolute inset-0" />
                           <div className="w-2 h-2 bg-emerald-400 rounded relative" />
                         </div>
-                        <span className="text-white text-xs  tracking-tight">
+                        <span className="text-white text-xs  ">
                           {selectedIncomingOrders.size} Selected
                         </span>
                       </div>
@@ -924,7 +924,7 @@ const DesignOrders = () => {
                       </svg>
                     </div>
                     <div className="max-w-xs">
-                      <h3 className="text-md  text-slate-900 tracking-tight">Inbox is Clear</h3>
+                      <h3 className="text-md  text-slate-900 ">Inbox is Clear</h3>
                       <p className="text-xs text-slate-500 mt-1 leading-relaxed  ">No new design requests waiting.</p>
                     </div>
                   </div>
@@ -980,7 +980,7 @@ const DesignOrders = () => {
                                   {group.orders.length} Drawings
                                 </span>
                               </h3>
-                              <p className="text-xs text-blue-500 font-semibold tracking-tight mt-0.5">
+                              <p className="text-xs text-blue-500 font-semibold  mt-0.5">
                                 {group.company_name} {group.po_number !== 'NO-PO' && group.project_name && `| ${group.project_name}`}
                               </p>
                             </div>
@@ -1044,14 +1044,14 @@ const DesignOrders = () => {
                                       <div className="space-y-3">
                                         <div className="flex flex-wrap gap-1.5">
                                           {order.item_code ? (
-                                            <span className="p-1  bg-emerald-50 text-emerald-700 border border-emerald-100 rounded text-xs   tracking-tight">
+                                            <span className="p-1  bg-emerald-50 text-emerald-700 border border-emerald-100 rounded text-xs   ">
                                               {order.item_code}
                                             </span>
                                           ) : (
                                             <span className="p-1  bg-slate-100 text-slate-400 italic rounded text-xs ">Pending Code</span>
                                           )}
                                           {order.item_group && (
-                                            <span className="p-1  bg-slate-100 text-slate-600 border border-slate-200 rounded text-xs   tracking-tight">
+                                            <span className="p-1  bg-slate-100 text-slate-600 border border-slate-200 rounded text-xs   ">
                                               {order.item_group}
                                             </span>
                                           )}
@@ -1253,7 +1253,7 @@ const DesignOrders = () => {
                       </svg>
                     </div>
                     <div>
-                      <h2 className="text-lg  text-white tracking-tight flex items-center gap-2">
+                      <h2 className="text-lg  text-white  flex items-center gap-2">
                         Design Tasks in Progress
                         {orders.length > 0 && (
                           <span className="px-2 py-0.5 bg-white/20 rounded text-xs    border border-white/30 backdrop-blur-sm">
@@ -1320,7 +1320,7 @@ const DesignOrders = () => {
                     <Search className="w-8 h-8" strokeWidth={1} />
                   </div>
                   <div className="max-w-xs">
-                    <h3 className="text-md  text-slate-900 tracking-tight">No active tasks</h3>
+                    <h3 className="text-md  text-slate-900 ">No active tasks</h3>
                     <p className="text-xs text-slate-500 mt-1 leading-relaxed  ">Try adjusting search or refresh.</p>
                   </div>
                 </div>
@@ -1357,7 +1357,7 @@ const DesignOrders = () => {
                       <div className="flex items-center gap-8 w-full md:w-auto justify-between md:justify-end border-t md:border-t-0 pt-3 md:pt-0 mt-3 md:mt-0">
                         <div className="text-right">
                           <p className="text-xs text-slate-400    mb-0.5">Total Quantity</p>
-                          <p className="text-sm  text-slate-800 tracking-tight">
+                          <p className="text-sm  text-slate-800 ">
                             {group.orders.reduce((sum, o) => sum + (Number(o.total_quantity) || 0), 0)}
                           </p>
                         </div>

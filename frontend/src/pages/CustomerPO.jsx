@@ -429,7 +429,7 @@ const CustomerPO = ({
           <div className="p-2 bg-indigo-50 text-indigo-600 rounded ">
             <FileText className="w-4 h-4" />
           </div>
-          <p className="text-xs  text-slate-900   tracking-tight">{row.po_number}</p>
+          <p className="text-xs  text-slate-900   ">{row.po_number}</p>
         </div>
       )
     },
@@ -629,7 +629,7 @@ const CustomerPO = ({
                 {formMode === 'VIEW' && (
                   <button
                     onClick={() => setFormMode('EDIT')}
-                    className="p-2 rounded hover:bg-amber-100 transition-all text-amber-600 active:scale-90 bg-amber-50 border border-amber-100 flex items-center gap-2 text-xs font-bold"
+                    className="p-2 rounded hover:bg-amber-100 transition-all text-amber-600 active:scale-90 bg-amber-50 border border-amber-100 flex items-center gap-2 text-xs "
                     title="Switch to Edit Mode"
                   >
                     <Pencil className="w-3 h-3" />
@@ -735,7 +735,7 @@ const CustomerPO = ({
                         disabled={formMode === 'VIEW'}
                         value={poForm.poNumber}
                         onChange={(e) => setPoForm(prev => ({ ...prev, poNumber: e.target.value }))}
-                        className="w-full bg-slate-50 border-2 border-slate-100 rounded p-2 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all  text-slate-900 font-bold"
+                        className="w-full bg-slate-50 border-2 border-slate-100 rounded p-2 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all  text-slate-900 "
                       />
                     </div>
                     <div className="space-y-2">
@@ -788,7 +788,7 @@ const CustomerPO = ({
                       <button
                         type="button"
                         onClick={handleAddItem}
-                        className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded  text-xs    hover:bg-indigo-100 transition-all active:scale-95 "
+                        className="flex items-center gap-2 p-2 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded  text-xs    hover:bg-indigo-100 transition-all active:scale-95 "
                       >
                         <Plus className="w-3.5 h-3.5 stroke-[3]" />
                         Add Line Item
@@ -928,14 +928,14 @@ const CustomerPO = ({
                                   <td className="p-2 border-b border-slate-100">
                                     <div className="flex items-center gap-2 pl-3">
                                       <GitBranch size={12} className="text-blue-400 rotate-180" />
-                                      <span className="text-[9px] text-slate-500 font-mono font-bold">{sa.drawingNo}</span>
+                                      <span className="text-[9px] text-slate-500 font-mono ">{sa.drawingNo}</span>
                                     </div>
                                   </td>
                                   <td className="p-2 border-b border-slate-100">
                                     <div className="flex flex-col pl-3">
                                       <span className="text-[11px] text-slate-700 font-semibold">{sa.description}</span>
                                       <div className="flex items-center gap-2 mt-0.5">
-                                        <span className="px-1 py-0.5 rounded-[3px] text-[8px] font-bold bg-blue-50 text-blue-600 border border-blue-100/50">SA</span>
+                                        <span className="px-1 py-0.5 rounded-[3px] text-[8px]  bg-blue-50 text-blue-600 border border-blue-100/50">SA</span>
                                       </div>
                                     </div>
                                   </td>
@@ -949,7 +949,7 @@ const CustomerPO = ({
                                     {formatCurrency(saRate)}
                                   </td>
                                   <td colSpan="3" className="p-2 border-b border-slate-100"></td>
-                                  <td className="p-2 border-b border-slate-100 text-right pr-6 text-[11px] text-slate-900 font-bold">
+                                  <td className="p-2 border-b border-slate-100 text-right pr-6 text-[11px] text-slate-900 ">
                                     {formatCurrency(saTotal)}
                                   </td>
                                   <td className="p-2 border-b border-slate-100"></td>

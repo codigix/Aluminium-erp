@@ -473,7 +473,7 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
                     </div>
                     <div>
                       <p className="text-xs text-slate-400   ">Project</p>
-                      <p className="text-xs   text-slate-700 mt-0.5 font-medium">{po.project_name}</p>
+                      <p className="text-xs   text-slate-700 mt-0.5 ">{po.project_name}</p>
                     </div>
                   </div>
                 )}
@@ -536,7 +536,7 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
                   <div className={`p-2 bg-white rounded  border border-slate-50 text-blue-600  group-hover:scale-110 transition-transform`}>
                     <action.icon className="w-4 h-4" />
                   </div>
-                  <span className="text-xs  text-slate-700 tracking-tight">{action.label}</span>
+                  <span className="text-xs  text-slate-700 ">{action.label}</span>
                 </div>
                 <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-blue-500 transition-colors" />
               </button>

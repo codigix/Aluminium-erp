@@ -140,15 +140,15 @@ const InventoryReport = () => {
   };
 
   const KPIStoreCard = ({ title, value, subtitle, icon: Icon, color, subColor }) => (
-    <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm flex items-center gap-4 relative overflow-hidden group">
+    <div className="bg-white rounded p-2 border border-slate-100 shadow-sm flex items-center gap-4 relative overflow-hidden group">
       <div className={`absolute top-0 right-0 w-16 h-16 ${subColor} opacity-10 rounded -mr-6 -mt-6 transition-transform group-hover:scale-110`} />
-      <div className={`p-3 rounded-xl ${subColor} ${color}`}>
+      <div className={`p-3 rounded ${subColor} ${color}`}>
         <Icon className="w-5 h-5" />
       </div>
       <div>
-        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{title}</p>
-        <h3 className="text-xl text-slate-900 font-black">{value}</h3>
-        <p className="text-[10px] text-slate-500 font-bold tracking-tight">{subtitle}</p>
+        <p className="text-xs text-slate-400   ">{title}</p>
+        <h3 className="text-xl text-slate-900 ">{value}</h3>
+        <p className="text-xs text-slate-500  ">{subtitle}</p>
       </div>
     </div>
   );
@@ -157,7 +157,7 @@ const InventoryReport = () => {
     return (
       <div className="flex flex-col items-center justify-center p-22 space-y-4">
         <div className="w-16 h-16 border-4 border-slate-100 border-t-rose-600 rounded animate-spin" />
-        <h3 className="text-slate-900 font-black tracking-tight uppercase">Generating Inventory Report...</h3>
+        <h3 className="text-slate-900   ">Generating Inventory Report...</h3>
       </div>
     );
   }
@@ -165,15 +165,15 @@ const InventoryReport = () => {
   const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#f43f5e', '#8b5cf6'];
 
   return (
-    <div className="space-y-6 pb-12 animate-in fade-in duration-500">
+    <div className="space-y-2 pb-12 animate-in fade-in duration-500">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl text-slate-900 font-black tracking-tight">Inventory Report</h1>
-          <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-1">Overview of inventory status and stock movement</p>
+          <h1 className="text-xl text-slate-900  ">Inventory Report</h1>
+          <p className="text-xs text-slate-500    mt-1">Overview of inventory status and stock movement</p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg text-[11px] font-bold text-slate-600">
+          <div className="flex items-center gap-2 p-2 bg-white border border-slate-200 rounded text-xs  text-slate-600">
              <Calendar className="w-4 h-4 text-slate-400" />
              <input 
                type="date" 
@@ -192,7 +192,7 @@ const InventoryReport = () => {
           <select 
             value={selectedWarehouse}
             onChange={(e) => setSelectedWarehouse(e.target.value)}
-            className="bg-white border border-slate-200 rounded-lg px-3 py-2 text-[11px] font-bold text-slate-600 outline-none"
+            className="bg-white border border-slate-200 rounded p-2 text-xs  text-slate-600 outline-none"
           >
             <option value="All">All Warehouses</option>
             {stats.stockByWarehouse?.map((warehouse, idx) => (
@@ -201,7 +201,7 @@ const InventoryReport = () => {
           </select>
           <button 
             onClick={handleExport}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all flex items-center gap-2 shadow-lg shadow-indigo-100"
+            className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded text-xs    transition-all flex items-center gap-2 shadow-lg shadow-indigo-100"
           >
             <Download className="w-4 h-4" />
             Export Report
@@ -219,12 +219,12 @@ const InventoryReport = () => {
       </div>
 
       {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-2">
         {/* Stock Value by Category */}
-        <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm flex flex-col">
+        <div className="bg-white rounded p-2 border border-slate-100 shadow-sm flex flex-col">
           <div className="mb-8">
-            <h3 className="text-sm text-slate-900 font-black uppercase tracking-widest">Stock Value by Category</h3>
-            <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">Distribution of stock value by category</p>
+            <h3 className="text-sm text-slate-900   ">Stock Value by Category</h3>
+            <p className="text-xs text-slate-400   mt-1">Distribution of stock value by category</p>
           </div>
           <div className="flex-1 flex flex-col items-center justify-center relative">
             <div className="h-[200px] w-full">
@@ -249,10 +249,10 @@ const InventoryReport = () => {
               {stats.categoryDistribution.map((item, idx) => (
                 <div key={idx} className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[idx % COLORS.length] }} />
-                    <span className="text-[10px] font-bold text-slate-500 uppercase">{item.name}</span>
+                    <div className="w-2 h-2 rounded" style={{ backgroundColor: COLORS[idx % COLORS.length] }} />
+                    <span className="text-xs  text-slate-500 ">{item.name}</span>
                   </div>
-                  <span className="text-[10px] font-black text-slate-900">₹{parseFloat(item.value).toLocaleString('en-IN')} ({item.percent}%)</span>
+                  <span className="text-xs  text-slate-900">₹{parseFloat(item.value).toLocaleString('en-IN')} ({item.percent}%)</span>
                 </div>
               ))}
             </div>
@@ -260,17 +260,17 @@ const InventoryReport = () => {
         </div>
 
         {/* Stock Status Summary */}
-        <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
+        <div className="bg-white rounded p-2 border border-slate-100 shadow-sm">
           <div className="mb-8">
-            <h3 className="text-sm text-slate-900 font-black uppercase tracking-widest">Stock Status Summary</h3>
-            <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">Current stock availability overview</p>
+            <h3 className="text-sm text-slate-900   ">Stock Status Summary</h3>
+            <p className="text-xs text-slate-400   mt-1">Current stock availability overview</p>
           </div>
           <div className="space-y-6">
             {stats.statusSummary.map((item, idx) => (
               <div key={idx} className="space-y-2">
-                <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-wider">
+                <div className="flex items-center justify-between text-xs   ">
                   <div className="flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full ${
+                    <div className={`w-2 h-2 rounded ${
                       item.name === 'Available' ? 'bg-emerald-500' : 
                       item.name === 'Low Stock' ? 'bg-amber-500' : 'bg-rose-500'
                     }`} />
@@ -278,8 +278,8 @@ const InventoryReport = () => {
                   </div>
                   <span className="text-slate-900">{item.value}</span>
                 </div>
-                <div className="h-2 bg-slate-50 rounded-full overflow-hidden">
-                  <div className={`h-full rounded-full ${
+                <div className="h-2 bg-slate-50 rounded overflow-hidden">
+                  <div className={`h-full rounded ${
                     item.name === 'Available' ? 'bg-emerald-500' : 
                     item.name === 'Low Stock' ? 'bg-amber-500' : 'bg-rose-500'
                   }`} style={{ width: `${(item.value / stats.kpis.totalItems) * 100}%` }} />
@@ -287,20 +287,20 @@ const InventoryReport = () => {
               </div>
             ))}
             <div className="pt-4 border-t border-slate-50 flex items-center justify-between">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Items</span>
-              <span className="text-sm font-black text-slate-900">{stats.kpis.totalItems}</span>
+              <span className="text-xs  text-slate-400  ">Total Items</span>
+              <span className="text-sm  text-slate-900">{stats.kpis.totalItems}</span>
             </div>
           </div>
         </div>
 
         {/* Stock Value Trend */}
-        <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm flex flex-col">
+        <div className="bg-white rounded p-2 border border-slate-100 shadow-sm flex flex-col">
           <div className="flex items-center justify-between mb-8">
             <div>
-              <h3 className="text-sm text-slate-900 font-black uppercase tracking-widest">Stock Value Trend</h3>
-              <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">Total stock value over time</p>
+              <h3 className="text-sm text-slate-900   ">Stock Value Trend</h3>
+              <p className="text-xs text-slate-400   mt-1">Total stock value over time</p>
             </div>
-            <select className="text-[10px] font-black uppercase tracking-widest text-slate-500 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1">
+            <select className="text-xs    text-slate-500 bg-slate-50 border border-slate-200 rounded px-2 py-1">
               <option>Daily</option>
             </select>
           </div>
@@ -327,13 +327,49 @@ const InventoryReport = () => {
       {/* Warehouse & Low Stock Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Stock by Warehouse */}
+<<<<<<< Updated upstream
         <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm flex flex-col">
+=======
+<<<<<<< HEAD
+        <div className="bg-white rounded p-2 border border-slate-100 shadow-sm">
+=======
+        <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm flex flex-col">
+>>>>>>> cca9023b61ada16bf798ca1df8a8b822f8431698
+>>>>>>> Stashed changes
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h3 className="text-sm text-slate-900 font-black uppercase tracking-widest">Stock by Warehouse</h3>
-              <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">Current stock summary by warehouse</p>
+              <h3 className="text-sm text-slate-900   ">Stock by Warehouse</h3>
+              <p className="text-xs text-slate-400   mt-1">Current stock summary by warehouse</p>
             </div>
           </div>
+<<<<<<< Updated upstream
+=======
+<<<<<<< HEAD
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="text-xs text-slate-400    border-b border-slate-50">
+                  <th className="pb-3 pr-2">Warehouse</th>
+                  <th className="pb-3 pr-2 text-center">Total Items</th>
+                  <th className="pb-3 pr-2 text-center">Stock Value</th>
+                  <th className="pb-3 pr-2 text-center">Low Stock</th>
+                  <th className="pb-3 pr-2 text-center">Out of Stock</th>
+                  <th className="pb-3 text-right">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {stats.warehouseStock.map((warehouse, idx) => (
+                  <tr key={idx} className="hover:bg-slate-50 transition-colors group">
+                    <td className="py-4 pr-2 text-xs  text-slate-900">{warehouse.name}</td>
+                    <td className="py-4 text-xs  text-slate-600 text-center">{warehouse.totalItems}</td>
+                    <td className="py-4 text-xs  text-slate-600 text-center">₹{parseFloat(warehouse.stockValue).toLocaleString('en-IN')}</td>
+                    <td className="py-4 text-xs  text-amber-600 text-center">{warehouse.lowStock}</td>
+                    <td className="py-4 text-xs  text-rose-600 text-center">{warehouse.outOfStock}</td>
+                    <td className="py-4 text-right">
+                       <span className="text-[9px]   px-2 py-0.5 rounded bg-emerald-50 text-emerald-600">Active</span>
+                    </td>
+=======
+>>>>>>> Stashed changes
           <div className="flex-1 max-h-[300px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
@@ -345,6 +381,10 @@ const InventoryReport = () => {
                     <th className="pb-3 pr-2 text-center">Low Stock</th>
                     <th className="pb-3 pr-2 text-center">Out of Stock</th>
                     <th className="pb-3 text-right">Status</th>
+<<<<<<< Updated upstream
+=======
+>>>>>>> cca9023b61ada16bf798ca1df8a8b822f8431698
+>>>>>>> Stashed changes
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
@@ -367,16 +407,46 @@ const InventoryReport = () => {
         </div>
 
         {/* Top Low Stock Items */}
+<<<<<<< Updated upstream
         <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm flex flex-col">
+=======
+<<<<<<< HEAD
+        <div className="bg-white rounded p-2 border border-slate-100 shadow-sm">
+=======
+        <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm flex flex-col">
+>>>>>>> cca9023b61ada16bf798ca1df8a8b822f8431698
+>>>>>>> Stashed changes
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h3 className="text-sm text-slate-900 font-black uppercase tracking-widest">Top Low Stock Items</h3>
-              <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">Items that are running low on stock</p>
+              <h3 className="text-sm text-slate-900   ">Top Low Stock Items</h3>
+              <p className="text-xs text-slate-400   mt-1">Items that are running low on stock</p>
             </div>
-            <button className="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-1">
+            <button className="text-xs  text-indigo-600   flex items-center gap-1">
               View all low stock items <ArrowRight className="w-3 h-3" />
             </button>
           </div>
+<<<<<<< Updated upstream
+=======
+<<<<<<< HEAD
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="text-xs text-slate-400    border-b border-slate-50">
+                  <th className="pb-3 pr-2">Item Code</th>
+                  <th className="pb-3 pr-2">Item Name</th>
+                  <th className="pb-3 pr-2 text-center">Current Stock</th>
+                  <th className="pb-3 text-right">Min. Required</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {paginatedLowStock.map((item, idx) => (
+                  <tr key={idx} className="hover:bg-slate-50 transition-colors group">
+                    <td className="py-4 text-xs  text-indigo-600">{item.itemCode}</td>
+                    <td className="py-4 text-xs  text-slate-600">{item.itemName}</td>
+                    <td className="py-4 text-xs  text-rose-600 text-center">{parseFloat(item.currentStock).toFixed(0)} {item.uom}</td>
+                    <td className="py-4 text-right text-xs  text-slate-400">{parseFloat(item.minRequired).toFixed(0)} {item.uom}</td>
+=======
+>>>>>>> Stashed changes
           <div className="flex-1 max-h-[300px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
@@ -386,6 +456,10 @@ const InventoryReport = () => {
                     <th className="pb-3 pr-2">Item Name</th>
                     <th className="pb-3 pr-2 text-center">Current Stock</th>
                     <th className="pb-3 text-right">Min. Required</th>
+<<<<<<< Updated upstream
+=======
+>>>>>>> cca9023b61ada16bf798ca1df8a8b822f8431698
+>>>>>>> Stashed changes
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
@@ -403,7 +477,7 @@ const InventoryReport = () => {
           </div>
           {totalLowStockPages > 1 && (
             <div className="mt-4 flex items-center justify-between">
-              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+              <p className="text-[9px]  text-slate-400  ">
                 Page {lowStockPage} of {totalLowStockPages}
               </p>
               <div className="flex items-center gap-1">
@@ -428,51 +502,51 @@ const InventoryReport = () => {
       </div>
 
       {/* Recent Stock Movements */}
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+      <div className="bg-white rounded border border-slate-100 shadow-sm overflow-hidden">
         <div className="p-6 border-b border-slate-50 flex items-center justify-between">
-           <h3 className="text-sm text-slate-900 font-black uppercase tracking-widest">Recent Stock Movements</h3>
-           <button className="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-1">
+           <h3 className="text-sm text-slate-900   ">Recent Stock Movements</h3>
+           <button className="text-xs  text-indigo-600   flex items-center gap-1">
              View all stock movements <ArrowRight className="w-3 h-3" />
            </button>
         </div>
         <div className="p-0 overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-slate-50/50 text-[10px] text-slate-400 font-black uppercase tracking-widest border-b border-slate-100">
-                <th className="px-4 py-2">Date / Time</th>
-                <th className="px-4 py-2">Item Code</th>
-                <th className="px-4 py-2">Item Name</th>
-                <th className="px-4 py-2 text-center">Transaction Type</th>
-                <th className="px-4 py-2">Reference</th>
-                <th className="px-4 py-2 text-right">Quantity</th>
-                <th className="px-4 py-2 text-right">Balance</th>
-                <th className="px-4 py-2">Warehouse</th>
+              <tr className="bg-slate-50/50 text-xs text-slate-400    border-b border-slate-100">
+                <th className="p-2">Date / Time</th>
+                <th className="p-2">Item Code</th>
+                <th className="p-2">Item Name</th>
+                <th className="p-2 text-center">Transaction Type</th>
+                <th className="p-2">Reference</th>
+                <th className="p-2 text-right">Quantity</th>
+                <th className="p-2 text-right">Balance</th>
+                <th className="p-2">Warehouse</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
               {paginatedMovements.map((movement, idx) => (
-                <tr key={idx} className="hover:bg-slate-50/50 transition-colors group text-[10px] border-b border-slate-50">
+                <tr key={idx} className="hover:bg-slate-50/50 transition-colors group text-xs border-b border-slate-50">
                   <td className="px-4 py-1.5 whitespace-nowrap">
-                    <p className="font-black text-slate-900">{new Date(movement.time).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
-                    <p className="text-[8px] text-slate-400 font-bold mt-0.5">{new Date(movement.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</p>
+                    <p className=" text-slate-900">{new Date(movement.time).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                    <p className="text-[8px] text-slate-400  mt-0.5">{new Date(movement.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</p>
                   </td>
-                  <td className="px-4 py-1.5 font-black text-indigo-600">{movement.itemCode}</td>
-                  <td className="px-4 py-1.5 font-bold text-slate-600 truncate max-w-[150px]">{movement.itemName}</td>
+                  <td className="px-4 py-1.5  text-indigo-600">{movement.itemCode}</td>
+                  <td className="px-4 py-1.5  text-slate-600 truncate max-w-[150px]">{movement.itemName}</td>
                   <td className="px-4 py-1.5 text-center">
-                    <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter ${
+                    <span className={`px-1.5 py-0.5 rounded text-[8px]   er ${
                       movement.type === 'IN' || movement.type === 'GRN_IN' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'
                     }`}>
                       {movement.type === 'IN' || movement.type === 'GRN_IN' ? 'Receipt' : 'Issue'}
                     </span>
                   </td>
-                  <td className="px-4 py-1.5 font-black text-slate-900">{movement.reference}</td>
-                  <td className={`px-4 py-1.5 text-right font-black ${
+                  <td className="px-4 py-1.5  text-slate-900">{movement.reference}</td>
+                  <td className={`px-4 py-1.5 text-right  ${
                     movement.type === 'IN' || movement.type === 'GRN_IN' ? 'text-emerald-600' : 'text-rose-600'
                   }`}>
                     {movement.type === 'IN' || movement.type === 'GRN_IN' ? '+' : '-'}{parseFloat(movement.quantity).toFixed(3)}
                   </td>
-                  <td className="px-4 py-1.5 text-right font-black text-slate-900">{parseFloat(movement.balance).toFixed(3)}</td>
-                  <td className="px-4 py-1.5 font-bold text-slate-500">{movement.warehouse}</td>
+                  <td className="px-4 py-1.5 text-right  text-slate-900">{parseFloat(movement.balance).toFixed(3)}</td>
+                  <td className="px-4 py-1.5  text-slate-500">{movement.warehouse}</td>
                 </tr>
               ))}
             </tbody>
@@ -480,14 +554,14 @@ const InventoryReport = () => {
         </div>
         {totalMovementsPages > 1 && (
           <div className="px-6 py-4 border-t border-slate-50 bg-slate-50/20 flex items-center justify-between">
-             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+             <p className="text-xs  text-slate-400  ">
                Showing {(movementsPage - 1) * itemsPerPage + 1} to {Math.min(movementsPage * itemsPerPage, stats.recentMovements.length)} of {stats.recentMovements.length} entries
              </p>
              <div className="flex items-center gap-1">
                <button 
                  disabled={movementsPage === 1}
                  onClick={() => setMovementsPage(prev => prev - 1)}
-                 className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:bg-white disabled:opacity-50"
+                 className="w-8 h-8 flex items-center justify-center rounded border border-slate-200 text-slate-400 hover:bg-white disabled:opacity-50"
                >
                  <ChevronRight className="w-4 h-4 rotate-180" />
                </button>
@@ -495,7 +569,7 @@ const InventoryReport = () => {
                  <button 
                    key={i}
                    onClick={() => setMovementsPage(i + 1)}
-                   className={`w-8 h-8 flex items-center justify-center rounded-lg font-black text-xs transition-all ${
+                   className={`w-8 h-8 flex items-center justify-center rounded  text-xs transition-all ${
                      movementsPage === i + 1 ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'border border-slate-200 text-slate-400 hover:bg-white'
                    }`}
                  >
@@ -505,7 +579,7 @@ const InventoryReport = () => {
                <button 
                  disabled={movementsPage === totalMovementsPages}
                  onClick={() => setMovementsPage(prev => prev + 1)}
-                 className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:bg-white disabled:opacity-50"
+                 className="w-8 h-8 flex items-center justify-center rounded border border-slate-200 text-slate-400 hover:bg-white disabled:opacity-50"
                >
                  <ChevronRight className="w-4 h-4" />
                </button>
