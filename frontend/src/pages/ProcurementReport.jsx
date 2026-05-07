@@ -29,6 +29,7 @@ const ProcurementReport = () => {
   const [selectedSupplier, setSelectedSupplier] = useState('All');
   const [summaryPage, setSummaryPage] = useState(1);
   const [vendorsPage, setVendorsPage] = useState(1);
+  const [activityPage, setActivityPage] = useState(1);
   const [uploadingPoId, setUploadingPoId] = useState(null);
   const [selectedPODetail, setSelectedPODetail] = useState(null);
   const [fetchingDetail, setFetchingDetail] = useState(false);
@@ -39,25 +40,12 @@ const ProcurementReport = () => {
     fetchProcurementReport();
     setSummaryPage(1);
     setVendorsPage(1);
+    setActivityPage(1);
   }, [dateRange, selectedSupplier]);
 
   const handleViewPO = async (poId) => {
     if (!poId) return;
-    try {
-      setFetchingDetail(true);
-      const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/purchase-orders/${poId}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setSelectedPODetail(data);
-      }
-    } catch (error) {
-      console.error('Error fetching PO detail:', error);
-    } finally {
-      setFetchingDetail(false);
-    }
+    navigate(`/grn-po-details/${poId}`);
   };
 
   const handleViewPDF = async (poId) => {
@@ -180,6 +168,14 @@ const ProcurementReport = () => {
   }, [stats?.vendorPerformance, vendorsPage]);
 
   const totalVendorsPages = Math.ceil((stats?.vendorPerformance?.length || 0) / itemsPerSmallPage);
+
+  const paginatedActivity = useMemo(() => {
+    if (!stats?.recentActivity) return [];
+    const startIndex = (activityPage - 1) * itemsPerSmallPage;
+    return stats.recentActivity.slice(startIndex, startIndex + itemsPerSmallPage);
+  }, [stats?.recentActivity, activityPage]);
+
+  const totalActivityPages = Math.ceil((stats?.recentActivity?.length || 0) / itemsPerSmallPage);
 
   const handleExport = () => {
     if (!stats) return;
@@ -418,7 +414,10 @@ const ProcurementReport = () => {
               <h3 className="text-sm text-slate-900   ">Vendor Performance</h3>
               <p className="text-xs text-slate-400   mt-1">Top vendors based on order performance</p>
             </div>
-            <button className="text-xs  text-indigo-600   flex items-center gap-1">
+            <button 
+              onClick={() => navigate('/suppliers?from=procurement-report')}
+              className="text-xs  text-indigo-600   flex items-center gap-1"
+            >
               View all vendors <ChevronRight className="w-3 h-3" />
             </button>
           </div>
@@ -489,12 +488,9 @@ const ProcurementReport = () => {
         <div className="bg-white rounded p-2 border border-slate-100 shadow-sm">
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-sm text-slate-900   ">Recent Procurement Activity</h3>
-            <button className="text-xs  text-indigo-600   flex items-center gap-1">
-              View all activity <ChevronRight className="w-3 h-3" />
-            </button>
           </div>
           <div className="space-y-4">
-            {stats.recentActivity.map((activity, idx) => (
+            {paginatedActivity.map((activity, idx) => (
               <div key={idx} className="flex items-start gap-3 group">
                 <div className={`p-2 rounded ${
                   activity.type === 'RFQ_SENT' ? 'bg-blue-50 text-blue-600' : 
@@ -518,6 +514,29 @@ const ProcurementReport = () => {
               </div>
             ))}
           </div>
+          {totalActivityPages > 1 && (
+            <div className="mt-4 flex items-center justify-between pt-2 border-t border-slate-50">
+              <p className="text-[9px]  text-slate-400  ">
+                Page {activityPage} of {totalActivityPages}
+              </p>
+              <div className="flex items-center gap-1">
+                <button 
+                  disabled={activityPage === 1}
+                  onClick={() => setActivityPage(prev => prev - 1)}
+                  className="w-6 h-6 flex items-center justify-center rounded bg-slate-50 text-slate-400 hover:bg-slate-100 disabled:opacity-50"
+                >
+                  <ChevronRight className="w-3 h-3 rotate-180" />
+                </button>
+                <button 
+                  disabled={activityPage === totalActivityPages}
+                  onClick={() => setActivityPage(prev => prev + 1)}
+                  className="w-6 h-6 flex items-center justify-center rounded bg-slate-50 text-slate-400 hover:bg-slate-100 disabled:opacity-50"
+                >
+                  <ChevronRight className="w-3 h-3" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

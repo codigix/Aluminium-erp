@@ -80,6 +80,7 @@ import ProcurementDashboard from "./pages/ProcurementDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
 import ProjectAnalysis from "./pages/ProjectAnalysis";
 import SalesReport from "./pages/SalesReport";
+import SalesReportDetails from "./pages/SalesReportDetails";
 import ProcurementReport from "./pages/ProcurementReport";
 import ProductionReport from "./pages/ProductionReport";
 import InventoryReport from "./pages/InventoryReport";
@@ -87,12 +88,19 @@ import OEEAnalysis from "./pages/OEEAnalysis";
 import MachineAnalysis from "./pages/MachineAnalysis";
 import MaterialConsumption from "./pages/MaterialConsumption";
 import WorkOrderDetail from "./pages/WorkOrderDetail";
+import GRNPOdetails from "./pages/GRNPOdetails";
+import QCGrnDetails from "./pages/QCGrnDetails";
+import ShipmentDetails from "./pages/ShipmentDetails";
+import TransactionDetails from "./pages/TransactionDetails";
+import StockDetails from "./pages/StockDetails";
+import ApprovedQuotations from "./pages/ApprovedQuotations";
+import ActiveClients from "./pages/ActiveClients";
 import { FormControl, StatusBadge, Button } from "./components/ui.jsx";
 import './index.css'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 const API_HOST = API_BASE
-const MODULE_IDS = ['dashboard', 'admin-dashboard', 'project-analysis', 'sales-report', 'procurement-report', 'production-report', 'inventory-report', 'accounts-report', 'oee-analysis', 'machine-analysis', 'material-consumption', 'sales-dashboard', 'design-dashboard', 'production-dashboard', 'procurement-dashboard', 'item-master', 'company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'quotation-form', 'vendor-management', 'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'quality-dashboard', 'accounts-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance', 'incoming-qc', 'quality-rejections', 'quality-reports', 'quality-rejection-entry', 'warehouses', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval', 'bom-form', 'workstation-master', 'operation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card', 'sub-contract-challans', 'stock-entries', 'incoming-orders', 'vendor-inward-challans', 'invoice-received', 'payment-processing', 'payment-received', 'payment-history', 'customer-payment-history', 'shipment-dashboard', 'shipment-orders', 'shipment-planning', 'dispatch-management', 'delivery-challan', 'shipment-tracking', 'shipment-returns', 'shipment-reports', 'work-order-details']
+const MODULE_IDS = ['dashboard', 'admin-dashboard', 'project-analysis', 'sales-report', 'approved-quotations', 'active-clients', 'sales-report-details', 'procurement-report', 'production-report', 'inventory-report', 'accounts-report', 'oee-analysis', 'machine-analysis', 'material-consumption', 'sales-dashboard', 'design-dashboard', 'production-dashboard', 'procurement-dashboard', 'item-master', 'company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'quotation-form', 'vendor-management', 'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'quality-dashboard', 'accounts-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance', 'incoming-qc', 'quality-rejections', 'quality-reports', 'quality-rejection-entry', 'warehouses', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval', 'bom-form', 'workstation-master', 'operation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card', 'sub-contract-challans', 'stock-entries', 'incoming-orders', 'vendor-inward-challans', 'invoice-received', 'payment-processing', 'payment-received', 'payment-history', 'customer-payment-history', 'shipment-dashboard', 'shipment-orders', 'shipment-planning', 'dispatch-management', 'delivery-challan', 'shipment-tracking', 'shipment-returns', 'shipment-reports', 'work-order-details', 'grn-po-details', 'qc-grn-details', 'shipment-details', 'transaction-details', 'stock-details']
 const DEFAULT_MODULE = 'dashboard'
 const HOME_PLANT_STATE = (import.meta.env.VITE_PLANT_STATE || 'maharashtra').toLowerCase()
 const currencyFormatter = new Intl.NumberFormat('en-IN', {
@@ -184,19 +192,19 @@ const getContactStatusActionLabel = status => {
 }
 
 const DEPARTMENT_MODULES = {
-  SALES: ['dashboard', 'item-master', 'company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'quotation-form', 'sales-report'],
+  SALES: ['dashboard', 'item-master', 'company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'quotation-form', 'sales-report', 'approved-quotations', 'sales-report-details'],
   DESIGN_ENG: ['dashboard', 'item-master', 'design-orders', 'drawing-master', 'bom-creation', 'bom-approval', 'bom-form', 'routing-operations', 'process-sheet'],
   PRODUCTION: ['dashboard', 'item-master', 'project-requests', 'incoming-orders', 'operation-master', 'workstation-master', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card', 'sub-contract-challans', 'routing-operations', 'process-sheet', 'production-report', 'work-order-details'],
   QUALITY: ['dashboard', 'item-master', 'incoming-qc', 'quality-rejections', 'quality-reports', 'quality-rejection-entry', 'qc-inspections'],
   SHIPMENT: ['dashboard', 'item-master', 'shipment-orders', 'shipment-planning', 'dispatch-management', 'delivery-challan', 'shipment-tracking', 'shipment-returns', 'shipment-reports'],
-  ACCOUNTS: ['dashboard', 'payment-history', 'customer-payment-history'],
-  INVENTORY: ['dashboard', 'item-master', 'po-material-request', 'grn', 'stock-entries', 'stock-ledger', 'stock-balance', 'warehouses', 'suppliers'],
-  PROCUREMENT: ['dashboard', 'item-master', 'quotations', 'purchase-orders', 'po-receipts', 'incoming-orders', 'suppliers', 'procurement-report'],
+  ACCOUNTS: ['dashboard', 'payment-history', 'customer-payment-history', 'accounts-report', 'transaction-details'],
+  INVENTORY: ['dashboard', 'item-master', 'po-material-request', 'grn', 'stock-entries', 'stock-ledger', 'stock-balance', 'warehouses', 'suppliers', 'grn-po-details'],
+  PROCUREMENT: ['dashboard', 'item-master', 'quotations', 'purchase-orders', 'po-receipts', 'incoming-orders', 'suppliers', 'procurement-report', 'grn-po-details'],
   ADMIN: [
-    'dashboard', 'admin-dashboard', 'project-analysis', 'sales-report', 'procurement-report', 'production-report', 'inventory-report', 'accounts-report', 'oee-analysis', 'machine-analysis', 'material-consumption',
+    'dashboard', 'admin-dashboard', 'project-analysis', 'sales-report', 'approved-quotations', 'sales-report-details', 'procurement-report', 'production-report', 'inventory-report', 'accounts-report', 'oee-analysis', 'machine-analysis', 'material-consumption',
     'quality-reports',
     'payment-history', 'customer-payment-history',
-    'shipment-tracking', 'shipment-reports', 'work-order-details'
+    'shipment-tracking', 'shipment-reports', 'work-order-details', 'grn-po-details', 'stock-details'
   ]
 }
 
@@ -217,6 +225,9 @@ function App() {
     if (MODULE_IDS.includes(firstSegment)) {
       if (firstSegment === 'work-order-details') {
         return 'work-order-details';
+      }
+      if (firstSegment === 'sales-report-details') {
+        return 'sales-report-details';
       }
       if (firstSegment === 'work-order' && segments[1] === 'edit-work') {
         return 'work-order-form';
@@ -247,6 +258,21 @@ function App() {
       }
       if (firstSegment === 'sub-contract-challans') {
         return 'sub-contract-challans';
+      }
+      if (firstSegment === 'grn-po-details') {
+        return 'grn-po-details';
+      }
+      if (firstSegment === 'qc-grn-details') {
+        return 'qc-grn-details';
+      }
+      if (firstSegment === 'shipment-details') {
+        return 'shipment-details';
+      }
+      if (firstSegment === 'transaction-details') {
+        return 'transaction-details';
+      }
+      if (firstSegment === 'stock-details') {
+        return 'stock-details';
       }
       return firstSegment
     }
@@ -296,7 +322,7 @@ function App() {
     }
     
     // Ensure auxiliary pages are always included if the main module is present
-    if (modules.includes('client-quotations') && !modules.includes('quotation-form')) {
+    if ((modules.includes('client-quotations') || modules.includes('approved-quotations')) && !modules.includes('quotation-form')) {
       modules.push('quotation-form')
     }
     if (modules.includes('bom-creation') && !modules.includes('bom-form')) {
@@ -304,6 +330,36 @@ function App() {
     }
     if ((modules.includes('production-report') || modules.includes('work-order') || modules.includes('job-card')) && !modules.includes('work-order-details')) {
       modules.push('work-order-details')
+    }
+    if (modules.includes('production-report') && !modules.includes('operation-master')) {
+      modules.push('operation-master')
+    }
+    if (modules.includes('sales-report') && !modules.includes('sales-report-details')) {
+      modules.push('sales-report-details')
+    }
+    if (modules.includes('sales-report') && !modules.includes('approved-quotations')) {
+      modules.push('approved-quotations')
+    }
+    if ((modules.includes('sales-report') || modules.includes('production-report')) && !modules.includes('active-clients')) {
+      modules.push('active-clients')
+    }
+    if ((modules.includes('purchase-orders') || modules.includes('grn') || modules.includes('procurement-report') || modules.includes('po-receipts')) && !modules.includes('grn-po-details')) {
+      modules.push('grn-po-details')
+    }
+    if (modules.includes('procurement-report') && !modules.includes('suppliers')) {
+      modules.push('suppliers')
+    }
+    if ((modules.includes('quality-reports') || modules.includes('qc-inspections')) && !modules.includes('qc-grn-details')) {
+      modules.push('qc-grn-details')
+    }
+    if ((modules.includes('shipment-reports') || modules.includes('shipment-orders') || modules.includes('shipment-planning')) && !modules.includes('shipment-details')) {
+      modules.push('shipment-details')
+    }
+    if ((modules.includes('accounts-report') || modules.includes('invoice-received') || modules.includes('payment-history')) && !modules.includes('transaction-details')) {
+      modules.push('transaction-details')
+    }
+    if ((modules.includes('inventory-report') || modules.includes('stock-balance') || modules.includes('stock-ledger')) && !modules.includes('stock-details')) {
+      modules.push('stock-details')
     }
     
     return modules
@@ -638,6 +694,13 @@ function App() {
   useEffect(() => {
     if (token && user && allowedModules.length > 0) {
       if (!allowedModules.includes(activeModule)) {
+        // Special case for detail pages that might not be in the permission list
+        if (activeModule === 'sales-report-details' && allowedModules.includes('sales-report')) {
+          return;
+        }
+        if (activeModule === 'work-order-details' && (allowedModules.includes('work-order') || allowedModules.includes('production-report'))) {
+          return;
+        }
         navigate(`/${allowedModules[0]}`)
       }
     }
@@ -1177,7 +1240,11 @@ function App() {
     }
 
     const isAllowedModule = !item.moduleId || allowedModules.includes(item.moduleId)
-    const isCorrectDept = !item.deptCode || isAdmin || user?.department_code === item.deptCode
+    let isCorrectDept = !item.deptCode || isAdmin || user?.department_code === item.deptCode
+    
+    // Explicitly hide Operations from Admin sidebar as requested
+    if (isAdmin && (item.moduleId === 'operation-master' || item.moduleId === 'suppliers')) isCorrectDept = false
+    
     return isAllowedModule && isCorrectDept
   }) : []
 
@@ -1586,8 +1653,18 @@ function App() {
           <div className="flex-1 p-4 min-w-0 overflow-y-auto custom-scrollbar">
             {location.pathname.startsWith('/receipt-details/') ? (
               <POReceiptDetails />
+            ) : location.pathname.startsWith('/sales-report-details/') ? (
+              <SalesReportDetails />
             ) : location.pathname.startsWith('/work-order-details/') ? (
               <WorkOrderDetail />
+            ) : location.pathname.startsWith('/grn-po-details/') ? (
+              <GRNPOdetails />
+            ) : location.pathname.startsWith('/qc-grn-details/') ? (
+              <QCGrnDetails />
+            ) : location.pathname.startsWith('/transaction-details/') ? (
+              <TransactionDetails />
+            ) : location.pathname.startsWith('/stock-details/') ? (
+              <StockDetails />
             ) : !allowedModules.includes(activeModule) && user.department_code !== 'ADMIN' ? (
               <div className="flex flex-col items-center justify-center h-full text-slate-500">
                 <XCircle className="w-16 h-16 mb-4 text-rose-500" />
@@ -1616,6 +1693,14 @@ function App() {
 
                 {activeModule === 'sales-report' && (
                   <SalesReport />
+                )}
+
+                {activeModule === 'approved-quotations' && (
+                  <ApprovedQuotations />
+                )}
+
+                {activeModule === 'active-clients' && (
+                  <ActiveClients />
                 )}
 
                 {activeModule === 'procurement-report' && (
@@ -1925,6 +2010,10 @@ function App() {
 
                 {activeModule === 'shipment-reports' && (
                   <ShipmentReports apiRequest={apiRequest} />
+                )}
+
+                {activeModule === 'shipment-details' && (
+                  <ShipmentDetails />
                 )}
               </>
             )}

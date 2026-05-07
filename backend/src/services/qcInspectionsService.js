@@ -816,6 +816,7 @@ const getQCReports = async (filters = {}) => {
   const [recentReports] = await pool.query(`
     SELECT 
       qc.id as reportId,
+      qc.grn_id as grnId,
       CONCAT('GRN-', LPAD(qc.grn_id, 4, '0')) as grn,
       qc.inspection_date as date,
       qc.status,

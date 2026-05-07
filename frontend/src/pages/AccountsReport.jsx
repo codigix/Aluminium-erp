@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import { Card, DataTable, StatusBadge, Button } from '../components/ui.jsx';
 import { 
@@ -17,6 +18,7 @@ import {
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
 const AccountsReport = () => {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(new Date());
@@ -28,12 +30,16 @@ const AccountsReport = () => {
   const [transactionsPage, setTransactionsPage] = useState(1);
   const [customersPage, setCustomersPage] = useState(1);
   const [vendorsPage, setVendorsPage] = useState(1);
-  const itemsPerPage = 2;
-  const transactionsPerPage = 3;
+  const [showAllTransactions, setShowAllTransactions] = useState(false);
+  const [allTransactionsPage, setAllTransactionsPage] = useState(1);
+  const itemsPerPage = 5;
+  const transactionsPerPage = 5;
+  const allTransactionsPerPage = 15;
 
   useEffect(() => {
     fetchAccountsReport();
     setTransactionsPage(1);
+    setAllTransactionsPage(1);
     setCustomersPage(1);
     setVendorsPage(1);
   }, [dateRange, selectedCustomer]);
@@ -65,11 +71,13 @@ const AccountsReport = () => {
 
   const paginatedTransactions = useMemo(() => {
     if (!stats?.recentTransactions) return [];
-    const startIndex = (transactionsPage - 1) * transactionsPerPage;
-    return stats.recentTransactions.slice(startIndex, startIndex + transactionsPerPage);
-  }, [stats?.recentTransactions, transactionsPage]);
+    const perPage = showAllTransactions ? allTransactionsPerPage : transactionsPerPage;
+    const currPage = showAllTransactions ? allTransactionsPage : transactionsPage;
+    const startIndex = (currPage - 1) * perPage;
+    return stats.recentTransactions.slice(startIndex, startIndex + perPage);
+  }, [stats?.recentTransactions, transactionsPage, allTransactionsPage, showAllTransactions]);
 
-  const totalTransactionPages = Math.ceil((stats?.recentTransactions?.length || 0) / transactionsPerPage);
+  const totalTransactionPages = Math.ceil((stats?.recentTransactions?.length || 0) / (showAllTransactions ? allTransactionsPerPage : transactionsPerPage));
 
   const paginatedCustomers = useMemo(() => {
     if (!stats?.topCustomers) return [];
@@ -180,6 +188,29 @@ const AccountsReport = () => {
     }
   };
 
+  const handleDownloadAttachment = async (url, fileName) => {
+    if (!url) return;
+    try {
+      const fullUrl = url.startsWith('http') ? url : `${API_BASE}${url}`;
+      const response = await fetch(fullUrl);
+      if (!response.ok) throw new Error('File not found');
+      
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = fileName || url.split('/').pop() || 'attachment.pdf';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      console.error('Error downloading attachment:', error);
+      const fullUrl = url.startsWith('http') ? url : `${API_BASE}${url}`;
+      window.open(fullUrl, '_blank');
+    }
+  };
+
   const handleExport = () => {
     if (!stats) return;
 
@@ -245,10 +276,91 @@ const AccountsReport = () => {
         <Icon className="w-5 h-5" />
       </div>
       <div>
-        <p className="text-xs text-slate-400   tracking-wider">{title}</p>
-        <h3 className="text-xl text-slate-900 ">{value}</h3>
-        <p className="text-xs text-slate-500  ">{subtitle}</p>
+        <p className="text-xs text-slate-400 font-medium uppercase tracking-wider leading-tight truncate">{title}</p>
+        <h3 className="text-xl font-bold text-slate-900 leading-tight truncate">{value}</h3>
+        <p className="text-xs text-slate-500 font-medium leading-tight truncate">{subtitle}</p>
       </div>
+    </div>
+  );
+
+  const renderTransactionsTable = (data, isFullView = false) => (
+    <div className="p-0 overflow-x-auto">
+      <table className="w-full text-left bg-white border-collapse">
+        <thead>
+          <tr className="bg-slate-50/50 text-xs text-slate-400 font-bold uppercase tracking-tighter border-b border-slate-100">
+            <th className="p-2">Type</th>
+            <th className="p-2">Reference</th>
+            <th className="p-2">Customer / Vendor</th>
+            <th className="p-2">Date</th>
+            <th className="p-2">Due Date</th>
+            <th className="p-2 text-right">Amount</th>
+            <th className="p-2 text-center">Status</th>
+            <th className="p-2 text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-50">
+          {data.map((transaction, idx) => (
+            <tr key={idx} className="hover:bg-slate-50/50 transition-colors group text-xs">
+              <td className="p-2">
+                <span className={`px-2 py-0.5 rounded font-bold ${
+                  transaction.type === 'Payment Received' ? 'bg-emerald-50 text-emerald-600' : 
+                  transaction.type === 'Vendor Payment' ? 'bg-amber-50 text-amber-600' : 'bg-blue-50 text-blue-600'
+                }`}>
+                  {transaction.type}
+                </span>
+              </td>
+              <td className="p-2 font-bold text-indigo-600">{transaction.reference}</td>
+              <td className="p-2 font-medium text-slate-900">{transaction.party}</td>
+              <td className="p-2 text-slate-500 whitespace-nowrap">
+                {new Date(transaction.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+              </td>
+              <td className="p-2 text-slate-500 whitespace-nowrap">
+                {transaction.dueDate ? new Date(transaction.dueDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'}
+              </td>
+              <td className="p-2 text-right font-bold text-slate-900">₹{parseFloat(transaction.amount).toLocaleString('en-IN')}</td>
+              <td className="p-2 text-center">
+                <span className={`px-2 py-0.5 rounded font-bold ${
+                  transaction.status === 'Confirmed' || transaction.status === 'Paid' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'
+                }`}>
+                  {transaction.status}
+                </span>
+              </td>
+              <td className="p-2 text-right">
+                <div className="flex items-center justify-end gap-1">
+                  <button 
+                    onClick={() => navigate(`/transaction-details/${transaction.id}?type=${encodeURIComponent(transaction.type)}`)}
+                    className="p-2 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded-lg transition-all border border-transparent hover:border-slate-200"
+                    title="View Details"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                  </button>
+                  <button 
+                    onClick={() => handleDownloadPDF(transaction)}
+                    className="p-2 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded-lg transition-all border border-transparent hover:border-slate-200"
+                    title="Download PDF"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                  </button>
+                  <button 
+                    onClick={() => handlePrintPDF(transaction)}
+                    className="p-2 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded-lg transition-all border border-transparent hover:border-slate-200"
+                    title="Print PDF"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </td>
+            </tr>
+          ))}
+          {data.length === 0 && (
+            <tr>
+              <td colSpan="8" className="p-2 text-center text-slate-400 text-xs   ">
+                No transactions found for selected period
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
     </div>
   );
 
@@ -261,15 +373,83 @@ const AccountsReport = () => {
     );
   }
 
+  if (showAllTransactions) {
+    return (
+      <div className="space-y-6 pb-12 animate-in fade-in duration-500">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-bold text-slate-900">All Transactions</h2>
+            <p className="text-xs text-slate-500 mt-1">Full transaction history for the selected period</p>
+          </div>
+          <Button 
+            variant="outline" 
+            onClick={() => setShowAllTransactions(false)}
+            className="flex items-center gap-2"
+          >
+            <ArrowRight className="w-4 h-4 rotate-180" />
+            Back to Report
+          </Button>
+        </div>
+
+        {/* Mini KPIs for History View */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+           <KPIStoreCard title="Receivables" value={`₹${(stats.kpis.totalReceivables/100000).toFixed(1)}L`} subtitle="Total Owed" icon={IndianRupee} color="text-indigo-600" subColor="bg-indigo-50" />
+           <KPIStoreCard title="Payables" value={`₹${(stats.kpis.totalPayables/100000).toFixed(1)}L`} subtitle="Total Due" icon={CreditCard} color="text-rose-600" subColor="bg-rose-50" />
+           <KPIStoreCard title="Cash Inflow" value={`₹${(stats.kpis.cashReceived/100000).toFixed(1)}L`} subtitle="Total Collected" icon={TrendingUp} color="text-emerald-600" subColor="bg-emerald-50" />
+           <KPIStoreCard title="Overdue" value={`₹${(stats.kpis.overdueAmount/100000).toFixed(1)}L`} subtitle="Pending Recovery" icon={AlertTriangle} color="text-amber-600" subColor="bg-amber-50" />
+        </div>
+
+        <div className="bg-white rounded border border-slate-100 shadow-sm overflow-hidden flex flex-col">
+          {renderTransactionsTable(paginatedTransactions, true)}
+          
+          {totalTransactionPages > 1 && (
+            <div className="p-2 border-t border-slate-50 bg-slate-50/20 flex items-center justify-between">
+              <p className="text-xs text-slate-400">
+                Showing {(allTransactionsPage - 1) * allTransactionsPerPage + 1} to {Math.min(allTransactionsPage * allTransactionsPerPage, stats.recentTransactions.length)} of {stats.recentTransactions.length} transactions
+              </p>
+              <div className="flex items-center gap-1">
+                <button 
+                  disabled={allTransactionsPage === 1}
+                  onClick={() => setAllTransactionsPage(prev => prev - 1)}
+                  className="w-8 h-8 flex items-center justify-center rounded border border-slate-200 text-slate-400 hover:bg-white disabled:opacity-50"
+                >
+                  <ChevronRight className="w-4 h-4 rotate-180" />
+                </button>
+                {[...Array(totalTransactionPages)].map((_, i) => (
+                  <button 
+                    key={i}
+                    onClick={() => setAllTransactionsPage(i + 1)}
+                    className={`w-8 h-8 flex items-center justify-center rounded text-xs font-bold transition-all ${
+                      allTransactionsPage === i + 1 ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'border border-slate-200 text-slate-400 hover:bg-white'
+                    }`}
+                  >
+                    {i + 1}
+                  </button>
+                ))}
+                <button 
+                  disabled={allTransactionsPage === totalTransactionPages}
+                  onClick={() => setAllTransactionsPage(prev => prev + 1)}
+                  className="w-8 h-8 flex items-center justify-center rounded border border-slate-200 text-slate-400 hover:bg-white disabled:opacity-50"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#f43f5e'];
 
   return (
     <div className=" pb-12 animate-in fade-in duration-500">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-xl  text-slate-900  ">Accounts Report</h1>
-          <p className="text-xs text-slate-500    mt-1">Overview of financial performance and account activities</p>
+          <h1 className="text-xl font-bold text-slate-900">Accounts Report</h1>
+          <p className="text-xs text-slate-500 mt-1">Overview of financial performance and account activities</p>
         </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 p-2 bg-white border border-slate-200 rounded text-xs  text-slate-600">
@@ -353,7 +533,6 @@ const AccountsReport = () => {
                   </div>
                   <div className="text-right">
                     <p className="text-xs  text-slate-900">₹{parseFloat(item.value).toLocaleString('en-IN')}</p>
-                    <p className="text-xs text-slate-400 ">{item.percent}%</p>
                   </div>
                 </div>
               ))}
@@ -435,7 +614,10 @@ const AccountsReport = () => {
               <h3 className="text-sm text-slate-900   ">Top Customers</h3>
               <p className="text-xs text-slate-400   mt-1">By outstanding amount</p>
             </div>
-            <button className="text-xs  text-indigo-600   flex items-center gap-1">
+            <button 
+              onClick={() => navigate('/active-clients')}
+              className="text-xs  text-indigo-600   flex items-center gap-1"
+            >
               View all customers <ChevronRight className="w-3 h-3" />
             </button>
           </div>
@@ -500,7 +682,10 @@ const AccountsReport = () => {
               <h3 className="text-sm text-slate-900   ">Top Vendors</h3>
               <p className="text-xs text-slate-400   mt-1">By outstanding amount</p>
             </div>
-            <button className="text-xs  text-indigo-600   flex items-center gap-1">
+            <button 
+              onClick={() => navigate('/suppliers?from=procurement-report')}
+              className="text-xs  text-indigo-600   flex items-center gap-1"
+            >
               View all vendors <ChevronRight className="w-3 h-3" />
             </button>
           </div>
@@ -563,81 +748,14 @@ const AccountsReport = () => {
       <div className="mt-5">
         <div className="border-b border-slate-50 flex items-center justify-between">
            <h3 className="text-sm text-slate-900   ">Recent Transactions</h3>
-           <button className="text-xs  text-indigo-600   flex items-center gap-1">
+           <button 
+             onClick={() => setShowAllTransactions(true)}
+             className="text-xs  text-indigo-600   flex items-center gap-1"
+           >
              View all transactions <ArrowRight className="w-3 h-3" />
            </button>
         </div>
-        <div className="p-0 overflow-x-auto">
-          <table className="w-full text-left bg-white border-collapse">
-            <thead>
-              <tr className="bg-slate-50/50 text-xs text-slate-400    border-b border-slate-100">
-                <th className="p-2">Type</th>
-                <th className="p-2">Reference</th>
-                <th className="p-2">Customer / Vendor</th>
-                <th className="p-2">Date</th>
-                <th className="p-2">Due Date</th>
-                <th className="p-2 text-right">Amount</th>
-                <th className="p-2 text-center">Status</th>
-                <th className="p-2 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50">
-              {paginatedTransactions.map((transaction, idx) => (
-                <tr key={idx} className="hover:bg-slate-50/50 transition-colors group text-xs">
-                  <td className="p-2">
-                    <span className={`p-1 rounded text-xs   er ${
-                      transaction.type === 'Payment Received' ? 'bg-emerald-50 text-emerald-600' : 
-                      transaction.type === 'Vendor Payment' ? 'bg-amber-50 text-amber-600' : 'bg-blue-50 text-blue-600'
-                    }`}>
-                      {transaction.type}
-                    </span>
-                  </td>
-                  <td className="p-2  text-indigo-600">{transaction.reference}</td>
-                  <td className="p-2  text-slate-900">{transaction.party}</td>
-                  <td className="p-2 text-slate-500  whitespace-nowrap">
-                    {new Date(transaction.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
-                  </td>
-                  <td className="p-2 text-slate-500  whitespace-nowrap">
-                    {transaction.dueDate ? new Date(transaction.dueDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'}
-                  </td>
-                  <td className="p-2 text-right  text-slate-900">₹{parseFloat(transaction.amount).toLocaleString('en-IN')}</td>
-                  <td className="p-2 text-center">
-                    <span className={`p-1 rounded text-xs   er ${
-                      transaction.status === 'Confirmed' || transaction.status === 'Paid' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'
-                    }`}>
-                      {transaction.status}
-                    </span>
-                  </td>
-                  <td className="p-2 text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <button 
-                        onClick={() => handleDownloadPDF(transaction)}
-                        className="p-2 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded-lg transition-all border border-transparent hover:border-slate-200"
-                        title="Download PDF"
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                      </button>
-                      <button 
-                        onClick={() => handlePrintPDF(transaction)}
-                        className="p-2 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded-lg transition-all border border-transparent hover:border-slate-200"
-                        title="Print PDF"
-                      >
-                        <Printer className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {paginatedTransactions.length === 0 && (
-                <tr>
-                  <td colSpan="8" className="p-2 text-center text-slate-400 text-xs   ">
-                    No transactions found for selected period
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        {renderTransactionsTable(paginatedTransactions)}
         {totalTransactionPages > 1 && (
           <div className="p-2 border-t border-slate-50 bg-slate-50/20 flex items-center justify-between">
              <p className="text-xs  text-slate-400  ">

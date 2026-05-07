@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import { Card, DataTable, StatusBadge, Button } from '../components/ui.jsx';
+import { useNavigate } from 'react-router-dom';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   AreaChart, Area, Cell, PieChart, Pie, Legend
@@ -17,6 +18,7 @@ import {
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
 const InventoryReport = () => {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(new Date());
@@ -27,8 +29,11 @@ const InventoryReport = () => {
   const [selectedWarehouse, setSelectedWarehouse] = useState('All');
   const [movementsPage, setMovementsPage] = useState(1);
   const [lowStockPage, setLowStockPage] = useState(1);
+  const [showAllLowStock, setShowAllLowStock] = useState(false);
+  const [showAllMovements, setShowAllMovements] = useState(false);
   const itemsPerPage = 10;
   const itemsPerSmallPage = 5;
+  const allItemsPerPage = 15;
 
   useEffect(() => {
     fetchInventoryReport();
@@ -63,19 +68,29 @@ const InventoryReport = () => {
 
   const paginatedMovements = useMemo(() => {
     if (!stats?.recentMovements) return [];
-    const startIndex = (movementsPage - 1) * itemsPerPage;
-    return stats.recentMovements.slice(startIndex, startIndex + itemsPerPage);
-  }, [stats?.recentMovements, movementsPage]);
+    const perPage = showAllMovements ? allItemsPerPage : itemsPerPage;
+    const currPage = movementsPage;
+    const startIndex = (currPage - 1) * perPage;
+    return stats.recentMovements.slice(startIndex, startIndex + perPage);
+  }, [stats?.recentMovements, movementsPage, showAllMovements]);
 
-  const totalMovementsPages = Math.ceil((stats?.recentMovements?.length || 0) / itemsPerPage);
+  const totalMovementsPages = useMemo(() => {
+    const perPage = showAllMovements ? allItemsPerPage : itemsPerPage;
+    return Math.ceil((stats?.recentMovements?.length || 0) / perPage);
+  }, [stats?.recentMovements, showAllMovements]);
 
   const paginatedLowStock = useMemo(() => {
     if (!stats?.lowStockItems) return [];
-    const startIndex = (lowStockPage - 1) * itemsPerSmallPage;
-    return stats.lowStockItems.slice(startIndex, startIndex + itemsPerSmallPage);
-  }, [stats?.lowStockItems, lowStockPage]);
+    const perPage = showAllLowStock ? allItemsPerPage : itemsPerSmallPage;
+    const currPage = lowStockPage;
+    const startIndex = (currPage - 1) * perPage;
+    return stats.lowStockItems.slice(startIndex, startIndex + perPage);
+  }, [stats?.lowStockItems, lowStockPage, showAllLowStock]);
 
-  const totalLowStockPages = Math.ceil((stats?.lowStockItems?.length || 0) / itemsPerSmallPage);
+  const totalLowStockPages = useMemo(() => {
+    const perPage = showAllLowStock ? allItemsPerPage : itemsPerSmallPage;
+    return Math.ceil((stats?.lowStockItems?.length || 0) / perPage);
+  }, [stats?.lowStockItems, showAllLowStock]);
 
   const handleExport = () => {
     if (!stats) return;
@@ -142,13 +157,13 @@ const InventoryReport = () => {
   const KPIStoreCard = ({ title, value, subtitle, icon: Icon, color, subColor }) => (
     <div className="bg-white rounded p-2 border border-slate-100 shadow-sm flex items-center gap-4 relative overflow-hidden group">
       <div className={`absolute top-0 right-0 w-16 h-16 ${subColor} opacity-10 rounded -mr-6 -mt-6 transition-transform group-hover:scale-110`} />
-      <div className={`p-3 rounded ${subColor} ${color}`}>
+      <div className={`p-2 rounded ${subColor} ${color}`}>
         <Icon className="w-5 h-5" />
       </div>
       <div>
-        <p className="text-xs text-slate-400   tracking-wider">{title}</p>
-        <h3 className="text-xl text-slate-900 ">{value}</h3>
-        <p className="text-xs text-slate-500  ">{subtitle}</p>
+        <p className="text-xs text-slate-400 font-medium uppercase tracking-wider leading-tight truncate">{title}</p>
+        <h3 className="text-xl font-bold text-slate-900 leading-tight truncate">{value}</h3>
+        <p className="text-xs text-slate-500 font-medium leading-tight truncate">{subtitle}</p>
       </div>
     </div>
   );
@@ -158,6 +173,229 @@ const InventoryReport = () => {
       <div className="flex flex-col items-center justify-center p-22 space-y-4">
         <div className="w-16 h-16 border-4 border-slate-100 border-t-rose-600 rounded animate-spin" />
         <h3 className="text-slate-900   ">Generating Inventory Report...</h3>
+      </div>
+    );
+  }
+
+  if (showAllLowStock) {
+    return (
+      <div className="space-y-6 pb-12 animate-in fade-in duration-500">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <h2 className="text-xl text-slate-900 font-bold">All Low Stock Items</h2>
+            <div className="hidden md:flex items-center gap-2">
+               <div className="px-3 py-1 bg-amber-50 text-amber-600 rounded-full text-xs font-bold">Low Stock: {stats.kpis.lowStockCount}</div>
+               <div className="px-3 py-1 bg-rose-50 text-rose-600 rounded-full text-xs font-bold">Out of Stock: {stats.kpis.outOfStockCount}</div>
+            </div>
+          </div>
+          <Button 
+            variant="outline" 
+            onClick={() => setShowAllLowStock(false)}
+            className="flex items-center gap-2"
+          >
+            <ArrowRight className="w-4 h-4 rotate-180" />
+            Back to Report
+          </Button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+           <KPIStoreCard title="Total Items" value={stats.kpis.totalItems} subtitle="In Catalog" icon={Box} color="text-indigo-600" subColor="bg-indigo-50" />
+           <KPIStoreCard title="Low Stock" value={stats.kpis.lowStockCount} subtitle="Items Below Min" icon={AlertTriangle} color="text-amber-600" subColor="bg-amber-50" />
+           <KPIStoreCard title="Out of Stock" value={stats.kpis.outOfStockCount} subtitle="Zero Balance" icon={XCircle} color="text-rose-600" subColor="bg-rose-50" />
+           <KPIStoreCard title="Stock Value" value={`₹${(stats.kpis.totalValue/100000).toFixed(1)}L`} subtitle="Total Assets" icon={IndianRupee} color="text-emerald-600" subColor="bg-emerald-50" />
+        </div>
+
+        <div className="bg-white rounded border border-slate-100 shadow-sm overflow-hidden flex flex-col">
+          <div className="p-0 overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50/50 text-xs text-slate-400 font-bold uppercase tracking-tighter border-b border-slate-100">
+                  <th className="p-2">Item Code</th>
+                  <th className="p-2">Item Name</th>
+                  <th className="p-2">Warehouse</th>
+                  <th className="p-2 text-center">Current Stock</th>
+                  <th className="p-2 text-right">Min. Required</th>
+                  <th className="p-2 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {paginatedLowStock.map((item, idx) => (
+                  <tr key={idx} className="hover:bg-slate-50/50 transition-colors group text-xs">
+                    <td className="p-2 font-bold text-indigo-600">{item.itemCode}</td>
+                    <td className="p-2 font-medium text-slate-900">{item.itemName}</td>
+                    <td className="p-2 text-slate-500">{item.warehouse}</td>
+                    <td className="p-2 text-center">
+                       <span className={`px-2 py-0.5 rounded font-bold ${parseFloat(item.currentStock) === 0 ? 'bg-rose-50 text-rose-600' : 'bg-amber-50 text-amber-600'}`}>
+                         {parseFloat(item.currentStock).toFixed(0)} {item.uom}
+                       </span>
+                    </td>
+                    <td className="p-2 text-right font-bold text-slate-400">{parseFloat(item.minRequired).toFixed(0)} {item.uom}</td>
+                    <td className="p-2 text-right">
+                      <button 
+                        onClick={() => navigate(`/stock-details/${item.itemCode}`)}
+                        className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded transition-all"
+                        title="View Details"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {totalLowStockPages > 1 && (
+            <div className="p-2 border-t border-slate-50 bg-slate-50/20 flex items-center justify-between">
+              <p className="text-xs text-slate-400">
+                Showing {(lowStockPage - 1) * (showAllLowStock ? allItemsPerPage : itemsPerSmallPage) + 1} to {Math.min(lowStockPage * (showAllLowStock ? allItemsPerPage : itemsPerSmallPage), stats.lowStockItems.length)} of {stats.lowStockItems.length} items
+              </p>
+              <div className="flex items-center gap-1">
+                <button 
+                  disabled={lowStockPage === 1}
+                  onClick={() => setLowStockPage(prev => prev - 1)}
+                  className="w-8 h-8 flex items-center justify-center rounded border border-slate-200 text-slate-400 hover:bg-white disabled:opacity-50"
+                >
+                  <ChevronRight className="w-4 h-4 rotate-180" />
+                </button>
+                {[...Array(totalLowStockPages)].map((_, i) => (
+                  <button 
+                    key={i}
+                    onClick={() => setLowStockPage(i + 1)}
+                    className={`w-8 h-8 flex items-center justify-center rounded text-xs font-bold transition-all ${
+                      lowStockPage === i + 1 ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'border border-slate-200 text-slate-400 hover:bg-white'
+                    }`}
+                  >
+                    {i + 1}
+                  </button>
+                ))}
+                <button 
+                  disabled={lowStockPage === totalLowStockPages}
+                  onClick={() => setLowStockPage(prev => prev + 1)}
+                  className="w-8 h-8 flex items-center justify-center rounded border border-slate-200 text-slate-400 hover:bg-white disabled:opacity-50"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (showAllMovements) {
+    return (
+      <div className="space-y-6 pb-12 animate-in fade-in duration-500">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <h2 className="text-xl text-slate-900 font-bold">Stock Movement History</h2>
+            <div className="hidden md:flex items-center gap-2">
+               <div className="px-3 py-1 bg-emerald-50 text-emerald-600 rounded-full text-xs font-bold">Receipts: {stats.recentMovements.filter(m => m.type.includes('IN')).length}</div>
+               <div className="px-3 py-1 bg-rose-50 text-rose-600 rounded-full text-xs font-bold">Issues: {stats.recentMovements.filter(m => m.type.includes('OUT')).length}</div>
+            </div>
+          </div>
+          <Button 
+            variant="outline" 
+            onClick={() => setShowAllMovements(false)}
+            className="flex items-center gap-2"
+          >
+            <ArrowRight className="w-4 h-4 rotate-180" />
+            Back to Report
+          </Button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+           <KPIStoreCard title="Total Items" value={stats.kpis.totalItems} subtitle="Inventory Catalog" icon={Box} color="text-indigo-600" subColor="bg-indigo-50" />
+           <KPIStoreCard title="Total Value" value={`₹${(stats.kpis.totalValue/100000).toFixed(1)}L`} subtitle="Current Assets" icon={IndianRupee} color="text-emerald-600" subColor="bg-emerald-50" />
+           <KPIStoreCard title="Active WH" value={stats.kpis.activeWarehouses} subtitle="Storage Locations" icon={Warehouse} color="text-blue-600" subColor="bg-blue-50" />
+           <KPIStoreCard title="Low Stock" value={stats.kpis.lowStockCount} subtitle="Needs Reorder" icon={AlertTriangle} color="text-amber-600" subColor="bg-amber-50" />
+        </div>
+
+        <div className="bg-white rounded border border-slate-100 shadow-sm overflow-hidden flex flex-col">
+          <div className="p-0 overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50/50 text-xs text-slate-400 font-bold uppercase tracking-tighter border-b border-slate-100">
+                  <th className="p-2">Date / Time</th>
+                  <th className="p-2">Item Code</th>
+                  <th className="p-2">Item Name</th>
+                  <th className="p-2 text-center">Type</th>
+                  <th className="p-2">Reference</th>
+                  <th className="p-2 text-right">Quantity</th>
+                  <th className="p-2 text-right">Balance</th>
+                  <th className="p-2 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {paginatedMovements.map((m, idx) => (
+                  <tr key={idx} className="hover:bg-slate-50/50 transition-colors group text-xs">
+                    <td className="p-2">
+                      <p className="font-bold text-slate-900">{new Date(m.time).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                      <p className="text-[10px] text-slate-400">{new Date(m.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</p>
+                    </td>
+                    <td className="p-2 font-bold text-indigo-600">{m.itemCode}</td>
+                    <td className="p-2 font-medium text-slate-900 truncate max-w-[200px]">{m.itemName}</td>
+                    <td className="p-2 text-center">
+                       <span className={`px-2 py-0.5 rounded font-black text-[10px] uppercase ${
+                         m.type.includes('IN') ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'
+                       }`}>
+                         {m.type.includes('IN') ? 'Receipt' : 'Issue'}
+                       </span>
+                    </td>
+                    <td className="p-2 font-medium text-slate-600">{m.reference}</td>
+                    <td className={`p-2 text-right font-black ${m.type.includes('IN') ? 'text-emerald-600' : 'text-rose-600'}`}>
+                      {m.type.includes('IN') ? '+' : '-'}{parseFloat(m.quantity).toFixed(3)}
+                    </td>
+                    <td className="p-2 text-right font-black text-slate-900">{parseFloat(m.balance).toFixed(3)}</td>
+                    <td className="p-2 text-right">
+                      <button 
+                        onClick={() => navigate(`/stock-details/${m.itemCode}`)}
+                        className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded transition-all"
+                        title="View Details"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {totalMovementsPages > 1 && (
+            <div className="p-2 border-t border-slate-50 bg-slate-50/20 flex items-center justify-between">
+              <p className="text-xs text-slate-400">
+                Showing {(movementsPage - 1) * allItemsPerPage + 1} to {Math.min(movementsPage * allItemsPerPage, stats.recentMovements.length)} of {stats.recentMovements.length} movements
+              </p>
+              <div className="flex items-center gap-1">
+                <button 
+                  disabled={movementsPage === 1}
+                  onClick={() => setMovementsPage(prev => prev - 1)}
+                  className="w-8 h-8 flex items-center justify-center rounded border border-slate-200 text-slate-400 hover:bg-white disabled:opacity-50"
+                >
+                  <ChevronRight className="w-4 h-4 rotate-180" />
+                </button>
+                {[...Array(totalMovementsPages)].map((_, i) => (
+                  <button 
+                    key={i}
+                    onClick={() => setMovementsPage(i + 1)}
+                    className={`w-8 h-8 flex items-center justify-center rounded text-xs font-bold transition-all ${
+                      movementsPage === i + 1 ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'border border-slate-200 text-slate-400 hover:bg-white'
+                    }`}
+                  >
+                    {i + 1}
+                  </button>
+                ))}
+                <button 
+                  disabled={movementsPage === totalMovementsPages}
+                  onClick={() => setMovementsPage(prev => prev + 1)}
+                  className="w-8 h-8 flex items-center justify-center rounded border border-slate-200 text-slate-400 hover:bg-white disabled:opacity-50"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     );
   }
@@ -371,7 +609,10 @@ const InventoryReport = () => {
               <h3 className="text-sm text-slate-900   ">Top Low Stock Items</h3>
               <p className="text-xs text-slate-400   mt-1">Items that are running low on stock</p>
             </div>
-            <button className="text-xs  text-indigo-600   flex items-center gap-1">
+            <button 
+              onClick={() => setShowAllLowStock(true)}
+              className="text-xs  text-indigo-600   flex items-center gap-1 hover:underline"
+            >
               View all low stock items <ArrowRight className="w-3 h-3" />
             </button>
           </div>
@@ -427,7 +668,10 @@ const InventoryReport = () => {
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
         <div className="p-6 border-b border-slate-50 flex items-center justify-between">
            <h3 className="text-sm text-slate-900   ">Recent Stock Movements</h3>
-           <button className="text-xs  text-indigo-600   flex items-center gap-1">
+           <button 
+             onClick={() => setShowAllMovements(true)}
+             className="text-xs  text-indigo-600   flex items-center gap-1 hover:underline"
+           >
              View all stock movements <ArrowRight className="w-3 h-3" />
            </button>
         </div>
@@ -443,6 +687,7 @@ const InventoryReport = () => {
                 <th className="px-4 py-2 text-right">Quantity</th>
                 <th className="px-4 py-2 text-right">Balance</th>
                 <th className="px-4 py-2">Warehouse</th>
+                <th className="px-4 py-2 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -452,23 +697,32 @@ const InventoryReport = () => {
                     <p className=" text-slate-900">{new Date(movement.time).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
                     <p className="text-[8px] text-slate-400  mt-0.5">{new Date(movement.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</p>
                   </td>
-                  <td className="px-4 py-1.5  text-indigo-600">{movement.itemCode}</td>
-                  <td className="px-4 py-1.5  text-slate-600 truncate max-w-[150px]">{movement.itemName}</td>
+                  <td className="px-4 py-1.5  text-indigo-600 font-bold">{movement.itemCode}</td>
+                  <td className="px-4 py-1.5  text-slate-600 truncate max-w-[150px] font-medium">{movement.itemName}</td>
                   <td className="px-4 py-1.5 text-center">
                     <span className={`px-1.5 py-0.5 rounded text-[8px]   er ${
-                      movement.type === 'IN' || movement.type === 'GRN_IN' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'
+                      movement.type === 'IN' || movement.type === 'GRN_IN' ? 'bg-emerald-50 text-emerald-600 font-black' : 'bg-rose-50 text-rose-600 font-black'
                     }`}>
                       {movement.type === 'IN' || movement.type === 'GRN_IN' ? 'Receipt' : 'Issue'}
                     </span>
                   </td>
-                  <td className="px-4 py-1.5  text-slate-900">{movement.reference}</td>
-                  <td className={`px-4 py-1.5 text-right  ${
+                  <td className="px-4 py-1.5  text-slate-900 font-medium">{movement.reference}</td>
+                  <td className={`px-4 py-1.5 text-right font-black ${
                     movement.type === 'IN' || movement.type === 'GRN_IN' ? 'text-emerald-600' : 'text-rose-600'
                   }`}>
                     {movement.type === 'IN' || movement.type === 'GRN_IN' ? '+' : '-'}{parseFloat(movement.quantity).toFixed(3)}
                   </td>
-                  <td className="px-4 py-1.5 text-right  text-slate-900">{parseFloat(movement.balance).toFixed(3)}</td>
+                  <td className="px-4 py-1.5 text-right  text-slate-900 font-black">{parseFloat(movement.balance).toFixed(3)}</td>
                   <td className="px-4 py-1.5  text-slate-500">{movement.warehouse}</td>
+                  <td className="px-4 py-1.5 text-right">
+                    <button 
+                      onClick={() => navigate(`/stock-details/${movement.itemCode}`)}
+                      className="p-1 hover:bg-white text-slate-400 hover:text-indigo-600 rounded border border-transparent hover:border-slate-100 transition-all shadow-sm"
+                      title="View Stock Details"
+                    >
+                      <Eye size={14} />
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>

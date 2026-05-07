@@ -228,6 +228,8 @@ const Suppliers = () => {
     }
   };
 
+  const isFromProcurementReport = new URLSearchParams(location.search).get('from') === 'procurement-report';
+
   const columns = [
     {
       label: 'Name',
@@ -278,7 +280,7 @@ const Suppliers = () => {
         );
       }
     },
-    {
+    ...(!isFromProcurementReport ? [{
       label: 'Actions',
       key: 'id',
       className: 'text-right',
@@ -300,7 +302,7 @@ const Suppliers = () => {
           </button>
         </div>
       )
-    }
+    }] : [])
   ];
 
   return (
@@ -310,13 +312,15 @@ const Suppliers = () => {
           <h1 className="text-xl  text-slate-900">Suppliers</h1>
           <p className="text-slate-500 text-xs mt-1">Manage your supplier network and relationships</p>
         </div>
-        <button
-          onClick={() => navigate('/suppliers/add')}
-          className="flex items-center justify-center gap-2 p-2 bg-indigo-600 text-white rounded  text-xs  hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all active:scale-95"
-        >
-          <Plus size={15} />
-          Add Supplier
-        </button>
+        {!isFromProcurementReport && (
+          <button
+            onClick={() => navigate('/suppliers/add')}
+            className="flex items-center justify-center gap-2 p-2 bg-indigo-600 text-white rounded  text-xs  hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all active:scale-95"
+          >
+            <Plus size={15} />
+            Add Supplier
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-2">

@@ -375,7 +375,7 @@ const ProductionReport = () => {
         </div>
 
         {/* Operation Efficiency */}
-        <div className="">
+        <div className="bg-white rounded p-2 border border-slate-100 flex flex-col">
           <div className="mb-6">
             <h3 className="text-sm text-slate-900   ">Operation Efficiency</h3>
             <p className="text-xs text-slate-400   mt-1">Average efficiency by operations</p>
@@ -403,7 +403,10 @@ const ProductionReport = () => {
               ))}
             </div>
           </div>
-          <button className="w-full text-center mt-4 text-xs  text-indigo-600   flex items-center justify-center gap-1">
+          <button 
+            onClick={() => navigate('/operation-master?from=production-report')}
+            className="text-xs  text-indigo-600   flex items-center gap-1 self-end mt-auto pt-4 hover:underline"
+          >
             View all operations <ArrowRight className="w-3 h-3" />
           </button>
         </div>
@@ -418,7 +421,10 @@ const ProductionReport = () => {
               <h3 className="text-sm text-slate-900   ">Top Projects by Production</h3>
               <p className="text-xs text-slate-400   mt-1">Projects with highest production output</p>
             </div>
-            <button className="text-xs  text-indigo-600   flex items-center gap-1">
+            <button 
+              onClick={() => navigate('/active-clients')}
+              className="text-xs  text-indigo-600   flex items-center gap-1"
+            >
               View all projects <ChevronRight className="w-3 h-3" />
             </button>
           </div>
@@ -482,9 +488,6 @@ const ProductionReport = () => {
         <div className="bg-white rounded p-2 border border-slate-100 ">
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-sm text-slate-900   ">Recent Production Activity</h3>
-            <button className="text-xs  text-indigo-600   flex items-center gap-1">
-              View all activity <ChevronRight className="w-3 h-3" />
-            </button>
           </div>
           <div className="max-h-[350px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
             <div className="space-y-4">

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import { Card, DataTable, StatusBadge, Button } from '../components/ui.jsx';
 import { 
@@ -18,6 +19,7 @@ import { errorToast } from '../utils/toast';
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
 const QualityReports = () => {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [dateRange, setDateRange] = useState({
@@ -26,9 +28,12 @@ const QualityReports = () => {
   });
   const [selectedSupplier, setSelectedSupplier] = useState('All');
   const [inspectionsPage, setInspectionsPage] = useState(1);
+  const [allHistoryPage, setAllHistoryPage] = useState(1);
   const [suppliersPage, setSuppliersPage] = useState(1);
+  const [showAllHistory, setShowAllHistory] = useState(false);
   const itemsPerPage = 5;
   const inspectionsPerPage = 10;
+  const allHistoryPerPage = 15;
 
   const [data, setData] = useState({
     kpis: {
@@ -48,6 +53,7 @@ const QualityReports = () => {
   useEffect(() => {
     fetchReportData();
     setInspectionsPage(1);
+    setAllHistoryPage(1);
     setSuppliersPage(1);
   }, [dateRange, selectedSupplier]);
 
@@ -75,11 +81,14 @@ const QualityReports = () => {
 
   const paginatedInspections = useMemo(() => {
     if (!data?.recentReports) return [];
-    const startIndex = (inspectionsPage - 1) * inspectionsPerPage;
-    return data.recentReports.slice(startIndex, startIndex + inspectionsPerPage);
-  }, [data?.recentReports, inspectionsPage]);
+    const perPage = showAllHistory ? allHistoryPerPage : inspectionsPerPage;
+    const currPage = showAllHistory ? allHistoryPage : inspectionsPage;
+    const startIndex = (currPage - 1) * perPage;
+    return data.recentReports.slice(startIndex, startIndex + perPage);
+  }, [data?.recentReports, inspectionsPage, allHistoryPage, showAllHistory]);
 
   const totalInspectionPages = Math.ceil((data?.recentReports?.length || 0) / inspectionsPerPage);
+  const totalHistoryPages = Math.ceil((data?.recentReports?.length || 0) / allHistoryPerPage);
 
   const paginatedSuppliers = useMemo(() => {
     if (!data?.supplierPerformance) return [];
@@ -158,10 +167,10 @@ const QualityReports = () => {
       <div className={`p-2 rounded ${subColor} ${color}`}>
         <Icon className="w-5 h-5" />
       </div>
-      <div>
-        <p className="text-xs text-slate-400  ">{title}</p>
-        <h3 className="text-xl text-slate-900 ">{value}</h3>
-        <p className="text-xs text-slate-500  ">{subtitle}</p>
+      <div className="min-w-0">
+        <p className="text-xs text-slate-400 font-medium uppercase tracking-wider leading-tight truncate">{title}</p>
+        <h3 className="text-xl font-bold text-slate-900 leading-tight truncate">{value}</h3>
+        <p className="text-xs text-slate-500 font-medium leading-tight truncate">{subtitle}</p>
       </div>
     </div>
   );
@@ -171,6 +180,118 @@ const QualityReports = () => {
       <div className="flex flex-col items-center justify-center p-22 space-y-4">
         <div className="w-16 h-16 border-4 border-slate-100 border-t-rose-600 rounded animate-spin" />
         <h3 className="text-slate-900   ">Generating Quality Report...</h3>
+      </div>
+    );
+  }
+
+  if (showAllHistory) {
+    return (
+      <div className="space-y-6 pb-12 animate-in fade-in duration-500">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <h2 className="text-xl text-slate-900  ">QC Inspection History</h2>
+            <div className="hidden md:flex items-center gap-2">
+               <div className="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-full text-xs font-bold">Total: {data.kpis.totalInspections}</div>
+               <div className="px-3 py-1 bg-emerald-50 text-emerald-600 rounded-full text-xs font-bold">Pass: {data.kpis.passRate}</div>
+            </div>
+          </div>
+          <Button 
+            variant="outline" 
+            onClick={() => setShowAllHistory(false)}
+            className="flex items-center gap-2"
+          >
+            <ArrowRight className="w-4 h-4 rotate-180" />
+            Back to Report
+          </Button>
+        </div>
+
+        {/* Mini KPIs for History View */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+           <KPIStoreCard title="Total" value={data.kpis.totalInspections} subtitle="Total Inspections" icon={ClipboardList} color="text-indigo-600" subColor="bg-indigo-50" />
+           <KPIStoreCard title="Pass Rate" value={data.kpis.passRate} subtitle="Success Ratio" icon={CheckCircle} color="text-emerald-600" subColor="bg-emerald-50" />
+           <KPIStoreCard title="Rejection" value={data.kpis.rejectionRate} subtitle="Failure Ratio" icon={AlertTriangle} color="text-rose-600" subColor="bg-rose-50" />
+           <KPIStoreCard title="Quality" value={data.kpis.qualityScore} subtitle="Compliance" icon={ShieldCheck} color="text-blue-600" subColor="bg-blue-50" />
+        </div>
+
+        <div className="bg-white rounded border border-slate-100 shadow-sm overflow-hidden flex flex-col">
+          <div className="p-0 overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50/50 text-xs text-slate-400 font-bold uppercase tracking-tighter border-b border-slate-100">
+                  <th className="p-2">Report ID</th>
+                  <th className="p-2">GRN Number</th>
+                  <th className="p-2">Date</th>
+                  <th className="p-2 text-center">Status</th>
+                  <th className="p-2 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {paginatedInspections.map((report, idx) => (
+                  <tr key={idx} className="hover:bg-slate-50/50 transition-colors group text-xs">
+                    <td className="p-2  text-indigo-600 font-bold">QC-{String(report.reportId).padStart(4, '0')}</td>
+                    <td className="p-2  text-slate-600 font-medium">{report.grn}</td>
+                    <td className="p-2 text-slate-500">{report.date}</td>
+                    <td className="p-2 text-center">
+                       <StatusBadge status={report.status} />
+                    </td>
+                    <td className="p-2 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <button 
+                          onClick={() => navigate(`/qc-grn-details/${report.grnId}`)}
+                          className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded transition-all"
+                          title="View Details"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        <button 
+                          onClick={() => handleDownloadPdf(report.reportId)}
+                          className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded transition-all"
+                          title="Download PDF"
+                        >
+                          <Download className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {totalHistoryPages > 1 && (
+            <div className="p-2 border-t border-slate-50 bg-slate-50/20 flex items-center justify-between">
+              <p className="text-xs  text-slate-400  ">
+                Showing {(allHistoryPage - 1) * allHistoryPerPage + 1} to {Math.min(allHistoryPage * allHistoryPerPage, data.recentReports.length)} of {data.recentReports.length} entries
+              </p>
+              <div className="flex items-center gap-1">
+                <button 
+                  disabled={allHistoryPage === 1}
+                  onClick={() => setAllHistoryPage(prev => prev - 1)}
+                  className="w-8 h-8 flex items-center justify-center rounded border border-slate-200 text-slate-400 hover:bg-white disabled:opacity-50"
+                >
+                  <ChevronRight className="w-4 h-4 rotate-180" />
+                </button>
+                {[...Array(totalHistoryPages)].map((_, i) => (
+                  <button 
+                    key={i}
+                    onClick={() => setAllHistoryPage(i + 1)}
+                    className={`w-8 h-8 flex items-center justify-center rounded  text-xs font-bold transition-all ${
+                      allHistoryPage === i + 1 ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'border border-slate-200 text-slate-400 hover:bg-white'
+                    }`}
+                  >
+                    {i + 1}
+                  </button>
+                ))}
+                <button 
+                  disabled={allHistoryPage === totalHistoryPages}
+                  onClick={() => setAllHistoryPage(prev => prev + 1)}
+                  className="w-8 h-8 flex items-center justify-center rounded border border-slate-200 text-slate-400 hover:bg-white disabled:opacity-50"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     );
   }
@@ -356,7 +477,10 @@ const QualityReports = () => {
         <div className="lg:col-span-2 bg-white rounded border border-slate-100 shadow-sm overflow-hidden flex flex-col">
           <div className="p-2 border-b border-slate-50 flex items-center justify-between">
             <h3 className="text-sm text-slate-900   ">Recent QC Inspections</h3>
-            <button className="text-xs  text-indigo-600   flex items-center gap-1">
+            <button 
+              onClick={() => setShowAllHistory(true)}
+              className="text-xs  text-indigo-600   flex items-center gap-1 hover:underline"
+            >
               View All History <ArrowRight className="w-3 h-3" />
             </button>
           </div>
@@ -380,6 +504,13 @@ const QualityReports = () => {
                     </td>
                     <td className="p-2 text-right">
                       <div className="flex items-center justify-end gap-1">
+                        <button 
+                          onClick={() => navigate(`/qc-grn-details/${report.grnId}`)}
+                          className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded transition-all"
+                          title="View Details"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                        </button>
                         <button 
                           onClick={() => handleDownloadPdf(report.reportId)}
                           className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded transition-all"
@@ -469,14 +600,26 @@ const QualityReports = () => {
                     {rejection.item_remarks || 'No remarks'}
                   </td>
                   <td className="p-2 text-right">
-                    {rejection.ref_type === 'GRN' && rejection.qc_inspection_id && (
-                      <button 
-                        onClick={() => handleDownloadPdf(rejection.qc_inspection_id)}
-                        className="p-1 text-xs  text-white bg-rose-600 rounded hover:bg-rose-700 transition-all shadow-sm"
-                      >
-                        QC Report
-                      </button>
-                    )}
+                    <div className="flex items-center justify-end gap-1.5">
+                      {rejection.ref_type === 'GRN' && (
+                        <button 
+                          onClick={() => navigate(`/qc-grn-details/${rejection.ref_id}`)}
+                          className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded transition-all"
+                          title="View Details"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      {rejection.ref_type === 'GRN' && rejection.qc_inspection_id && (
+                        <button 
+                          onClick={() => handleDownloadPdf(rejection.qc_inspection_id)}
+                          className="p-1.5 hover:bg-rose-50 text-rose-600 rounded transition-all border border-transparent hover:border-rose-100"
+                          title="QC Report"
+                        >
+                          <FileText className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}

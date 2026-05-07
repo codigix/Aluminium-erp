@@ -522,6 +522,7 @@ const getPurchaseOrders = async (filters = {}) => {
 const getPurchaseOrderById = async (poId) => {
   const [rows] = await pool.query(
     `SELECT po.*, v.vendor_name, v.email as vendor_email, mr.mr_number, so.so_number,
+     po.invoice_url,
      COALESCE(
        so.project_name,
        (SELECT so2.project_name 

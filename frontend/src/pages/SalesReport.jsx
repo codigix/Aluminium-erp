@@ -330,7 +330,7 @@ const SalesReport = () => {
               onClick={() => navigate('/dashboard')}
               className="text-xs  text-indigo-600 hover:text-indigo-700   flex items-center gap-1 transition-colors"
             >
-              View all activity <ChevronRight className="w-3 h-3" />
+              <ChevronRight className="w-3 h-3" />
             </button>
           </div>
           <div className="space-y-4">
@@ -371,7 +371,7 @@ const SalesReport = () => {
               <p className="text-xs text-slate-400   mt-1">List of recently approved quotations</p>
             </div>
             <button 
-              onClick={() => navigate('/client-quotations')}
+              onClick={() => navigate('/approved-quotations')}
               className="text-xs  text-indigo-600 hover:text-indigo-700   flex items-center gap-1 transition-colors"
             >
               View all approved quotations <ChevronRight className="w-3 h-3" />
@@ -432,7 +432,7 @@ const SalesReport = () => {
               <p className="text-xs text-slate-400   mt-1">Top active clients based on orders</p>
             </div>
             <button 
-              onClick={() => navigate('/company-master')}
+              onClick={() => navigate('/active-clients')}
               className="text-xs  text-indigo-600 hover:text-indigo-700   flex items-center gap-1 transition-colors"
             >
               View all clients <ChevronRight className="w-3 h-3" />
@@ -520,8 +520,13 @@ const SalesReport = () => {
               {paginatedOrders.map((order, idx) => (
                 <tr key={idx} className="hover:bg-slate-50/50 transition-colors group">
                   <td className="p-2">
-                    <p className="text-xs  text-indigo-600 ">{order.id}</p>
-                    <p className="text-[9px] text-slate-400   mt-0.5">Sales Order</p>
+                    <button 
+                      onClick={() => navigate(`/sales-report-details/${order.id_val}`)}
+                      className="text-left group/id"
+                    >
+                      <p className="text-xs  text-indigo-600 group-hover/id:underline font-bold">{order.id}</p>
+                      <p className="text-[9px] text-slate-400   mt-0.5">Sales Order</p>
+                    </button>
                   </td>
                   <td className="p-2">
                     <div className="flex items-center gap-3">
@@ -558,9 +563,9 @@ const SalesReport = () => {
                   <td className="p-2 text-right">
                     <div className="flex items-center justify-end gap-1">
                        <button 
-                         onClick={() => navigate('/sales-order')}
+                         onClick={() => navigate(`/sales-report-details/${order.id_val}`)}
                          className="p-2 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded transition-all border border-transparent hover:border-slate-200"
-                         title="View Order"
+                         title="View Order Details"
                        >
                          <Eye className="w-3.5 h-3.5" />
                        </button>

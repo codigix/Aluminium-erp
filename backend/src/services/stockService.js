@@ -265,7 +265,7 @@ const getStockBalance = async (drawingNo = null, includeAll = false) => {
 
 const getStockBalanceByItem = async (itemCode) => {
   const [balance] = await pool.query(`
-    SELECT id, item_code, item_description, material_name, material_type, unit, current_balance, drawing_no, drawing_id, last_updated 
+    SELECT id, item_code, item_description, material_name, material_type, unit, current_balance, valuation_rate as avg_cost, drawing_no, drawing_id, last_updated 
     FROM stock_balance 
     WHERE item_code = ?
   `, [itemCode]);
@@ -295,6 +295,7 @@ const getStockBalanceByItem = async (itemCode) => {
     accepted_qty: details.accepted_qty,
     issued_qty: details.issued_qty,
     current_balance: parseFloat(balance[0].current_balance || 0),
+    avg_cost: parseFloat(balance[0].avg_cost || 0),
     unit: balance[0].unit || 'NOS',
     last_updated: balance[0].last_updated
   };

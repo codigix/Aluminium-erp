@@ -1496,7 +1496,8 @@ const getAccountsReportStats = async (filters = {}) => {
       cp.payment_date as date,
       NULL as dueDate,
       cp.payment_amount as amount,
-      cp.status
+      cp.status,
+      NULL as invoice_url
     FROM customer_payments cp
     JOIN companies c ON cp.customer_id = c.id
     WHERE 1=1 ${dateFilter.replace('created_at', 'cp.payment_date')} ${customerFilter}
@@ -1510,7 +1511,8 @@ const getAccountsReportStats = async (filters = {}) => {
       p.payment_date as date,
       NULL as dueDate,
       p.payment_amount as amount,
-      p.status
+      p.status,
+      NULL as invoice_url
     FROM payments p
     JOIN vendors v ON p.vendor_id = v.id
     WHERE 1=1 ${dateFilter.replace('created_at', 'p.payment_date')} ${customerFilter.replace('c.company_name', 'v.vendor_name')}
@@ -1524,7 +1526,8 @@ const getAccountsReportStats = async (filters = {}) => {
       po.created_at as date,
       po.expected_delivery_date as dueDate,
       po.total_amount as amount,
-      po.status
+      po.status,
+      po.invoice_url
     FROM purchase_orders po
     JOIN vendors v ON po.vendor_id = v.id
     WHERE 1=1 ${dateFilter.replace('created_at', 'po.created_at')} ${customerFilter.replace('c.company_name', 'v.vendor_name')}

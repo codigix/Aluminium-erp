@@ -250,10 +250,7 @@ const OperationMaster = ({ showForm: propShowForm, setShowForm: propSetShowForm 
     }
   };
 
-  const filteredOperations = operations.filter(op => 
-    op.operation_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    op.operation_code.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const isFromProductionReport = searchParams.get('from') === 'production-report';
 
   const columns = [
     { 
@@ -306,7 +303,7 @@ const OperationMaster = ({ showForm: propShowForm, setShowForm: propSetShowForm 
         </Badge>
       )
     },
-    {
+    ...(!isFromProductionReport ? [{
       label: 'Actions',
       key: 'actions',
       className: 'text-right',
@@ -341,7 +338,7 @@ const OperationMaster = ({ showForm: propShowForm, setShowForm: propSetShowForm 
           </button>
         </div>
       )
-    }
+    }] : [])
   ];
 
   return (
@@ -351,26 +348,28 @@ const OperationMaster = ({ showForm: propShowForm, setShowForm: propSetShowForm 
           <h1 className="text-xl text-slate-900">Operation Master</h1>
           <p className="text-xs text-slate-500 ">Define and manage manufacturing operations and standard times</p>
         </div>
-        <div className="flex gap-2">
-          <button 
-            onClick={fetchOperations}
-            className="p-2 bg-slate-100 text-slate-600 rounded  hover:bg-slate-200 transition-all"
-            title="Refresh Data"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-          </button>
-          <button 
-            onClick={() => { navigate('/operation-master/form'); }}
-            className="flex items-center gap-2  p-2  bg-indigo-600 text-white rounded  text-xs  hover:bg-indigo-700  shadow-indigo-200 transition-all active:scale-95"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-            </svg>
-            Add Operation
-          </button>
-        </div>
+        {!isFromProductionReport && (
+          <div className="flex gap-2">
+            <button 
+              onClick={fetchOperations}
+              className="p-2 bg-slate-100 text-slate-600 rounded  hover:bg-slate-200 transition-all"
+              title="Refresh Data"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            </button>
+            <button 
+              onClick={() => { navigate('/operation-master/form'); }}
+              className="flex items-center gap-2  p-2  bg-indigo-600 text-white rounded  text-xs  hover:bg-indigo-700  shadow-indigo-200 transition-all active:scale-95"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+              </svg>
+              Add Operation
+            </button>
+          </div>
+        )}
       </div>
 
       <DataTable 
