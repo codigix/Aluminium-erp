@@ -550,7 +550,7 @@ const BOMFormPage = () => {
     setLoadingHistory(true);
     try {
       const token = localStorage.getItem('authToken');
-      const url = new URL(`${API_BASE}/bom/history`);
+      const url = new URL(`${API_BASE}/bom/history`, window.location.origin);
       if (itemCode) url.searchParams.append('itemCode', itemCode);
       if (drawingNo) url.searchParams.append('drawingNo', drawingNo);
       if (effectiveId) url.searchParams.append('itemId', effectiveId);
