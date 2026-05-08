@@ -395,7 +395,15 @@ const ClientQuotations = () => {
         delete client.all_items_map;
       });
 
-      setGroupedByClient(grouped);
+      // Filter out clients that have no items after all filtering/grouping
+      const finalGrouped = {};
+      Object.keys(grouped).forEach(clientName => {
+        if (grouped[clientName].orders?.[0]?.items?.length > 0) {
+          finalGrouped[clientName] = grouped[clientName];
+        }
+      });
+
+      setGroupedByClient(finalGrouped);
       setQuotePricesMap(initialPrices);
       setProfitMap(initialProfits);
       setGstMap(initialGst);

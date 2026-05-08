@@ -743,10 +743,11 @@ const getApprovedDrawings = async () => {
          drawing_id
        FROM sales_order_items 
        WHERE id IN (
-         SELECT MAX(id) 
-         FROM sales_order_items 
-         WHERE bom_cost > 0
-         GROUP BY COALESCE(drawing_id, drawing_no)
+         SELECT MAX(soi2.id) 
+         FROM sales_order_items soi2
+         JOIN sales_orders so ON so.id = soi2.sales_order_id
+         WHERE soi2.bom_cost > 0 AND so.quotation_id IS NULL
+         GROUP BY COALESCE(soi2.drawing_id, soi2.drawing_no)
        )
      ) latest_bom ON (d.id = latest_bom.drawing_id OR (latest_bom.drawing_id IS NULL AND d.drawing_no = latest_bom.drawing_no))
      WHERE d.status = 'APPROVED' OR d.shared_with_design = 1

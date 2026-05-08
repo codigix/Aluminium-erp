@@ -118,6 +118,14 @@ const createQuotation = async (payload) => {
       );
     }
 
+    // Update Sales Order status and quotation_id if salesOrderId is provided
+    if (salesOrderId) {
+      await connection.execute(
+        "UPDATE sales_orders SET status = 'QUOTATION_SENT', quotation_id = ?, updated_at = NOW() WHERE id = ?",
+        [quotationId, salesOrderId]
+      );
+    }
+
     // Update Material Request status to PROCESSING if mrId is provided, but only if it's not already PROCESSING
     if (mrId) {
       await connection.execute(

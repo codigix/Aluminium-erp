@@ -7,6 +7,7 @@ const { authenticate, authorize } = require('../middleware/authMiddleware');
 router.use(authenticate);
 
 router.get('/', authorize(['PO_VIEW']), quotationRequestController.getQuotationRequests);
+router.post('/', authorize(['PO_EDIT']), quotationRequestController.sendQuotationViaEmail);
 router.get('/versions/:id', authorize(['PO_VIEW']), quotationRequestController.getQuotationVersionHistory);
 router.get('/version-details/:id', authorize(['PO_VIEW']), quotationRequestController.getQuotationVersionDetails);
 router.get('/download-pdf/:id', authorize(['PO_VIEW']), quotationRequestController.downloadQuotationPDF);
