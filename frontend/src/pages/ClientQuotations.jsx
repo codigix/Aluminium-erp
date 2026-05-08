@@ -1,8 +1,8 @@
-  import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import { Card, StatusBadge, Tabs, Button, DataTable } from '../components/ui.jsx';
-import { 
+import {
   MessageSquare, Send, X, User, ShieldCheck, RotateCw, Save, Check, FileText, CheckCircle, Mail, ClipboardList, Eye, Trash2, Loader2, Upload, Package, ChevronDown, ChevronUp, History, Search, CheckCheck, Plus, GitBranch, Download, Clock, ArrowUpRight, Calculator
 } from 'lucide-react';
 import { successToast, errorToast } from '../utils/toast';
@@ -22,21 +22,21 @@ const formatCurrency = (value) => {
 const getFileUrl = (path) => {
   if (!path) return '';
   if (path.startsWith('http')) return path;
-  
+
   // 1. Determine base URL (priority: VITE_UPLOAD_URL -> API_BASE)
   let base = UPLOAD_BASE || API_BASE;
   if (base.endsWith('/')) base = base.slice(0, -1);
-  
+
   // 2. Clean the incoming path
   let cleanPath = path.startsWith('/') ? path.slice(1) : path;
-  
+
   // 3. Prevent double 'uploads/' if base already includes it
   if (base.toLowerCase().endsWith('/uploads') && cleanPath.toLowerCase().startsWith('uploads/')) {
     cleanPath = cleanPath.slice(8);
   }
-  
+
   const url = `${base}/${cleanPath}`;
-  
+
   if (url.startsWith('http')) return url;
   return window.location.origin + (url.startsWith('/') ? url : '/' + url);
 };
@@ -83,7 +83,7 @@ const ClientQuotations = () => {
   const fetchUnreadCounts = async () => {
     try {
       const token = localStorage.getItem('authToken');
-      
+
       // Fetch Client unread counts
       const clientResponse = await fetch(`${API_BASE}/quotations/communications/unread-counts?type=CLIENT`, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -123,11 +123,11 @@ const ClientQuotations = () => {
       if (response.ok) {
         const data = await response.json();
         setMessages(data);
-        
+
         // Mark as read
         await fetch(`${API_BASE}/quotations/communications/mark-as-read`, {
           method: 'POST',
-          headers: { 
+          headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           },
@@ -151,7 +151,7 @@ const ClientQuotations = () => {
 
   const handleRefreshMessages = async () => {
     if (!selectedQuoteForComm || syncing) return;
-    
+
     try {
       setSyncing(true);
       const token = localStorage.getItem('authToken');
@@ -179,7 +179,7 @@ const ClientQuotations = () => {
     try {
       setSendingMsg(true);
       const token = localStorage.getItem('authToken');
-      
+
       const response = await fetch(`${API_BASE}/quotations/communications`, {
         method: 'POST',
         headers: {
@@ -212,7 +212,7 @@ const ClientQuotations = () => {
   const openCommDrawer = (group) => {
     if (!group) return;
     const firstQuote = group.quotes?.[0];
-    
+
     setSelectedQuoteForComm({
       id: group.id,
       company_name: group.company_name,
@@ -233,7 +233,7 @@ const ClientQuotations = () => {
       });
       if (!response.ok) throw new Error('Failed to fetch approved orders');
       const data = await response.json();
-      
+
       const grouped = {};
       const initialPrices = {};
       const initialProfits = {};
@@ -251,23 +251,23 @@ const ClientQuotations = () => {
             created_at: order.created_at,
             orders: [],
             // Store all items here for client-wide grouping
-            all_items_map: {} 
+            all_items_map: {}
           };
           initialPrices[clientName] = {};
           initialProfits[clientName] = {};
           initialGst[clientName] = {};
         }
 
-          // Process items and group by identity across ALL orders for this client
+        // Process items and group by identity across ALL orders for this client
         (order.items || []).forEach(item => {
           const g = (item.item_group || '').trim().toUpperCase();
           const t = (item.item_type || '').trim().toUpperCase();
           const p = (item.product_type || '').trim().toUpperCase();
-          
+
           // Refined detection: prioritize FG even if it has SA/ASSEMBLY in name if it's explicitly marked as FG type/group
           const isFG = (g.includes('FG') || t.includes('FG') || p.includes('FG') || g.includes('FINISHED') || t.includes('FINISHED')) && !g.includes('SA') && !g.includes('SUB') && !t.includes('SA') && !t.includes('SUB');
           const isSA = (g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY') || t.includes('SA') || t.includes('SUB') || t.includes('ASSEMBLY')) && !isFG;
-          
+
           // Skip if rejected, or if it's an FG with no cost (SA/ASSEMBLY can have 0 cost)
           if ((!isFG && !isSA) || item.status === 'REJECTED' || (isFG && !Number(item.bom_cost))) return;
 
@@ -280,7 +280,7 @@ const ClientQuotations = () => {
 
           const identity = `${item.drawing_no || 'NA'}_${item.item_code || 'NA'}_${item.item_group_calc}`;
           const existing = grouped[clientName].all_items_map[identity];
-          
+
           const parseVer = (v) => parseFloat(String(v || 0).replace(/[^\d.]/g, '')) || 0;
 
           if (!existing) {
@@ -288,7 +288,7 @@ const ClientQuotations = () => {
           } else {
             const currentRev = parseVer(item.revision_no || item.version);
             const existingRev = parseVer(existing.revision_no || existing.version);
-            
+
             // Prioritize higher revision, then higher ID
             if (currentRev > existingRev || (currentRev === existingRev && parseInt(item.id) > parseInt(existing.id))) {
               grouped[clientName].all_items_map[identity] = { ...item, project_name: order.project_name };
@@ -311,7 +311,7 @@ const ClientQuotations = () => {
               const saCode = (sa.component_code || sa.componentCode || '').trim().toUpperCase();
               const saDrawing = (sa.drawing_no || '').trim().toUpperCase();
               const saDesc = (sa.description || sa.item_description || '').trim().toUpperCase();
-              
+
               if (saCode) {
                 nestedIdentities.add(`${saDrawing}_${saCode}`);
                 nestedIdentities.add(`_ANY_DRAWING_${saCode}`);
@@ -332,24 +332,24 @@ const ClientQuotations = () => {
 
           // Be very specific about FG vs SA
           const isFG = (g === 'FG' || g.includes('FINISHED') || t.includes('FG') || p.includes('FG')) && !g.includes('SA') && !g.includes('SUB') && !t.includes('SA');
-          
+
           if (isFG) return true; // Always show FGs at top level
-          
+
           const code = (item.item_code || '').trim().toUpperCase();
           const drawing = (item.drawing_no || '').trim().toUpperCase();
           const desc = (item.description || item.item_description || '').trim().toUpperCase();
-          
+
           const identity = `${drawing}_${code}`;
           const identityDesc = `${drawing}_DESC_${desc}`;
-          
-          const isNested = nestedIdentities.has(identity) || 
-                          nestedIdentities.has(`_ANY_DRAWING_${code}`) ||
-                          nestedIdentities.has(identityDesc) ||
-                          nestedIdentities.has(`_ANY_DRAWING_DESC_${desc}`);
-          
+
+          const isNested = nestedIdentities.has(identity) ||
+            nestedIdentities.has(`_ANY_DRAWING_${code}`) ||
+            nestedIdentities.has(identityDesc) ||
+            nestedIdentities.has(`_ANY_DRAWING_DESC_${desc}`);
+
           return !isNested;
         });
-        
+
         // Sort items: FG first, then SAs
         items.sort((a, b) => {
           const gA = (a.item_group_calc || '').toUpperCase();
@@ -358,7 +358,7 @@ const ClientQuotations = () => {
           const isSAB = (gB.includes('SA') || gB.includes('SUB') || gB.includes('ASSEMBLY')) && !gB.includes('FG');
           const isFGA = (gA.includes('FG') || gA.includes('FINISHED')) && !isSAA;
           const isFGB = (gB.includes('FG') || gB.includes('FINISHED')) && !isSAB;
-          
+
           if (isFGA && !isFGB) return -1;
           if (!isFGA && isFGB) return 1;
           if (isSAA && !isSAB) return -1;
@@ -391,7 +391,7 @@ const ClientQuotations = () => {
             initialPrices[clientName][item.id] = "0.00";
           }
         });
-        
+
         delete client.all_items_map;
       });
 
@@ -425,7 +425,7 @@ const ClientQuotations = () => {
       });
       if (!response.ok) throw new Error('Failed to fetch sent quotations');
       const data = await response.json();
-      
+
       // 1. Group items by their batch_id to form "Quotation Versions"
       const versionBatches = {};
       data.forEach(quote => {
@@ -444,9 +444,9 @@ const ClientQuotations = () => {
       const grouped = {};
       Object.values(versionBatches).forEach(batch => {
         const leadItem = batch.items[0];
-        const rootId = leadItem.parent_id || leadItem.id; 
+        const rootId = leadItem.parent_id || leadItem.id;
         const chainKey = `chain_${rootId}`;
-        
+
         const currentVer = parseInt(batch.version || 1);
 
         if (!grouped[chainKey]) {
@@ -457,12 +457,12 @@ const ClientQuotations = () => {
             company_name: leadItem.company_name,
             company_id: leadItem.company_id,
             created_at: batch.created_at,
-            status: leadItem.status, 
+            status: leadItem.status,
             reply_pdf: leadItem.reply_pdf,
-            project_name: leadItem.project_name, 
+            project_name: leadItem.project_name,
             total_amount: 0,
             received_amount: 0,
-            quotes: batch.items, 
+            quotes: batch.items,
             version: currentVer,
             batch_id: leadItem.batch_id,
             has_revisions: (currentVer > 1),
@@ -471,7 +471,7 @@ const ClientQuotations = () => {
         } else {
           grouped[chainKey].all_batches.push(batch);
           grouped[chainKey].has_revisions = true;
-          
+
           // Update to latest version info if this batch is newer
           if (currentVer > grouped[chainKey].version) {
             grouped[chainKey].id = leadItem.id;
@@ -488,7 +488,7 @@ const ClientQuotations = () => {
           grouped[chainKey].has_pending_bom = true;
         }
       });
-      
+
       // 3. Filter chains: keep if the latest version is in a relevant state
       const filtered = Object.values(grouped).filter(group => {
         const s = (group.status || '').toUpperCase();
@@ -508,7 +508,7 @@ const ClientQuotations = () => {
         group.received_amount = billableQuotes.reduce((sum, q) => sum + (parseFloat(q.received_amount) || 0), 0);
         group.status = group.status || 'Sent';
       });
-      
+
       setSentQuotations(filtered.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)));
     } catch (error) {
       console.error(error);
@@ -550,12 +550,12 @@ const ClientQuotations = () => {
       });
       if (!response.ok) throw new Error('Failed to fetch received quotations');
       const data = await response.json();
-      
+
       const grouped = {};
       data.forEach(quote => {
         const rootId = quote.parent_id || quote.id;
         const groupKey = `received_${quote.company_id}_${rootId}`;
-        
+
         if (!grouped[groupKey]) {
           grouped[groupKey] = {
             id: quote.id,
@@ -566,7 +566,7 @@ const ClientQuotations = () => {
             created_at: quote.created_at,
             status: quote.status,
             reply_pdf: quote.reply_pdf,
-            project_name: quote.project_name, 
+            project_name: quote.project_name,
             total_amount: 0,
             received_amount: 0,
             quotes: [],
@@ -575,7 +575,7 @@ const ClientQuotations = () => {
             parent_id: quote.parent_id
           };
         }
-        
+
         grouped[groupKey].quotes.push(quote);
 
         const currentVersion = grouped[groupKey].version || 0;
@@ -594,7 +594,7 @@ const ClientQuotations = () => {
           grouped[groupKey].parent_id = quote.parent_id;
         }
       });
-      
+
       // Filter groups: keep those where the LATEST version has a "Received" type status
       const filteredGroups = Object.values(grouped).filter(group => {
         const s = (group.status || '').trim().toUpperCase();
@@ -615,12 +615,12 @@ const ClientQuotations = () => {
 
         const latestQuotes = group.quotes.filter(q => {
           if ((q.version || 1) !== latestVersion) return false;
-          
+
           // 1. Match by batch_id if available
           if (targetBatchId && q.batch_id) {
             return q.batch_id === targetBatchId;
           }
-          
+
           // 2. Match by parent_id if batch_id is missing
           if (targetParentId && q.parent_id) {
             return q.parent_id === targetParentId;
@@ -628,23 +628,23 @@ const ClientQuotations = () => {
 
           // 3. Fallback: Check if this item is the "latest" one itself or shares the same creation window
           if (q.id === group.id) return true;
-          
+
           const diff = Math.abs(new Date(q.created_at) - new Date(targetCreatedAt));
           return diff < 10000; // 10 seconds window for legacy items without batch_id
         });
-        
+
         const billableLatestQuotes = latestQuotes.filter(q => {
           const g = (q.item_group || q.item_group_calc || '').toUpperCase();
           const isSA = (g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY')) && !g.includes('FG');
           const isFG = (g.includes('FG') || g.includes('FINISHED')) && !isSA;
           return isFG || isSA;
         });
-        
+
         group.total_amount = billableLatestQuotes.reduce((sum, q) => sum + (parseFloat(q.total_amount) || 0), 0);
         group.received_amount = billableLatestQuotes.reduce((sum, q) => sum + (parseFloat(q.received_amount) || 0), 0);
         group.quotes = latestQuotes; // Fix: Only keep latest version items to avoid incorrect drawing/item counts
       });
-      
+
       setReceivedQuotations(filteredGroups.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)));
     } catch (error) {
       console.error(error);
@@ -745,8 +745,8 @@ const ClientQuotations = () => {
           <span className="text-xs text-slate-700 ">
             {(() => {
               const uniqueDrawings = [...new Set((group.quotes || []).map(q => q.drawing_no).filter(Boolean))];
-              return uniqueDrawings.length > 1 
-                ? `${uniqueDrawings.length} Drawings` 
+              return uniqueDrawings.length > 1
+                ? `${uniqueDrawings.length} Drawings`
                 : (uniqueDrawings[0] || '—');
             })()}
           </span>
@@ -762,11 +762,11 @@ const ClientQuotations = () => {
                 const g = (q.item_group || q.item_group_calc || '').toUpperCase();
                 return g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY');
               }).length;
-              
+
               const parts = [];
               if (fgCount > 0) parts.push(`${fgCount} FG`);
               if (saCount > 0) parts.push(`${saCount} SA`);
-              
+
               return (
                 <span className="text-xs  text-slate-400  bg-slate-50 px-1 rounded border border-slate-100">
                   {parts.length > 0 ? parts.join(' + ') : `${items.length} item(s)`}
@@ -793,7 +793,7 @@ const ClientQuotations = () => {
                     const g = (item.item_group || item.item_group_calc || '').toUpperCase();
                     const isSA = g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY');
                     const isFG = (g.includes('FG') || g.includes('FINISHED')) && !isSA;
-                    
+
                     if (isFG || isSA) {
                       const rate = parseFloat(quotePricesMap[group.company_name]?.[item.id]) || 0;
                       const qty = parseFloat(item.design_qty) || 0;
@@ -845,7 +845,7 @@ const ClientQuotations = () => {
       className: 'text-right',
       render: (_, group) => {
         const isPending = group.type === 'PENDING';
-        
+
         return (
           <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
             {!isPending && (group.quotes || []).some(q => q.pending_bom_cost) && (
@@ -1009,7 +1009,7 @@ const ClientQuotations = () => {
                       const isSAB = (gB.includes('SA') || gB.includes('SUB') || gB.includes('ASSEMBLY')) && !gB.includes('FG');
                       const isFGA = (gA.includes('FG') || gA.includes('FINISHED')) && !isSAA;
                       const isFGB = (gB.includes('FG') || gB.includes('FINISHED')) && !isSAB;
-                      
+
                       if (isFGA && !isFGB) return -1;
                       if (!isFGA && isFGB) return 1;
                       if (isSAA && !isSAB) return -1;
@@ -1028,7 +1028,7 @@ const ClientQuotations = () => {
                           const g = (item.item_group || item.item_group_calc || '').toUpperCase();
                           const isSA = (g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY')) && !g.includes('FG');
                           const isFG = (g.includes('FG') || g.includes('FINISHED')) && !isSA;
-                          
+
                           const displayGroup = isSA ? (g.includes('ASSEMBLY') && !g.includes('SUB') ? 'ASSY' : 'SA') : (isFG ? 'FG' : g);
 
                           const mainRow = (
@@ -1039,11 +1039,10 @@ const ClientQuotations = () => {
                                     {isSA && <GitBranch size={10} className="text-slate-400 rotate-180" />}
                                     <span className="text-xs  text-slate-900 ">{item.description || item.item_description || '—'}</span>
                                     {displayGroup && (
-                                      <span className={`px-1.5 py-0.5 rounded text-xs    ${
-                                        isSA 
-                                          ? 'bg-blue-100 text-blue-700 border border-blue-200' 
-                                          : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
-                                      }`}>
+                                      <span className={`px-1.5 py-0.5 rounded text-xs    ${isSA
+                                        ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                                        : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                                        }`}>
                                         {displayGroup}
                                       </span>
                                     )}
@@ -1164,7 +1163,7 @@ const ClientQuotations = () => {
                                               </button>
                                             </div>
                                           ) : (
-                                            <button 
+                                            <button
                                               onClick={() => setEditingItemRates(prev => ({ ...prev, [item.id]: (parseFloat(item.unit_rate) || (parseFloat(item.total_amount) / (parseFloat(item.item_qty) || 1))).toFixed(2) }))}
                                               className="text-xs  text-slate-600 hover:text-indigo-600"
                                             >
@@ -1264,7 +1263,7 @@ const ClientQuotations = () => {
                     const gstRate = parseFloat(gstMap[group.company_name]?.[item.id]) || 18;
                     const profitP = parseFloat(profitMap[group.company_name]?.[item.id]) || 0;
                     const lineTotal = unitRate * qty;
-                    
+
                     subTotal += lineTotal;
                     totalTax += lineTotal * (gstRate / 100);
                     const basePrice = unitRate / (1 + profitP / 100);
@@ -1356,7 +1355,7 @@ const ClientQuotations = () => {
     const profit = parseFloat(profitVal) || 0;
     const bomCost = parseFloat(item.bom_cost) || 0;
     const newRate = (bomCost * (1 + profit / 100)).toFixed(2);
-    
+
     setProfitMap(prev => ({
       ...prev,
       [clientName]: {
@@ -1364,7 +1363,7 @@ const ClientQuotations = () => {
         [item.id]: profitVal
       }
     }));
-    
+
     setQuotePricesMap(prev => ({
       ...prev,
       [clientName]: {
@@ -1398,23 +1397,23 @@ const ClientQuotations = () => {
     try {
       setSavingSentAmount(group.uniqueKey);
       const token = localStorage.getItem('authToken');
-      
+
       const totalOriginal = group.total_amount;
       const newTotalInclGst = parseFloat(newAmount);
       const newTotalBase = newTotalInclGst / 1.18;
       const quotes = group.quotes || [];
-      
+
       const itemsToUpdate = quotes.map(q => {
         const originalItemTotal = parseFloat(q.total_amount) || 0;
         const itemQty = parseFloat(q.item_qty) || 1;
-        
+
         let newItemTotal;
         if (totalOriginal > 0) {
           newItemTotal = (originalItemTotal / totalOriginal) * newTotalBase;
         } else {
           newItemTotal = newTotalBase / quotes.length;
         }
-        
+
         return {
           id: q.id,
           rate: newItemTotal / itemQty,
@@ -1458,7 +1457,7 @@ const ClientQuotations = () => {
     try {
       setSavingItemRateId(quote.id);
       const token = localStorage.getItem('authToken');
-      
+
       const rateVal = parseFloat(newRate) || 0;
       const qtyVal = parseFloat(quote.item_qty) || 1;
       const totalBase = rateVal * qtyVal;
@@ -1505,7 +1504,7 @@ const ClientQuotations = () => {
 
     const prices = quotePricesMap[clientName] || {};
     let allItems = [];
-    
+
     clientData.orders.forEach(order => {
       if (order.items) {
         allItems = allItems.concat(order.items);
@@ -1524,8 +1523,8 @@ const ClientQuotations = () => {
       return;
     }
 
-    navigate('/quotation-form', { 
-      state: { 
+    navigate('/quotation-form', {
+      state: {
         initialData: {
           clientId: clientData.company_id,
           clientName: clientData.company_name,
@@ -1537,7 +1536,7 @@ const ClientQuotations = () => {
           items: allItems.map(item => {
             const gsts = gstMap[clientName] || {};
             const itemPrice = parseFloat(prices[item.id]) || 0;
-            
+
             return {
               id: item.id,
               salesOrderItemId: item.id,
@@ -1562,8 +1561,8 @@ const ClientQuotations = () => {
             };
           }),
           notes: `Drawing Numbers: ${[...new Set(allItems.map(i => i.drawing_no))].filter(Boolean).join(', ')}`
-        } 
-      } 
+        }
+      }
     });
   };
 
@@ -1595,7 +1594,7 @@ const ClientQuotations = () => {
         const file = result.value;
         const token = localStorage.getItem('authToken');
         const ids = (group.quotes || []).map(q => q.id);
-        
+
         const formData = new FormData();
         formData.append('reply_pdf', file);
         formData.append('ids', JSON.stringify(ids));
@@ -1729,7 +1728,7 @@ const ClientQuotations = () => {
     const quotes = group?.quotes || [];
     const latestQuotes = quotes.filter(q => (q.version || 1) === latestVersion);
     const firstQuote = latestQuotes[0] || quotes[0];
-    
+
     navigate('/quotation-form', {
       state: {
         initialData: {
@@ -1823,16 +1822,16 @@ const ClientQuotations = () => {
               // Apply pending BOM cost if it's the target item (direct match)
               // OR if the target item is a sub-assembly component of this quote item
               const isTarget = q.id === targetItem.id;
-              
-              const targetComp = (q.sub_assemblies || []).find(sa => 
+
+              const targetComp = (q.sub_assemblies || []).find(sa =>
                 (sa.component_code === targetItem.item_code || sa.component_code === targetItem.component_code) &&
                 sa.drawing_no === targetItem.drawing_no
               );
 
-              const newBomCost = isTarget 
-                ? targetItem.pending_bom_cost 
+              const newBomCost = isTarget
+                ? targetItem.pending_bom_cost
                 : (q.bom_cost || q.latest_bom_cost || 0);
-              
+
               return {
                 id: Date.now() + Math.random(),
                 salesOrderItemId: q.sales_order_item_id,
@@ -1902,7 +1901,7 @@ const ClientQuotations = () => {
       try {
         const token = localStorage.getItem('authToken');
         const ids = (group.quotes || []).map(q => q.id);
-        
+
         const response = await fetch(`${API_BASE}/quotation-requests/batch-delete`, {
           method: 'DELETE',
           headers: {
@@ -1929,13 +1928,13 @@ const ClientQuotations = () => {
     <div className="  animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          
+
           <div>
             <h1 className="text-xl  text-slate-900 ">Client Quotations</h1>
             <p className="text-xs text-slate-500 ">Track all quotations from BOM-approved orders</p>
           </div>
         </div>
-        
+
         <div className="flex items-center gap-2">
           <button
             onClick={() => navigate('/quotation-form')}
@@ -1944,7 +1943,7 @@ const ClientQuotations = () => {
             <Plus size={15} />
             Create Quotation
           </button>
-          
+
           <button
             onClick={fetchAllData}
             disabled={loading}
@@ -1990,200 +1989,196 @@ const ClientQuotations = () => {
 
 
 
-        {/* Communication Modal */}
-        {showCommDrawer && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-6 md:p-10">
-            <div 
-              className="absolute inset-0 bg-slate-900/60 backdrop-blur-md transition-opacity duration-300"
-              onClick={() => setShowCommDrawer(false)}
-            />
-            <div className="relative w-full max-w-5xl h-full max-h-[800px] bg-white rounded-2xl shadow-2xl flex overflow-hidden animate-in zoom-in-95 duration-300">
-              {/* Left Sidebar - Quote Info */}
-              <div className="w-80 bg-slate-50 border-r border-slate-100 flex flex-col hidden md:flex">
-                <div className="p-6 border-b border-slate-200/60">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="p-2 bg-indigo-600 text-white rounded-xl shadow-lg shadow-indigo-100">
-                      <MessageSquare size={20} />
-                    </div>
-                    <h3 className="text-lg  text-slate-900">Communication</h3>
+      {/* Communication Modal */}
+      {showCommDrawer && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-6 md:p-10">
+          <div
+            className="absolute inset-0 bg-slate-900/60 backdrop-blur-md transition-opacity duration-300"
+            onClick={() => setShowCommDrawer(false)}
+          />
+          <div className="relative w-full max-w-5xl h-full max-h-[800px] bg-white rounded-2xl shadow-2xl flex overflow-hidden animate-in zoom-in-95 duration-300">
+            {/* Left Sidebar - Quote Info */}
+            <div className="w-80 bg-slate-50 border-r border-slate-100 flex flex-col hidden md:flex">
+              <div className="p-6 border-b border-slate-200/60">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2 bg-indigo-600 text-white rounded-xl shadow-lg shadow-indigo-100">
+                    <MessageSquare size={20} />
                   </div>
-                  <div className="space-y-4">
-                    <div>
-                      <p className="text-xs   text-slate-400   mb-1">Client</p>
-                      <p className="text-sm font-semibold text-slate-700">{selectedQuoteForComm?.company_name}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs   text-slate-400   mb-1">Reference</p>
-                      <p className="text-sm font-mono text-indigo-600 bg-indigo-50 px-2 py-1 rounded-md w-fit">
-                        QRT-{String(selectedQuoteForComm?.id).padStart(4, '0')}
-                      </p>
-                    </div>
-                  </div>
+                  <h3 className="text-lg  text-slate-900">Communication</h3>
                 </div>
-                
-                <div className="flex-1 p-6 overflow-y-auto">
-                  <h4 className="text-xs  text-slate-400   mb-4">Quick Actions</h4>
-                  <div className="space-y-2">
-                    <button 
-                      onClick={handleRefreshMessages}
-                      disabled={syncing}
-                      className="w-full flex items-center gap-3 p-3 text-slate-600 hover:bg-white hover:text-indigo-600 hover:shadow-md rounded-xl transition-all group"
-                    >
-                      <RotateCw size={18} className={syncing ? 'animate-spin' : 'group-hover:rotate-180 duration-500'} />
-                      <span className="text-sm ">Sync with Email</span>
-                    </button>
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-xs   text-slate-400   mb-1">Client</p>
+                    <p className="text-sm font-semibold text-slate-700">{selectedQuoteForComm?.company_name}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs   text-slate-400   mb-1">Reference</p>
+                    <p className="text-sm font-mono text-indigo-600 bg-indigo-50 px-2 py-1 rounded-md w-fit">
+                      QRT-{String(selectedQuoteForComm?.id).padStart(4, '0')}
+                    </p>
                   </div>
                 </div>
               </div>
 
-              {/* Main Chat Area */}
-              <div className="flex-1 flex flex-col bg-white">
-                {/* Header */}
-                <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="md:hidden p-2 bg-indigo-50 text-indigo-600 rounded">
-                      <MessageSquare size={18} />
-                    </div>
-                    <div>
-                      <h3 className=" text-slate-900">{selectedQuoteForComm?.company_name}</h3>
-                      <div className="flex items-center gap-2">
-                        <span className={`w-2 h-2 rounded ${commType === 'CLIENT' ? 'bg-emerald-500' : 'bg-amber-500'} animate-pulse`} />
-                        <span className="text-xs   text-slate-400 ">
-                          {commType === 'CLIENT' ? 'Active Channel (Client)' : 'Internal Requests'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {/* Tab Selector */}
-                  <div className="flex bg-slate-100 p-1 rounded-xl">
-                    <button
-                      onClick={() => handleCommTypeChange('CLIENT')}
-                      className={`px-4 py-1.5 rounded text-xs  transition-all ${
-                        commType === 'CLIENT' 
-                          ? 'bg-white text-indigo-600 shadow-sm' 
-                          : 'text-slate-500 hover:text-slate-700'
-                      }`}
-                    >
-                      Client
-                    </button>
-                    <button
-                      onClick={() => handleCommTypeChange('INTERNAL')}
-                      className={`px-4 py-1.5 rounded text-xs  transition-all relative ${
-                        commType === 'INTERNAL' 
-                          ? 'bg-white text-indigo-600 shadow-sm' 
-                          : 'text-slate-500 hover:text-slate-700'
-                      }`}
-                    >
-                      Internal
-                      {internalUnreadCounts[selectedQuoteForComm?.id] > 0 && (
-                        <span className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 text-white text-[8px] flex items-center justify-center rounded border-2 border-white">
-                          {internalUnreadCounts[selectedQuoteForComm?.id]}
-                        </span>
-                      )}
-                    </button>
-                  </div>
-
-                  <button 
-                    onClick={() => setShowCommDrawer(false)}
-                    className="p-2 hover:bg-slate-100 text-slate-400 hover:text-slate-600 rounded transition-all"
+              <div className="flex-1 p-6 overflow-y-auto">
+                <h4 className="text-xs  text-slate-400   mb-4">Quick Actions</h4>
+                <div className="space-y-2">
+                  <button
+                    onClick={handleRefreshMessages}
+                    disabled={syncing}
+                    className="w-full flex items-center gap-3 p-3 text-slate-600 hover:bg-white hover:text-indigo-600 hover:shadow-md rounded-xl transition-all group"
                   >
-                    <X size={20} />
+                    <RotateCw size={18} className={syncing ? 'animate-spin' : 'group-hover:rotate-180 duration-500'} />
+                    <span className="text-sm ">Sync with Email</span>
                   </button>
-                </div>
-
-                {/* Messages */}
-                <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50/30">
-                  {messages.length === 0 ? (
-                    <div className="h-full flex flex-col items-center justify-center text-center px-10">
-                      <div className="w-20 h-20 bg-white rounded-3xl shadow-sm border border-slate-100 flex items-center justify-center mb-4">
-                        <Mail className="w-10 h-10 text-slate-200" />
-                      </div>
-                      <h4 className="text-lg  text-slate-900 mb-2">No conversations yet</h4>
-                      <p className="text-sm text-slate-500 max-w-xs leading-relaxed">
-                        {commType === 'CLIENT' 
-                          ? `Start a conversation with ${selectedQuoteForComm?.company_name} regarding this quotation.`
-                          : 'No internal requests or notes found for this quotation.'}
-                      </p>
-                    </div>
-                  ) : (
-                    messages.map((msg, idx) => {
-                      const isClient = msg.sender_type === 'CLIENT';
-                      const isSystem = msg.sender_type === 'SYSTEM';
-                      const isInternal = msg.sender_type === 'INTERNAL';
-                      
-                      return (
-                        <div key={idx} className={`flex ${isClient ? 'justify-start' : 'justify-end'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
-                          <div className={`max-w-[80%] flex flex-col ${isClient ? 'items-start' : 'items-end'}`}>
-                            <div className={`flex items-center gap-2 mb-1.5 ${isClient ? 'flex-row' : 'flex-row-reverse'}`}>
-                              <span className={`text-xs     ${
-                                isClient ? 'text-slate-400' : isSystem ? 'text-amber-500' : 'text-indigo-400'
-                              }`}>
-                                {isClient ? 'Client' : isSystem ? 'System Notification' : 'Internal Team'}
-                              </span>
-                              <span className="text-xs  text-slate-300">•</span>
-                              <span className="text-xs  text-slate-400">
-                                {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                              </span>
-                            </div>
-                            <div className={`p-4 rounded-2xl shadow-sm ${
-                              isClient 
-                                ? 'bg-white text-slate-700 rounded-tl-none border border-slate-100' 
-                                : isSystem
-                                  ? 'bg-amber-50 text-amber-900 border border-amber-100 rounded-tr-none'
-                                  : 'bg-indigo-600 text-white rounded-tr-none'
-                            }`}>
-                              <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.message}</p>
-                            </div>
-                            {!isClient && !isSystem && (
-                              <div className="flex items-center gap-1 mt-1.5">
-                                <CheckCheck size={12} className="text-indigo-400" />
-                                <span className="text-xs   text-slate-400 ">Sent</span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                  <div ref={chatEndRef} />
-                </div>
-
-                {/* Input Area */}
-                <div className="p-6 bg-white border-t border-slate-100">
-                  <form onSubmit={handleSendMessage} className="relative">
-                    <textarea
-                      value={newMessage}
-                      onChange={(e) => setNewMessage(e.target.value)}
-                      placeholder="Type your message here..."
-                      className="w-full bg-slate-50 border-0 rounded-2xl p-4 pr-16 text-sm text-slate-700 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500/20 focus:bg-white transition-all resize-none min-h-[100px]"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                          e.preventDefault();
-                          handleSendMessage(e);
-                        }
-                      }}
-                    />
-                    <button
-                      type="submit"
-                      disabled={!newMessage.trim() || sendingMsg}
-                      className="absolute bottom-4 right-4 p-3 bg-indigo-600 text-white rounded-xl shadow-lg shadow-indigo-100 hover:bg-indigo-700 disabled:opacity-50 disabled:shadow-none transition-all active:scale-90"
-                    >
-                      {sendingMsg ? (
-                        <Loader2 size={20} className="animate-spin" />
-                      ) : (
-                        <Send size={20} />
-                      )}
-                    </button>
-                  </form>
-                  <p className="mt-3 text-xs  text-center text-slate-400 ">
-                    Press <kbd className="px-1.5 py-0.5 bg-slate-100 rounded text-slate-500 font-sans">Enter</kbd> to send, <kbd className="px-1.5 py-0.5 bg-slate-100 rounded text-slate-500 font-sans">Shift+Enter</kbd> for new line.
-                  </p>
                 </div>
               </div>
             </div>
+
+            {/* Main Chat Area */}
+            <div className="flex-1 flex flex-col bg-white">
+              {/* Header */}
+              <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="md:hidden p-2 bg-indigo-50 text-indigo-600 rounded">
+                    <MessageSquare size={18} />
+                  </div>
+                  <div>
+                    <h3 className=" text-slate-900">{selectedQuoteForComm?.company_name}</h3>
+                    <div className="flex items-center gap-2">
+                      <span className={`w-2 h-2 rounded ${commType === 'CLIENT' ? 'bg-emerald-500' : 'bg-amber-500'} animate-pulse`} />
+                      <span className="text-xs   text-slate-400 ">
+                        {commType === 'CLIENT' ? 'Active Channel (Client)' : 'Internal Requests'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Tab Selector */}
+                <div className="flex bg-slate-100 p-1 rounded-xl">
+                  <button
+                    onClick={() => handleCommTypeChange('CLIENT')}
+                    className={`px-4 py-1.5 rounded text-xs  transition-all ${commType === 'CLIENT'
+                      ? 'bg-white text-indigo-600 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                  >
+                    Client
+                  </button>
+                  <button
+                    onClick={() => handleCommTypeChange('INTERNAL')}
+                    className={`px-4 py-1.5 rounded text-xs  transition-all relative ${commType === 'INTERNAL'
+                      ? 'bg-white text-indigo-600 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                  >
+                    Internal
+                    {internalUnreadCounts[selectedQuoteForComm?.id] > 0 && (
+                      <span className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 text-white text-[8px] flex items-center justify-center rounded border-2 border-white">
+                        {internalUnreadCounts[selectedQuoteForComm?.id]}
+                      </span>
+                    )}
+                  </button>
+                </div>
+
+                <button
+                  onClick={() => setShowCommDrawer(false)}
+                  className="p-2 hover:bg-slate-100 text-slate-400 hover:text-slate-600 rounded transition-all"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Messages */}
+              <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50/30">
+                {messages.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-center px-10">
+                    <div className="w-20 h-20 bg-white rounded-3xl shadow-sm border border-slate-100 flex items-center justify-center mb-4">
+                      <Mail className="w-10 h-10 text-slate-200" />
+                    </div>
+                    <h4 className="text-lg  text-slate-900 mb-2">No conversations yet</h4>
+                    <p className="text-sm text-slate-500 max-w-xs leading-relaxed">
+                      {commType === 'CLIENT'
+                        ? `Start a conversation with ${selectedQuoteForComm?.company_name} regarding this quotation.`
+                        : 'No internal requests or notes found for this quotation.'}
+                    </p>
+                  </div>
+                ) : (
+                  messages.map((msg, idx) => {
+                    const isClient = msg.sender_type === 'CLIENT';
+                    const isSystem = msg.sender_type === 'SYSTEM';
+                    const isInternal = msg.sender_type === 'INTERNAL';
+
+                    return (
+                      <div key={idx} className={`flex ${isClient ? 'justify-start' : 'justify-end'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
+                        <div className={`max-w-[80%] flex flex-col ${isClient ? 'items-start' : 'items-end'}`}>
+                          <div className={`flex items-center gap-2 mb-1.5 ${isClient ? 'flex-row' : 'flex-row-reverse'}`}>
+                            <span className={`text-xs     ${isClient ? 'text-slate-400' : isSystem ? 'text-amber-500' : 'text-indigo-400'
+                              }`}>
+                              {isClient ? 'Client' : isSystem ? 'System Notification' : 'Internal Team'}
+                            </span>
+                            <span className="text-xs  text-slate-300">•</span>
+                            <span className="text-xs  text-slate-400">
+                              {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                          <div className={`p-4 rounded-2xl shadow-sm ${isClient
+                            ? 'bg-white text-slate-700 rounded-tl-none border border-slate-100'
+                            : isSystem
+                              ? 'bg-amber-50 text-amber-900 border border-amber-100 rounded-tr-none'
+                              : 'bg-indigo-600 text-white rounded-tr-none'
+                            }`}>
+                            <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.message}</p>
+                          </div>
+                          {!isClient && !isSystem && (
+                            <div className="flex items-center gap-1 mt-1.5">
+                              <CheckCheck size={12} className="text-indigo-400" />
+                              <span className="text-xs   text-slate-400 ">Sent</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+                <div ref={chatEndRef} />
+              </div>
+
+              {/* Input Area */}
+              <div className="p-6 bg-white border-t border-slate-100">
+                <form onSubmit={handleSendMessage} className="relative">
+                  <textarea
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    placeholder="Type your message here..."
+                    className="w-full bg-slate-50 border-0 rounded-2xl p-4 pr-16 text-sm text-slate-700 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500/20 focus:bg-white transition-all resize-none min-h-[100px]"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSendMessage(e);
+                      }
+                    }}
+                  />
+                  <button
+                    type="submit"
+                    disabled={!newMessage.trim() || sendingMsg}
+                    className="absolute bottom-4 right-4 p-3 bg-indigo-600 text-white rounded-xl shadow-lg shadow-indigo-100 hover:bg-indigo-700 disabled:opacity-50 disabled:shadow-none transition-all active:scale-90"
+                  >
+                    {sendingMsg ? (
+                      <Loader2 size={20} className="animate-spin" />
+                    ) : (
+                      <Send size={20} />
+                    )}
+                  </button>
+                </form>
+                <p className="mt-3 text-xs  text-center text-slate-400 ">
+                  Press <kbd className="px-1.5 py-0.5 bg-slate-100 rounded text-slate-500 font-sans">Enter</kbd> to send, <kbd className="px-1.5 py-0.5 bg-slate-100 rounded text-slate-500 font-sans">Shift+Enter</kbd> for new line.
+                </p>
+              </div>
+            </div>
           </div>
-        )}
+        </div>
+      )}
     </div>
   );
 };

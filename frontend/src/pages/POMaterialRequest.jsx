@@ -223,9 +223,34 @@ const POMaterialRequest = () => {
       const itemsToRequest = (mr.items || []).filter(item => {
         const type = (item.material_type || '').toUpperCase();
         const isNotFG = type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
-        // ONLY request items that are NOT in stock (fulfillment_source should be 'PURCHASE')
-        const isOutOfStock = item.fulfillment_source !== 'STOCK';
-        return isNotFG && isOutOfStock;
+        
+        // Calculate shortage: quantity requested minus what's currently in stock
+        const requiredQty = parseFloat(item.quantity || 0);
+        const stockQty = parseFloat(item.total_stock || 0);
+        const shortage = Math.max(0, requiredQty - stockQty);
+        
+        // ONLY request items that have a shortage and are not Finished Goods
+        return isNotFG && shortage > 0;
+      }).map(item => {
+        const requiredQty = parseFloat(item.quantity || 0);
+        const stockQty = parseFloat(item.total_stock || 0);
+        const shortage = Math.max(0, requiredQty - stockQty);
+        
+        return {
+          ...item,
+          material_name: item.name || item.material_name,
+          // Use the actual shortage quantity for the RFQ
+          quantity: shortage,
+          planned_qty: parseFloat(item.design_qty) || 0,
+          uom: item.uom || 'pcs',
+          length: item.length || 0,
+          width: item.width || 0,
+          thickness: item.thickness || 0,
+          diameter: item.diameter || 0,
+          outer_diameter: item.outer_diameter || 0,
+          density: item.density || 0,
+          weight_per_unit: item.weight_per_unit || 0
+        };
       });
 
       if (itemsToRequest.length === 0) {
@@ -241,20 +266,7 @@ const POMaterialRequest = () => {
         },
         body: JSON.stringify({
           mr_id: mr.id,
-          items: itemsToRequest.map(item => ({
-            ...item,
-            material_name: item.name || item.material_name, // Ensure name is passed correctly
-            quantity: parseFloat(item.quantity) || 0,
-            planned_qty: parseFloat(item.design_qty) || 0,
-            uom: item.uom || 'pcs',
-            length: item.length || 0,
-            width: item.width || 0,
-            thickness: item.thickness || 0,
-            diameter: item.diameter || 0,
-            outer_diameter: item.outer_diameter || 0,
-            density: item.density || 0,
-            weight_per_unit: item.weight_per_unit || 0
-          }))
+          items: itemsToRequest
         })
       });
 
@@ -614,7 +626,7 @@ const POMaterialRequest = () => {
           <div className="flex items-center gap-2">
             <div className="p-2 bg-white rounded  ">
               <svg className="w-3 h-3 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
               </svg>
             </div>
             <div>
@@ -1218,9 +1230,9 @@ const POMaterialRequest = () => {
                             <StatusBadge status={rfq.status} />
                           </div>
 
-                          {rfq.items && rfq.items.length > 0 && (
+                          {rfq.items && rfq.items.length > 0 && selectedRequest?.items && (
                             <div className="mb-4 space-y-2 border-b border-slate-50 pb-3">
-                              {rfq.items.map((it, iidx) => (
+                              {rfq.items.filter(it => selectedRequest.items.some(si => si.item_code === it.item_code)).map((it, iidx) => (
                                 <div key={iidx} className="flex justify-between items-start text-xs">
                                   <div className="flex-1 min-w-0 pr-2">
                                     <p className=" text-slate-700 truncate">{it.material_name || it.item_code}</p>

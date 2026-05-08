@@ -83,29 +83,37 @@ const getRfqsByMrId = async (mrId) => {
         [mrId]
     );
 
+    if (rfqs.length === 0) return [];
+
+    const rfqIds = rfqs.map(r => r.id);
+
     const [items] = await pool.query(`
         SELECT i.*, 
                COALESCE(i.material_name, sb.material_name, sb.item_description, i.item_code) as material_name
         FROM procurement_rfq_items i 
-        JOIN procurement_rfqs r ON i.rfq_id = r.id 
+        JOIN procurement_rfqs r ON i.rfq_id = r.id
         LEFT JOIN (
             SELECT item_code, MAX(material_name) as material_name, MAX(item_description) as item_description 
             FROM stock_balance GROUP BY item_code
         ) sb ON i.item_code = sb.item_code
-        WHERE r.mr_id = ?`,
-        [mrId]
+        WHERE i.rfq_id IN (?)
+        AND (r.mr_id IS NULL OR EXISTS (
+            SELECT 1 FROM material_request_items mri 
+            WHERE mri.mr_id = r.mr_id AND mri.item_code = i.item_code
+        ))`,
+        [rfqIds]
     );
 
     // Get linked quotations
     const [quotations] = await pool.query(
-        'SELECT q.*, v.vendor_name FROM quotations q JOIN vendors v ON q.vendor_id = v.id WHERE q.rfq_id IN (SELECT id FROM procurement_rfqs WHERE mr_id = ?)',
-        [mrId]
+        'SELECT q.*, v.vendor_name FROM quotations q JOIN vendors v ON q.vendor_id = v.id WHERE q.rfq_id IN (?)',
+        [rfqIds]
     );
 
     return rfqs.map(rfq => ({
         ...rfq,
-        items: items.filter(i => i.rfq_id === rfq.id),
-        quotations: quotations.filter(q => q.rfq_id === rfq.id)
+        items: items.filter(i => Number(i.rfq_id) === Number(rfq.id)),
+        quotations: quotations.filter(q => Number(q.rfq_id) === Number(rfq.id))
     }));
 };
 
@@ -124,24 +132,36 @@ const getRfqs = async () => {
          ORDER BY r.created_at DESC`
     );
 
+    if (rfqs.length === 0) return [];
+
+    const rfqIds = rfqs.map(r => r.id);
+
     const [items] = await pool.query(`
         SELECT i.*, 
                COALESCE(i.material_name, sb.material_name, sb.item_description, i.item_code) as material_name
         FROM procurement_rfq_items i
+        JOIN procurement_rfqs r ON i.rfq_id = r.id
         LEFT JOIN (
             SELECT item_code, MAX(material_name) as material_name, MAX(item_description) as item_description 
             FROM stock_balance GROUP BY item_code
         ) sb ON i.item_code = sb.item_code
-    `);
+        WHERE i.rfq_id IN (?)
+        AND (r.mr_id IS NULL OR EXISTS (
+            SELECT 1 FROM material_request_items mri 
+            WHERE mri.mr_id = r.mr_id AND mri.item_code = i.item_code
+        ))`,
+        [rfqIds]
+    );
 
     const [quotations] = await pool.query(
-        'SELECT q.*, v.vendor_name FROM quotations q JOIN vendors v ON q.vendor_id = v.id WHERE q.rfq_id IS NOT NULL'
+        'SELECT q.*, v.vendor_name FROM quotations q JOIN vendors v ON q.vendor_id = v.id WHERE q.rfq_id IN (?)',
+        [rfqIds]
     );
 
     return rfqs.map(rfq => ({
         ...rfq,
-        items: items.filter(i => i.rfq_id === rfq.id),
-        quotations: quotations.filter(q => q.rfq_id === rfq.id)
+        items: items.filter(i => Number(i.rfq_id) === Number(rfq.id)),
+        quotations: quotations.filter(q => Number(q.rfq_id) === Number(rfq.id))
     }));
 };
 
