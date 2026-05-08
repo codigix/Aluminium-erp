@@ -230,6 +230,8 @@ const Suppliers = () => {
   };
 
   const isFromReport = new URLSearchParams(location.search).get('from');
+  const user = JSON.parse(localStorage.getItem('authUser') || '{}');
+  const isAdmin = user?.department_code === 'ADMIN';
 
   const columns = [
     {
@@ -281,7 +283,7 @@ const Suppliers = () => {
         );
       }
     },
-    ...(!isFromReport ? [{
+    ...(!isFromReport && !isAdmin ? [{
       label: 'Actions',
       key: 'id',
       className: 'text-right',
@@ -324,7 +326,7 @@ const Suppliers = () => {
             <p className="text-slate-500 text-xs mt-1">Manage your supplier network and relationships</p>
           </div>
         </div>
-        {!isFromReport && (
+        {!isFromReport && !isAdmin && (
           <button
             onClick={() => navigate('/suppliers/add')}
             className="flex items-center justify-center gap-2 p-2 bg-indigo-600 text-white rounded  text-xs  hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all active:scale-95"

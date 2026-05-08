@@ -1242,8 +1242,20 @@ function App() {
     const isAllowedModule = !item.moduleId || allowedModules.includes(item.moduleId)
     let isCorrectDept = !item.deptCode || isAdmin || user?.department_code === item.deptCode
     
-    // Explicitly hide Operations from Admin sidebar as requested
-    if (isAdmin && (item.moduleId === 'operation-master' || item.moduleId === 'suppliers')) isCorrectDept = false
+    // Explicitly hide items from Admin sidebar as requested
+    if (isAdmin) {
+      if (
+        item.moduleId === 'operation-master' || 
+        item.moduleId === 'payment-history' ||
+        item.moduleId === 'customer-payment-history'
+      ) {
+        isCorrectDept = false
+      }
+      // For suppliers, only show the one in GENERAL section for Admin
+      if (item.moduleId === 'suppliers' && item.deptCode !== 'ADMIN') {
+        isCorrectDept = false
+      }
+    }
     
     return isAllowedModule && isCorrectDept
   }) : []

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
 import { Card, Modal, DataTable, Badge, FormControl, StatusBadge, SearchableSelect, MultiSelect } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
@@ -344,9 +345,20 @@ const OperationMaster = ({ showForm: propShowForm, setShowForm: propSetShowForm 
   return (
     <div className="">
       <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-xl text-slate-900">Operation Master</h1>
-          <p className="text-xs text-slate-500 ">Define and manage manufacturing operations and standard times</p>
+        <div className="flex items-center gap-3">
+          {isFromProductionReport && (
+            <button
+              onClick={() => navigate(-1)}
+              className="p-1.5 hover:bg-slate-100 rounded-full transition-colors"
+              title="Back"
+            >
+              <ArrowLeft size={18} className="text-slate-600" />
+            </button>
+          )}
+          <div>
+            <h1 className="text-xl text-slate-900">Operation Master</h1>
+            <p className="text-xs text-slate-500 ">Define and manage manufacturing operations and standard times</p>
+          </div>
         </div>
         {!isFromProductionReport && (
           <div className="flex gap-2">
