@@ -532,6 +532,7 @@ const CustomerDrawing = () => {
       
       const manualDrawings = (row.original_items || []).map(item => ({
         id: item.id || Date.now() + Math.random(),
+        drawing_id: item.drawing_id || item.drawing_master_id,
         drawing_no: item.drawing_no || '',
         revision: item.revision || item.revision_no || '',
         qty: item.quantity || item.qty || 1,
@@ -712,18 +713,24 @@ const CustomerDrawing = () => {
   const validationSchema = Yup.object().shape({
     client_name: Yup.string().required('Client Name is required'),
     project_name: Yup.string().required('Project Name is required'),
-    contact_person: Yup.string().required('Contact Person is required'),
+    contact_person: Yup.string().nullable(),
     phone_number: Yup.string()
-      .matches(/^[0-9]{10}$/, 'Phone number must be exactly 10 digits')
-      .required('Phone number is required'),
-    email_address: Yup.string().email('Invalid email address').required('Email is required'),
-    customer_type: Yup.string().required('Type is required'),
-    gstin: Yup.string()
-      .matches(/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/, 'Invalid GSTIN format')
+      .matches(/^[0-9]{10}$/, {
+        message: 'Phone number must be exactly 10 digits',
+        excludeEmptyString: true
+      })
       .nullable(),
-    city: Yup.string().required('City is required'),
-    state: Yup.string().required('State is required'),
-    billing_address: Yup.string().required('Billing address is required'),
+    email_address: Yup.string().email('Invalid email address').nullable(),
+    customer_type: Yup.string().nullable(),
+    gstin: Yup.string()
+      .matches(/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/, {
+        message: 'Invalid GSTIN format',
+        excludeEmptyString: true
+      })
+      .nullable(),
+    city: Yup.string().nullable(),
+    state: Yup.string().nullable(),
+    billing_address: Yup.string().nullable(),
     file: Yup.mixed().when('uploadMode', {
       is: 'bulk',
       then: (schema) => schema.required('Excel file is required'),
@@ -734,7 +741,7 @@ const CustomerDrawing = () => {
       then: (schema) => schema.of(
         Yup.object().shape({
           drawing_no: Yup.string().required('Drawing # is required'),
-          file: Yup.mixed().required('File is required'),
+          file: Yup.mixed().nullable().optional(),
         })
       ),
       otherwise: (schema) => schema.nullable(),
@@ -763,11 +770,12 @@ const CustomerDrawing = () => {
       remarks: '',
       uploadMode: 'bulk',
       manualDrawings: [
-        { id: Date.now(), drawing_no: '', revision: '', qty: 1, description: '', file: null, remarks: '' }
+        { id: Date.now() + Math.random(), drawing_no: '', revision: '', qty: 1, description: '', file: null, remarks: '' }
       ],
     },
     validationSchema,
     onSubmit: async (values) => {
+      console.log('Submitting Formik values:', values);
       try {
         setLoading(true);
         if (values.uploadMode === 'bulk') {
@@ -810,21 +818,32 @@ const CustomerDrawing = () => {
                   formData.append('drawing_pdf', drawing.file);
                 }
 
-                await fetch(`${API_BASE}/drawings/${drawing.id}`, {
+                // Use drawing_id if available, fallback to id (which should be the drawing_master_id for existing)
+                const updateId = drawing.drawing_id || drawing.id;
+                const response = await fetch(`${API_BASE}/drawings/${updateId}`, {
                   method: 'PATCH',
                   headers: { 'Authorization': `Bearer ${token}` },
                   body: formData
                 });
+
+                if (!response.ok) {
+                  const errData = await response.json();
+                  throw new Error(errData.message || `Failed to update drawing ${drawing.drawing_no}`);
+                }
               } else {
                 // Add new drawing to existing requirement
                 await saveSingleDrawing({ ...values, ...drawing }, false);
               }
               successCount++;
             }
-            successToast(`Requirement updated successfully`);
+            if (successCount > 0) {
+              successToast(`Requirement updated successfully`);
+            } else {
+              warningToast('No valid drawings found to update');
+            }
           } else {
             for (const drawing of values.manualDrawings) {
-              if (!drawing.drawing_no || !drawing.file) continue;
+              if (!drawing.drawing_no) continue;
               await saveSingleDrawing({ ...values, ...drawing }, false);
               successCount++;
             }
@@ -893,7 +912,7 @@ const CustomerDrawing = () => {
   };
 
   const addManualDrawingRow = () => {
-    const newRow = { id: Date.now(), drawing_no: '', revision: '', qty: 1, description: '', file: null, remarks: '' };
+    const newRow = { id: Date.now() + Math.random(), drawing_no: '', revision: '', qty: 1, description: '', file: null, remarks: '' };
     formik.setFieldValue('manualDrawings', [...formik.values.manualDrawings, newRow]);
   };
 
@@ -953,10 +972,13 @@ const CustomerDrawing = () => {
     const fileExt = drawingData.file ? drawingData.file.name.split('.').pop().toUpperCase() : '';
     const isExcel = fileExt === 'XLSX' || fileExt === 'XLS';
 
+    // Removed mandatory file check as requested
+    /*
     if (!drawingData.file) {
       warningToast('Drawing File is mandatory');
       return null;
     }
+    */
 
     if (!isExcel && !drawingData.drawing_no) {
       warningToast('Drawing Number is mandatory');
@@ -984,7 +1006,9 @@ const CustomerDrawing = () => {
       formData.append('description', drawingData.description || '');
       formData.append('remarks', drawingData.remarks || '');
       formData.append('fileType', fileExt);
-      formData.append('file', drawingData.file);
+      if (drawingData.file) {
+        formData.append('file', drawingData.file);
+      }
       if (drawingData.zipFile) {
         formData.append('zipFile', drawingData.zipFile);
       }
@@ -1094,29 +1118,6 @@ const CustomerDrawing = () => {
         <span className="text-slate-300 italic text-xs">No File</span>
       )
     },
-    { 
-      label: 'Actions', 
-      key: 'actions', 
-      className: 'text-right',
-      render: (_, row) => (
-        <div className="flex items-center justify-end gap-2">
-          <button
-            onClick={() => handleEdit(row)}
-            className="p-1.5 text-amber-600 hover:bg-amber-50 rounded transition-all"
-            title="Edit"
-          >
-            <Edit2 size={14} />
-          </button>
-          <button
-            onClick={() => handleDelete(row.id)}
-            className="p-1.5 text-rose-600 hover:bg-rose-50 rounded transition-all"
-            title="Delete"
-          >
-            <Trash2 size={14} />
-          </button>
-        </div>
-      )
-    }
   ];
 
   const revisionColumns = [
@@ -2161,7 +2162,7 @@ const CustomerDrawing = () => {
                               />
                               <label
                                 htmlFor={`file-${drawing.id}`}
-                                className={`flex items-center gap-1 px-2 py-1 border border-dashed rounded text-xs  cursor-pointer transition-colors ${drawing.file ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : (formik.touched.manualDrawings?.[index]?.file && formik.errors.manualDrawings?.[index]?.file ? 'border-red-500 bg-red-50' : 'border-slate-300 bg-slate-50 text-slate-600 hover:border-indigo-400')}`}
+                                className={`flex items-center gap-1 px-2 py-1 border border-dashed rounded text-xs  cursor-pointer transition-colors ${drawing.file ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : (formik.errors.manualDrawings?.[index]?.file ? 'border-red-500 bg-red-50' : 'border-slate-300 bg-slate-50 text-slate-600 hover:border-indigo-400')}`}
                               >
                                 <Plus className="w-3 h-3" />
                                 <span className="truncate max-w-[60px]">{drawing.file ? drawing.file.name : 'Choose'}</span>

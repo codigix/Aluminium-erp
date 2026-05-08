@@ -98,16 +98,17 @@ const createDrawing = async (req, res, next) => {
     const zipFile = req.files?.zipFile?.[0];
 
     const fileName = excelFile ? excelFile.filename : null;
-    if (!fileName) throw new Error('Excel or Drawing file is required');
+    // Removed mandatory file check as requested
+    // if (!fileName) throw new Error('Excel or Drawing file is required');
 
     // Use absolute path for reading the file with XLSX
-    const absoluteExcelPath = path.join(uploadsPath, fileName);
-    const dbFilePath = `uploads/${fileName}`;
+    const absoluteExcelPath = fileName ? path.join(uploadsPath, fileName) : null;
+    const dbFilePath = fileName ? `uploads/${fileName}` : null;
 
     const uploadedBy = req.user ? `${req.user.first_name || ''} ${req.user.last_name || ''}`.trim() : 'Sales';
 
     // Handle Excel + ZIP
-    if ((fileType === 'XLSX' || fileType === 'XLS') && excelFile) {
+    if (fileName && (fileType === 'XLSX' || fileType === 'XLS') && excelFile) {
       const parsedDrawings = await parseExcelDrawings(absoluteExcelPath);
       if (parsedDrawings && parsedDrawings.length > 0) {
         let zipEntries = [];

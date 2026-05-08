@@ -138,59 +138,190 @@ const updateDrawing = async (id, data) => {
     billingAddress, shippingAddress, qty, remarks, drawingNo 
   } = data;
 
-  let query = 'UPDATE customer_drawings SET ';
-  const updates = [];
-  const params = [];
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
 
-  if (description !== undefined) { updates.push('description = ?'); params.push(description); }
-  if (revisionNo !== undefined) { updates.push('revision = ?'); params.push(revisionNo); }
-  if (drawingPdf !== undefined && drawingPdf !== null) { updates.push('file_path = ?'); params.push(drawingPdf); }
-  if (clientName !== undefined) { updates.push('client_name = ?'); params.push(clientName); }
-  if (projectName !== undefined) { updates.push('project_name = ?'); params.push(projectName); }
-  if (contactPerson !== undefined) { updates.push('contact_person = ?'); params.push(contactPerson); }
-  if (phoneNumber !== undefined) { updates.push('phone = ?'); params.push(phoneNumber); }
-  if (emailAddress !== undefined) { updates.push('email = ?'); params.push(emailAddress); }
-  if (customerType !== undefined) { updates.push('customer_type = ?'); params.push(customerType); }
-  if (gstin !== undefined) { updates.push('gstin = ?'); params.push(gstin); }
-  if (city !== undefined) { updates.push('city = ?'); params.push(city); }
-  if (state !== undefined) { updates.push('state = ?'); params.push(state); }
-  if (billingAddress !== undefined) { updates.push('billing_address = ?'); params.push(billingAddress); }
-  if (shippingAddress !== undefined) { updates.push('shipping_address = ?'); params.push(shippingAddress); }
-  if (qty !== undefined) { updates.push('qty = ?'); params.push(qty); }
-  if (remarks !== undefined) { updates.push('remarks = ?'); params.push(remarks); }
-  if (drawingNo !== undefined) { updates.push('drawing_no = ?'); params.push(drawingNo); }
+    // 1. Update customer_drawings
+    let query = 'UPDATE customer_drawings SET ';
+    const updates = [];
+    const params = [];
 
-  if (updates.length === 0) return;
+    if (description !== undefined) { updates.push('description = ?'); params.push(description); }
+    if (revisionNo !== undefined) { updates.push('revision = ?'); params.push(revisionNo); }
+    if (drawingPdf !== undefined && drawingPdf !== null) { updates.push('file_path = ?'); params.push(drawingPdf); }
+    if (clientName !== undefined) { updates.push('client_name = ?'); params.push(clientName); }
+    if (projectName !== undefined) { updates.push('project_name = ?'); params.push(projectName); }
+    if (contactPerson !== undefined) { updates.push('contact_person = ?'); params.push(contactPerson); }
+    if (phoneNumber !== undefined) { updates.push('phone = ?'); params.push(phoneNumber); }
+    if (emailAddress !== undefined) { updates.push('email = ?'); params.push(emailAddress); }
+    if (customerType !== undefined) { updates.push('customer_type = ?'); params.push(customerType); }
+    if (gstin !== undefined) { updates.push('gstin = ?'); params.push(gstin); }
+    if (city !== undefined) { updates.push('city = ?'); params.push(city); }
+    if (state !== undefined) { updates.push('state = ?'); params.push(state); }
+    if (billingAddress !== undefined) { updates.push('billing_address = ?'); params.push(billingAddress); }
+    if (shippingAddress !== undefined) { updates.push('shipping_address = ?'); params.push(shippingAddress); }
+    if (qty !== undefined) { updates.push('qty = ?'); params.push(qty); }
+    if (remarks !== undefined) { updates.push('remarks = ?'); params.push(remarks); }
+    if (drawingNo !== undefined) { updates.push('drawing_no = ?'); params.push(drawingNo); }
 
-  updates.push('updated_at = NOW()');
+    if (!id || id === 'undefined') {
+      throw new Error('Drawing ID is required for update');
+    }
 
-  if (!id || id === 'undefined') {
-    throw new Error('Drawing ID is required for update');
+    if (updates.length > 0) {
+      updates.push('updated_at = NOW()');
+      const drawingQuery = query + updates.join(', ') + ' WHERE id = ?';
+      const drawingParams = [...params, id];
+      await connection.execute(drawingQuery, drawingParams);
+    }
+
+    // 2. Sync with sales_order_items and sales_orders
+    const [items] = await connection.query(
+      'SELECT sales_order_id, id as item_id FROM sales_order_items WHERE drawing_id = ?',
+      [id]
+    );
+
+    if (items.length > 0) {
+      for (const item of items) {
+        // Update sales_order_items
+        const itemUpdates = [];
+        const itemParams = [];
+        if (drawingNo !== undefined) { itemUpdates.push('drawing_no = ?'); itemParams.push(drawingNo); }
+        if (revisionNo !== undefined) { itemUpdates.push('revision_no = ?'); itemParams.push(revisionNo); }
+        if (description !== undefined) { itemUpdates.push('description = ?'); itemParams.push(description); }
+        if (drawingPdf !== undefined && drawingPdf !== null) { itemUpdates.push('drawing_pdf = ?'); itemParams.push(drawingPdf); }
+        if (qty !== undefined) { itemUpdates.push('quantity = ?'); itemParams.push(qty); }
+
+        if (itemUpdates.length > 0) {
+          await connection.execute(
+            `UPDATE sales_order_items SET ${itemUpdates.join(', ')} WHERE id = ?`,
+            [...itemParams, item.item_id]
+          );
+        }
+
+        // Update sales_orders
+        const soUpdates = [];
+        const soParams = [];
+        if (projectName !== undefined) { soUpdates.push('project_name = ?'); soParams.push(projectName); }
+        if (billingAddress !== undefined) { soUpdates.push('billing_address = ?'); soParams.push(billingAddress); }
+        if (shippingAddress !== undefined) { soUpdates.push('shipping_address = ?'); soParams.push(shippingAddress); }
+        if (city !== undefined) { soUpdates.push('city = ?'); soParams.push(city); }
+        if (state !== undefined) { soUpdates.push('state = ?'); soParams.push(state); }
+        if (gstin !== undefined) { soUpdates.push('gstin = ?'); soParams.push(gstin); }
+        if (customerType !== undefined) { soUpdates.push('customer_type = ?'); soParams.push(customerType); }
+
+        if (soUpdates.length > 0) {
+          await connection.execute(
+            `UPDATE sales_orders SET ${soUpdates.join(', ')} WHERE id = ?`,
+            [...soParams, item.sales_order_id]
+          );
+        }
+
+        // Update Company
+        if (gstin !== undefined || customerType !== undefined) {
+           const [so] = await connection.query('SELECT company_id FROM sales_orders WHERE id = ?', [item.sales_order_id]);
+           if (so.length > 0) {
+              const companyId = so[0].company_id;
+              const companyUpdates = [];
+              const companyParams = [];
+              if (gstin !== undefined) { companyUpdates.push('gstin = ?'); companyParams.push(gstin); }
+              if (customerType !== undefined) { companyUpdates.push('customer_type = ?'); companyParams.push(customerType); }
+              
+              if (companyUpdates.length > 0) {
+                await connection.execute(
+                  `UPDATE companies SET ${companyUpdates.join(', ')} WHERE id = ?`,
+                  [...companyParams, companyId]
+                );
+              }
+           }
+        }
+        
+        // Update Contact
+        if (contactPerson !== undefined || phoneNumber !== undefined || emailAddress !== undefined) {
+           const [so] = await connection.query('SELECT company_id FROM sales_orders WHERE id = ?', [item.sales_order_id]);
+           if (so.length > 0) {
+              const companyId = so[0].company_id;
+              const [contacts] = await connection.query(
+                'SELECT id FROM contacts WHERE company_id = ? AND contact_type = "PRIMARY"',
+                [companyId]
+              );
+              if (contacts.length > 0) {
+                 const contactUpdates = [];
+                 const contactParams = [];
+                 if (contactPerson !== undefined) { contactUpdates.push('name = ?'); contactParams.push(contactPerson); }
+                 if (emailAddress !== undefined) { contactUpdates.push('email = ?'); contactParams.push(emailAddress); }
+                 if (phoneNumber !== undefined) { contactUpdates.push('phone = ?'); contactParams.push(phoneNumber); }
+                 
+                 if (contactUpdates.length > 0) {
+                    await connection.execute(
+                      `UPDATE contacts SET ${contactUpdates.join(', ')} WHERE id = ?`,
+                      [...contactParams, contacts[0].id]
+                    );
+                 }
+              }
+           }
+        }
+      }
+    }
+
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
   }
-
-  query += updates.join(', ') + ' WHERE id = ?';
-  params.push(id);
-
-  await pool.execute(query, params);
 };
 
 const updateItemDrawing = async (itemId, data) => {
   const { drawingNo, revisionNo, description, drawingPdf } = data;
   
-  const updates = [];
-  const params = [];
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
 
-  if (drawingNo !== undefined) { updates.push('drawing_no = ?'); params.push(drawingNo); }
-  if (revisionNo !== undefined) { updates.push('revision_no = ?'); params.push(revisionNo); }
-  if (description !== undefined) { updates.push('description = ?'); params.push(description); }
-  if (drawingPdf !== undefined && drawingPdf !== null) { updates.push('drawing_pdf = ?'); params.push(drawingPdf); }
+    const updates = [];
+    const params = [];
 
-  if (updates.length === 0) return;
+    if (drawingNo !== undefined) { updates.push('drawing_no = ?'); params.push(drawingNo); }
+    if (revisionNo !== undefined) { updates.push('revision_no = ?'); params.push(revisionNo); }
+    if (description !== undefined) { updates.push('description = ?'); params.push(description); }
+    if (drawingPdf !== undefined && drawingPdf !== null) { updates.push('drawing_pdf = ?'); params.push(drawingPdf); }
 
-  const query = `UPDATE sales_order_items SET ${updates.join(', ')} WHERE id = ?`;
-  params.push(itemId);
+    if (updates.length > 0) {
+      const query = `UPDATE sales_order_items SET ${updates.join(', ')} WHERE id = ?`;
+      params.push(itemId);
+      await connection.execute(query, params);
+    }
 
-  await pool.execute(query, params);
+    // Sync back to customer_drawings
+    const [item] = await connection.query('SELECT drawing_id FROM sales_order_items WHERE id = ?', [itemId]);
+    if (item.length > 0 && item[0].drawing_id) {
+      const drawingId = item[0].drawing_id;
+      const dUpdates = [];
+      const dParams = [];
+      if (drawingNo !== undefined) { dUpdates.push('drawing_no = ?'); dParams.push(drawingNo); }
+      if (revisionNo !== undefined) { dUpdates.push('revision = ?'); dParams.push(revisionNo); }
+      if (description !== undefined) { dUpdates.push('description = ?'); dParams.push(description); }
+      if (drawingPdf !== undefined && drawingPdf !== null) { dUpdates.push('file_path = ?'); dParams.push(drawingPdf); }
+      
+      if (dUpdates.length > 0) {
+        dUpdates.push('updated_at = NOW()');
+        await connection.execute(
+          `UPDATE customer_drawings SET ${dUpdates.join(', ')} WHERE id = ?`,
+          [...dParams, drawingId]
+        );
+      }
+    }
+
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 };
 
 const getDrawingsByClient = async (clientName) => {

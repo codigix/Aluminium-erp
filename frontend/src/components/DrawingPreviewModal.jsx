@@ -125,13 +125,19 @@ const DrawingPreviewModal = ({ isOpen, onClose, drawing }) => {
             </div>
           ) : previewFile.type === 'pdf' ? (
             <div className="w-full h-full relative">
-              <iframe 
-                src={previewFile.url} 
-                key={previewFile.url}
-                title={previewFile.name}
+              <object
+                data={previewFile.url}
+                type="application/pdf"
                 className="w-full h-full border-0 bg-white"
-                loading="lazy"
-              />
+              >
+                <iframe 
+                  src={previewFile.url} 
+                  key={previewFile.url}
+                  title={previewFile.name}
+                  className="w-full h-full border-0 bg-white"
+                  loading="lazy"
+                />
+              </object>
               <div className="absolute inset-0 pointer-events-none  group-hover:opacity-100 transition-opacity flex items-end justify-center pb-2">
                  <div className="bg-white/90 backdrop-blur p-1.5 rounded  shadow-lg border border-slate-200 pointer-events-auto">
                     <p className="text-xs  text-slate-500">PDF issue? <a href={previewFile.url} target="_blank" rel="noreferrer" className="text-indigo-600 underline">Open directly</a></p>
