@@ -2130,7 +2130,8 @@ const ensureSalesOrderColumns = async () => {
       { name: 'gstin', definition: 'VARCHAR(20) NULL' },
       { name: 'customer_type', definition: 'VARCHAR(100) NULL' },
       { name: 'excel_path', definition: 'VARCHAR(255) NULL' },
-      { name: 'zip_path', definition: 'VARCHAR(255) NULL' }
+      { name: 'zip_path', definition: 'VARCHAR(255) NULL' },
+      { name: 'parent_id', definition: 'INT NULL' }
     ];
 
     for (const col of requiredColumns) {

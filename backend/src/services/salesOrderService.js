@@ -204,7 +204,8 @@ const createSalesOrder = async (orderData) => {
     warehouse = null,
     status = 'CREATED',
     quotation_id = null,
-    source_type = 'DIRECT'
+    source_type = 'DIRECT',
+    parent_id = null
   } = orderData;
 
   // Use either targetDispatchDate or delivery_date
@@ -231,9 +232,9 @@ const createSalesOrder = async (orderData) => {
         production_priority, target_dispatch_date, status, 
         current_department, request_accepted, cgst_rate, 
         sgst_rate, profit_margin, bom_id, warehouse,
-        quotation_id, source_type
+        quotation_id, source_type, parent_id
       )
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'DESIGN_ENG', 0, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'DESIGN_ENG', 0, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         validatedPoId, 
         companyId || null, 
@@ -248,7 +249,8 @@ const createSalesOrder = async (orderData) => {
         bom_id,
         warehouse,
         finalQuotationId,
-        source_type
+        source_type,
+        parent_id
       ]
     );
 
