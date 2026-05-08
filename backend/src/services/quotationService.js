@@ -304,12 +304,12 @@ const getQuotationById = async (quotationId) => {
 
 const handleAutoApproval = async (quotationId, connection) => {
   const [q] = await connection.query(
-    'SELECT rfq_group_id, rfq_id, sales_order_id, mr_id FROM quotations WHERE id = ?',
+    'SELECT rfq_group_id, rfq_id, sales_order_id, mr_id, base_quote_number FROM quotations WHERE id = ?',
     [quotationId]
   );
 
   if (q.length > 0) {
-    const { rfq_group_id, rfq_id, sales_order_id, mr_id } = q[0];
+    const { rfq_group_id, rfq_id, sales_order_id, mr_id, base_quote_number } = q[0];
     let whereClause = '';
     let params = [];
     
@@ -337,16 +337,24 @@ const handleAutoApproval = async (quotationId, connection) => {
         ['REVIEWED', quotationId]
       );
 
-      // Check if PO already exists for this quotation to avoid duplicates
+      // Check if PO already exists for this quotation or its base versions to avoid duplicates
       const [existingPO] = await connection.query(
-        'SELECT id FROM purchase_orders WHERE quotation_id = ?',
-        [quotationId]
+        `SELECT po.id FROM purchase_orders po
+         JOIN quotations q ON po.quotation_id = q.id
+         WHERE q.id = ? OR q.base_quote_number = ?`,
+        [quotationId, base_quote_number]
       );
 
       if (existingPO.length === 0) {
         await purchaseOrderService.createPurchaseOrder({
           quotationId: quotationId
         }, connection);
+      } else {
+        // If PO exists, we might want to update it with the new quotation_id to link it to the latest version
+        await connection.execute(
+          'UPDATE purchase_orders SET quotation_id = ? WHERE id = ?',
+          [quotationId, existingPO[0].id]
+        );
       }
       return true;
     }
@@ -376,15 +384,27 @@ const updateQuotationStatus = async (quotationId, status) => {
       await handleAutoApproval(quotationId, connection);
     } else if (status === 'REVIEWED') {
       // Manual approval - create PO if not exists
+      // Check if PO already exists for this quotation or its base versions to avoid duplicates
+      const [qInfo] = await connection.query('SELECT base_quote_number FROM quotations WHERE id = ?', [quotationId]);
+      const baseQuoteNumber = qInfo[0]?.base_quote_number;
+
       const [existingPO] = await connection.query(
-        'SELECT id FROM purchase_orders WHERE quotation_id = ?',
-        [quotationId]
+        `SELECT po.id FROM purchase_orders po
+         JOIN quotations q ON po.quotation_id = q.id
+         WHERE q.id = ? OR q.base_quote_number = ?`,
+        [quotationId, baseQuoteNumber]
       );
 
       if (existingPO.length === 0) {
         await purchaseOrderService.createPurchaseOrder({
           quotationId: quotationId
         }, connection);
+      } else {
+        // Link existing PO to new quotation version
+        await connection.execute(
+          'UPDATE purchase_orders SET quotation_id = ? WHERE id = ?',
+          [quotationId, existingPO[0].id]
+        );
       }
     }
 

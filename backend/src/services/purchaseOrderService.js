@@ -69,15 +69,26 @@ const getCorrectItemCode = async (item, connection) => {
 
 const generatePONumber = async () => {
   const currentYear = new Date().getFullYear();
+  const prefix = `PO-${currentYear}-`;
+  
   const [result] = await pool.query(
-    `SELECT COUNT(*) as count FROM purchase_orders 
-     WHERE YEAR(created_at) = ?`,
-    [currentYear]
+    `SELECT po_number FROM purchase_orders 
+     WHERE po_number LIKE ? 
+     ORDER BY po_number DESC LIMIT 1`,
+    [`${prefix}%`]
   );
   
-  const count = (result[0]?.count || 0) + 1;
-  const paddedCount = String(count).padStart(4, '0');
-  return `PO-${currentYear}-${paddedCount}`;
+  let nextNumber = 1;
+  if (result.length > 0) {
+    const lastNumberStr = result[0].po_number.split('-').pop();
+    const lastNumber = parseInt(lastNumberStr, 10);
+    if (!isNaN(lastNumber)) {
+      nextNumber = lastNumber + 1;
+    }
+  }
+  
+  const paddedCount = String(nextNumber).padStart(4, '0');
+  return `${prefix}${paddedCount}`;
 };
 
 const previewPurchaseOrder = async (quotationId) => {
