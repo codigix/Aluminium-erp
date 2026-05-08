@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, DataTable, StatusBadge } from '../components/ui.jsx';
 import { 
   ShoppingCart, 

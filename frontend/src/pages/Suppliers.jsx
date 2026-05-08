@@ -9,7 +9,8 @@ import {
   ShoppingBag, 
   FileEdit, 
   Trash2,
-  Search
+  Search,
+  ArrowLeft
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
@@ -228,7 +229,7 @@ const Suppliers = () => {
     }
   };
 
-  const isFromProcurementReport = new URLSearchParams(location.search).get('from') === 'procurement-report';
+  const isFromReport = new URLSearchParams(location.search).get('from');
 
   const columns = [
     {
@@ -280,7 +281,7 @@ const Suppliers = () => {
         );
       }
     },
-    ...(!isFromProcurementReport ? [{
+    ...(!isFromReport ? [{
       label: 'Actions',
       key: 'id',
       className: 'text-right',
@@ -308,11 +309,22 @@ const Suppliers = () => {
   return (
     <div className="p-4 space-y-2">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
-        <div>
-          <h1 className="text-xl  text-slate-900">Suppliers</h1>
-          <p className="text-slate-500 text-xs mt-1">Manage your supplier network and relationships</p>
+        <div className="flex items-center gap-3">
+          {isFromReport && (
+            <button
+              onClick={() => navigate(-1)}
+              className="p-1.5 hover:bg-slate-100 rounded-full transition-colors"
+              title="Back"
+            >
+              <ArrowLeft size={18} className="text-slate-600" />
+            </button>
+          )}
+          <div>
+            <h1 className="text-xl  text-slate-900">Suppliers</h1>
+            <p className="text-slate-500 text-xs mt-1">Manage your supplier network and relationships</p>
+          </div>
         </div>
-        {!isFromProcurementReport && (
+        {!isFromReport && (
           <button
             onClick={() => navigate('/suppliers/add')}
             className="flex items-center justify-center gap-2 p-2 bg-indigo-600 text-white rounded  text-xs  hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all active:scale-95"

@@ -346,7 +346,7 @@ function App() {
     if ((modules.includes('purchase-orders') || modules.includes('grn') || modules.includes('procurement-report') || modules.includes('po-receipts')) && !modules.includes('grn-po-details')) {
       modules.push('grn-po-details')
     }
-    if (modules.includes('procurement-report') && !modules.includes('suppliers')) {
+    if ((modules.includes('procurement-report') || modules.includes('accounts-report')) && !modules.includes('suppliers')) {
       modules.push('suppliers')
     }
     if ((modules.includes('quality-reports') || modules.includes('qc-inspections')) && !modules.includes('qc-grn-details')) {
