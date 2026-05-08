@@ -293,8 +293,15 @@ const ProjectAnalysis = () => {
             <Projector className="w-3 h-3 text-slate-400" />
           </div>
           <div className="flex flex-col">
-            <span className="text-xs text-slate-900   ">{row.project_name}</span>
-            <span className="text-xs text-slate-400 ">#SO-{row.id?.toString().padStart(6, '0')}</span>
+            <span className="text-xs text-slate-900   font-medium">{row.project_name}</span>
+            <div className="flex items-center gap-2 mt-0.5">
+               <span className="text-[10px] text-slate-400 ">#SO-{row.id?.toString().padStart(6, '0')}</span>
+               {row.drawing_nos && (
+                 <span className="text-[10px] text-indigo-500 bg-indigo-50 px-1 rounded border border-indigo-100 max-w-[150px] truncate">
+                   {row.drawing_nos}
+                 </span>
+               )}
+            </div>
           </div>
         </div>
       )

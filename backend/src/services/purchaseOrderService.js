@@ -521,8 +521,20 @@ const getPurchaseOrders = async (filters = {}) => {
 
 const getPurchaseOrderById = async (poId) => {
   const [rows] = await pool.query(
-    `SELECT po.*, v.vendor_name, v.email as vendor_email, mr.mr_number, so.so_number,
+    `SELECT po.*, v.vendor_name, v.email as vendor_email, v.phone as vendor_phone, 
+     (SELECT name FROM contacts WHERE company_id = po.vendor_id AND contact_type = 'PRIMARY' LIMIT 1) as contact_person,
+     (SELECT phone FROM contacts WHERE company_id = po.vendor_id AND contact_type = 'PRIMARY' LIMIT 1) as contact_phone,
+     mr.mr_number, so.so_number,
      po.invoice_url,
+     (SELECT p.payment_mode FROM payments p WHERE p.po_id = po.id AND p.status = 'CONFIRMED' LIMIT 1) as payment_mode,
+     (SELECT p.transaction_ref_no FROM payments p WHERE p.po_id = po.id AND p.status = 'CONFIRMED' LIMIT 1) as transaction_ref_no,
+     (SELECT p.upi_transaction_id FROM payments p WHERE p.po_id = po.id AND p.status = 'CONFIRMED' LIMIT 1) as upi_transaction_id,
+     (SELECT p.payment_date FROM payments p WHERE p.po_id = po.id AND p.status = 'CONFIRMED' LIMIT 1) as payment_date,
+     (SELECT ba.bank_name FROM payments p JOIN bank_accounts ba ON p.bank_account_id = ba.id WHERE p.po_id = po.id AND p.status = 'CONFIRMED' LIMIT 1) as bank_name,
+     (SELECT ba.account_number FROM payments p JOIN bank_accounts ba ON p.bank_account_id = ba.id WHERE p.po_id = po.id AND p.status = 'CONFIRMED' LIMIT 1) as account_number,
+     (SELECT CONCAT(u.first_name, ' ', u.last_name) FROM payments p JOIN users u ON p.created_by = u.id WHERE p.po_id = po.id AND p.status = 'CONFIRMED' LIMIT 1) as paid_by,
+     (SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = po.approved_by) as updated_by,
+     (SELECT CONCAT('GRN-', LPAD(g.id, 4, '0')) FROM grns g WHERE g.po_number = po.po_number LIMIT 1) as shipment_code,
      COALESCE(
        so.project_name,
        (SELECT so2.project_name 

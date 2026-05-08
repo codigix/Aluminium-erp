@@ -8,6 +8,7 @@ import {
   MapPin, Calendar, CreditCard, Activity, ArrowRight, Share2, MoreVertical
 } from 'lucide-react';
 import { Card, StatusBadge, Button } from '../components/ui.jsx';
+import Swal from 'sweetalert2';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -22,6 +23,7 @@ const ShipmentDetails = () => {
   
   const [loading, setLoading] = useState(true);
   const [shipmentData, setShipmentData] = useState(null);
+  const [challanData, setChallanData] = useState(null);
 
   useEffect(() => {
     fetchData();
@@ -37,10 +39,248 @@ const ShipmentDetails = () => {
       if (!res.ok) throw new Error('Failed to fetch Shipment details');
       const data = await res.json();
       setShipmentData(data);
+
+      // Fetch delivery challan for this shipment
+      try {
+        const dcRes = await fetch(`${API_BASE}/delivery-challans`, { headers });
+        if (dcRes.ok) {
+          const challans = await dcRes.json();
+          const shipmentChallan = challans.find(c => String(c.shipment_id) === String(shipmentId));
+          if (shipmentChallan) {
+            setChallanData(shipmentChallan);
+          }
+        }
+      } catch (dcError) {
+        console.error('Error fetching delivery challan:', dcError);
+      }
     } catch (error) {
       console.error('Error fetching shipment details:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handlePrintChallan = async () => {
+    if (!challanData && !shipmentData) return;
+
+    try {
+      Swal.fire({
+        title: 'Preparing Print...',
+        didOpen: () => Swal.showLoading(),
+        allowOutsideClick: false
+      });
+
+      const token = localStorage.getItem('authToken');
+      let fullChallan = challanData;
+
+      // If we have a challan ID, fetch full details including items
+      if (challanData && challanData.id) {
+        const response = await fetch(`${API_BASE}/delivery-challans/${challanData.id}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          fullChallan = await response.json();
+        }
+      } else {
+        // Fallback: use shipment data to construct a temporary challan view
+        fullChallan = {
+          challan_number: `DC-TEMP-${shipmentData.shipment_code}`,
+          shipment_code: shipmentData.shipment_code,
+          customer_name: shipmentData.company_name,
+          snapshot_customer_name: shipmentData.snapshot_customer_name,
+          snapshot_customer_phone: shipmentData.snapshot_customer_phone,
+          snapshot_customer_email: shipmentData.snapshot_customer_email,
+          snapshot_shipping_address: shipmentData.snapshot_shipping_address,
+          snapshot_billing_address: shipmentData.snapshot_billing_address,
+          transporter: shipmentData.transporter,
+          vehicle_number: shipmentData.vehicle_number,
+          driver_name: shipmentData.driver_name,
+          dispatch_time: shipmentData.planned_dispatch_date,
+          items: shipmentData.items || []
+        };
+      }
+
+      Swal.close();
+
+      if (!fullChallan) {
+        Swal.fire('Error', 'Could not load challan details', 'error');
+        return;
+      }
+
+      const totalQty = fullChallan.items?.reduce((sum, item) => sum + Number(item.quantity), 0).toFixed(0);
+      const dispatchDate = fullChallan.dispatch_time ? new Date(fullChallan.dispatch_time).toLocaleDateString('en-IN') : '—';
+      const dispatchTime = fullChallan.dispatch_time ? new Date(fullChallan.dispatch_time).toLocaleTimeString('en-IN') : '—';
+
+      const printWindow = window.open('', '_blank');
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>Delivery Challan - ${fullChallan.challan_number}</title>
+            <script src="https://cdn.tailwindcss.com"></script>
+            <style>
+              @page { size: A4; margin: 0; }
+              body { margin: 0; padding: 0; -webkit-print-color-adjust: exact; font-family: 'Roboto', sans-serif; }
+              .print-container { width: 210mm; min-height: 297mm; margin: 0 auto; background: white; }
+            </style>
+          </head>
+          <body>
+            <div class="print-container flex flex-col">
+              <!-- Header -->
+              <div class="bg-[#4f6ebc] text-white p-8 text-center">
+                <h1 class="text-xl font-bold mb-1">SPTECHPIONEER PRIVATE LIMITED</h1>
+                <p class="text-xs opacity-90 ">MIDC Bhosari, Pune – 411026, Maharashtra</p>
+                <p class="text-xs opacity-80 mt-1">GSTIN: 27ABCDE1234F1Z5 | Phone: +91-9876543210 | Email: info@sptech.com</p>
+              </div>
+
+              <!-- Title Section -->
+              <div class="px-10 py-6 flex justify-between items-end border-b-2 border-slate-100">
+                <h2 class="text-xl font-bold text-[#1e3a8a] ">DELIVERY CHALLAN</h2>
+                <div class="text-right space-y-1">
+                  <p class="text-xs font-bold text-slate-400  ">Challan No: <span class="text-slate-900 ml-2">${fullChallan.challan_number}</span></p>
+                  <p class="text-xs font-bold text-slate-400  ">Date: <span class="text-slate-900 ml-2">${dispatchDate}</span></p>
+                  <p class="text-xs font-bold text-slate-400  ">Shipment: <span class="text-slate-900 ml-2">${fullChallan.shipment_code}</span></p>
+                </div>
+              </div>
+
+              <div class="p-10 space-y-2 flex-1">
+                <!-- Info Cards Grid -->
+                <div class="grid grid-cols-2 gap-8">
+                  <div class="space-y-2">
+                    <div class="border border-slate-100 rounded overflow-hidden bg-slate-50/30">
+                      <div class="bg-slate-50 p-2 text-xs font-bold text-slate-500   border-b border-slate-100">Bill To:</div>
+                      <div class="p-5 space-y-3">
+                        <p class="text-lg font-bold text-[#1e3a8a] leading-none mb-2">${fullChallan.snapshot_customer_name || fullChallan.customer_name}</p>
+                        <div class="space-y-1 text-xs font-medium text-slate-600">
+                          <p><span class="w-16 inline-block text-xs text-slate-400 font-bold ">GSTIN:</span> ${fullChallan.snapshot_customer_gst || '27XXXXX1234Z1A1'}</p>
+                          <p><span class="w-16 inline-block text-xs text-slate-400 font-bold ">Contact:</span> ${fullChallan.snapshot_customer_phone || 'N/A'}</p>
+                          <p><span class="w-16 inline-block text-xs text-slate-400 font-bold ">Email:</span> ${fullChallan.snapshot_customer_email || 'N/A'}</p>
+                        </div>
+                        <div class="pt-3 border-t border-slate-100 mt-3">
+                          <p class="text-xs font-bold text-slate-400   mb-1">Billing Address:</p>
+                          <p class="text-xs font-medium text-slate-600 leading-relaxed">${fullChallan.snapshot_billing_address || 'N/A'}</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="border border-slate-100 rounded overflow-hidden bg-slate-50/30">
+                      <div class="bg-slate-50 p-2 text-xs font-bold text-slate-500   border-b border-slate-100">Ship To:</div>
+                      <div class="p-5 text-xs font-medium text-slate-600 leading-relaxed">${fullChallan.snapshot_shipping_address || 'Address not set'}</div>
+                    </div>
+                  </div>
+
+                  <div class="space-y-2">
+                    <div class="border border-slate-100 rounded overflow-hidden bg-slate-50/30">
+                      <div class="bg-slate-50 p-2 text-xs font-bold text-slate-500   border-b border-slate-100">Transport Details:</div>
+                      <div class="p-5 space-y-3">
+                        <div class="flex justify-between items-center text-xs font-medium text-slate-600">
+                          <span class="text-xs text-slate-400 font-bold ">Transporter:</span>
+                          <span>${fullChallan.transporter || '—'}</span>
+                        </div>
+                        <div class="flex justify-between items-center text-xs font-medium text-slate-600">
+                          <span class="text-xs text-slate-400 font-bold ">Vehicle No:</span>
+                          <span class="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded border border-indigo-100">${fullChallan.vehicle_number || '—'}</span>
+                        </div>
+                        <div class="flex justify-between items-center text-xs font-medium text-slate-600">
+                          <span class="text-xs text-slate-400 font-bold ">Driver Name:</span>
+                          <span>${fullChallan.driver_name || '—'}</span>
+                        </div>
+                        <div class="flex justify-between items-center text-xs font-medium text-slate-600">
+                          <span class="text-xs text-slate-400 font-bold ">Dispatch Time:</span>
+                          <span>${dispatchTime}</span>
+                        </div>
+                        <div class="mt-6 pt-6 border-t-2 border-slate-100 grid grid-cols-2 gap-2 text-center">
+                          <div class="bg-indigo-50/50 p-2 rounded font-bold border border-indigo-100">
+                            <p class="text-[8px] font-bold text-indigo-400  ">Total Qty</p>
+                            <p class="text-lg font-bold text-[#1e3a8a]">${totalQty} <span class="text-xs">PCS</span></p>
+                          </div>
+                          <div class="bg-indigo-50/50 p-2 rounded font-bold border border-indigo-100">
+                            <p class="text-[8px] font-bold text-indigo-400  ">Total Weight</p>
+                            <p class="text-lg font-bold text-[#1e3a8a]">200 <span class="text-xs">KG</span></p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Items Table -->
+                <div class="border-2 border-slate-100 rounded overflow-hidden mt-8">
+                  <table class="w-full text-left">
+                    <thead class="bg-[#e0e7ff] text-[#1e3a8a]">
+                      <tr class="text-xs font-bold  ">
+                        <th class=" p-2 w-12 text-center border-r border-slate-200/50">Sr</th>
+                        <th class=" p-2 w-32 border-r border-slate-200/50">Item Code</th>
+                        <th class=" p-2 border-r border-slate-200/50">Description</th>
+                        <th class=" p-2 w-20 text-center border-r border-slate-200/50">HSN</th>
+                        <th class=" p-2 w-20 text-right border-r border-slate-200/50">Qty</th>
+                        <th class=" p-2 w-20 text-center">Unit</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 text-xs font-medium text-slate-700">
+                      ${fullChallan.items?.map((item, idx) => `
+                        <tr>
+                          <td class=" p-2 text-center border-r border-slate-50 text-slate-400">${idx + 1}</td>
+                          <td class=" p-2 border-r border-slate-50 font-bold text-[#1e3a8a]">${item.item_code}</td>
+                          <td class=" p-2 border-r border-slate-50">${item.description}</td>
+                          <td class=" p-2 text-center border-r border-slate-50 text-slate-500">732690</td>
+                          <td class=" p-2 text-right border-r border-slate-50 font-bold">${Number(item.quantity).toFixed(0)}</td>
+                          <td class=" p-2 text-center text-slate-500">PCS</td>
+                        </tr>
+                      `).join('')}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div class="bg-[#fffbeb] border-2 border-[#fde68a] p-2 rounded font-medium mt-8 relative">
+                  <h4 class="text-xs font-bold text-[#92400e]   mb-2">Remarks:</h4>
+                  <p class="text-xs font-medium text-[#b45309] leading-relaxed italic">"${fullChallan.remarks || 'Material sent for delivery. Please check items and quantities before receiving.'}"</p>
+                </div>
+
+                <div class="grid grid-cols-5 gap-8 mt-12 mb-10">
+                  <div class="col-span-3 border-2 border-slate-100 rounded font-bold p-2 space-y-2">
+                    <h4 class="text-xs font-bold text-slate-400  ">Received By:</h4>
+                    <div class="grid grid-cols-2 gap-x-10 gap-y-6">
+                      ${['Name', 'Mobile', 'Date / Time', 'Signature'].map(label => `
+                        <div class="space-y-1">
+                          <p class="text-xs text-slate-400 font-bold ">${label}:</p>
+                          <div class="border-b border-dotted border-slate-300 h-6"></div>
+                        </div>
+                      `).join('')}
+                    </div>
+                  </div>
+                  <div class="col-span-2 border-2 border-slate-100 rounded font-bold p-2 flex flex-col items-center justify-between text-center bg-slate-50/30">
+                    <h4 class="text-xs font-bold text-slate-400  ">For SPTECHPIONEER PVT LTD</h4>
+                    <div class="py-8 opacity-10">
+                      <div class="w-5 h-5 border-4 border-indigo-200 rounded flex items-center justify-center">
+                        <span class="text-xl font-bold  text-indigo-200">SP</span>
+                      </div>
+                    </div>
+                    <div class="space-y-1">
+                      <p class="text-sm font-bold text-[#1e3a8a]">Authorized Signatory</p>
+                      <p class="text-xs text-slate-400 font-bold  ">Computer Generated</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="bg-slate-100 p-2 text-center mt-auto">
+                <p class="text-xs font-bold text-slate-500 font-bold tracking-[0.3em]">This is a computer generated Delivery Challan. Subject to Pune Jurisdiction.</p>
+              </div>
+            </div>
+            <script>
+              window.onload = () => {
+                setTimeout(() => {
+                  window.print();
+                  window.close();
+                }, 500);
+              };
+            </script>
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+    } catch (error) {
+      console.error('Error printing challan:', error);
+      Swal.fire('Error', 'Failed to generate delivery challan', 'error');
     }
   };
 
@@ -115,10 +355,10 @@ const ShipmentDetails = () => {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" className="bg-white">
+          <Button variant="outline" size="sm" className="bg-white" onClick={handlePrintChallan}>
             <Printer className="w-4 h-4 mr-2" /> Print
           </Button>
-          <Button variant="outline" size="sm" className="bg-white">
+          <Button variant="outline" size="sm" className="bg-white" onClick={handlePrintChallan}>
             <Download className="w-4 h-4 mr-2" /> Download (PDF)
           </Button>
           <button className="p-2 hover:bg-white rounded-lg border border-transparent hover:border-slate-200 transition-all">
@@ -155,28 +395,24 @@ const ShipmentDetails = () => {
                 </div>
                 <div className="space-y-0.5">
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Contact Person</p>
-                  <p className="text-xs font-medium text-indigo-600">{shipmentData.driver_name || 'Rahul Sharma'}</p>
+                  <p className="text-xs font-medium text-indigo-600">{shipmentData.snapshot_customer_name || '—'}</p>
                 </div>
                 <div className="space-y-0.5">
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Phone</p>
-                  <p className="text-xs font-medium text-slate-700">{shipmentData.driver_contact || '9988776655'}</p>
+                  <p className="text-xs font-medium text-slate-700">{shipmentData.snapshot_customer_phone || '—'}</p>
                 </div>
               </div>
 
               <div className="p-4 space-y-2">
                 <div className="space-y-0.5">
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Destination</p>
-                  <p className="text-sm font-bold text-slate-900">Main Warehouse</p>
+                  <p className="text-sm font-bold text-slate-900">Shipping Address</p>
                 </div>
                 <div className="space-y-0.5">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Shipping Address</p>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Full Address</p>
                   <p className="text-xs leading-relaxed text-slate-600">
-                    Plot No. 45, Industrial Area, Pimpri, Pune - 411018, Maharashtra
+                    {shipmentData.snapshot_shipping_address || 'Address not set'}
                   </p>
-                </div>
-                <div className="space-y-0.5">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Pincode</p>
-                  <p className="text-xs font-medium text-slate-700">411018</p>
                 </div>
               </div>
 
@@ -186,8 +422,8 @@ const ShipmentDetails = () => {
                   <StatusBadge status={shipmentData.shipment_status} />
                 </div>
                 <div className="space-y-0.5">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Dispatched By</p>
-                  <p className="text-xs font-medium text-slate-700">sdfgh</p>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Estimated Delivery</p>
+                  <p className="text-xs font-medium text-slate-700">{formatDisplayDate(shipmentData.estimated_delivery_date)}</p>
                 </div>
                 <div className="space-y-0.5">
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Dispatched Date & Time</p>
@@ -199,16 +435,16 @@ const ShipmentDetails = () => {
                 <div className="space-y-0.5">
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Vehicle No.</p>
                   <p className="text-xs font-medium bg-slate-100 px-2 py-0.5 rounded text-slate-700 inline-block">
-                    {shipmentData.vehicle_number || 'MH12 AB 1234'}
+                    {shipmentData.vehicle_number || '—'}
                   </p>
                 </div>
                 <div className="space-y-0.5">
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Driver Name</p>
-                  <p className="text-sm font-bold text-slate-900">{shipmentData.driver_name || 'sudharshan'}</p>
+                  <p className="text-sm font-bold text-slate-900">{shipmentData.driver_name || '—'}</p>
                 </div>
                 <div className="space-y-0.5">
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Driver Contact</p>
-                  <p className="text-xs font-medium text-slate-700">{shipmentData.driver_contact || '9112706604'}</p>
+                  <p className="text-xs font-medium text-slate-700">{shipmentData.driver_contact || '—'}</p>
                 </div>
               </div>
             </div>
@@ -345,27 +581,23 @@ const ShipmentDetails = () => {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1">
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Transporter</p>
-                      <p className="text-xs font-bold text-slate-900">{shipmentData.transporter || 'Blue dark'}</p>
+                      <p className="text-xs font-bold text-slate-900">{shipmentData.transporter || '—'}</p>
                     </div>
                     <div className="space-y-1">
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Vehicle No.</p>
-                      <p className="text-xs font-medium text-slate-700">{shipmentData.vehicle_number || 'MH12 AB 1234'}</p>
+                      <p className="text-xs font-medium text-slate-700">{shipmentData.vehicle_number || '—'}</p>
                     </div>
                     <div className="space-y-1">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Transport Mode</p>
-                      <p className="text-xs font-bold text-slate-900">Road</p>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Driver Name</p>
+                      <p className="text-xs font-bold text-slate-900">{shipmentData.driver_name || '—'}</p>
                     </div>
                     <div className="space-y-1">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">E-Way Bill No.</p>
-                      <p className="text-xs font-medium text-slate-700">EWB5487963210</p>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Driver Contact</p>
+                      <p className="text-xs font-medium text-slate-700">{shipmentData.driver_contact || '—'}</p>
                     </div>
-                    <div className="space-y-1">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Vehicle Type</p>
-                      <p className="text-xs font-bold text-slate-900">Tata 407</p>
-                    </div>
-                    <div className="space-y-1">
+                    <div className="space-y-1 col-span-2">
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">LR / Challan No.</p>
-                      <p className="text-xs font-medium text-slate-700">DC-2026-0017</p>
+                      <p className="text-xs font-medium text-slate-700">{shipmentData.shipment_code || '—'}</p>
                     </div>
                   </div>
                 </div>
@@ -380,13 +612,18 @@ const ShipmentDetails = () => {
                   <h3 className="text-sm font-bold text-slate-900">Attachments</h3>
                 </div>
                 <div className="p-4 space-y-3">
-                  <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100 group hover:border-blue-200 transition-all cursor-pointer">
+                  <div 
+                    onClick={handlePrintChallan}
+                    className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100 group hover:border-blue-200 transition-all cursor-pointer"
+                  >
                     <div className="flex items-center gap-3">
                       <div className="p-2 bg-white rounded shadow-sm">
                         <FileText className="w-4 h-4 text-rose-500" />
                       </div>
                       <div className="space-y-0.5">
-                        <p className="text-[10px] font-bold text-slate-700 truncate w-40">delivery_challan_{shipmentData.shipment_code}.pdf</p>
+                        <p className="text-[10px] font-bold text-slate-700 truncate w-40">
+                          {challanData ? `${challanData.challan_number}.pdf` : `delivery_challan_${shipmentData.shipment_code}.pdf`}
+                        </p>
                         <p className="text-[10px] text-slate-400 font-medium">245 KB</p>
                       </div>
                     </div>
@@ -406,7 +643,7 @@ const ShipmentDetails = () => {
                 <div className="p-4">
                   <div className="p-3 bg-amber-50/50 rounded-lg border border-amber-100/50">
                     <p className="text-xs text-slate-700 italic leading-relaxed">
-                      "Goods delivered in good condition. Received by store in-charge."
+                      {shipmentData.special_instructions || "No special instructions provided for this shipment."}
                     </p>
                   </div>
                 </div>

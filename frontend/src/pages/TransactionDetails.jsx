@@ -173,6 +173,11 @@ const TransactionDetails = () => {
 
   const isVendorInvoice = type === 'Vendor Invoice';
 
+  // Calculate dynamic totals
+  const subtotal = transaction.items?.reduce((sum, item) => sum + (parseFloat(item.amount) || (parseFloat(item.quantity) * parseFloat(item.unit_rate || item.rate || 0))), 0) || 0;
+  const totalTax = transaction.items?.reduce((sum, item) => sum + (parseFloat(item.cgst_amount || 0) + parseFloat(item.sgst_amount || 0)), 0) || 0;
+  const grandTotal = transaction.total_amount || transaction.payment_amount || transaction.amount || (subtotal + totalTax);
+
   return (
     <div className="space-y-3 animate-in fade-in slide-in-from-bottom-1 duration-500 pb-10">
       {/* Breadcrumb & Header */}
@@ -251,23 +256,23 @@ const TransactionDetails = () => {
 
         <Card className="p-2.5 border-slate-100 shadow-sm bg-white/80 backdrop-blur-sm group hover:border-rose-200 transition-all">
           <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 group-hover:text-rose-400 transition-colors">{type === 'Payment Received' ? 'Customer' : 'Vendor'}</p>
-          <p className="text-[11px] font-black text-slate-900 truncate tracking-tight">{transaction.vendor_name || transaction.customer_name || transaction.party || '—'}</p>
+          <p className="text-[11px] font-black text-slate-900 truncate tracking-tight">{transaction.customer_name || transaction.vendor_name || transaction.party || '—'}</p>
           <div className="mt-3 pt-2 border-t border-slate-50 space-y-1.5">
             <div className="flex justify-between items-center text-[9px]">
               <span className="text-slate-400 font-bold uppercase tracking-tighter">ID</span>
-              <span className="text-rose-600 font-black tracking-tight">{transaction.vendor_id || transaction.customer_id || 'N/A'}</span>
+              <span className="text-rose-600 font-black tracking-tight">{transaction.customer_id || transaction.vendor_id || 'N/A'}</span>
             </div>
             <div className="flex justify-between items-center text-[9px]">
               <span className="text-slate-400 font-bold uppercase tracking-tighter">GSTIN</span>
-              <span className="text-slate-900 font-black tracking-tight">{transaction.vendor_gstin || transaction.gstin || '27AABCC1234A1Z1'}</span>
+              <span className="text-slate-900 font-black tracking-tight">{transaction.gstin || transaction.vendor_gstin || '—'}</span>
             </div>
             <div className="flex justify-between items-center text-[9px]">
               <span className="text-slate-400 font-bold uppercase tracking-tighter">Contact Person</span>
-              <span className="text-slate-900 font-black truncate max-w-[80px]">Rahul Sharma</span>
+              <span className="text-slate-900 font-black truncate max-w-[80px]">{transaction.contact_person || '—'}</span>
             </div>
             <div className="flex justify-between items-center text-[9px]">
               <span className="text-slate-400 font-bold uppercase tracking-tighter">Phone</span>
-              <span className="text-slate-900 font-black tracking-tight">9112706604</span>
+              <span className="text-slate-900 font-black tracking-tight">{transaction.customer_phone || transaction.vendor_phone || '—'}</span>
             </div>
           </div>
         </Card>
@@ -278,16 +283,16 @@ const TransactionDetails = () => {
           <div className="mt-3 pt-2 border-t border-slate-50 space-y-1.5">
             <div className="flex justify-between items-center text-[9px]">
               <span className="text-slate-400 font-bold uppercase tracking-tighter">Reference No.</span>
-              <span className="text-slate-900 font-black tracking-tight">{transaction.transaction_ref_no || transaction.upi_transaction_id || 'UTR123456789012'}</span>
+              <span className="text-slate-900 font-black tracking-tight">{transaction.transaction_ref_no || transaction.upi_transaction_id || '—'}</span>
             </div>
             <div className="flex justify-between items-center text-[9px]">
               <span className="text-slate-400 font-bold uppercase tracking-tighter">Currency</span>
               <span className="text-slate-900 font-black uppercase tracking-tight">{transaction.currency || 'INR'} - Rupee</span>
             </div>
             <div className="flex justify-between items-center text-[9px]">
-              <span className="text-slate-400 font-bold uppercase tracking-tighter">Delivery Challan</span>
+              <span className="text-slate-400 font-bold uppercase tracking-tighter">Shipment Ref</span>
               <span className="text-indigo-500 font-black flex items-center gap-0.5 cursor-pointer hover:underline">
-                DC-2026-0005 <ArrowRight size={7} className="-rotate-45" />
+                {transaction.shipment_code || '—'} <ArrowRight size={7} className="-rotate-45" />
               </span>
             </div>
           </div>
@@ -317,7 +322,7 @@ const TransactionDetails = () => {
 
         <Card className="p-2.5 border-slate-100 shadow-sm bg-white/80 backdrop-blur-sm group hover:border-slate-300 transition-all">
           <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">Audit Info</p>
-          <p className="text-[11px] font-black text-slate-900 tracking-tight truncate">Accounts Manager</p>
+          <p className="text-[11px] font-black text-slate-900 tracking-tight truncate">{transaction.created_by_role || 'Accounts Manager'}</p>
           <div className="mt-3 pt-2 border-t border-slate-50 space-y-1.5">
             <div className="flex justify-between items-center text-[9px]">
               <span className="text-slate-400 font-bold uppercase tracking-tighter">Created On</span>
@@ -325,7 +330,7 @@ const TransactionDetails = () => {
             </div>
             <div className="flex justify-between items-center text-[9px]">
               <span className="text-slate-400 font-bold uppercase tracking-tighter">Updated By</span>
-              <span className="text-slate-900 font-black truncate max-w-[70px]">Manager</span>
+              <span className="text-slate-900 font-black truncate max-w-[70px]">{transaction.paid_by || transaction.updated_by || 'Admin'}</span>
             </div>
             <div className="flex justify-between items-center text-[9px]">
               <span className="text-slate-400 font-bold uppercase tracking-tighter">Updated On</span>
@@ -355,19 +360,19 @@ const TransactionDetails = () => {
           </div>
 
           {[
-            { label: 'Invoice Received', date: '06 May, 11:42 AM', icon: CheckCircle2 },
-            { label: 'Verification', date: '06 May, 11:50 AM', icon: ShieldCheck },
-            { label: 'Payment Initiated', date: '06 May, 12:05 PM', icon: Send },
-            { label: 'Payment Received', date: '06 May, 12:12 PM', icon: Wallet },
-            { label: 'Confirmed', date: '06 May, 12:15 PM', icon: CheckCircle }
+            { label: 'Invoice Received', date: formatDate(transaction.created_at), icon: CheckCircle2 },
+            { label: 'Verification', date: formatDate(transaction.created_at), icon: ShieldCheck },
+            { label: 'Payment Initiated', date: transaction.payment_date ? formatDate(transaction.payment_date) : 'Pending', icon: Send },
+            { label: 'Payment Received', date: transaction.payment_date ? formatDate(transaction.payment_date) : 'Pending', icon: Wallet },
+            { label: 'Confirmed', date: transaction.payment_date ? formatDate(transaction.payment_date) : 'Pending', icon: CheckCircle }
           ].map((step, idx) => (
             <div key={idx} className="flex flex-col items-center gap-2 relative z-10 group">
-              <div className="w-7 h-7 rounded-full bg-emerald-500 border-2 border-emerald-500 text-white flex items-center justify-center shadow-md shadow-emerald-100 transform group-hover:scale-110 transition-transform">
+              <div className={`w-7 h-7 rounded-full border-2 flex items-center justify-center shadow-md transform group-hover:scale-110 transition-all ${step.date === 'Pending' ? 'bg-slate-100 border-slate-200 text-slate-400' : 'bg-emerald-500 border-emerald-500 text-white shadow-emerald-100'}`}>
                 <step.icon size={14} />
               </div>
               <div className="text-center">
-                <p className="text-[9px] font-black text-slate-900 tracking-tighter uppercase">{step.label}</p>
-                <p className="text-[8px] text-slate-400 font-bold mt-0.5">{step.date}</p>
+                <p className={`text-[9px] font-black tracking-tighter uppercase ${step.date === 'Pending' ? 'text-slate-400' : 'text-slate-900'}`}>{step.label}</p>
+                <p className="text-[8px] text-slate-400 font-bold mt-0.5">{step.date.split(',')[0]}</p>
               </div>
             </div>
           ))}
@@ -382,7 +387,9 @@ const TransactionDetails = () => {
               <div className="p-1.5 bg-blue-50 text-blue-600 rounded">
                 <Package size={14} />
               </div>
-              <h3 className="text-[10px] font-black text-slate-900 uppercase tracking-[0.2em]">Items Received</h3>
+              <h3 className="text-[10px] font-black text-slate-900 uppercase tracking-[0.2em]">
+                {type === 'Payment Received' ? 'Order Items' : 'Items Received'}
+              </h3>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
@@ -390,8 +397,8 @@ const TransactionDetails = () => {
                   <tr className="bg-slate-50/50 text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] border-b border-slate-100">
                     <th className="p-2.5 w-10 text-center">#</th>
                     <th className="p-2.5">Item Details</th>
-                    <th className="p-2.5 text-center">Ord. Qty</th>
-                    <th className="p-2.5 text-center">Rec. Qty</th>
+                    <th className="p-2.5 text-center">{type === 'Payment Received' ? 'Qty' : 'Ord. Qty'}</th>
+                    <th className="p-2.5 text-center">{type === 'Payment Received' ? 'Unit' : 'Rec. Qty'}</th>
                     <th className="p-2.5 text-center">Rate (₹)</th>
                     <th className="p-2.5 text-right">Amount (₹)</th>
                   </tr>
@@ -407,12 +414,12 @@ const TransactionDetails = () => {
                         <p className="text-[9px] text-slate-400 mt-0.5 font-bold tracking-tight">ID: {item.item_code || item.drawing_no || 'N/A'}</p>
                       </td>
                       <td className="p-2.5 text-center">
-                        <p className="text-[10px] font-black text-slate-900">{item.design_qty || item.quantity || 0}</p>
-                        <p className="text-[8px] text-slate-400 font-bold uppercase">{item.unit || 'NOS'}</p>
+                        <p className="text-[10px] font-black text-slate-900">{type === 'Payment Received' ? (item.quantity || 0) : (item.design_qty || item.quantity || 0)}</p>
+                        <p className="text-[8px] text-slate-400 font-bold uppercase">{type === 'Payment Received' ? (item.unit || 'NOS') : (item.unit || 'NOS')}</p>
                       </td>
                       <td className="p-2.5 text-center">
-                        <p className="text-[10px] font-black text-indigo-600">{item.quantity || 0}</p>
-                        <p className="text-[8px] text-slate-400 font-bold uppercase">{item.unit || 'NOS'}</p>
+                        <p className={`text-[10px] font-black ${type === 'Payment Received' ? 'text-slate-900' : 'text-indigo-600'}`}>{type === 'Payment Received' ? (item.unit || 'NOS') : (item.quantity || 0)}</p>
+                        <p className="text-[8px] text-slate-400 font-bold uppercase">{type === 'Payment Received' ? 'Unit' : (item.unit || 'NOS')}</p>
                       </td>
                       <td className="p-2.5 text-center text-[10px] font-black text-slate-700">
                         {parseFloat(item.unit_rate || item.rate || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
@@ -467,24 +474,24 @@ const TransactionDetails = () => {
             <div className="space-y-2">
               <div className="flex justify-between items-center text-[10px]">
                 <span className="text-slate-400 font-bold uppercase tracking-tighter">Subtotal</span>
-                <span className="text-slate-900 font-black">{formatCurrency(transaction.total_amount * 0.85)}</span>
+                <span className="text-slate-900 font-black">{formatCurrency(subtotal)}</span>
               </div>
               <div className="flex justify-between items-center text-[10px]">
-                <span className="text-slate-400 font-bold uppercase tracking-tighter">GST (18%)</span>
-                <span className="text-slate-900 font-black">{formatCurrency(transaction.total_amount * 0.15)}</span>
+                <span className="text-slate-400 font-bold uppercase tracking-tighter">Total GST</span>
+                <span className="text-slate-900 font-black">{formatCurrency(totalTax)}</span>
               </div>
               <div className="h-[1px] bg-slate-50 my-1" />
               <div className="flex justify-between items-center py-1">
                 <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Grand Total</span>
-                <span className="text-[11px] font-black text-slate-900">{formatCurrency(transaction.total_amount || transaction.amount)}</span>
+                <span className="text-[11px] font-black text-slate-900">{formatCurrency(grandTotal)}</span>
               </div>
               <div className="flex justify-between items-center py-1 border-t border-slate-50">
                 <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">Amount Paid</span>
-                <span className="text-[11px] font-black text-emerald-600">{formatCurrency(transaction.total_amount || transaction.amount)}</span>
+                <span className="text-[11px] font-black text-emerald-600">{formatCurrency(transaction.status === 'PAID' || transaction.status === 'CONFIRMED' || transaction.status === 'FULFILLED' ? grandTotal : 0)}</span>
               </div>
               <div className="flex justify-between items-center p-1.5 bg-slate-50 rounded border border-slate-100 mt-1">
                 <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Balance</span>
-                <span className="text-[10px] font-black text-slate-900">₹0.00</span>
+                <span className="text-[10px] font-black text-slate-900">{formatCurrency(transaction.status === 'PAID' || transaction.status === 'CONFIRMED' || transaction.status === 'FULFILLED' ? 0 : grandTotal)}</span>
               </div>
             </div>
           </Card>
@@ -498,12 +505,15 @@ const TransactionDetails = () => {
             </div>
             <div className="space-y-2.5">
               {[
-                { label: 'Transaction UTR', val: 'UTR123456789012' },
-                { label: 'Payment Date', val: '06 May, 12:12 PM' },
-                { label: 'Bank Name', val: 'HDFC Bank' },
-                { label: 'Account No.', val: 'XXXX XXXX 1234' },
-                { label: 'Paid By', val: 'Accounts Dept' }
-              ].map((row, i) => (
+                { label: 'Transaction UTR', val: transaction.transaction_ref_no || transaction.upi_transaction_id || '—', show: ['UPI', 'BANK_TRANSFER', 'DEBIT_CARD', 'CREDIT_CARD'].includes(transaction.payment_mode?.toUpperCase()) },
+                { label: 'Payment Date', val: transaction.payment_date ? formatDate(transaction.payment_date) : '—', show: true },
+                { label: 'Bank Name', val: transaction.bank_name || transaction.cheque_bank_name || '—', show: ['BANK_TRANSFER', 'CHEQUE'].includes(transaction.payment_mode?.toUpperCase()) },
+                { label: 'Account No.', val: transaction.account_number || '—', show: ['BANK_TRANSFER'].includes(transaction.payment_mode?.toUpperCase()) },
+                { label: 'Cheque No.', val: transaction.cheque_number || '—', show: transaction.payment_mode?.toUpperCase() === 'CHEQUE' },
+                { label: 'Cheque Date', val: transaction.cheque_date ? formatDate(transaction.cheque_date) : '—', show: transaction.payment_mode?.toUpperCase() === 'CHEQUE' },
+                { label: 'Card Type', val: transaction.card_type || '—', show: ['DEBIT_CARD', 'CREDIT_CARD'].includes(transaction.payment_mode?.toUpperCase()) },
+                { label: 'Paid By', val: transaction.paid_by || '—', show: true }
+              ].filter(row => row.show).map((row, i) => (
                 <div key={i} className="space-y-0.5">
                   <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{row.label}</p>
                   <p className="text-[10px] font-black text-slate-900 tracking-tight">{row.val}</p>
@@ -522,7 +532,7 @@ const TransactionDetails = () => {
             <div className="space-y-2">
               {(transaction.invoice_url || isVendorInvoice) && (
                 <div 
-                  onClick={() => handleDownloadAttachment(transaction.invoice_url || `/uploads/Invoice_IR-26.pdf`, 'Invoice_IR-26.pdf')}
+                  onClick={() => handleDownloadAttachment(transaction.invoice_url || `/uploads/Vendor_Invoice_${transaction.po_number || 'N/A'}.pdf`, `Vendor_Invoice_${transaction.po_number || 'N/A'}.pdf`)}
                   className="flex items-center justify-between p-1.5 rounded border border-slate-50 hover:bg-slate-50 transition-colors cursor-pointer group"
                 >
                   <div className="flex items-center gap-2 overflow-hidden">
@@ -531,7 +541,7 @@ const TransactionDetails = () => {
                     </div>
                     <div className="overflow-hidden">
                       <p className="text-[9px] font-black text-slate-700 truncate group-hover:text-indigo-600 transition-colors">
-                        {transaction.invoice_url ? transaction.invoice_url.split('/').pop() : 'Invoice_IR-26.pdf'}
+                        {transaction.invoice_url ? transaction.invoice_url.split('/').pop() : `Vendor_Invoice_${transaction.po_number || 'N/A'}.pdf`}
                       </p>
                       <p className="text-[8px] text-slate-400 font-bold uppercase tracking-tighter">245 KB</p>
                     </div>

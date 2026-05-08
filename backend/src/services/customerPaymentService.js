@@ -248,16 +248,30 @@ const getPaymentReceivedById = async (paymentId) => {
         WHEN cp.sales_order_source = 'DIRECT_ORDER' THEN o.order_no
         ELSE COALESCE(so.so_number, cp_pos.po_number, CAST(so.id AS CHAR))
       END as so_number,
+      CASE
+        WHEN cp.sales_order_source = 'DIRECT_ORDER' THEN o.project_name
+        ELSE COALESCE(so.project_name, cp_pos.project_name)
+      END as project_name,
       c.company_name as customer_name,
+      c.gstin,
+      con.name as contact_person,
+      con.phone as customer_phone,
       COALESCE(ba.bank_name, cp.manual_bank_account) as bank_name,
       ba.account_number,
-      cp.manual_bank_account
+      cp.manual_bank_account,
+      u.first_name as paid_by_first,
+      u.last_name as paid_by_last,
+      CONCAT(u.first_name, ' ', u.last_name) as paid_by,
+      r.name as created_by_role
     FROM customer_payments cp
     LEFT JOIN sales_orders so ON cp.sales_order_id = so.id AND cp.sales_order_source = 'SALES_ORDER'
     LEFT JOIN customer_pos cp_pos ON so.customer_po_id = cp_pos.id
     LEFT JOIN orders o ON cp.sales_order_id = o.id AND cp.sales_order_source = 'DIRECT_ORDER'
     LEFT JOIN companies c ON cp.customer_id = c.id
+    LEFT JOIN contacts con ON con.company_id = c.id AND con.contact_type = 'PRIMARY'
     LEFT JOIN bank_accounts ba ON cp.bank_account_id = ba.id
+    LEFT JOIN users u ON cp.created_by = u.id
+    LEFT JOIN roles r ON u.role_id = r.id
     WHERE cp.id = ?`,
     [paymentId]
   );
@@ -268,7 +282,44 @@ const getPaymentReceivedById = async (paymentId) => {
     throw error;
   }
 
-  return rows[0];
+  const payment = rows[0];
+
+  // Fetch items based on source
+  let items = [];
+  if (payment.sales_order_id) {
+    if (payment.sales_order_source === 'DIRECT_ORDER') {
+      const [orderItems] = await pool.query(
+        `SELECT 
+          item_code,
+          description,
+          quantity,
+          rate as unit_rate,
+          amount
+        FROM order_items 
+        WHERE order_id = ?`,
+        [payment.sales_order_id]
+      );
+      items = orderItems;
+    } else {
+      // SALES_ORDER
+      const [soItems] = await pool.query(
+        `SELECT 
+          item_code,
+          description,
+          quantity,
+          rate as unit_rate,
+          (quantity * rate) as amount,
+          tax_value as cgst_amount -- Approximate mapping if detailed tax not available
+        FROM sales_order_items 
+        WHERE sales_order_id = ?`,
+        [payment.sales_order_id]
+      );
+      items = soItems;
+    }
+  }
+
+  payment.items = items;
+  return payment;
 };
 
 const getCustomerBalance = async (customerId) => {
