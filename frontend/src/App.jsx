@@ -1156,6 +1156,8 @@ function App() {
     { label: 'Material Consumption', moduleId: 'material-consumption', icon: 'layers', indent: true },
     { label: 'Machine Analysis', moduleId: 'machine-analysis', icon: 'monitor', indent: true },
     { label: 'OEE Analysis', moduleId: 'oee-analysis', icon: 'activity', indent: true },
+    { label: 'Active Clients', moduleId: 'active-clients', icon: 'users', indent: true, deptCode: 'ADMIN' },
+    { label: 'Suppliers', moduleId: 'suppliers', icon: 'truck', indent: true, deptCode: 'ADMIN' },
     { label: 'Company Master', moduleId: 'company-master', icon: 'building', indent: true },
     { label: 'Client Contacts', moduleId: 'client-contacts', icon: 'users', indent: true },
 
