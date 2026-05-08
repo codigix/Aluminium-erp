@@ -368,7 +368,7 @@ const QCGrnDetails = () => {
               </span>
             </div>
             <p className="text-xs text-slate-500 font-medium">
-              Quality Reports > QC Details > {grnData.poNumber}
+              Quality Reports &gt; QC Details &gt; {grnData.poNumber}
             </p>
           </div>
         </div>
