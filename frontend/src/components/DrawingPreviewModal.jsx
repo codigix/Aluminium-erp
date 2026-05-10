@@ -17,6 +17,8 @@ const DrawingPreviewModal = ({ isOpen, onClose, drawing }) => {
     type = 'image';
   } else if (serverFileType === 'PDF' || extension === 'pdf') {
     type = 'pdf';
+  } else if (['DXF', 'DWG'].includes(serverFileType) || ['dxf', 'dwg'].includes(extension)) {
+    type = 'cad';
   }
 
   const previewFile = {
@@ -40,6 +42,9 @@ const DrawingPreviewModal = ({ isOpen, onClose, drawing }) => {
 
   // PDF Viewer URL (Google Docs viewer for better compatibility)
   const pdfViewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(previewFile.url)}&embedded=true`;
+  
+  // CAD Viewer (ShareCAD.org free viewer)
+  const cadViewerUrl = `https://sharecad.org/cadframe/load?url=${encodeURIComponent(previewFile.url)}`;
 
   return (
     <Modal
@@ -116,8 +121,10 @@ const DrawingPreviewModal = ({ isOpen, onClose, drawing }) => {
               <img 
                 src={previewFile.url} 
                 alt={previewFile.name} 
+                crossOrigin="anonymous"
                 className="max-w-full max-h-full object-contain shadow-lg rounded transition-transform duration-500 group-hover:scale-[1.01]"
                 onError={(e) => {
+                  console.error('Image preview error:', e);
                   e.target.onerror = null;
                   e.target.style.display = 'none';
                 }}
@@ -131,7 +138,7 @@ const DrawingPreviewModal = ({ isOpen, onClose, drawing }) => {
                 className="w-full h-full border-0 bg-white"
               >
                 <iframe 
-                  src={previewFile.url} 
+                  src={pdfViewerUrl} 
                   key={previewFile.url}
                   title={previewFile.name}
                   className="w-full h-full border-0 bg-white"
@@ -141,6 +148,20 @@ const DrawingPreviewModal = ({ isOpen, onClose, drawing }) => {
               <div className="absolute inset-0 pointer-events-none  group-hover:opacity-100 transition-opacity flex items-end justify-center pb-2">
                  <div className="bg-white/90 backdrop-blur p-1.5 rounded  shadow-lg border border-slate-200 pointer-events-auto">
                     <p className="text-xs  text-slate-500">PDF issue? <a href={previewFile.url} target="_blank" rel="noreferrer" className="text-indigo-600 underline">Open directly</a></p>
+                 </div>
+              </div>
+            </div>
+          ) : previewFile.type === 'cad' ? (
+            <div className="w-full h-full relative">
+               <iframe 
+                  src={cadViewerUrl}
+                  title={previewFile.name}
+                  className="w-full h-full border-0 bg-white"
+                  loading="lazy"
+                />
+                <div className="absolute inset-0 pointer-events-none  group-hover:opacity-100 transition-opacity flex items-end justify-center pb-2">
+                 <div className="bg-white/90 backdrop-blur p-1.5 rounded  shadow-lg border border-slate-200 pointer-events-auto">
+                    <p className="text-xs  text-slate-500">CAD Preview by ShareCAD. <a href={previewFile.url} download className="text-indigo-600 underline">Download File</a></p>
                  </div>
               </div>
             </div>

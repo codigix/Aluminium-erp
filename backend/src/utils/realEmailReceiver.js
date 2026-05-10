@@ -64,7 +64,7 @@ const processEmails = async () => {
     });
 
     try {
-        console.log(`[Email Receiver] ${new Date().toISOString()} - Starting email sync...`);
+        // console.log(`[Email Receiver] ${new Date().toISOString()} - Starting email sync...`);
         await client.connect();
         let lock = await client.getMailboxLock('INBOX');
         try {
@@ -80,7 +80,7 @@ const processEmails = async () => {
                 for await (const msg of list) {
                     messages.push(msg.uid);
                 }
-                console.log(`[Email Receiver] Found ${messages.length} unread messages.`);
+                // console.log(`[Email Receiver] Found ${messages.length} unread messages.`);
             }
             
             // If no unread, check last 10 messages just in case (increased from 5)
@@ -89,7 +89,7 @@ const processEmails = async () => {
                 for await (const msg of list) {
                     messages.push(msg.uid);
                 }
-                console.log(`[Email Receiver] Checking last ${messages.length} messages (fallback).`);
+                // console.log(`[Email Receiver] Checking last ${messages.length} messages (fallback).`);
             }
             
             for (let uid of messages) {
@@ -110,11 +110,11 @@ const processEmails = async () => {
                     const messageId = parsed.messageId;
                     const systemEmail = (process.env.MAIL_FROM_ADDRESS || 'reactjscodigix@gmail.com').toLowerCase();
 
-                    console.log(`[Email Receiver] Checking email: Subject: "${subject}", From: ${from}`);
+// console.log(`[Email Receiver] Checking email: Subject: "${subject}", From: ${from}`);
 
                     // Skip emails sent BY the system
                     if (from === systemEmail) {
-                        console.log(`[Email Receiver] Skipping system-sent email.`);
+                        // console.log(`[Email Receiver] Skipping system-sent email.`);
                         if (searchResult.length > 0) {
                             await client.messageFlagsAdd(uid, ['\\Seen'], { uid: true });
                         }
@@ -233,7 +233,7 @@ const processEmails = async () => {
         try { await client.logout(); } catch (e) {}
     } finally {
         isProcessing = false;
-        console.log(`[Email Receiver] ${new Date().toISOString()} - Email sync finished.`);
+        // console.log(`[Email Receiver] ${new Date().toISOString()} - Email sync finished.`);
         if (timeoutId !== 'STOPPED') {
             timeoutId = setTimeout(processEmails, 60000);
         }

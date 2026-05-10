@@ -8,7 +8,7 @@ app.listen(PORT, () => {
   
   // Start real email receiver to fetch replies
   try {
-    emailReceiver.startEmailReceiver();
+    // emailReceiver.startEmailReceiver();
   } catch (error) {
     console.error('[Server] Failed to start email receiver:', error.message);
   }

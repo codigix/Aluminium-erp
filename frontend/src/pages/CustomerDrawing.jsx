@@ -22,6 +22,7 @@ const CustomerDrawing = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [uploadMode, setUploadMode] = useState('bulk'); // 'bulk' or 'manual'
   const [clientLocked, setClientLocked] = useState(false);
+  const [deletedDrawingIds, setDeletedDrawingIds] = useState([]);
 
   // Revisions Modal State
   const [showRevisions, setShowRevisions] = useState(false);
@@ -527,6 +528,7 @@ const CustomerDrawing = () => {
 
   useEffect(() => {
     if (showFormModal && formMode === 'edit' && editingRequirementData) {
+      setDeletedDrawingIds([]);
       const row = editingRequirementData;
       const company = companies.find(c => c.company_name === (row.client_name || row.company_name));
       
@@ -788,6 +790,20 @@ const CustomerDrawing = () => {
           let successCount = 0;
           
           if (formMode === 'edit') {
+            // Handle deletions first
+            if (deletedDrawingIds.length > 0) {
+              const token = localStorage.getItem('authToken');
+              await fetch(`${API_BASE}/drawings/delete/bulk`, {
+                method: 'POST',
+                headers: { 
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ ids: deletedDrawingIds })
+              });
+              setDeletedDrawingIds([]);
+            }
+
             // Update existing requirement logic
             for (const drawing of values.manualDrawings) {
               if (!drawing.drawing_no) continue;
@@ -913,13 +929,25 @@ const CustomerDrawing = () => {
 
   const addManualDrawingRow = () => {
     const newRow = { id: Date.now() + Math.random(), drawing_no: '', revision: '', qty: 1, description: '', file: null, remarks: '' };
-    formik.setFieldValue('manualDrawings', [...formik.values.manualDrawings, newRow]);
+    formik.setFieldValue('manualDrawings', [newRow, ...formik.values.manualDrawings]);
   };
 
   const removeManualDrawingRow = (id) => {
+    const drawingToRemove = formik.values.manualDrawings.find(d => d.id === id);
+    
+    // Track for deletion if it's an existing drawing (not a temp one)
+    if (drawingToRemove && drawingToRemove.id && !String(drawingToRemove.id).includes('.')) {
+      setDeletedDrawingIds(prev => [...prev, drawingToRemove.drawing_id || drawingToRemove.id]);
+    }
+
     if (formik.values.manualDrawings.length > 1) {
       const updatedManualDrawings = formik.values.manualDrawings.filter(d => d.id !== id);
       formik.setFieldValue('manualDrawings', updatedManualDrawings);
+    } else {
+      // If it's the last row, clear it instead of removing it
+      formik.setFieldValue('manualDrawings', [
+        { id: Date.now() + Math.random(), drawing_no: '', revision: '', qty: 1, description: '', file: null, remarks: '' }
+      ]);
     }
   };
 
@@ -1390,6 +1418,7 @@ const CustomerDrawing = () => {
           <Button
             variant="primary"
             onClick={() => {
+              setDeletedDrawingIds([]);
               setFormMode('add');
               setEditingRequirementId(null);
               setEditingRequirementData(null);
@@ -1830,6 +1859,7 @@ const CustomerDrawing = () => {
       <Modal
         isOpen={showFormModal}
         onClose={() => {
+          setDeletedDrawingIds([]);
           setShowFormModal(false);
           setFormMode('add');
           setEditingRequirementId(null);
@@ -2194,15 +2224,13 @@ const CustomerDrawing = () => {
                           />
                         </td>
                         <td className="px-2 py-2 text-center">
-                          {formik.values.manualDrawings.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => removeManualDrawingRow(drawing.id)}
-                              className="text-slate-400 hover:text-red-500 transition-colors"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                            </button>
-                          )}
+                          <button
+                            type="button"
+                            onClick={() => removeManualDrawingRow(drawing.id)}
+                            className="text-slate-400 hover:text-red-500 transition-colors"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                          </button>
                         </td>
                       </tr>
                     ))}
