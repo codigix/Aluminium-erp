@@ -383,8 +383,7 @@ const CustomerDrawing = () => {
       const data = await response.json();
       const filtered = data.filter(so =>
         so.project_name?.includes('Design Review') ||
-        so.current_department === 'DESIGN_ENG' ||
-        so.current_department === 'SALES'
+        ['DESIGN_ENG', 'SALES', 'PRODUCTION', 'SHIPMENT', 'QUALITY', 'QC', 'ACCOUNTS'].includes(so.current_department)
       );
 
       // Group by client to avoid duplicates
