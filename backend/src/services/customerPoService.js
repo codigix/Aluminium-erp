@@ -277,11 +277,23 @@ const getCustomerPoById = async id => {
       return { ...item, sub_assemblies: storedSA };
     }
 
-    // 2. Fallback to dynamic BOM fetching for older records
+    // 2. Fallback to dynamic BOM fetching ONLY for legacy records that have NO stored sub-assemblies
+    // and are clearly Finished Goods.
     const isFG = (item.item_code || '').startsWith('FG-') || 
                  (item.drawing_no && item.drawing_no !== '—');
     
-    if (isFG) {
+    if (isFG && storedSA.length === 0) {
+      // Check if we already have some sub-assemblies for other items in this PO. 
+      // If we do, it means this is a modern record and we should NOT fallback.
+      const [anyStoredSA] = await pool.query(
+        'SELECT id FROM customer_po_item_subassemblies WHERE po_item_id IN (SELECT id FROM customer_po_items WHERE customer_po_id = ?)',
+        [id]
+      );
+
+      if (anyStoredSA.length > 0) {
+        return item; // Modern record, trust the (empty) snapshot
+      }
+
       const sub_assemblies = await bomService.getItemComponents(null, item.item_code, item.drawing_no);
       return { 
         ...item, 
@@ -354,6 +366,7 @@ const updateCustomerPo = async (id, payload) => {
     );
 
     // Delete existing items and re-insert
+    await connection.execute('DELETE FROM customer_po_item_subassemblies WHERE po_item_id IN (SELECT id FROM customer_po_items WHERE customer_po_id = ?)', [id]);
     await connection.execute('DELETE FROM customer_po_items WHERE customer_po_id = ?', [id]);
 
     for (const item of items) {

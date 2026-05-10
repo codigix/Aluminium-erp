@@ -139,7 +139,9 @@ const CustomerPO = ({
       }
 
       const items = [];
-      relatedItems.forEach(item => {
+      relatedItems
+        .filter(item => (item.item_group || item.item_type || '').toUpperCase() !== 'SA')
+        .forEach(item => {
         // Handle different property names between list view and version details
         const qty = parseFloat(item.item_qty || item.quantity) || 0;
         const totalAmount = parseFloat(item.total_amount || item.total) || 0;
@@ -329,7 +331,16 @@ const CustomerPO = ({
         currency: poForm.currency,
         paymentTerms: poForm.paymentTerms,
         creditDays: poForm.creditDays,
-        items: poForm.items,
+        items: poForm.items.map(item => ({
+          ...item,
+          sub_assemblies: (item.sub_assemblies || []).map(sa => ({
+            drawingNo: sa.drawingNo,
+            description: sa.description,
+            quantity: sa.quantity,
+            unit: sa.unit,
+            rate: sa.rate
+          }))
+        })),
         remarks: poForm.remarks
       }
 
