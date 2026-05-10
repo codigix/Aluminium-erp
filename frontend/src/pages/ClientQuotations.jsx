@@ -434,10 +434,24 @@ const ClientQuotations = () => {
           versionBatches[bId] = {
             version: quote.version || 1,
             created_at: quote.created_at,
-            items: []
+            items_map: {} // Use map for deduplication within batch
           };
         }
-        versionBatches[bId].items.push(quote);
+        
+        // Deduplicate within the same batch by drawing_no and item_code
+        const identity = `${quote.drawing_no || 'NA'}_${quote.item_code || 'NA'}_${(quote.item_group || quote.item_group_calc || '').toUpperCase()}`;
+        const existingInBatch = versionBatches[bId].items_map[identity];
+        
+        // Keep the latest ID/revision within the same batch
+        if (!existingInBatch || parseInt(quote.id) > parseInt(existingInBatch.id)) {
+          versionBatches[bId].items_map[identity] = quote;
+        }
+      });
+
+      // Convert items_map back to items array for each batch
+      Object.values(versionBatches).forEach(batch => {
+        batch.items = Object.values(batch.items_map);
+        delete batch.items_map;
       });
 
       // 2. Consolidate Versions into Quotation Chains
@@ -492,7 +506,8 @@ const ClientQuotations = () => {
       // 3. Filter chains: keep if the latest version is in a relevant state
       const filtered = Object.values(grouped).filter(group => {
         const s = (group.status || '').toUpperCase();
-        return ['SENT', 'DRAFT', 'REVISED'].includes(s);
+        // Include APPROVED/ACCEPTED/COMPLETED so they stay in Sent tab as well
+        return ['SENT', 'DRAFT', 'REVISED', 'APPROVED', 'ACCEPTED', 'COMPLETED', 'REJECTED'].includes(s);
       });
 
       // 4. Final calculations
