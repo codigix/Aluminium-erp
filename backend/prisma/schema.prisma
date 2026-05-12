@@ -1953,6 +1953,7 @@ model vendor_ledger {
 
 model vendors {
   id               Int                @id @default(autoincrement())
+  public_id        String?            @unique @db.VarChar(100)
   vendor_name      String             @db.VarChar(255)
   vendor_code      String?            @unique(map: "vendor_code") @db.VarChar(50)
   category         String?            @db.VarChar(120)
