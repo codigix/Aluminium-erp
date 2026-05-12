@@ -1327,7 +1327,7 @@ function App() {
                 </div>
                 <Button
                   type="submit"
-                  variant="purple"
+                  variant="rosey"
                   loading={loginLoading}
                   className="w-full col-span-2"
                 >

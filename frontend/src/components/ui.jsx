@@ -276,6 +276,7 @@ export const Button = ({
     warning: 'bg-amber-500 text-white border-amber-600 hover:bg-amber-600 shadow-md shadow-amber-100',
     info: 'bg-blue-500 text-white border-blue-600 hover:bg-blue-600 shadow-md shadow-blue-100',
     purple: 'bg-purple-600 text-white border-purple-700 hover:bg-purple-700 shadow-md shadow-purple-100',
+    rosey: 'bg-rose-500 text-white border-rose-600 hover:bg-rose-600 shadow-md shadow-rose-100',
     light: 'bg-slate-50 text-slate-600 border-slate-100 hover:bg-slate-100 shadow-sm',
     dark: 'bg-slate-700 text-white border-slate-800 hover:bg-slate-800 shadow-md shadow-slate-200'
   };
