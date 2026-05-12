@@ -1,0 +1,1 @@
+ALTER TABLE shapes ADD COLUMN test VARCHAR(255); 
