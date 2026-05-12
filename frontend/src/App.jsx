@@ -1327,12 +1327,12 @@ function App() {
                 </div>
                 <Button
                   type="submit"
-                  variant="dark"
+                  variant="primary"
                   loading={loginLoading}
                   className="w-full col-span-2"
                 >
                   Sign In
-                </Button>
+                </Button >
               </form>
             ) : (
               <form onSubmit={handleSignup} className="space-y-3 max-h-96 overflow-y-auto">
@@ -1436,7 +1436,7 @@ function App() {
                 </div>
                 <Button
                   type="submit"
-                  variant="dark"
+                  variant="primary"
                   loading={signupLoading}
                   className="w-full"
                 >
