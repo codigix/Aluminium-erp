@@ -22,7 +22,8 @@ jobs:
 
             cd /var/www/Aluminium-erp
 
-            git pull origin production_branch
+            git fetch origin production_branch
+            git reset --hard origin/production_branch
 
             # === FRONTEND ===
             echo "🎨 Rebuilding frontend..."
