@@ -1670,6 +1670,7 @@ model sales_orders {
 
 model shapes {
   id         Int            @id @default(autoincrement())
+  public_id  String?        @unique @db.VarChar(100)
   name       String         @unique(map: "name") @db.VarChar(255)
   status     shapes_status? @default(ACTIVE)
   test       String?        @db.VarChar(255)

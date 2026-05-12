@@ -269,7 +269,7 @@ export const Button = ({
 }) => {
   const variants = {
     default: 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 shadow-sm',
-    primary: 'bg-yellow-400 text-slate-900 border-yellow-500 hover:bg-yellow-500 shadow-md shadow-yellow-100',
+    primary: 'bg-emerald-500 text-white border-emerald-600 hover:bg-emerald-600 shadow-md shadow-emerald-100',
     secondary: 'bg-sky-500 text-white border-sky-600 hover:bg-sky-600 shadow-md shadow-sky-100',
     success: 'text-emerald-500 text-white border-emerald-600 hover:bg-emerald-600 shadow-md shadow-emerald-100',
     danger: 'bg-rose-500 text-white border-rose-600 hover:bg-rose-600 shadow-md shadow-rose-100',
