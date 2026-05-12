@@ -35,7 +35,7 @@ jobs:
             echo "📦 Updating backend..."
             cd ../backend
             npm install --production
-            npx prisma migrate deploy
+            npx prisma migrate deploy --schema=prisma/schema.prisma
             pm2 restart aluminium-erp || pm2 start src/app.js --name "aluminium-erp"
 
             # === RELOAD NGINX ===
