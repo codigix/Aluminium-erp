@@ -1475,6 +1475,7 @@ model roles {
   name             String             @unique(map: "name") @db.VarChar(120)
   code             String             @unique(map: "code") @db.VarChar(50)
   description      String?            @db.Text
+  test             String?            @db.VarChar(255)
   department_id    Int
   status           roles_status?      @default(ACTIVE)
   created_at       DateTime?          @default(now()) @db.Timestamp(0)
@@ -1671,6 +1672,7 @@ model shapes {
   id         Int            @id @default(autoincrement())
   name       String         @unique(map: "name") @db.VarChar(255)
   status     shapes_status? @default(ACTIVE)
+  test       String?        @db.VarChar(255)
   created_at DateTime?      @default(now()) @db.Timestamp(0)
 }
 
