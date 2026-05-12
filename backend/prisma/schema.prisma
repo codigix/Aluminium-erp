@@ -1673,7 +1673,14 @@ model shapes {
   name       String         @unique(map: "name") @db.VarChar(255)
   status     shapes_status? @default(ACTIVE)
   test       String?        @db.VarChar(255)
+  new_column String?        @db.VarChar(255)
   created_at DateTime?      @default(now()) @db.Timestamp(0)
+}
+
+model product_types {
+  id         Int       @id @default(autoincrement())
+  name       String    @unique @db.VarChar(255)
+  created_at DateTime? @default(now()) @db.Timestamp(0)
 }
 
 model shipment_order_items {
