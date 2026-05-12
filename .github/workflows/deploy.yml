@@ -2,7 +2,7 @@ name: Deploy Aluminium ERP
 
 on:
   push:
-    branches: [ main ]
+    branches: [ production_branch ]
 
 jobs:
   deploy:
@@ -22,19 +22,20 @@ jobs:
 
             cd /var/www/Aluminium-erp
 
-            git pull origin main
-
-            # === BACKEND ===
-            echo "📦 Updating backend..."
-            cd backend
-            npm install --production
-            pm2 restart aluminium-erp || pm2 start src/app.js --name "aluminium-erp"
+            git pull origin production_branch
 
             # === FRONTEND ===
             echo "🎨 Rebuilding frontend..."
-            cd ../frontend
+            cd frontend
             npm install
             npm run build
+
+            # === BACKEND ===
+            echo "📦 Updating backend..."
+            cd ../backend
+            npm install --production
+            npx prisma migrate deploy
+            pm2 restart aluminium-erp || pm2 start src/app.js --name "aluminium-erp"
 
             # === RELOAD NGINX ===
             echo "🔁 Reloading Nginx..."
