@@ -1,1 +1,1 @@
--- Placeholder migration
+-- Redundant migration, column already exists in 0_init
