@@ -525,11 +525,11 @@ model inward_challans {
 
 model item_groups {
   id             Int                 @id @default(autoincrement())
-  itemsPublic_id String?             @unique @db.VarChar(100)
   name           String              @unique(map: "name") @db.VarChar(120)
   group_type     String?             @default("OTHER") @db.VarChar(50)
   status         item_groups_status? @default(ACTIVE)
   created_at     DateTime?           @default(now()) @db.Timestamp(0)
+  itemsPublic_id String?             @unique @db.VarChar(100)
 }
 
 model items {
@@ -1476,10 +1476,10 @@ model roles {
   name             String             @unique(map: "name") @db.VarChar(120)
   code             String             @unique(map: "code") @db.VarChar(50)
   description      String?            @db.Text
-  test             String?            @db.VarChar(255)
   department_id    Int
   status           roles_status?      @default(ACTIVE)
   created_at       DateTime?          @default(now()) @db.Timestamp(0)
+  test             String?            @db.VarChar(255)
   role_permissions role_permissions[]
   departments      departments        @relation(fields: [department_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "roles_ibfk_1")
   users            users[]
@@ -1671,12 +1671,12 @@ model sales_orders {
 
 model shapes {
   id         Int            @id @default(autoincrement())
-  public_id  String?        @unique @db.VarChar(100)
   name       String         @unique(map: "name") @db.VarChar(255)
   status     shapes_status? @default(ACTIVE)
+  created_at DateTime?      @default(now()) @db.Timestamp(0)
   test       String?        @db.VarChar(255)
   new_column String?        @db.VarChar(255)
-  created_at DateTime?      @default(now()) @db.Timestamp(0)
+  public_id  String?        @unique @db.VarChar(100)
 }
 
 model product_types {
@@ -1907,6 +1907,7 @@ model stock_ledger {
 
 model users {
   id                              Int                               @id @default(autoincrement())
+  public_id                       String                            @unique(map: "public_id") @db.VarChar(50)
   username                        String                            @unique(map: "username") @db.VarChar(120)
   email                           String                            @unique(map: "email") @db.VarChar(255)
   password                        String                            @db.VarChar(255)
@@ -1954,7 +1955,6 @@ model vendor_ledger {
 
 model vendors {
   id               Int                @id @default(autoincrement())
-  public_id        String?            @unique @db.VarChar(100)
   vendor_name      String             @db.VarChar(255)
   vendor_code      String?            @unique(map: "vendor_code") @db.VarChar(50)
   category         String?            @db.VarChar(120)
@@ -1971,6 +1971,10 @@ model vendors {
   gstin            String?            @db.VarChar(20)
   group_name       String?            @db.VarChar(100)
   lead_time        String?            @db.VarChar(50)
+  public_id        String?            @unique @db.VarChar(100)
+ 
+  dummy_test String? @db.VarChar(100)
+
   inward_challans  inward_challans[]
   outward_challans outward_challans[]
   payment_vouchers payment_vouchers[]
