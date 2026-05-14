@@ -1972,9 +1972,8 @@ model vendors {
   group_name       String?            @db.VarChar(100)
   lead_time        String?            @db.VarChar(50)
   public_id        String?            @unique @db.VarChar(100)
-  dummy_test String? @db.VarChar(100)
- 
- cloumn_test String? @db.VarChar(100)
+  dummy_name       String?            @db.VarChar(100)
+  
   inward_challans  inward_challans[]
   outward_challans outward_challans[]
   payment_vouchers payment_vouchers[]
