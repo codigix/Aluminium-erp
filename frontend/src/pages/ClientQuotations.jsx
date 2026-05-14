@@ -1538,7 +1538,7 @@ const ClientQuotations = () => {
       return;
     }
 
-    navigate('/quotation-form', {
+    navigate('/sales/quotation-form', {
       state: {
         initialData: {
           clientId: clientData.company_id,
@@ -1700,7 +1700,7 @@ const ClientQuotations = () => {
     const latestQuotes = quotes.filter(q => (q.version || 1) === latestVersion);
     const firstQuote = latestQuotes[0] || quotes[0];
 
-    navigate('/quotation-form', {
+    navigate('/sales/quotation-form', {
       state: {
         initialData: {
           id: group.id,
@@ -1744,7 +1744,7 @@ const ClientQuotations = () => {
     const latestQuotes = quotes.filter(q => (q.version || 1) === latestVersion);
     const firstQuote = latestQuotes[0] || quotes[0];
 
-    navigate('/quotation-form', {
+    navigate('/sales/quotation-form', {
       state: {
         initialData: {
           clientId: group.company_id,
@@ -1819,7 +1819,7 @@ const ClientQuotations = () => {
       const latestQuotes = quotes.filter(q => (q.version || 1) === latestVersion);
       const firstQuote = latestQuotes[0] || quotes[0];
 
-      navigate('/quotation-form', {
+      navigate('/sales/quotation-form', {
         state: {
           initialData: {
             id: group.id,
@@ -1952,7 +1952,7 @@ const ClientQuotations = () => {
 
         <div className="flex items-center gap-2">
           <button
-            onClick={() => navigate('/quotation-form')}
+            onClick={() => navigate('/sales/quotation-form')}
             className="p-2 bg-indigo-600 text-white hover:bg-indigo-700 rounded transition-all shadow-md flex items-center gap-2 text-xs"
           >
             <Plus size={15} />

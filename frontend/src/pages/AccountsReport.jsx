@@ -615,7 +615,7 @@ const AccountsReport = () => {
               <p className="text-xs text-slate-400   mt-1">By outstanding amount</p>
             </div>
             <button 
-              onClick={() => navigate('/active-clients')}
+              onClick={() => navigate('/sales/active-clients')}
               className="text-xs  text-indigo-600   flex items-center gap-1"
             >
               View all customers <ChevronRight className="w-3 h-3" />
@@ -683,7 +683,7 @@ const AccountsReport = () => {
               <p className="text-xs text-slate-400   mt-1">By outstanding amount</p>
             </div>
             <button 
-              onClick={() => navigate('/suppliers?from=accounts-report')}
+              onClick={() => navigate('/procurement/suppliers?from=accounts-report')}
               className="text-xs  text-indigo-600   flex items-center gap-1"
             >
               View all vendors <ChevronRight className="w-3 h-3" />

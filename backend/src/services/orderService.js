@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const crypto = require('crypto');
 const bomService = require('./bomService');
 
 const numberToWords = (num) => {
@@ -96,6 +97,7 @@ const createOrder = async (orderData) => {
   } = orderData;
 
   const orderNo = await generateOrderNo();
+  const publicId = crypto.randomUUID();
 
   const connection = await pool.getConnection();
   try {
@@ -103,12 +105,13 @@ const createOrder = async (orderData) => {
 
     const [result] = await connection.execute(`
       INSERT INTO orders
-      (order_no, quotation_id, client_id, project_name, order_date, delivery_date, 
+      (order_no, public_id, quotation_id, client_id, project_name, order_date, delivery_date, 
        status, source_type, warehouse, cgst_rate, sgst_rate, profit_margin,
        subtotal, gst, grand_total)
-      VALUES (?, ?, ?, ?, ?, ?, 'Created', ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'Created', ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       orderNo,
+      publicId,
       quotation_id || null,
       client_id,
       project_name || null,
@@ -168,13 +171,13 @@ const getOrderById = async (id) => {
               ROW_NUMBER() OVER (PARTITION BY company_id ORDER BY contact_type = 'PRIMARY' DESC, id ASC) as rn
        FROM contacts
     ) ct ON ct.company_id = c.id AND ct.rn = 1
-    WHERE o.id = ?
-  `, [id]);
+    WHERE o.id = ? OR o.public_id = ?
+  `, [id, id]);
   
   if (rows.length === 0) return null;
   
   const order = rows[0];
-  const [items] = await pool.query('SELECT * FROM order_items WHERE order_id = ?', [id]);
+  const [items] = await pool.query('SELECT * FROM order_items WHERE order_id = ?', [order.id]);
   
   const enrichedItems = await Promise.all(items.map(async (item) => {
     // Try to fetch sub-assemblies if linked to a PO
@@ -408,8 +411,8 @@ const generateOrderPDF = async (orderId) => {
      LEFT JOIN companies c ON c.id = o.client_id
      LEFT JOIN company_addresses ba ON ba.company_id = c.id AND ba.address_type = 'BILLING'
      LEFT JOIN customer_pos cp ON cp.id = o.quotation_id AND o.source_type = 'DIRECT'
-     WHERE o.id = ?`,
-    [orderId]
+     WHERE o.id = ? OR o.public_id = ?`,
+    [orderId, orderId]
   );
 
   if (!orderRows.length) throw new Error('Order not found');
@@ -429,7 +432,7 @@ const generateOrderPDF = async (orderId) => {
     `SELECT oi.*
      FROM order_items oi
      WHERE oi.order_id = ?`,
-    [orderId]
+    [order.id]
   );
 
   // Enrich items with sub-assemblies

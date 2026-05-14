@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { DataTable, Modal } from '../components/ui.jsx';
 import { errorToast, successToast } from '../utils/toast';
 import { Eye, FileText, CheckCircle, Send } from 'lucide-react';
@@ -23,6 +23,15 @@ const formatDate = (date) => {
 
 const VendorInwardChallans = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const getDeptPrefix = () => {
+    const segments = location.pathname.split('/').filter(Boolean);
+    const prefixes = ['sales', 'design', 'production', 'procurement', 'inventory', 'quality', 'shipment', 'accounts', 'hr', 'admin'];
+    return prefixes.includes(segments[0]) ? `/${segments[0]}` : '';
+  };
+  const deptPrefix = getDeptPrefix();
+
   const [receipts, setReceipts] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -74,7 +83,7 @@ const VendorInwardChallans = () => {
       successToast('Receipt sent to payment processing');
       
       // Navigate to payment processing with state
-      navigate('/payment-processing', {
+      navigate('/accounts/payment-processing', {
         state: {
           selectedInvoice: {
             id: receipt.id,

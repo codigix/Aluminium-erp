@@ -225,13 +225,13 @@ const ProjectRequests = () => {
       ) : (
         <div className="flex justify-end gap-2">
           <button
-            onClick={() => navigate('/production-plan', { state: { salesOrderId: row.id } })}
+            onClick={() => navigate('/production/production-plan', { state: { salesOrderId: row.id } })}
             className="px-3 py-1 bg-indigo-50 text-indigo-600 text-xs     rounded border border-indigo-100 hover:bg-indigo-600 hover:text-white transition-all active:scale-95 shadow-sm"
           >
             Plan
           </button>
           <button
-            onClick={() => navigate('/work-order-form', { state: { salesOrderId: row.id, salesOrderItemId: row.item_id } })}
+            onClick={() => navigate('/production/work-order-form', { state: { salesOrderId: row.id, salesOrderItemId: row.item_id } })}
             className="px-3 py-1 bg-emerald-50 text-emerald-600 text-xs     rounded border border-emerald-100 hover:bg-emerald-600 hover:text-white transition-all active:scale-95 shadow-sm"
           >
             Work Order

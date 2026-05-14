@@ -404,7 +404,7 @@ const ProductionReport = () => {
             </div>
           </div>
           <button 
-            onClick={() => navigate('/operation-master?from=production-report')}
+            onClick={() => navigate('/production/operation-master?from=production-report')}
             className="text-xs  text-indigo-600   flex items-center gap-1 self-end mt-auto pt-4 hover:underline"
           >
             View all operations <ArrowRight className="w-3 h-3" />
@@ -422,7 +422,7 @@ const ProductionReport = () => {
               <p className="text-xs text-slate-400   mt-1">Projects with highest production output</p>
             </div>
             <button 
-              onClick={() => navigate('/active-clients')}
+              onClick={() => navigate('/sales/active-clients')}
               className="text-xs  text-indigo-600   flex items-center gap-1"
             >
               View all projects <ChevronRight className="w-3 h-3" />
@@ -654,7 +654,7 @@ const ProductionReport = () => {
                   <td className="p-2 text-right">
                     <div className="flex items-center justify-end gap-1">
                        <Link 
-                         to={`/work-order-details/${row.jobCardNo}`}
+                         to={`/work-order-details/${row.jobCardId}`}
                          className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded transition-all"
                          title="View Details"
                        >

@@ -74,16 +74,16 @@ const CustomerPO = ({
   // URL-based Modal Navigation
   React.useEffect(() => {
     // Initial check on mount
-    if (window.location.pathname.includes('/customer-po/new-po')) {
+    if (window.location.pathname.includes('/sales/customer-po/new-po')) {
       setShowPoForm(true);
     }
 
     // Handle browser Back/Forward buttons
     const handlePopState = () => {
       const path = window.location.pathname;
-      if (path === '/customer-po') {
+      if (path === '/sales/customer-po') {
         setShowPoForm(false);
-      } else if (path.includes('/customer-po/new-po')) {
+      } else if (path.includes('/sales/customer-po/new-po')) {
         setShowPoForm(true);
       }
     };
@@ -236,8 +236,8 @@ const CustomerPO = ({
     setShowPoForm(false)
     setFormMode('CREATE')
     setEditingPoId(null)
-    if (window.location.pathname !== '/customer-po') {
-      window.history.pushState({}, '', '/customer-po');
+    if (window.location.pathname !== '/sales/customer-po') {
+      window.history.pushState({}, '', '/sales/customer-po');
     }
     setSelectedQuoteId('')
     setPoForm({
@@ -306,8 +306,8 @@ const CustomerPO = ({
       }
     } else {
       setShowPoForm(true);
-      if (window.location.pathname !== '/customer-po/new-po') {
-        window.history.pushState({}, '', '/customer-po/new-po');
+      if (window.location.pathname !== '/sales/customer-po/new-po') {
+        window.history.pushState({}, '', '/sales/customer-po/new-po');
       }
     }
   };

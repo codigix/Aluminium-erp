@@ -53,6 +53,14 @@ const formatCurrency = (value, currency = 'INR') => {
 const POReceipts = () => {
   const location = useLocation();
   const navigate = useNavigate();
+
+  const getDeptPrefix = () => {
+    const segments = location.pathname.split('/').filter(Boolean);
+    const prefixes = ['sales', 'design', 'production', 'procurement', 'inventory', 'quality', 'shipment', 'accounts', 'hr', 'admin'];
+    return prefixes.includes(segments[0]) ? `/${segments[0]}` : '';
+  };
+  const deptPrefix = getDeptPrefix();
+
   const [receipts, setReceipts] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -74,7 +82,7 @@ const POReceipts = () => {
   useEffect(() => {
     const path = location.pathname;
     
-    if (path === '/po-receipts/add') {
+    if (path.endsWith('/po-receipts/add')) {
       if (!showCreateModal) {
         setFormData({
           poId: '',
@@ -90,28 +98,28 @@ const POReceipts = () => {
         setShowEditModal(false);
         setShowViewModal(false);
       }
-    } else if (path.startsWith('/po-receipts/view/')) {
+    } else if (path.includes('/po-receipts/view/')) {
       const id = path.split('/').pop();
       if (!showViewModal || selectedReceiptForView?.id?.toString() !== id) {
         handleViewReceiptDetail(id);
         setShowCreateModal(false);
         setShowEditModal(false);
       }
-    } else if (path.startsWith('/po-receipts/edit/')) {
+    } else if (path.includes('/po-receipts/edit/')) {
       const id = path.split('/').pop();
       if (!showEditModal || selectedReceipt?.id?.toString() !== id) {
         handleEditReceipt(id);
         setShowCreateModal(false);
         setShowViewModal(false);
       }
-    } else if (path === '/po-receipts/stocks') {
+    } else if (path.endsWith('/po-receipts/stocks')) {
       if (activeTab !== 'stocks') {
         setActiveTab('stocks');
         setShowCreateModal(false);
         setShowEditModal(false);
         setShowViewModal(false);
       }
-    } else if (path === '/po-receipts') {
+    } else if (path.endsWith('/po-receipts')) {
       if (showCreateModal) setShowCreateModal(false);
       if (showEditModal) setShowEditModal(false);
       if (showViewModal) {
@@ -679,7 +687,7 @@ const POReceipts = () => {
       render: (_, row) => (
         <div className="flex justify-center gap-2" onClick={(e) => e.stopPropagation()}>
           <button 
-            onClick={() => navigate(`/po-receipts/view/${row.id}`)} 
+            onClick={() => navigate(`${deptPrefix}/po-receipts/view/${row.id}`)} 
             className="p-2 text-indigo-500 hover:bg-indigo-50 rounded  transition-all border border-indigo-50  active:scale-90"
             title="View Details"
           >
@@ -792,7 +800,7 @@ const POReceipts = () => {
             <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
           </button>
           <button
-            onClick={() => navigate('/po-receipts/add')}
+            onClick={() => navigate('/procurement/po-receipts/add')}
             className="flex items-center gap-2  p-2  bg-blue-600 text-white rounded  text-sm  hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95"
           >
             <Plus className="w-5 h-5" />
@@ -830,14 +838,14 @@ const POReceipts = () => {
       <div className="flex items-center my-5 gap-2">
         <div className="flex bg-white p-1 rounded  border border-slate-200 ">
           <button 
-            onClick={() => navigate('/po-receipts')}
+            onClick={() => navigate('/procurement/po-receipts')}
             className={`flex items-center gap-2  p-2 rounded  text-xs  transition-all ${activeTab === 'grn' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'text-slate-400 hover:text-slate-600'}`}
           >
             <FileText className="w-4 h-4" />
             GRN Request
           </button>
           <button 
-            onClick={() => navigate('/po-receipts/stocks')}
+            onClick={() => navigate('/procurement/po-receipts/stocks')}
             className={`flex items-center gap-2  p-2 rounded  text-xs  transition-all ${activeTab === 'stocks' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'text-slate-400 hover:text-slate-600'}`}
           >
             <Package className="w-4 h-4" />
@@ -1074,7 +1082,7 @@ const POReceipts = () => {
                 PRINT GRN
               </button>
               <button 
-                onClick={() => navigate('/po-receipts')}
+                onClick={() => navigate('/procurement/po-receipts')}
                 className="px-8 py-2.5 bg-emerald-500 text-white rounded  text-xs  hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-100 active:scale-95"
               >
                 Close
@@ -1087,7 +1095,7 @@ const POReceipts = () => {
       {/* Modal logic remains same but with updated styling if needed */}
       <Modal 
         isOpen={showCreateModal} 
-        onClose={() => navigate('/po-receipts')} 
+        onClose={() => navigate('/procurement/po-receipts')} 
         title="Create GRN Request"
         size="6xl"
       >
@@ -1372,7 +1380,7 @@ const POReceipts = () => {
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => navigate('/po-receipts')}
+                onClick={() => navigate('/procurement/po-receipts')}
                 className="p-2 bg-white border border-slate-200 text-slate-600 rounded  text-sm  hover:bg-slate-50 transition-all active:scale-95"
               >
                 Cancel
@@ -1389,7 +1397,7 @@ const POReceipts = () => {
         </form>
       </Modal>
 
-        <Modal isOpen={showEditModal} onClose={() => navigate('/po-receipts')} title="Edit PO Receipt" size="xl">
+        <Modal isOpen={showEditModal} onClose={() => navigate('/procurement/po-receipts')} title="Edit PO Receipt" size="xl">
           <form onSubmit={handleUpdateReceipt} className="space-y-2">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               <FormControl label="Receipt Date *">
@@ -1437,7 +1445,7 @@ const POReceipts = () => {
             <div className="flex gap-2 justify-end pt-4 border-t border-slate-100">
               <button
                 type="button"
-                onClick={() => navigate('/po-receipts')}
+                onClick={() => navigate('/procurement/po-receipts')}
                 className="p-2 border border-slate-200 rounded text-xs  text-slate-500 hover:bg-slate-50 transition-all active:scale-95"
               >
                 Cancel

@@ -125,6 +125,14 @@ const TimePicker = ({ value, ampmValue, onTimeChange, onAMPMChange, label, small
 const JobCard = () => {
   const navigate = useNavigate();
   const location = useLocation();
+
+  const getDeptPrefix = () => {
+    const segments = location.pathname.split('/').filter(Boolean);
+    const prefixes = ['sales', 'design', 'production', 'procurement', 'inventory', 'quality', 'shipment', 'accounts', 'hr', 'admin'];
+    return prefixes.includes(segments[0]) ? `/${segments[0]}` : '';
+  };
+  const deptPrefix = getDeptPrefix();
+
   const [searchParams] = useSearchParams();
   const [jobCards, setJobCards] = useState([]);
   const [users, setUsers] = useState([]);
@@ -1408,7 +1416,7 @@ const JobCard = () => {
     });
 
     if (!location.pathname.includes('/production-entry')) {
-      navigate(`/job-card/production-entry?id=${jc.id}`);
+      navigate(`${deptPrefix}/job-card/production-entry?id=${jc.id}`);
     }
     setShowProductionEntry(true);
   };
@@ -1464,7 +1472,7 @@ const JobCard = () => {
     }
 
     // Reset modals if path doesn't match
-    if (location.pathname === '/job-card' || location.pathname === '/job-card/') {
+    if (location.pathname === `${deptPrefix}/job-card` || location.pathname === `${deptPrefix}/job-card/`) {
       if (isModalOpen) setIsModalOpen(false);
       if (viewingJobCard) setViewingJobCard(null);
       if (isOutwardModalOpen) setIsOutwardModalOpen(false);
@@ -1692,7 +1700,7 @@ const JobCard = () => {
             </div>
           </div>
           <button
-            onClick={() => navigate('/job-card')}
+            onClick={() => navigate(`${deptPrefix}/job-card`)}
             className="flex items-center gap-2 p-1.5 text-slate-500 hover:text-slate-900 transition-colors"
           >
             <ChevronLeft className="w-4 h-4" />
@@ -3131,7 +3139,7 @@ const JobCard = () => {
 
       if (response.ok) {
         successToast('Outward Challan created successfully');
-        navigate('/job-card');
+        navigate(`${deptPrefix}/job-card`);
         fetchJobCards();
       } else {
         errorToast('Failed to create outward challan');
@@ -3177,7 +3185,7 @@ const JobCard = () => {
         // Also update the job card status to completed if everything is received
         await handleUpdateStatus(selectedJCOutward, 'COMPLETED');
         successToast('Vendor Receipt recorded successfully');
-        navigate('/job-card');
+        navigate(`${deptPrefix}/job-card`);
         fetchJobCards();
       } else {
         errorToast('Failed to record vendor receipt');
@@ -3290,7 +3298,7 @@ const JobCard = () => {
 
       if (response.ok) {
         successToast(`Job Card ${isEdit ? 'updated' : 'created'} successfully`);
-        navigate('/job-card');
+        navigate(`${deptPrefix}/job-card`);
         fetchJobCards();
       } else {
         const error = await response.json();
@@ -4185,7 +4193,7 @@ const JobCard = () => {
           <div className="flex items-center justify-end gap-1">
             {/* View Details - Always Show */}
             <button
-              onClick={() => navigate(`/job-card/view?id=${jc.id}`)}
+              onClick={() => navigate(`${deptPrefix}/job-card/view?id=${jc.id}`)}
               className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded transition-all"
               title="View Details"
             >
@@ -4220,7 +4228,7 @@ const JobCard = () => {
             {isSubcontract && (
               <>
                 <button
-                  onClick={() => navigate(`/job-card/outward?id=${jc.id}`)}
+                  onClick={() => navigate(`${deptPrefix}/job-card/outward?id=${jc.id}`)}
                   className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-all"
                   title="Outward Challan"
                 >
@@ -4228,7 +4236,7 @@ const JobCard = () => {
                 </button>
 
                 <button
-                  onClick={() => navigate(`/job-card/inward?id=${jc.id}`)}
+                  onClick={() => navigate(`${deptPrefix}/job-card/inward?id=${jc.id}`)}
                   className="p-1 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-all"
                   title="Inward Entry"
                 >
@@ -4303,7 +4311,7 @@ const JobCard = () => {
                 Reset Queue
               </button>
               <button
-                onClick={() => navigate('/job-card/add')}
+                onClick={() => navigate(`${deptPrefix}/job-card/add`)}
                 className="flex items-center gap-2  p-2 bg-slate-900 text-white rounded  hover:bg-slate-800 transition-all  text-xs shadow-lg shadow-slate-200"
               >
                 <Play className="w-4 h-4" />
@@ -4357,7 +4365,7 @@ const JobCard = () => {
       {/* Job Card View Modal */}
       <Modal
         isOpen={!!viewingJobCard}
-        onClose={() => navigate('/job-card')}
+        onClose={() => navigate(`${deptPrefix}/job-card`)}
         title="Operational Intelligence"
         maxWidth="max-w-2xl"
       >
@@ -4476,7 +4484,7 @@ const JobCard = () => {
             {/* Action Buttons */}
             <div className="flex justify-between items-center pt-4 border-t border-slate-100">
               <button
-                onClick={() => navigate('/job-card')}
+                onClick={() => navigate(`${deptPrefix}/job-card`)}
                 className="p-2 text-xs text-slate-600 hover:text-slate-900 transition-colors"
               >
                 ✕ Terminate View
@@ -4485,7 +4493,7 @@ const JobCard = () => {
                 <button
                   onClick={() => {
                     handleUpdateStatus(viewingJobCard.id, 'COMPLETED');
-                    navigate('/job-card');
+                    navigate(`${deptPrefix}/job-card`);
                   }}
                   className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded  hover:shadow-lg transition-all "
                 >
@@ -4501,7 +4509,7 @@ const JobCard = () => {
       {/* Edit Job Card Modal */}
       <Modal
         isOpen={isModalOpen}
-        onClose={() => navigate('/job-card')}
+        onClose={() => navigate(`${deptPrefix}/job-card`)}
         title={`${formData.id ? "Edit Job Card" : "Create Job Card"}${formData.jcNumber ? `: ${formData.jcNumber}` : ''}${selectedWO ? ` - ${selectedWO.wo_number}` : ''}`}
         size="4xl"
       >
@@ -4800,7 +4808,7 @@ const JobCard = () => {
           <div className="flex justify-end gap-3 pt-6 border-t border-slate-100 mt-4">
             <button
               type="button"
-              onClick={() => navigate('/job-card')}
+              onClick={() => navigate(`${deptPrefix}/job-card`)}
               className="px-6 py-2 text-xs  text-slate-600 hover:bg-slate-50 border border-slate-200 rounded-md transition-all"
             >
               Discard Changes
@@ -4818,7 +4826,7 @@ const JobCard = () => {
       {/* Existing Modals */}
       <Modal
         isOpen={isOutwardModalOpen}
-        onClose={() => navigate('/job-card')}
+        onClose={() => navigate(`${deptPrefix}/job-card`)}
         title="Outward Challan"
         size="2xl"
       >
@@ -4998,7 +5006,7 @@ const JobCard = () => {
 
           <div className="flex justify-end items-center gap-2 pt-4 border-t border-slate-100">
             <button
-              onClick={() => navigate('/job-card')}
+              onClick={() => navigate(`${deptPrefix}/job-card`)}
               className="p-2 text-xs  text-slate-500 hover:text-slate-700  "
             >
               Cancel
@@ -5016,7 +5024,7 @@ const JobCard = () => {
 
       <Modal
         isOpen={isInwardModalOpen}
-        onClose={() => navigate('/job-card')}
+        onClose={() => navigate(`${deptPrefix}/job-card`)}
         title="Vendor Receipt (Inward)"
         size="xl"
       >
@@ -5184,7 +5192,7 @@ const JobCard = () => {
 
           <div className="flex justify-end items-center gap-2 pt-4 border-t border-slate-100">
             <button
-              onClick={() => navigate('/job-card')}
+              onClick={() => navigate(`${deptPrefix}/job-card`)}
               className="p-2 text-xs  text-slate-500 hover:text-slate-700  "
             >
               Cancel

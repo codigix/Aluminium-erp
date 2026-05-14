@@ -315,7 +315,7 @@ const POMaterialRequest = () => {
         }
       } else {
         errorToast("Failed to fetch request details");
-        navigate('/po-material-request');
+        navigate('/inventory/po-material-request');
       }
     } catch (error) {
       console.error('Error:', error);
@@ -647,7 +647,7 @@ const POMaterialRequest = () => {
               <svg className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
               Refresh
             </button>
-            <button onClick={() => navigate('/po-material-request/new')} className="p-2  bg-indigo-600 text-white rounded  text-xs  hover:bg-indigo-700 flex items-center gap-2   shadow-indigo-200">
+            <button onClick={() => navigate('/inventory/po-material-request/new')} className="p-2  bg-indigo-600 text-white rounded  text-xs  hover:bg-indigo-700 flex items-center gap-2   shadow-indigo-200">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
               New Request
             </button>
@@ -707,7 +707,7 @@ const POMaterialRequest = () => {
 
       <Modal
         isOpen={showModal}
-        onClose={() => navigate('/po-material-request')}
+        onClose={() => navigate('/inventory/po-material-request')}
         title="Create Material Request"
         size="4xl"
       >
@@ -980,7 +980,7 @@ const POMaterialRequest = () => {
 
           <div className="mt-8 pt-6 border-t border-slate-100 flex justify-between items-center">
             <button 
-              onClick={() => navigate('/po-material-request')}
+              onClick={() => navigate('/inventory/po-material-request')}
               className="p-2 bg-slate-100 text-slate-600 rounded  text-xs  hover:bg-slate-200 transition-all"
             >
               Cancel
@@ -1007,7 +1007,7 @@ const POMaterialRequest = () => {
 
       <Modal
         isOpen={showViewModal}
-        onClose={() => navigate('/po-material-request')}
+        onClose={() => navigate('/inventory/po-material-request')}
         title={`Material Request: ${selectedRequest?.mr_number}`}
         size="7xl"
       >

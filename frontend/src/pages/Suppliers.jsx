@@ -44,6 +44,15 @@ const StarRating = ({ rating }) => {
 const Suppliers = () => {
   const location = useLocation();
   const navigate = useNavigate();
+
+  const getDeptPrefix = () => {
+    const segments = location.pathname.split('/').filter(Boolean);
+    const prefixes = ['sales', 'design', 'production', 'procurement', 'inventory', 'quality', 'shipment', 'accounts', 'hr', 'admin'];
+    return prefixes.includes(segments[0]) ? `/${segments[0]}` : '';
+  };
+  const deptPrefix = getDeptPrefix();
+  const isAddPath = location.pathname.endsWith('/suppliers/add');
+  const isEditPath = location.pathname.includes('/suppliers/edit/');
   const [suppliers, setSuppliers] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -63,9 +72,7 @@ const Suppliers = () => {
   });
 
   useEffect(() => {
-    const path = location.pathname;
-    
-    if (path === '/suppliers/add') {
+    if (isAddPath) {
       if (!showForm || editingSupplier) {
         setFormData({
           vendorName: '',
@@ -82,8 +89,8 @@ const Suppliers = () => {
         setEditingSupplier(null);
         setShowForm(true);
       }
-    } else if (path.startsWith('/suppliers/edit/')) {
-      const id = path.split('/').pop();
+    } else if (isEditPath) {
+      const id = location.pathname.split('/').pop();
       const supplier = suppliers.find(s => s.id.toString() === id);
       if (supplier) {
         if (!showForm || editingSupplier?.id !== supplier.id) {
@@ -103,7 +110,7 @@ const Suppliers = () => {
           setShowForm(true);
         }
       }
-    } else if (path === '/suppliers') {
+    } else if (location.pathname === `${deptPrefix}/suppliers`) {
       if (showForm) {
         setShowForm(false);
         setEditingSupplier(null);
@@ -181,7 +188,7 @@ const Suppliers = () => {
       if (!response.ok) throw new Error(`Failed to ${editingSupplier ? 'update' : 'create'} supplier`);
 
       successToast(`Supplier ${editingSupplier ? 'updated' : 'added'} successfully`);
-      navigate('/suppliers');
+      navigate(`${deptPrefix}/suppliers`);
       fetchSuppliers();
       fetchStats();
     } catch (error) {
@@ -190,11 +197,11 @@ const Suppliers = () => {
   };
 
   const resetForm = () => {
-    navigate('/suppliers');
+    navigate(`${deptPrefix}/suppliers`);
   };
 
   const handleEdit = (supplier) => {
-    navigate(`/suppliers/edit/${supplier.id}`);
+    navigate(`${deptPrefix}/suppliers/edit/${supplier.id}`);
   };
 
   const handleDelete = async (id, name) => {
@@ -328,7 +335,7 @@ const Suppliers = () => {
         </div>
         {!isFromReport && !isAdmin && (
           <button
-            onClick={() => navigate('/suppliers/add')}
+            onClick={() => navigate(`${deptPrefix}/suppliers/add`)}
             className="flex items-center justify-center gap-2 p-2 bg-indigo-600 text-white rounded  text-xs  hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all active:scale-95"
           >
             <Plus size={15} />
