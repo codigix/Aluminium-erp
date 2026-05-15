@@ -789,8 +789,8 @@ const getItemBOMDetails = async (salesOrderItemId) => {
       );
 
       if (altMatch.length > 0) {
-        console.log(`[getItemBOMDetails] Found ${altMatch.length} alternative SO Item IDs with data`);
-        soItemIdForLookup = altMatch.map(m => m.id);
+        console.log(`[getItemBOMDetails] Found ${altMatch.length} alternative SO Item IDs with data, using most recent`);
+        soItemIdForLookup = altMatch[0].id;
       } else {
         // Fallback: Try to find any MASTER BOM for this drawing/item code
         const [masterMatch] = await pool.query(
@@ -798,15 +798,14 @@ const getItemBOMDetails = async (salesOrderItemId) => {
            FROM sales_order_items soi
            JOIN sales_order_item_materials som ON soi.id = som.sales_order_item_id
            WHERE (soi.item_code = ? OR (soi.drawing_no = ? AND soi.drawing_no IS NOT NULL)) AND soi.sales_order_id IS NULL 
-           ORDER BY soi.id DESC`,
+           ORDER BY soi.id DESC LIMIT 1`,
           [item.item_code, item.drawing_no]
         );
         if (masterMatch.length > 0) {
-          console.log(`[getItemBOMDetails] Found ${masterMatch.length} MASTER Item IDs with data`);
-          soItemIdForLookup = masterMatch.map(m => m.id);
+          console.log(`[getItemBOMDetails] Found MASTER Item ID ${masterMatch[0].id} with data`);
+          soItemIdForLookup = masterMatch[0].id;
         } else {
-          // IMPROVED ULTIMATE FALLBACK: Find ALL matching items and merge their contexts
-          // This handles fragmented BOMs where some info is in one SO and some in another
+          // ULTIMATE FALLBACK: Find the SINGLE matching item with most data
           const [globalMatches] = await pool.query(
             `SELECT soi.id 
              FROM sales_order_items soi
@@ -815,14 +814,13 @@ const getItemBOMDetails = async (salesOrderItemId) => {
              WHERE (soi.item_code = ? OR (soi.drawing_no = ? AND soi.drawing_no IS NOT NULL))
              GROUP BY soi.id
              HAVING (COUNT(som.id) + COUNT(soc.id)) > 0
-             ORDER BY (COUNT(soc.id) * 5 + COUNT(som.id)) DESC`,
+             ORDER BY (COUNT(soc.id) * 5 + COUNT(som.id)) DESC, soi.id DESC LIMIT 1`,
             [item.item_code, item.drawing_no]
           );
 
           if (globalMatches.length > 0) {
-            console.log(`[getItemBOMDetails] Found ${globalMatches.length} GLOBAL matches, using collective data`);
-            // We pass an array of IDs to explodeBOM to merge them at the root level
-            soItemIdForLookup = globalMatches.map(m => m.id);
+            console.log(`[getItemBOMDetails] Found global match ID ${globalMatches[0].id}, using its data`);
+            soItemIdForLookup = globalMatches[0].id;
           }
         }
       }
@@ -858,19 +856,19 @@ const getItemBOMDetails = async (salesOrderItemId) => {
       );
 
       if (soMatch.length > 0) {
-        soItemIdForLookup = soMatch.map(m => m.id);
+        soItemIdForLookup = soMatch[0].id;
       } else {
         // Fallback: Try to find a MASTER BOM for this drawing
         const [masterMatch] = await pool.query(
           `SELECT id FROM sales_order_items 
-           WHERE drawing_no = ? AND sales_order_id IS NULL 
-           ORDER BY id DESC`,
-          [item.drawing_no]
+           WHERE (drawing_no = ? OR item_code = ?) AND sales_order_id IS NULL 
+           ORDER BY id DESC LIMIT 1`,
+          [item.drawing_no, item.item_code]
         );
         if (masterMatch.length > 0) {
-          soItemIdForLookup = masterMatch.map(m => m.id);
+          soItemIdForLookup = masterMatch[0].id;
         } else {
-          // IMPROVED ULTIMATE FALLBACK: Find ALL matching items
+          // ULTIMATE FALLBACK: Find the SINGLE matching item with most data
           const [globalMatches] = await pool.query(
             `SELECT soi.id 
              FROM sales_order_items soi
@@ -879,16 +877,20 @@ const getItemBOMDetails = async (salesOrderItemId) => {
              WHERE (soi.item_code = ? OR (soi.drawing_no = ? AND soi.drawing_no IS NOT NULL))
              GROUP BY soi.id
              HAVING (COUNT(som.id) + COUNT(soc.id)) > 0
-             ORDER BY (COUNT(soc.id) * 5 + COUNT(som.id)) DESC`,
+             ORDER BY (COUNT(soc.id) * 5 + COUNT(som.id)) DESC, soi.id DESC LIMIT 1`,
             [item.item_code, item.drawing_no]
           );
           if (globalMatches.length > 0) {
-            console.log(`[getItemBOMDetails] Found ${globalMatches.length} GLOBAL matches (from order_items fallback)`);
-            soItemIdForLookup = globalMatches.map(m => m.id);
+            console.log(`[getItemBOMDetails] Found global match ID ${globalMatches[0].id} (from order_items fallback)`);
+            soItemIdForLookup = globalMatches[0].id;
           }
         }
       }
     }
+  }
+
+  if (!soItemIdForLookup && items.length > 0) {
+     console.log(`[getItemBOMDetails] No soItemIdForLookup found for ${items[0].item_code}, but item exists in items table.`);
   }
 
   if (items.length === 0) return null;
@@ -1158,6 +1160,7 @@ const getItemBOMDetails = async (salesOrderItemId) => {
              OR sales_order_id IN (SELECT quotation_id FROM orders WHERE id IN (SELECT sales_order_id FROM sales_order_items WHERE id IN (?)))
              OR sales_order_id IN (SELECT id FROM orders WHERE quotation_id IN (SELECT sales_order_id FROM sales_order_items WHERE id IN (?)))
            )
+           ORDER BY id DESC
            LIMIT 1`,
           [compCode, targetIds, targetIds, targetIds]
         );
