@@ -6,18 +6,18 @@ async function listDeptsAndRoles() {
         host: process.env.DB_HOST || '127.0.0.1',
         user: process.env.DB_USER || 'aluminium_user',
         password: process.env.DB_PASSWORD || 'C0digix$309',
-        database: process.env.DB_NAME || 'sales_erp',
-        port: process.env.DB_PORT || 3307
+        database: 'sales_erp',
+        port: 3306
     };
 
     try {
         const connection = await mysql.createConnection(config);
         console.log('Connected to database');
         
-        const [depts] = await connection.query('SELECT id, name, code FROM departments');
+        const [depts] = await connection.query("SELECT id, name, CONCAT('>', code, '<') as code FROM departments");
         console.log('Departments:', depts);
         
-        const [roles] = await connection.query('SELECT id, name, code, department_id FROM roles');
+        const [roles] = await connection.query("SELECT id, name, CONCAT('>', code, '<') as code, department_id FROM roles");
         console.log('Roles:', roles);
         
         await connection.end();

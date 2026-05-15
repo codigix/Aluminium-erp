@@ -394,6 +394,13 @@ const BOMFormPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  const getDeptPrefix = () => {
+    const segments = location.pathname.split('/').filter(Boolean);
+    const prefixes = ['sales', 'design', 'production', 'procurement', 'inventory', 'quality', 'shipment', 'accounts', 'hr', 'admin'];
+    return prefixes.includes(segments[0]) ? `/${segments[0]}` : '';
+  };
+  const deptPrefix = getDeptPrefix();
+
   const isReadOnly = useMemo(() => {
     const params = new URLSearchParams(location.search);
     return params.get('view') === 'true';
@@ -1797,7 +1804,7 @@ const BOMFormPage = () => {
           : '?view=true';
         navigate(`/bom-form/${targetId}${queryParams}`);
       } else {
-        navigate('/bom-creation');
+        navigate(`${deptPrefix}/bom-creation`);
       }
     } catch (error) {
       errorToast(error.message);
@@ -1878,7 +1885,7 @@ const BOMFormPage = () => {
             const nextVersion = remainingVersions[remainingVersions.length - 1];
             navigate(`/bom-form/${nextVersion.id}?view=true`);
           } else {
-            navigate('/bom-creation');
+            navigate(`${deptPrefix}/bom-creation`);
           }
         } else {
           // Just refresh history and data
@@ -1975,13 +1982,13 @@ const BOMFormPage = () => {
           </div>
           <div className="flex gap-2">
             <button 
-              onClick={() => navigate('/bom-creation?filter=drafts')} 
+              onClick={() => navigate('/design/bom-creation?filter=drafts')} 
               className="p-2 bg-blue-50 text-blue-600 rounded  text-xs  border border-blue-100 hover:bg-blue-100 transition-all flex items-center gap-1.5"
             >
               <History className="w-3.5 h-3.5" />
               View Drafts
             </button>
-            <button onClick={() => navigate('/bom-creation')} className="p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-600 hover:bg-slate-50  transition-all flex items-center gap-1">
+            <button onClick={() => navigate(`${deptPrefix}/bom-creation`)} className="p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-600 hover:bg-slate-50  transition-all flex items-center gap-1">
               ← Back
             </button>
           </div>
@@ -3645,7 +3652,7 @@ const BOMFormPage = () => {
           </div>
           <div className="p-2 border-t border-slate-50 bg-slate-50/30">
             <button 
-              onClick={() => navigate('/bom-approval')}
+              onClick={() => navigate(`${deptPrefix}/bom-approval`)}
               className="text-xs text-indigo-600  hover:underline"
             >
               View Full Version History →
@@ -3660,7 +3667,7 @@ const BOMFormPage = () => {
       <div className="flex justify-end gap-2 pb-8">
         <Button 
           variant="default"
-          onClick={() => navigate('/bom-creation')}
+          onClick={() => navigate(`${deptPrefix}/bom-creation`)}
         >
           {isReadOnly ? 'Back to List' : 'Cancel'}
         </Button>

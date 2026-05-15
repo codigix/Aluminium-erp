@@ -54,7 +54,7 @@ const DesignOrders = () => {
   });
 
   const openAddMaterialModal = (item = null) => {
-    navigate('/item-master', { state: { addItem: true, item } });
+    navigate('/design/item-master', { state: { addItem: true, item } });
   };
 
   // Preview State
@@ -634,7 +634,7 @@ const DesignOrders = () => {
 
   const handleViewDetails = async (order, shouldNavigate = true) => {
     if (shouldNavigate) {
-      navigate(`/design-orders/details/${order.id}`);
+      navigate(`/design/design-orders/details/${order.id}`);
       return;
     }
     try {
@@ -792,7 +792,7 @@ const DesignOrders = () => {
                 { label: 'In Progress', value: 'progress', icon: History }
               ]}
               activeTab={activeTab}
-              onTabChange={(value) => navigate(`/design-orders/${value}`)}
+              onTabChange={(value) => navigate(`/design/design-orders/${value}`)}
             />
           </div>
 
@@ -1711,7 +1711,7 @@ const DesignOrders = () => {
                 <button 
                   type="button" 
                   className="p-2 bg-indigo-600 text-white rounded  text-xs  hover:bg-indigo-700 transition-colors"
-                  onClick={() => navigate('/design-orders/progress')}
+                  onClick={() => navigate('/design/design-orders/progress')}
                 >
                   Close
                 </button>
@@ -1881,7 +1881,7 @@ const DesignOrders = () => {
             <div className="bg-slate-50 p-2 border-t border-slate-200 flex justify-end gap-2">
               <div className="flex gap-2">
                 <button 
-                  onClick={() => navigate('/design-orders/incoming')}
+                  onClick={() => navigate('/design/design-orders/incoming')}
                   className="p-2  bg-slate-300 text-slate-900 rounded  text-xs  hover:bg-slate-400 transition-colors"
                 >
                   Cancel

@@ -5,11 +5,10 @@ const mysql = require('mysql2');
 
 const pool = mysql.createPool({
   host: process.env.DB_HOST || 'localhost',
-  port: process.env.DB_PORT || 3306,
+  port: Number(process.env.DB_PORT || 3306),
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD || 'root',
   database: process.env.DB_NAME || 'sales_erp',
-  port: Number(process.env.DB_PORT || 3306),
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0
@@ -109,26 +108,41 @@ const DEFAULT_USERS = [
 ];
 
 const seedDatabase = async () => {
-  console.log('Starting database seeding...\n');
+  console.log('Starting database seeding...');
+  console.log('Using database:', process.env.DB_NAME || 'sales_erp');
+  console.log('Using host:', process.env.DB_HOST || 'localhost');
+  console.log('Using port:', process.env.DB_PORT || 3306);
 
   for (const userData of DEFAULT_USERS) {
     try {
       const hashedPassword = await bcrypt.hash(userData.password, 10);
 
+      // Debug check: find dept and role ids
+      const [drRows] = await pool.promise().query(
+        'SELECT d.id as dept_id, r.id as role_id FROM departments d JOIN roles r ON r.department_id = d.id WHERE d.code = ? AND r.code = ?',
+        [userData.department_code, userData.role_code]
+      );
+
+      if (drRows.length === 0) {
+        console.error(`✗ Could not find department/role for ${userData.email} (${userData.department_code}/${userData.role_code})`);
+        continue;
+      }
+
+      const { dept_id, role_id } = drRows[0];
+
       const query = `
         INSERT INTO users (username, email, password, first_name, last_name, department_id, role_id, status, phone)
-        SELECT ?, ?, ?, ?, ?, d.id, r.id, 'ACTIVE', ?
-        FROM departments d
-        JOIN roles r ON r.department_id = d.id
-        WHERE d.code = ? AND r.code = ?
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?)
         ON DUPLICATE KEY UPDATE 
         password = VALUES(password),
         first_name = VALUES(first_name),
         last_name = VALUES(last_name),
-        phone = VALUES(phone)
+        phone = VALUES(phone),
+        department_id = VALUES(department_id),
+        role_id = VALUES(role_id)
       `;
 
-      pool.query(
+      const [results] = await pool.promise().query(
         query,
         [
           userData.username,
@@ -136,38 +150,33 @@ const seedDatabase = async () => {
           hashedPassword,
           userData.first_name,
           userData.last_name,
-          userData.phone,
-          userData.department_code,
-          userData.role_code
-        ],
-        (err, results) => {
-          if (err) {
-            console.error(`✗ Error creating/updating user ${userData.email}:`, err.message);
-          } else if (results.affectedRows === 1) {
-            console.log(`✓ User created: ${userData.email}`);
-          } else if (results.affectedRows === 2) {
-            console.log(`✓ User updated: ${userData.email}`);
-          } else {
-            console.log(`⊘ User verified (no changes): ${userData.email}\n`);
-          }
-        }
+          dept_id,
+          role_id,
+          userData.phone
+        ]
       );
+
+      if (results.affectedRows === 1) {
+        console.log(`✓ User created: ${userData.email}`);
+      } else if (results.affectedRows === 2) {
+        console.log(`✓ User updated: ${userData.email}`);
+      } else {
+        console.log(`⊘ User verified (no changes): ${userData.email}`);
+      }
     } catch (error) {
-      console.error(`✗ Error hashing password for ${userData.email}:`, error.message);
+      console.error(`✗ Error for ${userData.email}:`, error.message);
     }
   }
 
-  setTimeout(() => {
-    console.log('Database seeding completed!');
-    console.log('\nDEFAULT CREDENTIALS:');
-    console.log('====================');
-    DEFAULT_USERS.forEach(user => {
-      console.log(`\nEmail: ${user.email}`);
-      console.log(`Password: ${user.password}`);
-      console.log(`Department: ${user.department_code}`);
-    });
-    pool.end();
-  }, 2000);
+  console.log('Database seeding completed!');
+  console.log('\nDEFAULT CREDENTIALS:');
+  console.log('====================');
+  DEFAULT_USERS.forEach(user => {
+    console.log(`\nEmail: ${user.email}`);
+    console.log(`Password: ${user.password}`);
+    console.log(`Department: ${user.department_code}`);
+  });
+  await pool.promise().end();
 };
 
 seedDatabase().catch(err => {
