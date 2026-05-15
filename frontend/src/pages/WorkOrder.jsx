@@ -48,11 +48,11 @@ const WorkOrder = () => {
   };
 
   const handleCreateNew = () => {
-    navigate('/work-order/edit-work');
+    navigate('/production/work-order/edit-work');
   };
 
   const handleEdit = (id) => {
-    navigate(`/work-order/edit-work?id=${id}`);
+    navigate(`/production/work-order/edit-work?id=${id}`);
   };
 
   const sortedWorkOrders = React.useMemo(() => {
@@ -195,7 +195,7 @@ const WorkOrder = () => {
       render: (_, row) => (
         <div className="flex items-center justify-end gap-1">
           <button 
-            onClick={() => navigate(`/job-card?filter_work_order=${row.wo_number}`)}
+            onClick={() => navigate(`/production/job-card?filter_work_order=${row.wo_number}`)}
             className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-all"
             title="Track Production"
           >

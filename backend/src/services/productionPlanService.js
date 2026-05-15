@@ -971,7 +971,7 @@ const getItemBOMDetails = async (salesOrderItemId) => {
       // Normalize item_type
       const soCWithTypes = Array.from(uniqueComps.values()).map(c => ({
         ...c,
-        item_type: (c.item_type === 'SA' || c.item_group === 'Sub Assembly' || c.item_group === 'SUB_ASSEMBLY' || (c.component_code && c.component_code.startsWith('SA-'))) ? 'Sub Assembly' : (c.item_type || 'FG')
+        item_type: (c.item_type === 'SA' || c.item_type === 'SFG' || c.item_group === 'Sub Assembly' || c.item_group === 'SUB_ASSEMBLY' || c.item_group === 'SFG' || (c.component_code && (c.component_code.startsWith('SA-') || c.component_code.startsWith('SFG-')))) ? 'Sub Assembly' : (c.item_type || 'FG')
       }));
 
       materials = soM;
@@ -1043,7 +1043,7 @@ const getItemBOMDetails = async (salesOrderItemId) => {
           materials = gM;
           components = gC.map(c => ({
             ...c,
-            item_type: (c.item_type === 'SA' || c.item_group === 'Sub Assembly' || c.item_group === 'SUB_ASSEMBLY' || (c.component_code && c.component_code.startsWith('SA-'))) ? 'Sub Assembly' : (c.item_type || 'FG')
+            item_type: (c.item_type === 'SA' || c.item_type === 'SFG' || c.item_group === 'Sub Assembly' || c.item_group === 'SUB_ASSEMBLY' || c.item_group === 'SFG' || (c.component_code && (c.component_code.startsWith('SA-') || c.component_code.startsWith('SFG-')))) ? 'Sub Assembly' : (c.item_type || 'FG')
           }));
           operations = gO;
         }
@@ -1052,7 +1052,7 @@ const getItemBOMDetails = async (salesOrderItemId) => {
       // Map item types for all components (including those from fallbacks)
       components = components.map(c => ({
         ...c,
-        item_type: (c.item_type === 'SA' || c.item_group === 'Sub Assembly' || c.item_group === 'SUB_ASSEMBLY' || (c.component_code && c.component_code.startsWith('SA-'))) ? 'Sub Assembly' : (c.item_type || 'FG')
+        item_type: (c.item_type === 'SA' || c.item_type === 'SFG' || c.item_group === 'Sub Assembly' || c.item_group === 'SUB_ASSEMBLY' || c.item_group === 'SFG' || (c.component_code && (c.component_code.startsWith('SA-') || c.component_code.startsWith('SFG-')))) ? 'Sub Assembly' : (c.item_type || 'FG')
       }));
     }
 
@@ -1313,13 +1313,23 @@ const getMaterialRequestItemsForPlan = async (planId) => {
     const code = (itemCode || name).trim();
     const key = code.toUpperCase();
 
+    // Skip SFG and FG items from material request
+    const c = code.toUpperCase();
+    const cat = (category || '').toUpperCase();
+    if (
+      c.startsWith('SA-') || c.startsWith('FG-') || c.startsWith('SFG-') ||
+      cat === 'SUB ASSEMBLY' || cat === 'SUB_ASSEMBLY' || cat === 'SA' || cat === 'SFG' || cat === 'FG'
+    ) {
+      return;
+    }
+
     const mapItemType = (code, cat) => {
       const materialCategories = ['CORE', 'EXPLODED', 'RAW_MATERIAL', 'COMPONENT'];
       if (materialCategories.includes(String(cat).toUpperCase())) return 'RAW_MATERIAL';
 
       const c = (code || '').toUpperCase();
       if (c.startsWith('RM-')) return 'RAW_MATERIAL';
-      if (c.startsWith('SA-')) return 'SUB_ASSEMBLY';
+      if (c.startsWith('SA-') || c.startsWith('SFG-')) return 'SUB_ASSEMBLY';
       if (c.startsWith('FG-')) return 'FG';
 
       if (cat === 'FG') return 'FG';
@@ -1429,7 +1439,7 @@ ON (ppm.item_code = issued.item_code OR ppm.material_name = issued.material_name
 
   for (const mat of materials) {
     const code = (mat.actual_item_code || mat.item_code || '').toUpperCase();
-    if (code.startsWith('SA-') || code.startsWith('FG-')) continue;
+    if (code.startsWith('SA-') || code.startsWith('FG-') || code.startsWith('SFG-')) continue;
 
     // If material request is fulfilled or completed, show full quantity as available
     const isFulfilled = (mat.status_rank || 0) >= 4;
@@ -1494,6 +1504,16 @@ const createMaterialRequestFromPlan = async (planId, userId, customItems = null)
       const code = (itemCode || name).trim();
       const key = code.toUpperCase();
 
+      // Skip SFG and FG items from material request
+      const c = code.toUpperCase();
+      const cat = (category || '').toUpperCase();
+      if (
+        c.startsWith('SA-') || c.startsWith('FG-') || c.startsWith('SFG-') ||
+        cat === 'SUB ASSEMBLY' || cat === 'SUB_ASSEMBLY' || cat === 'SA' || cat === 'SFG' || cat === 'FG'
+      ) {
+        return;
+      }
+
       if (map.has(key)) {
         const existing = map.get(key);
         existing.quantity += Number(qty);
@@ -1523,8 +1543,9 @@ const createMaterialRequestFromPlan = async (planId, userId, customItems = null)
         const wh = item.warehouse || 'Consumables Store';
         const rate = item.unit_rate || 0;
         const design = item.design_qty || 0;
+        const cat = item.item_type || item.category || 'RAW_MATERIAL';
 
-        addToPurposeMap(purchaseMap, code, req, uom, name, wh, 'RAW_MATERIAL', rate, design);
+        addToPurposeMap(purchaseMap, code, req, uom, name, wh, cat, rate, design);
       }
     } else {
       // Automatic logic for non-custom items
@@ -1555,14 +1576,11 @@ const createMaterialRequestFromPlan = async (planId, userId, customItems = null)
       `, [planId, planId]);
 
       for (const mat of materials) {
-        const code = (mat.actual_item_code || mat.item_code || '').toUpperCase();
-        if (code.startsWith('SA-') || code.startsWith('FG-')) continue;
-
         const effectiveRate = mat.rate || mat.stock_rate || 0;
         const required = Number(mat.required_qty);
 
         // Simplified: Request full quantity for everything
-        addToPurposeMap(purchaseMap, mat.actual_item_code, required, mat.uom, mat.material_name, mat.warehouse, 'RAW_MATERIAL', effectiveRate, mat.design_qty);
+        addToPurposeMap(purchaseMap, mat.actual_item_code, required, mat.uom, mat.material_name, mat.warehouse, mat.material_category, effectiveRate, mat.design_qty);
       }
     }
 

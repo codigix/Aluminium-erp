@@ -15,6 +15,14 @@ const warehouseStatusColors = {
 const Warehouses = () => {
   const navigate = useNavigate();
   const location = useLocation();
+
+  const getDeptPrefix = () => {
+    const segments = location.pathname.split('/').filter(Boolean);
+    const prefixes = ['sales', 'design', 'production', 'procurement', 'inventory', 'quality', 'shipment', 'accounts', 'hr', 'admin'];
+    return prefixes.includes(segments[0]) ? `/${segments[0]}` : '';
+  };
+  const deptPrefix = getDeptPrefix();
+
   const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState('list'); // 'list' or 'allocation'
   const [warehouses, setWarehouses] = useState([]);
@@ -247,7 +255,7 @@ const Warehouses = () => {
       if (!response.ok) throw new Error(`Failed to ${editingWarehouse ? 'update' : 'create'} warehouse`);
 
       successToast(`Warehouse ${editingWarehouse ? 'updated' : 'added'} successfully`);
-      navigate('/warehouses');
+      navigate(`${deptPrefix}/warehouses`);
       fetchWarehouses();
     } catch (error) {
       errorToast(error.message);
@@ -255,11 +263,11 @@ const Warehouses = () => {
   };
 
   const resetForm = () => {
-    navigate('/warehouses');
+    navigate(`${deptPrefix}/warehouses`);
   };
 
   const handleEdit = (warehouse) => {
-    navigate(`/warehouses/edit-warehouse?id=${warehouse.id}`);
+    navigate(`${deptPrefix}/warehouses/edit-warehouse?id=${warehouse.id}`);
   };
 
   const handleDelete = async (id, name) => {
@@ -372,7 +380,7 @@ const Warehouses = () => {
         </div>
         {activeTab === 'list' && (
           <button
-            onClick={() => navigate('/warehouses/add-warehouse')}
+            onClick={() => navigate(`${deptPrefix}/warehouses/add-warehouse`)}
             className="flex items-center justify-center gap-2 p-2  bg-orange-500 text-white rounded  text-sm  hover:bg-orange-600  shadow-orange-200 transition-all active:scale-95"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -389,7 +397,7 @@ const Warehouses = () => {
           { label: 'Material Allocation', value: 'allocation', icon: PackageSearch }
         ]}
         activeTab={activeTab}
-        onTabChange={(val) => navigate(val === 'list' ? '/warehouses' : '/warehouses/allocation')}
+        onTabChange={(val) => navigate(val === 'list' ? `${deptPrefix}/warehouses` : `${deptPrefix}/warehouses/allocation`)}
         className="mb-4"
       />
 

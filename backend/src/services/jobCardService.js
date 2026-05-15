@@ -1,9 +1,11 @@
+const crypto = require('crypto');
 const pool = require('../config/db');
 const generateJobCardQcPdf = require('../utils/generateJobCardQcPdf');
 
 const listJobCards = async () => {
   const [rows] = await pool.query(
-    `SELECT jc.*, wo.wo_number, wo.item_name, wo.priority, wo.quantity as wo_quantity, wo.status as wo_status, wo.end_date as wo_end_date, wo.source_type,
+    `SELECT jc.id, jc.job_card_no, jc.work_order_id, jc.operation_id, jc.workstation_id, jc.assigned_to, jc.planned_qty, jc.status, jc.execution_mode, jc.public_id,
+            wo.wo_number, wo.item_name, wo.priority, wo.quantity as wo_quantity, wo.status as wo_status, wo.end_date as wo_end_date, wo.source_type,
             wo.plan_id, wo.sales_order_id, wo.parent_wo_id,
             COALESCE(soi_parent.description, oi_parent.description, soi_source.description, soi_fallback.description, oi_fallback.description, wo_parent.item_name, wo.source_fg) as source_fg,
             COALESCE(soi.drawing_no, oi.drawing_no, soi_parent.drawing_no, oi_parent.drawing_no, wo.bom_no, wo_parent.bom_no, wo_parent.item_code, wo.item_code) as drawing_no,
@@ -66,16 +68,18 @@ const createJobCard = async (data) => {
     throw new Error('Cannot create Job Card for a rejected drawing/item.');
   }
 
+  const publicId = crypto.randomUUID();
   const [result] = await pool.execute(
     `INSERT INTO job_cards 
      (job_card_no, work_order_id, operation_id, workstation_id, assigned_to, planned_qty, remarks, 
-      status, execution_mode, vendor_id, vendor_rate, produced_qty, accepted_qty, start_time, end_time)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      status, execution_mode, vendor_id, vendor_rate, produced_qty, accepted_qty, start_time, end_time, public_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       jobCardNo || null, workOrderId, operationId || null, workstationId || null, assignedTo || null, plannedQty, remarks,
       status || 'PENDING', executionMode || 'In-house', vendorId || null, vendorRate || 0, producedQty || 0, acceptedQty || 0, 
       startDateTime ? startDateTime.replace('T', ' ') : null, 
-      endDateTime ? endDateTime.replace('T', ' ') : null
+      endDateTime ? endDateTime.replace('T', ' ') : null,
+      publicId
     ]
   );
 
@@ -125,7 +129,7 @@ const updateJobCardProgress = async (id, data) => {
         [id]
       );
       
-      const totalProduced = parseFloat(producedSum[0].total || 0);
+      const totalProduced = parseFloat(producedSum[0]?.total || 0);
       const totalInspected = qualityLogs.reduce((sum, log) => sum + parseFloat(log.inspected_qty || 0), 0);
       
       if (totalInspected < totalProduced) {
@@ -140,15 +144,18 @@ const updateJobCardProgress = async (id, data) => {
     }
 
     if (status === 'IN_PROGRESS') {
-      const checkWorkstationId = workstationId || (await connection.query('SELECT workstation_id FROM job_cards WHERE id = ?', [id]))[0][0].workstation_id;
-      const checkAssignedTo = assignedTo || (await connection.query('SELECT assigned_to FROM job_cards WHERE id = ?', [id]))[0][0].assigned_to;
+      const [jcData] = await connection.query('SELECT workstation_id, assigned_to FROM job_cards WHERE id = ?', [id]);
+      if (jcData.length === 0) throw new Error('Job Card not found');
+
+      const checkWorkstationId = workstationId || jcData[0].workstation_id;
+      const checkAssignedTo = assignedTo || jcData[0].assigned_to;
 
       if (checkWorkstationId) {
         const [busyWS] = await connection.query(
           'SELECT job_card_no FROM job_cards WHERE workstation_id = ? AND status = "IN_PROGRESS" AND id != ?',
           [checkWorkstationId, id]
         );
-        if (busyWS.length > 0) {
+        if (busyWS.length > 0 && busyWS[0]) {
           throw new Error(`Workstation is busy with Job Card ${busyWS[0].job_card_no}`);
         }
       }
@@ -158,7 +165,7 @@ const updateJobCardProgress = async (id, data) => {
           'SELECT job_card_no FROM job_cards WHERE assigned_to = ? AND status = "IN_PROGRESS" AND id != ?',
           [checkAssignedTo, id]
         );
-        if (busyOp.length > 0) {
+        if (busyOp.length > 0 && busyOp[0]) {
           throw new Error(`Operator is busy with Job Card ${busyOp[0].job_card_no}`);
         }
       }
@@ -189,16 +196,18 @@ const updateJobCardProgress = async (id, data) => {
       params.push(executionType);
       
       // Update execution_type if it exists in DB (sync both columns)
-      updates.push('execution_type = ?');
-      params.push(executionType);
+      try {
+        updates.push('execution_type = ?');
+        params.push(executionType);
+      } catch (e) {
+        console.warn('execution_type column might be missing', e.message);
+      }
     }
 
     if (updates.length > 0) {
       params.push(id);
-      await connection.execute(
-        `UPDATE job_cards SET ${updates.join(', ')} WHERE id = ?`,
-        params
-      );
+      const query = `UPDATE job_cards SET ${updates.join(', ')} WHERE id = ?`;
+      await connection.execute(query, params);
     }
 
     // Update Work Order status based on Job Cards
@@ -214,7 +223,6 @@ const updateJobCardProgress = async (id, data) => {
       } else if (allJcs.every(jc => jc.status === 'COMPLETED')) {
         newWoStatus = 'COMPLETED';
       } else if (allJcs.some(jc => jc.status === 'COMPLETED' || jc.status === 'PENDING')) {
-        // If some are done but none in progress, and some pending, keep it as IN_PROGRESS if any work has started
         const hasStarted = allJcs.some(jc => jc.status === 'COMPLETED');
         if (hasStarted) newWoStatus = 'IN_PROGRESS';
       }
@@ -225,6 +233,7 @@ const updateJobCardProgress = async (id, data) => {
     await connection.commit();
   } catch (error) {
     await connection.rollback();
+    console.error('Error updating job card progress:', error);
     throw error;
   } finally {
     connection.release();
@@ -232,6 +241,8 @@ const updateJobCardProgress = async (id, data) => {
 };
 
 const getJobCardById = async (id) => {
+  const isUuid = typeof id === 'string' && id.length === 36;
+  const whereClause = isUuid ? 'jc.public_id = ?' : 'jc.id = ?';
   const [rows] = await pool.query(
     `SELECT jc.*, wo.wo_number, wo.item_name, wo.drawing_no,
             COALESCE(o.operation_name, jc.operation_name) as operation_name, 
@@ -246,7 +257,7 @@ const getJobCardById = async (id) => {
      LEFT JOIN operations o ON jc.operation_id = o.id
      LEFT JOIN workstations w ON jc.workstation_id = w.id
      LEFT JOIN users u ON jc.assigned_to = u.id
-     WHERE jc.id = ?`,
+     WHERE ${whereClause}`,
     [id]
   );
   return rows[0];
@@ -843,7 +854,9 @@ const downloadJobCardQcPdf = async (logId) => {
 
 const getJobCardDetailAnalysis = async (idOrNo) => {
   try {
-    // 1. Get Job Card Basic Info
+    const isUuid = typeof idOrNo === 'string' && idOrNo.length === 36;
+    const whereClause = isUuid ? 'jc.public_id = :id' : 'jc.id = :id OR TRIM(jc.job_card_no) = :no OR jc.job_card_no LIKE :likeNo';
+
     const query = `SELECT jc.*, wo.wo_number, wo.item_name, wo.item_code, wo.priority, wo.quantity as wo_total_qty,
             COALESCE(o.operation_name, jc.operation_name) as op_name,
             w.workstation_name, u.username as operator_name,
@@ -859,10 +872,10 @@ const getJobCardDetailAnalysis = async (idOrNo) => {
      LEFT JOIN operations o ON jc.operation_id = o.id
      LEFT JOIN workstations w ON jc.workstation_id = w.id
      LEFT JOIN users u ON jc.assigned_to = u.id
-     WHERE jc.id = :id OR TRIM(jc.job_card_no) = :no OR jc.job_card_no LIKE :likeNo`;
+     WHERE ${whereClause}`;
     
     const params = { 
-      id: isNaN(idOrNo) ? 0 : Number(idOrNo), 
+      id: isUuid ? idOrNo : (isNaN(idOrNo) ? 0 : Number(idOrNo)), 
       no: String(idOrNo).trim(), 
       likeNo: `%${idOrNo}%` 
     };

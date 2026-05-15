@@ -14,6 +14,13 @@ const TransactionDetails = () => {
   const { id: paramId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
+
+  const getDeptPrefix = () => {
+    const segments = location.pathname.split('/').filter(Boolean);
+    const prefixes = ['sales', 'design', 'production', 'procurement', 'inventory', 'quality', 'shipment', 'accounts', 'hr', 'admin'];
+    return prefixes.includes(segments[0]) ? `/${segments[0]}` : '';
+  };
+  const deptPrefix = getDeptPrefix();
   
   // Extract ID from URL if not available in params
   const segments = location.pathname.split('/').filter(Boolean);
@@ -159,7 +166,7 @@ const TransactionDetails = () => {
           <Info size={32} />
         </div>
         <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Transaction Not Found</h3>
-        <Button variant="secondary" onClick={() => navigate('/accounts-report')} className="mt-4 text-[10px]">Back to Reports</Button>
+        <Button variant="secondary" onClick={() => navigate(`${deptPrefix}/accounts-report`)} className="mt-4 text-[10px]">Back to Reports</Button>
       </div>
     );
   }
@@ -184,9 +191,9 @@ const TransactionDetails = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div className="space-y-0.5">
           <div className="flex items-center gap-1.5 text-[9px] text-slate-400 uppercase tracking-[0.15em] font-bold">
-            <span className="cursor-pointer hover:text-indigo-600 transition-colors" onClick={() => navigate('/accounts-report')}>Accounts</span>
+            <span className="cursor-pointer hover:text-indigo-600 transition-colors" onClick={() => navigate(`${deptPrefix}/accounts-report`)}>Accounts</span>
             <ChevronLeft size={8} className="rotate-180 text-slate-300" />
-            <span className="cursor-pointer hover:text-indigo-600 transition-colors" onClick={() => navigate('/invoice-received')}>Vendor Invoices</span>
+            <span className="cursor-pointer hover:text-indigo-600 transition-colors" onClick={() => navigate(`${deptPrefix}/invoice-received`)}>Vendor Invoices</span>
             <ChevronLeft size={8} className="rotate-180 text-slate-300" />
             <span className="text-slate-600">{type} Details</span>
             <ChevronLeft size={8} className="rotate-180 text-slate-300" />

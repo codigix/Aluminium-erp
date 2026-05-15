@@ -10,6 +10,14 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/
 const WorkstationMaster = ({ showForm: propShowForm, setShowForm: propSetShowForm }) => {
   const navigate = useNavigate();
   const location = useLocation();
+
+  const getDeptPrefix = () => {
+    const segments = location.pathname.split('/').filter(Boolean);
+    const prefixes = ['sales', 'design', 'production', 'procurement', 'inventory', 'quality', 'shipment', 'accounts', 'hr', 'admin'];
+    return prefixes.includes(segments[0]) ? `/${segments[0]}` : '';
+  };
+  const deptPrefix = getDeptPrefix();
+
   const [searchParams] = useSearchParams();
   const [workstations, setWorkstations] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -285,7 +293,7 @@ const WorkstationMaster = ({ showForm: propShowForm, setShowForm: propSetShowFor
 
   return (
     <div className="">
-      <Modal isOpen={showForm} onClose={() => { navigate('/workstation-master'); }} title={isEditing ? "Edit Workstation" : "Create Workstation"}>
+      <Modal isOpen={showForm} onClose={() => { navigate(`${deptPrefix}/workstation-master`); }} title={isEditing ? "Edit Workstation" : "Create Workstation"}>
         <form onSubmit={handleSubmit} className="space-y-3">
             {/* Basic Information */}
             <section className="space-y-2">
@@ -344,7 +352,7 @@ const WorkstationMaster = ({ showForm: propShowForm, setShowForm: propSetShowFor
             <div className="flex justify-end gap-2 pt-8 border-t border-slate-100">
               <button
                 type="button"
-                onClick={() => { navigate('/workstation-master'); }}
+                onClick={() => { navigate(`${deptPrefix}/workstation-master`); }}
                 className="p-2 rounded  border border-slate-200 text-sm  text-slate-600 hover:bg-slate-50 transition-all"
               >
                 Cancel
@@ -372,7 +380,7 @@ const WorkstationMaster = ({ showForm: propShowForm, setShowForm: propSetShowFor
           </div>
         </div>
         <button
-          onClick={() => { navigate('/workstation-master/form'); }}
+          onClick={() => { navigate(`${deptPrefix}/workstation-master/form`); }}
           className="flex items-center justify-center gap-2 p-2 text-xs bg-indigo-600 hover:bg-indigo-700 text-white rounded  transition-all shadow-lg shadow-indigo-200 "
         >
           <Plus className="w-5 h-5" />

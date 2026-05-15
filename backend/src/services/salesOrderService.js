@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const pool = require('../config/db');
 const designOrderService = require('./designOrderService');
 const bomService = require('./bomService');
@@ -86,6 +87,8 @@ const listSalesOrders = async (includeWithoutPo = true) => {
 };
 
 const getSalesOrderById = async (id) => {
+  const isUuid = typeof id === 'string' && id.length === 36;
+  const whereClause = isUuid ? 'so.public_id = ?' : 'so.id = ?';
   const [rows] = await pool.query(
     `SELECT so.*, 
             COALESCE(so.project_name, cp.project_name) as project_name,
@@ -100,7 +103,7 @@ const getSalesOrderById = async (id) => {
               ROW_NUMBER() OVER (PARTITION BY company_id ORDER BY contact_type = 'PRIMARY' DESC, id ASC) as rn
        FROM contacts
      ) ct ON ct.company_id = c.id AND ct.rn = 1
-     WHERE so.id = ?`,
+     WHERE ${whereClause}`,
     [id]
   );
   
@@ -226,15 +229,16 @@ const createSalesOrder = async (orderData) => {
   try {
     await connection.beginTransaction();
 
+    const publicId = crypto.randomUUID();
     const [result] = await connection.execute(
       `INSERT INTO sales_orders (
         customer_po_id, company_id, project_name, drawing_required, 
         production_priority, target_dispatch_date, status, 
         current_department, request_accepted, cgst_rate, 
         sgst_rate, profit_margin, bom_id, warehouse,
-        quotation_id, source_type, parent_id
+        quotation_id, source_type, parent_id, public_id
       )
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'DESIGN_ENG', 0, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'DESIGN_ENG', 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         validatedPoId, 
         companyId || null, 
@@ -250,7 +254,8 @@ const createSalesOrder = async (orderData) => {
         warehouse,
         finalQuotationId,
         source_type,
-        parent_id
+        parent_id,
+        publicId
       ]
     );
 

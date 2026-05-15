@@ -10,6 +10,13 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/
 const ItemsMaster = () => {
   const location = useLocation();
   const navigate = useNavigate();
+
+  const getDeptPrefix = () => {
+    const segments = location.pathname.split('/').filter(Boolean);
+    const prefixes = ['sales', 'design', 'production', 'procurement', 'inventory', 'quality', 'shipment', 'accounts', 'hr', 'admin'];
+    return prefixes.includes(segments[0]) ? `/${segments[0]}` : '';
+  };
+  const deptPrefix = getDeptPrefix();
   const [activeTab, setActiveTab] = useState('items'); // 'items' or 'groups'
   const [itemsList, setItemsList] = useState([]);
   const [itemsLoading, setItemsLoading] = useState(false);
@@ -105,10 +112,10 @@ const ItemsMaster = () => {
     const path = location.pathname;
     
     // For Edit and Copy, we need itemsList and itemGroups to be loaded
-    const isEditPath = path.startsWith('/item-master/edit-item/');
-    const isCopyPath = path.startsWith('/item-master/copy-item/');
+    const isEditPath = path.includes('/item-master/edit-item/');
+    const isCopyPath = path.includes('/item-master/copy-item/');
     
-    if (path === '/item-master/add-items') {
+    if (path.endsWith('/item-master/add-items')) {
       setActiveTab('items');
       if (!showItemForm || isEditingItem) {
         handleClearItemForm();
@@ -152,7 +159,7 @@ const ItemsMaster = () => {
       return;
     }
 
-    if (path === '/item-master/groups') {
+    if (path.endsWith('/item-master/groups')) {
       setActiveTab('groups');
       if (showItemForm) {
         setShowItemForm(false);
@@ -162,7 +169,7 @@ const ItemsMaster = () => {
     }
 
     // Default: Close form and reset tab if on base path
-    if (path === '/item-master') {
+    if (path.endsWith('/item-master')) {
       if (showItemForm) {
         setShowItemForm(false);
         handleClearItemForm();
@@ -181,8 +188,8 @@ const ItemsMaster = () => {
     fetchApprovedDrawings();
     
     // Check if we have initial data from navigation
-    if (location.state?.addItem && location.pathname !== '/item-master/add-items') {
-      navigate('/item-master/add-items', { state: location.state, replace: true });
+    if (location.state?.addItem && !location.pathname.endsWith('/item-master/add-items')) {
+      navigate(`${deptPrefix}/item-master/add-items`, { state: location.state, replace: true });
     }
   }, [location.state]);
 
@@ -364,7 +371,7 @@ const ItemsMaster = () => {
       
       successToast(`Item ${isEditingItem ? 'updated' : 'created'} successfully`);
       fetchItemsList();
-      navigate('/item-master');
+      navigate(`${deptPrefix}/item-master`);
     } catch (error) {
       errorToast(error.message);
     } finally {
@@ -400,11 +407,11 @@ const ItemsMaster = () => {
   };
 
   const handleEditItem = useCallback((item) => {
-    navigate(`/item-master/edit-item/${item.id}`);
+    navigate(`${deptPrefix}/item-master/edit-item/${item.id}`);
   }, [navigate]);
 
   const handleCopyItem = useCallback((item) => {
-    navigate(`/item-master/copy-item/${item.id}`);
+    navigate(`${deptPrefix}/item-master/copy-item/${item.id}`);
   }, [navigate]);
 
   const handleDeleteItem = useCallback(async (id) => {
@@ -839,7 +846,7 @@ const ItemsMaster = () => {
             { id: 'groups', label: 'Item Groups', icon: Layers }
           ]}
           activeTab={activeTab}
-          onTabChange={(id) => navigate(id === 'items' ? '/item-master' : '/item-master/groups')}
+          onTabChange={(id) => navigate(id === 'items' ? `${deptPrefix}/item-master` : `${deptPrefix}/item-master/groups`)}
         />
       </div>
 
@@ -866,7 +873,7 @@ const ItemsMaster = () => {
               />
               <Button 
                 variant="primary"
-                onClick={() => navigate('/item-master/add-items')}
+                onClick={() => navigate(`${deptPrefix}/item-master/add-items`)}
                 icon={Plus}
               >
                 Add New Item
@@ -899,7 +906,7 @@ const ItemsMaster = () => {
             </div>
             <Button 
               variant="secondary"
-              onClick={() => navigate('/item-master')}
+              onClick={() => navigate(`${deptPrefix}/item-master`)}
             >
               Cancel
             </Button>
@@ -994,8 +1001,8 @@ const ItemsMaster = () => {
                 </select>
               </div>
 
-              {((['Raw Materials', 'Raw Material', 'RAW_MATERIALS', 'RAW_MATERIAL', 'RM', 'Consumables', 'Consumable', 'CONSUMABLES', 'CONSUMABLE', 'CON'].includes(itemFormData.itemGroup) && itemFormData.defaultUom === 'Kg') || 
-                (['Consumables', 'Consumable', 'CONSUMABLES', 'CONSUMABLE', 'CON'].includes(itemFormData.itemGroup) && itemFormData.defaultUom === 'Litre (Ltr)')) && (
+              {((['RAW MATERIALS', 'RAW MATERIAL', 'RAW_MATERIALS', 'RAW_MATERIAL', 'RM', 'CONSUMABLES', 'CONSUMABLE', 'CON'].includes(itemFormData.itemGroup?.toUpperCase().trim()) && itemFormData.defaultUom === 'Kg') || 
+                (['CONSUMABLES', 'CONSUMABLE', 'CON'].includes(itemFormData.itemGroup?.toUpperCase().trim()) && itemFormData.defaultUom === 'Litre (Ltr)')) && (
                 <>
                   <div className="space-y-2">
                     <label className="text-xs text-slate-500">Select Material Type</label>
@@ -1145,7 +1152,7 @@ const ItemsMaster = () => {
             <div className="pt-6 border-t border-slate-50 flex justify-end gap-2">
               <button 
                 type="button" 
-                onClick={() => navigate('/item-master')}
+                onClick={() => navigate(`${deptPrefix}/item-master`)}
                 className="p-2 bg-slate-50 border border-slate-200 text-slate-600 rounded text-xs  hover:bg-slate-100 transition-all"
               >
                 Cancel
