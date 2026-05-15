@@ -40,16 +40,27 @@ const ActiveClients = () => {
       if (!response.ok) throw new Error('Failed to fetch clients data');
       const rawData = await response.json();
       
-      const filtered = rawData.filter(so =>
-        so.project_name?.includes('Design Review') ||
-        so.current_department === 'DESIGN_ENG' ||
-        so.current_department === 'SALES' ||
-        so.status === 'ACTIVE'
-      );
+      const filtered = rawData.filter(so => {
+        // Broaden the definition of "Active" to include anything currently in the system 
+        // that isn't explicitly cancelled or completed in a way that makes it "Inactive"
+        const activeStatuses = [
+          'ACTIVE', 'CREATED', 'DESIGN_Approved', 'BOM_Approved', 
+          'BOM_SUBMITTED', 'IN_PRODUCTION', 'PRODUCTION_COMPLETED',
+          'READY_FOR_SHIPMENT', 'QC_APPROVED', 'DESIGN_IN_REVIEW', 'DESIGN_QUERY'
+        ];
+        
+        return (
+          so.project_name?.includes('Design Review') ||
+          ['DESIGN_ENG', 'SALES', 'PROCUREMENT', 'PRODUCTION', 'QUALITY', 'QC', 'SHIPMENT'].includes(so.current_department) ||
+          activeStatuses.includes(so.status?.toUpperCase()) ||
+          activeStatuses.includes(so.status) ||
+          so.is_sales_order === 1 || so.is_sales_order === true
+        );
+      });
 
       // Group by client to avoid duplicate entries
       const grouped = filtered.reduce((acc, so) => {
-        const clientName = so.client_name || so.company_name || 'Unassigned';
+        const clientName = so.company_name || so.client_name || so.client || 'Unassigned';
         const key = clientName;
         
         if (!acc[key]) {
@@ -61,18 +72,28 @@ const ActiveClients = () => {
             project_name: so.project_name || 'General',
             drawing_count: 0,
             contact_person: so.contact_person || firstDrawingWithContact?.contact_person || '—',
-            contact_phone: so.contact_phone || firstDrawingWithContact?.phone || '—',
+            contact_phone: so.contact_phone || so.phone || firstDrawingWithContact?.phone || '—',
             email_address: so.email_address || firstDrawingWithContact?.email || '—',
             customer_type: so.customer_type || firstDrawingWithContact?.customer_type || 'Regular',
             gstin: so.gstin || firstDrawingWithContact?.gstin || '—',
             city: so.city || firstDrawingWithContact?.city || '—',
             state: so.state || firstDrawingWithContact?.state || '—',
-            status: so.status || 'Active'
+            status: so.status || 'Active',
+            created_at: so.created_at
           };
         }
 
-        const items = so.items?.filter(item => !item.item_code) || [];
-        acc[key].drawing_count += items.length;
+        // Count unique drawings for this client across all their projects
+        const items = so.items?.filter(item => item.drawing_no || item.drawing_id) || [];
+        
+        // Add unique drawings to the count if we haven't seen them for this client
+        if (!acc[key].seen_drawings) acc[key].seen_drawings = new Set();
+        items.forEach(item => {
+          const drawingKey = item.drawing_no || item.drawing_id;
+          if (drawingKey) acc[key].seen_drawings.add(drawingKey);
+        });
+        
+        acc[key].drawing_count = acc[key].seen_drawings.size;
 
         // If this entry has a cleaner project name (not a design review snippet), use it
         if (so.project_name && !so.project_name.includes('Design Review') && acc[key].project_name.includes('Design Review')) {
@@ -105,19 +126,23 @@ const ActiveClients = () => {
 
   const stats = useMemo(() => {
     const uniqueClients = new Set(data.map(d => d.client_name)).size;
-    const activeClients = new Set(data.filter(d => d.status?.toUpperCase() === 'ACTIVE').map(d => d.client_name)).size;
+    const activeClients = new Set(data.filter(d => {
+      const s = (d.status || '').toUpperCase();
+      return ['ACTIVE', 'CREATED', 'DESIGN_APPROVED', 'BOM_APPROVED', 'IN_PRODUCTION', 'PRODUCTION_COMPLETED', 'QC_APPROVED'].includes(s);
+    }).map(d => d.client_name)).size;
     const totalDrawings = data.reduce((sum, d) => sum + (d.drawing_count || 0), 0);
     
     // Count new clients added this month
     const now = new Date();
     const thisMonthAdded = new Set(data.filter(d => {
+      if (!d.created_at) return false;
       const date = new Date(d.created_at);
       return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
     }).map(d => d.client_name)).size;
 
     return {
       totalClients: uniqueClients,
-      activeClients: activeClients || uniqueClients, // fallback if status not present
+      activeClients: activeClients || uniqueClients, // fallback if status not present or all filtered out
       thisMonthAdded: thisMonthAdded,
       totalDrawings: totalDrawings
     };
