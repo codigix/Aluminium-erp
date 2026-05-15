@@ -1036,7 +1036,7 @@ const PurchaseOrders = () => {
             </button>
           )}
           <button
-            onClick={() => navigate(`/procurement/purchase-orders/view/${row.id}`)}
+            onClick={() => navigate(`/purchase-orders/view/${row.id}`)}
             className="p-1 text-blue-500 hover:bg-blue-50 rounded  transition-all active:scale-90"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1074,7 +1074,7 @@ const PurchaseOrders = () => {
           <button
             onClick={() => {
                 if (row.status === 'PO_REQUEST') {
-                    navigate(`/procurement/purchase-orders/edit-manual/${row.id}`);
+                    navigate(`/purchase-orders/edit-manual/${row.id}`);
                 } else {
                     handleEditPO(row.id);
                 }
@@ -1113,7 +1113,7 @@ const PurchaseOrders = () => {
     return (
       <PurchaseOrderDetail 
         po={selectedPO} 
-        onBack={() => navigate('/procurement/purchase-orders')} 
+        onBack={() => navigate('/purchase-orders')} 
         onRefresh={() => {
           handleViewPODetail(selectedPO.id);
           fetchPOs();
@@ -1164,7 +1164,7 @@ const PurchaseOrders = () => {
           />
           <Button
             variant="primary"
-            onClick={() => navigate('/procurement/purchase-orders/manual-add')}
+            onClick={() => navigate('/purchase-orders/manual-add')}
             icon={Plus}
           >
             Create Order
@@ -1252,7 +1252,7 @@ const PurchaseOrders = () => {
             <div className="flex justify-between items-center p-2 border-b border-slate-50">
               <h2 className="text-xl  text-slate-800">{manualFormData.id ? 'Edit Purchase Order Request' : 'Create New Purchase Order'}</h2>
               <button 
-                onClick={() => navigate('/procurement/purchase-orders')}
+                onClick={() => navigate('/purchase-orders')}
                 className="p-2 hover:bg-slate-100 rounded transition-colors text-slate-400"
               >
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>

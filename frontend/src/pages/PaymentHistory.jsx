@@ -136,7 +136,7 @@ const PaymentHistory = () => {
       }
 
       successToast('Payment voucher sent to vendor email');
-      navigate('/accounts/payment-history');
+      navigate('/payment-history');
     } catch (error) {
       console.error('Error sending email:', error);
       errorToast(error.message || 'Failed to send email');
@@ -290,7 +290,7 @@ const PaymentHistory = () => {
 
       <SendEmailModal
         isOpen={showEmailModal}
-        onClose={() => navigate('/accounts/payment-history')}
+        onClose={() => navigate('/payment-history')}
         onSend={handleSendEmail}
         data={emailData}
         title="Send Receipt to Vendor"

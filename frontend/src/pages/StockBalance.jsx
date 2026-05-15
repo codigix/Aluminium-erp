@@ -111,7 +111,7 @@ const StockBalance = () => {
       }
 
       successToast('New item created successfully');
-      navigate('/inventory/stock-balance');
+      navigate('/stock-balance');
       setNewItem({
         itemName: '',
         itemGroup: 'Raw Material',
@@ -154,7 +154,7 @@ const StockBalance = () => {
       if (!response.ok) throw new Error('Failed to update item');
 
       successToast('Item updated successfully');
-      navigate('/inventory/stock-balance');
+      navigate('/stock-balance');
       fetchStockBalance();
     } catch (error) {
       errorToast(error.message);
@@ -410,7 +410,7 @@ const StockBalance = () => {
       {/* Add Item Modal */}
       <Modal 
         isOpen={showAddModal} 
-        onClose={() => navigate('/inventory/stock-balance')} 
+        onClose={() => navigate('/stock-balance')} 
         title="Add New Master Item"
         size="2xl"
       >
@@ -485,7 +485,7 @@ const StockBalance = () => {
           <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
             <button
               type="button"
-              onClick={() => navigate('/inventory/stock-balance')}
+              onClick={() => navigate('/stock-balance')}
               className="px-6 py-2.5 bg-white border border-slate-200 text-slate-600 rounded  text-xs  hover:bg-slate-50 transition-all active:scale-95"
             >
               Cancel
@@ -505,7 +505,7 @@ const StockBalance = () => {
       {/* Edit Item Modal */}
       <Modal 
         isOpen={showEditModal} 
-        onClose={() => navigate('/inventory/stock-balance')} 
+        onClose={() => navigate('/stock-balance')} 
         title="Edit Master Item"
         size="2xl"
       >
@@ -577,7 +577,7 @@ const StockBalance = () => {
             <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
               <button
                 type="button"
-                onClick={() => navigate('/inventory/stock-balance')}
+                onClick={() => navigate('/stock-balance')}
                 className="px-6 py-2.5 bg-white border border-slate-200 text-slate-600 rounded  text-xs  hover:bg-slate-50 transition-all active:scale-95"
               >
                 Cancel

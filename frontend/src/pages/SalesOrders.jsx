@@ -86,18 +86,18 @@ const SalesOrders = () => {
 
     // URL-based Navigation
     const path = window.location.pathname;
-    if (path === '/sales/sales-order') {
+    if (path === '/sales-order') {
       setViewMode('list');
-    } else if (path.includes('/sales/sales-order/new-sales')) {
+    } else if (path.includes('/sales-order/new-sales')) {
       handleAddOrder();
     }
 
     // Handle browser Back/Forward buttons
     const handlePopState = () => {
       const currentPath = window.location.pathname;
-      if (currentPath === '/sales/sales-order') {
+      if (currentPath === '/sales-order') {
         setViewMode('list');
-      } else if (currentPath.includes('/sales/sales-order/new-sales')) {
+      } else if (currentPath.includes('/sales-order/new-sales')) {
         handleAddOrder();
       }
     };
@@ -404,8 +404,8 @@ const SalesOrders = () => {
     setViewMode('form');
 
     // Update URL behavior
-    if (window.location.pathname !== '/sales/sales-order/new-sales') {
-      window.history.pushState({}, '', '/sales/sales-order/new-sales');
+    if (window.location.pathname !== '/sales-order/new-sales') {
+      window.history.pushState({}, '', '/sales-order/new-sales');
     }
   };
 
@@ -511,7 +511,7 @@ const SalesOrders = () => {
         setViewMode('form');
 
         // Update URL behavior
-        window.history.pushState({}, '', '/sales/sales-order/edit-order');
+        window.history.pushState({}, '', '/sales-order/edit-order');
       }
     } catch (err) {
       console.error('Error fetching order details:', err);
@@ -526,7 +526,7 @@ const SalesOrders = () => {
     setFormMode('view');
 
     // Update URL behavior
-    window.history.pushState({}, '', '/sales/sales-order/view-order');
+    window.history.pushState({}, '', '/sales-order/view-order');
   };
 
   const handleDeleteOrder = async (id) => {
@@ -654,8 +654,8 @@ const SalesOrders = () => {
       if (response.ok) {
         successToast(`Order ${formMode === 'create' ? 'created' : 'updated'} successfully`);
         setViewMode('list');
-        if (window.location.pathname !== '/sales/sales-order') {
-          window.history.pushState({}, '', '/sales/sales-order');
+        if (window.location.pathname !== '/sales-order') {
+          window.history.pushState({}, '', '/sales-order');
         }
         fetchOrders();
       } else {
@@ -831,7 +831,7 @@ const SalesOrders = () => {
           <div className="flex justify-end items-center gap-1.5" onClick={e => e.stopPropagation()}>
             {isReadyForShipment ? (
               <button
-                onClick={() => navigate('/accounts/payment-received')}
+                onClick={() => navigate('/payment-received')}
                 className="p-2 hover:bg-rose-50 rounded text-slate-400 hover:text-rose-600 transition-all border border-transparent hover:border-rose-100 group shadow-sm"
                 title="Account / Payment"
               >
@@ -962,8 +962,8 @@ const SalesOrders = () => {
             variant="secondary"
             onClick={() => {
               setViewMode('list');
-              if (window.location.pathname !== '/sales/sales-order') {
-                window.history.pushState({}, '', '/sales/sales-order');
+              if (window.location.pathname !== '/sales-order') {
+                window.history.pushState({}, '', '/sales-order');
               }
             }}
             icon={ArrowLeft}
@@ -985,8 +985,8 @@ const SalesOrders = () => {
             variant="secondary"
             onClick={() => {
               setViewMode('list');
-              if (window.location.pathname !== '/sales/sales-order') {
-                window.history.pushState({}, '', '/sales/sales-order');
+              if (window.location.pathname !== '/sales-order') {
+                window.history.pushState({}, '', '/sales-order');
               }
             }}
           >

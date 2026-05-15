@@ -928,7 +928,7 @@ const GRNProcessing = () => {
             <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end gap-2">
               <button
                 type="button"
-                onClick={() => navigate('/inventory/grn')}
+                onClick={() => navigate('/grn')}
                 className="p-2 rounded  border border-slate-200 text-slate-700  hover:bg-white transition-all"
               >
                 Cancel
@@ -954,7 +954,7 @@ const GRNProcessing = () => {
                 <p className="text-sm text-slate-500">View recorded material receipt and verify quantities</p>
               </div>
               <button
-                onClick={() => navigate('/inventory/grn')}
+                onClick={() => navigate('/grn')}
                 className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded  transition-colors"
               >
                 <XCircle className="w-3 h-3" />
@@ -1038,7 +1038,7 @@ const GRNProcessing = () => {
                 Print GRN
               </button>
               <button
-                onClick={() => navigate('/inventory/grn')}
+                onClick={() => navigate('/grn')}
                 className="p-2 rounded  border border-slate-200 text-slate-700  hover:bg-white transition-all"
               >
                 Close

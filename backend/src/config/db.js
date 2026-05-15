@@ -36,11 +36,8 @@ const ensureJobCardColumns = async () => {
       { name: 'hourly_rate', definition: 'DECIMAL(12, 2) DEFAULT 0' },
       { name: 'operation_name', definition: 'VARCHAR(255) NULL' },
       { name: 'execution_mode', definition: "VARCHAR(100) DEFAULT 'In-house'" },
-      { name: 'execution_type', definition: "VARCHAR(100) DEFAULT 'In-House'" },
       { name: 'vendor_id', definition: 'INT NULL' },
       { name: 'vendor_rate', definition: 'DECIMAL(12, 2) DEFAULT 0' },
-      { name: 'actual_start_date', definition: 'DATE NULL' },
-      { name: 'jc_number', definition: 'VARCHAR(100) NULL' },
       { name: 'start_time', definition: 'DATETIME NULL' },
       { name: 'end_time', definition: 'DATETIME NULL' },
       { name: 'produced_qty', definition: 'DECIMAL(12, 3) DEFAULT 0' },
@@ -52,8 +49,7 @@ const ensureJobCardColumns = async () => {
       { name: 'outward_challan_no', definition: 'VARCHAR(100) NULL' },
       { name: 'dispatch_qty', definition: 'DECIMAL(12, 3) DEFAULT 0' },
       { name: 'cycle_time', definition: 'DECIMAL(12, 3) DEFAULT 0' },
-      { name: 'setup_time', definition: 'DECIMAL(12, 3) DEFAULT 0' },
-      { name: 'public_id', definition: 'VARCHAR(100) UNIQUE NULL' }
+      { name: 'setup_time', definition: 'DECIMAL(12, 3) DEFAULT 0' }
     ];
 
     const missing = requiredColumns.filter(column => !existing.has(column.name));
@@ -450,8 +446,7 @@ const ensurePoMaterialRequestColumns = async () => {
       { name: 'store_acceptance_notes', definition: 'TEXT NULL' },
       { name: 'mr_id', definition: 'INT NULL' },
       { name: 'approved_by', definition: 'INT NULL' },
-      { name: 'approved_at', definition: 'TIMESTAMP NULL' },
-      { name: 'public_id', definition: 'VARCHAR(100) UNIQUE NULL' }
+      { name: 'approved_at', definition: 'TIMESTAMP NULL' }
     ];
     
     const missingPoCols = requiredPoCols.filter(c => !existingPoCols.has(c.name));
@@ -1949,7 +1944,6 @@ const ensureOrdersTable = async () => {
     if (!existing.has('cgst_rate')) await connection.query('ALTER TABLE orders ADD COLUMN cgst_rate DECIMAL(5,2) DEFAULT 0');
     if (!existing.has('sgst_rate')) await connection.query('ALTER TABLE orders ADD COLUMN sgst_rate DECIMAL(5,2) DEFAULT 0');
     if (!existing.has('profit_margin')) await connection.query('ALTER TABLE orders ADD COLUMN profit_margin DECIMAL(5,2) DEFAULT 0');
-    if (!existing.has('public_id')) await connection.query('ALTER TABLE orders ADD COLUMN public_id VARCHAR(100) UNIQUE NULL');
 
     console.log('Orders and Order Items tables synchronized');
   } catch (error) {
@@ -2137,8 +2131,7 @@ const ensureSalesOrderColumns = async () => {
       { name: 'customer_type', definition: 'VARCHAR(100) NULL' },
       { name: 'excel_path', definition: 'VARCHAR(255) NULL' },
       { name: 'zip_path', definition: 'VARCHAR(255) NULL' },
-      { name: 'parent_id', definition: 'INT NULL' },
-      { name: 'public_id', definition: 'VARCHAR(100) UNIQUE NULL' }
+      { name: 'parent_id', definition: 'INT NULL' }
     ];
 
     for (const col of requiredColumns) {

@@ -11,21 +11,13 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/
 const DrawingMaster = () => {
   const navigate = useNavigate();
   const location = useLocation();
-
-  const getDeptPrefix = () => {
-    const segments = location.pathname.split('/').filter(Boolean);
-    const prefixes = ['sales', 'design', 'production', 'procurement', 'inventory', 'quality', 'shipment', 'accounts', 'hr', 'admin'];
-    return prefixes.includes(segments[0]) ? `/${segments[0]}` : '';
-  };
-  const deptPrefix = getDeptPrefix();
-
   const [searchParams] = useSearchParams();
   const [drawings, setDrawings] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    const isEditPath = location.pathname.includes(`${deptPrefix}/drawing-master/edit`);
+    const isEditPath = location.pathname.includes('/drawing-master/edit');
     const id = searchParams.get('id');
 
     if (isEditPath && id && drawings.length > 0) {
@@ -472,7 +464,7 @@ const DrawingMaster = () => {
           <button 
             onClick={(e) => {
               e.stopPropagation();
-              navigate(`${deptPrefix}/drawing-master/edit?id=${row.drawing_master_id}`);
+              navigate(`/drawing-master/edit?id=${row.drawing_master_id}`);
             }}
             className="p-2 text-amber-500 hover:bg-amber-50 rounded  transition-all border border-transparent hover:border-amber-100"
             title="Edit Drawing"
@@ -528,8 +520,8 @@ const DrawingMaster = () => {
       drawing_pdf: null,
       file_path: drawing.file_path || drawing.drawing_pdf || ''
     });
-    if (!location.pathname.includes(`${deptPrefix}/drawing-master/edit`)) {
-      navigate(`${deptPrefix}/drawing-master/edit?id=${drawing.drawing_master_id}`);
+    if (!location.pathname.includes('/drawing-master/edit')) {
+      navigate(`/drawing-master/edit?id=${drawing.drawing_master_id}`);
     }
     setShowEditForm(true);
   };
@@ -572,7 +564,7 @@ const DrawingMaster = () => {
       if (!response.ok) throw new Error('Failed to update drawing');
       
       successToast('Drawing updated successfully');
-      navigate(`${deptPrefix}/drawing-master`);
+      navigate('/drawing-master');
       fetchDrawings();
       setExpandedRevisions(prev => {
         const next = { ...prev };
@@ -784,7 +776,7 @@ const DrawingMaster = () => {
                     </div>
                 </div>
                 <button 
-                    onClick={() => navigate(`${deptPrefix}/drawing-master`)}
+                    onClick={() => navigate('/drawing-master')}
                     className="p-2 text-slate-400 hover:bg-white hover:text-slate-600 rounded  transition-all border border-transparent hover:border-slate-200"
                 >
                     <X size={20} />
@@ -862,7 +854,7 @@ const DrawingMaster = () => {
                 <div className="pt-6 border-t border-slate-50 flex justify-end gap-2">
                     <button 
                         type="button" 
-                        onClick={() => navigate(`${deptPrefix}/drawing-master`)}
+                        onClick={() => navigate('/drawing-master')}
                         className="p-2 bg-white border border-slate-200 text-slate-600 rounded text-xs  hover:bg-slate-50 transition-all"
                     >
                         Discard Changes

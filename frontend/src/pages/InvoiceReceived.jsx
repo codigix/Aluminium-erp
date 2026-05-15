@@ -97,7 +97,7 @@ const VendorInvoices = () => {
 
       successToast('Invoice sent to payment processing');
       
-      navigate('/accounts/payment-processing', {
+      navigate('/payment-processing', {
         state: {
           selectedInvoice: {
             id: invoice.id,

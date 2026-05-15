@@ -631,7 +631,7 @@ const QuotationFormPage = () => {
           const newHistory = versionHistory.filter(item => item.id !== v.id);
           setVersionHistory(newHistory);
           if (newHistory.length === 0) {
-            navigate('/sales/client-quotations');
+            navigate('/client-quotations');
           } else if (selectedVersionId === v.id) {
             await loadVersionData(newHistory[0]);
           }
@@ -868,7 +868,7 @@ const QuotationFormPage = () => {
       successToast(message);
 
       if (finalSendEmail || status === 'Draft') {
-        navigate('/sales/client-quotations');
+        navigate('/client-quotations');
       } else if (newQuotationId) {
         // If we stay on the page, update to reflect the newly created quotation
         setQuotationNo(`QRT-${String(newQuotationId).padStart(4, '0')}`);
@@ -894,7 +894,7 @@ const QuotationFormPage = () => {
         <div>
           <div className="flex items-center gap-2 text-slate-500 mb-0.5">
             <button 
-              onClick={() => navigate('/sales/client-quotations')}
+              onClick={() => navigate('/client-quotations')}
               className="p-1 hover:bg-slate-100 rounded transition-colors"
             >
               <ChevronLeft size={16} />
@@ -914,7 +914,7 @@ const QuotationFormPage = () => {
         
         <div className="flex items-center gap-2">
           <button
-            onClick={() => navigate('/sales/client-quotations')}
+            onClick={() => navigate('/client-quotations')}
             className="px-3 py-1.5 text-xs  text-slate-600 bg-white border border-slate-200 rounded hover:bg-slate-50 transition-all flex items-center gap-2"
           >
             <X size={14} />

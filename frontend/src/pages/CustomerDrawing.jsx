@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
 import { useFormik } from 'formik';
 import * as Yup from 'yup';
 import { Card, Modal, DataTable, StatusBadge, FormControl, Tabs, Button } from '../components/ui.jsx';
@@ -11,14 +10,6 @@ import { successToast, errorToast, warningToast, infoToast } from '../utils/toas
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
 const CustomerDrawing = () => {
-  const location = useLocation();
-  const getDeptPrefix = () => {
-    const segments = location.pathname.split('/').filter(Boolean);
-    const prefixes = ['sales', 'design', 'production', 'procurement', 'inventory', 'quality', 'shipment', 'accounts', 'hr', 'admin'];
-    return prefixes.includes(segments[0]) ? `/${segments[0]}` : '';
-  };
-  const deptPrefix = getDeptPrefix();
-
   const [drawings, setDrawings] = useState([]);
   const [requirements, setRequirements] = useState([]);
   const [showFormModal, setShowFormModal] = useState(false);
@@ -136,7 +127,7 @@ const CustomerDrawing = () => {
               setEditingRequirementData(row);
               setUploadMode('manual');
               setShowFormModal(true);
-              window.history.pushState({ type: 'edit-requirement', data: row }, '', `${deptPrefix}/customer-drawing/edit-client`);
+              window.history.pushState({ type: 'edit-requirement', data: row }, '', '/customer-drawing/edit-client');
             }}
             className="p-1.5 text-amber-600 hover:bg-amber-50 rounded transition-all"
             title="Edit Client & Drawings"
@@ -451,13 +442,13 @@ const CustomerDrawing = () => {
     const path = window.location.pathname;
     const historyState = window.history.state;
 
-    if (path === `${deptPrefix}/customer-drawing`) {
+    if (path === '/customer-drawing') {
       setShowFormModal(false);
       setShowEditModal(false);
       setShowClientDrawingsModal(false);
-    } else if (path.includes(`${deptPrefix}/customer-drawing/addclient`)) {
+    } else if (path.includes('/customer-drawing/addclient')) {
       setShowFormModal(true);
-    } else if (path.includes(`${deptPrefix}/customer-drawing/edit-client`)) {
+    } else if (path.includes('/customer-drawing/edit-client')) {
       if (historyState?.type === 'edit-requirement') {
         setFormMode('edit');
         setEditingRequirementId(historyState.data.id);
@@ -467,8 +458,8 @@ const CustomerDrawing = () => {
         setModalMode(historyState.mode || 'edit');
         setShowEditModal(true);
       }
-      setShowFormModal(path.includes(`${deptPrefix}/customer-drawing/edit-client`));
-    } else if (path.includes(`${deptPrefix}/customer-drawing/view-draw`)) {
+      setShowFormModal(path.includes('/customer-drawing/edit-client'));
+    } else if (path.includes('/customer-drawing/view-draw')) {
       if (historyState?.type === 'view-client-drawings') {
         setViewingClient(historyState.data);
       }
@@ -480,21 +471,21 @@ const CustomerDrawing = () => {
       const currentPath = window.location.pathname;
       const state = event.state;
 
-      if (currentPath === `${deptPrefix}/customer-drawing`) {
+      if (currentPath === '/customer-drawing') {
         setShowFormModal(false);
         setShowEditModal(false);
         setShowClientDrawingsModal(false);
         setFormMode('add');
         setEditingRequirementId(null);
         setEditingRequirementData(null);
-      } else if (currentPath.includes(`${deptPrefix}/customer-drawing/addclient`)) {
+      } else if (currentPath.includes('/customer-drawing/addclient')) {
         setFormMode('add');
         setEditingRequirementId(null);
         setEditingRequirementData(null);
         setShowFormModal(true);
         setShowEditModal(false);
         setShowClientDrawingsModal(false);
-      } else if (currentPath.includes(`${deptPrefix}/customer-drawing/edit-client`)) {
+      } else if (currentPath.includes('/customer-drawing/edit-client')) {
         if (state?.type === 'edit-requirement') {
           setFormMode('edit');
           setEditingRequirementId(state.data.id);
@@ -508,7 +499,7 @@ const CustomerDrawing = () => {
           setShowFormModal(false);
         }
         setShowClientDrawingsModal(false);
-      } else if (currentPath.includes(`${deptPrefix}/customer-drawing/view-draw`)) {
+      } else if (currentPath.includes('/customer-drawing/view-draw')) {
         if (state?.type === 'view-client-drawings') {
           setViewingClient(state.data);
         }
@@ -657,7 +648,7 @@ const CustomerDrawing = () => {
     setShowEditModal(true);
 
     // Update URL behavior
-    const targetUrl = mode === 'view' ? `${deptPrefix}/customer-drawing/view-draw` : `${deptPrefix}/customer-drawing/edit-client`;
+    const targetUrl = mode === 'view' ? '/customer-drawing/view-draw' : '/customer-drawing/edit-client';
     window.history.pushState({ type: 'edit-drawing', data: newEditData, mode }, '', targetUrl);
   };
 
@@ -706,8 +697,8 @@ const CustomerDrawing = () => {
 
       successToast('Customer drawing updated successfully');
       setShowEditModal(false);
-      if (window.location.pathname !== `${deptPrefix}/customer-drawing`) {
-        window.history.pushState({}, '', `${deptPrefix}/customer-drawing`);
+      if (window.location.pathname !== '/customer-drawing') {
+        window.history.pushState({}, '', '/customer-drawing');
       }
       fetchDrawings(searchTerm);
     } catch (error) {
@@ -887,8 +878,8 @@ const CustomerDrawing = () => {
            setFormMode('add');
            setEditingRequirementId(null);
            setEditingRequirementData(null);
-           if (window.location.pathname !== `${deptPrefix}/customer-drawing`) {
-            window.history.pushState({}, '', `${deptPrefix}/customer-drawing`);
+           if (window.location.pathname !== '/customer-drawing') {
+            window.history.pushState({}, '', '/customer-drawing');
           }
         }
 
@@ -1110,8 +1101,8 @@ const CustomerDrawing = () => {
         await shareDrawingsBulkAPI(recentDrawings.map(d => d.id));
         successToast(`All ${recentDrawings.length} imported drawings sent to Design Engineer for review as a single request`);
         setShowFormModal(false);
-        if (window.location.pathname !== `${deptPrefix}/customer-drawing`) {
-          window.history.pushState({}, '', `${deptPrefix}/customer-drawing`);
+        if (window.location.pathname !== '/customer-drawing') {
+          window.history.pushState({}, '', '/customer-drawing');
         }
         fetchDrawings(searchTerm);
         fetchRequirements();
@@ -1370,7 +1361,7 @@ const CustomerDrawing = () => {
     setShowClientDrawingsModal(true);
 
     // Update URL behavior
-    window.history.pushState({ type: 'view-client-drawings', data: viewData }, '', `${deptPrefix}/customer-drawing/view-draw`);
+    window.history.pushState({ type: 'view-client-drawings', data: viewData }, '', '/customer-drawing/view-draw');
   };
 
   const handleDeleteRequirement = async (companyId, clientName) => {
@@ -1432,7 +1423,7 @@ const CustomerDrawing = () => {
               setEditingRequirementData(null);
               formik.resetForm();
               setClientLocked(false);
-              window.history.pushState({}, '', `${deptPrefix}/customer-drawing/addclient`);
+              window.history.pushState({}, '', '/customer-drawing/addclient');
               setShowFormModal(true);
             }}
             icon={Plus}
@@ -1467,8 +1458,8 @@ const CustomerDrawing = () => {
         isOpen={showEditModal}
         onClose={() => {
           setShowEditModal(false);
-          if (window.location.pathname !== `${deptPrefix}/customer-drawing`) {
-            window.history.pushState({}, '', `${deptPrefix}/customer-drawing`);
+          if (window.location.pathname !== '/customer-drawing') {
+            window.history.pushState({}, '', '/customer-drawing');
           }
         }}
         title={modalMode === 'view' ? 'View Drawing Details' : 'Edit Drawing'}
@@ -1684,8 +1675,8 @@ const CustomerDrawing = () => {
               type="button"
               onClick={() => {
                 setShowEditModal(false);
-                if (window.location.pathname !== `${deptPrefix}/customer-drawing`) {
-                  window.history.pushState({}, '', `${deptPrefix}/customer-drawing`);
+                if (window.location.pathname !== '/customer-drawing') {
+                  window.history.pushState({}, '', '/customer-drawing');
                 }
               }}
               className="p-2 text-xs text-slate-600 hover:bg-slate-100 rounded transition-colors"
@@ -1874,8 +1865,8 @@ const CustomerDrawing = () => {
           setEditingRequirementData(null);
           formik.resetForm();
           setClientLocked(false);
-          if (location.pathname !== `${deptPrefix}/customer-drawing`) {
-            window.history.pushState({}, '', `${deptPrefix}/customer-drawing`);
+          if (location.pathname !== '/customer-drawing') {
+            window.history.pushState({}, '', '/customer-drawing');
           }
         }}
         title={formMode === 'edit' ? 'Update Client Requirement' : 'Add Client Requirement'}
@@ -2324,8 +2315,8 @@ const CustomerDrawing = () => {
         isOpen={showClientDrawingsModal}
         onClose={() => {
           setShowClientDrawingsModal(false);
-          if (window.location.pathname !== `${deptPrefix}/customer-drawing`) {
-            window.history.pushState({}, '', `${deptPrefix}/customer-drawing`);
+          if (window.location.pathname !== '/customer-drawing') {
+            window.history.pushState({}, '', '/customer-drawing');
           }
         }}
         title={viewingClient ? `Drawings for ${viewingClient.name}` : 'Client Drawings'}
@@ -2346,8 +2337,8 @@ const CustomerDrawing = () => {
               <button
                 onClick={() => {
                   setShowClientDrawingsModal(false);
-                  if (window.location.pathname !== `${deptPrefix}/customer-drawing`) {
-                    window.history.pushState({}, '', `${deptPrefix}/customer-drawing`);
+                  if (window.location.pathname !== '/customer-drawing') {
+                    window.history.pushState({}, '', '/customer-drawing');
                   }
                 }}
                 className="px-6 py-2 bg-slate-100 text-slate-700 rounded-md text-xs font-semibold hover:bg-slate-200 transition-colors"

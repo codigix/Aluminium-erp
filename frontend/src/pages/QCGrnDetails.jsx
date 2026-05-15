@@ -342,9 +342,9 @@ const QCGrnDetails = () => {
     <div className="p-4 space-y-4 bg-slate-50/50 min-h-screen">
       {/* Breadcrumbs */}
       <div className="flex items-center gap-2 text-[10px] text-slate-400 mb-2">
-        <span className="hover:text-indigo-600 cursor-pointer" onClick={() => navigate('/quality/quality-dashboard')}>Quality</span>
+        <span className="hover:text-indigo-600 cursor-pointer" onClick={() => navigate('/quality-dashboard')}>Quality</span>
         <ChevronRight className="w-3 h-3" />
-        <span className="hover:text-indigo-600 cursor-pointer" onClick={() => navigate('/quality/quality-reports')}>QC Reports</span>
+        <span className="hover:text-indigo-600 cursor-pointer" onClick={() => navigate('/quality-reports')}>QC Reports</span>
         <ChevronRight className="w-3 h-3" />
         <span className="hover:text-indigo-600 cursor-pointer">GRN Details</span>
         <ChevronRight className="w-3 h-3" />

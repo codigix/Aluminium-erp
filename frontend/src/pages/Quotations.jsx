@@ -76,16 +76,9 @@ const Quotations = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const getDeptPrefix = () => {
-    const segments = location.pathname.split('/').filter(Boolean);
-    const prefixes = ['sales', 'design', 'production', 'procurement', 'inventory', 'quality', 'shipment', 'accounts', 'hr', 'admin'];
-    return prefixes.includes(segments[0]) ? `/${segments[0]}` : '';
-  };
-  const deptPrefix = getDeptPrefix();
-
   const activeTab = useMemo(() => {
     const path = location.pathname;
-    if (path.endsWith('/received') || path.endsWith('/record')) return 'received';
+    if (path.includes('/received') || path.includes('/record')) return 'received';
     return 'sent';
   }, [location.pathname]);
 
@@ -203,7 +196,7 @@ const Quotations = () => {
   useEffect(() => {
     const path = location.pathname;
 
-    if (path.endsWith('/quotations/request')) {
+    if (path === '/quotations/request') {
       if (!showCreateModal) {
         if (!location.state?.fromRFQ) {
           setFormData({
@@ -218,7 +211,7 @@ const Quotations = () => {
         }
         setShowCreateModal(true);
       }
-    } else if (path.endsWith('/quotations/record')) {
+    } else if (path === '/quotations/record') {
       if (!showCreateModal) {
         if (!location.state?.fromRFQ) {
           setRecordData({
@@ -234,12 +227,12 @@ const Quotations = () => {
         }
         setShowCreateModal(true);
       }
-    } else if (path.endsWith('/quotations/received')) {
+    } else if (path === '/quotations/received') {
       if (showCreateModal) {
         setShowCreateModal(false);
       }
       return;
-    } else if (path.endsWith('/quotations')) {
+    } else if (path === '/quotations') {
       if (showCreateModal) {
         setShowCreateModal(false);
       }
@@ -253,7 +246,7 @@ const Quotations = () => {
     if (mrId && materialRequests.length > 0) {
       handleSalesOrderChange({ target: { value: `MR-${mrId}` } });
       setSearchParams({});
-      navigate(`${deptPrefix}/quotations/request`, { state: { fromRFQ: true }, replace: true });
+      navigate('/quotations/request', { state: { fromRFQ: true }, replace: true });
     } else if (rfqId && rawRfqs.length > 0) {
       const rfq = rawRfqs.find(r => String(r.id) === String(rfqId));
       if (rfq) {
@@ -845,7 +838,7 @@ const Quotations = () => {
       }
 
       successToast(`Successfully created RFQs for ${formData.vendorIds.length} vendor(s)`);
-      navigate(`${deptPrefix}/quotations`);
+      navigate('/quotations');
       setFormData({
         vendorId: '',
         vendorIds: [],
@@ -924,7 +917,7 @@ const Quotations = () => {
       }
 
       successToast('Quote details recorded successfully');
-      navigate(`${deptPrefix}/quotations`);
+      navigate('/quotations');
       setRecordData({ projectId: '', vendorId: '', quotationId: '', amount: 0, validUntil: '', items: [], notes: '', recordFile: null });
       fetchQuotations();
       fetchStats();
@@ -1103,7 +1096,7 @@ const Quotations = () => {
       notes: q.notes || `Response to ${q.quote_number}`,
       recordFile: null
     });
-    navigate(`${deptPrefix}/quotations/record`, { state: { fromRFQ: true } });
+    navigate('/quotations/record', { state: { fromRFQ: true } });
   };
 
   const handleSendEmail = async (e) => {
@@ -1240,7 +1233,7 @@ const Quotations = () => {
     });
 
     // 2. Open create modal
-    navigate(`${deptPrefix}/quotations/request`, { state: { fromRFQ: true } });
+    navigate('/quotations/request', { state: { fromRFQ: true } });
   };
 
   const displayQuotations = useMemo(() => {
@@ -1551,9 +1544,9 @@ const Quotations = () => {
           <button
             onClick={() => {
               if (activeTab === 'sent') {
-                navigate('/procurement/quotations/request');
+                navigate('/quotations/request');
               } else {
-                navigate('/procurement/quotations/record');
+                navigate('/quotations/record');
               }
             }}
             className="flex items-center gap-2  p-2  bg-blue-600 text-white rounded  text-sm  hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95"
@@ -1572,8 +1565,8 @@ const Quotations = () => {
           ]}
           activeTab={activeTab}
           onTabChange={(value) => {
-            if (value === 'sent') navigate(`${deptPrefix}/quotations`);
-            else navigate(`${deptPrefix}/quotations/received`);
+            if (value === 'sent') navigate('/quotations');
+            else navigate('/quotations/received');
           }}
           className="border-none px-0"
         />
@@ -1691,7 +1684,7 @@ const Quotations = () => {
                   <p className="text-xs text-slate-500 mt-1">Record details from vendor response</p>
                 )}
               </div>
-              <button onClick={() => navigate(`${deptPrefix}/quotations`)} className="text-slate-500 text-xl  leading-none">&times;</button>
+              <button onClick={() => navigate('/quotations')} className="text-slate-500 text-xl  leading-none">&times;</button>
             </div>
 
             <form onSubmit={activeTab === 'sent' ? handleCreateQuotation : handleRecordQuote} className="">
@@ -2134,7 +2127,7 @@ const Quotations = () => {
               <div className="flex gap-2 justify-end pt-4 border-t border-slate-200">
                 <button
                   type="button"
-                  onClick={() => navigate(`${deptPrefix}/quotations`)}
+                  onClick={() => navigate('/quotations')}
                   className="p-2  border border-slate-200 rounded text-xs  hover:bg-slate-50"
                 >
                   Cancel
