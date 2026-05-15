@@ -379,7 +379,7 @@ const generateJobCardNo = async (connection) => {
 const createJobCardsForWorkOrder = async (workOrderId, connection, initialStatus = 'DRAFT', providedOperations = null) => {
   // 1. Fetch WO details
   const [woRows] = await connection.query(
-    'SELECT item_code, bom_no, quantity, sales_order_item_id, source_type FROM work_orders WHERE id = ?',
+    'SELECT item_code, item_name, bom_no, quantity, sales_order_item_id, source_type, source_fg FROM work_orders WHERE id = ?',
     [workOrderId]
   );
   if (woRows.length === 0) return;
@@ -397,22 +397,45 @@ const createJobCardsForWorkOrder = async (workOrderId, connection, initialStatus
     // we should include all operations where source_item matches item_code OR drawing_no
     // OR if the operation item_type is 'FG' and this is an 'FG' work order.
     
-    const [woDetails] = await connection.query('SELECT drawing_no FROM sales_order_items WHERE id = ?', [wo.sales_order_item_id]);
-    const woDrawing = woDetails[0]?.drawing_no;
+    const [woDetails] = await connection.query('SELECT drawing_no, item_code FROM sales_order_items WHERE id = ?', [wo.sales_order_item_id]);
+    const woDrawing = woDetails[0]?.drawing_no || wo.bom_no;
+    const woSoiCode = woDetails[0]?.item_code;
 
     operationsToUse = providedOperations.filter(op => {
       const opSource = (op.source_item || op.sourceItem || '').toUpperCase();
       const opType = (op.item_type || op.itemType || '').toUpperCase();
+      
       const targetCode = (wo.item_code || '').toUpperCase();
       const targetDrawing = (woDrawing || '').toUpperCase();
+      const targetSoiCode = (woSoiCode || '').toUpperCase();
+      const targetName = (wo.item_name || '').toUpperCase();
+      const targetSourceFg = (wo.source_fg || '').toUpperCase();
 
-      // Match by code
-      if (opSource === targetCode) return true;
-      // Match by drawing
-      if (targetDrawing && opSource === targetDrawing) return true;
-      // Match by type if it's the main FG or an SA
-      if (wo.source_type === 'FG' && (opType === 'FG' || opType === 'FINISHED GOOD')) return true;
-      if (wo.source_type === 'SA' && (opType === 'SA' || opType === 'SUB ASSEMBLY')) return true;
+      const isFG = wo.source_type === 'FG';
+      const isSA = wo.source_type === 'SA';
+      const opIsFG = ['FG', 'FINISHED GOOD', 'FINISHED GOODS'].includes(opType);
+      const opIsSA = ['SA', 'SUB ASSEMBLY', 'SUB-ASSEMBLY', 'SUBASSEMBLY'].includes(opType);
+
+      // Priority 1: Direct match by source item code, drawing, name, source_fg, or SOI code
+      if (opSource) {
+        // If opSource is specified, it MUST match one of the identifiers 
+        // AND the item type must also match to avoid cross-contamination between FG and SA
+        const sourceMatches = (opSource === targetCode || 
+                               (targetDrawing && opSource === targetDrawing) ||
+                               (targetSoiCode && opSource === targetSoiCode) ||
+                               (targetName && opSource === targetName) ||
+                               (targetSourceFg && opSource === targetSourceFg));
+        
+        const typeMatches = (isFG && opIsFG) || (isSA && opIsSA);
+        
+        if (sourceMatches && typeMatches) return true;
+      }
+
+      // Priority 2: If opSource is NOT specified, fallback to matching strictly by type
+      if (!opSource) {
+        if (isFG && opIsFG) return true;
+        if (isSA && opIsSA) return true;
+      }
 
       return false;
     }).map(op => ({
