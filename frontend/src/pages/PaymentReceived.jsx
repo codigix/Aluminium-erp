@@ -204,7 +204,7 @@ const PaymentReceived = () => {
           />
           <Button
             variant="primary"
-            onClick={() => navigate('/accounts/payment-received/add')}
+            onClick={() => navigate('/payment-received/add')}
             icon={Plus}
             className="bg-rose-600 hover:bg-rose-700 text-white"
           >
@@ -225,7 +225,7 @@ const PaymentReceived = () => {
 
       <PaymentReceivedModal
         isOpen={isPaymentModalOpen}
-        onClose={() => navigate('/accounts/payment-received')}
+        onClose={() => navigate('/payment-received')}
         invoice={selectedInvoice}
         onSuccess={() => fetchOutstandingInvoices()}
       />

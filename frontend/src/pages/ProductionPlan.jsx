@@ -16,14 +16,6 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/
 const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
   const navigate = useNavigate();
   const location = useLocation();
-
-  const getDeptPrefix = () => {
-    const segments = location.pathname.split('/').filter(Boolean);
-    const prefixes = ['sales', 'design', 'production', 'procurement', 'inventory', 'quality', 'shipment', 'accounts', 'hr', 'admin'];
-    return prefixes.includes(segments[0]) ? `/${segments[0]}` : '';
-  };
-  const deptPrefix = getDeptPrefix();
-
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
@@ -99,21 +91,21 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
 
   useEffect(() => {
     const path = location.pathname;
-    if (path.endsWith('/production-plan/new')) {
+    if (path === '/production-plan/new') {
       if (!isCreating || isViewing) {
         initializeNewPlan();
       }
-    } else if (path.includes('/production-plan/view/')) {
+    } else if (path.startsWith('/production-plan/view/')) {
       const planId = path.split('/').pop();
       if (planId && (!isViewing || newPlan.id?.toString() !== planId)) {
         loadPlanDetails(planId);
       }
-    } else if (path.includes('/production-plan/edit/')) {
+    } else if (path.startsWith('/production-plan/edit/')) {
       const planId = path.split('/').pop();
       if (planId && (isViewing || !isCreating || newPlan.id?.toString() !== planId)) {
         loadPlanForEdit(planId);
       }
-    } else if (path.endsWith('/production-plan')) {
+    } else if (path === '/production-plan') {
       if (isCreating || isViewing) {
         setIsCreating(false);
         setIsViewing(false);
@@ -323,7 +315,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
           successToast(data.message || 'Work orders created successfully');
           setConfigModalOpen(false);
           // Navigate to the work order list
-          navigate(`${deptPrefix}/work-order`);
+          navigate('/work-order');
         } else {
           const error = await response.json();
           errorToast(error.error || 'Failed to create work orders');
@@ -650,15 +642,15 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
   };
 
   const handleEditPlan = (id) => {
-    navigate(`${deptPrefix}/production-plan/edit/${id}`);
+    navigate(`/production-plan/edit/${id}`);
   };
 
   const handleCreateNew = () => {
-    navigate(`${deptPrefix}/production-plan/new`);
+    navigate('/production-plan/new');
   };
 
   const handleViewPlan = async (id) => {
-    navigate(`${deptPrefix}/production-plan/view/${id}`);
+    navigate(`/production-plan/view/${id}`);
   };
 
   const handleOrderSelect = async (orderId) => {
@@ -1463,7 +1455,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
           <div className="flex items-center gap-4">
             <Button
               variant="secondary"
-              onClick={() => navigate(`${deptPrefix}/production-plan`)}
+              onClick={() => navigate('/production-plan')}
               icon={ArrowLeft}
             />
             <div className="flex items-center gap-3">
@@ -1485,7 +1477,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
           <div className="flex items-center gap-3">
             <Button
               variant="secondary"
-              onClick={() => navigate(`${deptPrefix}/production-plan`)}
+              onClick={() => navigate('/production-plan')}
             >
               {isViewing ? 'Close' : 'Discard'}
             </Button>
@@ -2142,7 +2134,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
 
       if (response.ok) {
         successToast(`Production plan ${newPlan.id ? 'updated' : 'created'} successfully`);
-        navigate(`${deptPrefix}/production-plan`);
+        navigate('/production-plan');
         fetchPlans();
       } else {
         const error = await response.json();

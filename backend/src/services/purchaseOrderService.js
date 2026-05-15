@@ -1,5 +1,4 @@
 const pool = require('../config/db');
-const crypto = require('crypto');
 const emailService = require('./emailService');
 const puppeteer = require('puppeteer');
 const mustache = require('mustache');
@@ -323,14 +322,12 @@ const createPurchaseOrder = async (data, existingConnection = null) => {
     }
 
     const poStatus = (actualMrId && !finalVendorId) ? 'PO_REQUEST' : 'DRAFT';
-    const publicId = crypto.randomUUID();
 
     const [result] = await connection.execute(
-      `INSERT INTO purchase_orders (po_number, public_id, quotation_id, mr_id, vendor_id, sales_order_id, status, total_amount, expected_delivery_date, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO purchase_orders (po_number, quotation_id, mr_id, vendor_id, sales_order_id, status, total_amount, expected_delivery_date, notes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         poNumber,
-        publicId,
         quotationId || null,
         actualMrId || null,
         finalVendorId || null,
@@ -571,8 +568,8 @@ const getPurchaseOrderById = async (poId) => {
      LEFT JOIN vendors v ON v.id = po.vendor_id
      LEFT JOIN material_requests mr ON mr.id = po.mr_id
      LEFT JOIN sales_orders so ON so.id = po.sales_order_id
-     WHERE po.id = ? OR po.public_id = ?`,
-    [poId, poId]
+     WHERE po.id = ?`,
+    [poId]
   );
 
   if (!rows.length) {
@@ -630,7 +627,7 @@ const getPurchaseOrderById = async (poId) => {
        GROUP BY item_code
      ) sb ON poi.item_code = sb.item_code
      WHERE poi.purchase_order_id = ?`,
-    [po.sales_order_id, po.id]
+    [po.sales_order_id, poId]
   );
 
   // Filter out FG and Sub Assembly items

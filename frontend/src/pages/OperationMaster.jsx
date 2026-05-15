@@ -372,7 +372,7 @@ const OperationMaster = ({ showForm: propShowForm, setShowForm: propSetShowForm 
               </svg>
             </button>
             <button 
-              onClick={() => { navigate('/production/operation-master/form'); }}
+              onClick={() => { navigate('/operation-master/form'); }}
               className="flex items-center gap-2  p-2  bg-indigo-600 text-white rounded  text-xs  hover:bg-indigo-700  shadow-indigo-200 transition-all active:scale-95"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -393,7 +393,7 @@ const OperationMaster = ({ showForm: propShowForm, setShowForm: propSetShowForm 
 
       <Modal 
         isOpen={showForm} 
-        onClose={() => { navigate('/production/operation-master'); }}
+        onClose={() => { navigate('/operation-master'); }}
         title={isEditing ? 'Edit Operation' : 'Add New Operation'}
       >
         <form onSubmit={handleSubmit} className="space-y-3">

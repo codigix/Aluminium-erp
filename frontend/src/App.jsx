@@ -100,7 +100,7 @@ import './index.css'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 const API_HOST = API_BASE
-const MODULE_IDS = ['dashboard', 'admin-dashboard', 'project-analysis', 'sales-report', 'approved-quotations', 'active-clients', 'sales-report-details', 'procurement-report', 'production-report', 'inventory-report', 'accounts-report', 'oee-analysis', 'machine-analysis', 'material-consumption', 'sales-dashboard', 'design-dashboard', 'production-dashboard', 'procurement-dashboard', 'item-master', 'company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'quotation-form', 'vendor-management', 'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'po-receipt-details', 'inventory-dashboard', 'quality-dashboard', 'accounts-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance', 'incoming-qc', 'quality-rejections', 'quality-reports', 'quality-rejection-entry', 'warehouses', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval', 'bom-form', 'workstation-master', 'operation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card', 'sub-contract-challans', 'stock-entries', 'incoming-orders', 'vendor-inward-challans', 'invoice-received', 'payment-processing', 'payment-received', 'payment-history', 'customer-payment-history', 'shipment-dashboard', 'shipment-orders', 'shipment-planning', 'dispatch-management', 'delivery-challan', 'shipment-tracking', 'shipment-returns', 'shipment-reports', 'work-order-details', 'grn-po-details', 'qc-grn-details', 'shipment-details', 'transaction-details', 'stock-details']
+const MODULE_IDS = ['dashboard', 'admin-dashboard', 'project-analysis', 'sales-report', 'approved-quotations', 'active-clients', 'sales-report-details', 'procurement-report', 'production-report', 'inventory-report', 'accounts-report', 'oee-analysis', 'machine-analysis', 'material-consumption', 'sales-dashboard', 'design-dashboard', 'production-dashboard', 'procurement-dashboard', 'item-master', 'company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'quotation-form', 'vendor-management', 'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'inventory-dashboard', 'quality-dashboard', 'accounts-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance', 'incoming-qc', 'quality-rejections', 'quality-reports', 'quality-rejection-entry', 'warehouses', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval', 'bom-form', 'workstation-master', 'operation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card', 'sub-contract-challans', 'stock-entries', 'incoming-orders', 'vendor-inward-challans', 'invoice-received', 'payment-processing', 'payment-received', 'payment-history', 'customer-payment-history', 'shipment-dashboard', 'shipment-orders', 'shipment-planning', 'dispatch-management', 'delivery-challan', 'shipment-tracking', 'shipment-returns', 'shipment-reports', 'work-order-details', 'grn-po-details', 'qc-grn-details', 'shipment-details', 'transaction-details', 'stock-details']
 const DEFAULT_MODULE = 'dashboard'
 const HOME_PLANT_STATE = (import.meta.env.VITE_PLANT_STATE || 'maharashtra').toLowerCase()
 const currencyFormatter = new Intl.NumberFormat('en-IN', {
@@ -208,18 +208,6 @@ const DEPARTMENT_MODULES = {
   ]
 }
 
-const DEPARTMENT_PREFIXES = {
-  SALES: 'sales',
-  DESIGN_ENG: 'design',
-  PROCUREMENT: 'procurement',
-  PRODUCTION: 'production',
-  QUALITY: 'quality',
-  SHIPMENT: 'shipment',
-  ACCOUNTS: 'accounts',
-  INVENTORY: 'inventory',
-  ADMIN: 'admin'
-}
-
 function App() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -230,26 +218,8 @@ function App() {
     
     // Split the path and handle segments
     const segments = path.split('/').filter(Boolean)
-    let firstSegment = segments[0]
-    let secondSegment = segments[1]
+    const firstSegment = segments[0]
     
-    // Handle ERP module routing structure /*/module-id
-    const prefixEntry = Object.entries(DEPARTMENT_PREFIXES).find(([_, prefix]) => prefix === firstSegment)
-    if (prefixEntry) {
-      const [deptCode] = prefixEntry
-      const storedUser = localStorage.getItem('authUser');
-      const currentUser = storedUser ? JSON.parse(storedUser) : null;
-      
-      // Admin bypasses all departmental restrictions
-      if (currentUser?.department_code !== deptCode && currentUser?.department_code !== 'ADMIN') {
-        return 'unauthorized';
-      }
-
-      if (!secondSegment) return 'dashboard'
-      firstSegment = secondSegment
-      secondSegment = segments[2]
-    }
-
     // Handle special cases for dash-separated module names that might have subpaths
     // For example /item-master/add-items should map to item-master
     if (MODULE_IDS.includes(firstSegment)) {
@@ -259,19 +229,19 @@ function App() {
       if (firstSegment === 'sales-report-details') {
         return 'sales-report-details';
       }
-      if (firstSegment === 'work-order' && secondSegment === 'edit-work') {
+      if (firstSegment === 'work-order' && segments[1] === 'edit-work') {
         return 'work-order-form';
       }
-      if (firstSegment === 'job-card' && secondSegment === 'production-entry') {
+      if (firstSegment === 'job-card' && segments[1] === 'production-entry') {
         return 'job-card';
       }
-      if (firstSegment === 'workstation-master' && secondSegment === 'form') {
+      if (firstSegment === 'workstation-master' && segments[1] === 'form') {
         return 'workstation-master';
       }
-      if (firstSegment === 'operation-master' && secondSegment === 'form') {
+      if (firstSegment === 'operation-master' && segments[1] === 'form') {
         return 'operation-master';
       }
-      if (firstSegment === 'drawing-master' && secondSegment === 'edit') {
+      if (firstSegment === 'drawing-master' && segments[1] === 'edit') {
         return 'drawing-master';
       }
       if (firstSegment === 'po-material-request') {
@@ -535,14 +505,10 @@ function App() {
       setLoginPassword('')
       showToast(`Welcome, ${data.user.first_name || data.user.username}!`)
       
-      // Redirect to first allowed module based on department with prefix
+      // Redirect to first allowed module based on department
       const userAllowed = DEPARTMENT_MODULES[data.user.department_code] || []
-      const prefix = DEPARTMENT_PREFIXES[data.user.department_code]?.toLowerCase() || ''
-      
       if (userAllowed.length > 0) {
-        const targetModule = userAllowed[0]
-        const targetPath = prefix ? `/${prefix}/${targetModule}` : `/${targetModule}`
-        navigate(targetPath)
+        navigate(`/${userAllowed[0]}`)
       }
     } catch (error) {
       showToast(error.message)
@@ -573,10 +539,6 @@ function App() {
       console.error('Error loading departments:', error)
     }
   }, [])
-
-  useEffect(() => {
-    loadDepartmentsAndRoles().catch(() => null)
-  }, [loadDepartmentsAndRoles])
 
 
 
@@ -739,9 +701,7 @@ function App() {
         if (activeModule === 'work-order-details' && (allowedModules.includes('work-order') || allowedModules.includes('production-report'))) {
           return;
         }
-        const prefix = DEPARTMENT_PREFIXES[user.department_code]?.toLowerCase() || '';
-        const targetPath = prefix ? `/${prefix}/${allowedModules[0]}` : `/${allowedModules[0]}`;
-        navigate(targetPath)
+        navigate(`/${allowedModules[0]}`)
       }
     }
   }, [token, user, allowedModules, activeModule, navigate])
@@ -1191,80 +1151,80 @@ function App() {
 
   const allNavigationItems = [
     { label: 'GENERAL', isGroup: true, groupId: 'general-group' },
-    { label: 'Dashboard', moduleId: 'dashboard', icon: 'dashboard', indent: true, prefix: user?.department_code ? `/${DEPARTMENT_PREFIXES[user.department_code]}` : '' },
-    { label: 'Project Analysis', moduleId: 'project-analysis', icon: 'chart', indent: true, prefix: '/admin' },
-    { label: 'Material Consumption', moduleId: 'material-consumption', icon: 'layers', indent: true, prefix: '/admin' },
-    { label: 'Machine Analysis', moduleId: 'machine-analysis', icon: 'monitor', indent: true, prefix: '/admin' },
-    { label: 'OEE Analysis', moduleId: 'oee-analysis', icon: 'activity', indent: true, prefix: '/admin' },
-    { label: 'Active Clients', moduleId: 'active-clients', icon: 'users', indent: true, deptCode: 'ADMIN', prefix: '/admin' },
-    { label: 'Suppliers', moduleId: 'suppliers', icon: 'truck', indent: true, deptCode: 'ADMIN', prefix: '/admin' },
-    { label: 'Company Master', moduleId: 'company-master', icon: 'building', indent: true, prefix: user?.department_code ? `/${DEPARTMENT_PREFIXES[user.department_code]}` : '' },
-    { label: 'Client Contacts', moduleId: 'client-contacts', icon: 'users', indent: true, prefix: user?.department_code ? `/${DEPARTMENT_PREFIXES[user.department_code]}` : '' },
+    { label: 'Dashboard', moduleId: 'dashboard', icon: 'dashboard', indent: true },
+    { label: 'Project Analysis', moduleId: 'project-analysis', icon: 'chart', indent: true },
+    { label: 'Material Consumption', moduleId: 'material-consumption', icon: 'layers', indent: true },
+    { label: 'Machine Analysis', moduleId: 'machine-analysis', icon: 'monitor', indent: true },
+    { label: 'OEE Analysis', moduleId: 'oee-analysis', icon: 'activity', indent: true },
+    { label: 'Active Clients', moduleId: 'active-clients', icon: 'users', indent: true, deptCode: 'ADMIN' },
+    { label: 'Suppliers', moduleId: 'suppliers', icon: 'truck', indent: true, deptCode: 'ADMIN' },
+    { label: 'Company Master', moduleId: 'company-master', icon: 'building', indent: true },
+    { label: 'Client Contacts', moduleId: 'client-contacts', icon: 'users', indent: true },
 
     { label: 'SALES', isGroup: true, groupId: 'sales-group' },
-    { label: 'Customer Drawings', moduleId: 'customer-drawing', icon: 'file-search', indent: true, prefix: '/sales' },
-    { label: 'Sales Quotations', moduleId: 'client-quotations', icon: 'document', indent: true, prefix: '/sales' },
-    { label: 'Customer PO', moduleId: 'customer-po', icon: 'file-check', indent: true, prefix: '/sales' },
-    { label: 'Sales Order', moduleId: 'sales-order', icon: 'shopping-bag', indent: true, prefix: '/sales' },
-    { label: 'Sales Report', moduleId: 'sales-report', icon: 'file-bar-chart', indent: true, deptCode: 'SALES', prefix: '/sales' },
+    { label: 'Customer Drawings', moduleId: 'customer-drawing', icon: 'file-search', indent: true },
+    { label: 'Sales Quotations', moduleId: 'client-quotations', icon: 'document', indent: true },
+    { label: 'Customer PO', moduleId: 'customer-po', icon: 'file-check', indent: true },
+    { label: 'Sales Order', moduleId: 'sales-order', icon: 'shopping-bag', indent: true },
+    { label: 'Sales Report', moduleId: 'sales-report', icon: 'file-bar-chart', indent: true, deptCode: 'SALES' },
 
     { label: 'DESIGN & ENG', isGroup: true, groupId: 'design-group' },
-    { label: 'Drawing Master', moduleId: 'drawing-master', icon: 'layers', indent: true, prefix: '/design' },
-    { label: 'Items Master', moduleId: 'item-master', icon: 'box', indent: true, prefix: '/design' },
-    { label: 'BOM Creation', moduleId: 'bom-creation', icon: 'list-tree', indent: true, prefix: '/design' },
-    { label: 'Routing / Operations', moduleId: 'routing-operations', icon: 'settings-2', indent: true, prefix: '/design' },
-    { label: 'Process Sheet', moduleId: 'process-sheet', icon: 'spreadsheet', indent: true, prefix: '/design' },
+    { label: 'Drawing Master', moduleId: 'drawing-master', icon: 'layers', indent: true },
+    { label: 'Items Master', moduleId: 'item-master', icon: 'box', indent: true },
+    { label: 'BOM Creation', moduleId: 'bom-creation', icon: 'list-tree', indent: true },
+    { label: 'Routing / Operations', moduleId: 'routing-operations', icon: 'settings-2', indent: true },
+    { label: 'Process Sheet', moduleId: 'process-sheet', icon: 'spreadsheet', indent: true },
 
     { label: 'PRODUCTION', isGroup: true, groupId: 'production-group' },
-    { label: 'Project Requests', moduleId: 'project-requests', icon: 'clipboard', indent: true, prefix: '/production' },
-    { label: 'Material Requirements', moduleId: 'material-requirements', icon: 'package-search', indent: true, prefix: '/production' },
-    { label: 'Production Plan', moduleId: 'production-plan', icon: 'calendar', indent: true, prefix: '/production' },
-    { label: 'Work Order', moduleId: 'work-order', icon: 'wrench', indent: true, prefix: '/production' },
-    { label: 'Job Card', moduleId: 'job-card', icon: 'signature', indent: true, prefix: '/production' },
-    { label: 'Subcontract Challans', moduleId: 'sub-contract-challans', icon: 'truck', indent: true, prefix: '/production' },
-    { label: 'Workstations', moduleId: 'workstation-master', icon: 'cpu', indent: true, prefix: '/production' },
-    { label: 'Operations', moduleId: 'operation-master', icon: 'activity', indent: true, prefix: '/production' },
-    { label: 'Production Report', moduleId: 'production-report', icon: 'file-bar-chart', indent: true, deptCode: 'PRODUCTION', prefix: '/production' },
+    { label: 'Project Requests', moduleId: 'project-requests', icon: 'clipboard', indent: true },
+    { label: 'Material Requirements', moduleId: 'material-requirements', icon: 'package-search', indent: true },
+    { label: 'Production Plan', moduleId: 'production-plan', icon: 'calendar', indent: true },
+    { label: 'Work Order', moduleId: 'work-order', icon: 'wrench', indent: true },
+    { label: 'Job Card', moduleId: 'job-card', icon: 'signature', indent: true },
+    { label: 'Subcontract Challans', moduleId: 'sub-contract-challans', icon: 'truck', indent: true },
+    { label: 'Workstations', moduleId: 'workstation-master', icon: 'cpu', indent: true },
+    { label: 'Operations', moduleId: 'operation-master', icon: 'activity', indent: true },
+    { label: 'Production Report', moduleId: 'production-report', icon: 'file-bar-chart', indent: true, deptCode: 'PRODUCTION' },
 
     { label: 'PROCUREMENT', isGroup: true, groupId: 'procurement-group' },
-    { label: 'Purchase RFQs', moduleId: 'quotations', icon: 'file-question', indent: true, prefix: '/procurement' },
-    { label: 'Purchase Orders', moduleId: 'purchase-orders', icon: 'shopping-bag', indent: true, prefix: '/procurement' },
-    { label: 'Goods Receipt (PO)', moduleId: 'po-receipts', icon: 'inbox', indent: true, prefix: '/procurement' },
-    { label: 'Suppliers', moduleId: 'suppliers', icon: 'truck', indent: true, deptCode: 'PROCUREMENT', prefix: '/procurement' },
-    { label: 'Procurement Report', moduleId: 'procurement-report', icon: 'file-bar-chart', indent: true, deptCode: 'PROCUREMENT', prefix: '/procurement' },
+    { label: 'Purchase RFQs', moduleId: 'quotations', icon: 'file-question', indent: true },
+    { label: 'Purchase Orders', moduleId: 'purchase-orders', icon: 'shopping-bag', indent: true },
+    { label: 'Goods Receipt (PO)', moduleId: 'po-receipts', icon: 'inbox', indent: true },
+    { label: 'Suppliers', moduleId: 'suppliers', icon: 'truck', indent: true, deptCode: 'PROCUREMENT' },
+    { label: 'Procurement Report', moduleId: 'procurement-report', icon: 'file-bar-chart', indent: true, deptCode: 'PROCUREMENT' },
 
     { label: 'INVENTORY', isGroup: true, groupId: 'inventory-group' },
-    { label: 'Material Requests', moduleId: 'po-material-request', icon: 'clipboard-plus', indent: true, prefix: '/inventory' },
-    { label: 'GRN Management', moduleId: 'grn', icon: 'clipboard-check', indent: true, prefix: '/inventory' },
-    { label: 'Stock Entries', moduleId: 'stock-entries', icon: 'move', indent: true, prefix: '/inventory' },
-    { label: 'Stock Balance', moduleId: 'stock-balance', icon: 'scale', indent: true, prefix: '/inventory' },
-    { label: 'Stock Ledger', moduleId: 'stock-ledger', icon: 'book-open', indent: true, prefix: '/inventory' },
-    { label: 'Warehouses', moduleId: 'warehouses', icon: 'warehouse', indent: true, prefix: '/inventory' },
-    { label: 'Suppliers', moduleId: 'suppliers', icon: 'truck', indent: true, deptCode: 'INVENTORY', prefix: '/inventory' },
-    { label: 'Inventory Report', moduleId: 'inventory-report', icon: 'file-bar-chart', indent: true, deptCode: 'INVENTORY', prefix: '/inventory' },
+    { label: 'Material Requests', moduleId: 'po-material-request', icon: 'clipboard-plus', indent: true },
+    { label: 'GRN Management', moduleId: 'grn', icon: 'clipboard-check', indent: true },
+    { label: 'Stock Entries', moduleId: 'stock-entries', icon: 'move', indent: true },
+    { label: 'Stock Balance', moduleId: 'stock-balance', icon: 'scale', indent: true },
+    { label: 'Stock Ledger', moduleId: 'stock-ledger', icon: 'book-open', indent: true },
+    { label: 'Warehouses', moduleId: 'warehouses', icon: 'warehouse', indent: true },
+    { label: 'Suppliers', moduleId: 'suppliers', icon: 'truck', indent: true, deptCode: 'INVENTORY' },
+    { label: 'Inventory Report', moduleId: 'inventory-report', icon: 'file-bar-chart', indent: true, deptCode: 'INVENTORY' },
 
     { label: 'QUALITY', isGroup: true, groupId: 'quality-group' },
-    { label: 'QC Inspection', moduleId: 'quality-rejection-entry', icon: 'shield-check', indent: true, prefix: '/quality' },
-    { label: 'Incoming QC', moduleId: 'incoming-qc', icon: 'log-in', indent: true, prefix: '/quality' },
-    { label: 'Rejections', moduleId: 'quality-rejections', icon: 'close', indent: true, prefix: '/quality' },
-    { label: 'QC Reports', moduleId: 'quality-reports', icon: 'file-bar-chart', indent: true, prefix: '/quality' },
+    { label: 'QC Inspection', moduleId: 'quality-rejection-entry', icon: 'shield-check', indent: true },
+    { label: 'Incoming QC', moduleId: 'incoming-qc', icon: 'log-in', indent: true },
+    { label: 'Rejections', moduleId: 'quality-rejections', icon: 'close', indent: true },
+    { label: 'QC Reports', moduleId: 'quality-reports', icon: 'file-bar-chart', indent: true },
 
     { label: 'ACCOUNTS', isGroup: true, groupId: 'accounts-main-group' },
-    { label: 'Vendor Invoices', moduleId: 'invoice-received', icon: 'receipt', indent: true, prefix: '/accounts' },
-    { label: 'Payment Processing', moduleId: 'payment-processing', icon: 'credit-card', indent: true, prefix: '/accounts' },
-    { label: 'Vendor Payment History', moduleId: 'payment-history', icon: 'history', indent: true, prefix: '/accounts' },
-    { label: 'Payment Received', moduleId: 'payment-received', icon: 'check-circle', indent: true, prefix: '/accounts' },
-    { label: 'Client History', moduleId: 'customer-payment-history', icon: 'contact', indent: true, prefix: '/accounts' },
-    { label: 'Accounts Report', moduleId: 'accounts-report', icon: 'file-bar-chart', indent: true, deptCode: 'ACCOUNTS', prefix: '/accounts' },
+    { label: 'Vendor Invoices', moduleId: 'invoice-received', icon: 'receipt', indent: true },
+    { label: 'Payment Processing', moduleId: 'payment-processing', icon: 'credit-card', indent: true },
+    { label: 'Vendor Payment History', moduleId: 'payment-history', icon: 'history', indent: true },
+    { label: 'Payment Received', moduleId: 'payment-received', icon: 'check-circle', indent: true },
+    { label: 'Client History', moduleId: 'customer-payment-history', icon: 'contact', indent: true },
+    { label: 'Accounts Report', moduleId: 'accounts-report', icon: 'file-bar-chart', indent: true, deptCode: 'ACCOUNTS' },
 
     { label: 'SHIPMENT', isGroup: true, groupId: 'shipment-group' },
-    { label: 'Shipment Orders', moduleId: 'shipment-orders', icon: 'package', indent: true, prefix: '/shipment' },
-    { label: 'Shipment Planning', moduleId: 'shipment-planning', icon: 'calendar', indent: true, prefix: '/shipment' },
-    { label: 'Dispatch Management', moduleId: 'dispatch-management', icon: 'settings', indent: true, prefix: '/shipment' },
-    { label: 'Delivery Challan', moduleId: 'delivery-challan', icon: 'document', indent: true, prefix: '/shipment' },
-    { label: 'Shipment Tracking', moduleId: 'shipment-tracking', icon: 'search', indent: true, prefix: '/shipment' },
-    { label: 'Shipment Returns', moduleId: 'shipment-returns', icon: 'refresh', indent: true, prefix: '/shipment' },
-    { label: 'Shipment Reports', moduleId: 'shipment-reports', icon: 'files', indent: true, prefix: '/shipment' }
+    { label: 'Shipment Orders', moduleId: 'shipment-orders', icon: 'package', indent: true },
+    { label: 'Shipment Planning', moduleId: 'shipment-planning', icon: 'calendar', indent: true },
+    { label: 'Dispatch Management', moduleId: 'dispatch-management', icon: 'settings', indent: true },
+    { label: 'Delivery Challan', moduleId: 'delivery-challan', icon: 'document', indent: true },
+    { label: 'Shipment Tracking', moduleId: 'shipment-tracking', icon: 'search', indent: true },
+    { label: 'Shipment Returns', moduleId: 'shipment-returns', icon: 'refresh', indent: true },
+    { label: 'Shipment Reports', moduleId: 'shipment-reports', icon: 'files', indent: true }
   ]
 
   const navigationItems = allowedModules ? allNavigationItems.filter((item, index) => {
@@ -1621,8 +1581,7 @@ function App() {
                     type="button"
                     onClick={() => {
                       if (item.moduleId) {
-                        const pathPrefix = item.prefix || ''
-                        navigate(`${pathPrefix}/${item.moduleId}`)
+                        navigate(`/${item.moduleId}`)
                         setMobileMenuOpen(false)
                       }
                     }}
@@ -1706,21 +1665,21 @@ function App() {
             </div>
 
           <div className="flex-1 p-4 min-w-0 overflow-y-auto custom-scrollbar">
-            {activeModule === 'po-receipt-details' ? (
+            {location.pathname.startsWith('/receipt-details/') ? (
               <POReceiptDetails />
-            ) : activeModule === 'sales-report-details' ? (
+            ) : location.pathname.startsWith('/sales-report-details/') ? (
               <SalesReportDetails />
-            ) : activeModule === 'work-order-details' ? (
+            ) : location.pathname.startsWith('/work-order-details/') ? (
               <WorkOrderDetail />
-            ) : activeModule === 'grn-po-details' ? (
+            ) : location.pathname.startsWith('/grn-po-details/') ? (
               <GRNPOdetails />
-            ) : activeModule === 'qc-grn-details' ? (
+            ) : location.pathname.startsWith('/qc-grn-details/') ? (
               <QCGrnDetails />
-            ) : activeModule === 'transaction-details' ? (
+            ) : location.pathname.startsWith('/transaction-details/') ? (
               <TransactionDetails />
-            ) : activeModule === 'stock-details' ? (
+            ) : location.pathname.startsWith('/stock-details/') ? (
               <StockDetails />
-            ) : (activeModule === 'unauthorized' || (!allowedModules.includes(activeModule) && user.department_code !== 'ADMIN')) ? (
+            ) : !allowedModules.includes(activeModule) && user.department_code !== 'ADMIN' ? (
               <div className="flex flex-col items-center justify-center h-full text-slate-500">
                 <XCircle className="w-16 h-16 mb-4 text-rose-500" />
                 <h2 className="text-xl font-semibold text-slate-900">Access Denied</h2>
@@ -2018,8 +1977,8 @@ function App() {
                     workOrderId={location.state?.workOrderId} 
                     salesOrderId={location.state?.salesOrderId}
                     salesOrderItemId={location.state?.salesOrderItemId}
-                    onBack={() => navigate('/production/work-order')}
-                    onSuccess={() => navigate('/production/work-order')}
+                    onBack={() => navigate('/work-order')}
+                    onSuccess={() => navigate('/work-order')}
                   />
                 )}
 
@@ -2069,27 +2028,6 @@ function App() {
 
                 {activeModule === 'shipment-details' && (
                   <ShipmentDetails />
-                )}
-
-                {activeModule === 'unauthorized' && (
-                  <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-6 bg-white rounded shadow-sm border border-slate-100">
-                    <div className="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center mb-4">
-                      <ShieldCheck className="w-8 h-8 text-rose-500" />
-                    </div>
-                    <h2 className="text-xl font-bold text-slate-900 mb-2">Access Denied</h2>
-                    <p className="text-slate-500 max-w-md mx-auto mb-6">
-                      You do not have permission to access this department. Please contact your administrator if you believe this is an error.
-                    </p>
-                    <Button 
-                      variant="primary" 
-                      onClick={() => {
-                        const prefix = DEPARTMENT_PREFIXES[user.department_code]?.toLowerCase() || '';
-                        navigate(prefix ? `/${prefix}/dashboard` : '/dashboard');
-                      }}
-                    >
-                      Back to My Dashboard
-                    </Button>
-                  </div>
                 )}
               </>
             )}

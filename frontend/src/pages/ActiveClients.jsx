@@ -195,7 +195,7 @@ const ActiveClients = () => {
           <p className="text-slate-500 text-xs font-medium">Manage all clients and their details</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => navigate('/sales/sales-report')} className="flex items-center gap-1.5 font-bold text-xs h-10 px-4">
+          <Button variant="outline" onClick={() => navigate('/sales-report')} className="flex items-center gap-1.5 font-bold text-xs h-10 px-4">
             <ArrowLeft className="w-4 h-4" />
             Back
           </Button>

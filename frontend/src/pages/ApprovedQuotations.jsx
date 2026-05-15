@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { 
   FileText, Search, Filter, Download, ChevronRight, 
   ArrowLeft, Eye, Calendar, Building2, 
@@ -164,7 +164,7 @@ const ApprovedQuotations = () => {
     const latestQuotes = quotes.filter(q => (q.version || 1) === latestVersion);
     const firstQuote = latestQuotes[0] || quotes[0];
 
-    navigate('/sales/quotation-form', {
+    navigate('/quotation-form', {
       state: {
         initialData: {
           id: row.id,
@@ -244,7 +244,7 @@ const ApprovedQuotations = () => {
           <p className="text-slate-500 text-[11px]">Track approved quotations from BOM-approved orders</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => navigate('/sales/sales-report')} className="flex items-center gap-1 font-bold text-[10px] h-8 px-3">
+          <Button variant="outline" onClick={() => navigate('/sales-report')} className="flex items-center gap-1 font-bold text-[10px] h-8 px-3">
             <ArrowLeft className="w-3.5 h-3.5" />
             Back
           </Button>

@@ -590,7 +590,6 @@ const getSalesDashboardStats = async (filters = {}) => {
   const [salesOrders] = await pool.query(`
     SELECT 
       o.id as id_val,
-      o.public_id,
       o.order_no as id,
       c.company_name as customer,
       LEFT(c.company_name, 2) as initials,
@@ -797,7 +796,7 @@ const getProcurementReportStats = async (filters = {}) => {
     UNION ALL
     (SELECT 
       'PO_CREATED' as type,
-      po.public_id as id,
+      po.id,
       po.po_number as ref,
       po.status as status,
       (SELECT vendor_name FROM vendors WHERE id = po.vendor_id) as sub,
@@ -818,7 +817,7 @@ const getProcurementReportStats = async (filters = {}) => {
   // 6. PO & GRN Summary Table
   const [poGrnSummary] = await pool.query(`
     SELECT 
-      COALESCE(po.public_id, po.id) as id,
+      po.id,
       po.po_number as poNumber,
       v.vendor_name as supplier,
       COALESCE(so.project_name, 'General Procurement') as project,
@@ -990,7 +989,6 @@ const getProductionReportStats = async (filters = {}) => {
   // 6. Recent Activity - Robust operation name
   const [recentActivity] = await pool.query(`
     SELECT 
-      COALESCE(jc.public_id, jc.id) as id,
       wo.wo_number as wo,
       jc.status as type,
       COALESCE(o.operation_name, jc.operation_name, 'Process') as operation,
@@ -1009,8 +1007,8 @@ const getProductionReportStats = async (filters = {}) => {
   // 7. Summary Table - Updated to list Job Cards with same details as Job Card page
   const [summaryTable] = await pool.query(`
     SELECT 
-      COALESCE(jc.public_id, jc.id) as id,
-      COALESCE(jc.public_id, jc.id) as jobCardId,
+      jc.id,
+      jc.id as jobCardId,
       jc.job_card_no as jobCardNo,
       wo.wo_number as woNumber,
       so.project_name as project,

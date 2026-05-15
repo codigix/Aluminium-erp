@@ -10,14 +10,6 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/
 const Challans = () => {
   const navigate = useNavigate();
   const location = useLocation();
-
-  const getDeptPrefix = () => {
-    const segments = location.pathname.split('/').filter(Boolean);
-    const prefixes = ['sales', 'design', 'production', 'procurement', 'inventory', 'quality', 'shipment', 'accounts', 'hr', 'admin'];
-    return prefixes.includes(segments[0]) ? `/${segments[0]}` : '';
-  };
-  const deptPrefix = getDeptPrefix();
-
   const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState('outward');
   const [outwardChallans, setOutwardChallans] = useState([]);
@@ -67,7 +59,7 @@ const Challans = () => {
   }, [location.pathname, searchParams, outwardChallans, inwardChallans, activeTab]);
 
   const handleTabChange = (tab) => {
-    navigate(`${deptPrefix}/sub-contract-challans/${tab}`);
+    navigate(`/sub-contract-challans/${tab}`);
   };
   const [inwardFormData, setInwardFormData] = useState({
     receivedQty: 0,
@@ -181,13 +173,13 @@ const Challans = () => {
     )},
     { label: 'Actions', key: 'id', className: 'text-right', render: (_, row) => (
       <div className="flex items-center justify-end gap-1">
-        <button onClick={() => { navigate(`${deptPrefix}/sub-contract-challans/${activeTab}/details?id=${row.id}`); }} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded" title="View Details">
+        <button onClick={() => { navigate(`/sub-contract-challans/${activeTab}/details?id=${row.id}`); }} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded" title="View Details">
           <Eye className="w-4 h-4" />
         </button>
         {row.status === 'DISPATCHED' && (
           <button 
             onClick={() => {
-              navigate(`${deptPrefix}/sub-contract-challans/outward/record-inward?id=${row.id}`);
+              navigate(`/sub-contract-challans/outward/record-inward?id=${row.id}`);
             }} 
             className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded"
             title="Record Inward Receipt"
@@ -208,7 +200,7 @@ const Challans = () => {
     { label: 'Received Date', key: 'received_date', render: (val) => formatDate(val) },
     { label: 'Status', key: 'status', render: (val) => <StatusBadge status="APPROVED" text={val} /> },
     { label: 'Actions', key: 'id', className: 'text-right', render: (_, row) => (
-      <button onClick={() => { navigate(`${deptPrefix}/sub-contract-challans/inward/details?id=${row.id}`); }} className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded">
+      <button onClick={() => { navigate(`/sub-contract-challans/inward/details?id=${row.id}`); }} className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded">
         <Eye className="w-4 h-4" />
       </button>
     )}
@@ -252,7 +244,7 @@ const Challans = () => {
 
       <Modal
         isOpen={isViewModalOpen}
-        onClose={() => navigate(`${deptPrefix}/sub-contract-challans/${activeTab}`)}
+        onClose={() => navigate(`/sub-contract-challans/${activeTab}`)}
         title={activeTab === 'outward' ? 'Outward Challan Details' : 'Inward Receipt Details'}
         maxWidth="max-w-2xl"
       >
@@ -311,7 +303,7 @@ const Challans = () => {
 
             <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
               <button 
-                onClick={() => navigate(`${deptPrefix}/sub-contract-challans/${activeTab}`)}
+                onClick={() => navigate(`/sub-contract-challans/${activeTab}`)}
                 className="p-2 text-xs  text-slate-600 hover:text-slate-900 transition-colors"
               >
                 Close
@@ -329,7 +321,7 @@ const Challans = () => {
 
       <Modal
         isOpen={isInwardModalOpen}
-        onClose={() => navigate(`${deptPrefix}/sub-contract-challans/outward`)}
+        onClose={() => navigate('/sub-contract-challans/outward')}
         title="Vendor Receipt (Inward)"
         maxWidth="max-w-3xl"
       >

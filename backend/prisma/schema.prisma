@@ -656,7 +656,6 @@ model job_cards {
   jc_number              String?                  @db.VarChar(100)
   cycle_time             Decimal?                 @default(0.000) @db.Decimal(12, 3)
   setup_time             Decimal?                 @default(0.000) @db.Decimal(12, 3)
-  public_id              String?                  @unique(map: "public_id") @db.VarChar(100)
   inward_challans        inward_challans[]
   job_card_downtime_logs job_card_downtime_logs[]
   job_card_quality_logs  job_card_quality_logs[]
@@ -911,7 +910,6 @@ model orders {
   grand_total   Decimal?      @default(0.00) @db.Decimal(12, 2)
   created_at    DateTime?     @default(now()) @db.Timestamp(0)
   updated_at    DateTime?     @default(now()) @db.Timestamp(0)
-  public_id     String?       @unique(map: "public_id") @db.VarChar(100)
   order_items   order_items[]
 
   @@index([client_id], map: "idx_client")
@@ -978,7 +976,6 @@ model payment_vouchers {
   amount       Decimal   @db.Decimal(14, 2)
   description  String?   @db.Text
   created_at   DateTime? @default(now()) @db.Timestamp(0)
-  dummy_name   String?   @db.VarChar(100)
   payments     payments? @relation(fields: [payment_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "payment_vouchers_ibfk_1")
   vendors      vendors?  @relation(fields: [vendor_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "payment_vouchers_vendor_id_fk")
 
@@ -1275,7 +1272,6 @@ model purchase_orders {
   approved_by             Int?
   approved_at             DateTime?                                @db.Timestamp(0)
   invoice_url             String?                                  @db.VarChar(255)
-  public_id               String?                                  @unique(map: "public_id") @db.VarChar(100)
   payments                payments[]
   purchase_order_items    purchase_order_items[]
   quotations              quotations?                              @relation(fields: [quotation_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "purchase_orders_ibfk_1")
@@ -1656,7 +1652,6 @@ model sales_orders {
   excel_path           String?                           @db.VarChar(255)
   zip_path             String?                           @db.VarChar(255)
   parent_id            Int?
-  public_id            String?                           @unique(map: "public_id") @db.VarChar(100)
   bom_approval_history bom_approval_history[]
   design_orders        design_orders[]
   design_rejections    design_rejections[]
@@ -1912,6 +1907,7 @@ model stock_ledger {
 
 model users {
   id                              Int                               @id @default(autoincrement())
+  public_id                       String                            @unique(map: "public_id") @db.VarChar(50)
   username                        String                            @unique(map: "username") @db.VarChar(120)
   email                           String                            @unique(map: "email") @db.VarChar(255)
   password                        String                            @db.VarChar(255)
@@ -1976,6 +1972,8 @@ model vendors {
   group_name       String?            @db.VarChar(100)
   lead_time        String?            @db.VarChar(50)
   public_id        String?            @unique @db.VarChar(100)
+  dummy_name       String?            @db.VarChar(100)
+  
   inward_challans  inward_challans[]
   outward_challans outward_challans[]
   payment_vouchers payment_vouchers[]
@@ -2059,7 +2057,6 @@ model work_orders {
   remarks                         String?                           @db.Text
   created_at                      DateTime?                         @default(now()) @db.Timestamp(0)
   updated_at                      DateTime?                         @default(now()) @db.Timestamp(0)
-  public_id                       String?                           @unique(map: "public_id") @db.VarChar(100)
   job_cards                       job_cards[]
   material_issues                 material_issues[]
   work_order_material_consumption work_order_material_consumption[]

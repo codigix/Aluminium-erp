@@ -92,7 +92,7 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
   };
 
   const handleCreateReceipt = () => {
-    navigate('/procurement/po-receipts', { state: { poId: po.id, autoOpen: true } });
+    navigate('/purchase-receipt', { state: { poId: po.id, autoOpen: true } });
   };
 
   const handleReceiveMaterial = async () => {

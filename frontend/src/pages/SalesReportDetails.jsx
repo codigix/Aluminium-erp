@@ -213,7 +213,7 @@ const SalesReportDetails = () => {
         <Package className="w-12 h-12 text-slate-300 mx-auto mb-4" />
         <h3 className="text-lg font-semibold text-slate-900">Order Not Found</h3>
         <p className="text-slate-500 mt-2">The requested sales order could not be located.</p>
-        <Button variant="primary" onClick={() => navigate('/sales/sales-report')} className="mt-6">
+        <Button variant="primary" onClick={() => navigate('/sales-report')} className="mt-6">
           Back to Sales Report
         </Button>
       </div>
@@ -226,7 +226,7 @@ const SalesReportDetails = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <button 
-            onClick={() => navigate('/sales/sales-report')}
+            onClick={() => navigate('/sales-report')}
             className="p-2 hover:bg-white rounded-lg border border-transparent hover:border-slate-200 transition-all shadow-sm"
           >
             <ArrowLeft className="w-5 h-5 text-slate-500" />
