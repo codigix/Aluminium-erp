@@ -44,7 +44,7 @@ const numberToWords = (num) => {
 };
 
 const listSalesOrders = async (includeWithoutPo = true) => {
-  let whereClause = "WHERE (so.is_sales_order = 1 OR so.status IN ('BOM_SUBMITTED', 'BOM_Approved', 'CREATED', 'DESIGN_QUERY', 'DESIGN_IN_REVIEW', 'QUOTATION_SENT', 'PRODUCTION_COMPLETED', 'READY_FOR_SHIPMENT', 'QC_APPROVED', 'READY_FOR_DISPATCH', 'QC_IN_PROGRESS', 'IN_PRODUCTION', 'MATERIAL_READY', 'QC_REJECTED'))";
+  let whereClause = "WHERE (so.is_sales_order = 1 OR so.status IN ('BOM_SUBMITTED', 'BOM_Approved', 'CREATED', 'DESIGN_QUERY', 'DESIGN_IN_REVIEW', 'QUOTATION_SENT', 'PRODUCTION_COMPLETED', 'READY_FOR_SHIPMENT', 'QC_APPROVED', 'READY_FOR_DISPATCH', 'QC_IN_PROGRESS', 'IN_PRODUCTION', 'MATERIAL_READY', 'QC_REJECTED', 'APPROVED', 'DESIGN_Approved', 'ACTIVE'))";
   if (!includeWithoutPo) {
     whereClause += ' AND so.customer_po_id IS NOT NULL';
   }
