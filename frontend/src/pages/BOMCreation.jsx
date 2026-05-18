@@ -755,7 +755,7 @@ const BOMCreation = () => {
                       <p className="text-sm  text-slate-700 leading-none">{itemsWithBOM.length}</p>
                     </div>
                     <Link
-                      to={`/bom-form?drawing_no=${encodeURIComponent(dwgNo)}&drawing_id=${drawingId}&drawing_name=${encodeURIComponent(drawingName)}&sales_order_id=${dwgItems[0].sales_order_id}`}
+                      to={`/bom-form?drawing_no=${encodeURIComponent(dwgNo)}&drawing_id=${dwgItems[0].drawing_public_id || drawingId}&drawing_name=${encodeURIComponent(drawingName)}&sales_order_id=${dwgItems[0].sales_order_public_id || dwgItems[0].sales_order_id}`}
                       onClick={(e) => e.stopPropagation()}
                       className="p-2 rounded text-xs transition-all shadow-sm flex items-center gap-1.5 bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-100"
                     >

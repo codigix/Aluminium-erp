@@ -1832,6 +1832,7 @@ model stock_balance {
   diameter         Decimal?  @db.Decimal(12, 4)
   outer_diameter   Decimal?  @db.Decimal(12, 4)
   density          Decimal?  @db.Decimal(10, 4)
+  hsn_code         String?   @db.VarChar(50)
 
   @@unique([item_code, warehouse], map: "unique_item_warehouse")
   @@index([item_code], map: "idx_item_code")
@@ -1910,6 +1911,8 @@ model stock_ledger {
   warehouse            String?                       @db.VarChar(100)
   qty_in               Decimal?                      @default(0.000) @db.Decimal(12, 3)
   qty_out              Decimal?                      @default(0.000) @db.Decimal(12, 3)
+  public_id            String?                       @unique(map: "public_id") @db.VarChar(100)
+  hsn_code             String?                       @db.VarChar(50)
   users                users?                        @relation(fields: [created_by], references: [id], onUpdate: NoAction, map: "stock_ledger_ibfk_1")
 
   @@unique([reference_doc_id, grn_item_id, transaction_type], map: "unique_grn_ledger")
@@ -2251,21 +2254,6 @@ enum production_plans_status {
   CANCELLED
 }
 
-enum purchase_orders_status {
-  DRAFT
-  ORDERED
-  SENT
-  ACKNOWLEDGED
-  RECEIVED
-  PARTIALLY_RECEIVED
-  FULFILLED
-  APPROVED
-  PENDING_PAYMENT
-  PAID
-  CLOSED
-  COMPLETED
-}
-
 enum qc_inspections_status {
   PENDING
   IN_PROGRESS
@@ -2524,4 +2512,16 @@ enum payments_status {
 enum shipment_orders_packing_status {
   PENDING
   PACKED
+}
+
+enum purchase_orders_status {
+  DRAFT
+  PO_REQUEST
+  ORDERED
+  Sent
+  ACKNOWLEDGED
+  RECEIVED
+  PARTIALLY_RECEIVED
+  CLOSED
+  COMPLETED
 }

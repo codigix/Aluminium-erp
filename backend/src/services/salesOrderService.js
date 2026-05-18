@@ -993,13 +993,15 @@ const getOrderTimeline = async salesOrderId => {
   const [items] = await pool.query(
     `SELECT soi.*, sb.material_type as item_group, sb.product_type,
             so.status as sales_order_status,
+            so.public_id as sales_order_public_id,
             COALESCE(soi.drawing_id, cd.latest_drawing_id) as drawing_id,
-            cd.drawing_name
+            cd.drawing_name,
+            cd.drawing_public_id
      FROM sales_order_items soi
      JOIN sales_orders so ON soi.sales_order_id = so.id
      LEFT JOIN stock_balance sb ON sb.item_code = soi.item_code
      LEFT JOIN (
-       SELECT d1.drawing_no, d1.id as latest_drawing_id, d1.description as drawing_name
+       SELECT d1.drawing_no, d1.id as latest_drawing_id, d1.description as drawing_name, d1.public_id as drawing_public_id
        FROM customer_drawings d1
        JOIN (
          SELECT drawing_no, MAX(id) as max_id
@@ -1019,12 +1021,14 @@ const getOrderTimeline = async salesOrderId => {
     const [masterItems] = await pool.query(
       `SELECT soi.*, sb.material_type as item_group, sb.product_type,
               'MASTER' as sales_order_status,
+              NULL as sales_order_public_id,
               COALESCE(soi.drawing_id, cd.latest_drawing_id) as drawing_id,
-              cd.drawing_name
+              cd.drawing_name,
+              cd.drawing_public_id
        FROM sales_order_items soi
        LEFT JOIN stock_balance sb ON sb.item_code = soi.item_code
        LEFT JOIN (
-         SELECT d1.drawing_no, d1.id as latest_drawing_id, d1.description as drawing_name
+         SELECT d1.drawing_no, d1.id as latest_drawing_id, d1.description as drawing_name, d1.public_id as drawing_public_id
          FROM customer_drawings d1
          JOIN (
            SELECT drawing_no, MAX(id) as max_id
