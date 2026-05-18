@@ -39,13 +39,13 @@ const getDrawingRevisions = async (req, res, next) => {
 const updateDrawing = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { 
-      description, 
-      revisionNo, 
-      clientName, 
+    const {
+      description,
+      revisionNo,
+      clientName,
       projectName,
-      contactPerson, 
-      phoneNumber, 
+      contactPerson,
+      phoneNumber,
       emailAddress,
       customerType,
       gstin,
@@ -56,13 +56,17 @@ const updateDrawing = async (req, res, next) => {
       qty,
       remarks,
       drawingNo,
-      drawing_type
+      drawing_type,
+      hsn_code,
+      hsnCode,
+      deliveryDate,
+      delivery_date
     } = req.body;
     const drawingPdf = req.file ? `uploads/${req.file.filename}` : null;
 
-    await drawingService.updateDrawing(id, { 
-      description, 
-      revisionNo, 
+    await drawingService.updateDrawing(id, {
+      description,
+      revisionNo,
       drawingPdf,
       clientName,
       projectName,
@@ -78,7 +82,9 @@ const updateDrawing = async (req, res, next) => {
       qty,
       remarks,
       drawingNo,
-      drawing_type
+      drawing_type,
+      hsnCode: hsnCode || hsn_code,
+      deliveryDate: deliveryDate || delivery_date
     });
     res.json({ message: 'Drawing updated successfully' });
   } catch (error) {
@@ -101,13 +107,14 @@ const updateItemDrawing = async (req, res, next) => {
 
 const createDrawing = async (req, res, next) => {
   try {
-    const { 
-      clientName, projectName, drawingNo, revision, qty, description, remarks, fileType, 
+    const {
+      clientName, projectName, drawingNo, revision, qty, description, remarks, fileType,
       contactPerson, phoneNumber, emailAddress,
       customerType, gstin, city, state, billingAddress, shippingAddress,
-      drawing_type, hsnCode
+      drawing_type, hsnCode, hsn_code, deliveryDate, delivery_date,
+      salesOrderId
     } = req.body;
-    
+
     // Check for both single file and multiple files (upload.fields)
     const excelFile = req.files?.file?.[0] || req.file;
     const zipFile = req.files?.zipFile?.[0];
@@ -134,8 +141,8 @@ const createDrawing = async (req, res, next) => {
 
         const batchData = [];
         for (const d of parsedDrawings) {
-          let rowFilePath = null; 
-          
+          let rowFilePath = null;
+
           if (zipFile && zipEntries.length > 0) {
             // Find drawing file in ZIP matching drawingNo or drawingFile column
             // We search for files matching drawingNo (ignoring case and extension)
@@ -147,13 +154,13 @@ const createDrawing = async (req, res, next) => {
               const entryName = e.entryName.toLowerCase();
               const fileNameWithExt = path.basename(entryName);
               const fileNameWithoutExt = path.basename(entryName, path.extname(entryName));
-              
+
               // Priority 0: Exact match with explicit drawingFile from Excel
               if (explicitFileName && (fileNameWithExt === explicitFileName || fileNameWithoutExt === explicitFileName)) return true;
 
               // Priority 1: Exact match of filename without extension
               if (fileNameWithoutExt === cleanDrawingNo) return true;
-              
+
               // Priority 2: Full entry name matches (for files in root)
               if (entryName === cleanDrawingNo) return true;
 
@@ -171,7 +178,7 @@ const createDrawing = async (req, res, next) => {
 
           // If no ZIP match, we can still save the record but without a file path
           // Unless the user uploaded a single drawing (which shouldn't happen in batch mode but let's be safe)
-          
+
           batchData.push({
             clientName,
             projectName,
@@ -181,6 +188,7 @@ const createDrawing = async (req, res, next) => {
             description: d.description || description,
             drawing_type: d.drawing_type || d.drawingType || drawing_type || 'Part',
             hsnCode: d.hsnCode || d.hsn_code || hsnCode,
+            deliveryDate: d.deliveryDate || d.delivery_date || deliveryDate || delivery_date || null,
             filePath: rowFilePath,
             fileType: rowFilePath ? (path.extname(rowFilePath).replace('.', '').toUpperCase() || 'PDF') : 'NONE',
             remarks: d.remarks || remarks,
@@ -196,19 +204,19 @@ const createDrawing = async (req, res, next) => {
             shippingAddress
           });
         }
-        
+
         const count = await drawingService.createBatchCustomerDrawings(batchData, {
           excelPath: dbFilePath,
           zipPath: zipFile ? `uploads/${zipFile.filename}` : null
         });
-        return res.status(201).json({ 
+        return res.status(201).json({
           message: `${count} drawings imported from Excel successfully`,
-          count 
+          count
         });
       }
     }
 
-    const id = await drawingService.createCustomerDrawing({
+    const result = await drawingService.createCustomerDrawing({
       clientName,
       projectName,
       drawingNo,
@@ -229,10 +237,16 @@ const createDrawing = async (req, res, next) => {
       billingAddress,
       shippingAddress,
       drawing_type,
-      hsnCode
+      hsnCode: hsnCode || hsn_code,
+      deliveryDate: deliveryDate || delivery_date,
+      salesOrderId: salesOrderId ? parseInt(salesOrderId) : null
     });
 
-    res.status(201).json({ message: 'Customer drawing uploaded successfully', id });
+    res.status(201).json({ 
+      message: 'Customer drawing uploaded successfully', 
+      id: result.drawingId, 
+      salesOrderId: result.salesOrderId 
+    });
   } catch (error) {
     next(error);
   }

@@ -64,7 +64,7 @@ const BOMCreation = () => {
       // Use the first sales order ID for the summary, similar to BOMApproval
       const mainOrderId = salesOrderIds[0];
       const mainItem = items.find(i => i.sales_order_id === mainOrderId);
-      
+
       setSelectedBOMOrder({
         id: mainOrderId,
         company_name: client.client_name,
@@ -74,7 +74,7 @@ const BOMCreation = () => {
 
       setShowBOMDetails(true);
       setBomDetailsLoading(true);
-      
+
       const token = localStorage.getItem('authToken');
       const response = await fetch(`${API_BASE}/sales-orders/${mainOrderId}/timeline`, {
         headers: {
@@ -101,7 +101,7 @@ const BOMCreation = () => {
     try {
       setClientData(prev => ({ ...prev, [client.id]: { ...(prev[client.id] || {}), loading: true } }));
       const token = localStorage.getItem('authToken');
-      
+
       const allTimelineItems = [];
       const seenItemIds = new Set();
       const salesOrderIds = [...new Set(client.items.map(i => i.sales_order_id))];
@@ -121,9 +121,9 @@ const BOMCreation = () => {
         }
       }
 
-      setClientData(prev => ({ 
-        ...prev, 
-        [client.id]: { items: allTimelineItems, loading: false } 
+      setClientData(prev => ({
+        ...prev,
+        [client.id]: { items: allTimelineItems, loading: false }
       }));
     } catch (err) {
       console.error(err);
@@ -135,14 +135,14 @@ const BOMCreation = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
-      
+
       // First try to find by search
       const response = await fetch(`${API_BASE}/drawings?search=${encodeURIComponent(drawingNo)}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!response.ok) throw new Error('Failed to fetch drawing details');
       const data = await response.json();
-      
+
       let drawing = null;
       if (data && data.length > 0) {
         drawing = data.find(d => d.drawing_no === drawingNo) || data[0];
@@ -185,7 +185,7 @@ const BOMCreation = () => {
       });
       if (!response.ok) throw new Error('Failed to fetch design orders');
       const data = await response.json();
-      
+
       const clientGroups = data.reduce((acc, item) => {
         const clientName = item.company_name || 'Unknown Client';
         if (!acc[clientName]) {
@@ -201,7 +201,7 @@ const BOMCreation = () => {
 
       const groupedArray = Object.values(clientGroups).sort((a, b) => (a.client_name || '').localeCompare(b.client_name || ''));
       setOrders(groupedArray);
-      
+
       for (const client of groupedArray) {
         fetchClientDrawings(client);
       }
@@ -286,7 +286,7 @@ const BOMCreation = () => {
         if (!response.ok) throw new Error('Failed to delete BOM');
         successToast('BOM has been deleted.');
         fetchOrders();
-        
+
         // If modal is open and showing this order, refresh its items
         if (showBOMDetails && selectedBOMOrder) {
           handleViewBOMDetails(selectedBOMOrder);
@@ -327,8 +327,8 @@ const BOMCreation = () => {
       if (result.isConfirmed) {
         setLoading(true);
         const token = localStorage.getItem('authToken');
-        
-        const promises = itemsWithBOM.map(item => 
+
+        const promises = itemsWithBOM.map(item =>
           fetch(`${API_BASE}/bom/items/${item.id}`, {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${token}` }
@@ -381,8 +381,8 @@ const BOMCreation = () => {
       if (result.isConfirmed) {
         setLoading(true);
         const token = localStorage.getItem('authToken');
-        
-        const promises = itemsWithBOM.map(item => 
+
+        const promises = itemsWithBOM.map(item =>
           fetch(`${API_BASE}/bom/items/${item.id}`, {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${token}` }
@@ -441,11 +441,11 @@ const BOMCreation = () => {
       if (result.isConfirmed) {
         setLoading(true);
         const token = localStorage.getItem('authToken');
-        
-        const promises = salesOrderIds.map(soId => 
+
+        const promises = salesOrderIds.map(soId =>
           fetch(`${API_BASE}/sales-orders/${soId}/status`, {
             method: 'PATCH',
-            headers: { 
+            headers: {
               'Authorization': `Bearer ${token}`,
               'Content-Type': 'application/json'
             },
@@ -478,7 +478,7 @@ const BOMCreation = () => {
     orders.forEach(client => {
       const items = clientData[client.id]?.items || [];
       const drawingsMap = {};
-      
+
       items.forEach(i => {
         const dwgNo = cleanText(i.drawing_no || 'N/A');
         if (!drawingsMap[dwgNo]) drawingsMap[dwgNo] = [];
@@ -487,10 +487,10 @@ const BOMCreation = () => {
 
       const drawings = Object.keys(drawingsMap);
       totalDrawings += drawings.length;
-      
+
       drawings.forEach(dwgNo => {
         const dwgItems = drawingsMap[dwgNo];
-        
+
         // Group by item to handle versions in cost calculation
         const itemGroups = dwgItems.reduce((acc, i) => {
           const groupId = i.item_code || cleanText(i.description || i.item_name || i.material_name || 'BOM Item');
@@ -542,9 +542,9 @@ const BOMCreation = () => {
       acc[dwg].push(item);
       return acc;
     }, {});
-    
+
     const drawingsList = Object.values(drawingsMap);
-    return drawingsList.length > 0 && drawingsList.every(dwgItems => 
+    return drawingsList.length > 0 && drawingsList.every(dwgItems =>
       dwgItems.some(i => i.has_bom && (i.item_group === 'FG' || i.product_type === 'FG' || (i.item_group || '').toLowerCase().includes('finished')))
     );
   };
@@ -578,7 +578,7 @@ const BOMCreation = () => {
       key: 'fg_bom_cost',
       render: (_, row) => {
         const items = clientData[row.id]?.items || [];
-        
+
         // Group by item to handle versions
         const itemGroups = items.reduce((acc, i) => {
           const groupId = i.item_code || cleanText(i.description || i.item_name || i.material_name || 'BOM Item');
@@ -601,7 +601,7 @@ const BOMCreation = () => {
           }
           return total;
         }, 0);
-        
+
         return <span className=" text-slate-900">₹{fgBomCost.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>;
       }
     },
@@ -620,14 +620,14 @@ const BOMCreation = () => {
         const isCompleted = isClientBOMCompleted(row);
         return (
           <div className="flex items-center gap-2">
-            <button 
+            <button
               onClick={(e) => { e.stopPropagation(); handleViewBOMDetails(row); }}
               className="p-1.5 rounded border border-slate-200 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 transition-all shadow-sm"
               title="View BOM Details"
             >
               <Eye className="w-4 h-4" />
             </button>
-            <button 
+            <button
               onClick={(e) => { e.stopPropagation(); handleDeleteAllClientBOMs(row); }}
               className="p-1.5 rounded border border-slate-200 text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all shadow-sm"
               title="Delete All Client BOMs"
@@ -638,21 +638,20 @@ const BOMCreation = () => {
               const s = (i.sales_order_status || '').toUpperCase();
               return !s.includes('BOM_SUBMITTED') && !s.includes('BOM_APPROVED') && !s.includes('QUOTATION') && !s.includes('PO_');
             })) && (
-              <button 
-                onClick={(e) => { e.stopPropagation(); handleSendForApproval(row); }}
-                disabled={!isCompleted}
-                className={`flex items-center gap-2 p-1.5 rounded text-xs transition-all border ${
-                  isCompleted 
-                    ? "bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border-emerald-100" 
-                    : "bg-slate-50 text-slate-400 border-slate-100 cursor-not-allowed opacity-60"
-                }`}
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
-                </svg>
-                Send for Approval
-              </button>
-            )}
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleSendForApproval(row); }}
+                  disabled={!isCompleted}
+                  className={`flex items-center gap-2 p-1.5 rounded text-xs transition-all border ${isCompleted
+                      ? "bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border-emerald-100"
+                      : "bg-slate-50 text-slate-400 border-slate-100 cursor-not-allowed opacity-60"
+                    }`}
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
+                  </svg>
+                  Send for Approval
+                </button>
+              )}
           </div>
         );
       }
@@ -691,12 +690,12 @@ const BOMCreation = () => {
             const drawingName = dwgItems[0].drawing_name || dwgItems[0].item_name || dwgItems[0].item_description || 'No Description';
             const drawingId = dwgItems[0].drawing_id;
             const itemsWithBOM = dwgItems.filter(i => i.has_bom || i.has_master_bom);
-            
+
             // Calculate total FG/SA cost for this drawing
-            const fgItems = dwgItems.filter(i => 
+            const fgItems = dwgItems.filter(i =>
               (i.item_group === 'FG' || i.product_type === 'FG' || (i.item_group || '').toLowerCase().includes('finished'))
             );
-            const topItems = fgItems.length > 0 ? fgItems : dwgItems.filter(i => 
+            const topItems = fgItems.length > 0 ? fgItems : dwgItems.filter(i =>
               (i.item_code || '').startsWith('SA-') || (i.item_group || '').includes('SA')
             );
             const latestCosts = topItems.reduce((acc, i) => {
@@ -707,7 +706,7 @@ const BOMCreation = () => {
               return acc;
             }, {});
             const totalDisplayCost = Object.values(latestCosts).reduce((sum, i) => sum + parseFloat(i.bom_cost || 0), 0);
-            
+
             // Refined status logic
             let dwgStatus = 'PENDING';
             if (itemsWithBOM.some(i => (i.item_group === 'FG' || i.product_type === 'FG' || (i.item_group || '').toLowerCase().includes('finished')))) {
@@ -718,7 +717,7 @@ const BOMCreation = () => {
 
             return (
               <div key={dwgKey} className="bg-white border border-slate-100 rounded  shadow-sm overflow-hidden">
-                <div 
+                <div
                   onClick={() => toggleDrawing(dwgKey)}
                   className="p-2 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition-colors"
                 >
@@ -729,7 +728,7 @@ const BOMCreation = () => {
                       </svg>
                     </div>
                     <div>
-                                            <p className="text-xs text-slate-500 ">{drawingName}</p>
+                      <p className="text-xs text-slate-500 ">{drawingName}</p>
 
                       <div className="flex items-center gap-2">
                         <span className="text-xs  text-slate-900">{dwgNo}</span>
@@ -743,7 +742,7 @@ const BOMCreation = () => {
                       </div>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-center gap-4">
                     <div className="text-right hidden sm:block border-r border-slate-100 pr-4">
                       <p className="text-xs  text-slate-400  uppercase tracking-wider mb-0.5">Est. Price</p>
@@ -755,7 +754,7 @@ const BOMCreation = () => {
                       <p className="text-xs  text-slate-400  uppercase tracking-wider mb-0.5">BOMs</p>
                       <p className="text-sm  text-slate-700 leading-none">{itemsWithBOM.length}</p>
                     </div>
-                    <Link 
+                    <Link
                       to={`/bom-form?drawing_no=${encodeURIComponent(dwgNo)}&drawing_id=${drawingId}&drawing_name=${encodeURIComponent(drawingName)}&sales_order_id=${dwgItems[0].sales_order_id}`}
                       onClick={(e) => e.stopPropagation()}
                       className="p-2 rounded text-xs transition-all shadow-sm flex items-center gap-1.5 bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-100"
@@ -765,7 +764,7 @@ const BOMCreation = () => {
                       </svg>
                       Create BOM
                     </Link>
-                    <button 
+                    <button
                       onClick={(e) => { e.stopPropagation(); handleDeleteDrawingBOMs(dwgNo, dwgItems, client.client_name); }}
                       className="p-2 rounded border border-slate-200 text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all shadow-sm"
                       title="Delete Drawing BOMs"
@@ -855,25 +854,25 @@ const BOMCreation = () => {
                                     </td>
                                     <td className="px-4 p-2">
                                       <div className="flex justify-end gap-1">
-                                        <Link 
-                                          to={`/bom-form/${latest.id}?view=true`} 
+                                        <Link
+                                          to={`/bom-form/${latest.id}?view=true`}
                                           onClick={(e) => e.stopPropagation()}
-                                          className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-all" 
+                                          className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-all"
                                           title="View Latest BOM"
                                         >
                                           <Eye className="w-4 h-4" />
                                         </Link>
-                                        <Link 
-                                          to={`/bom-form/${latest.id}`} 
+                                        <Link
+                                          to={`/bom-form/${latest.id}`}
                                           onClick={(e) => e.stopPropagation()}
-                                          className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded transition-all" 
+                                          className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded transition-all"
                                           title="Edit Latest BOM"
                                         >
                                           <Edit2 className="w-4 h-4" />
                                         </Link>
-                                        <button 
+                                        <button
                                           onClick={(e) => { e.stopPropagation(); handleDeleteBOM(latest.id); }}
-                                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-all" 
+                                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-all"
                                           title="Delete BOM"
                                         >
                                           <Trash2 className="w-4 h-4" />
@@ -936,25 +935,25 @@ const BOMCreation = () => {
           ))}
         </div>
 
-        
-          
-            <DataTable 
-              columns={columns}
-              data={filteredOrders}
-              loading={loading}
-              pageSize={5}
-              renderExpanded={renderClientExpanded}
-              searchPlaceholder="Search by client, drawing, or code..."
-              emptyMessage="No active clients found."
-            />
-          
+
+
+        <DataTable
+          columns={columns}
+          data={filteredOrders}
+          loading={loading}
+          pageSize={5}
+          renderExpanded={renderClientExpanded}
+          searchPlaceholder="Search by client, drawing, or code..."
+          emptyMessage="No active clients found."
+        />
+
       </div>
 
       {showBOMDetails && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="flex items-center justify-center min-h-screen px-4 py-8">
             <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={() => setShowBOMDetails(false)}></div>
-            
+
             <div className="relative bg-white rounded  shadow-2xl max-w-6xl w-full overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-100">
               <div className="p-2 border-b border-slate-100 flex justify-between items-center bg-white">
                 <div className="flex items-center gap-2">
@@ -970,8 +969,8 @@ const BOMCreation = () => {
                     </div>
                   </div>
                 </div>
-                <button 
-                  onClick={() => setShowBOMDetails(false)} 
+                <button
+                  onClick={() => setShowBOMDetails(false)}
                   className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded  transition-all border border-transparent hover:border-rose-100"
                 >
                   <X className="w-5 h-5" />
@@ -1000,7 +999,7 @@ const BOMCreation = () => {
                           <History size={20} />
                         </div>
                       </div>
-                      
+
                       <div className="md:col-span-2 bg-gradient-to-br from-indigo-600 via-indigo-700 to-blue-800 p-2 rounded  shadow-xl shadow-indigo-100 flex items-center justify-between border border-indigo-500/20">
                         <div>
                           <p className="text-xs  text-indigo-200/80   mb-1">Aggregate Estimated Manufacturing Cost</p>
@@ -1024,8 +1023,8 @@ const BOMCreation = () => {
                           </div>
                         </div>
                         <div className="p-2 bg-white/10 text-white/50 rounded backdrop-blur-md border border-white/5 flex flex-col items-center">
-                           <Check size={15} className="text-emerald-400" />
-                           <span className="text-[8px]   er mt-1 text-emerald-400/80">Validated</span>
+                          <Check size={15} className="text-emerald-400" />
+                          <span className="text-[8px]   er mt-1 text-emerald-400/80">Validated</span>
                         </div>
                       </div>
                     </div>
@@ -1059,13 +1058,13 @@ const BOMCreation = () => {
                                     <span className="px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded text-xs    ">{item.item_group || 'FINISHED_GOOD'}</span>
                                   </div>
                                   <div className="flex items-center gap-3 text-xs  text-slate-500 ">
-                                    <button 
+                                    <button
                                       onClick={() => item.drawing_no && handlePreviewByNo(item.drawing_no)}
                                       className="flex items-center gap-1 text-indigo-600 hover:text-indigo-700 transition-colors "
                                     >
                                       VIEW DRAWING <ExternalLink size={10} />
                                     </button>
-                                    <button 
+                                    <button
                                       onClick={() => toggleBOMItem(item.id)}
                                       className="flex items-center gap-1 text-slate-400 hover:text-slate-600 transition-colors "
                                     >
@@ -1073,7 +1072,7 @@ const BOMCreation = () => {
                                     </button>
                                   </div>
                                 </div>
-                                
+
                                 <div className="flex gap-6 text-center">
                                   <div>
                                     <p className="text-xs  text-slate-400   mb-1">Order Qty</p>
@@ -1099,9 +1098,9 @@ const BOMCreation = () => {
                                     <div className="p-1.5 bg-emerald-100 text-emerald-600 rounded">
                                       <Check size={14} strokeWidth={3} />
                                     </div>
-                                    <button 
+                                    <button
                                       onClick={() => handleDeleteBOM(item.id)}
-                                      className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-all" 
+                                      className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-all"
                                       title="Delete BOM"
                                     >
                                       <Trash2 size={14} />
@@ -1200,7 +1199,7 @@ const BOMCreation = () => {
               </div>
 
               <div className="bg-slate-50 p-3 border-t border-slate-100 flex justify-end">
-                <button 
+                <button
                   onClick={() => setShowBOMDetails(false)}
                   className="px-6 py-2 bg-white text-slate-600 border border-slate-200 rounded text-xs  hover:bg-slate-50 transition-all  "
                 >
@@ -1213,7 +1212,7 @@ const BOMCreation = () => {
       )}
 
       {showPreviewModal && previewDrawing && (
-        <DrawingPreviewModal 
+        <DrawingPreviewModal
           isOpen={showPreviewModal}
           onClose={() => {
             setShowPreviewModal(false);

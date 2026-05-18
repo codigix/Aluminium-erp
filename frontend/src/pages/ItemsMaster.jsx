@@ -53,7 +53,8 @@ const ItemsMaster = () => {
     width: '',
     thickness: '',
     diameter: '',
-    outerDiameter: ''
+    outerDiameter: '',
+    hsnCode: ''
   });
   const [isSubmittingItem, setIsSubmittingItem] = useState(false);
 
@@ -104,7 +105,8 @@ const ItemsMaster = () => {
       width: item.width || '',
       thickness: item.thickness || '',
       diameter: item.diameter || '',
-      outerDiameter: item.outer_diameter || ''
+      outerDiameter: item.outer_diameter || '',
+      hsnCode: item.hsn_code || ''
     });
   };
 
@@ -180,18 +182,6 @@ const ItemsMaster = () => {
     }
   }, [location.pathname, location.state, itemsList, itemGroups, activeTab, isEditingItem, editingItemId, showItemForm]);
 
-  useEffect(() => {
-    fetchItemsList();
-    fetchItemGroups();
-    fetchShapes();
-    fetchMaterials();
-    fetchApprovedDrawings();
-    
-    // Check if we have initial data from navigation
-    if (location.state?.addItem && !location.pathname.endsWith('/item-master/add-items')) {
-      navigate(`${deptPrefix}/item-master/add-items`, { state: location.state, replace: true });
-    }
-  }, [location.state]);
 
   const fetchItemsList = useCallback(async () => {
     try {
@@ -286,6 +276,34 @@ const ItemsMaster = () => {
     }
   }, []);
 
+  // Handle popstate event for browser Back/Forward transitions
+  useEffect(() => {
+    const handlePopState = () => {
+      fetchItemsList();
+      fetchItemGroups();
+      fetchShapes();
+      fetchMaterials();
+      fetchApprovedDrawings();
+    };
+    
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [fetchItemsList, fetchItemGroups, fetchShapes, fetchMaterials, fetchApprovedDrawings]);
+
+  // Fetch all master data on path or state changes
+  useEffect(() => {
+    fetchItemsList();
+    fetchItemGroups();
+    fetchShapes();
+    fetchMaterials();
+    fetchApprovedDrawings();
+    
+    // Check if we have initial data from navigation
+    if (location.state?.addItem && !location.pathname.endsWith('/item-master/add-items')) {
+      navigate(`${deptPrefix}/item-master/add-items`, { state: location.state, replace: true });
+    }
+  }, [location.pathname, location.state, fetchItemsList, fetchItemGroups, fetchShapes, fetchMaterials, fetchApprovedDrawings, navigate, deptPrefix]);
+
   const fetchNextItemCode = useCallback(async (itemName = '', itemGroup = '') => {
     try {
       const token = localStorage.getItem('authToken');
@@ -313,7 +331,8 @@ const ItemsMaster = () => {
         itemGroup: drawing.item_group || itemFormData.itemGroup,
         drawingNo: drawing.drawing_no || '',
         revision: drawing.revision_no || '',
-        defaultUom: drawing.unit || itemFormData.defaultUom
+        defaultUom: drawing.unit || itemFormData.defaultUom,
+        hsnCode: drawing.hsn_code || ''
       };
       setItemFormData(newFormData);
       
@@ -328,7 +347,8 @@ const ItemsMaster = () => {
         drawingNo: existingItem.drawing_no || '',
         revision: existingItem.revision || '',
         defaultUom: existingItem.unit || existingItem.uom || itemFormData.defaultUom,
-        valuationRate: existingItem.valuation_rate || 0
+        valuationRate: existingItem.valuation_rate || 0,
+        hsnCode: existingItem.hsn_code || ''
       };
       setItemFormData(newFormData);
       
@@ -405,7 +425,8 @@ const ItemsMaster = () => {
       width: '',
       thickness: '',
       diameter: '',
-      outerDiameter: ''
+      outerDiameter: '',
+      hsnCode: ''
     });
     setIsEditingItem(false);
     setEditingItemId(null);
@@ -662,6 +683,12 @@ const ItemsMaster = () => {
       }
     },
     { label: 'Group', key: 'material_type', sortable: true, render: (val) => <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-xs">{val}</span> },
+    { 
+      label: 'HSN Code', 
+      key: 'hsn_code', 
+      sortable: true, 
+      render: (val) => <span className="text-slate-600 font-medium">{val || '—'}</span> 
+    },
     { 
       label: 'Unit Details', 
       key: 'unit', 
@@ -1150,6 +1177,16 @@ const ItemsMaster = () => {
                   className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                   value={itemFormData.valuationRate}
                   onChange={(e) => setItemFormData({...itemFormData, valuationRate: parseFloat(e.target.value) || 0})}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs  text-slate-500  ">HSN Code</label>
+                <input 
+                  type="text"
+                  placeholder="Enter HSN Code"
+                  className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                  value={itemFormData.hsnCode}
+                  onChange={(e) => setItemFormData({...itemFormData, hsnCode: e.target.value})}
                 />
               </div>
             </div>

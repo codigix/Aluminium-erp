@@ -2,6 +2,23 @@ const XLSX = require('xlsx');
 
 const cleanup = value => (value || '').toString().replace(/\s+/g, ' ').trim();
 
+const parseExcelDate = (val) => {
+  if (!val) return '';
+  if (typeof val === 'number') {
+    const date = new Date(Math.round((val - 25569) * 86400 * 1000));
+    if (!isNaN(date.getTime())) {
+      return date.toISOString().split('T')[0];
+    }
+  }
+  const cleanVal = String(val).trim();
+  if (!cleanVal) return '';
+  const parsed = new Date(cleanVal);
+  if (!isNaN(parsed.getTime())) {
+    return parsed.toISOString().split('T')[0];
+  }
+  return cleanVal;
+};
+
 const parseExcelDrawings = async (filePath) => {
   try {
     const workbook = XLSX.readFile(filePath);
@@ -20,6 +37,7 @@ const parseExcelDrawings = async (filePath) => {
       description: -1,
       drawingType: -1,
       hsnCode: -1,
+      deliveryDate: -1,
       qty: -1,
       remarks: -1,
       drawingFile: -1
@@ -39,6 +57,8 @@ const parseExcelDrawings = async (filePath) => {
             if (columnMap.drawingType === -1) columnMap.drawingType = idx;
           } else if (cell.includes('hsn')) {
             if (columnMap.hsnCode === -1) columnMap.hsnCode = idx;
+          } else if (cell.includes('delivery') || cell.includes('dispatch') || cell.includes('due date')) {
+            if (columnMap.deliveryDate === -1) columnMap.deliveryDate = idx;
           } else if (cell.includes('drawing') || cell.includes('drw') || cell.includes('part no') || cell.includes('item code')) {
             if (columnMap.drawingNo === -1) columnMap.drawingNo = idx;
           } else if (cell.includes('rev')) {
@@ -78,6 +98,7 @@ const parseExcelDrawings = async (filePath) => {
           description: columnMap.description !== -1 ? cleanup(row[columnMap.description]) : '',
           drawingType: drawingType,
           hsnCode: columnMap.hsnCode !== -1 ? cleanup(row[columnMap.hsnCode]) : '',
+          deliveryDate: columnMap.deliveryDate !== -1 ? parseExcelDate(row[columnMap.deliveryDate]) : '',
           qty: columnMap.qty !== -1 ? parseInt(row[columnMap.qty]) || 1 : 1,
           remarks: columnMap.remarks !== -1 ? cleanup(row[columnMap.remarks]) : '',
           drawingFile: columnMap.drawingFile !== -1 ? cleanup(row[columnMap.drawingFile]) : ''

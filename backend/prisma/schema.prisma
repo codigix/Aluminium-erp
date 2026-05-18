@@ -132,6 +132,8 @@ model customer_drawings {
   qty                Int?                      @default(1)
   description        String?                   @db.Text
   drawing_type       String?                   @default("Part") @db.VarChar(50)
+  hsn_code           String?                   @db.VarChar(20)
+  delivery_date      DateTime?                 @db.Date
   file_path          String                    @db.VarChar(500)
   file_type          String?                   @db.VarChar(20)
   remarks            String?                   @db.Text

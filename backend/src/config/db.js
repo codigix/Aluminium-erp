@@ -604,7 +604,8 @@ const ensureStockColumns = async () => {
       { name: 'warehouse', definition: 'VARCHAR(100) NULL' },
       { name: 'qty_in', definition: 'DECIMAL(12, 3) DEFAULT 0' },
       { name: 'qty_out', definition: 'DECIMAL(12, 3) DEFAULT 0' },
-      { name: 'public_id', definition: 'VARCHAR(100) UNIQUE NULL' }
+      { name: 'public_id', definition: 'VARCHAR(100) UNIQUE NULL' },
+      { name: 'hsn_code', definition: 'VARCHAR(50) NULL' }
     ];
     
     const missingLedgerCols = requiredStockCols.filter(c => !existingLedgerCols.has(c.name));
@@ -883,6 +884,12 @@ const ensureCustomerDrawingTable = async () => {
     if (zipPathCols.length === 0) {
       await connection.query("ALTER TABLE customer_drawings ADD COLUMN zip_path VARCHAR(255) NULL");
       console.log('Added zip_path column to customer_drawings');
+    }
+
+    const [deliveryDateCols] = await connection.query("SHOW COLUMNS FROM customer_drawings LIKE 'delivery_date'");
+    if (deliveryDateCols.length === 0) {
+      await connection.query("ALTER TABLE customer_drawings ADD COLUMN delivery_date DATE NULL AFTER hsn_code");
+      console.log('Added delivery_date column to customer_drawings');
     }
 
     console.log('Customer drawings table synchronized');

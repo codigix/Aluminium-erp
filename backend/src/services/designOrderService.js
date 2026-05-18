@@ -46,7 +46,7 @@ const listDesignOrders = async () => {
 
 const createDesignOrder = async (salesOrderId, connection = null, status = 'DRAFT') => {
   const exec = connection || pool;
-  
+
   // Check if design order already exists
   const [existing] = await exec.query('SELECT id FROM design_orders WHERE sales_order_id = ?', [salesOrderId]);
   if (existing.length > 0) {
@@ -54,20 +54,20 @@ const createDesignOrder = async (salesOrderId, connection = null, status = 'DRAF
   }
 
   const designOrderNumber = `DO-${String(salesOrderId).padStart(4, '0')}`;
-  
+
   let query = 'INSERT INTO design_orders (design_order_number, sales_order_id, status';
   let placeholders = '?, ?, ?';
   const params = [designOrderNumber, salesOrderId, status];
-  
+
   if (status === 'IN_DESIGN') {
     query += ', start_date';
     placeholders += ', CURRENT_TIMESTAMP';
   }
-  
+
   query += `) VALUES (${placeholders})`;
-  
+
   const [result] = await exec.execute(query, params);
-  
+
   return result.insertId;
 };
 
@@ -75,27 +75,27 @@ const updateDesignOrderStatus = async (designOrderId, status) => {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
-    
+
     let updateFields = 'status = ?';
     const params = [status];
-    
+
     const upperStatus = (status || '').toUpperCase();
-    
+
     if (upperStatus === 'IN_DESIGN') {
       updateFields += ', start_date = CURRENT_TIMESTAMP';
     } else if (upperStatus === 'COMPLETED') {
       updateFields += ', completion_date = CURRENT_TIMESTAMP';
     }
-    
+
     params.push(designOrderId);
-    
+
     await connection.execute(`UPDATE design_orders SET ${updateFields} WHERE id = ?`, params);
 
     if (upperStatus === 'COMPLETED') {
       const [doRows] = await connection.query('SELECT sales_order_id FROM design_orders WHERE id = ?', [designOrderId]);
       if (doRows.length > 0) {
         const salesOrderId = doRows[0].sales_order_id;
-        
+
         await connection.execute(
           "UPDATE sales_orders SET status = 'DESIGN_Approved ', current_department = 'PROCUREMENT', updated_at = NOW() WHERE id = ?",
           [salesOrderId]

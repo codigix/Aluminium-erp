@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const pool = require('../config/db');
 const bomService = require('./bomService');
 
@@ -39,6 +40,8 @@ const listDrawings = async (search = '', onlyShared = false, clientName = null) 
       d.shipping_address,
       d.excel_path,
       d.zip_path,
+      d.hsn_code,
+      d.delivery_date,
       soi.id as sales_order_item_id,
       soi.status as item_status,
       soi.sales_order_id as sales_order_id,
@@ -78,7 +81,7 @@ const listDrawings = async (search = '', onlyShared = false, clientName = null) 
 
   query += ` ORDER BY d.id DESC, (soi.item_group LIKE '%FG%' OR soi.item_group LIKE '%FINISHED%') DESC, (soi.bom_cost > 0) DESC, soi.id DESC`;
   const [rows] = await pool.query(query, params);
-  
+
   // Enrich with sub-assemblies for items with BOM structure
   const enrichedRows = await Promise.all(rows.map(async (row) => {
     // We attempt to fetch components if we have an item ID OR identifying info for fallback (FG or SA)
@@ -89,10 +92,10 @@ const listDrawings = async (search = '', onlyShared = false, clientName = null) 
           const code = (c.item_code || c.component_code || '').toUpperCase();
           const group = (c.item_group || '').toUpperCase();
           const desc = (c.description || '').toUpperCase();
-          return (code.startsWith('SA-') || code.startsWith('SFG-') || 
-                  group.includes('SA') || group.includes('SUB') || group.includes('ASSEMBLY') ||
-                  desc.includes('ASSEMBLY') || desc.includes('UNIT')) &&
-                 !group.includes('FG');
+          return (code.startsWith('SA-') || code.startsWith('SFG-') ||
+            group.includes('SA') || group.includes('SUB') || group.includes('ASSEMBLY') ||
+            desc.includes('ASSEMBLY') || desc.includes('UNIT')) &&
+            !group.includes('FG');
         });
         return { ...row, sub_assemblies };
       } catch (err) {
@@ -141,6 +144,8 @@ const getDrawingById = async (id) => {
       d.shipping_address,
       d.excel_path,
       d.zip_path,
+      d.hsn_code,
+      d.delivery_date,
       soi.id as sales_order_item_id,
       soi.status as item_status,
       soi.sales_order_id as sales_order_id,
@@ -174,9 +179,9 @@ const getDrawingById = async (id) => {
     LIMIT 1`,
     [id, id]
   );
-  
+
   if (rows.length === 0) return null;
-  
+
   const row = rows[0];
   if (row.sales_order_item_id || row.item_code || row.drawing_no) {
     try {
@@ -185,10 +190,10 @@ const getDrawingById = async (id) => {
         const code = (c.item_code || c.component_code || "").toUpperCase();
         const group = (c.item_group || "").toUpperCase();
         const desc = (c.description || "").toUpperCase();
-        return (code.startsWith("SA-") || code.startsWith("SFG-") || 
-                group.includes("SA") || group.includes("SUB") || group.includes("ASSEMBLY") ||
-                desc.includes("ASSEMBLY") || desc.includes("UNIT")) &&
-               !group.includes("FG");
+        return (code.startsWith("SA-") || code.startsWith("SFG-") ||
+          group.includes("SA") || group.includes("SUB") || group.includes("ASSEMBLY") ||
+          desc.includes("ASSEMBLY") || desc.includes("UNIT")) &&
+          !group.includes("FG");
       });
       row.sub_assemblies = sub_assemblies;
     } catch (err) {
@@ -214,10 +219,10 @@ const getDrawingRevisions = async (drawingNo) => {
 };
 
 const updateDrawing = async (id, data) => {
-  const { 
-    description, revisionNo, drawingPdf, clientName, projectName, contactPerson, 
-    phoneNumber, emailAddress, customerType, gstin, city, state, 
-    billingAddress, shippingAddress, qty, remarks, drawingNo, drawing_type, hsnCode
+  const {
+    description, revisionNo, drawingPdf, clientName, projectName, contactPerson,
+    phoneNumber, emailAddress, customerType, gstin, city, state,
+    billingAddress, shippingAddress, qty, remarks, drawingNo, drawing_type, hsnCode, deliveryDate
   } = data;
 
   const connection = await pool.getConnection();
@@ -256,6 +261,7 @@ const updateDrawing = async (id, data) => {
     if (remarks !== undefined) { updates.push('remarks = ?'); params.push(remarks); }
     if (drawingNo !== undefined) { updates.push('drawing_no = ?'); params.push(drawingNo); }
     if (hsnCode !== undefined) { updates.push('hsn_code = ?'); params.push(hsnCode); }
+    if (deliveryDate !== undefined) { updates.push('delivery_date = ?'); params.push(deliveryDate || null); }
 
     if (!id || id === 'undefined') {
       throw new Error('Drawing ID is required for update');
@@ -285,6 +291,7 @@ const updateDrawing = async (id, data) => {
         if (drawing_type !== undefined) { itemUpdates.push('drawing_type = ?'); itemParams.push(drawing_type); }
         if (drawingPdf !== undefined && drawingPdf !== null) { itemUpdates.push('drawing_pdf = ?'); itemParams.push(drawingPdf); }
         if (qty !== undefined) { itemUpdates.push('quantity = ?'); itemParams.push(qty); }
+        if (deliveryDate !== undefined) { itemUpdates.push('delivery_date = ?'); itemParams.push(deliveryDate || null); }
 
         if (itemUpdates.length > 0) {
           await connection.execute(
@@ -303,6 +310,7 @@ const updateDrawing = async (id, data) => {
         if (state !== undefined) { soUpdates.push('state = ?'); soParams.push(state); }
         if (gstin !== undefined) { soUpdates.push('gstin = ?'); soParams.push(gstin); }
         if (customerType !== undefined) { soUpdates.push('customer_type = ?'); soParams.push(customerType); }
+        if (deliveryDate !== undefined) { soUpdates.push('target_dispatch_date = ?'); soParams.push(deliveryDate || null); }
 
         if (soUpdates.length > 0) {
           await connection.execute(
@@ -313,47 +321,47 @@ const updateDrawing = async (id, data) => {
 
         // Update Company
         if (gstin !== undefined || customerType !== undefined) {
-           const [so] = await connection.query('SELECT company_id FROM sales_orders WHERE id = ?', [item.sales_order_id]);
-           if (so.length > 0) {
-              const companyId = so[0].company_id;
-              const companyUpdates = [];
-              const companyParams = [];
-              if (gstin !== undefined) { companyUpdates.push('gstin = ?'); companyParams.push(gstin); }
-              if (customerType !== undefined) { companyUpdates.push('customer_type = ?'); companyParams.push(customerType); }
-              
-              if (companyUpdates.length > 0) {
-                await connection.execute(
-                  `UPDATE companies SET ${companyUpdates.join(', ')} WHERE id = ?`,
-                  [...companyParams, companyId]
-                );
-              }
-           }
+          const [so] = await connection.query('SELECT company_id FROM sales_orders WHERE id = ?', [item.sales_order_id]);
+          if (so.length > 0) {
+            const companyId = so[0].company_id;
+            const companyUpdates = [];
+            const companyParams = [];
+            if (gstin !== undefined) { companyUpdates.push('gstin = ?'); companyParams.push(gstin); }
+            if (customerType !== undefined) { companyUpdates.push('customer_type = ?'); companyParams.push(customerType); }
+
+            if (companyUpdates.length > 0) {
+              await connection.execute(
+                `UPDATE companies SET ${companyUpdates.join(', ')} WHERE id = ?`,
+                [...companyParams, companyId]
+              );
+            }
+          }
         }
-        
+
         // Update Contact
         if (contactPerson !== undefined || phoneNumber !== undefined || emailAddress !== undefined) {
-           const [so] = await connection.query('SELECT company_id FROM sales_orders WHERE id = ?', [item.sales_order_id]);
-           if (so.length > 0) {
-              const companyId = so[0].company_id;
-              const [contacts] = await connection.query(
-                'SELECT id FROM contacts WHERE company_id = ? AND contact_type = "PRIMARY"',
-                [companyId]
-              );
-              if (contacts.length > 0) {
-                 const contactUpdates = [];
-                 const contactParams = [];
-                 if (contactPerson !== undefined) { contactUpdates.push('name = ?'); contactParams.push(contactPerson); }
-                 if (emailAddress !== undefined) { contactUpdates.push('email = ?'); contactParams.push(emailAddress); }
-                 if (phoneNumber !== undefined) { contactUpdates.push('phone = ?'); contactParams.push(phoneNumber); }
-                 
-                 if (contactUpdates.length > 0) {
-                    await connection.execute(
-                      `UPDATE contacts SET ${contactUpdates.join(', ')} WHERE id = ?`,
-                      [...contactParams, contacts[0].id]
-                    );
-                 }
+          const [so] = await connection.query('SELECT company_id FROM sales_orders WHERE id = ?', [item.sales_order_id]);
+          if (so.length > 0) {
+            const companyId = so[0].company_id;
+            const [contacts] = await connection.query(
+              'SELECT id FROM contacts WHERE company_id = ? AND contact_type = "PRIMARY"',
+              [companyId]
+            );
+            if (contacts.length > 0) {
+              const contactUpdates = [];
+              const contactParams = [];
+              if (contactPerson !== undefined) { contactUpdates.push('name = ?'); contactParams.push(contactPerson); }
+              if (emailAddress !== undefined) { contactUpdates.push('email = ?'); contactParams.push(emailAddress); }
+              if (phoneNumber !== undefined) { contactUpdates.push('phone = ?'); contactParams.push(phoneNumber); }
+
+              if (contactUpdates.length > 0) {
+                await connection.execute(
+                  `UPDATE contacts SET ${contactUpdates.join(', ')} WHERE id = ?`,
+                  [...contactParams, contacts[0].id]
+                );
               }
-           }
+            }
+          }
         }
       }
     }
@@ -369,7 +377,7 @@ const updateDrawing = async (id, data) => {
 
 const updateItemDrawing = async (itemId, data) => {
   const { drawingNo, revisionNo, description, drawingPdf, drawing_type } = data;
-  
+
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
@@ -400,7 +408,7 @@ const updateItemDrawing = async (itemId, data) => {
       if (description !== undefined) { dUpdates.push('description = ?'); dParams.push(description); }
       if (drawing_type !== undefined) { dUpdates.push('drawing_type = ?'); dParams.push(drawing_type); }
       if (drawingPdf !== undefined && drawingPdf !== null) { dUpdates.push('file_path = ?'); dParams.push(drawingPdf); }
-      
+
       if (dUpdates.length > 0) {
         dUpdates.push('updated_at = NOW()');
         await connection.execute(
@@ -428,27 +436,31 @@ const getDrawingsByClient = async (clientName) => {
 };
 
 const createCustomerDrawing = async (data) => {
-  const { 
-    clientName, projectName, drawingNo, revision, qty, description, filePath, fileType, remarks, 
+  const {
+    clientName, projectName, drawingNo, revision, qty, description, filePath, fileType, remarks,
     uploadedBy, contactPerson, phoneNumber, emailAddress,
     customerType, gstin, city, state, billingAddress, shippingAddress,
-    drawing_type, hsnCode
+    drawing_type, hsnCode, deliveryDate
   } = data;
-  
+
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
 
+    const drawingPublicId = crypto.randomUUID();
+    const salesOrderPublicId = crypto.randomUUID();
+
     // 1. Insert into customer_drawings
     const [result] = await connection.execute(
       `INSERT INTO customer_drawings 
-        (client_name, project_name, drawing_no, revision, qty, description, drawing_type, hsn_code, file_path, file_type, remarks, 
+        (public_id, client_name, project_name, drawing_no, revision, qty, description, drawing_type, hsn_code, delivery_date, file_path, file_type, remarks, 
          uploaded_by, contact_person, phone, email, 
          customer_type, gstin, city, state, billing_address, shipping_address, excel_path, zip_path, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')`
       ,
       [
-        clientName || null, projectName || null, drawingNo, revision || null, qty || 1, description || null, drawing_type || 'Part', hsnCode || null, filePath, fileType, remarks || null, 
+        drawingPublicId,
+        clientName || null, projectName || null, drawingNo, revision || null, qty || 1, description || null, drawing_type || 'Part', hsnCode || null, deliveryDate || null, filePath, fileType, remarks || null,
         uploadedBy || 'Sales', contactPerson || null, phoneNumber || null, emailAddress || null,
         customerType || null, gstin || null, city || null, state || null, billingAddress || null, shippingAddress || null,
         fileType === 'XLSX' || fileType === 'XLS' ? filePath : null,
@@ -462,7 +474,7 @@ const createCustomerDrawing = async (data) => {
       'SELECT id FROM companies WHERE company_name = ?',
       [clientName]
     );
-    
+
     let companyId;
     if (companies.length > 0) {
       companyId = companies[0].id;
@@ -497,15 +509,17 @@ const createCustomerDrawing = async (data) => {
 
     // 3. Create Sales Order Requirement
     const [soResult] = await connection.execute(
-      `INSERT INTO sales_orders (company_id, project_name, drawing_required, production_priority, status, current_department, request_accepted, billing_address, shipping_address, city, state, gstin, customer_type, excel_path, zip_path)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO sales_orders (public_id, company_id, project_name, drawing_required, production_priority, target_dispatch_date, status, current_department, request_accepted, billing_address, shipping_address, city, state, gstin, customer_type, excel_path, zip_path)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        companyId, 
-        projectName || `Design Review - Drawing ${drawingNo} for ${clientName}`, 
-        1, 
-        'NORMAL', 
-        'CREATED', 
-        'SALES', 
+        salesOrderPublicId,
+        companyId,
+        projectName || `Design Review - Drawing ${drawingNo} for ${clientName}`,
+        1,
+        'NORMAL',
+        deliveryDate || null,
+        'CREATED',
+        'SALES',
         0,
         billingAddress || null,
         shippingAddress || null,
@@ -521,9 +535,9 @@ const createCustomerDrawing = async (data) => {
 
     // 4. Create Sales Order Item
     await connection.execute(
-      `INSERT INTO sales_order_items (sales_order_id, drawing_no, drawing_id, revision_no, drawing_pdf, description, drawing_type, quantity, unit, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')`,
-      [salesOrderId, drawingNo, drawingId, revision || '0', filePath, description || 'Customer Drawing', drawing_type || 'Part', qty || 1, 'NOS']
+      `INSERT INTO sales_order_items (sales_order_id, drawing_no, drawing_id, revision_no, drawing_pdf, description, drawing_type, quantity, unit, delivery_date, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')`,
+      [salesOrderId, drawingNo, drawingId, revision || '0', filePath, description || 'Customer Drawing', drawing_type || 'Part', qty || 1, 'NOS', deliveryDate || null]
     );
 
     await connection.commit();
@@ -543,23 +557,27 @@ const createBatchCustomerDrawings = async (batchData, batchInfo = {}) => {
     let count = 0;
 
     for (const data of batchData) {
-      const { 
-        clientName, projectName, drawingNo, revision, qty, description, filePath, fileType, remarks, 
+      const {
+        clientName, projectName, drawingNo, revision, qty, description, filePath, fileType, remarks,
         uploadedBy, contactPerson, phoneNumber, emailAddress,
         customerType, gstin, city, state, billingAddress, shippingAddress,
-        drawing_type, hsnCode
+        drawing_type, hsnCode, deliveryDate
       } = data;
+
+      const drawingPublicId = crypto.randomUUID();
+      const salesOrderPublicId = crypto.randomUUID();
 
       // 1. Insert into customer_drawings
       const [result] = await connection.execute(
         `INSERT INTO customer_drawings 
-          (client_name, project_name, drawing_no, revision, qty, description, drawing_type, hsn_code, file_path, file_type, remarks, 
+          (public_id, client_name, project_name, drawing_no, revision, qty, description, drawing_type, hsn_code, delivery_date, file_path, file_type, remarks, 
            uploaded_by, contact_person, phone, email, 
            customer_type, gstin, city, state, billing_address, shipping_address, excel_path, zip_path, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')`
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')`
         ,
         [
-          clientName || null, projectName || null, drawingNo, revision || null, qty || 1, description || null, drawing_type || 'Part', hsnCode || null, filePath, fileType, remarks || null, 
+          drawingPublicId,
+          clientName || null, projectName || null, drawingNo, revision || null, qty || 1, description || null, drawing_type || 'Part', hsnCode || null, deliveryDate || null, filePath, fileType, remarks || null,
           uploadedBy || 'Sales', contactPerson || null, phoneNumber || null, emailAddress || null,
           customerType || null, gstin || null, city || null, state || null, billingAddress || null, shippingAddress || null,
           batchInfo.excelPath || null,
@@ -573,7 +591,7 @@ const createBatchCustomerDrawings = async (batchData, batchInfo = {}) => {
         'SELECT id FROM companies WHERE company_name = ?',
         [clientName]
       );
-      
+
       let companyId;
       if (companies.length > 0) {
         companyId = companies[0].id;
@@ -602,15 +620,17 @@ const createBatchCustomerDrawings = async (batchData, batchInfo = {}) => {
 
       // 3. Create Sales Order Requirement
       const [soResult] = await connection.execute(
-        `INSERT INTO sales_orders (company_id, project_name, drawing_required, production_priority, status, current_department, request_accepted, billing_address, shipping_address, city, state, gstin, customer_type, excel_path, zip_path)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO sales_orders (public_id, company_id, project_name, drawing_required, production_priority, target_dispatch_date, status, current_department, request_accepted, billing_address, shipping_address, city, state, gstin, customer_type, excel_path, zip_path)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
-          companyId, 
-          projectName || `Design Review - Drawing ${drawingNo} for ${clientName}`, 
-          1, 
-          'NORMAL', 
-          'CREATED', 
-          'SALES', 
+          salesOrderPublicId,
+          companyId,
+          projectName || `Design Review - Drawing ${drawingNo} for ${clientName}`,
+          1,
+          'NORMAL',
+          deliveryDate || null,
+          'CREATED',
+          'SALES',
           0,
           billingAddress || null,
           shippingAddress || null,
@@ -626,11 +646,11 @@ const createBatchCustomerDrawings = async (batchData, batchInfo = {}) => {
 
       // 4. Create Sales Order Item
       await connection.execute(
-        `INSERT INTO sales_order_items (sales_order_id, drawing_no, drawing_id, revision_no, drawing_pdf, description, drawing_type, quantity, unit, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')`,
-        [salesOrderId, drawingNo, drawingId, revision || '0', filePath, description || 'Customer Drawing', drawing_type || 'Part', qty || 1, 'NOS']
+        `INSERT INTO sales_order_items (sales_order_id, drawing_no, drawing_id, revision_no, drawing_pdf, description, drawing_type, quantity, unit, delivery_date, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')`,
+        [salesOrderId, drawingNo, drawingId, revision || '0', filePath, description || 'Customer Drawing', drawing_type || 'Part', qty || 1, 'NOS', deliveryDate || null]
       );
-      
+
       count++;
     }
 
@@ -698,7 +718,7 @@ const internalDeleteDrawing = async (connection, id) => {
   // 2. Delete from tables that don't have ON DELETE CASCADE for sales_order_item_id
   if (soItemIds.length > 0) {
     const placeholders = soItemIds.map(() => '?').join(',');
-    
+
     // Delete from quotation_requests
     await connection.query(
       `DELETE FROM quotation_requests WHERE sales_order_item_id IN (${placeholders})`,
@@ -779,22 +799,22 @@ const shareWithDesign = async (id) => {
 const shareDrawingsBulk = async (ids) => {
   if (!ids || ids.length === 0) return;
   const placeholders = ids.map(() => "?").join(",");
-  
+
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
-    
+
     // 1. Update customer_drawings status
     await connection.execute(
       `UPDATE customer_drawings SET status = 'SHARED', shared_with_design = 1, shared_at = CURRENT_TIMESTAMP WHERE id IN (${placeholders})`,
       ids
     );
-    
+
     // 2. Update linked sales_order_items status to 'SHARED' (or DESIGN_IN_REVIEW)
     // First find the drawing_nos for these IDs
     const [drawings] = await connection.query(`SELECT drawing_no FROM customer_drawings WHERE id IN (${placeholders})`, ids);
     const drawingNos = drawings.map(d => d.drawing_no);
-    
+
     if (drawingNos.length > 0) {
       const dwgPlaceholders = drawingNos.map(() => "?").join(",");
       await connection.execute(
@@ -802,7 +822,7 @@ const shareDrawingsBulk = async (ids) => {
         drawingNos
       );
     }
-    
+
     await connection.commit();
   } catch (error) {
     await connection.rollback();
@@ -820,6 +840,7 @@ const getApprovedDrawings = async () => {
        d.client_name,
        MAX(d.file_path) as file_path,
        MAX(d.description) as drawing_description,
+       MAX(d.hsn_code) as hsn_code,
        MAX(latest_bom.id) as id,
        MAX(latest_bom.bom_cost) as bom_cost, 
        MAX(latest_bom.item_group) as item_group, 
@@ -861,9 +882,9 @@ const getApprovedDrawings = async () => {
         const sub_assemblies = components.filter(c => {
           const code = (c.item_code || '').toUpperCase();
           const group = (c.item_group || '').toUpperCase();
-          return (code.startsWith('SA-') || code.startsWith('SFG-') || 
-                  group.includes('SA') || group.includes('SUB') || group.includes('ASSEMBLY')) &&
-                 !group.includes('FG');
+          return (code.startsWith('SA-') || code.startsWith('SFG-') ||
+            group.includes('SA') || group.includes('SUB') || group.includes('ASSEMBLY')) &&
+            !group.includes('FG');
         });
         return { ...row, sub_assemblies };
       } catch (err) {
@@ -889,6 +910,7 @@ module.exports = {
   createBatchCustomerDrawings,
   deleteCustomerDrawing,
   deleteDrawingsBulk,
+  deleteClientDrawings,
   shareWithDesign,
   shareDrawingsBulk,
   getApprovedDrawings

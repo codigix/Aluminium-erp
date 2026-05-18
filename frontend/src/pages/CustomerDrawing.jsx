@@ -30,6 +30,7 @@ const CustomerDrawing = () => {
   const [editingRequirementId, setEditingRequirementId] = useState(null);
   const [editingRequirementData, setEditingRequirementData] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [uploadMode, setUploadMode] = useState('bulk'); // 'bulk' or 'manual'
   const [clientLocked, setClientLocked] = useState(false);
@@ -65,6 +66,7 @@ const CustomerDrawing = () => {
     remarks: '',
     drawing_type: 'Part',
     hsn_code: '',
+    delivery_date: '',
     drawing_pdf: null,
     file_path: ''
   });
@@ -112,11 +114,6 @@ const CustomerDrawing = () => {
       }
     },
     {
-      label: 'Delivery Date',
-      key: 'delivery_date',
-      render: (val) => val ? new Date(val).toLocaleDateString() : '—'
-    },
-    {
       label: 'Status',
       key: 'status',
       render: (val) => <StatusBadge status={val || 'PENDING'} />
@@ -150,16 +147,16 @@ const CustomerDrawing = () => {
             <Edit2 size={15} />
           </button>
           {/* Unify Send to Design buttons: Show if there are unshared drawings OR if the requirement status is CREATED */}
-          {(drawings.some(d => (d.client_name === (row.client_name || row.company_name)) && (d.status !== 'SHARED')) || 
+          {(drawings.some(d => (d.client_name === (row.client_name || row.company_name)) && (d.status !== 'SHARED')) ||
             row.status?.toUpperCase() === 'CREATED') && (
-            <button
-              onClick={() => handleShareClientGroupWithDesign(row.client_name || row.company_name, row)}
-              className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded transition-all"
-              title="Send to Design"
-            >
-              <Send size={15} />
-            </button>
-          )}
+              <button
+                onClick={() => handleShareClientGroupWithDesign(row.client_name || row.company_name, row)}
+                className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded transition-all"
+                title="Send to Design"
+              >
+                <Send size={15} />
+              </button>
+            )}
           <button
             onClick={() => handleDeleteRequirement(row.company_id, row.client_name)}
             className="p-1.5 text-rose-600 hover:bg-rose-50 rounded transition-all"
@@ -382,7 +379,7 @@ const CustomerDrawing = () => {
   const groupedDrawings = drawings.reduce((acc, drawing) => {
     const client = drawing.client_name || 'Unassigned';
     if (!acc[client]) acc[client] = [];
-    
+
     // Ensure uniqueness by drawing_master_id
     if (!acc[client].some(d => d.drawing_master_id === drawing.drawing_master_id)) {
       acc[client].push(drawing);
@@ -432,7 +429,7 @@ const CustomerDrawing = () => {
       });
       if (!response.ok) throw new Error('Failed to fetch requirement details');
       const data = await response.json();
-      
+
       setFormMode('edit');
       setEditingRequirementId(data.id);
       setEditingRequirementData(data);
@@ -467,7 +464,7 @@ const CustomerDrawing = () => {
         if (!acc[clientName]) {
           // Find first item with contact info if available
           const firstDrawingWithContact = so.items?.find(item => item.contact_person || item.phone || item.email);
-          
+
           acc[clientName] = {
             ...so,
             client_name: clientName,
@@ -584,6 +581,8 @@ const CustomerDrawing = () => {
         setFormMode('add');
         setEditingRequirementId(null);
         setEditingRequirementData(null);
+        fetchDrawings(searchTerm);
+        fetchRequirements();
       } else if (currentPath.includes(`${deptPrefix}/customer-drawing/addclient`)) {
         setFormMode('add');
         setEditingRequirementId(null);
@@ -650,7 +649,7 @@ const CustomerDrawing = () => {
       setDeletedDrawingIds([]);
       const row = editingRequirementData;
       const company = companies.find(c => c.company_name === (row.client_name || row.company_name));
-      
+
       const manualDrawings = (row.original_items || []).map(item => ({
         id: item.id || Date.now() + Math.random(),
         drawing_id: item.drawing_id || item.drawing_master_id,
@@ -658,6 +657,8 @@ const CustomerDrawing = () => {
         revision: item.revision || item.revision_no || '',
         qty: item.quantity || item.qty || 1,
         description: item.description || '',
+        hsn_code: item.hsn_code || '',
+        delivery_date: item.delivery_date ? new Date(item.delivery_date).toISOString().split('T')[0] : '',
         drawing_type: item.drawing_type || 'Part',
         remarks: item.remarks || '',
         file: null,
@@ -758,12 +759,14 @@ const CustomerDrawing = () => {
       state: drawing.state || (company ? (company.addresses?.find(a => a.address_type === 'BILLING')?.state || '') : ''),
       billing_address: drawing.billing_address || billingAddressLine,
       shipping_address: drawing.shipping_address || shippingAddressLine,
+      hsn_code: drawing.hsn_code || '',
+      delivery_date: drawing.delivery_date ? new Date(drawing.delivery_date).toISOString().split('T')[0] : '',
       qty: drawing.qty || 1,
       remarks: drawing.remarks || '',
       drawing_pdf: null,
       file_path: drawing.file_path || drawing.drawing_pdf || ''
     };
-    
+
     setEditData(newEditData);
     setModalMode(mode);
     setShowEditModal(true);
@@ -803,6 +806,7 @@ const CustomerDrawing = () => {
       formData.append('shippingAddress', editData.shipping_address);
       formData.append('qty', editData.qty);
       formData.append('hsn_code', editData.hsn_code || '');
+      formData.append('delivery_date', editData.delivery_date || '');
       formData.append('remarks', editData.remarks);
 
       if (editData.drawing_pdf) {
@@ -897,30 +901,35 @@ const CustomerDrawing = () => {
       remarks: '',
       uploadMode: 'bulk',
       manualDrawings: [
-        { id: Date.now() + Math.random(), drawing_no: '', revision: '', qty: 1, description: '', hsn_code: '', drawing_type: 'Part', file: null, remarks: '' }
+        { id: Date.now() + Math.random(), drawing_no: '', revision: '', qty: 1, description: '', hsn_code: '', delivery_date: '', drawing_type: 'Part', file: null, remarks: '' }
       ],
     },
     validationSchema,
     onSubmit: async (values) => {
       console.log('Submitting Formik values:', values);
       try {
-        setLoading(true);
+        let successCount = 0;
+        setSubmitting(true);
         if (values.uploadMode === 'bulk') {
           const result = await saveSingleDrawing(values, false);
           if (result) {
             successToast(result.isExcelUpload ? `${result.count} Excel drawings imported successfully` : 'Drawing added successfully');
+            successCount = result.isExcelUpload ? (result.count || 1) : 1;
             formik.resetForm();
+            setShowFormModal(false);
+            setClientLocked(false);
+            if (window.location.pathname !== `${deptPrefix}/customer-drawing`) {
+              window.history.pushState({}, '', `${deptPrefix}/customer-drawing`);
+            }
           }
         } else {
-          let successCount = 0;
-          
           if (formMode === 'edit') {
             // Handle deletions first
             if (deletedDrawingIds.length > 0) {
               const token = localStorage.getItem('authToken');
               await fetch(`${API_BASE}/drawings/delete/bulk`, {
                 method: 'POST',
-                headers: { 
+                headers: {
                   'Authorization': `Bearer ${token}`,
                   'Content-Type': 'application/json'
                 },
@@ -932,7 +941,7 @@ const CustomerDrawing = () => {
             // Update existing requirement logic
             for (const drawing of values.manualDrawings) {
               if (!drawing.drawing_no) continue;
-              
+
               // If it has a file, it might be a new drawing added during edit OR an update with new file
               // If it has id and no file, it's just updating metadata
               if (drawing.id && !String(drawing.id).includes('.')) {
@@ -955,6 +964,7 @@ const CustomerDrawing = () => {
                 formData.append('qty', drawing.qty || 1);
                 formData.append('description', drawing.description || '');
                 formData.append('hsn_code', drawing.hsn_code || '');
+                formData.append('delivery_date', drawing.delivery_date || '');
                 formData.append('drawing_type', drawing.drawing_type || 'Part');
                 formData.append('remarks', drawing.remarks || '');
                 if (drawing.file) {
@@ -993,20 +1003,20 @@ const CustomerDrawing = () => {
 
             if (successCount > 0) {
               successToast(`${successCount} drawings added successfully`);
-              formik.setFieldValue('manualDrawings', [{ id: Date.now(), drawing_no: '', revision: '', qty: 1, description: '', hsn_code: '', drawing_type: 'Part', file: null, remarks: '' }]);
-              setClientLocked(true);
             } else {
               warningToast('No drawings were added. Please fill in Drawing # and select a file for at least one row.');
             }
           }
         }
-        
-        if (formMode === 'edit') {
-           setShowFormModal(false);
-           setFormMode('add');
-           setEditingRequirementId(null);
-           setEditingRequirementData(null);
-           if (window.location.pathname !== `${deptPrefix}/customer-drawing`) {
+
+        if (formMode === 'edit' || successCount > 0) {
+          setShowFormModal(false);
+          setFormMode('add');
+          setEditingRequirementId(null);
+          setEditingRequirementData(null);
+          setClientLocked(false);
+          formik.resetForm();
+          if (window.location.pathname !== `${deptPrefix}/customer-drawing`) {
             window.history.pushState({}, '', `${deptPrefix}/customer-drawing`);
           }
         }
@@ -1016,7 +1026,7 @@ const CustomerDrawing = () => {
       } catch (error) {
         errorToast(error.message);
       } finally {
-        setLoading(false);
+        setSubmitting(false);
       }
     },
   });
@@ -1025,6 +1035,17 @@ const CustomerDrawing = () => {
   useEffect(() => {
     formik.setFieldValue('uploadMode', uploadMode);
   }, [uploadMode]);
+
+  // Reset form to clear stale/old data when entering add mode or closing form modal
+  useEffect(() => {
+    if (!showFormModal) {
+      formik.resetForm();
+      setClientLocked(false);
+    } else if (formMode === 'add') {
+      formik.resetForm();
+      setClientLocked(false);
+    }
+  }, [showFormModal, formMode]);
 
   const [clientSuggestions, setClientSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -1055,13 +1076,13 @@ const CustomerDrawing = () => {
   };
 
   const addManualDrawingRow = () => {
-    const newRow = { id: Date.now() + Math.random(), drawing_no: '', revision: '', qty: 1, description: '', hsn_code: '', drawing_type: 'Part', file: null, remarks: '' };
+    const newRow = { id: Date.now() + Math.random(), drawing_no: '', revision: '', qty: 1, description: '', hsn_code: '', delivery_date: '', drawing_type: 'Part', file: null, remarks: '' };
     formik.setFieldValue('manualDrawings', [newRow, ...formik.values.manualDrawings]);
   };
 
   const removeManualDrawingRow = (id) => {
     const drawingToRemove = formik.values.manualDrawings.find(d => d.id === id);
-    
+
     // Track for deletion if it's an existing drawing (not a temp one)
     if (drawingToRemove && drawingToRemove.id && !String(drawingToRemove.id).includes('.')) {
       setDeletedDrawingIds(prev => [...prev, drawingToRemove.drawing_id || drawingToRemove.id]);
@@ -1073,7 +1094,7 @@ const CustomerDrawing = () => {
     } else {
       // If it's the last row, clear it instead of removing it
       formik.setFieldValue('manualDrawings', [
-        { id: Date.now() + Math.random(), drawing_no: '', revision: '', qty: 1, description: '', hsn_code: '', drawing_type: 'Part', file: null, remarks: '' }
+        { id: Date.now() + Math.random(), drawing_no: '', revision: '', qty: 1, description: '', hsn_code: '', delivery_date: '', drawing_type: 'Part', file: null, remarks: '' }
       ]);
     }
   };
@@ -1160,6 +1181,7 @@ const CustomerDrawing = () => {
       formData.append('qty', drawingData.qty || 1);
       formData.append('description', drawingData.description || '');
       formData.append('hsn_code', drawingData.hsn_code || '');
+      formData.append('delivery_date', drawingData.delivery_date || '');
       formData.append('drawing_type', drawingData.drawing_type || 'Part');
       formData.append('remarks', drawingData.remarks || '');
       formData.append('fileType', fileExt);
@@ -1249,8 +1271,13 @@ const CustomerDrawing = () => {
     { label: 'Project Name', key: 'project_name' },
     { label: 'Description', key: 'drawing_description' },
     { label: 'HSN Code', key: 'hsn_code' },
-    { 
-      label: 'Type', 
+    {
+      label: 'Item Delivery',
+      key: 'delivery_date',
+      render: (val) => val ? new Date(val).toLocaleDateString('en-GB') : '—'
+    },
+    {
+      label: 'Type',
       key: 'drawing_type',
       render: (val) => (
         <span className={`px-2 py-0.5 rounded text-xs border ${val === 'Assembly' ? 'bg-purple-100 text-purple-700 border-purple-200' : 'bg-blue-100 text-blue-700 border-blue-200'}`}>
@@ -1258,9 +1285,9 @@ const CustomerDrawing = () => {
         </span>
       )
     },
-    { 
-      label: 'Revision', 
-      key: 'revision', 
+    {
+      label: 'Revision',
+      key: 'revision',
       className: 'text-center',
       render: (val, row) => (
         <span className="inline-flex items-center px-2 py-0.5 rounded text-xs  bg-slate-100 text-slate-700 border border-slate-200">
@@ -1269,9 +1296,9 @@ const CustomerDrawing = () => {
       )
     },
     { label: 'Qty', key: 'qty', className: 'text-center text-indigo-600 ', render: (val) => val || 1 },
-    { 
-      label: 'File', 
-      key: 'file_path', 
+    {
+      label: 'File',
+      key: 'file_path',
       className: 'text-center',
       render: (val, row) => (val || row.drawing_pdf) ? (
         <button
@@ -1288,21 +1315,21 @@ const CustomerDrawing = () => {
   ];
 
   const revisionColumns = [
-    { 
-      label: 'Revision', 
+    {
+      label: 'Revision',
       key: 'revision_no',
       render: (val) => (
         <span className="p-1 bg-indigo-100 text-indigo-700 rounded text-xs ">{val || '0'}</span>
       )
     },
-    { 
-      label: 'Date', 
+    {
+      label: 'Date',
       key: 'created_at',
       render: (val) => new Date(val).toLocaleDateString('en-IN')
     },
     { label: 'Description', key: 'description' },
-    { 
-      label: 'File', 
+    {
+      label: 'File',
       key: 'drawing_pdf',
       className: 'text-center',
       render: (val, row) => val ? (
@@ -1315,8 +1342,8 @@ const CustomerDrawing = () => {
         </button>
       ) : <span className="text-slate-400">—</span>
     },
-    { 
-      label: 'Reference', 
+    {
+      label: 'Reference',
       key: 'po_number',
       className: 'text-right',
       render: (val, row) => (
@@ -1329,8 +1356,8 @@ const CustomerDrawing = () => {
   ];
 
   const approvedItemColumns = [
-    { 
-      label: 'Drawing', 
+    {
+      label: 'Drawing',
       key: 'drawing_no',
       render: (val, row) => (
         <div className="flex items-center gap-2 ">
@@ -1350,8 +1377,8 @@ const CustomerDrawing = () => {
     { label: 'Description', key: 'description' },
     { label: 'Qty', key: 'quantity', className: 'text-center text-slate-900 ' },
     { label: 'Unit', key: 'unit' },
-    { 
-      label: 'Price', 
+    {
+      label: 'Price',
       key: 'price',
       className: 'text-right',
       render: (_, row) => (
@@ -1378,7 +1405,7 @@ const CustomerDrawing = () => {
     }
 
     const title = isCreatedStatus ? 'Send Requirement to Design?' : 'Send Drawings to Design?';
-    const text = unsharedDrawings.length > 0 
+    const text = unsharedDrawings.length > 0
       ? `Send all ${unsharedDrawings.length} unshared drawings to Design Department for review?`
       : `Move this requirement to Design Department for review?`;
 
@@ -1484,7 +1511,7 @@ const CustomerDrawing = () => {
   const handleViewClientDrawings = (client) => {
     // Handle both string (clientName) or object (row)
     const name = typeof client === 'string' ? client : (client.client_name || client.company_name);
-    
+
     // Use a case-insensitive search if direct match fails
     let drawingsForClient = groupedDrawings[name] || [];
     if (drawingsForClient.length === 0 && name) {
@@ -1541,7 +1568,7 @@ const CustomerDrawing = () => {
       {/* Header Section */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          
+
           <div>
             <h1 className="text-xl  text-slate-900 ">Customer Drawings</h1>
             <p className="text-xs text-slate-500 ">Manage customer reference drawings and technical documentation</p>
@@ -1576,7 +1603,7 @@ const CustomerDrawing = () => {
       </div>
 
       {/* SEARCH & FILTER SECTION */}
-      
+
 
       {/* SECTION 2: CLIENT REQUIREMENTS TABLE */}
       <Card className="overflow-hidden">
@@ -1603,6 +1630,8 @@ const CustomerDrawing = () => {
           if (window.location.pathname !== `${deptPrefix}/customer-drawing`) {
             window.history.pushState({}, '', `${deptPrefix}/customer-drawing`);
           }
+          fetchDrawings(searchTerm);
+          fetchRequirements();
         }}
         title={modalMode === 'view' ? 'View Drawing Details' : 'Edit Drawing'}
         size="4xl"
@@ -1725,7 +1754,7 @@ const CustomerDrawing = () => {
           <div className="mt-4">
             <h3 className="text-xs  text-slate-700 mb-2">Drawing Details</h3>
             <div className="bg-slate-50 p-2 rounded border border-slate-200 space-y-2">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-2">
                 <div>
                   <label className="block text-xs text-slate-700 mb-1">Drawing # *</label>
                   <input
@@ -1753,6 +1782,16 @@ const CustomerDrawing = () => {
                     className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
                     value={editData.hsn_code}
                     onChange={(e) => setEditData({ ...editData, hsn_code: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-700 mb-1">Item Delivery</label>
+                  <input
+                    type="date"
+                    disabled={modalMode === 'view'}
+                    className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+                    value={editData.delivery_date || ''}
+                    onChange={(e) => setEditData({ ...editData, delivery_date: e.target.value })}
                   />
                 </div>
                 <div>
@@ -2020,6 +2059,8 @@ const CustomerDrawing = () => {
           if (location.pathname !== `${deptPrefix}/customer-drawing`) {
             window.history.pushState({}, '', `${deptPrefix}/customer-drawing`);
           }
+          fetchDrawings(searchTerm);
+          fetchRequirements();
         }}
         title={formMode === 'edit' ? 'Update Client Requirement' : 'Add Client Requirement'}
       >
@@ -2275,6 +2316,7 @@ const CustomerDrawing = () => {
                       <th className="p-2 text-left text-xs   text-slate-500  ">Drawing # *</th>
                       <th className="p-2 text-left text-xs   text-slate-500  ">Description</th>
                       <th className="p-2 text-left text-xs   text-slate-500  ">HSN Code</th>
+                      <th className="p-2 text-left text-xs   text-slate-500  ">Item Delivery</th>
                       <th className="p-2 text-left text-xs   text-slate-500   w-16">Rev</th>
                       <th className="p-2 text-left text-xs   text-slate-500   w-16">Qty</th>
                       <th className="p-2 text-left text-xs   text-slate-500  ">File *</th>
@@ -2315,6 +2357,16 @@ const CustomerDrawing = () => {
                             placeholder="HSN Code"
                             className="w-full px-2 py-1 border border-slate-300 rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500"
                             value={drawing.hsn_code}
+                            onChange={formik.handleChange}
+                            onBlur={formik.handleBlur}
+                          />
+                        </td>
+                        <td className="px-2 py-2">
+                          <input
+                            type="date"
+                            name={`manualDrawings[${index}].delivery_date`}
+                            className="w-full px-2 py-1 border border-slate-300 rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500"
+                            value={drawing.delivery_date}
                             onChange={formik.handleChange}
                             onBlur={formik.handleBlur}
                           />
@@ -2476,12 +2528,12 @@ const CustomerDrawing = () => {
             </button>
             <button
               type="submit"
-              disabled={loading}
+              disabled={submitting}
               className="px-6 py-2 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700 disabled:opacity-50 transition-colors flex items-center gap-2"
             >
-              {loading && <Loader2 className="w-3 h-3 animate-spin" />}
+              {submitting && <Loader2 className="w-3 h-3 animate-spin" />}
               <Send className="w-3 h-3" />
-              {formMode === 'edit' ? (loading ? 'Updating...' : 'Update Requirement') : (uploadMode === 'bulk' ? 'Upload Excel' : 'Add Requirements')}
+              {formMode === 'edit' ? (submitting ? 'Updating...' : 'Update Requirement') : (uploadMode === 'bulk' ? 'Upload Excel' : 'Add Requirements')}
             </button>
           </div>
         </form>
@@ -2495,6 +2547,8 @@ const CustomerDrawing = () => {
           if (window.location.pathname !== `${deptPrefix}/customer-drawing`) {
             window.history.pushState({}, '', `${deptPrefix}/customer-drawing`);
           }
+          fetchDrawings(searchTerm);
+          fetchRequirements();
         }}
         title={viewingClient ? `Drawings for ${viewingClient.name}` : 'Client Drawings'}
         width="max-w-5xl"
@@ -2517,6 +2571,8 @@ const CustomerDrawing = () => {
                   if (window.location.pathname !== `${deptPrefix}/customer-drawing`) {
                     window.history.pushState({}, '', `${deptPrefix}/customer-drawing`);
                   }
+                  fetchDrawings(searchTerm);
+                  fetchRequirements();
                 }}
                 className="px-6 py-2 bg-slate-100 text-slate-700 rounded-md text-xs font-semibold hover:bg-slate-200 transition-colors"
               >

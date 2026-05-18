@@ -74,7 +74,7 @@ const listSalesOrders = async (includeWithoutPo = true) => {
   
   for (const order of rows) {
     const [items] = await pool.query(
-      `SELECT soi.*, soi.quantity as design_qty, cd.file_path 
+      `SELECT soi.*, soi.quantity as design_qty, cd.file_path, cd.hsn_code, COALESCE(soi.delivery_date, cd.delivery_date) as delivery_date 
        FROM sales_order_items soi
        LEFT JOIN customer_drawings cd ON soi.drawing_id = cd.id
        WHERE soi.sales_order_id = ?`,
@@ -113,7 +113,7 @@ const getSalesOrderById = async (id) => {
   order.client = order.company_name;
 
   const [items] = await pool.query(
-    `SELECT soi.*, cd.file_path 
+    `SELECT soi.*, cd.file_path, cd.hsn_code, COALESCE(soi.delivery_date, cd.delivery_date) as delivery_date 
      FROM sales_order_items soi
      LEFT JOIN customer_drawings cd ON soi.drawing_id = cd.id
      WHERE soi.sales_order_id = ?`,

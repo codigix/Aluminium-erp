@@ -162,7 +162,7 @@ const getStockLedger = async (itemCode = null, startDate = null, endDate = null)
 const getStockBalance = async (drawingNo = null, includeAll = false) => {
   let query = `
     SELECT 
-      MIN(sb.id) as id,
+      MAX(sb.id) as id,
       MAX(sb.public_id) as public_id,
       sb.item_code,
       MAX(sb.item_description) as item_description,
@@ -187,6 +187,7 @@ const getStockBalance = async (drawingNo = null, includeAll = false) => {
       MAX(sb.outer_diameter) as outer_diameter,
       MAX(sb.density) as density,
       MAX(sb.warehouse) as warehouse,
+      COALESCE(MAX(sb.hsn_code), MAX(d.hsn_code)) as hsn_code,
       MAX(sb.last_updated) as last_updated,
       SUM(sb.current_balance) as current_balance,
       COALESCE(MAX(sl.accepted_qty), 0) as accepted_qty,
@@ -208,6 +209,12 @@ const getStockBalance = async (drawingNo = null, includeAll = false) => {
       FROM purchase_order_items
       GROUP BY item_code
     ) po ON sb.item_code = po.item_code
+    LEFT JOIN (
+      SELECT drawing_no, MAX(hsn_code) as hsn_code
+      FROM customer_drawings
+      WHERE drawing_no IS NOT NULL AND drawing_no != ''
+      GROUP BY drawing_no
+    ) d ON sb.drawing_no = d.drawing_no
   `;
 
   const params = [];
@@ -226,7 +233,7 @@ const getStockBalance = async (drawingNo = null, includeAll = false) => {
     query += " WHERE " + conditions.join(" AND ");
   }
 
-  query += ` GROUP BY sb.item_code ORDER BY last_updated DESC `;
+  query += ` GROUP BY sb.item_code ORDER BY id DESC `;
 
   const [balances] = await pool.query(query, params);
 
@@ -261,15 +268,17 @@ const getStockBalance = async (drawingNo = null, includeAll = false) => {
     outer_diameter: balance.outer_diameter,
     density: balance.density,
     warehouse: balance.warehouse,
+    hsn_code: balance.hsn_code,
     last_updated: balance.last_updated
   }));
 };
 
 const getStockBalanceByItem = async (itemCode) => {
   const [balance] = await pool.query(`
-    SELECT id, item_code, item_description, material_name, material_type, unit, current_balance, valuation_rate as avg_cost, drawing_no, drawing_id, last_updated 
-    FROM stock_balance 
-    WHERE item_code = ?
+    SELECT sb.id, sb.item_code, sb.item_description, sb.material_name, sb.material_type, sb.unit, sb.current_balance, sb.valuation_rate as avg_cost, sb.drawing_no, sb.drawing_id, 
+           COALESCE(sb.hsn_code, (SELECT MAX(hsn_code) FROM customer_drawings WHERE drawing_no = sb.drawing_no)) as hsn_code, sb.last_updated 
+    FROM stock_balance sb
+    WHERE sb.item_code = ?
   `, [itemCode]);
 
   if (balance.length === 0) {
@@ -292,6 +301,7 @@ const getStockBalanceByItem = async (itemCode) => {
     material_type: balance[0].material_type,
     drawing_no: balance[0].drawing_no,
     drawing_id: balance[0].drawing_id,
+    hsn_code: balance[0].hsn_code,
     po_qty: poQty,
     received_qty: details.received_qty,
     accepted_qty: details.accepted_qty,
@@ -738,8 +748,8 @@ const createItem = async (itemData) => {
         weight_per_unit, weight_uom, drawing_no, 
         revision, material_grade,
         material_id, shape_id, length, width, thickness, 
-        diameter, outer_diameter, density
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        diameter, outer_diameter, density, hsn_code
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       itemCode,
       itemData.itemName,
@@ -760,7 +770,8 @@ const createItem = async (itemData) => {
       itemData.thickness || null,
       itemData.diameter || null,
       itemData.outerDiameter || null,
-      itemData.density || null
+      itemData.density || null,
+      itemData.hsnCode || null
     ]);
 
     await connection.commit();
@@ -788,7 +799,7 @@ const updateItem = async (id, itemData) => {
         weight_per_unit = ?, weight_uom = ?, drawing_no = ?, 
         revision = ?, material_grade = ?,
         material_id = ?, shape_id = ?, length = ?, width = ?, thickness = ?, 
-        diameter = ?, outer_diameter = ?, density = ?,
+        diameter = ?, outer_diameter = ?, density = ?, hsn_code = ?,
         last_updated = CURRENT_TIMESTAMP
       WHERE id = ?
     `, [
@@ -812,6 +823,7 @@ const updateItem = async (id, itemData) => {
       itemData.diameter || null,
       itemData.outerDiameter || null,
       itemData.density || null,
+      itemData.hsnCode || null,
       id
     ]);
 
@@ -833,10 +845,10 @@ const promoteDrawingToItem = async (drawingData, connection = null) => {
   try {
     if (shouldRelease) await useConnection.beginTransaction();
 
-    // Check if item already exists for this drawing_no
+    // Check if item already exists for this drawing_no and description
     const [existing] = await useConnection.query(
-      'SELECT item_code FROM stock_balance WHERE drawing_no = ? LIMIT 1',
-      [drawing_no]
+      'SELECT item_code FROM stock_balance WHERE drawing_no = ? AND material_name = ? LIMIT 1',
+      [drawing_no, description || 'Drawing Item']
     );
 
     if (existing.length > 0) {
