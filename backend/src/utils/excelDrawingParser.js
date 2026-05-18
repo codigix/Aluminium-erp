@@ -19,6 +19,7 @@ const parseExcelDrawings = async (filePath) => {
       revision: -1,
       description: -1,
       drawingType: -1,
+      hsnCode: -1,
       qty: -1,
       remarks: -1,
       drawingFile: -1
@@ -36,6 +37,8 @@ const parseExcelDrawings = async (filePath) => {
             if (columnMap.drawingFile === -1) columnMap.drawingFile = idx;
           } else if (cell.includes('type')) {
             if (columnMap.drawingType === -1) columnMap.drawingType = idx;
+          } else if (cell.includes('hsn')) {
+            if (columnMap.hsnCode === -1) columnMap.hsnCode = idx;
           } else if (cell.includes('drawing') || cell.includes('drw') || cell.includes('part no') || cell.includes('item code')) {
             if (columnMap.drawingNo === -1) columnMap.drawingNo = idx;
           } else if (cell.includes('rev')) {
@@ -63,8 +66,10 @@ const parseExcelDrawings = async (filePath) => {
 
         const rawType = columnMap.drawingType !== -1 ? cleanup(row[columnMap.drawingType]) : '';
         let drawingType = 'Part';
-        if (rawType.toLowerCase().includes('assembly') || rawType.toLowerCase().includes('assly')) {
+        if (rawType === '2' || rawType.toLowerCase().includes('assembly') || rawType.toLowerCase().includes('assly')) {
           drawingType = 'Assembly';
+        } else if (rawType === '1' || rawType.toLowerCase().includes('part')) {
+          drawingType = 'Part';
         }
 
         drawings.push({
@@ -72,6 +77,7 @@ const parseExcelDrawings = async (filePath) => {
           revision: columnMap.revision !== -1 ? cleanup(row[columnMap.revision]) : '',
           description: columnMap.description !== -1 ? cleanup(row[columnMap.description]) : '',
           drawingType: drawingType,
+          hsnCode: columnMap.hsnCode !== -1 ? cleanup(row[columnMap.hsnCode]) : '',
           qty: columnMap.qty !== -1 ? parseInt(row[columnMap.qty]) || 1 : 1,
           remarks: columnMap.remarks !== -1 ? cleanup(row[columnMap.remarks]) : '',
           drawingFile: columnMap.drawingFile !== -1 ? cleanup(row[columnMap.drawingFile]) : ''
@@ -87,20 +93,23 @@ const parseExcelDrawings = async (filePath) => {
         // If first column looks like a drawing number (often has hyphens or mixed alphanumeric)
         const firstCell = cleanup(row[0]);
         if (firstCell && firstCell.length > 3 && /[A-Z0-9]/.test(firstCell)) {
-           const rawType = row[3] ? cleanup(row[3]) : '';
+           const rawType = row[4] ? cleanup(row[4]) : '';
            let drawingType = 'Part';
-           if (rawType.toLowerCase().includes('assembly') || rawType.toLowerCase().includes('assly')) {
+           if (rawType === '2' || rawType.toLowerCase().includes('assembly') || rawType.toLowerCase().includes('assly')) {
              drawingType = 'Assembly';
+           } else if (rawType === '1' || rawType.toLowerCase().includes('part')) {
+             drawingType = 'Part';
            }
 
            drawings.push({
              drawingNo: firstCell,
              revision: row[1] ? cleanup(row[1]) : '',
              description: row[2] ? cleanup(row[2]) : '',
+             hsnCode: row[3] ? cleanup(row[3]) : '',
              drawingType: drawingType,
-             qty: row[4] ? parseInt(row[4]) || 1 : 1,
-             remarks: row[5] ? cleanup(row[5]) : '',
-             drawingFile: row[6] ? cleanup(row[6]) : ''
+             qty: row[5] ? parseInt(row[5]) || 1 : 1,
+             remarks: row[6] ? cleanup(row[6]) : '',
+             drawingFile: row[7] ? cleanup(row[7]) : ''
            });
         }
       }

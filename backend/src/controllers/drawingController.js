@@ -105,7 +105,7 @@ const createDrawing = async (req, res, next) => {
       clientName, projectName, drawingNo, revision, qty, description, remarks, fileType, 
       contactPerson, phoneNumber, emailAddress,
       customerType, gstin, city, state, billingAddress, shippingAddress,
-      drawing_type
+      drawing_type, hsnCode
     } = req.body;
     
     // Check for both single file and multiple files (upload.fields)
@@ -180,6 +180,7 @@ const createDrawing = async (req, res, next) => {
             qty: d.qty || qty || 1,
             description: d.description || description,
             drawing_type: d.drawing_type || d.drawingType || drawing_type || 'Part',
+            hsnCode: d.hsnCode || d.hsn_code || hsnCode,
             filePath: rowFilePath,
             fileType: rowFilePath ? (path.extname(rowFilePath).replace('.', '').toUpperCase() || 'PDF') : 'NONE',
             remarks: d.remarks || remarks,
@@ -227,7 +228,8 @@ const createDrawing = async (req, res, next) => {
       state,
       billingAddress,
       shippingAddress,
-      drawing_type
+      drawing_type,
+      hsnCode
     });
 
     res.status(201).json({ message: 'Customer drawing uploaded successfully', id });

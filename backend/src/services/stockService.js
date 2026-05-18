@@ -163,6 +163,7 @@ const getStockBalance = async (drawingNo = null, includeAll = false) => {
   let query = `
     SELECT 
       MIN(sb.id) as id,
+      MAX(sb.public_id) as public_id,
       sb.item_code,
       MAX(sb.item_description) as item_description,
       MAX(sb.material_name) as material_name,
@@ -231,6 +232,7 @@ const getStockBalance = async (drawingNo = null, includeAll = false) => {
 
   return balances.map(balance => ({
     id: balance.id,
+    public_id: balance.public_id,
     item_code: balance.item_code,
     item_description: balance.item_description,
     material_name: balance.material_name,

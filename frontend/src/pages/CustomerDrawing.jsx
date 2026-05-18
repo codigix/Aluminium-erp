@@ -63,6 +63,8 @@ const CustomerDrawing = () => {
     shipping_address: '',
     qty: 1,
     remarks: '',
+    drawing_type: 'Part',
+    hsn_code: '',
     drawing_pdf: null,
     file_path: ''
   });
@@ -800,6 +802,7 @@ const CustomerDrawing = () => {
       formData.append('billingAddress', editData.billing_address);
       formData.append('shippingAddress', editData.shipping_address);
       formData.append('qty', editData.qty);
+      formData.append('hsn_code', editData.hsn_code || '');
       formData.append('remarks', editData.remarks);
 
       if (editData.drawing_pdf) {
@@ -894,7 +897,7 @@ const CustomerDrawing = () => {
       remarks: '',
       uploadMode: 'bulk',
       manualDrawings: [
-        { id: Date.now() + Math.random(), drawing_no: '', revision: '', qty: 1, description: '', drawing_type: 'Part', file: null, remarks: '' }
+        { id: Date.now() + Math.random(), drawing_no: '', revision: '', qty: 1, description: '', hsn_code: '', drawing_type: 'Part', file: null, remarks: '' }
       ],
     },
     validationSchema,
@@ -951,6 +954,7 @@ const CustomerDrawing = () => {
                 formData.append('revisionNo', drawing.revision || '');
                 formData.append('qty', drawing.qty || 1);
                 formData.append('description', drawing.description || '');
+                formData.append('hsn_code', drawing.hsn_code || '');
                 formData.append('drawing_type', drawing.drawing_type || 'Part');
                 formData.append('remarks', drawing.remarks || '');
                 if (drawing.file) {
@@ -989,7 +993,7 @@ const CustomerDrawing = () => {
 
             if (successCount > 0) {
               successToast(`${successCount} drawings added successfully`);
-              formik.setFieldValue('manualDrawings', [{ id: Date.now(), drawing_no: '', revision: '', qty: 1, description: '', drawing_type: 'Part', file: null, remarks: '' }]);
+              formik.setFieldValue('manualDrawings', [{ id: Date.now(), drawing_no: '', revision: '', qty: 1, description: '', hsn_code: '', drawing_type: 'Part', file: null, remarks: '' }]);
               setClientLocked(true);
             } else {
               warningToast('No drawings were added. Please fill in Drawing # and select a file for at least one row.');
@@ -1051,7 +1055,7 @@ const CustomerDrawing = () => {
   };
 
   const addManualDrawingRow = () => {
-    const newRow = { id: Date.now() + Math.random(), drawing_no: '', revision: '', qty: 1, description: '', drawing_type: 'Part', file: null, remarks: '' };
+    const newRow = { id: Date.now() + Math.random(), drawing_no: '', revision: '', qty: 1, description: '', hsn_code: '', drawing_type: 'Part', file: null, remarks: '' };
     formik.setFieldValue('manualDrawings', [newRow, ...formik.values.manualDrawings]);
   };
 
@@ -1069,7 +1073,7 @@ const CustomerDrawing = () => {
     } else {
       // If it's the last row, clear it instead of removing it
       formik.setFieldValue('manualDrawings', [
-        { id: Date.now() + Math.random(), drawing_no: '', revision: '', qty: 1, description: '', drawing_type: 'Part', file: null, remarks: '' }
+        { id: Date.now() + Math.random(), drawing_no: '', revision: '', qty: 1, description: '', hsn_code: '', drawing_type: 'Part', file: null, remarks: '' }
       ]);
     }
   };
@@ -1155,6 +1159,7 @@ const CustomerDrawing = () => {
       formData.append('revision', drawingData.revision || '');
       formData.append('qty', drawingData.qty || 1);
       formData.append('description', drawingData.description || '');
+      formData.append('hsn_code', drawingData.hsn_code || '');
       formData.append('drawing_type', drawingData.drawing_type || 'Part');
       formData.append('remarks', drawingData.remarks || '');
       formData.append('fileType', fileExt);
@@ -1243,6 +1248,7 @@ const CustomerDrawing = () => {
     { label: 'Drawing No', key: 'drawing_no', className: ' text-slate-900' },
     { label: 'Project Name', key: 'project_name' },
     { label: 'Description', key: 'drawing_description' },
+    { label: 'HSN Code', key: 'hsn_code' },
     { 
       label: 'Type', 
       key: 'drawing_type',
@@ -1719,7 +1725,7 @@ const CustomerDrawing = () => {
           <div className="mt-4">
             <h3 className="text-xs  text-slate-700 mb-2">Drawing Details</h3>
             <div className="bg-slate-50 p-2 rounded border border-slate-200 space-y-2">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
                 <div>
                   <label className="block text-xs text-slate-700 mb-1">Drawing # *</label>
                   <input
@@ -1740,13 +1746,23 @@ const CustomerDrawing = () => {
                   />
                 </div>
                 <div>
+                  <label className="block text-xs text-slate-700 mb-1">HSN Code</label>
+                  <input
+                    type="text"
+                    disabled={modalMode === 'view'}
+                    className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+                    value={editData.hsn_code}
+                    onChange={(e) => setEditData({ ...editData, hsn_code: e.target.value })}
+                  />
+                </div>
+                <div>
                   <label className="block text-xs text-slate-700 mb-1">Qty</label>
                   <input
                     type="number"
                     disabled={modalMode === 'view'}
                     className={`w-full p-2 border border-slate-300 rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${modalMode === 'view' ? 'bg-slate-50 cursor-not-allowed' : ''}`}
                     value={editData.qty}
-                    onChange={(e) => setEditData({ ...editData, qty: parseInt(e.target.value) || 0 })}
+                    onChange={(e) => setEditData({ ...editData, qty: parseFloat(e.target.value) || 0 })}
                   />
                 </div>
               </div>
@@ -2258,6 +2274,7 @@ const CustomerDrawing = () => {
                     <tr>
                       <th className="p-2 text-left text-xs   text-slate-500  ">Drawing # *</th>
                       <th className="p-2 text-left text-xs   text-slate-500  ">Description</th>
+                      <th className="p-2 text-left text-xs   text-slate-500  ">HSN Code</th>
                       <th className="p-2 text-left text-xs   text-slate-500   w-16">Rev</th>
                       <th className="p-2 text-left text-xs   text-slate-500   w-16">Qty</th>
                       <th className="p-2 text-left text-xs   text-slate-500  ">File *</th>
@@ -2287,6 +2304,17 @@ const CustomerDrawing = () => {
                             placeholder="Aluminum Frame"
                             className="w-full px-2 py-1 border border-slate-300 rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500"
                             value={drawing.description}
+                            onChange={formik.handleChange}
+                            onBlur={formik.handleBlur}
+                          />
+                        </td>
+                        <td className="px-2 py-2">
+                          <input
+                            type="text"
+                            name={`manualDrawings[${index}].hsn_code`}
+                            placeholder="HSN Code"
+                            className="w-full px-2 py-1 border border-slate-300 rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500"
+                            value={drawing.hsn_code}
                             onChange={formik.handleChange}
                             onBlur={formik.handleBlur}
                           />

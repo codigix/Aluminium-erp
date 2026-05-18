@@ -141,8 +141,8 @@ const ItemsMaster = () => {
       setActiveTab('items');
       if (itemsList.length === 0 || itemGroups.length === 0) return;
       
-      const id = path.split('/').pop();
-      const item = itemsList.find(i => i.id.toString() === id);
+      const identifier = path.split('/').pop();
+      const item = itemsList.find(i => (i.public_id === identifier) || (i.id.toString() === identifier));
       
       if (item) {
         const isCopy = isCopyPath;
@@ -412,12 +412,12 @@ const ItemsMaster = () => {
   };
 
   const handleEditItem = useCallback((item) => {
-    navigate(`${deptPrefix}/item-master/edit-item/${item.id}`);
-  }, [navigate]);
+    navigate(`${deptPrefix}/item-master/edit-item/${item.public_id || item.id}`);
+  }, [navigate, deptPrefix]);
 
   const handleCopyItem = useCallback((item) => {
-    navigate(`${deptPrefix}/item-master/copy-item/${item.id}`);
-  }, [navigate]);
+    navigate(`${deptPrefix}/item-master/copy-item/${item.public_id || item.id}`);
+  }, [navigate, deptPrefix]);
 
   const handleDeleteItem = useCallback(async (id) => {
     const result = await Swal.fire({

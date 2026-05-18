@@ -603,7 +603,8 @@ const ensureStockColumns = async () => {
       { name: 'unit', definition: 'VARCHAR(20) DEFAULT "Nos"' },
       { name: 'warehouse', definition: 'VARCHAR(100) NULL' },
       { name: 'qty_in', definition: 'DECIMAL(12, 3) DEFAULT 0' },
-      { name: 'qty_out', definition: 'DECIMAL(12, 3) DEFAULT 0' }
+      { name: 'qty_out', definition: 'DECIMAL(12, 3) DEFAULT 0' },
+      { name: 'public_id', definition: 'VARCHAR(100) UNIQUE NULL' }
     ];
     
     const missingLedgerCols = requiredStockCols.filter(c => !existingLedgerCols.has(c.name));
@@ -784,6 +785,13 @@ const ensureCustomerDrawingTable = async () => {
       console.log('Added drawing_type column to customer_drawings');
     }
 
+    // Add hsn_code column if it doesn't exist
+    const [hsnCols] = await connection.query("SHOW COLUMNS FROM customer_drawings LIKE 'hsn_code'");
+    if (hsnCols.length === 0) {
+      await connection.query("ALTER TABLE customer_drawings ADD COLUMN hsn_code VARCHAR(20) NULL AFTER drawing_type");
+      console.log('Added hsn_code column to customer_drawings');
+    }
+
     // Add project_name column if it doesn't exist
     const [projectCols] = await connection.query("SHOW COLUMNS FROM customer_drawings LIKE 'project_name'");
     if (projectCols.length === 0) {
@@ -802,6 +810,13 @@ const ensureCustomerDrawingTable = async () => {
     if (qtyCols.length === 0) {
       await connection.query("ALTER TABLE customer_drawings ADD COLUMN qty INT DEFAULT 1 AFTER revision");
       console.log('Added qty column to customer_drawings');
+    }
+
+    // Add public_id column if it doesn't exist
+    const [publicIdCols] = await connection.query("SHOW COLUMNS FROM customer_drawings LIKE 'public_id'");
+    if (publicIdCols.length === 0) {
+      await connection.query("ALTER TABLE customer_drawings ADD COLUMN public_id VARCHAR(100) UNIQUE NULL AFTER id");
+      console.log('Added public_id column to customer_drawings');
     }
 
     const [contactPersonCols] = await connection.query("SHOW COLUMNS FROM customer_drawings LIKE 'contact_person'");

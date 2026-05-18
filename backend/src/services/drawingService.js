@@ -14,6 +14,7 @@ const listDrawings = async (search = '', onlyShared = false, clientName = null) 
   let query = `
     SELECT 
       d.id as drawing_master_id,
+      d.public_id,
       d.drawing_no,
       d.file_path,
       d.client_name,
@@ -115,6 +116,7 @@ const getDrawingById = async (id) => {
   const [rows] = await pool.query(
     `SELECT 
       d.id as drawing_master_id,
+      d.public_id,
       d.drawing_no,
       d.file_path,
       d.client_name,
@@ -168,9 +170,9 @@ const getDrawingById = async (id) => {
       ) s2 ON (s1.drawing_id = s2.dwg_id AND s1.drawing_no = s2.dwg_no AND s1.id = s2.max_id)
          OR (s1.drawing_id IS NULL AND s1.drawing_no = s2.dwg_no AND s1.id = s2.max_id)
     ) soi ON (d.id = soi.drawing_id OR (d.drawing_no = soi.drawing_no AND (soi.drawing_id IS NULL OR soi.drawing_id = d.id)))
-    WHERE d.id = ?
+    WHERE d.id = ? OR d.public_id = ?
     LIMIT 1`,
-    [id]
+    [id, id]
   );
   
   if (rows.length === 0) return null;
@@ -215,12 +217,20 @@ const updateDrawing = async (id, data) => {
   const { 
     description, revisionNo, drawingPdf, clientName, projectName, contactPerson, 
     phoneNumber, emailAddress, customerType, gstin, city, state, 
-    billingAddress, shippingAddress, qty, remarks, drawingNo, drawing_type
+    billingAddress, shippingAddress, qty, remarks, drawingNo, drawing_type, hsnCode
   } = data;
 
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
+
+    // If id is a UUID, find the internal ID first
+    let internalId = id;
+    if (isNaN(id)) {
+      const [rows] = await connection.query('SELECT id FROM customer_drawings WHERE public_id = ?', [id]);
+      if (rows.length === 0) throw new Error('Drawing not found');
+      internalId = rows[0].id;
+    }
 
     // 1. Update customer_drawings
     let query = 'UPDATE customer_drawings SET ';
@@ -245,6 +255,7 @@ const updateDrawing = async (id, data) => {
     if (qty !== undefined) { updates.push('qty = ?'); params.push(qty); }
     if (remarks !== undefined) { updates.push('remarks = ?'); params.push(remarks); }
     if (drawingNo !== undefined) { updates.push('drawing_no = ?'); params.push(drawingNo); }
+    if (hsnCode !== undefined) { updates.push('hsn_code = ?'); params.push(hsnCode); }
 
     if (!id || id === 'undefined') {
       throw new Error('Drawing ID is required for update');
@@ -253,14 +264,14 @@ const updateDrawing = async (id, data) => {
     if (updates.length > 0) {
       updates.push('updated_at = NOW()');
       const drawingQuery = query + updates.join(', ') + ' WHERE id = ?';
-      const drawingParams = [...params, id];
+      const drawingParams = [...params, internalId];
       await connection.execute(drawingQuery, drawingParams);
     }
 
     // 2. Sync with sales_order_items and sales_orders
     const [items] = await connection.query(
       'SELECT sales_order_id, id as item_id FROM sales_order_items WHERE drawing_id = ?',
-      [id]
+      [internalId]
     );
 
     if (items.length > 0) {
@@ -421,7 +432,7 @@ const createCustomerDrawing = async (data) => {
     clientName, projectName, drawingNo, revision, qty, description, filePath, fileType, remarks, 
     uploadedBy, contactPerson, phoneNumber, emailAddress,
     customerType, gstin, city, state, billingAddress, shippingAddress,
-    drawing_type
+    drawing_type, hsnCode
   } = data;
   
   const connection = await pool.getConnection();
@@ -431,13 +442,13 @@ const createCustomerDrawing = async (data) => {
     // 1. Insert into customer_drawings
     const [result] = await connection.execute(
       `INSERT INTO customer_drawings 
-        (client_name, project_name, drawing_no, revision, qty, description, drawing_type, file_path, file_type, remarks, 
+        (client_name, project_name, drawing_no, revision, qty, description, drawing_type, hsn_code, file_path, file_type, remarks, 
          uploaded_by, contact_person, phone, email, 
          customer_type, gstin, city, state, billing_address, shipping_address, excel_path, zip_path, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')`
       ,
       [
-        clientName || null, projectName || null, drawingNo, revision || null, qty || 1, description || null, drawing_type || 'Part', filePath, fileType, remarks || null, 
+        clientName || null, projectName || null, drawingNo, revision || null, qty || 1, description || null, drawing_type || 'Part', hsnCode || null, filePath, fileType, remarks || null, 
         uploadedBy || 'Sales', contactPerson || null, phoneNumber || null, emailAddress || null,
         customerType || null, gstin || null, city || null, state || null, billingAddress || null, shippingAddress || null,
         fileType === 'XLSX' || fileType === 'XLS' ? filePath : null,
@@ -536,19 +547,19 @@ const createBatchCustomerDrawings = async (batchData, batchInfo = {}) => {
         clientName, projectName, drawingNo, revision, qty, description, filePath, fileType, remarks, 
         uploadedBy, contactPerson, phoneNumber, emailAddress,
         customerType, gstin, city, state, billingAddress, shippingAddress,
-        drawing_type
+        drawing_type, hsnCode
       } = data;
 
       // 1. Insert into customer_drawings
       const [result] = await connection.execute(
         `INSERT INTO customer_drawings 
-          (client_name, project_name, drawing_no, revision, qty, description, drawing_type, file_path, file_type, remarks, 
+          (client_name, project_name, drawing_no, revision, qty, description, drawing_type, hsn_code, file_path, file_type, remarks, 
            uploaded_by, contact_person, phone, email, 
            customer_type, gstin, city, state, billing_address, shipping_address, excel_path, zip_path, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')`
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')`
         ,
         [
-          clientName || null, projectName || null, drawingNo, revision || null, qty || 1, description || null, drawing_type || 'Part', filePath, fileType, remarks || null, 
+          clientName || null, projectName || null, drawingNo, revision || null, qty || 1, description || null, drawing_type || 'Part', hsnCode || null, filePath, fileType, remarks || null, 
           uploadedBy || 'Sales', contactPerson || null, phoneNumber || null, emailAddress || null,
           customerType || null, gstin || null, city || null, state || null, billingAddress || null, shippingAddress || null,
           batchInfo.excelPath || null,

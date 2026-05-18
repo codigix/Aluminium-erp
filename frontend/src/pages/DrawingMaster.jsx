@@ -49,6 +49,7 @@ const DrawingMaster = () => {
     qty: 1,
     remarks: '',
     drawing_type: 'Part',
+    hsn_code: '',
     drawing_pdf: null,
     file_path: ''
   });
@@ -345,6 +346,12 @@ const DrawingMaster = () => {
       render: (val, row) => <div className="max-w-xs truncate text-slate-600 ">{val || row.item_description || '—'}</div>
     },
     {
+      label: 'HSN Code',
+      key: 'hsn_code',
+      sortable: true,
+      render: (val) => <span className="text-xs text-slate-600 ">{val || '—'}</span>
+    },
+    {
       label: 'Type',
       key: 'drawing_type',
       sortable: true,
@@ -464,7 +471,7 @@ const DrawingMaster = () => {
           <button 
             onClick={(e) => {
               e.stopPropagation();
-              navigate(`${deptPrefix}/drawing-master/edit?id=${row.drawing_master_id}`);
+              navigate(`${deptPrefix}/drawing-master/edit?id=${row.public_id || row.drawing_master_id}`);
             }}
             className="p-2 text-amber-500 hover:bg-amber-50 rounded  transition-all border border-transparent hover:border-amber-100"
             title="Edit Drawing"
@@ -517,12 +524,13 @@ const DrawingMaster = () => {
       shipping_address: drawing.shipping_address || shippingAddressLine,
       qty: drawing.qty || 1,
       drawing_type: drawing.drawing_type || 'Part',
+      hsn_code: drawing.hsn_code || '',
       remarks: drawing.remarks || '',
       drawing_pdf: null,
       file_path: drawing.file_path || drawing.drawing_pdf || ''
     });
     if (!location.pathname.includes(`${deptPrefix}/drawing-master/edit`)) {
-      navigate(`${deptPrefix}/drawing-master/edit?id=${drawing.drawing_master_id}`);
+      navigate(`${deptPrefix}/drawing-master/edit?id=${drawing.public_id || drawing.drawing_master_id}`);
     }
     setShowEditForm(true);
   };
@@ -548,7 +556,7 @@ const DrawingMaster = () => {
     const id = searchParams.get('id');
 
     if (isEditPath && id) {
-      const drawing = drawings.find(d => String(d.drawing_master_id) === String(id));
+      const drawing = drawings.find(d => (d.public_id === id) || (String(d.drawing_master_id) === String(id)));
       if (drawing) {
         if (!showEditForm || String(editData.id) !== String(id)) {
           handleEdit(drawing);
@@ -584,6 +592,7 @@ const DrawingMaster = () => {
       formData.append('shippingAddress', editData.shipping_address);
       formData.append('qty', editData.qty);
       formData.append('drawing_type', editData.drawing_type);
+      formData.append('hsnCode', editData.hsn_code);
       formData.append('remarks', editData.remarks);
 
       if (editData.drawing_pdf) {
@@ -847,6 +856,16 @@ const DrawingMaster = () => {
                             placeholder="Enter description"
                             value={editData.description}
                             onChange={(e) => setEditData({...editData, description: e.target.value})}
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-xs  text-slate-500  ">HSN Code</label>
+                        <input 
+                            type="text"
+                            className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                            placeholder="Enter HSN code"
+                            value={editData.hsn_code}
+                            onChange={(e) => setEditData({...editData, hsn_code: e.target.value})}
                         />
                     </div>
                     <div className="space-y-2">

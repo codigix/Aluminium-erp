@@ -3,7 +3,7 @@ const crypto = require('crypto');
 
 async function fix() {
   try {
-    const tables = ['sales_orders', 'customer_drawings', 'quotation_requests'];
+    const tables = ['sales_orders', 'customer_drawings', 'quotation_requests', 'items', 'stock_balance'];
     
     for (const table of tables) {
       const [rows] = await pool.query(`SELECT id FROM ${table} WHERE public_id IS NULL`);

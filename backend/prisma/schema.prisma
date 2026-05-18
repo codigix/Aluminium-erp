@@ -124,6 +124,7 @@ model contacts {
 
 model customer_drawings {
   id                 Int                       @id @default(autoincrement())
+  public_id          String?                   @unique(map: "public_id") @db.VarChar(100)
   project_name       String?                   @db.VarChar(255)
   client_name        String?                   @db.VarChar(255)
   drawing_no         String                    @db.VarChar(120)
@@ -535,6 +536,7 @@ model item_groups {
 
 model items {
   id              Int       @id @default(autoincrement())
+  public_id       String?   @unique(map: "public_id") @db.VarChar(100)
   item_code       String    @unique(map: "item_code") @db.VarChar(120)
   description     String?   @db.Text
   uom             String?   @db.VarChar(20)
@@ -1395,6 +1397,7 @@ model quotation_items {
 
 model quotation_requests {
   id                       Int                        @id @default(autoincrement())
+  public_id                String?                    @unique(map: "public_id") @db.VarChar(100)
   sales_order_id           Int?
   company_id               Int
   status                   quotation_requests_status? @default(DRAFT)
@@ -1794,6 +1797,7 @@ model shipment_tracking_logs {
 
 model stock_balance {
   id               Int       @id @default(autoincrement())
+  public_id        String?   @unique(map: "public_id") @db.VarChar(100)
   item_code        String    @db.VarChar(100)
   item_description String?   @db.Text
   po_qty           Decimal?  @default(0.000) @db.Decimal(12, 3)
