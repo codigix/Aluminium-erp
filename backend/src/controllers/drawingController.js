@@ -15,6 +15,18 @@ const listDrawings = async (req, res, next) => {
   }
 };
 
+const getDrawingById = async (req, res, next) => {
+  try {
+    const drawing = await drawingService.getDrawingById(req.params.id);
+    if (!drawing) {
+      return res.status(404).json({ message: 'Drawing not found' });
+    }
+    res.json(drawing);
+  } catch (error) {
+    next(error);
+  }
+};
+
 const getDrawingRevisions = async (req, res, next) => {
   try {
     const revisions = await drawingService.getDrawingRevisions(req.params.drawingNo);
@@ -274,6 +286,7 @@ const getApprovedDrawings = async (req, res, next) => {
 
 module.exports = {
   listDrawings,
+  getDrawingById,
   getDrawingRevisions,
   updateDrawing,
   updateItemDrawing,

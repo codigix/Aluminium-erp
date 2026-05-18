@@ -24,22 +24,6 @@ const DrawingMaster = () => {
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
-  useEffect(() => {
-    const isEditPath = location.pathname.includes(`${deptPrefix}/drawing-master/edit`);
-    const id = searchParams.get('id');
-
-    if (isEditPath && id && drawings.length > 0) {
-      const drawing = drawings.find(d => String(d.drawing_master_id) === String(id));
-      if (drawing) {
-        if (!showEditForm || String(editData.id) !== String(id)) {
-          handleEdit(drawing);
-        }
-      }
-    } else if (!isEditPath && showEditForm) {
-      setShowEditForm(false);
-    }
-  }, [location.pathname, searchParams, drawings]);
-  
   // Expanded Revisions State
   const [expandedRevisions, setExpandedRevisions] = useState({});
   const [revisionsLoading, setRevisionsLoading] = useState({});
@@ -81,9 +65,10 @@ const DrawingMaster = () => {
     setShowPreviewModal(true);
   };
 
-  const fetchDrawings = async (search = '') => {
+  const fetchDrawings = useCallback(async (search = '') => {
     try {
       setLoading(true);
+      setDrawings([]); // Clear stale data before fetching new data
       const token = localStorage.getItem('authToken');
       const params = new URLSearchParams();
       params.append('onlyShared', 'true');
@@ -103,7 +88,7 @@ const DrawingMaster = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   const fetchCompanies = async () => {
     try {
@@ -122,7 +107,7 @@ const DrawingMaster = () => {
   useEffect(() => {
     fetchDrawings();
     fetchCompanies();
-  }, []);
+  }, [fetchDrawings]);
 
   const fetchRevisions = async (drawingNo) => {
     try {
@@ -512,7 +497,7 @@ const DrawingMaster = () => {
       id: drawing.drawing_master_id,
       drawing_no: drawing.drawing_no,
       revision_no: drawing.revision || drawing.revision_no || '0',
-      description: drawing.description || '',
+      description: drawing.drawing_description || drawing.item_description || drawing.description || '',
       client_name: drawing.client_name,
       contact_person: drawing.contact_person || (company ? company.contact_person : ''),
       phone: drawing.phone || (company ? company.contact_mobile : ''),
@@ -533,6 +518,41 @@ const DrawingMaster = () => {
     }
     setShowEditForm(true);
   };
+
+  const fetchSingleDrawing = async (id) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/drawings/${id}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!response.ok) throw new Error('Failed to fetch drawing details');
+      const drawing = await response.json();
+      handleEdit(drawing);
+    } catch (error) {
+      console.error(error);
+      errorToast('Failed to load drawing details');
+      navigate(`${deptPrefix}/drawing-master`);
+    }
+  };
+
+  useEffect(() => {
+    const isEditPath = location.pathname.includes(`${deptPrefix}/drawing-master/edit`);
+    const id = searchParams.get('id');
+
+    if (isEditPath && id) {
+      const drawing = drawings.find(d => String(d.drawing_master_id) === String(id));
+      if (drawing) {
+        if (!showEditForm || String(editData.id) !== String(id)) {
+          handleEdit(drawing);
+        }
+      } else if (!loading && drawings.length === 0) {
+        // Only fetch if list is empty and not already loading
+        fetchSingleDrawing(id);
+      }
+    } else if (!isEditPath && showEditForm) {
+      setShowEditForm(false);
+    }
+  }, [location.pathname, searchParams, drawings, loading]);
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -796,18 +816,18 @@ const DrawingMaster = () => {
                         <label className="text-xs  text-slate-500  ">Drawing No</label>
                         <input 
                             type="text"
-                            readOnly
-                            className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs  text-slate-400 outline-none"
+                            className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                             value={editData.drawing_no}
+                            onChange={(e) => setEditData({...editData, drawing_no: e.target.value})}
                         />
                     </div>
                     <div className="space-y-2">
                         <label className="text-xs  text-slate-500  ">Current Revision</label>
                         <input 
                             type="text"
-                            readOnly
-                            className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs  text-slate-400 outline-none"
+                            className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                             value={editData.revision_no}
+                            onChange={(e) => setEditData({...editData, revision_no: e.target.value})}
                         />
                     </div>
                     <div className="space-y-2">
@@ -824,9 +844,63 @@ const DrawingMaster = () => {
                         <label className="text-xs  text-slate-500  ">Client Name</label>
                         <input 
                             type="text"
-                            readOnly
-                            className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs  text-slate-400 outline-none"
+                            className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                             value={editData.client_name}
+                            onChange={(e) => setEditData({...editData, client_name: e.target.value})}
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-xs  text-slate-500  ">Contact Person</label>
+                        <input 
+                            type="text"
+                            className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                            value={editData.contact_person}
+                            onChange={(e) => setEditData({...editData, contact_person: e.target.value})}
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-xs  text-slate-500  ">Phone</label>
+                        <input 
+                            type="text"
+                            className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                            value={editData.phone}
+                            onChange={(e) => setEditData({...editData, phone: e.target.value})}
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-xs  text-slate-500  ">Email</label>
+                        <input 
+                            type="email"
+                            className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                            value={editData.email}
+                            onChange={(e) => setEditData({...editData, email: e.target.value})}
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-xs  text-slate-500  ">GSTIN</label>
+                        <input 
+                            type="text"
+                            className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                            value={editData.gstin}
+                            onChange={(e) => setEditData({...editData, gstin: e.target.value})}
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-xs  text-slate-500  ">City</label>
+                        <input 
+                            type="text"
+                            className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                            value={editData.city}
+                            onChange={(e) => setEditData({...editData, city: e.target.value})}
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-xs  text-slate-500  ">State</label>
+                        <input 
+                            type="text"
+                            className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                            value={editData.state}
+                            onChange={(e) => setEditData({...editData, state: e.target.value})}
                         />
                     </div>
                     <div className="space-y-2">
@@ -837,6 +911,21 @@ const DrawingMaster = () => {
                             onChange={(e) => setEditData({...editData, drawing_pdf: e.target.files[0]})}
                             accept=".pdf"
                         />
+                        {editData.file_path && (
+                            <div className="flex items-center gap-2 mt-1">
+                                <p className="text-[10px] text-slate-400 truncate flex-1">
+                                    Current file: {editData.file_path.split('/').pop()}
+                                </p>
+                                <button
+                                    type="button"
+                                    onClick={() => handlePreview({ file_path: editData.file_path, drawing_no: editData.drawing_no })}
+                                    className="text-[10px] text-indigo-600 hover:text-indigo-700 flex items-center gap-1 font-medium"
+                                >
+                                    <Eye size={12} />
+                                    View Current
+                                </button>
+                            </div>
+                        )}
                     </div>
                     <div className="space-y-2">
                         <label className="text-xs  text-slate-500  ">Quantity</label>

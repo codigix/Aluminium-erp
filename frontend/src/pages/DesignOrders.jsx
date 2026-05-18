@@ -412,9 +412,10 @@ const DesignOrders = () => {
     return acc;
   }, {});
 
-  const fetchOrders = async () => {
+  const fetchOrders = useCallback(async () => {
     try {
       setLoading(true);
+      setOrders([]); // Clear stale data
       const token = localStorage.getItem('authToken');
       const response = await fetch(`${API_BASE}/design-orders`, {
         headers: {
@@ -430,11 +431,12 @@ const DesignOrders = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const fetchIncomingOrders = async () => {
+  const fetchIncomingOrders = useCallback(async () => {
     try {
       setIncomingLoading(true);
+      setIncomingOrders([]); // Clear stale data
       const token = localStorage.getItem('authToken');
       const response = await fetch(`${API_BASE}/sales-orders/incoming?department=DESIGN_ENG`, {
         headers: {
@@ -449,12 +451,12 @@ const DesignOrders = () => {
     } finally {
       setIncomingLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchOrders();
     fetchIncomingOrders();
-  }, []);
+  }, [fetchOrders, fetchIncomingOrders]);
 
   const handleViewOrder = async (order) => {
     try {

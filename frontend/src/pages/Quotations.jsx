@@ -266,6 +266,7 @@ const Quotations = () => {
   const fetchQuotations = async () => {
     try {
       setLoading(true);
+      setQuotations([]); // Clear stale data
       const token = localStorage.getItem('authToken');
       const response = await fetch(`${API_BASE}/quotations`, {
         headers: {

@@ -196,6 +196,7 @@ const ItemsMaster = () => {
   const fetchItemsList = useCallback(async () => {
     try {
       setItemsLoading(true);
+      setItemsList([]); // Clear stale data
       const token = localStorage.getItem('authToken');
       const response = await fetch(`${API_BASE}/stock/balance?includeAll=true`, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -215,6 +216,7 @@ const ItemsMaster = () => {
   const fetchItemGroups = useCallback(async () => {
     try {
       setGroupsLoading(true);
+      setItemGroups([]); // Clear stale data
       const token = localStorage.getItem('authToken');
       const response = await fetch(`${API_BASE}/item-groups`, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -233,6 +235,7 @@ const ItemsMaster = () => {
   const fetchShapes = useCallback(async () => {
     try {
       setShapesLoading(true);
+      setShapes([]); // Clear stale data
       const token = localStorage.getItem('authToken');
       const response = await fetch(`${API_BASE}/shapes`, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -251,6 +254,7 @@ const ItemsMaster = () => {
   const fetchMaterials = useCallback(async () => {
     try {
       setMaterialsLoading(true);
+      setMaterials([]); // Clear stale data
       const token = localStorage.getItem('authToken');
       const response = await fetch(`${API_BASE}/materials`, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -269,6 +273,7 @@ const ItemsMaster = () => {
   const fetchApprovedDrawings = useCallback(async () => {
     try {
       const token = localStorage.getItem('authToken');
+      setApprovedDrawings([]); // Clear stale data
       const response = await fetch(`${API_BASE}/drawings/approved`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });

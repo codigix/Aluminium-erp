@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useFormik } from 'formik';
 import * as Yup from 'yup';
 import { Card, Modal, DataTable, StatusBadge, FormControl, Tabs, Button } from '../components/ui.jsx';
@@ -12,6 +12,8 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/
 
 const CustomerDrawing = () => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const getDeptPrefix = () => {
     const segments = location.pathname.split('/').filter(Boolean);
     const prefixes = ['sales', 'design', 'production', 'procurement', 'inventory', 'quality', 'shipment', 'accounts', 'hr', 'admin'];
@@ -136,7 +138,9 @@ const CustomerDrawing = () => {
               setEditingRequirementData(row);
               setUploadMode('manual');
               setShowFormModal(true);
-              window.history.pushState({ type: 'edit-requirement', data: row }, '', `${deptPrefix}/customer-drawing/edit-client`);
+              navigate(`${deptPrefix}/customer-drawing/edit-client?requirement_id=${row.id}`, {
+                state: { type: 'edit-requirement', data: row }
+              });
             }}
             className="p-1.5 text-amber-600 hover:bg-amber-50 rounded transition-all"
             title="Edit Client & Drawings"
@@ -179,6 +183,7 @@ const CustomerDrawing = () => {
   const fetchDrawings = async (search = '') => {
     try {
       setLoading(true);
+      setDrawings([]); // Clear stale data
       const token = localStorage.getItem('authToken');
       const url = search
         ? `${API_BASE}/drawings?search=${encodeURIComponent(search)}`
@@ -202,6 +207,7 @@ const CustomerDrawing = () => {
 
   const fetchCompanies = async () => {
     try {
+      setCompanies([]); // Clear stale data
       const token = localStorage.getItem('authToken');
       const response = await fetch(`${API_BASE}/companies`, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -217,6 +223,7 @@ const CustomerDrawing = () => {
   const fetchApprovedDrawings = async () => {
     try {
       setApprovedLoading(true);
+      setApprovedGroupedByClient({}); // Clear stale data
       const token = localStorage.getItem('authToken');
       const response = await fetch(`${API_BASE}/sales-orders/approved-drawings`, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -381,9 +388,66 @@ const CustomerDrawing = () => {
     return acc;
   }, {});
 
+  useEffect(() => {
+    const clientName = searchParams.get('client_name');
+    if (clientName && !loading && drawings.length > 0 && !viewingClient) {
+      const lowerName = clientName.toLowerCase().trim();
+      const matchedKey = Object.keys(groupedDrawings).find(k => k.toLowerCase().trim() === lowerName);
+      if (matchedKey) {
+        setViewingClient({
+          name: matchedKey,
+          drawings: groupedDrawings[matchedKey]
+        });
+        setShowClientDrawingsModal(true);
+      }
+    }
+  }, [drawings, searchParams, loading, viewingClient]);
+
+  const fetchSingleDrawing = async (id) => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/drawings/${id}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!response.ok) throw new Error('Failed to fetch drawing details');
+      const drawing = await response.json();
+      handleEdit(drawing, searchParams.get('mode') || 'edit');
+    } catch (error) {
+      console.error(error);
+      errorToast('Failed to load drawing details');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchRequirementById = async (id) => {
+    try {
+      setReqLoading(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/sales-orders/${id}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!response.ok) throw new Error('Failed to fetch requirement details');
+      const data = await response.json();
+      
+      setFormMode('edit');
+      setEditingRequirementId(data.id);
+      setEditingRequirementData(data);
+      setUploadMode('manual');
+      setShowFormModal(true);
+    } catch (error) {
+      console.error(error);
+      errorToast('Failed to load requirement details');
+    } finally {
+      setReqLoading(false);
+    }
+  };
+
   const fetchRequirements = async () => {
     try {
       setReqLoading(true);
+      setRequirements([]); // Clear stale data
       const token = localStorage.getItem('authToken');
       const response = await fetch(`${API_BASE}/sales-orders?includeWithoutPo=true`, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -450,6 +514,9 @@ const CustomerDrawing = () => {
     // Initial check on mount or path change
     const path = window.location.pathname;
     const historyState = window.history.state;
+    const drawingId = searchParams.get('drawing_id');
+    const requirementId = searchParams.get('requirement_id');
+    const clientName = searchParams.get('client_name');
 
     if (path === `${deptPrefix}/customer-drawing`) {
       setShowFormModal(false);
@@ -462,17 +529,40 @@ const CustomerDrawing = () => {
         setFormMode('edit');
         setEditingRequirementId(historyState.data.id);
         setEditingRequirementData(historyState.data);
+        setShowFormModal(true);
+      } else if (requirementId) {
+        if (!editingRequirementId || String(editingRequirementId) !== String(requirementId)) {
+          fetchRequirementById(requirementId);
+        }
+        setShowFormModal(true);
       } else if (historyState?.type === 'edit-drawing') {
         setEditData(historyState.data);
         setModalMode(historyState.mode || 'edit');
         setShowEditModal(true);
+        setShowFormModal(false);
+      } else if (drawingId) {
+        if (!editData.id || String(editData.id) !== String(drawingId)) {
+          fetchSingleDrawing(drawingId);
+        }
+        setShowEditModal(true);
+        setShowFormModal(false);
       }
-      setShowFormModal(path.includes(`${deptPrefix}/customer-drawing/edit-client`));
     } else if (path.includes(`${deptPrefix}/customer-drawing/view-draw`)) {
       if (historyState?.type === 'view-client-drawings') {
         setViewingClient(historyState.data);
+        setShowClientDrawingsModal(true);
+      } else if (historyState?.type === 'edit-drawing') {
+        setEditData(historyState.data);
+        setModalMode(historyState.mode || 'view');
+        setShowEditModal(true);
+      } else if (drawingId) {
+        if (!editData.id || String(editData.id) !== String(drawingId)) {
+          fetchSingleDrawing(drawingId);
+        }
+        setShowEditModal(true);
+      } else if (clientName) {
+        setShowClientDrawingsModal(true);
       }
-      setShowClientDrawingsModal(true);
     }
 
     // Handle browser Back/Forward buttons
@@ -634,7 +724,7 @@ const CustomerDrawing = () => {
       id: drawing.id,
       drawing_no: drawing.drawing_no,
       revision_no: drawing.revision || drawing.revision_no || '0',
-      description: drawing.drawing_description || drawing.description || '',
+      description: drawing.drawing_description || drawing.description || drawing.item_description || '',
       client_name: drawing.client_name,
       project_name: drawing.project_name || '',
       contact_person: drawing.contact_person || (company ? company.contact_person : ''),
@@ -658,7 +748,9 @@ const CustomerDrawing = () => {
 
     // Update URL behavior
     const targetUrl = mode === 'view' ? `${deptPrefix}/customer-drawing/view-draw` : `${deptPrefix}/customer-drawing/edit-client`;
-    window.history.pushState({ type: 'edit-drawing', data: newEditData, mode }, '', targetUrl);
+    navigate(`${targetUrl}?drawing_id=${drawing.id}`, {
+      state: { type: 'edit-drawing', data: newEditData, mode }
+    });
   };
 
   const handlePreview = (drawing) => {
@@ -1370,7 +1462,9 @@ const CustomerDrawing = () => {
     setShowClientDrawingsModal(true);
 
     // Update URL behavior
-    window.history.pushState({ type: 'view-client-drawings', data: viewData }, '', `${deptPrefix}/customer-drawing/view-draw`);
+    navigate(`${deptPrefix}/customer-drawing/view-draw?client_name=${encodeURIComponent(name)}`, {
+      state: { type: 'view-client-drawings', data: viewData }
+    });
   };
 
   const handleDeleteRequirement = async (companyId, clientName) => {

@@ -133,6 +133,7 @@ const SalesOrders = () => {
   const fetchOrders = async () => {
     try {
       setLoading(true);
+      setOrders([]); // Clear stale data
       const token = localStorage.getItem('authToken');
       const response = await fetch(`${API_BASE}/order`, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -154,6 +155,7 @@ const SalesOrders = () => {
 
   const fetchCompanies = async () => {
     try {
+      setCompanies([]); // Clear stale data
       const token = localStorage.getItem('authToken');
       const response = await fetch(`${API_BASE}/companies`, {
         headers: { 'Authorization': `Bearer ${token}` }

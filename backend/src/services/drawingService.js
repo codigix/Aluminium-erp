@@ -13,66 +13,53 @@ const getAllDrawings = async () => {
 const listDrawings = async (search = '', onlyShared = false, clientName = null) => {
   let query = `
     SELECT 
-      MAX(d.id) as drawing_master_id,
+      d.id as drawing_master_id,
       d.drawing_no,
-      MAX(d.file_path) as file_path,
+      d.file_path,
       d.client_name,
-      MAX(d.project_name) as project_name,
-      MAX(d.status) as status,
-      MAX(d.status) as drawing_status,
-      MAX(d.description) as drawing_description,
-      MAX(d.uploaded_by) as uploader_name,
-      MAX(d.created_at) as updated_at,
-      MAX(d.qty) as qty,
+      d.project_name,
+      d.status as drawing_status,
+      d.status as status,
+      d.description as drawing_description,
+      d.uploaded_by as uploader_name,
+      d.created_at as updated_at,
+      d.qty,
       d.revision,
-      MAX(d.remarks) as remarks,
-      MAX(d.contact_person) as contact_person,
-      MAX(d.phone) as phone,
-      MAX(d.email) as email,
-      MAX(d.customer_type) as customer_type,
-      MAX(d.gstin) as gstin,
-      MAX(d.city) as city,
-      MAX(d.state) as state,
-      MAX(d.billing_address) as billing_address,
-      MAX(d.shipping_address) as shipping_address,
-      MAX(d.excel_path) as excel_path,
-      MAX(d.zip_path) as zip_path,
-      MAX(soi.id) as sales_order_item_id,
-      MAX(soi.status) as item_status,
-      MAX(soi.sales_order_id) as sales_order_id,
-      MAX(soi.description) as item_description,
-      MAX(soi.bom_cost) as bom_cost,
-      MAX(soi.item_group) as item_group,
-      MAX(soi.unit) as unit,
-      MAX(soi.item_code) as item_code
+      d.remarks,
+      d.contact_person,
+      d.phone,
+      d.email,
+      d.customer_type,
+      d.gstin,
+      d.city,
+      d.state,
+      d.billing_address,
+      d.shipping_address,
+      d.excel_path,
+      d.zip_path,
+      soi.id as sales_order_item_id,
+      soi.status as item_status,
+      soi.sales_order_id as sales_order_id,
+      soi.description as item_description,
+      soi.bom_cost as bom_cost,
+      soi.item_group as item_group,
+      soi.unit as unit,
+      soi.item_code as item_code
     FROM customer_drawings d
     LEFT JOIN (
-      SELECT 
-        s1.id, 
-        s1.drawing_no, 
-        s1.status, 
-        s1.sales_order_id, 
-        s1.description, 
-        s1.bom_cost, 
-        s1.item_group, 
-        s1.unit, 
-        s1.drawing_id, 
-        s1.item_code
+      SELECT s1.*
       FROM sales_order_items s1
-      JOIN (
+      INNER JOIN (
         SELECT COALESCE(drawing_id, 0) as dwg_id, drawing_no as dwg_no, MAX(id) as max_id
         FROM sales_order_items
         GROUP BY dwg_id, dwg_no
-      ) s2 ON (s1.drawing_id = s2.dwg_id AND s1.drawing_no = s2.dwg_no AND s1.id = s2.max_id)
-         OR (s1.drawing_id IS NULL AND s1.drawing_no = s2.dwg_no AND s1.id = s2.max_id)
-    ) soi ON (d.id = soi.drawing_id OR (d.drawing_no = soi.drawing_no AND (soi.drawing_id IS NULL OR soi.drawing_id = d.id)))
+      ) s2 ON (COALESCE(s1.drawing_id, 0) = s2.dwg_id AND s1.drawing_no = s2.dwg_no AND s1.id = s2.max_id)
+    ) soi ON (d.id = soi.drawing_id OR (soi.drawing_id IS NULL AND d.drawing_no = soi.drawing_no))
     WHERE 1=1
   `;
   const params = [];
 
   if (onlyShared) {
-    // Only show drawings that have been explicitly shared or are in design review
-    // We remove "soi.id IS NOT NULL" because an item is created immediately even in CREATED status
     query += ` AND (d.status IN ('SHARED', 'APPROVED', 'DESIGN_IN_REVIEW') OR soi.status IN ('SHARED', 'APPROVED', 'DESIGN_IN_REVIEW'))`;
   }
 
@@ -87,7 +74,7 @@ const listDrawings = async (search = '', onlyShared = false, clientName = null) 
     params.push(searchPattern, searchPattern, searchPattern);
   }
 
-  query += ` GROUP BY d.client_name, d.drawing_no, d.revision ORDER BY MAX(d.created_at) DESC, (MAX(soi.item_group) LIKE '%FG%' OR MAX(soi.item_group) LIKE '%FINISHED%') DESC, (MAX(soi.bom_cost) > 0) DESC, MAX(soi.id) DESC`;
+  query += ` ORDER BY d.id DESC, (soi.item_group LIKE '%FG%' OR soi.item_group LIKE '%FINISHED%') DESC, (soi.bom_cost > 0) DESC, soi.id DESC`;
   const [rows] = await pool.query(query, params);
   
   // Enrich with sub-assemblies for items with BOM structure
@@ -121,6 +108,97 @@ const listDrawings = async (search = '', onlyShared = false, clientName = null) 
     // Otherwise fallback to drawing_master_id
     id: row.sales_order_item_id ? `soi_${row.sales_order_item_id}` : row.drawing_master_id
   }));
+};
+
+const getDrawingById = async (id) => {
+  const [rows] = await pool.query(
+    `SELECT 
+      d.id as drawing_master_id,
+      d.drawing_no,
+      d.file_path,
+      d.client_name,
+      d.project_name,
+      d.status,
+      d.status as drawing_status,
+      d.description as drawing_description,
+      d.uploaded_by as uploader_name,
+      d.created_at as updated_at,
+      d.qty,
+      d.revision,
+      d.remarks,
+      d.contact_person,
+      d.phone,
+      d.email,
+      d.customer_type,
+      d.gstin,
+      d.city,
+      d.state,
+      d.billing_address,
+      d.shipping_address,
+      d.excel_path,
+      d.zip_path,
+      soi.id as sales_order_item_id,
+      soi.status as item_status,
+      soi.sales_order_id as sales_order_id,
+      soi.description as item_description,
+      soi.bom_cost as bom_cost,
+      soi.item_group as item_group,
+      soi.unit as unit,
+      soi.item_code as item_code
+    FROM customer_drawings d
+    LEFT JOIN (
+      SELECT 
+        s1.id, 
+        s1.drawing_no, 
+        s1.status, 
+        s1.sales_order_id, 
+        s1.description, 
+        s1.bom_cost, 
+        s1.item_group, 
+        s1.unit, 
+        s1.drawing_id, 
+        s1.item_code
+      FROM sales_order_items s1
+      JOIN (
+        SELECT COALESCE(drawing_id, 0) as dwg_id, drawing_no as dwg_no, MAX(id) as max_id
+        FROM sales_order_items
+        GROUP BY dwg_id, dwg_no
+      ) s2 ON (s1.drawing_id = s2.dwg_id AND s1.drawing_no = s2.dwg_no AND s1.id = s2.max_id)
+         OR (s1.drawing_id IS NULL AND s1.drawing_no = s2.dwg_no AND s1.id = s2.max_id)
+    ) soi ON (d.id = soi.drawing_id OR (d.drawing_no = soi.drawing_no AND (soi.drawing_id IS NULL OR soi.drawing_id = d.id)))
+    WHERE d.id = ?
+    LIMIT 1`,
+    [id]
+  );
+  
+  if (rows.length === 0) return null;
+  
+  const row = rows[0];
+  if (row.sales_order_item_id || row.item_code || row.drawing_no) {
+    try {
+      const components = await bomService.getItemComponents(row.sales_order_item_id, row.item_code, row.drawing_no);
+      const sub_assemblies = components.filter(c => {
+        const code = (c.item_code || c.component_code || "").toUpperCase();
+        const group = (c.item_group || "").toUpperCase();
+        const desc = (c.description || "").toUpperCase();
+        return (code.startsWith("SA-") || code.startsWith("SFG-") || 
+                group.includes("SA") || group.includes("SUB") || group.includes("ASSEMBLY") ||
+                desc.includes("ASSEMBLY") || desc.includes("UNIT")) &&
+               !group.includes("FG");
+      });
+      row.sub_assemblies = sub_assemblies;
+    } catch (err) {
+      console.error(`Error fetching components for drawing ${id}:`, err);
+      row.sub_assemblies = [];
+    }
+  } else {
+    row.sub_assemblies = [];
+  }
+
+  return {
+    ...row,
+    id: row.sales_order_item_id ? `soi_${row.sales_order_item_id}` : row.drawing_master_id
+  };
 };
 
 const getDrawingRevisions = async (drawingNo) => {
@@ -783,6 +861,7 @@ const getApprovedDrawings = async () => {
 module.exports = {
   getAllDrawings,
   listDrawings,
+  getDrawingById,
   getDrawingRevisions,
   updateDrawing,
   updateItemDrawing,
