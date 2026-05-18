@@ -54,8 +54,8 @@ const getIncomingOrders = async (req, res, next) => {
 
 const createSalesOrder = async (req, res, next) => {
   try {
-    const orderId = await salesOrderService.createSalesOrder(req.body);
-    res.status(201).json({ id: orderId, message: 'Sales order created' });
+    const { id, public_id } = await salesOrderService.createSalesOrder(req.body);
+    res.status(201).json({ id, public_id, message: 'Sales order created' });
   } catch (error) {
     next(error);
   }

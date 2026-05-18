@@ -48,6 +48,7 @@ const DrawingMaster = () => {
     shipping_address: '',
     qty: 1,
     remarks: '',
+    drawing_type: 'Part',
     drawing_pdf: null,
     file_path: ''
   });
@@ -343,6 +344,12 @@ const DrawingMaster = () => {
       sortable: true,
       render: (val, row) => <div className="max-w-xs truncate text-slate-600 ">{val || row.item_description || '—'}</div>
     },
+    {
+      label: 'Type',
+      key: 'drawing_type',
+      sortable: true,
+      render: (val) => <span className="text-xs text-slate-600 ">{val || 'Part'}</span>
+    },
     { 
       label: 'Client / Ref', 
       key: 'client_name',
@@ -509,6 +516,7 @@ const DrawingMaster = () => {
       billing_address: drawing.billing_address || billingAddressLine,
       shipping_address: drawing.shipping_address || shippingAddressLine,
       qty: drawing.qty || 1,
+      drawing_type: drawing.drawing_type || 'Part',
       remarks: drawing.remarks || '',
       drawing_pdf: null,
       file_path: drawing.file_path || drawing.drawing_pdf || ''
@@ -575,6 +583,7 @@ const DrawingMaster = () => {
       formData.append('billingAddress', editData.billing_address);
       formData.append('shippingAddress', editData.shipping_address);
       formData.append('qty', editData.qty);
+      formData.append('drawing_type', editData.drawing_type);
       formData.append('remarks', editData.remarks);
 
       if (editData.drawing_pdf) {
@@ -839,6 +848,17 @@ const DrawingMaster = () => {
                             value={editData.description}
                             onChange={(e) => setEditData({...editData, description: e.target.value})}
                         />
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-xs  text-slate-500  ">Type</label>
+                        <select 
+                            className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                            value={editData.drawing_type || 'Part'}
+                            onChange={(e) => setEditData({...editData, drawing_type: e.target.value})}
+                        >
+                            <option value="Part">Part</option>
+                            <option value="Assembly">Assembly</option>
+                        </select>
                     </div>
                     <div className="space-y-2">
                         <label className="text-xs  text-slate-500  ">Client Name</label>

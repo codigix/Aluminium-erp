@@ -907,18 +907,6 @@ const BOMCreation = () => {
             <h1 className="text-xl  text-slate-900">BOM Creation Center</h1>
             <p className="text-xs text-slate-500 ">Manage and define Bill of Materials for client production orders</p>
           </div>
-          
-          <div className="flex items-center gap-2">
-            <Link 
-              to="/bom-form"
-              className="flex items-center gap-2 p-2  bg-indigo-600 text-white rounded text-xs  shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-              </svg>
-              New BOM
-            </Link>
-          </div>
         </div>
 
         {/* Stats Grid */}

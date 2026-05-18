@@ -18,6 +18,7 @@ const parseExcelDrawings = async (filePath) => {
       drawingNo: -1,
       revision: -1,
       description: -1,
+      drawingType: -1,
       qty: -1,
       remarks: -1,
       drawingFile: -1
@@ -33,6 +34,8 @@ const parseExcelDrawings = async (filePath) => {
         row.forEach((cell, idx) => {
           if (cell.includes('drawing_file') || cell.includes('drawing file') || (cell.includes('file') && !cell.includes('type'))) {
             if (columnMap.drawingFile === -1) columnMap.drawingFile = idx;
+          } else if (cell.includes('type')) {
+            if (columnMap.drawingType === -1) columnMap.drawingType = idx;
           } else if (cell.includes('drawing') || cell.includes('drw') || cell.includes('part no') || cell.includes('item code')) {
             if (columnMap.drawingNo === -1) columnMap.drawingNo = idx;
           } else if (cell.includes('rev')) {
@@ -58,10 +61,17 @@ const parseExcelDrawings = async (filePath) => {
         const drawingNo = columnMap.drawingNo !== -1 ? cleanup(row[columnMap.drawingNo]) : '';
         if (!drawingNo) continue;
 
+        const rawType = columnMap.drawingType !== -1 ? cleanup(row[columnMap.drawingType]) : '';
+        let drawingType = 'Part';
+        if (rawType.toLowerCase().includes('assembly') || rawType.toLowerCase().includes('assly')) {
+          drawingType = 'Assembly';
+        }
+
         drawings.push({
           drawingNo: drawingNo,
           revision: columnMap.revision !== -1 ? cleanup(row[columnMap.revision]) : '',
           description: columnMap.description !== -1 ? cleanup(row[columnMap.description]) : '',
+          drawingType: drawingType,
           qty: columnMap.qty !== -1 ? parseInt(row[columnMap.qty]) || 1 : 1,
           remarks: columnMap.remarks !== -1 ? cleanup(row[columnMap.remarks]) : '',
           drawingFile: columnMap.drawingFile !== -1 ? cleanup(row[columnMap.drawingFile]) : ''
@@ -77,13 +87,20 @@ const parseExcelDrawings = async (filePath) => {
         // If first column looks like a drawing number (often has hyphens or mixed alphanumeric)
         const firstCell = cleanup(row[0]);
         if (firstCell && firstCell.length > 3 && /[A-Z0-9]/.test(firstCell)) {
+           const rawType = row[3] ? cleanup(row[3]) : '';
+           let drawingType = 'Part';
+           if (rawType.toLowerCase().includes('assembly') || rawType.toLowerCase().includes('assly')) {
+             drawingType = 'Assembly';
+           }
+
            drawings.push({
              drawingNo: firstCell,
              revision: row[1] ? cleanup(row[1]) : '',
              description: row[2] ? cleanup(row[2]) : '',
-             qty: row[3] ? parseInt(row[3]) || 1 : 1,
-             remarks: row[4] ? cleanup(row[4]) : '',
-             drawingFile: row[5] ? cleanup(row[5]) : ''
+             drawingType: drawingType,
+             qty: row[4] ? parseInt(row[4]) || 1 : 1,
+             remarks: row[5] ? cleanup(row[5]) : '',
+             drawingFile: row[6] ? cleanup(row[6]) : ''
            });
         }
       }

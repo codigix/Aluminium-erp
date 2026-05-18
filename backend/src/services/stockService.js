@@ -665,16 +665,14 @@ const generateItemCode = async (itemName, itemGroup) => {
 
   const group = (groupType || '').toUpperCase().trim();
   
-  if (group === 'FINISHED GOODS' || group === 'FG' || group === 'FINISHED GOOD') {
-    prefix = 'FG';
+  if (group === 'FINISHED GOODS' || group === 'FG' || group === 'FINISHED GOOD' || group === 'PART') {
+    prefix = 'PART';
   } else if (group === 'RAW MATERIAL' || group === 'RAW MATERIALS' || group === 'RM') {
     prefix = 'RM';
   } else if (group === 'SEMI FINISHED GOODS' || group === 'SFG' || group === 'SEMI-FINISHED GOODS') {
     prefix = 'SFG';
-  } else if (group === 'SUB ASSEMBLY' || group === 'SUB ASSEMBLIES' || group === 'SA' || group === 'SUB-ASSEMBLY') {
-    prefix = 'SA';
-  } else if (group === 'ASSEMBLY' || group === 'ASSY') {
-    prefix = 'ASSY';
+  } else if (group === 'SUB ASSEMBLY' || group === 'SUB ASSEMBLIES' || group === 'SA' || group === 'SUB-ASSEMBLY' || group === 'ASSEMBLY' || group === 'ASSY') {
+    prefix = 'ASSEMBLY';
   } else if (group === 'CONSUMABLES' || group === 'CONSUMABLE' || group === 'CON') {
     prefix = 'CON';
   } else if (group === 'PACKING MATERIAL' || group === 'PACKING MATERIALS' || group === 'PAC') {
@@ -825,6 +823,57 @@ const updateItem = async (id, itemData) => {
   }
 };
 
+const promoteDrawingToItem = async (drawingData, connection = null) => {
+  const { drawing_no, description, drawing_type, revision_no, unit } = drawingData;
+  const useConnection = connection || await pool.getConnection();
+  const shouldRelease = !connection;
+
+  try {
+    if (shouldRelease) await useConnection.beginTransaction();
+
+    // Check if item already exists for this drawing_no
+    const [existing] = await useConnection.query(
+      'SELECT item_code FROM stock_balance WHERE drawing_no = ? LIMIT 1',
+      [drawing_no]
+    );
+
+    if (existing.length > 0) {
+      if (shouldRelease) await useConnection.commit();
+      return existing[0].item_code;
+    }
+
+    // Generate item code - Map drawing types to item group types for prefixing
+    let itemGroup = drawing_type;
+    if (drawing_type?.toUpperCase() === 'ASSEMBLY') itemGroup = 'ASSEMBLY';
+    else if (drawing_type?.toUpperCase() === 'PART') itemGroup = 'PART';
+    
+    const itemCode = await generateItemCode(description, itemGroup);
+    const normalizedGroup = (itemGroup || 'PART').toUpperCase().trim().replace(/ /g, '_');
+
+    await useConnection.execute(`
+      INSERT INTO stock_balance (
+        item_code, material_name, material_type, unit, 
+        drawing_no, revision
+      ) VALUES (?, ?, ?, ?, ?, ?)
+    `, [
+      itemCode,
+      description || 'Drawing Item',
+      normalizedGroup,
+      unit || 'NOS',
+      drawing_no,
+      revision_no || '0'
+    ]);
+
+    if (shouldRelease) await useConnection.commit();
+    return itemCode;
+  } catch (error) {
+    if (shouldRelease) await useConnection.rollback();
+    throw error;
+  } finally {
+    if (shouldRelease) useConnection.release();
+  }
+};
+
 const deleteItem = async (id) => {
   const [result] = await pool.execute('DELETE FROM stock_balance WHERE id = ?', [id]);
   if (result.affectedRows === 0) {
@@ -846,5 +895,6 @@ module.exports = {
   deleteStockBalance,
   createItem,
   updateItem,
+  promoteDrawingToItem,
   generateItemCode
 };

@@ -1227,9 +1227,8 @@ const ItemsMaster = () => {
                     >
                       <option value="">Select Type</option>
                       <option value="RM">RM (Raw Material)</option>
-                      <option value="FG">FG (Finished Goods)</option>
-                      <option value="SFG">SFG (Semi-Finished Goods)</option>
-                      <option value="SA">SA (Sub-Assembly)</option>
+                      <option value="PART">PART</option>
+                      <option value="ASSEMBLY">ASSEMBLY</option>
                       <option value="CON">CON (Consumables)</option>
                       <option value="PAC">PAC (Packing Material)</option>
                       <option value="SCRAP">SCRAP</option>

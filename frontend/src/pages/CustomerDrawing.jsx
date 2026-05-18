@@ -138,7 +138,7 @@ const CustomerDrawing = () => {
               setEditingRequirementData(row);
               setUploadMode('manual');
               setShowFormModal(true);
-              navigate(`${deptPrefix}/customer-drawing/edit-client?requirement_id=${row.id}`, {
+              navigate(`${deptPrefix}/customer-drawing/edit-client?requirement_id=${row.public_id || row.id}`, {
                 state: { type: 'edit-requirement', data: row }
               });
             }}
@@ -531,7 +531,12 @@ const CustomerDrawing = () => {
         setEditingRequirementData(historyState.data);
         setShowFormModal(true);
       } else if (requirementId) {
-        if (!editingRequirementId || String(editingRequirementId) !== String(requirementId)) {
+        // Handle requirementId as either real ID or public_id (UUID)
+        const currentId = String(editingRequirementId);
+        const currentPublicId = String(editingRequirementData?.public_id || '');
+        const matchesCurrent = currentId === String(requirementId) || currentPublicId === String(requirementId);
+
+        if (!editingRequirementId || !matchesCurrent) {
           fetchRequirementById(requirementId);
         }
         setShowFormModal(true);
@@ -596,6 +601,20 @@ const CustomerDrawing = () => {
           setModalMode(state.mode || 'edit');
           setShowEditModal(true);
           setShowFormModal(false);
+        } else {
+          // If no state, try to use requirement_id from URL
+          const params = new URLSearchParams(window.location.search);
+          const rId = params.get('requirement_id');
+          if (rId) {
+            const currentId = String(editingRequirementId);
+            const currentPublicId = String(editingRequirementData?.public_id || '');
+            const matchesCurrent = currentId === String(rId) || currentPublicId === String(rId);
+
+            if (!editingRequirementId || !matchesCurrent) {
+              fetchRequirementById(rId);
+            }
+            setShowFormModal(true);
+          }
         }
         setShowClientDrawingsModal(false);
       } else if (currentPath.includes(`${deptPrefix}/customer-drawing/view-draw`)) {
@@ -637,6 +656,7 @@ const CustomerDrawing = () => {
         revision: item.revision || item.revision_no || '',
         qty: item.quantity || item.qty || 1,
         description: item.description || '',
+        drawing_type: item.drawing_type || 'Part',
         remarks: item.remarks || '',
         file: null,
         file_path: item.file_path || item.drawing_pdf
@@ -843,6 +863,7 @@ const CustomerDrawing = () => {
       then: (schema) => schema.of(
         Yup.object().shape({
           drawing_no: Yup.string().required('Drawing # is required'),
+          drawing_type: Yup.string().required('Type is required'),
           file: Yup.mixed().nullable().optional(),
         })
       ),
@@ -867,12 +888,13 @@ const CustomerDrawing = () => {
       revision: '',
       qty: 1,
       description: '',
+      drawing_type: 'Part',
       file: null,
       zipFile: null,
       remarks: '',
       uploadMode: 'bulk',
       manualDrawings: [
-        { id: Date.now() + Math.random(), drawing_no: '', revision: '', qty: 1, description: '', file: null, remarks: '' }
+        { id: Date.now() + Math.random(), drawing_no: '', revision: '', qty: 1, description: '', drawing_type: 'Part', file: null, remarks: '' }
       ],
     },
     validationSchema,
@@ -929,6 +951,7 @@ const CustomerDrawing = () => {
                 formData.append('revisionNo', drawing.revision || '');
                 formData.append('qty', drawing.qty || 1);
                 formData.append('description', drawing.description || '');
+                formData.append('drawing_type', drawing.drawing_type || 'Part');
                 formData.append('remarks', drawing.remarks || '');
                 if (drawing.file) {
                   formData.append('drawing_pdf', drawing.file);
@@ -966,7 +989,7 @@ const CustomerDrawing = () => {
 
             if (successCount > 0) {
               successToast(`${successCount} drawings added successfully`);
-              formik.setFieldValue('manualDrawings', [{ id: Date.now(), drawing_no: '', revision: '', qty: 1, description: '', file: null, remarks: '' }]);
+              formik.setFieldValue('manualDrawings', [{ id: Date.now(), drawing_no: '', revision: '', qty: 1, description: '', drawing_type: 'Part', file: null, remarks: '' }]);
               setClientLocked(true);
             } else {
               warningToast('No drawings were added. Please fill in Drawing # and select a file for at least one row.');
@@ -1028,7 +1051,7 @@ const CustomerDrawing = () => {
   };
 
   const addManualDrawingRow = () => {
-    const newRow = { id: Date.now() + Math.random(), drawing_no: '', revision: '', qty: 1, description: '', file: null, remarks: '' };
+    const newRow = { id: Date.now() + Math.random(), drawing_no: '', revision: '', qty: 1, description: '', drawing_type: 'Part', file: null, remarks: '' };
     formik.setFieldValue('manualDrawings', [newRow, ...formik.values.manualDrawings]);
   };
 
@@ -1046,7 +1069,7 @@ const CustomerDrawing = () => {
     } else {
       // If it's the last row, clear it instead of removing it
       formik.setFieldValue('manualDrawings', [
-        { id: Date.now() + Math.random(), drawing_no: '', revision: '', qty: 1, description: '', file: null, remarks: '' }
+        { id: Date.now() + Math.random(), drawing_no: '', revision: '', qty: 1, description: '', drawing_type: 'Part', file: null, remarks: '' }
       ]);
     }
   };
@@ -1132,6 +1155,7 @@ const CustomerDrawing = () => {
       formData.append('revision', drawingData.revision || '');
       formData.append('qty', drawingData.qty || 1);
       formData.append('description', drawingData.description || '');
+      formData.append('drawing_type', drawingData.drawing_type || 'Part');
       formData.append('remarks', drawingData.remarks || '');
       formData.append('fileType', fileExt);
       if (drawingData.file) {
@@ -1219,6 +1243,15 @@ const CustomerDrawing = () => {
     { label: 'Drawing No', key: 'drawing_no', className: ' text-slate-900' },
     { label: 'Project Name', key: 'project_name' },
     { label: 'Description', key: 'drawing_description' },
+    { 
+      label: 'Type', 
+      key: 'drawing_type',
+      render: (val) => (
+        <span className={`px-2 py-0.5 rounded text-xs border ${val === 'Assembly' ? 'bg-purple-100 text-purple-700 border-purple-200' : 'bg-blue-100 text-blue-700 border-blue-200'}`}>
+          {val || 'Part'}
+        </span>
+      )
+    },
     { 
       label: 'Revision', 
       key: 'revision', 
@@ -2228,6 +2261,7 @@ const CustomerDrawing = () => {
                       <th className="p-2 text-left text-xs   text-slate-500   w-16">Rev</th>
                       <th className="p-2 text-left text-xs   text-slate-500   w-16">Qty</th>
                       <th className="p-2 text-left text-xs   text-slate-500  ">File *</th>
+                      <th className="p-2 text-left text-xs   text-slate-500  ">Type *</th>
                       <th className="p-2 text-left text-xs   text-slate-500  ">Notes</th>
                       <th className="p-2 text-center text-xs   text-slate-500   w-10"></th>
                     </tr>
@@ -2315,6 +2349,18 @@ const CustomerDrawing = () => {
                           </div>
                         </td>
                         <td className="px-2 py-2">
+                          <select
+                            name={`manualDrawings[${index}].drawing_type`}
+                            className={`w-full px-2 py-1 border rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500 ${formik.touched.manualDrawings?.[index]?.drawing_type && formik.errors.manualDrawings?.[index]?.drawing_type ? 'border-red-500' : 'border-slate-300'}`}
+                            value={drawing.drawing_type || 'Part'}
+                            onChange={formik.handleChange}
+                            onBlur={formik.handleBlur}
+                          >
+                            <option value="Part">Part</option>
+                            <option value="Assembly">Assembly</option>
+                          </select>
+                        </td>
+                        <td className="px-2 py-2">
                           <input
                             type="text"
                             name={`manualDrawings[${index}].remarks`}
@@ -2357,7 +2403,7 @@ const CustomerDrawing = () => {
                   <div className="text-center">
                     <FileText className={`mx-auto h-6 w-6 ${formik.values.file ? 'text-indigo-600' : 'text-slate-400'}`} />
                     <p className="mt-1 text-xs  text-slate-500">{formik.values.file ? formik.values.file.name : 'Upload Excel File'}</p>
-                    <p className="text-[8px] text-slate-400">Format: Drawing No, Revision, Description, Qty, Drawing_File</p>
+                    <p className="text-[8px] text-slate-400">Format: Drawing No, Revision, Description, Type, Qty, Drawing_File</p>
                   </div>
                 </div>
                 {formik.touched.file && formik.errors.file && (

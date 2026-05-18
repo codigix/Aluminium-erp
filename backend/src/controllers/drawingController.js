@@ -55,7 +55,8 @@ const updateDrawing = async (req, res, next) => {
       shippingAddress,
       qty,
       remarks,
-      drawingNo
+      drawingNo,
+      drawing_type
     } = req.body;
     const drawingPdf = req.file ? `uploads/${req.file.filename}` : null;
 
@@ -76,7 +77,8 @@ const updateDrawing = async (req, res, next) => {
       shippingAddress,
       qty,
       remarks,
-      drawingNo
+      drawingNo,
+      drawing_type
     });
     res.json({ message: 'Drawing updated successfully' });
   } catch (error) {
@@ -87,10 +89,10 @@ const updateDrawing = async (req, res, next) => {
 const updateItemDrawing = async (req, res, next) => {
   try {
     const { itemId } = req.params;
-    const { drawingNo, revisionNo, description } = req.body;
+    const { drawingNo, revisionNo, description, drawing_type } = req.body;
     const drawingPdf = req.file ? `uploads/${req.file.filename}` : null;
 
-    await drawingService.updateItemDrawing(itemId, { drawingNo, revisionNo, description, drawingPdf });
+    await drawingService.updateItemDrawing(itemId, { drawingNo, revisionNo, description, drawingPdf, drawing_type });
     res.json({ message: 'Item drawing updated successfully' });
   } catch (error) {
     next(error);
@@ -102,7 +104,8 @@ const createDrawing = async (req, res, next) => {
     const { 
       clientName, projectName, drawingNo, revision, qty, description, remarks, fileType, 
       contactPerson, phoneNumber, emailAddress,
-      customerType, gstin, city, state, billingAddress, shippingAddress
+      customerType, gstin, city, state, billingAddress, shippingAddress,
+      drawing_type
     } = req.body;
     
     // Check for both single file and multiple files (upload.fields)
@@ -176,6 +179,7 @@ const createDrawing = async (req, res, next) => {
             revision: d.revision || revision,
             qty: d.qty || qty || 1,
             description: d.description || description,
+            drawing_type: d.drawing_type || d.drawingType || drawing_type || 'Part',
             filePath: rowFilePath,
             fileType: rowFilePath ? (path.extname(rowFilePath).replace('.', '').toUpperCase() || 'PDF') : 'NONE',
             remarks: d.remarks || remarks,
@@ -222,7 +226,8 @@ const createDrawing = async (req, res, next) => {
       city,
       state,
       billingAddress,
-      shippingAddress
+      shippingAddress,
+      drawing_type
     });
 
     res.status(201).json({ message: 'Customer drawing uploaded successfully', id });

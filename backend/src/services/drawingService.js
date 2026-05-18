@@ -21,6 +21,7 @@ const listDrawings = async (search = '', onlyShared = false, clientName = null) 
       d.status as drawing_status,
       d.status as status,
       d.description as drawing_description,
+      d.drawing_type,
       d.uploaded_by as uploader_name,
       d.created_at as updated_at,
       d.qty,
@@ -121,6 +122,7 @@ const getDrawingById = async (id) => {
       d.status,
       d.status as drawing_status,
       d.description as drawing_description,
+      d.drawing_type,
       d.uploaded_by as uploader_name,
       d.created_at as updated_at,
       d.qty,
@@ -213,7 +215,7 @@ const updateDrawing = async (id, data) => {
   const { 
     description, revisionNo, drawingPdf, clientName, projectName, contactPerson, 
     phoneNumber, emailAddress, customerType, gstin, city, state, 
-    billingAddress, shippingAddress, qty, remarks, drawingNo 
+    billingAddress, shippingAddress, qty, remarks, drawingNo, drawing_type
   } = data;
 
   const connection = await pool.getConnection();
@@ -227,6 +229,7 @@ const updateDrawing = async (id, data) => {
 
     if (description !== undefined) { updates.push('description = ?'); params.push(description); }
     if (revisionNo !== undefined) { updates.push('revision = ?'); params.push(revisionNo); }
+    if (drawing_type !== undefined) { updates.push('drawing_type = ?'); params.push(drawing_type); }
     if (drawingPdf !== undefined && drawingPdf !== null) { updates.push('file_path = ?'); params.push(drawingPdf); }
     if (clientName !== undefined) { updates.push('client_name = ?'); params.push(clientName); }
     if (projectName !== undefined) { updates.push('project_name = ?'); params.push(projectName); }
@@ -268,6 +271,7 @@ const updateDrawing = async (id, data) => {
         if (drawingNo !== undefined) { itemUpdates.push('drawing_no = ?'); itemParams.push(drawingNo); }
         if (revisionNo !== undefined) { itemUpdates.push('revision_no = ?'); itemParams.push(revisionNo); }
         if (description !== undefined) { itemUpdates.push('description = ?'); itemParams.push(description); }
+        if (drawing_type !== undefined) { itemUpdates.push('drawing_type = ?'); itemParams.push(drawing_type); }
         if (drawingPdf !== undefined && drawingPdf !== null) { itemUpdates.push('drawing_pdf = ?'); itemParams.push(drawingPdf); }
         if (qty !== undefined) { itemUpdates.push('quantity = ?'); itemParams.push(qty); }
 
@@ -353,7 +357,7 @@ const updateDrawing = async (id, data) => {
 };
 
 const updateItemDrawing = async (itemId, data) => {
-  const { drawingNo, revisionNo, description, drawingPdf } = data;
+  const { drawingNo, revisionNo, description, drawingPdf, drawing_type } = data;
   
   const connection = await pool.getConnection();
   try {
@@ -365,6 +369,7 @@ const updateItemDrawing = async (itemId, data) => {
     if (drawingNo !== undefined) { updates.push('drawing_no = ?'); params.push(drawingNo); }
     if (revisionNo !== undefined) { updates.push('revision_no = ?'); params.push(revisionNo); }
     if (description !== undefined) { updates.push('description = ?'); params.push(description); }
+    if (drawing_type !== undefined) { updates.push('drawing_type = ?'); params.push(drawing_type); }
     if (drawingPdf !== undefined && drawingPdf !== null) { updates.push('drawing_pdf = ?'); params.push(drawingPdf); }
 
     if (updates.length > 0) {
@@ -382,6 +387,7 @@ const updateItemDrawing = async (itemId, data) => {
       if (drawingNo !== undefined) { dUpdates.push('drawing_no = ?'); dParams.push(drawingNo); }
       if (revisionNo !== undefined) { dUpdates.push('revision = ?'); dParams.push(revisionNo); }
       if (description !== undefined) { dUpdates.push('description = ?'); dParams.push(description); }
+      if (drawing_type !== undefined) { dUpdates.push('drawing_type = ?'); dParams.push(drawing_type); }
       if (drawingPdf !== undefined && drawingPdf !== null) { dUpdates.push('file_path = ?'); dParams.push(drawingPdf); }
       
       if (dUpdates.length > 0) {
@@ -414,7 +420,8 @@ const createCustomerDrawing = async (data) => {
   const { 
     clientName, projectName, drawingNo, revision, qty, description, filePath, fileType, remarks, 
     uploadedBy, contactPerson, phoneNumber, emailAddress,
-    customerType, gstin, city, state, billingAddress, shippingAddress
+    customerType, gstin, city, state, billingAddress, shippingAddress,
+    drawing_type
   } = data;
   
   const connection = await pool.getConnection();
@@ -424,13 +431,13 @@ const createCustomerDrawing = async (data) => {
     // 1. Insert into customer_drawings
     const [result] = await connection.execute(
       `INSERT INTO customer_drawings 
-        (client_name, project_name, drawing_no, revision, qty, description, file_path, file_type, remarks, 
+        (client_name, project_name, drawing_no, revision, qty, description, drawing_type, file_path, file_type, remarks, 
          uploaded_by, contact_person, phone, email, 
-         customer_type, gstin, city, state, billing_address, shipping_address, excel_path, zip_path)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         customer_type, gstin, city, state, billing_address, shipping_address, excel_path, zip_path, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')`
       ,
       [
-        clientName || null, projectName || null, drawingNo, revision || null, qty || 1, description || null, filePath, fileType, remarks || null, 
+        clientName || null, projectName || null, drawingNo, revision || null, qty || 1, description || null, drawing_type || 'Part', filePath, fileType, remarks || null, 
         uploadedBy || 'Sales', contactPerson || null, phoneNumber || null, emailAddress || null,
         customerType || null, gstin || null, city || null, state || null, billingAddress || null, shippingAddress || null,
         fileType === 'XLSX' || fileType === 'XLS' ? filePath : null,
@@ -503,9 +510,9 @@ const createCustomerDrawing = async (data) => {
 
     // 4. Create Sales Order Item
     await connection.execute(
-      `INSERT INTO sales_order_items (sales_order_id, drawing_no, drawing_id, revision_no, drawing_pdf, description, quantity, unit)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [salesOrderId, drawingNo, drawingId, revision || '0', filePath, description || 'Customer Drawing', qty || 1, 'NOS']
+      `INSERT INTO sales_order_items (sales_order_id, drawing_no, drawing_id, revision_no, drawing_pdf, description, drawing_type, quantity, unit, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')`,
+      [salesOrderId, drawingNo, drawingId, revision || '0', filePath, description || 'Customer Drawing', drawing_type || 'Part', qty || 1, 'NOS']
     );
 
     await connection.commit();
@@ -528,19 +535,20 @@ const createBatchCustomerDrawings = async (batchData, batchInfo = {}) => {
       const { 
         clientName, projectName, drawingNo, revision, qty, description, filePath, fileType, remarks, 
         uploadedBy, contactPerson, phoneNumber, emailAddress,
-        customerType, gstin, city, state, billingAddress, shippingAddress
+        customerType, gstin, city, state, billingAddress, shippingAddress,
+        drawing_type
       } = data;
 
       // 1. Insert into customer_drawings
       const [result] = await connection.execute(
         `INSERT INTO customer_drawings 
-          (client_name, project_name, drawing_no, revision, qty, description, file_path, file_type, remarks, 
+          (client_name, project_name, drawing_no, revision, qty, description, drawing_type, file_path, file_type, remarks, 
            uploaded_by, contact_person, phone, email, 
-           customer_type, gstin, city, state, billing_address, shipping_address, excel_path, zip_path)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+           customer_type, gstin, city, state, billing_address, shipping_address, excel_path, zip_path, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')`
         ,
         [
-          clientName || null, projectName || null, drawingNo, revision || null, qty || 1, description || null, filePath, fileType, remarks || null, 
+          clientName || null, projectName || null, drawingNo, revision || null, qty || 1, description || null, drawing_type || 'Part', filePath, fileType, remarks || null, 
           uploadedBy || 'Sales', contactPerson || null, phoneNumber || null, emailAddress || null,
           customerType || null, gstin || null, city || null, state || null, billingAddress || null, shippingAddress || null,
           batchInfo.excelPath || null,
@@ -607,9 +615,9 @@ const createBatchCustomerDrawings = async (batchData, batchInfo = {}) => {
 
       // 4. Create Sales Order Item
       await connection.execute(
-        `INSERT INTO sales_order_items (sales_order_id, drawing_no, drawing_id, revision_no, drawing_pdf, description, quantity, unit)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [salesOrderId, drawingNo, drawingId, revision || '0', filePath, description || 'Customer Drawing', qty || 1, 'NOS']
+        `INSERT INTO sales_order_items (sales_order_id, drawing_no, drawing_id, revision_no, drawing_pdf, description, drawing_type, quantity, unit, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')`,
+        [salesOrderId, drawingNo, drawingId, revision || '0', filePath, description || 'Customer Drawing', drawing_type || 'Part', qty || 1, 'NOS']
       );
       
       count++;

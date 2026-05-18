@@ -777,6 +777,13 @@ const ensureCustomerDrawingTable = async () => {
       )
     `);
     
+    // Add drawing_type column if it doesn't exist
+    const [drawingTypeCols] = await connection.query("SHOW COLUMNS FROM customer_drawings LIKE 'drawing_type'");
+    if (drawingTypeCols.length === 0) {
+      await connection.query("ALTER TABLE customer_drawings ADD COLUMN drawing_type VARCHAR(50) DEFAULT 'Part' AFTER description");
+      console.log('Added drawing_type column to customer_drawings');
+    }
+
     // Add project_name column if it doesn't exist
     const [projectCols] = await connection.query("SHOW COLUMNS FROM customer_drawings LIKE 'project_name'");
     if (projectCols.length === 0) {
@@ -1017,7 +1024,8 @@ const ensureSalesOrderItemColumns = async () => {
       { name: 'status', definition: "VARCHAR(50) DEFAULT 'PENDING'" },
       { name: 'rejection_reason', definition: 'TEXT' },
       { name: 'bom_cost', definition: 'DECIMAL(14, 2) DEFAULT 0' },
-      { name: 'item_type', definition: "VARCHAR(50) DEFAULT 'FG'" }
+      { name: 'item_type', definition: "VARCHAR(50) DEFAULT 'FG'" },
+      { name: 'drawing_type', definition: "VARCHAR(50) DEFAULT 'Part'" }
     ];
 
     const missing = requiredColumns.filter(column => !existing.has(column.name));

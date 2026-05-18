@@ -122,7 +122,7 @@ const WorkOrder = () => {
         <span className={`text-[10px]  ${
           val === 'SA' ? 'text-amber-600' : 'text-indigo-600'
         }`}>
-          {val === 'SA' ? 'Sub-Assembly' : 'Finished Goods'}
+          {val === 'ASSEMBLY' || val === 'SA' ? 'ASSEMBLY' : 'PART'}
         </span>
       )
     },

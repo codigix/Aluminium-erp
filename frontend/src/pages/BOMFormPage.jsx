@@ -899,13 +899,12 @@ const BOMFormPage = () => {
 
   const getItemGroupFromMaterialType = (type) => {
     const t = (type || '').toLowerCase();
-    if (t === 'fg') return 'FG';
-    if (t.includes('finished') && !t.includes('semi')) return 'FG';
-    if (t.includes('semi')) return 'SFG';
-    if (t.includes('sub assembly') || t.includes('sub-assembly')) return 'Sub Assembly';
-    if (t.includes('assembly') && !t.includes('sub')) return 'Assembly';
-    // If it's a component or raw material being BOM'd, it's usually a Sub Assembly
-    return 'Sub Assembly';
+    if (t === 'fg' || t === 'part') return 'PART';
+    if (t.includes('finished') && !t.includes('semi')) return 'PART';
+    if (t.includes('semi')) return 'PART';
+    if (t.includes('sub assembly') || t.includes('sub-assembly') || t.includes('assembly')) return 'ASSEMBLY';
+    // If it's a component or raw material being BOM'd, it's usually an Assembly
+    return 'ASSEMBLY';
   };
 
   const getMaterialItemGroupFromType = (item) => {
@@ -920,11 +919,12 @@ const BOMFormPage = () => {
         name.includes('con-') || t.includes('con-') || name.includes('grease') || 
         name.includes('oil') || name.includes('lubricant') || name.includes('coolant')) return 'Consumables';
     
-    // Priority 2: Sub-assemblies / SFG
+    // Priority 2: Assemblies
     if (name.includes('sub assembly') || name.includes('sub-assembly') || ig.includes('sub assembly') || 
-        t.includes('sub assembly') || t.includes('sub-assembly') || name.startsWith('sa-') || name.startsWith('sfg-')) return 'Sub-Assembly';
+        t.includes('sub assembly') || t.includes('sub-assembly') || name.startsWith('sa-') || name.startsWith('sfg-') ||
+        name.includes('assembly') || ig.includes('assembly') || t.includes('assembly')) return 'ASSEMBLY';
     if (name.includes('sfg') || name.includes('semi') || ig.includes('sfg') || ig.includes('semi') || 
-        t.includes('sfg') || t.includes('semi')) return 'Semi-Finished Goods';
+        t.includes('sfg') || t.includes('semi')) return 'ASSEMBLY';
     
     // Priority 3: Packing Material
     if (name.includes('packing') || ig.includes('packing') || t.includes('packing') || 

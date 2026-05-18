@@ -7,7 +7,7 @@ async function run() {
     password: 'C0digix$309',
     database: 'spTech_dev'
   });
-  const [rows] = await connection.query('DESCRIBE sales_order_items');
+  const [rows] = await connection.query("SELECT drawing_no, drawing_type, item_code, sales_order_id FROM sales_order_items WHERE sales_order_id IN (SELECT id FROM sales_orders WHERE company_id = (SELECT id FROM companies WHERE company_name = 'Client Requirement PVT'))");
   console.table(rows);
   await connection.end();
 }

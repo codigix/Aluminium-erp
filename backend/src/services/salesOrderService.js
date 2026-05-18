@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const pool = require('../config/db');
 const designOrderService = require('./designOrderService');
 const bomService = require('./bomService');
+const stockService = require('./stockService');
 
 const numberToWords = (num) => {
   const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
@@ -391,7 +392,7 @@ const createSalesOrder = async (orderData) => {
     }
 
     await connection.commit();
-    return salesOrderId;
+    return { id: salesOrderId, public_id: publicId };
   } catch (error) {
     await connection.rollback();
     throw error;
@@ -733,6 +734,12 @@ const updateSalesOrderItemStatus = async (itemId, status, reason) => {
           [salesOrderId, `Item ID ${itemId} Rejected: ${reason}`]
         );
       } else if (status.trim().toUpperCase() === 'APPROVED') {
+        // Promote drawing to Item Master
+        const itemData = await getSalesOrderItem(itemId);
+        if (itemData) {
+          await stockService.promoteDrawingToItem(itemData, connection);
+        }
+
         // If an item is approved, ensure the order is accepted by design and visible in process list
         const [orderRows] = await connection.query('SELECT status, request_accepted FROM sales_orders WHERE id = ?', [salesOrderId]);
         if (orderRows.length > 0) {
@@ -1712,6 +1719,14 @@ const bulkUpdateItemStatus = async (itemIds, status, reason) => {
         );
       }
     } else if (status.trim().toUpperCase() === 'APPROVED') {
+      // Promote drawings to Item Master
+      for (const itemId of itemIds) {
+        const itemData = await getSalesOrderItem(itemId);
+        if (itemData) {
+          await stockService.promoteDrawingToItem(itemData, connection);
+        }
+      }
+
       // Process approval logic for each unique order
       for (const item of items) {
         const salesOrderId = item.sales_order_id;
