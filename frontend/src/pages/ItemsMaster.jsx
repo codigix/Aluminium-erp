@@ -671,11 +671,16 @@ const ItemsMaster = () => {
         }
         
         return (
-          <div className="flex flex-col">
-            <span className=" text-slate-900">{val}</span>
+          <div className="flex flex-col gap-0.5">
+            <span className=" text-slate-900 font-medium">{val}</span>
             {dims.length > 0 && (
               <span className="text-xs  text-slate-400 mt-0.5">
                 {dims.join(' x ')}
+              </span>
+            )}
+            {row.drawing_no && row.drawing_no !== 'N/A' && row.drawing_no !== '—' && (
+              <span className="text-[10px] text-slate-500 font-mono font-medium bg-slate-100 border border-slate-200 px-1 py-0.2 rounded w-fit mt-0.5 select-all">
+                DRW: {row.drawing_no}
               </span>
             )}
           </div>
@@ -1008,6 +1013,28 @@ const ItemsMaster = () => {
                   ))}
                 </select>
               </div>
+
+              {(() => {
+                const groupNameLower = String(itemFormData.itemGroup || '').toLowerCase().trim();
+                const selectedGroupObj = itemGroups.find(g => String(g.name).trim().toLowerCase() === groupNameLower);
+                const isPart = groupNameLower.includes('part') || (selectedGroupObj && selectedGroupObj.group_type === 'PART');
+                
+                if (!isPart) return null;
+                
+                return (
+                  <div className="space-y-2">
+                    <label className="text-xs text-slate-500 font-semibold">Drawing No *</label>
+                    <input 
+                      type="text"
+                      className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                      placeholder="Enter Drawing No"
+                      value={itemFormData.drawingNo || ''}
+                      onChange={(e) => setItemFormData({...itemFormData, drawingNo: e.target.value})}
+                      required
+                    />
+                  </div>
+                );
+              })()}
 
               <div className="space-y-2">
                 <label className="text-xs  text-slate-500  ">UOM</label>

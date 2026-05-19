@@ -218,30 +218,34 @@ const BOMCreation = () => {
 
   useEffect(() => {
     if (filter === 'drafts' && orders.length > 0) {
+      let changed = false;
       const newExpandedDrawings = { ...expandedDrawings };
-
+  
       orders.forEach(client => {
         const items = clientData[client.id]?.items || [];
-        const hasDraft = items.some(i => i.status === 'DRAFT');
-        if (hasDraft) {
-          const drawings = items.reduce((acc, item) => {
-            const dwg = cleanText(item.drawing_no || 'N/A');
-            if (!acc[dwg]) acc[dwg] = [];
-            acc[dwg].push(item);
-            return acc;
-          }, {});
-
-          Object.entries(drawings).forEach(([dwgNo, dwgItems]) => {
-            if (dwgItems.some(i => i.status === 'DRAFT')) {
-              newExpandedDrawings[`${client.id}_${dwgNo}`] = true;
+        const drawings = items.reduce((acc, item) => {
+          const dwg = cleanText(item.drawing_no || 'N/A');
+          if (!acc[dwg]) acc[dwg] = [];
+          acc[dwg].push(item);
+          return acc;
+        }, {});
+  
+        Object.entries(drawings).forEach(([dwgNo, dwgItems]) => {
+          if (dwgItems.some(i => i.status === 'DRAFT')) {
+            const key = `${client.id}_${dwgNo}`;
+            if (!newExpandedDrawings[key]) {
+              newExpandedDrawings[key] = true;
+              changed = true;
             }
-          });
-        }
+          }
+        });
       });
-
-      setExpandedDrawings(newExpandedDrawings);
+  
+      if (changed) {
+        setExpandedDrawings(newExpandedDrawings);
+      }
     }
-  }, [filter, orders, clientData, expandedDrawings]);
+  }, [filter, orders, clientData]);
 
   const toggleDrawing = (dwgKey) => {
     setExpandedDrawings(prev => ({ ...prev, [dwgKey]: !prev[dwgKey] }));
@@ -477,9 +481,10 @@ const BOMCreation = () => {
 
     orders.forEach(client => {
       const items = clientData[client.id]?.items || [];
+      const topLevelItems = items.filter(i => !i.parent_bom_id);
       const drawingsMap = {};
 
-      items.forEach(i => {
+      topLevelItems.forEach(i => {
         const dwgNo = cleanText(i.drawing_no || 'N/A');
         if (!drawingsMap[dwgNo]) drawingsMap[dwgNo] = [];
         drawingsMap[dwgNo].push(i);
@@ -536,7 +541,8 @@ const BOMCreation = () => {
 
   const isClientBOMCompleted = (row) => {
     const items = clientData[row.id]?.items || [];
-    const drawingsMap = items.reduce((acc, item) => {
+    const topLevelItems = items.filter(item => !item.parent_bom_id);
+    const drawingsMap = topLevelItems.reduce((acc, item) => {
       const dwg = cleanText(item.drawing_no || 'N/A');
       if (!acc[dwg]) acc[dwg] = [];
       acc[dwg].push(item);
@@ -642,8 +648,8 @@ const BOMCreation = () => {
                   onClick={(e) => { e.stopPropagation(); handleSendForApproval(row); }}
                   disabled={!isCompleted}
                   className={`flex items-center gap-2 p-1.5 rounded text-xs transition-all border ${isCompleted
-                      ? "bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border-emerald-100"
-                      : "bg-slate-50 text-slate-400 border-slate-100 cursor-not-allowed opacity-60"
+                    ? "bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border-emerald-100"
+                    : "bg-slate-50 text-slate-400 border-slate-100 cursor-not-allowed opacity-60"
                     }`}
                 >
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -670,7 +676,8 @@ const BOMCreation = () => {
       );
     }
 
-    const drawingsMap = items.reduce((acc, item) => {
+    const topLevelItems = items.filter(item => !item.parent_bom_id);
+    const drawingsMap = topLevelItems.reduce((acc, item) => {
       const dwg = cleanText(item.drawing_no || 'N/A');
       if (!acc[dwg]) acc[dwg] = [];
       acc[dwg].push(item);
@@ -690,13 +697,17 @@ const BOMCreation = () => {
             const drawingName = dwgItems[0].drawing_name || dwgItems[0].item_name || dwgItems[0].item_description || 'No Description';
             const drawingId = dwgItems[0].drawing_id;
             const drawingType = dwgItems.find(i => i.drawing_type)?.drawing_type || '';
-            const itemsWithBOM = dwgItems.filter(i => i.has_bom || i.has_master_bom);
+
+            const parentBOMs = dwgItems.filter(i => i.has_bom || i.has_master_bom);
+            const childBOMs = items.filter(i => i.parent_bom_id && dwgItems.some(p => p.id === i.parent_bom_id));
+            const allDwgItems = [...dwgItems, ...childBOMs];
+            const allItemsWithBOM = [...parentBOMs, ...childBOMs];
 
             // Calculate total FG/SA cost for this drawing
-            const fgItems = dwgItems.filter(i =>
+            const fgItems = allDwgItems.filter(i =>
               (i.item_group === 'FG' || i.product_type === 'FG' || (i.item_group || '').toLowerCase().includes('finished'))
             );
-            const topItems = fgItems.length > 0 ? fgItems : dwgItems.filter(i =>
+            const topItems = fgItems.length > 0 ? fgItems : allDwgItems.filter(i =>
               (i.item_code || '').startsWith('SA-') || (i.item_group || '').includes('SA')
             );
             const latestCosts = topItems.reduce((acc, i) => {
@@ -710,7 +721,7 @@ const BOMCreation = () => {
 
             // Refined status logic
             let dwgStatus = 'PENDING';
-            if (itemsWithBOM.length > 0) {
+            if (allItemsWithBOM.length > 0) {
               dwgStatus = 'COMPLETED';
             } else if (dwgItems.length > 0) {
               dwgStatus = 'DESIGN_APPROVED'; // Custom label for UI
@@ -758,7 +769,16 @@ const BOMCreation = () => {
                     </div>
                     <div className="text-right hidden sm:block">
                       <p className="text-xs  text-slate-400  uppercase tracking-wider mb-0.5">BOMs</p>
-                      <p className="text-sm  text-slate-700 leading-none">{itemsWithBOM.length}</p>
+                      <p className="text-sm  text-slate-700 leading-none">
+                        {(() => {
+                          const uniqueGroups = allItemsWithBOM.reduce((acc, item) => {
+                            const groupId = item.item_code || cleanText(item.description || item.item_name || item.material_name || 'BOM Item');
+                            acc.add(groupId);
+                            return acc;
+                          }, new Set());
+                          return uniqueGroups.size;
+                        })()}
+                      </p>
                     </div>
                     <Link
                       to={`/bom-form?drawing_no=${encodeURIComponent(dwgNo)}&drawing_id=${dwgItems[0].drawing_public_id || drawingId}&drawing_name=${encodeURIComponent(drawingName)}&sales_order_id=${dwgItems[0].sales_order_public_id || dwgItems[0].sales_order_id}`}
@@ -799,15 +819,18 @@ const BOMCreation = () => {
                         <tbody className="divide-y divide-slate-50">
                           {(() => {
                             // Group items by item_code or description to handle versions
-                            const groupedBOMs = dwgItems.filter(item => item.has_bom || item.has_master_bom).reduce((acc, item) => {
+                            const groupedBOMs = allItemsWithBOM.reduce((acc, item) => {
                               const groupId = item.item_code || cleanText(item.description || item.item_name || item.material_name || 'BOM Item');
                               if (!acc[groupId]) acc[groupId] = [];
                               acc[groupId].push(item);
                               return acc;
                             }, {});
 
-                            return Object.entries(groupedBOMs).map(([groupId, versions]) => {
-                              // Sort versions descending by revision_no then ID
+                            // Separate parents and children
+                            const parentGroups = [];
+                            const childGroupsMap = {}; // parentId -> array of child groups
+
+                            Object.entries(groupedBOMs).forEach(([groupId, versions]) => {
                               const sortedVersions = versions.sort((a, b) => {
                                 const vA = parseFloat(a.version || a.revision_no || 0);
                                 const vB = parseFloat(b.version || b.revision_no || 0);
@@ -815,18 +838,52 @@ const BOMCreation = () => {
                                 return b.id - a.id;
                               });
                               const latest = sortedVersions[0];
-                              const hasMultiple = sortedVersions.length > 1;
+                              if (latest.parent_bom_id) {
+                                if (!childGroupsMap[latest.parent_bom_id]) {
+                                  childGroupsMap[latest.parent_bom_id] = [];
+                                }
+                                childGroupsMap[latest.parent_bom_id].push({ groupId, sortedVersions, latest });
+                              } else {
+                                parentGroups.push({ groupId, sortedVersions, latest });
+                              }
+                            });
 
+                            // Flatten to ensure children are listed under parents
+                            const finalOrderedGroups = [];
+                            parentGroups.forEach(pg => {
+                              finalOrderedGroups.push(pg);
+                              const childGroups = childGroupsMap[pg.latest.id] || [];
+                              finalOrderedGroups.push(...childGroups);
+                            });
+
+                            // Also append any child groups whose parent was not found in this accordion (fallback)
+                            Object.entries(childGroupsMap).forEach(([pId, groups]) => {
+                              const parentInList = parentGroups.some(pg => pg.latest.id === parseInt(pId));
+                              if (!parentInList) {
+                                finalOrderedGroups.push(...groups);
+                              }
+                            });
+
+                            return finalOrderedGroups.map(({ groupId, sortedVersions, latest }) => {
+                              const hasMultiple = sortedVersions.length > 1;
+                              const isChild = latest.parent_bom_id !== null && latest.parent_bom_id !== undefined;
                               return (
                                 <React.Fragment key={groupId}>
                                   <tr className="hover:bg-slate-50/50 transition-colors">
                                     <td className="px-4 p-2">
                                       <div className="flex items-center gap-2">
                                         <div className="flex flex-col">
-                                          <span className="text-xs  text-slate-700">
-                                            {cleanText(latest.description || latest.material_name || 'BOM Item')}
+                                          <span className="text-xs text-slate-700 flex items-center gap-1 font-medium">
+                                            <span>{cleanText(latest.description || latest.material_name || 'BOM Item')}</span>
                                           </span>
-                                          <span className="text-xs  text-slate-400 ">{latest.item_code}</span>
+                                          <span className="text-[11px] text-slate-400 flex items-center gap-1.5 font-mono">
+                                            <span>{latest.item_code}</span>
+                                            {latest.drawing_no && latest.drawing_no !== dwgNo && (
+                                              <span className="text-[10px] bg-slate-100 text-slate-500 px-1 py-0.2 rounded font-sans">
+                                                DRW: {latest.drawing_no}
+                                              </span>
+                                            )}
+                                          </span>
                                         </div>
                                       </div>
                                     </td>
@@ -851,7 +908,7 @@ const BOMCreation = () => {
                                       </span>
                                     </td>
                                     <td className="px-4 p-2 text-center">
-                                      <span className="text-xs  text-indigo-600">
+                                      <span className="text-xs  text-indigo-600 font-medium">
                                         ₹{parseFloat(latest.bom_cost || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                       </span>
                                     </td>

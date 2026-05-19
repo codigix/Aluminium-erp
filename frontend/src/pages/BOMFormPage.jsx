@@ -160,6 +160,11 @@ const RecursiveBOMRow = ({
                 <span className="text-xs  text-slate-800 ">
                   {item.component_code || item.componentCode || item.material_name || item.materialName}
                 </span>
+                {(item.drawing_no || item.drawingNo) && (item.drawing_no || item.drawingNo) !== 'N/A' && (
+                  <span className="text-[10px] text-slate-500 font-mono">
+                    {item.drawing_no || item.drawingNo}
+                  </span>
+                )}
                 {getDimensionString(item) && (
                   <span className="text-xs text-emerald-600 ">
                     {getDimensionString(item)}
@@ -407,6 +412,11 @@ const getAutofetchedGroup = (item) => {
   // 1. Check item code / name / description prefixes and content (case-insensitive)
   const code = String(item.item_code || item.itemCode || item.component_code || item.componentCode || '').trim().toUpperCase();
   const desc = String(item.description || item.material_name || item.material_type || item.drawing_name || item.name || '').trim().toUpperCase();
+
+  // If the item code explicitly starts with PART-, it is a Part (regardless of desc keywords like ASSY)
+  if (code.startsWith('PART-')) {
+    return 'Part';
+  }
 
   if (code.startsWith('ASSEMBLY-') || code.startsWith('ASSY-') || code.startsWith('SA-') ||
     code.includes('ASSEMBLY') || code.includes('ASSY') ||
@@ -693,18 +703,42 @@ const BOMFormPage = () => {
     const currentItemCode = selectedItem?.item_code || productForm.itemCode;
     const productDrawing = selectedItem?.drawing_no || productForm.drawingNo;
 
-    // Helper to check if item is a component type
-    const isComponentType = (type) => {
+    // Helper to check if item is a component type (show ONLY Part and Consumables, NOT Assemblies)
+    const isComponentType = (type, code = '', name = '') => {
       const t = (type || '').toLowerCase();
-      // Exclude FG/Finished goods from component selection as they shouldn't be inside another BOM normally
-      return t.includes('part') || t.includes('semi') || t.includes('assembly') || t.includes('sfg') || t.includes('sub') || t.includes('consumable');
+      const c = (code || '').toUpperCase();
+      const n = (name || '').toLowerCase();
+
+      // EXCLUDE assemblies, finished goods, and sub-assemblies
+      if (c.startsWith('SA-') || c.startsWith('SFG-') || c.startsWith('FG-') || c.startsWith('ASSEMBLY-') || c.startsWith('ASSY-')) {
+        return false;
+      }
+      if (t.includes('assembly') || t.includes('finished') || t.includes('sfg') || t.includes('sub')) {
+        return false;
+      }
+
+      // Exclude raw materials, packaging, hardware, service, tooling
+      if (t.includes('raw') || t.includes('material') || t.includes('pack') || 
+          t.includes('tool') || t.includes('service') || t.includes('fastener')) {
+        return false;
+      }
+
+      // Exclude nuts, bolts, screws, washers, rivets, cartons, tapes from Component Selection
+      if (n.includes('nut') || n.includes('bolt') || n.includes('screw') || 
+          n.includes('washer') || n.includes('rivet') || n.includes('gasket') ||
+          n.includes('packing') || n.includes('carton') || n.includes('sticker') ||
+          n.includes('tape') || n.includes('glue')) {
+        return false;
+      }
+
+      // Include only Parts and Consumables
+      return t.includes('part') || t.includes('consumable') || c.startsWith('PART-');
     };
 
     // 1. Add Stock Items
     stockItems.forEach(item => {
-      if (getAutofetchedGroup(item) !== 'Part') return;
       const type = (item.material_type || item.item_group || "").toLowerCase();
-      if (!isComponentType(type)) return;
+      if (!isComponentType(type, item.item_code, item.material_name)) return;
 
       // Strict FG check by code prefix
       if (item.item_code && item.item_code.startsWith("FG-")) return;
@@ -739,7 +773,9 @@ const BOMFormPage = () => {
           width: item.width,
           thickness: item.thickness,
           diameter: item.diameter,
-          outer_diameter: item.outer_diameter
+          outer_diameter: item.outer_diameter,
+          drawingNo: item.drawing_no || 'N/A',
+          drawing_no: item.drawing_no || 'N/A'
         });
         seenCodes.add(item.item_code);
       }
@@ -747,8 +783,9 @@ const BOMFormPage = () => {
 
     // 2. Add Approved Drawings (Sales Order Items)
     approvedDrawings.forEach(item => {
-      if (getAutofetchedGroup(item) !== 'Part') return;
       const type = (item.item_group || "").toLowerCase();
+      if (!isComponentType(type, item.item_code, item.description || item.material_name)) return;
+
       const isSA = (item.item_code || "").startsWith("SA-") || (item.item_code || "").startsWith("SFG-") || (item.item_code || "").startsWith("PART-") || type.includes("assembly") || type.includes("sub") || type.includes("semi") || type.includes("sfg") || type.includes("consumable") || type.includes("part");
 
       if (!isSA && !showAllDrawings) return;
@@ -795,7 +832,9 @@ const BOMFormPage = () => {
           width: item.width,
           thickness: item.thickness,
           diameter: item.diameter,
-          outer_diameter: item.outer_diameter
+          outer_diameter: item.outer_diameter,
+          drawingNo: item.drawing_no || 'N/A',
+          drawing_no: item.drawing_no || 'N/A'
         });
         seenCodes.add(item.item_code);
       }
@@ -871,7 +910,7 @@ const BOMFormPage = () => {
       }
 
       // Handle itemCode or drawing_no or item_id from URL
-      if (!selectedItem && (stockItems.length > 0 || approvedDrawings.length > 0 || itemIdParam)) {
+      if (stockItems.length > 0 || approvedDrawings.length > 0 || itemIdParam) {
         if (itemIdParam) {
           try {
             const token = localStorage.getItem('authToken');
@@ -881,11 +920,11 @@ const BOMFormPage = () => {
             if (response.ok) {
               const item = await response.json();
               if (item) {
-                setSelectedItem({ ...item, source: 'order' });
+                setSelectedItem(prev => prev || { ...item, source: 'order' });
                 setProductForm(prev => ({
                   ...prev,
-                  itemCode: item.item_code || '',
-                  description: item.drawing_name || item.description || item.item_description || '',
+                  itemCode: item.item_code || prev.itemCode || '',
+                  description: item.drawing_name || item.description || item.item_description || prev.description || '',
                   drawingNo: item.drawing_no || dwgParam || prev.drawingNo,
                   drawing_id: item.drawing_id || dwgIdParam || prev.drawing_id
                 }));
@@ -902,9 +941,9 @@ const BOMFormPage = () => {
           const stockItem = stockItems.find(i => i.item_code === itemCodeParam);
           const item = orderItem || stockItem;
           if (item) {
-            setSelectedItem({ ...item, source: orderItem ? 'order' : 'stock' });
+            setSelectedItem(prev => prev || { ...item, source: orderItem ? 'order' : 'stock' });
           }
-        } else if (dwgParam && !itemId && !selectedItem) {
+        } else if (dwgParam && !itemId) {
           // For NEW BOM creation from a drawing, pre-fill drawing info
           // and also try to find and set the related product/item info
 
@@ -919,7 +958,7 @@ const BOMFormPage = () => {
             matchedItem = dwgInfo;
             dwgName = dwgInfo.material_name || dwgInfo.description || dwgInfo.item_description || '';
             itemCode = dwgInfo.item_code || '';
-            setSelectedItem({ ...dwgInfo, source: approvedDrawings.find(i => i.drawing_no === dwgParam) ? 'order' : 'stock' });
+            setSelectedItem(prev => prev || { ...dwgInfo, source: approvedDrawings.find(i => i.drawing_no === dwgParam) ? 'order' : 'stock' });
           }
 
           if (!dwgName) {
@@ -938,13 +977,13 @@ const BOMFormPage = () => {
         }
       }
 
-      if (dwgParam && !drawingFilter) {
-        setDrawingFilter(dwgParam);
+      if (dwgParam) {
+        setDrawingFilter(prev => prev || dwgParam);
       }
     };
 
     handleInitialParams();
-  }, [location.search, drawingFilter, selectedItem, approvedDrawings, stockItems, itemId, productForm.drawingNo, fetchDrawingName]);
+  }, [location.search, approvedDrawings.length, stockItems.length, itemId, fetchDrawingName]);
 
   useEffect(() => {
     const effectiveId = (itemId === 'bom-form' || !itemId) ? null : itemId;
@@ -1182,6 +1221,8 @@ const BOMFormPage = () => {
               // Use stored weights/dimensions if available, especially for historical integrity
               return {
                 ...m,
+                drawingNo: m.drawing_no || m.drawingNo || s?.drawing_no || 'N/A',
+                drawing_no: m.drawing_no || m.drawingNo || s?.drawing_no || 'N/A',
                 rate: parseFloat(rate || 0),
                 item_code: m.item_code || s?.item_code,
                 weight_per_unit: (isHistorical && parseFloat(m.weight_per_unit) > 0) ? m.weight_per_unit : (m.weight_per_unit || s?.weight_per_unit || 0),
@@ -1205,6 +1246,8 @@ const BOMFormPage = () => {
 
               return {
                 ...c,
+                drawingNo: c.drawing_no || c.drawingNo || s?.drawing_no || 'N/A',
+                drawing_no: c.drawing_no || c.drawingNo || s?.drawing_no || 'N/A',
                 rate: parseFloat(rate || 0),
                 weight_per_unit: (isHistorical && parseFloat(c.weight_per_unit) > 0) ? c.weight_per_unit : (c.weight_per_unit || s?.weight_per_unit || 0),
                 length: (isHistorical && parseFloat(c.length) > 0) ? c.length : (c.length || s?.length || 0),
@@ -1280,7 +1323,8 @@ const BOMFormPage = () => {
       const payload = { ...formData };
       payload.parent_id = payload.parentId || null;
       payload.itemCode = formData.itemCode || selectedItem?.item_code || productForm.itemCode;
-      payload.drawingNo = selectedItem?.drawing_no || productForm.drawingNo;
+      payload.drawingNo = (section === 'components' || section === 'materials' || section === 'scrap') ? (formData.drawingNo || formData.drawing_no || 'N/A') : (selectedItem?.drawing_no || productForm.drawingNo);
+      payload.drawing_no = payload.drawingNo;
 
       if (section === 'materials') {
         if (!payload.materialName || !payload.qty) {
@@ -1419,6 +1463,8 @@ const BOMFormPage = () => {
         payload.scrap_percent = parseFloat(formData.scrapPercent) || 0;
         payload.materialName = payload.materialName;
         payload.itemGroup = payload.itemGroup;
+        payload.drawingNo = formData.drawingNo || formData.drawing_no || 'N/A';
+        payload.drawing_no = payload.drawingNo;
       } else if (section === 'components') {
         payload.component_code = payload.componentCode;
         payload.quantity = parseFloat(payload.quantity) || 0;
@@ -1427,6 +1473,8 @@ const BOMFormPage = () => {
         payload.weight_per_unit = parseFloat(formData.weightPerUnit) || 0;
         payload.scrap_percent = parseFloat(formData.scrapPercent) || 0;
         payload.item_group = payload.itemGroup;
+        payload.drawingNo = formData.drawingNo || formData.drawing_no || 'N/A';
+        payload.drawing_no = payload.drawingNo;
       } else if (section === 'operations') {
         payload.operation_name = payload.operationName;
         payload.cycle_time_min = parseFloat(payload.cycleTimeMin) || 0;
@@ -1786,13 +1834,20 @@ const BOMFormPage = () => {
         isNewVersion,
         salesOrderId: salesOrderIdFromUrl || (selectedItem?.source === 'order' ? (selectedItem.sales_order_id || selectedItem.salesOrderId) : null),
         status: status,
+        parentDrawingNo: params.get('drawing_no') || null,
         productForm: {
           ...productForm,
           revision: nextRevision
         },
-        materials: bomData.materials,
+        materials: bomData.materials.map(m => ({
+          ...m,
+          drawingNo: m.drawingNo || m.drawing_no || 'N/A',
+          drawing_no: m.drawing_no || m.drawingNo || 'N/A'
+        })),
         components: bomData.components.map(c => ({
           ...c,
+          drawingNo: c.drawingNo || c.drawing_no || 'N/A',
+          drawing_no: c.drawing_no || c.drawingNo || 'N/A',
           sourceFg: ((c.componentCode || '').startsWith('SA-') || (c.componentCode || '').startsWith('SFG-')) ? productForm.drawingNo : null
         })),
         operations: bomData.operations,
@@ -1998,8 +2053,8 @@ const BOMFormPage = () => {
     const group = (productForm.itemGroup || "").toUpperCase();
     const isFG = group.includes("FG") || group.includes("FINISHED") || group.includes("GOOD");
 
-    // ONLY auto-update if we have an existing BOM (itemId present)
-    if (itemId && itemId !== 'bom-form' && !loading && totalBOMCost > 0 && !hasAutoUpdated.current) {
+    // ONLY auto-update if we have an existing BOM (itemId present) and NOT in read-only mode
+    if (itemId && itemId !== 'bom-form' && !isReadOnly && !loading && totalBOMCost > 0 && !hasAutoUpdated.current) {
       // Robust parsing: remove everything except numbers and decimal point
       const savedCost = parseFloat(String(productForm.bom_cost || 0).replace(/[^0-9.]/g, ''));
       const currentCost = parseFloat(totalBOMCost);
@@ -2015,7 +2070,7 @@ const BOMFormPage = () => {
         return () => clearTimeout(timer);
       }
     }
-  }, [totalBOMCost, productForm.bom_cost, loading, productForm.itemGroup, itemId]);
+  }, [totalBOMCost, productForm.bom_cost, loading, productForm.itemGroup, itemId, isReadOnly]);
 
   if (loading && stockItems.length === 0 && bomData.materials.length === 0 && bomData.components.length === 0) return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-2">
@@ -2040,9 +2095,9 @@ const BOMFormPage = () => {
                     : 'Create BOM')}
                 {productForm.revision && (
                   <span className={`p-1 rounded text-xs border  ${selectedItem?.status === 'Approved' ? 'text-emerald-50  ' :
-                      selectedItem?.status === 'Draft' ? 'text-amber-50 ' :
-                        selectedItem?.status === 'Rejected' ? 'text-rose-50 ' :
-                          ' text-blue-600 '
+                    selectedItem?.status === 'Draft' ? 'text-amber-50 ' :
+                      selectedItem?.status === 'Rejected' ? 'text-rose-50 ' :
+                        ' text-blue-600 '
                     }`}>
                     {selectedItem?.status || 'Pending'}
                   </span>
@@ -2162,25 +2217,37 @@ const BOMFormPage = () => {
                           return true;
                         });
 
-                        // Filter to show only Part or Assembly items (excl. Finished Goods / FG- prefix)
+                        // Filter to show only FG (Finished Goods), SA (Sub-assemblies), SFG, and Parts
                         return deduplicated.filter(opt => {
                           // Always include selected item
                           if (selectedItem && opt.value === `${selectedItem.source || 'order'}_${selectedItem.id}`) return true;
 
                           const code = (opt.item_code || '').toUpperCase();
-                          if (code.startsWith('FG-')) return false;
-
                           const group = (opt.item_group || '').toLowerCase();
-                          if (group === 'fg' || group.includes('finished')) return false;
+                          const name = (opt.label || '').toLowerCase();
 
-                          const sub = (opt.subLabel || '').toLowerCase();
+                          // Exclude raw materials, consumables, hardware, services, packaging
+                          if (group.includes('raw') || group.includes('material') || group.includes('consumable') || 
+                              group.includes('hardware') || group.includes('service') || group.includes('pack') ||
+                              group.includes('tool') || group.includes('fastener') || group.includes('chemical') || 
+                              group.includes('scrap')) {
+                            return false;
+                          }
 
-                          return group.includes('part') ||
-                            group.includes('assembly') ||
-                            group.includes('sfg') ||
-                            group.includes('semi') ||
-                            sub.includes('part') ||
-                            sub.includes('assembly');
+                          if (name.includes('nut') || name.includes('bolt') || name.includes('screw') || 
+                              name.includes('washer') || name.includes('rivet') || name.includes('gasket') ||
+                              name.includes('packing') || name.includes('carton') || name.includes('sticker') ||
+                              name.includes('tape') || name.includes('glue') || name.includes('consumable')) {
+                            return false;
+                          }
+
+                          // Include only valid BOM-able groups: FG, SA, SFG, Part, Assembly, Semi-Finished
+                          const isBOMableGroup = group.includes('fg') || group.includes('sfg') || group.includes('finished') || 
+                                                 group.includes('assembly') || group.includes('assy') || group.includes('part') || 
+                                                 group.includes('semi') || code.startsWith('SA-') || code.startsWith('SFG-') || 
+                                                 code.startsWith('FG-') || code.startsWith('ASSEMBLY-') || code.startsWith('PART-');
+
+                          return isBOMableGroup;
                         }).sort((a, b) => {
                           if (drawingFilter) {
                             const cleanA = String(a.drawing_no || '').replace(/\s*\($/, '');
@@ -2205,7 +2272,7 @@ const BOMFormPage = () => {
                             ...prev,
                             description: (item.material_name || item.description || item.item_description || '').replace(/\s*\($/, ''),
                             itemCode: item.item_code,
-                            itemGroup: item.item_group || item.material_type || getItemGroupFromMaterialType(item.material_type),
+                            itemGroup: getAutofetchedGroup(item),
                             drawingNo: (item.drawing_no && item.drawing_no !== 'N/A') ? item.drawing_no : (prev.drawingNo || ''),
                             drawing_id: (item.drawing_id && item.drawing_id !== 'N/A') ? item.drawing_id : (prev.drawing_id || ''),
                             uom: item.unit || item.uom || 'Kg',
@@ -2265,19 +2332,32 @@ const BOMFormPage = () => {
                         // Always include selected item
                         if (selectedItem && opt.value === `${selectedItem.source || 'order'}_${selectedItem.id}`) return true;
 
+                        const code = (opt.label || '').toUpperCase();
                         const group = (opt.item_group || '').toLowerCase();
-                        const isFinishedOrSub = group.includes('finished') ||
-                          group.includes('sub') ||
-                          group.includes('assembly') ||
-                          group === 'fg' ||
-                          group === 'sfg' ||
-                          group === 'sub-assembly' ||
-                          group === 'semi finished' ||
-                          group === 'semi-finished' ||
-                          group === 'raw' || // Allow raw materials if they want to BOM them (unlikely but possible)
-                          group.includes('good');
+                        const name = (opt.subLabel || '').toLowerCase();
 
-                        return isFinishedOrSub;
+                        // Exclude raw materials, consumables, hardware, services, packaging
+                        if (group.includes('raw') || group.includes('material') || group.includes('consumable') || 
+                            group.includes('hardware') || group.includes('service') || group.includes('pack') ||
+                            group.includes('tool') || group.includes('fastener') || group.includes('chemical') || 
+                            group.includes('scrap')) {
+                          return false;
+                        }
+
+                        if (name.includes('nut') || name.includes('bolt') || name.includes('screw') || 
+                            name.includes('washer') || name.includes('rivet') || name.includes('gasket') ||
+                            name.includes('packing') || name.includes('carton') || name.includes('sticker') ||
+                            name.includes('tape') || name.includes('glue') || name.includes('consumable')) {
+                          return false;
+                        }
+
+                        // Include only valid BOM-able groups: FG, SA, SFG, Part, Assembly, Semi-Finished
+                        const isBOMableGroup = group.includes('fg') || group.includes('sfg') || group.includes('finished') || 
+                                               group.includes('assembly') || group.includes('assy') || group.includes('part') || 
+                                               group.includes('semi') || code.startsWith('SA-') || code.startsWith('SFG-') || 
+                                               code.startsWith('FG-') || code.startsWith('ASSEMBLY-') || code.startsWith('PART-');
+
+                        return isBOMableGroup;
                       }).sort((a, b) => {
                         // Sort matching drawings to the top
                         if (drawingFilter) {
@@ -2302,7 +2382,7 @@ const BOMFormPage = () => {
                             ...prev,
                             description: (item.material_name || item.description || item.item_description || '').replace(/\s*\($/, ''),
                             itemCode: item.item_code,
-                            itemGroup: item.item_group || item.material_type || getItemGroupFromMaterialType(item.material_type),
+                            itemGroup: getAutofetchedGroup(item),
                             drawingNo: (item.drawing_no && item.drawing_no !== 'N/A') ? item.drawing_no : (prev.drawingNo || ''),
                             drawing_id: (item.drawing_id && item.drawing_id !== 'N/A') ? item.drawing_id : (prev.drawing_id || ''),
                             uom: item.unit || item.uom || 'Kg',
@@ -2406,7 +2486,7 @@ const BOMFormPage = () => {
         </div>
 
         {/* SECTION 2: Components */}
-        {(productForm.itemGroup === 'Assembly' || productForm.itemGroup === 'Part') && (
+        {String(productForm.itemGroup || '').toLowerCase() === 'assembly' && (
           <Card className="p-0 border-slate-200 overflow-hidden  transition-all hover:">
             <div
               className="bg-white p-2 flex justify-between items-center cursor-pointer hover:bg-slate-50 transition-colors border-b border-slate-100"
@@ -2483,7 +2563,9 @@ const BOMFormPage = () => {
                               width: item ? item.width : '',
                               thickness: item ? item.thickness : '',
                               diameter: item ? item.diameter : '',
-                              outer_diameter: item ? item.outer_diameter : ''
+                              outer_diameter: item ? item.outer_diameter : '',
+                              drawingNo: item ? (item.drawingNo || item.drawing_no || 'N/A') : 'N/A',
+                              drawing_no: item ? (item.drawing_no || item.drawingNo || 'N/A') : 'N/A'
                             });
                           }}
                           subLabelField="subLabel"
@@ -2496,7 +2578,7 @@ const BOMFormPage = () => {
                           value={componentForm.parentId}
                           onChange={(e) => setComponentForm({ ...componentForm, parentId: e.target.value })}
                         >
-                          <option value="">None (Top Level)</option>
+                          <option value="">{productForm.description || productForm.drawingNo || new URLSearchParams(location.search).get('drawing_name') || new URLSearchParams(location.search).get('drawing_no') || 'None (Top Level)'}</option>
                           {bomData.components.map(c => (
                             <option key={c.id} value={c.id}>{c.component_code || c.componentCode}</option>
                           ))}
@@ -2520,7 +2602,7 @@ const BOMFormPage = () => {
                         {editingSectionItem?.section === 'components' ? (
                           <div className="flex gap-2">
                             <button
-                              onClick={() => handleUpdateSectionItem('components', componentForm, setComponentForm, { componentCode: '', quantity: '1', uom: 'Kg', rate: '', lossPercent: '', notes: '', parentId: '', description: '', weightPerUnit: '', scrapPercent: '0', itemGroup: '', length: '', width: '', thickness: '', diameter: '', outer_diameter: '' })}
+                              onClick={() => handleUpdateSectionItem('components', componentForm, setComponentForm, { componentCode: '', quantity: '1', uom: 'Kg', rate: '', lossPercent: '', notes: '', parentId: '', description: '', weightPerUnit: '', scrapPercent: '0', itemGroup: '', length: '', width: '', thickness: '', diameter: '', outer_diameter: '', drawingNo: '', drawing_no: '' })}
                               className="flex-1 py-2 bg-blue-600 text-white rounded  text-xs  hover:bg-blue-700 shadow-lg shadow-blue-100 transition-all active:scale-95 flex items-center justify-center gap-2"
                             >
                               <Save className="w-4 h-4" />
@@ -2535,7 +2617,7 @@ const BOMFormPage = () => {
                           </div>
                         ) : (
                           <button
-                            onClick={() => handleAddSectionItem('components', componentForm, setComponentForm, { componentCode: '', quantity: '1', uom: 'Kg', rate: '', lossPercent: '', notes: '', parentId: '', description: '', weightPerUnit: '', scrapPercent: '0', itemGroup: '', length: '', width: '', thickness: '', diameter: '', outer_diameter: '' })}
+                            onClick={() => handleAddSectionItem('components', componentForm, setComponentForm, { componentCode: '', quantity: '1', uom: 'Kg', rate: '', lossPercent: '', notes: '', parentId: '', description: '', weightPerUnit: '', scrapPercent: '0', itemGroup: '', length: '', width: '', thickness: '', diameter: '', outer_diameter: '', drawingNo: '', drawing_no: '' })}
                             className="w-full py-2 bg-indigo-600 text-white rounded  text-xs  hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all active:scale-95 flex items-center justify-center gap-2"
                           >
                             <Plus className="w-4 h-4" />
@@ -2710,10 +2792,10 @@ const BOMFormPage = () => {
                             const type = (item.material_type || "").toLowerCase();
                             const group = (item.item_group || "").toLowerCase();
 
-                            // EXCLUDE FG and Sub-assemblies ONLY (Keep Raw Materials, Consumables, PM, etc.)
-                            if (itemCode.startsWith("FG-") || itemCode.startsWith("SA-") || itemCode.startsWith("SFG-")) return false;
-                            if (type.includes("finished") || type.includes("assembly")) return false;
-                            if (group.includes("finished") || group.includes("assembly")) return false;
+                            // EXCLUDE FG, Sub-assemblies, and Parts (Keep Raw Materials, Consumables, PM, etc.)
+                            if (itemCode.startsWith("FG-") || itemCode.startsWith("SA-") || itemCode.startsWith("SFG-") || itemCode.startsWith("PART-")) return false;
+                            if (type.includes("finished") || type.includes("assembly") || type.includes("part")) return false;
+                            if (group.includes("finished") || group.includes("assembly") || group.includes("part")) return false;
 
                             // Type Filter
                             const targetGroup = (materialForm.itemGroup || '').toLowerCase().replace(/_/g, ' ').trim();
@@ -2723,9 +2805,9 @@ const BOMFormPage = () => {
                             // Filter by group logic
                             if (targetGroup) {
                               if (targetGroup.includes('raw material') || targetGroup.includes('rm')) {
-                                // For Raw Material selection, allow everything EXCEPT sub-assemblies/SFG/FG
-                                if (normalizedType.includes('finished') || normalizedType.includes('assembly')) return false;
-                                if (normalizedGroup.includes('finished') || normalizedGroup.includes('assembly')) return false;
+                                // For Raw Material selection, allow everything EXCEPT sub-assemblies/SFG/FG/Parts
+                                if (normalizedType.includes('finished') || normalizedType.includes('assembly') || normalizedType.includes('part')) return false;
+                                if (normalizedGroup.includes('finished') || normalizedGroup.includes('assembly') || normalizedGroup.includes('part')) return false;
                               } else if (targetGroup.includes('consumable') || targetGroup.includes('con')) {
                                 if (!normalizedType.includes('consumable') && !normalizedGroup.includes('consumable') && !normalizedGroup.includes('con')) return false;
                               } else if (targetGroup.includes('pm') || targetGroup.includes('packing')) {
@@ -2926,7 +3008,7 @@ const BOMFormPage = () => {
                         value={materialForm.parentId}
                         onChange={(e) => setMaterialForm({ ...materialForm, parentId: e.target.value })}
                       >
-                        <option value="">None (Top Level)</option>
+                        <option value="">{productForm.description || productForm.drawingNo || new URLSearchParams(location.search).get('drawing_name') || new URLSearchParams(location.search).get('drawing_no') || 'None (Top Level)'}</option>
                         {bomData.components.map(c => (
                           <option key={c.id} value={c.id}>{c.component_code || c.componentCode}</option>
                         ))}
@@ -3365,7 +3447,7 @@ const BOMFormPage = () => {
                         value={scrapForm.parentId}
                         onChange={(e) => setScrapForm({ ...scrapForm, parentId: e.target.value })}
                       >
-                        <option value="">None (Top Level)</option>
+                        <option value="">{productForm.description || productForm.drawingNo || new URLSearchParams(location.search).get('drawing_name') || new URLSearchParams(location.search).get('drawing_no') || 'None (Top Level)'}</option>
                         {bomData.components.map(c => (
                           <option key={c.id} value={c.id}>{c.component_code || c.componentCode}</option>
                         ))}
@@ -3671,8 +3753,8 @@ const BOMFormPage = () => {
                         key={v.id || idx}
                         onClick={() => navigate(`/bom-form/${v.id}?view=true`)}
                         className={`group relative p-2 rounded border transition-all cursor-pointer ${isViewing
-                            ? 'bg-indigo-50/50 border-indigo-200 ring-1 ring-indigo-100'
-                            : 'bg-white border-slate-100 hover:border-indigo-200 hover:shadow-md hover:shadow-indigo-50'
+                          ? 'bg-indigo-50/50 border-indigo-200 ring-1 ring-indigo-100'
+                          : 'bg-white border-slate-100 hover:border-indigo-200 hover:shadow-md hover:shadow-indigo-50'
                           }`}
                       >
                         <div className="flex items-center justify-between">

@@ -834,8 +834,8 @@ const getBOMBySalesOrder = async (salesOrderId) => {
 };
 
 const createBOMRequest = async (bomData) => {
-  const { itemId, salesOrderId, status, productForm, materials, components, operations, scrap, source, costing, isNewVersion } = bomData;
-  console.log(`[createBOMRequest] ItemID: ${itemId}, SOID: ${salesOrderId}, Status: ${status}, Source: ${source}, Drawing: ${productForm.drawingNo}, isNewVersion: ${isNewVersion}`);
+  const { itemId, salesOrderId, status, productForm, materials, components, operations, scrap, source, costing, isNewVersion, parentDrawingNo } = bomData;
+  console.log(`[createBOMRequest] ItemID: ${itemId}, SOID: ${salesOrderId}, Status: ${status}, Source: ${source}, Drawing: ${productForm.drawingNo}, isNewVersion: ${isNewVersion}, parentDrawingNo: ${parentDrawingNo}`);
   
   const { itemCode, itemGroup, uom, revision, description, notes, isActive, isDefault, quantity, drawingNo, drawing_id } = productForm;
   const bom_cost = costing?.costPerUnit || 0;
@@ -869,6 +869,17 @@ const createBOMRequest = async (bomData) => {
 
     const safeItemCode = itemCode || null;
 
+    let resolvedParentBomId = null;
+    if (parentDrawingNo && parentDrawingNo !== drawingNo && resolvedSalesOrderId) {
+      const [parentRows] = await connection.query(
+        'SELECT id FROM sales_order_items WHERE sales_order_id = ? AND drawing_no = ? ORDER BY id DESC LIMIT 1',
+        [resolvedSalesOrderId, parentDrawingNo]
+      );
+      if (parentRows.length > 0) {
+        resolvedParentBomId = parentRows[0].id;
+      }
+    }
+
     let itemType = 'FG';
     if (safeItemCode) {
       if (safeItemCode.startsWith('SA-')) itemType = 'SA';
@@ -900,9 +911,10 @@ const createBOMRequest = async (bomData) => {
         `UPDATE sales_order_items 
          SET item_code = ?, item_type = ?, item_group = ?, unit = ?, revision_no = ?, description = ?, is_active = ?, is_default = ?, drawing_no = ?, drawing_id = ?, bom_cost = ?, 
              bom_id = IFNULL(bom_id, ?),
-             status = CASE WHEN UPPER(TRIM(status)) = 'APPROVED' THEN status ELSE ? END
+             status = CASE WHEN UPPER(TRIM(status)) = 'APPROVED' THEN status ELSE ? END,
+             parent_bom_id = COALESCE(parent_bom_id, ?)
          WHERE id = ?`,
-        [
+         [
           safeItemCode, 
           itemType,
           itemGroup || null, 
@@ -916,6 +928,7 @@ const createBOMRequest = async (bomData) => {
           bom_cost,
           effectiveBomId || itemId,
           finalStatus === 'Draft' ? 'DRAFT' : 'PENDING',
+          resolvedParentBomId,
           itemId
         ]
       );
@@ -940,8 +953,8 @@ const createBOMRequest = async (bomData) => {
 
       const [result] = await connection.execute(
         `INSERT INTO sales_order_items 
-         (sales_order_id, bom_id, item_code, item_type, item_group, unit, revision_no, description, is_active, is_default, quantity, drawing_no, drawing_id, bom_cost, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (sales_order_id, bom_id, item_code, item_type, item_group, unit, revision_no, description, is_active, is_default, quantity, drawing_no, drawing_id, bom_cost, status, parent_bom_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           resolvedSalesOrderId || null,
           effectiveBomId, // Will be NULL if completely new, or parent ID if new version
@@ -957,7 +970,8 @@ const createBOMRequest = async (bomData) => {
           drawingNo || null,
           resolvedDrawingId || null,
           bom_cost,
-          initialStatus
+          initialStatus,
+          resolvedParentBomId
         ]
       );
       targetItemId = result.insertId;
@@ -1106,9 +1120,56 @@ const createBOMRequest = async (bomData) => {
       }
     }
 
-    // 4. Update sales_order status (only if linked to sales order)
-    // 4. Removed automatic update of sales_order status to BOM_SUBMITTED
-    // This allows manual submission via "BOM Approval" button in frontend
+    // Sync parent_bom_id relationships in sales_order_items for this sales order
+    try {
+      if (resolvedSalesOrderId) {
+        // Find all BOM items for this sales order
+        const [boms] = await connection.query(
+          'SELECT id, item_code, drawing_no FROM sales_order_items WHERE sales_order_id = ?',
+          [resolvedSalesOrderId]
+        );
+        for (const bom of boms) {
+          if (!bom.item_code) continue;
+          // Find if this bom is referenced as a component in any other BOM of the same sales order
+          const [parents] = await connection.query(
+            `SELECT sales_order_item_id FROM sales_order_item_components 
+             WHERE sales_order_item_id IN (SELECT id FROM sales_order_items WHERE sales_order_id = ?)
+             AND component_code = ? AND component_code IS NOT NULL AND component_code != ''
+             LIMIT 1`,
+            [resolvedSalesOrderId, bom.item_code]
+          );
+          if (parents.length > 0) {
+            await connection.query(
+              'UPDATE sales_order_items SET parent_bom_id = ? WHERE id = ?',
+              [parents[0].sales_order_item_id, bom.id]
+            );
+          }
+        }
+      } else {
+        // Master BOMs (sales_order_id is NULL)
+        const [boms] = await connection.query(
+          'SELECT id, item_code, drawing_no FROM sales_order_items WHERE sales_order_id IS NULL'
+        );
+        for (const bom of boms) {
+          if (!bom.item_code) continue;
+          const [parents] = await connection.query(
+            `SELECT sales_order_item_id FROM sales_order_item_components 
+             WHERE sales_order_item_id IN (SELECT id FROM sales_order_items WHERE sales_order_id IS NULL)
+             AND component_code = ? AND component_code IS NOT NULL AND component_code != ''
+             LIMIT 1`,
+            [bom.item_code]
+          );
+          if (parents.length > 0) {
+            await connection.query(
+              'UPDATE sales_order_items SET parent_bom_id = ? WHERE id = ?',
+              [parents[0].sales_order_item_id, bom.id]
+            );
+          }
+        }
+      }
+    } catch (syncError) {
+      console.error('[Relation Sync Error] Failed to sync parent_bom_id:', syncError.message);
+    }
     
     await connection.commit();
 
@@ -1208,6 +1269,7 @@ const deleteBOM = async (itemId) => {
     const salesOrderId = itemRows.length > 0 ? itemRows[0].sales_order_id : null;
 
     // 2. Handle references in other tables
+    await connection.execute('UPDATE sales_order_items SET parent_bom_id = NULL WHERE parent_bom_id = ?', [itemId]);
     await connection.execute('UPDATE quotation_requests SET sales_order_item_id = NULL WHERE sales_order_item_id = ?', [itemId]);
     await connection.execute('UPDATE production_plan_items SET sales_order_item_id = NULL WHERE sales_order_item_id = ?', [itemId]);
     await connection.execute('UPDATE work_orders SET sales_order_item_id = NULL WHERE sales_order_item_id = ?', [itemId]);

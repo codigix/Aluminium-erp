@@ -1047,7 +1047,8 @@ const ensureSalesOrderItemColumns = async () => {
       { name: 'rejection_reason', definition: 'TEXT' },
       { name: 'bom_cost', definition: 'DECIMAL(14, 2) DEFAULT 0' },
       { name: 'item_type', definition: "VARCHAR(50) DEFAULT 'FG'" },
-      { name: 'drawing_type', definition: "VARCHAR(50) DEFAULT 'Part'" }
+      { name: 'drawing_type', definition: "VARCHAR(50) DEFAULT 'Part'" },
+      { name: 'parent_bom_id', definition: 'INT DEFAULT NULL' }
     ];
 
     const missing = requiredColumns.filter(column => !existing.has(column.name));

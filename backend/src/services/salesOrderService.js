@@ -7,7 +7,7 @@ const stockService = require('./stockService');
 const numberToWords = (num) => {
   const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
   const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
-  
+
   const convert = (n) => {
     if (n < 20) return ones[n];
     if (n < 100) return tens[Math.floor(n / 10)] + (n % 10 !== 0 ? ' ' + ones[n % 10] : '');
@@ -36,7 +36,7 @@ const numberToWords = (num) => {
 
   const amount = Math.floor(num);
   const paisa = Math.round((num - amount) * 100);
-  
+
   let result = 'INR ' + formatWords(amount) + ' Only';
   if (paisa > 0) {
     result = 'INR ' + formatWords(amount) + ' and ' + formatWords(paisa) + ' Paisa Only';
@@ -49,7 +49,7 @@ const listSalesOrders = async (includeWithoutPo = true) => {
   if (!includeWithoutPo) {
     whereClause += ' AND so.customer_po_id IS NOT NULL';
   }
-  
+
   const [rows] = await pool.query(
     `SELECT so.*, 
             COALESCE(so.project_name, cp.project_name) as project_name,
@@ -71,7 +71,7 @@ const listSalesOrders = async (includeWithoutPo = true) => {
      ${whereClause}
      ORDER BY so.created_at DESC`
   );
-  
+
   for (const order of rows) {
     const [items] = await pool.query(
       `SELECT soi.*, soi.quantity as design_qty, cd.file_path, cd.hsn_code, COALESCE(soi.delivery_date, cd.delivery_date) as delivery_date 
@@ -83,7 +83,7 @@ const listSalesOrders = async (includeWithoutPo = true) => {
     order.items = items;
     order.client = order.company_name; // Add client alias for frontend
   }
-  
+
   return rows;
 };
 
@@ -107,7 +107,7 @@ const getSalesOrderById = async (id) => {
      WHERE ${whereClause}`,
     [id]
   );
-  
+
   if (rows.length === 0) return null;
   const order = rows[0];
   order.client = order.company_name;
@@ -120,13 +120,13 @@ const getSalesOrderById = async (id) => {
     [order.id]
   );
   order.items = items;
-  
+
   return order;
 };
 
 const getIncomingOrders = async (departmentCode, includeAccepted = false) => {
   console.log(`[getIncomingOrders-service] Starting query for department: "${departmentCode}", includeAccepted: ${includeAccepted}`);
-  
+
   let whereClause = '';
   if (departmentCode === 'DESIGN_ENG') {
     whereClause = `so.status IN ('CREATED', 'DESIGN_QUERY', 'DESIGN_IN_REVIEW')`;
@@ -143,7 +143,7 @@ const getIncomingOrders = async (departmentCode, includeAccepted = false) => {
   } else {
     whereClause = `so.current_department = '${departmentCode}'`;
   }
-  
+
   const acceptedFilter = includeAccepted ? '' : 'AND so.request_accepted = 0';
 
   const query = `SELECT so.*, so.target_dispatch_date as delivery_date, c.company_name, c.company_code, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path, 
@@ -178,27 +178,27 @@ const getIncomingOrders = async (departmentCode, includeAccepted = false) => {
      LEFT JOIN stock_balance sb ON sb.item_code = soi.item_code
      WHERE (${whereClause}) ${acceptedFilter}
      ORDER BY so.created_at DESC`;
-  
+
   const [rows] = await pool.query(query);
   console.log(`[getIncomingOrders-service] Query returned ${rows.length} rows for department "${departmentCode}"`);
   console.log(`[getIncomingOrders-service] Raw rows:`, rows);
-  
+
   // Add client alias for each row
   rows.forEach(row => {
     row.client = row.company_name;
   });
-  
+
   return rows;
 };
 
 const createSalesOrder = async (orderData) => {
-  const { 
-    customerPoId, 
-    companyId, 
-    projectName, 
-    drawingRequired = 0, 
-    productionPriority = 'NORMAL', 
-    targetDispatchDate, 
+  const {
+    customerPoId,
+    companyId,
+    projectName,
+    drawingRequired = 0,
+    productionPriority = 'NORMAL',
+    targetDispatchDate,
     delivery_date, // Added delivery_date alias
     items,
     cgst_rate = 0,
@@ -221,9 +221,9 @@ const createSalesOrder = async (orderData) => {
   if (source_type === 'PO' && customerPoId && !isNaN(Number(customerPoId)) && Number(customerPoId) > 0) {
     validatedPoId = Number(customerPoId);
   }
-  
+
   const finalQuotationId = (quotation_id && !isNaN(Number(quotation_id))) ? Number(quotation_id) : null;
-  
+
   console.log('[createSalesOrder] Received data:', { customerPoId, validatedPoId, quotation_id: finalQuotationId, source_type, companyId, status });
 
   const connection = await pool.getConnection();
@@ -241,12 +241,12 @@ const createSalesOrder = async (orderData) => {
       )
        VALUES (?, ?, ?, ?, ?, ?, ?, 'DESIGN_ENG', 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        validatedPoId, 
-        companyId || null, 
-        projectName || null, 
-        drawingRequired, 
-        productionPriority, 
-        finalTargetDispatchDate || null, 
+        validatedPoId,
+        companyId || null,
+        projectName || null,
+        drawingRequired,
+        productionPriority,
+        finalTargetDispatchDate || null,
         status,
         cgst_rate,
         sgst_rate,
@@ -288,17 +288,17 @@ const createSalesOrder = async (orderData) => {
         `INSERT INTO sales_order_items (sales_order_id, item_code, item_type, drawing_no, drawing_id, revision_no, description, quantity, unit, rate, delivery_date, tax_value, status, rejection_reason)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
-          salesOrderId, 
-          item.item_code || null, 
+          salesOrderId,
+          item.item_code || null,
           itemType,
-          item.drawing_no || null, 
+          item.drawing_no || null,
           item.drawing_id || null,
-          item.revision_no || null, 
-          item.description || null, 
-          item.quantity || 0, 
-          item.unit || null, 
-          item.rate || 0, 
-          item.delivery_date || null, 
+          item.revision_no || null,
+          item.description || null,
+          item.quantity || 0,
+          item.unit || null,
+          item.rate || 0,
+          item.delivery_date || null,
           item.tax_value || 0,
           item.status || (item.item_status) || 'PENDING',
           item.rejection_reason || (item.item_rejection_reason) || null
@@ -315,11 +315,11 @@ const createSalesOrder = async (orderData) => {
              (sales_order_item_id, material_name, material_type, item_group, qty_per_pc, uom, rate, warehouse, operation) 
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
-              salesOrderItemId, 
-              mat.material_name || mat.materialName || null, 
-              mat.material_type || mat.materialType || null, 
+              salesOrderItemId,
+              mat.material_name || mat.materialName || null,
+              mat.material_type || mat.materialType || null,
               mat.item_group || mat.itemGroup || null,
-              mat.qty_per_pc || mat.qtyPerPc || mat.qty || 0, 
+              mat.qty_per_pc || mat.qtyPerPc || mat.qty || 0,
               mat.uom || null,
               mat.rate || 0,
               mat.warehouse || null,
@@ -402,13 +402,13 @@ const createSalesOrder = async (orderData) => {
 };
 
 const updateSalesOrder = async (id, orderData) => {
-  const { 
+  const {
     customerPoId,
-    companyId, 
-    projectName, 
-    drawingRequired, 
-    productionPriority, 
-    targetDispatchDate, 
+    companyId,
+    projectName,
+    drawingRequired,
+    productionPriority,
+    targetDispatchDate,
     delivery_date, // Added delivery_date alias
     items,
     cgst_rate,
@@ -428,9 +428,9 @@ const updateSalesOrder = async (id, orderData) => {
   if (source_type === 'PO' && customerPoId && !isNaN(Number(customerPoId)) && Number(customerPoId) > 0) {
     validatedPoId = Number(customerPoId);
   }
-  
+
   const finalQuotationId = (quotation_id && !isNaN(Number(quotation_id))) ? Number(quotation_id) : null;
-  
+
   console.log('[updateSalesOrder] Received data:', { id, customerPoId, validatedPoId, quotation_id: finalQuotationId, source_type, companyId, status });
 
   const connection = await pool.getConnection();
@@ -456,12 +456,12 @@ const updateSalesOrder = async (id, orderData) => {
         updated_at = NOW()
        WHERE id = ?`,
       [
-        companyId || null, 
+        companyId || null,
         validatedPoId,
-        projectName || null, 
-        drawingRequired || 0, 
-        productionPriority || 'NORMAL', 
-        finalTargetDispatchDate || null, 
+        projectName || null,
+        drawingRequired || 0,
+        productionPriority || 'NORMAL',
+        finalTargetDispatchDate || null,
         status || null,
         cgst_rate || 0,
         sgst_rate || 0,
@@ -477,7 +477,7 @@ const updateSalesOrder = async (id, orderData) => {
     // Update items - for simplicity, delete and re-insert if provided
     if (items && items.length > 0) {
       await connection.execute('DELETE FROM sales_order_items WHERE sales_order_id = ?', [id]);
-      
+
       for (const item of items) {
         // Determine item_type from item_code prefix or default to FG
         let itemType = 'FG';
@@ -492,16 +492,16 @@ const updateSalesOrder = async (id, orderData) => {
           `INSERT INTO sales_order_items (sales_order_id, item_code, item_type, drawing_no, revision_no, description, quantity, unit, rate, delivery_date, tax_value, status)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
-            id, 
-            item.item_code || null, 
+            id,
+            item.item_code || null,
             itemType,
-            item.drawing_no || null, 
-            item.revision_no || null, 
-            item.description || null, 
-            item.quantity || 0, 
-            item.unit || 'NOS', 
-            item.rate || 0, 
-            item.delivery_date || null, 
+            item.drawing_no || null,
+            item.revision_no || null,
+            item.description || null,
+            item.quantity || 0,
+            item.unit || 'NOS',
+            item.rate || 0,
+            item.delivery_date || null,
             item.tax_value || 0,
             item.status || 'PENDING'
           ]
@@ -547,7 +547,7 @@ const updateSalesOrderStatus = async (salesOrderId, status, userId = null, remar
           [salesOrderId, userId, action, remarks]
         );
       }
-      
+
       /* REMOVED AUTO-QUOTATION CREATION
       if (status === 'QUOTATION_SENT') {
         const [orderRows] = await connection.query('SELECT * FROM sales_orders WHERE id = ?', [salesOrderId]);
@@ -588,7 +588,7 @@ const acceptRequest = async (salesOrderId, departmentCode) => {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
-    
+
     const [order] = await connection.query('SELECT * FROM sales_orders WHERE id = ?', [salesOrderId]);
     if (!order.length) throw new Error('Order not found');
 
@@ -683,23 +683,23 @@ const approveDesignAndCreateQuotation = async (salesOrderId) => {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
-    
+
     const [orders] = await connection.query('SELECT * FROM sales_orders WHERE id = ?', [salesOrderId]);
     if (!orders.length) throw new Error('Sales order not found');
-    
+
     const order = orders[0];
-    
+
     await connection.execute(
       'UPDATE sales_orders SET status = ?, current_department = ?, request_accepted = 1, updated_at = NOW() WHERE id = ?',
       ['DESIGN_IN_REVIEW', 'DESIGN_ENG', salesOrderId]
     );
-    
+
     // Mark non-rejected items as ACCEPTED
     await connection.execute(
       "UPDATE sales_order_items SET status = 'ACCEPTED' WHERE sales_order_id = ? AND (status IS NULL OR status = 'PENDING')",
       [salesOrderId]
     );
-    
+
     await connection.commit();
     return true;
   } catch (error) {
@@ -749,7 +749,7 @@ const updateSalesOrderItemStatus = async (itemId, status, reason) => {
               "UPDATE sales_orders SET request_accepted = 1, status = 'DESIGN_IN_REVIEW', current_department = 'DESIGN_ENG', updated_at = NOW() WHERE id = ?",
               [salesOrderId]
             );
-            
+
             // Create design order entry if it doesn't exist
             await designOrderService.createDesignOrder(salesOrderId, connection, 'IN_DESIGN');
           }
@@ -770,18 +770,18 @@ const rejectDesign = async (salesOrderId, reason) => {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
-    
+
     await connection.execute(
       'UPDATE sales_orders SET status = ?, current_department = ?, request_accepted = 0, updated_at = NOW() WHERE id = ?',
       ['DESIGN_QUERY', 'SALES', salesOrderId]
     );
-    
+
     const [requestResult] = await connection.execute(
       `INSERT INTO design_rejections (sales_order_id, reason, created_at)
        VALUES (?, ?, NOW())`,
       [salesOrderId, reason]
     );
-    
+
     await connection.commit();
     return requestResult.insertId;
   } catch (error) {
@@ -801,26 +801,26 @@ const bulkApproveDesigns = async (orderIds) => {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
-    
+
     const placeholders = orderIds.map(() => '?').join(',');
     console.log('[bulkApproveDesigns-service] Running SELECT with placeholders:', placeholders, 'and IDs:', orderIds);
-    
+
     const [orders] = await connection.query(
       `SELECT id, company_id FROM sales_orders WHERE id IN (${placeholders})`,
       orderIds
     );
-    
+
     console.log('[bulkApproveDesigns-service] Found orders:', orders);
     if (orders.length === 0) {
       console.error('[bulkApproveDesigns-service] No sales orders found for IDs:', orderIds);
       throw new Error('No sales orders found');
     }
-    
+
     await connection.execute(
       `UPDATE sales_orders SET status = ?, current_department = ?, request_accepted = 1, updated_at = NOW() WHERE id IN (${placeholders})`,
       ['DESIGN_IN_REVIEW', 'DESIGN_ENG', ...orderIds]
     );
-    
+
     // Mark non-rejected items as APPROVED
     await connection.execute(
       `UPDATE sales_order_items SET status = 'Approved ' WHERE sales_order_id IN (${placeholders}) AND (status IS NULL OR status = 'PENDING')`,
@@ -831,7 +831,7 @@ const bulkApproveDesigns = async (orderIds) => {
     for (const orderId of orderIds) {
       await designOrderService.createDesignOrder(orderId, connection, 'IN_DESIGN');
     }
-    
+
     await connection.commit();
     return { approvedCount: orders.length };
   } catch (error) {
@@ -850,14 +850,14 @@ const bulkRejectDesigns = async (orderIds, reason) => {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
-    
+
     const placeholders = orderIds.map(() => '?').join(',');
-    
+
     await connection.execute(
       `UPDATE sales_orders SET status = ?, current_department = ?, request_accepted = 0, updated_at = NOW() WHERE id IN (${placeholders})`,
       ['DESIGN_QUERY', 'SALES', ...orderIds]
     );
-    
+
     for (const orderId of orderIds) {
       await connection.execute(
         `INSERT INTO design_rejections (sales_order_id, reason, created_at)
@@ -865,7 +865,7 @@ const bulkRejectDesigns = async (orderIds, reason) => {
         [orderId, reason]
       );
     }
-    
+
     await connection.commit();
     return { rejectedCount: orderIds.length };
   } catch (error) {
@@ -893,17 +893,17 @@ const getApprovedDrawings = async (companyId = null) => {
      ) ct ON ct.company_id = c.id AND ct.rn = 1
      WHERE (TRIM(UPPER(so.status)) IN ('DESIGN_APPROVED', 'BOM_SUBMITTED', 'BOM_APPROVED', 'QUOTATION_SENT', 'PROCUREMENT_IN_PROGRESS', 'MATERIAL_PURCHASE_IN_PROGRESS', 'MATERIAL_READY', 'IN_PRODUCTION', 'PRODUCTION_COMPLETED', 'QC_IN_PROGRESS', 'QC_APPROVED', 'QC_REJECTED', 'READY_FOR_SHIPMENT'))
         AND so.quotation_id IS NULL`;
-  
+
   const params = [];
   if (companyId) {
     query += ` AND so.company_id = ?`;
     params.push(companyId);
   }
-  
+
   query += ` ORDER BY so.created_at DESC`;
-  
+
   const [rows] = await pool.query(query, params);
-  
+
   for (const order of rows) {
     const [items] = await pool.query(
       `SELECT soi.id, soi.sales_order_id, soi.bom_id, soi.item_code, soi.item_type, soi.item_group, 
@@ -955,7 +955,7 @@ const getApprovedDrawings = async (companyId = null) => {
       [order.id]
     );
     order.items = items;
-    
+
     // Fetch sub-assemblies for each item if it's an FG
     for (const item of order.items) {
       const g = (item.item_group || '').toUpperCase();
@@ -971,14 +971,14 @@ const getApprovedDrawings = async (companyId = null) => {
           const code = (c.item_code || c.component_code || '').toUpperCase();
           const group = (c.item_group || '').toUpperCase();
           const desc = (c.description || '').toUpperCase();
-          return (code.startsWith('SA-') || code.startsWith('SFG-') || 
-                  group.includes('SA') || group.includes('SUB') || group.includes('ASSEMBLY') ||
-                  desc.includes('ASSEMBLY') || desc.includes('UNIT')) &&
-                 !group.includes('FG');
+          return (code.startsWith('SA-') || code.startsWith('SFG-') ||
+            group.includes('SA') || group.includes('SUB') || group.includes('ASSEMBLY') ||
+            desc.includes('ASSEMBLY') || desc.includes('UNIT')) &&
+            !group.includes('FG');
         });
       }
     }
-    
+
     if (order.company_id) {
       const [companyContacts] = await pool.query(
         'SELECT id, name, email, phone, contact_type, status FROM contacts WHERE company_id = ? ORDER BY contact_type = "PRIMARY" DESC LIMIT 5',
@@ -987,7 +987,7 @@ const getApprovedDrawings = async (companyId = null) => {
       order._debug_contacts = companyContacts;
     }
   }
-  
+
   return rows;
 };
 
@@ -1012,14 +1012,29 @@ const getOrderTimeline = async salesOrderId => {
          GROUP BY drawing_no
        ) d2 ON d1.id = d2.max_id
      ) cd ON cd.drawing_no = soi.drawing_no
-     WHERE soi.sales_order_id = ?`,
+     WHERE soi.sales_order_id = ?
+        AND (
+          soi.parent_bom_id IS NOT NULL
+          OR (so.customer_po_id IS NOT NULL AND EXISTS (
+              SELECT 1 FROM customer_po_items poi2
+              WHERE poi2.customer_po_id = so.customer_po_id
+                AND (
+                  (poi2.item_code = soi.item_code AND soi.item_code IS NOT NULL)
+                  OR (poi2.drawing_no = soi.drawing_no AND soi.drawing_no IS NOT NULL)
+                )
+          ))
+          OR (so.customer_po_id IS NULL AND EXISTS (
+              SELECT 1 FROM customer_drawings cd
+              WHERE cd.drawing_no = soi.drawing_no
+          ))
+        )`,
     [salesOrderId]
   );
-  
+
   // 2. Also fetch any Master BOMs (sales_order_id is NULL) for these same drawings
   // to show them as available versions/options
   const drawingNos = [...new Set(items.map(i => i.drawing_no).filter(Boolean))];
-  
+
   if (drawingNos.length > 0) {
     const [masterItems] = await pool.query(
       `SELECT soi.*, COALESCE(soi.item_group, sb.material_type) as item_group, sb.product_type,
@@ -1042,7 +1057,7 @@ const getOrderTimeline = async salesOrderId => {
        WHERE soi.sales_order_id IS NULL AND soi.drawing_no IN (?)`,
       [drawingNos]
     );
-    
+
     // Append master items to the list so they show up in the versions list in frontend
     items.push(...masterItems);
   }
@@ -1128,10 +1143,10 @@ const getOrderTimeline = async salesOrderId => {
     let scrap = scrapByItem[`id_${item.id}`] || scrapByItem[`code_${item.item_code}`] || scrapByItem[`dwg_${item.drawing_no}`] || [];
 
     // Ensure we don't mix order-specific and master if any order-specific exists
-    const hasOrderSpecific = (materialsByItem[`id_${item.id}`]?.length > 0 || 
-                            componentsByItem[`id_${item.id}`]?.length > 0 || 
-                            operationsByItem[`id_${item.id}`]?.length > 0);
-    
+    const hasOrderSpecific = (materialsByItem[`id_${item.id}`]?.length > 0 ||
+      componentsByItem[`id_${item.id}`]?.length > 0 ||
+      operationsByItem[`id_${item.id}`]?.length > 0);
+
     if (hasOrderSpecific) {
       materials = materialsByItem[`id_${item.id}`] || [];
       components = componentsByItem[`id_${item.id}`] || [];
@@ -1164,25 +1179,25 @@ const getOrderTimeline = async salesOrderId => {
       const rate = parseFloat(s.rate || 0);
       return sum + (input * loss * rate);
     }, 0);
-    
+
     const totalOrderCost = matCost + compCost + laborCost - scrapRecovery;
     const calculatedBomCost = orderQty > 0 ? totalOrderCost / orderQty : 0;
-    
+
     item.bom_cost = (item.bom_cost && parseFloat(item.bom_cost) > 0) ? parseFloat(item.bom_cost) : calculatedBomCost;
     item.has_bom = hasOrderSpecific || (item.bom_id !== null && item.sales_order_id !== null);
 
     // Add has_master_bom to indicate if a template exists for this code or drawing
     item.has_master_bom = (
-                         (item.item_code && materialsByItem[`code_${item.item_code}`]?.length > 0) || 
-                         (item.drawing_no && materialsByItem[`dwg_${item.drawing_no}`]?.length > 0) ||
-                         (item.item_code && componentsByItem[`code_${item.item_code}`]?.length > 0) || 
-                         (item.drawing_no && componentsByItem[`dwg_${item.drawing_no}`]?.length > 0) ||
-                         (item.item_code && operationsByItem[`code_${item.item_code}`]?.length > 0) || 
-                         (item.drawing_no && operationsByItem[`dwg_${item.drawing_no}`]?.length > 0) ||
-                         (item.item_code && scrapByItem[`code_${item.item_code}`]?.length > 0) || 
-                         (item.drawing_no && scrapByItem[`dwg_${item.drawing_no}`]?.length > 0));
+      (item.item_code && materialsByItem[`code_${item.item_code}`]?.length > 0) ||
+      (item.drawing_no && materialsByItem[`dwg_${item.drawing_no}`]?.length > 0) ||
+      (item.item_code && componentsByItem[`code_${item.item_code}`]?.length > 0) ||
+      (item.drawing_no && componentsByItem[`dwg_${item.drawing_no}`]?.length > 0) ||
+      (item.item_code && operationsByItem[`code_${item.item_code}`]?.length > 0) ||
+      (item.drawing_no && operationsByItem[`dwg_${item.drawing_no}`]?.length > 0) ||
+      (item.item_code && scrapByItem[`code_${item.item_code}`]?.length > 0) ||
+      (item.drawing_no && scrapByItem[`dwg_${item.drawing_no}`]?.length > 0));
   }
-  
+
   return items;
 };
 
@@ -1203,7 +1218,7 @@ const generateSalesOrderPDF = async (salesOrderId) => {
 
   if (!orderRows.length) throw new Error('Sales Order not found');
   const order = orderRows[0];
-  
+
   // Format billing address
   const addrParts = [
     order.billing_line1,
@@ -1468,7 +1483,7 @@ const generateSalesOrderPDF = async (salesOrderId) => {
     const taxable = qty * rate;
     const cgst = taxable * (Number(order.cgst_rate || 0) / 100);
     const sgst = taxable * (Number(order.sgst_rate || 0) / 100);
-    
+
     totalTaxableValue += taxable;
     totalCgst += cgst;
     totalSgst += sgst;
@@ -1635,9 +1650,9 @@ const bulkUpdateStatus = async (orderIds, status) => {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
-    
+
     const placeholders = orderIds.map(() => '?').join(',');
-    
+
     let department = null;
     if (status === 'BOM_Approved') {
       department = 'PROCUREMENT';
@@ -1656,7 +1671,7 @@ const bulkUpdateStatus = async (orderIds, status) => {
         [status, ...orderIds]
       );
     }
-    
+
     await connection.commit();
     return { updatedCount: orderIds.length };
   } catch (error) {
@@ -1670,7 +1685,7 @@ const bulkUpdateStatus = async (orderIds, status) => {
 const updateSalesOrderItem = async (itemId, data) => {
   const fields = [];
   const params = [];
-  
+
   if (data.item_code !== undefined) {
     fields.push('item_code = ?');
     params.push(data.item_code);
@@ -1743,7 +1758,7 @@ const bulkUpdateItemStatus = async (itemIds, status, reason) => {
               "UPDATE sales_orders SET request_accepted = 1, status = 'DESIGN_IN_REVIEW', current_department = 'DESIGN_ENG', updated_at = NOW() WHERE id = ?",
               [salesOrderId]
             );
-            
+
             // Create design order entry if it doesn't exist
             await designOrderService.createDesignOrder(salesOrderId, connection, 'IN_DESIGN');
           }
