@@ -1,25 +1,25 @@
- import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Card, SearchableSelect, Button } from '../components/ui.jsx';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
-import { 
-  Eye, 
-  Trash2, 
-  Plus, 
-  Search, 
-  FileText, 
-  ChevronRight, 
+import {
+  Eye,
+  Trash2,
+  Plus,
+  Search,
+  FileText,
+  ChevronRight,
   ChevronDown,
   ChevronUp,
   X,
-  Info, 
-  Save, 
-  ArrowLeft, 
-  History, 
-  Settings, 
-  Layers, 
-  Activity, 
-  Package, 
+  Info,
+  Save,
+  ArrowLeft,
+  History,
+  Settings,
+  Layers,
+  Activity,
+  Package,
   Clock,
   CornerDownRight,
   Loader2,
@@ -32,34 +32,45 @@ import { successToast, errorToast } from '../utils/toast';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
-const RecursiveBOMRow = ({ 
-  item, 
-  level = 0, 
-  onRemove, 
+const RecursiveBOMRow = ({
+  item,
+  level = 0,
+  onRemove,
   onEdit,
   editingItem,
   setEditingItem,
   onUpdate,
-  isReadOnly, 
+  isReadOnly,
   childrenMap,
-  type: providedType, 
-  inheritedLoss = 0, 
-  isComponentSection = false 
+  type: providedType,
+  inheritedLoss = 0,
+  isComponentSection = false
 }) => {
   // Determine if this item is a material or component if type not provided or to be sure
   const actualType = providedType || ((item.material_name || item.materialName) ? 'material' : 'component');
-  
-  const isConsumable = (item.item_group || item.itemGroup || '').toLowerCase().includes('consumable') || 
-                       (item.material_type || item.materialType || '').toLowerCase().includes('consumable') || 
-                       (item.material_name || item.materialName || '').toLowerCase().includes('consumable') ||
-                       (item.component_code || item.componentCode || '').toLowerCase().startsWith('con-') ||
-                       (item.item_group || item.itemGroup || '').toLowerCase() === 'consumables';
+
+  const isConsumable = (item.item_group || item.itemGroup || '').toLowerCase().includes('consumable') ||
+    (item.material_type || item.materialType || '').toLowerCase().includes('consumable') ||
+    (item.material_name || item.materialName || '').toLowerCase().includes('consumable') ||
+    (item.component_code || item.componentCode || '').toLowerCase().startsWith('con-') ||
+    (item.item_group || item.itemGroup || '').toLowerCase() === 'consumables';
+
+  const displayGroup = (() => {
+    if (isConsumable) return 'Consumable';
+    const groupVal = (item.item_group || item.itemGroup || item.material_type || '').trim();
+    if (groupVal) {
+      if (groupVal.toLowerCase() === 'part') return 'Part';
+      if (groupVal.toLowerCase() === 'assembly') return 'Assembly';
+      return groupVal.charAt(0).toUpperCase() + groupVal.slice(1).toLowerCase();
+    }
+    return getAutofetchedGroup(item);
+  })();
 
   const children = childrenMap.get(String(item.id)) || [];
 
   const qty = parseFloat(
-    actualType === 'material' 
-      ? (item.qty_per_pc ?? item.qtyPerPc ?? item.qty ?? item.quantity ?? 0) 
+    actualType === 'material'
+      ? (item.qty_per_pc ?? item.qtyPerPc ?? item.qty ?? item.quantity ?? 0)
       : (item.quantity ?? item.qty ?? 0)
   );
   const rate = parseFloat(item.rate ?? 0);
@@ -76,7 +87,7 @@ const RecursiveBOMRow = ({
   }
 
   const itemLossPercent = actualType === 'component' ? parseFloat(item.loss_percent || item.lossPercent || 0) : 0;
-  
+
   const currentLevelLossFactor = 1 - (inheritedLoss / 100);
   const itemLossFactor = 1 - (itemLossPercent / 100);
   const cumulativeLossFactor = currentLevelLossFactor * itemLossFactor;
@@ -162,7 +173,7 @@ const RecursiveBOMRow = ({
           </td>
           <td className="p-2 text-center">
             <span className="px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-600 ">
-              {isConsumable ? 'Consumable' : 'Assembly'}
+              {displayGroup}
             </span>
           </td>
           <td className="p-2 text-center text-[11px]  text-slate-600">
@@ -383,9 +394,9 @@ const getDimensionString = (item) => {
   if (item.thickness && parseFloat(item.thickness) > 0) dimensions.push(`${parseFloat(item.thickness)}`);
   if (item.diameter && parseFloat(item.diameter) > 0) dimensions.push(`Ø${parseFloat(item.diameter)}`);
   if (item.outer_diameter && parseFloat(item.outer_diameter) > 0) dimensions.push(`OD${parseFloat(item.outer_diameter)}`);
-  
+
   if (dimensions.length === 0) return '';
-  
+
   const unit = (item.uom === 'Kg' || !item.uom) ? 'mm' : item.uom;
   return `${dimensions.join(' × ')} ${unit}`;
 };
@@ -394,12 +405,12 @@ const getAutofetchedGroup = (item) => {
   if (!item) return 'Part';
 
   // 1. Check item code / name / description prefixes and content (case-insensitive)
-  const code = String(item.item_code || item.itemCode || '').trim().toUpperCase();
+  const code = String(item.item_code || item.itemCode || item.component_code || item.componentCode || '').trim().toUpperCase();
   const desc = String(item.description || item.material_name || item.material_type || item.drawing_name || item.name || '').trim().toUpperCase();
 
   if (code.startsWith('ASSEMBLY-') || code.startsWith('ASSY-') || code.startsWith('SA-') ||
-      code.includes('ASSEMBLY') || code.includes('ASSY') ||
-      desc.includes('ASSEMBLY') || desc.includes('ASSY')) {
+    code.includes('ASSEMBLY') || code.includes('ASSY') ||
+    desc.includes('ASSEMBLY') || desc.includes('ASSY')) {
     return 'Assembly';
   }
 
@@ -520,10 +531,10 @@ const BOMFormPage = () => {
     const itemGroup = (item.item_group || item.itemGroup || '').toLowerCase();
     const materialType = (item.material_type || item.materialType || '').toLowerCase();
     const materialName = (item.material_name || item.materialName || '').toLowerCase();
-    
-    const isConsumable = itemGroup.includes('consumable') || 
-                         materialType.includes('consumable') || 
-                         materialName.includes('consumable');
+
+    const isConsumable = itemGroup.includes('consumable') ||
+      materialType.includes('consumable') ||
+      materialName.includes('consumable');
 
     const qty = parseFloat(isMaterial ? (item.qty_per_pc ?? item.qtyPerPc ?? item.qty ?? item.quantity ?? 0) : (item.quantity ?? item.qty ?? 0));
     const rate = parseFloat(item.rate ?? 0);
@@ -587,7 +598,7 @@ const BOMFormPage = () => {
   const fetchBOMHistory = useCallback(async (itemCode, drawingNo, currentItemId = null) => {
     const effectiveId = (currentItemId === 'bom-form' || !currentItemId) ? null : currentItemId;
     if (!itemCode && !drawingNo && !effectiveId) return;
-    
+
     setLoadingHistory(true);
     try {
       const token = localStorage.getItem('authToken');
@@ -621,30 +632,30 @@ const BOMFormPage = () => {
       errorToast('Please select a valid drawing number first');
       return;
     }
-    
+
     // Check if we already have it in approvedDrawings
     let dwg = approvedDrawings.find(d => d.drawing_no === drawingNo);
     if (!dwg) {
-        // Fetch from backend
-        try {
-            const token = localStorage.getItem('authToken');
-            const response = await fetch(`${API_BASE}/drawings?search=${encodeURIComponent(drawingNo)}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (response.ok) {
-                const drawings = await response.json();
-                dwg = drawings.find(d => d.drawing_no === drawingNo);
-            }
-        } catch (error) {
-            console.error(error);
+      // Fetch from backend
+      try {
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE}/drawings?search=${encodeURIComponent(drawingNo)}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const drawings = await response.json();
+          dwg = drawings.find(d => d.drawing_no === drawingNo);
         }
+      } catch (error) {
+        console.error(error);
+      }
     }
-    
+
     if (dwg) {
-        setPreviewDrawing(dwg);
-        setShowPreviewModal(true);
+      setPreviewDrawing(dwg);
+      setShowPreviewModal(true);
     } else {
-        errorToast('Drawing file not found in system');
+      errorToast('Drawing file not found in system');
     }
   };
 
@@ -694,12 +705,12 @@ const BOMFormPage = () => {
       if (getAutofetchedGroup(item) !== 'Part') return;
       const type = (item.material_type || item.item_group || "").toLowerCase();
       if (!isComponentType(type)) return;
-      
+
       // Strict FG check by code prefix
       if (item.item_code && item.item_code.startsWith("FG-")) return;
 
       const isSA = (item.item_code || "").startsWith("SA-") || (item.item_code || "").startsWith("SFG-") || (item.item_code || "").startsWith("PART-") || type.includes("assembly") || type.includes("sub") || type.includes("semi") || type.includes("sfg") || type.includes("consumable") || type.includes("part");
-      
+
       if (!showAllDrawings) {
         if (["Part", "FG"].includes(productForm.itemGroup) && !isSA) return;
       }
@@ -739,11 +750,11 @@ const BOMFormPage = () => {
       if (getAutofetchedGroup(item) !== 'Part') return;
       const type = (item.item_group || "").toLowerCase();
       const isSA = (item.item_code || "").startsWith("SA-") || (item.item_code || "").startsWith("SFG-") || (item.item_code || "").startsWith("PART-") || type.includes("assembly") || type.includes("sub") || type.includes("semi") || type.includes("sfg") || type.includes("consumable") || type.includes("part");
-      
-      if (!isSA && !showAllDrawings) return; 
+
+      if (!isSA && !showAllDrawings) return;
       // Strict FG check
       if (item.item_code && item.item_code.startsWith("FG-")) {
-        if (!showAllDrawings) return; 
+        if (!showAllDrawings) return;
       }
       if (type.includes("finished")) {
         if (!showAllDrawings) return;
@@ -885,7 +896,7 @@ const BOMFormPage = () => {
             console.error('Error fetching item by ID:', err);
           }
         }
-        
+
         if (itemCodeParam) {
           const orderItem = approvedDrawings.find(i => i.item_code === itemCodeParam);
           const stockItem = stockItems.find(i => i.item_code === itemCodeParam);
@@ -896,14 +907,14 @@ const BOMFormPage = () => {
         } else if (dwgParam && !itemId && !selectedItem) {
           // For NEW BOM creation from a drawing, pre-fill drawing info
           // and also try to find and set the related product/item info
-          
+
           let dwgName = dwgNameParam || '';
           let itemCode = '';
           let matchedItem = null;
 
           const dwgInfo = approvedDrawings.find(i => i.drawing_no === dwgParam) ||
             stockItems.find(i => i.drawing_no === dwgParam);
-          
+
           if (dwgInfo) {
             matchedItem = dwgInfo;
             dwgName = dwgInfo.material_name || dwgInfo.description || dwgInfo.item_description || '';
@@ -959,34 +970,34 @@ const BOMFormPage = () => {
 
   const getMaterialItemGroupFromType = (item) => {
     if (!item) return 'Raw Material';
-    
+
     const name = (item.material_name || item.itemName || '').toLowerCase();
     const ig = (item.item_group || item.itemGroup || item.material_group || item.material_type || '').toLowerCase();
     const t = (item.material_type || item.materialType || '').toLowerCase();
 
     // Priority 1: Consumables
-    if (name.includes('consumable') || ig.includes('consumable') || t.includes('consumable') || 
-        name.includes('con-') || t.includes('con-') || name.includes('grease') || 
-        name.includes('oil') || name.includes('lubricant') || name.includes('coolant')) return 'Consumables';
-    
+    if (name.includes('consumable') || ig.includes('consumable') || t.includes('consumable') ||
+      name.includes('con-') || t.includes('con-') || name.includes('grease') ||
+      name.includes('oil') || name.includes('lubricant') || name.includes('coolant')) return 'Consumables';
+
     // Priority 2: Assemblies
-    if (name.includes('sub assembly') || name.includes('sub-assembly') || ig.includes('sub assembly') || 
-        t.includes('sub assembly') || t.includes('sub-assembly') || name.startsWith('sa-') || name.startsWith('sfg-') ||
-        name.includes('assembly') || ig.includes('assembly') || t.includes('assembly')) return 'ASSEMBLY';
-    if (name.includes('sfg') || name.includes('semi') || ig.includes('sfg') || ig.includes('semi') || 
-        t.includes('sfg') || t.includes('semi')) return 'ASSEMBLY';
-    
+    if (name.includes('sub assembly') || name.includes('sub-assembly') || ig.includes('sub assembly') ||
+      t.includes('sub assembly') || t.includes('sub-assembly') || name.startsWith('sa-') || name.startsWith('sfg-') ||
+      name.includes('assembly') || ig.includes('assembly') || t.includes('assembly')) return 'ASSEMBLY';
+    if (name.includes('sfg') || name.includes('semi') || ig.includes('sfg') || ig.includes('semi') ||
+      t.includes('sfg') || t.includes('semi')) return 'ASSEMBLY';
+
     // Priority 3: Packing Material
-    if (name.includes('packing') || ig.includes('packing') || t.includes('packing') || 
-        name.includes('pm') || ig.includes('pm') || t.includes('pm') || 
-        name.startsWith('pac-') || name.includes('box') || name.includes('carton') || 
-        name.includes('label') || name.includes('tape') || name.includes('wrap')) return 'Packing Material';
+    if (name.includes('packing') || ig.includes('packing') || t.includes('packing') ||
+      name.includes('pm') || ig.includes('pm') || t.includes('pm') ||
+      name.startsWith('pac-') || name.includes('box') || name.includes('carton') ||
+      name.includes('label') || name.includes('tape') || name.includes('wrap')) return 'Packing Material';
 
     // Priority 4: Other groups
     if (name.includes('tool') || ig.includes('tool') || t.includes('tool')) return 'Hardware & Accessories';
     if (name.includes('scrap') || ig.includes('scrap') || t.includes('scrap')) return 'Scrap';
     if (name.includes('raw') || ig.includes('raw') || t.includes('raw') || name.startsWith('rm-')) return 'Raw Material';
-    
+
     return 'Raw Material';
   };
 
@@ -1017,7 +1028,7 @@ const BOMFormPage = () => {
         // Reset BOM data to avoid stale data flash
         setBomData({ materials: [], components: [], operations: [], scrap: [] });
       }
-      
+
       const token = localStorage.getItem('authToken');
       if (!token) {
         setLoading(false);
@@ -1025,7 +1036,7 @@ const BOMFormPage = () => {
       }
 
       fetchItemGroups();
-      
+
       let latestStockItems = [];
       let currentApprovedDrawings = [];
 
@@ -1046,9 +1057,9 @@ const BOMFormPage = () => {
           latestStockItems = await stockRes.json();
           setStockItems(latestStockItems);
         }
-        
+
         if (bomsRes.ok) setApprovedBOMs(await bomsRes.json());
-        
+
         if (dwgsRes.ok) {
           const drawingsData = await dwgsRes.json();
           currentApprovedDrawings = drawingsData.flatMap(order => (order.items || []).map(item => ({
@@ -1094,14 +1105,14 @@ const BOMFormPage = () => {
           console.error('Error resolving drawing_id UUID:', e);
         }
       }
-      
+
       if (effectiveId || itemCodeFromUrl || drawingNoFromUrl) {
         let currentItem = selectedItemRef.current;
 
         // 1. Auto-link drawing to Sales Order Item if needed
         if (!effectiveId && drawingNoFromUrl && salesOrderIdFromUrl && currentApprovedDrawings.length > 0) {
-          const matchedItem = currentApprovedDrawings.find(d => 
-            String(d.drawing_no) === String(drawingNoFromUrl) && 
+          const matchedItem = currentApprovedDrawings.find(d =>
+            String(d.drawing_no) === String(drawingNoFromUrl) &&
             String(d.sales_order_id) === String(salesOrderIdFromUrl)
           );
           if (matchedItem) {
@@ -1121,7 +1132,7 @@ const BOMFormPage = () => {
             const itemData = await itemRes.json();
             currentItem = { ...itemData, source: 'order' };
             setSelectedItem(currentItem);
-            
+
             setProductForm(prev => ({
               ...prev,
               itemCode: itemData.item_code || prev.itemCode,
@@ -1154,13 +1165,13 @@ const BOMFormPage = () => {
         if (bomRes.ok) {
           const data = await bomRes.json();
           console.log(`[fetchData] BOM items loaded: ${data.materials?.length || 0} mat, ${data.components?.length || 0} comp`);
-          
+
           if (data.materials) {
             data.materials = data.materials.map(m => {
               // Only override with latest stock rates if it's a new/draft BOM (not read-only with an ID)
               const isHistorical = isReadOnly && itemId && itemId !== 'bom-form';
               const s = latestStockItems.length > 0 ? latestStockItems.find(si => si.material_name === m.material_name) : null;
-              
+
               let rate = m.rate;
               // For historical versions, we MUST trust the saved rate. 
               // Only fallback for non-historical drafts that have 0 rate.
@@ -1169,13 +1180,13 @@ const BOMFormPage = () => {
               }
 
               // Use stored weights/dimensions if available, especially for historical integrity
-              return { 
-                ...m, 
-                rate: parseFloat(rate || 0), 
-                item_code: m.item_code || s?.item_code, 
+              return {
+                ...m,
+                rate: parseFloat(rate || 0),
+                item_code: m.item_code || s?.item_code,
                 weight_per_unit: (isHistorical && parseFloat(m.weight_per_unit) > 0) ? m.weight_per_unit : (m.weight_per_unit || s?.weight_per_unit || 0),
-                length: (isHistorical && parseFloat(m.length) > 0) ? m.length : (m.length || s?.length), 
-                width: (isHistorical && parseFloat(m.width) > 0) ? m.width : (m.width || s?.width), 
+                length: (isHistorical && parseFloat(m.length) > 0) ? m.length : (m.length || s?.length),
+                width: (isHistorical && parseFloat(m.width) > 0) ? m.width : (m.width || s?.width),
                 thickness: (isHistorical && parseFloat(m.thickness) > 0) ? m.thickness : (m.thickness || s?.thickness),
                 diameter: (isHistorical && parseFloat(m.diameter) > 0) ? m.diameter : (m.diameter || s?.diameter),
                 outer_diameter: (isHistorical && parseFloat(m.outer_diameter) > 0) ? m.outer_diameter : (m.outer_diameter || s?.outer_diameter)
@@ -1186,15 +1197,15 @@ const BOMFormPage = () => {
             data.components = data.components.map(c => {
               const isHistorical = isReadOnly && itemId && itemId !== 'bom-form';
               const s = latestStockItems.length > 0 ? latestStockItems.find(si => si.item_code === c.component_code) : null;
-              
+
               let rate = c.rate;
               if (!isHistorical && (!c.rate || parseFloat(c.rate) === 0)) {
                 rate = c.selling_rate || c.valuation_rate || s?.selling_rate || s?.valuation_rate || 0;
               }
 
-              return { 
-                ...c, 
-                rate: parseFloat(rate || 0), 
+              return {
+                ...c,
+                rate: parseFloat(rate || 0),
                 weight_per_unit: (isHistorical && parseFloat(c.weight_per_unit) > 0) ? c.weight_per_unit : (c.weight_per_unit || s?.weight_per_unit || 0),
                 length: (isHistorical && parseFloat(c.length) > 0) ? c.length : (c.length || s?.length || 0),
                 width: (isHistorical && parseFloat(c.width) > 0) ? c.width : (c.width || s?.width || 0),
@@ -1257,8 +1268,8 @@ const BOMFormPage = () => {
 
   const handleAddSectionItem = async (section, formData, setFormState, initialForm) => {
     try {
-      const effectiveItemId = (itemId && itemId !== 'bom-form') 
-        ? itemId 
+      const effectiveItemId = (itemId && itemId !== 'bom-form')
+        ? itemId
         : (selectedItem?.source === 'order' ? selectedItem?.id : null);
 
       if (!effectiveItemId && !productForm.drawingNo && !productForm.itemCode) {
@@ -1522,7 +1533,7 @@ const BOMFormPage = () => {
 
   const handleStartEditSectionItem = (section, item) => {
     setEditingSectionItem({ section, id: item.id });
-    
+
     // Prefill form
     if (section === 'materials') {
       setMaterialForm({
@@ -1650,7 +1661,7 @@ const BOMFormPage = () => {
         });
 
         if (!response.ok) throw new Error('Failed to update operation');
-        
+
         setBomData(prev => ({
           ...prev,
           operations: prev.operations.map(o => o.id === editingOperation.id ? { ...o, ...payload } : o)
@@ -1708,7 +1719,7 @@ const BOMFormPage = () => {
         });
 
         if (!response.ok) throw new Error('Failed to update material');
-        
+
         setBomData(prev => ({
           ...prev,
           materials: prev.materials.map(m => m.id === editingMaterial.id ? { ...m, ...payload } : m)
@@ -1761,8 +1772,8 @@ const BOMFormPage = () => {
         }
       }
 
-      const effectiveItemId = (itemId && itemId !== 'bom-form') 
-        ? itemId 
+      const effectiveItemId = (itemId && itemId !== 'bom-form')
+        ? itemId
         : (selectedItem?.source === 'order' ? selectedItem?.id : null);
 
       const token = localStorage.getItem('authToken');
@@ -1815,7 +1826,7 @@ const BOMFormPage = () => {
 
       const responseData = await response.json();
       const newId = responseData.id;
-      
+
       if (!silent) {
         successToast(isDraft ? 'BOM saved as draft' : (isNewVersion ? `BOM Revision V${nextRevision} created successfully` : 'BOM created successfully'));
       }
@@ -1835,20 +1846,20 @@ const BOMFormPage = () => {
         } catch (e) {
           console.error('Failed to auto-update quotation:', e);
         }
-        
+
         // Refresh history to show updated cost in sidebar
         fetchBOMHistory(productForm.itemCode, productForm.drawingNo, targetUpdateId);
 
         // Also update local state for immediate feedback
         setProductForm(prev => ({ ...prev, bom_cost: totalBOMCost }));
-        
+
         if (!isNewVersion) {
           setBomHistory(prev => {
             const newHistory = [...prev];
             // Find the version we're currently viewing to update its cost in history sidebar
             const currentViewingId = itemId || effectiveItemId;
             const idx = newHistory.findIndex(v => String(v.id) === String(currentViewingId));
-            
+
             if (idx !== -1) {
               newHistory[idx] = { ...newHistory[idx], total_cost: totalBOMCost };
             } else if (newHistory.length > 0) {
@@ -1907,7 +1918,7 @@ const BOMFormPage = () => {
       }
 
       const token = localStorage.getItem('authToken');
-      
+
       // We directly call the request endpoint instead of trying direct update first
       const response = await fetch(`${API_BASE}/quotation-requests/request-update-from-bom`, {
         method: 'POST',
@@ -1955,7 +1966,7 @@ const BOMFormPage = () => {
 
       if (response.ok) {
         successToast(`Version V${versionNo} deleted successfully`);
-        
+
         // If we were viewing the deleted version, navigate back to creation or another version
         if (String(itemId) === String(versionId)) {
           // Find another version to view if available
@@ -1986,7 +1997,7 @@ const BOMFormPage = () => {
   useEffect(() => {
     const group = (productForm.itemGroup || "").toUpperCase();
     const isFG = group.includes("FG") || group.includes("FINISHED") || group.includes("GOOD");
-    
+
     // ONLY auto-update if we have an existing BOM (itemId present)
     if (itemId && itemId !== 'bom-form' && !loading && totalBOMCost > 0 && !hasAutoUpdated.current) {
       // Robust parsing: remove everything except numbers and decimal point
@@ -1996,11 +2007,11 @@ const BOMFormPage = () => {
       if (isFG && Math.abs(savedCost - currentCost) > 0.01) {
         console.log(`[AutoUpdate] Syncing cost mismatch for ${itemId}. Saved: ${savedCost}, Calculated: ${currentCost}`);
         hasAutoUpdated.current = true;
-        
+
         const timer = setTimeout(() => {
           handleCreateBOM('Active', false, true); // (status, isNewVersion, silent)
         }, 100);
-        
+
         return () => clearTimeout(timer);
       }
     }
@@ -2019,21 +2030,20 @@ const BOMFormPage = () => {
         {/* Header Actions */}
         <div className="flex justify-between items-center mb-2">
           <div className="flex items-center gap-2  text-slate-900">
-            
+
             <div>
               <h1 className="text-xl  flex items-center gap-2">
                 {isReadOnly
                   ? `Viewing BOM V${productForm.revision || '1'}: ${cleanText(productForm.description) || itemId} ${productForm.itemGroup ? `(${productForm.itemGroup})` : ''}`
-                  : (productForm.drawingNo && productForm.drawingNo !== 'N/A' 
-                    ? `Create BOM: ${productForm.drawingNo}` 
+                  : (productForm.drawingNo && productForm.drawingNo !== 'N/A'
+                    ? `Create BOM: ${productForm.drawingNo}`
                     : 'Create BOM')}
                 {productForm.revision && (
-                  <span className={`p-1 rounded text-xs border  ${
-                    selectedItem?.status === 'Approved' ? 'text-emerald-50  ' :
-                    selectedItem?.status === 'Draft' ? 'text-amber-50 ' :
-                    selectedItem?.status === 'Rejected' ? 'text-rose-50 ' :
-                    ' text-blue-600 '
-                  }`}>
+                  <span className={`p-1 rounded text-xs border  ${selectedItem?.status === 'Approved' ? 'text-emerald-50  ' :
+                      selectedItem?.status === 'Draft' ? 'text-amber-50 ' :
+                        selectedItem?.status === 'Rejected' ? 'text-rose-50 ' :
+                          ' text-blue-600 '
+                    }`}>
                     {selectedItem?.status || 'Pending'}
                   </span>
                 )}
@@ -2051,17 +2061,17 @@ const BOMFormPage = () => {
               <p className="text-xs text-slate-400   ">
                 {selectedItem?.status === 'REJECTED' && selectedItem?.rejection_reason
                   ? `Reason: ${selectedItem.rejection_reason}`
-                  : isReadOnly 
-                    ? 'Inspecting bill of materials details' 
-                    : (productForm.description 
-                        ? `Drawing: ${productForm.description}${productForm.itemCode ? ` (${productForm.itemCode})` : ''}` 
-                        : 'Configure bill of materials')}
+                  : isReadOnly
+                    ? 'Inspecting bill of materials details'
+                    : (productForm.description
+                      ? `Drawing: ${productForm.description}${productForm.itemCode ? ` (${productForm.itemCode})` : ''}`
+                      : 'Configure bill of materials')}
               </p>
             </div>
           </div>
           <div className="flex gap-2">
-            <button 
-              onClick={() => navigate('/design/bom-creation?filter=drafts')} 
+            <button
+              onClick={() => navigate('/design/bom-creation?filter=drafts')}
               className="p-2 bg-blue-50 text-blue-600 rounded  text-xs  border border-blue-100 hover:bg-blue-100 transition-all flex items-center gap-1.5"
             >
               <History className="w-3.5 h-3.5" />
@@ -2164,13 +2174,13 @@ const BOMFormPage = () => {
                           if (group === 'fg' || group.includes('finished')) return false;
 
                           const sub = (opt.subLabel || '').toLowerCase();
-                          
-                          return group.includes('part') || 
-                                 group.includes('assembly') || 
-                                 group.includes('sfg') || 
-                                 group.includes('semi') || 
-                                 sub.includes('part') || 
-                                 sub.includes('assembly');
+
+                          return group.includes('part') ||
+                            group.includes('assembly') ||
+                            group.includes('sfg') ||
+                            group.includes('semi') ||
+                            sub.includes('part') ||
+                            sub.includes('assembly');
                         }).sort((a, b) => {
                           if (drawingFilter) {
                             const cleanA = String(a.drawing_no || '').replace(/\s*\($/, '');
@@ -2256,16 +2266,16 @@ const BOMFormPage = () => {
                         if (selectedItem && opt.value === `${selectedItem.source || 'order'}_${selectedItem.id}`) return true;
 
                         const group = (opt.item_group || '').toLowerCase();
-                        const isFinishedOrSub = group.includes('finished') || 
-                                              group.includes('sub') || 
-                                              group.includes('assembly') || 
-                                              group === 'fg' || 
-                                              group === 'sfg' ||
-                                              group === 'sub-assembly' ||
-                                              group === 'semi finished' ||
-                                              group === 'semi-finished' ||
-                                              group === 'raw' || // Allow raw materials if they want to BOM them (unlikely but possible)
-                                              group.includes('good');
+                        const isFinishedOrSub = group.includes('finished') ||
+                          group.includes('sub') ||
+                          group.includes('assembly') ||
+                          group === 'fg' ||
+                          group === 'sfg' ||
+                          group === 'sub-assembly' ||
+                          group === 'semi finished' ||
+                          group === 'semi-finished' ||
+                          group === 'raw' || // Allow raw materials if they want to BOM them (unlikely but possible)
+                          group.includes('good');
 
                         return isFinishedOrSub;
                       }).sort((a, b) => {
@@ -2389,246 +2399,246 @@ const BOMFormPage = () => {
                     onChange={(e) => setProductForm({ ...productForm, notes: e.target.value })}
                   />
                 </div>
-              
+
               </div>
             </div>
           )}
         </div>
 
         {/* SECTION 2: Components */}
-        {productForm.itemGroup === 'Assembly' && (
+        {(productForm.itemGroup === 'Assembly' || productForm.itemGroup === 'Part') && (
           <Card className="p-0 border-slate-200 overflow-hidden  transition-all hover:">
-          <div
-            className="bg-white p-2 flex justify-between items-center cursor-pointer hover:bg-slate-50 transition-colors border-b border-slate-100"
-            onClick={() => toggleSection('components')}
-          >
-            <div className="flex items-center gap-2">
-              <div className="w-9 h-9 bg-indigo-50 rounded  flex items-center justify-center text-indigo-600 border border-indigo-100 ">
-                <Layers className="w-5 h-5" />
+            <div
+              className="bg-white p-2 flex justify-between items-center cursor-pointer hover:bg-slate-50 transition-colors border-b border-slate-100"
+              onClick={() => toggleSection('components')}
+            >
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 bg-indigo-50 rounded  flex items-center justify-center text-indigo-600 border border-indigo-100 ">
+                  <Layers className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-sm  text-slate-800 ">Component/Part</h4>
+                  <p className="text-xs text-slate-400   ">{bomData.components.length} items • Total ₹{componentsCost.toFixed(2)}</p>
+                </div>
               </div>
-              <div>
-                <h4 className="text-sm  text-slate-800 ">Component/Part</h4>
-                <p className="text-xs text-slate-400   ">{bomData.components.length} items • Total ₹{componentsCost.toFixed(2)}</p>
+              <div className="flex items-center gap-2">
+                {!isReadOnly && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (collapsedSections.components) {
+                        toggleSection('components');
+                      }
+                    }}
+                    className="p-2 .5 bg-indigo-50 text-indigo-600 rounded  text-xs  hover:bg-indigo-100 transition-colors flex items-center gap-1.5 border border-indigo-100"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Quick Add
+                  </button>
+                )}
+                <div className={`transition-transform duration-300 ${collapsedSections.components ? 'rotate-180' : ''}`}>
+                  <ChevronDown className="w-5 h-5 text-slate-400" />
+                </div>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              {!isReadOnly && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (collapsedSections.components) {
-                      toggleSection('components');
-                    }
-                  }}
-                  className="p-2 .5 bg-indigo-50 text-indigo-600 rounded  text-xs  hover:bg-indigo-100 transition-colors flex items-center gap-1.5 border border-indigo-100"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  Quick Add
-                </button>
-              )}
-              <div className={`transition-transform duration-300 ${collapsedSections.components ? 'rotate-180' : ''}`}>
-                <ChevronDown className="w-5 h-5 text-slate-400" />
-              </div>
-            </div>
-          </div>
-          {!collapsedSections.components && (
-            <div className="p-2 bg-white">
-              {!isReadOnly && (
-                <div className="bg-slate-50 p-2 rounded  border border-slate-100 mb-6">
-                  <div className="flex justify-between items-center mb-4">
-                    <h5 className="text-xs  text-indigo-600  flex items-center gap-2 ">
-                      <span className="w-1.5 h-1.5 bg-indigo-500 rounded "></span>
-                      Add New Component
-                    </h5>
-                    <label className="flex items-center gap-2  cursor-pointer group bg-white px-2.5 py-1.5 rounded  border border-slate-200  hover:border-indigo-300 transition-all">
-                      <input
-                        type="checkbox"
-                        className="w-3.5 h-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                        checked={showAllDrawings}
-                        onChange={(e) => setShowAllDrawings(e.target.checked)}
-                      />
-                      <span className="text-xs  text-slate-600 group-hover:text-indigo-600 transition-colors">Global Search</span>
-                    </label>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-12 gap-2">
-                    <div className="md:col-span-4 space-y-1">
-                      <label className="text-xs  text-slate-500 ml-1">Component Selection <span className="text-rose-500">*</span></label>
-                      <SearchableSelect
-                        placeholder="Select assembly or part..."
-                        options={componentOptions}
-                        value={componentForm.componentCode}
-                        onChange={(e) => {
-                          const item = componentOptions.find(i => i.value === e.target.value) || 
-                                       stockItems.find(si => si.item_code === e.target.value);
-                          setComponentForm({
-                            ...componentForm,
-                            componentCode: e.target.value,
-                            rate: item ? item.rate : componentForm.rate,
-                            uom: item ? item.uom : componentForm.uom,
-                            description: item ? item.description : componentForm.description,
-                            weightPerUnit: item ? (item.weight_per_unit || item.weightPerUnit || 0) : '',
-                            itemGroup: item ? (item.itemGroup || item.item_group || "") : '',
-                            scrapPercent: item ? (item.scrapPercent || item.scrap_percent || 0) : '0',
-                            length: item ? item.length : '',
-                            width: item ? item.width : '',
-                            thickness: item ? item.thickness : '',
-                            diameter: item ? item.diameter : '',
-                            outer_diameter: item ? item.outer_diameter : ''
-                          });
-                        }}
-                        subLabelField="subLabel"
-                      />
+            {!collapsedSections.components && (
+              <div className="p-2 bg-white">
+                {!isReadOnly && (
+                  <div className="bg-slate-50 p-2 rounded  border border-slate-100 mb-6">
+                    <div className="flex justify-between items-center mb-4">
+                      <h5 className="text-xs  text-indigo-600  flex items-center gap-2 ">
+                        <span className="w-1.5 h-1.5 bg-indigo-500 rounded "></span>
+                        Add New Component
+                      </h5>
+                      <label className="flex items-center gap-2  cursor-pointer group bg-white px-2.5 py-1.5 rounded  border border-slate-200  hover:border-indigo-300 transition-all">
+                        <input
+                          type="checkbox"
+                          className="w-3.5 h-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                          checked={showAllDrawings}
+                          onChange={(e) => setShowAllDrawings(e.target.checked)}
+                        />
+                        <span className="text-xs  text-slate-600 group-hover:text-indigo-600 transition-colors">Global Search</span>
+                      </label>
                     </div>
-                    <div className="md:col-span-3 space-y-1">
-                      <label className="text-xs  text-slate-500 ml-1">Parent Level</label>
-                      <select
-                        className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                        value={componentForm.parentId}
-                        onChange={(e) => setComponentForm({ ...componentForm, parentId: e.target.value })}
-                      >
-                        <option value="">None (Top Level)</option>
-                        {bomData.components.map(c => (
-                          <option key={c.id} value={c.id}>{c.component_code || c.componentCode}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="md:col-span-2 space-y-1">
-                      <label className="text-xs  text-slate-500 ml-1">Qty</label>
-                      <input type="number" className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all" placeholder="0.00" step="0.01" value={componentForm.quantity} onChange={(e) => setComponentForm({ ...componentForm, quantity: e.target.value })} />
-                    </div>
-                    <div className="md:col-span-1 space-y-1">
-                      <label className="text-xs  text-slate-500 ml-1">UOM</label>
-                      <select className="w-full px-2 py-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all" value={componentForm.uom} onChange={(e) => setComponentForm({ ...componentForm, uom: e.target.value })}>
-                        <option value="Kg">Kg</option>
-                        <option value="Nos">Nos</option>
-                        <option value="Mtr">Mtr</option>
-                        <option value="Litre (Ltr)">Litre (Ltr)</option>
-                      </select>
-                    </div>
-                    
-                    <div className="md:col-span-2 space-y-1 flex flex-col justify-end">
-                      {editingSectionItem?.section === 'components' ? (
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => handleUpdateSectionItem('components', componentForm, setComponentForm, { componentCode: '', quantity: '1', uom: 'Kg', rate: '', lossPercent: '', notes: '', parentId: '', description: '', weightPerUnit: '', scrapPercent: '0', itemGroup: '', length: '', width: '', thickness: '', diameter: '', outer_diameter: '' })}
-                            className="flex-1 py-2 bg-blue-600 text-white rounded  text-xs  hover:bg-blue-700 shadow-lg shadow-blue-100 transition-all active:scale-95 flex items-center justify-center gap-2"
-                          >
-                            <Save className="w-4 h-4" />
-                            Update
-                          </button>
-                          <button
-                            onClick={() => handleCancelEditSectionItem('components')}
-                            className="px-3 py-2 bg-slate-100 text-slate-600 rounded  text-xs  hover:bg-slate-200 transition-all active:scale-95"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => handleAddSectionItem('components', componentForm, setComponentForm, { componentCode: '', quantity: '1', uom: 'Kg', rate: '', lossPercent: '', notes: '', parentId: '', description: '', weightPerUnit: '', scrapPercent: '0', itemGroup: '', length: '', width: '', thickness: '', diameter: '', outer_diameter: '' })}
-                          className="w-full py-2 bg-indigo-600 text-white rounded  text-xs  hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all active:scale-95 flex items-center justify-center gap-2"
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-2">
+                      <div className="md:col-span-4 space-y-1">
+                        <label className="text-xs  text-slate-500 ml-1">Component Selection <span className="text-rose-500">*</span></label>
+                        <SearchableSelect
+                          placeholder="Select assembly or part..."
+                          options={componentOptions}
+                          value={componentForm.componentCode}
+                          onChange={(e) => {
+                            const item = componentOptions.find(i => i.value === e.target.value) ||
+                              stockItems.find(si => si.item_code === e.target.value);
+                            setComponentForm({
+                              ...componentForm,
+                              componentCode: e.target.value,
+                              rate: item ? item.rate : componentForm.rate,
+                              uom: item ? item.uom : componentForm.uom,
+                              description: item ? item.description : componentForm.description,
+                              weightPerUnit: item ? (item.weight_per_unit || item.weightPerUnit || 0) : '',
+                              itemGroup: item ? (item.itemGroup || item.item_group || "") : '',
+                              scrapPercent: item ? (item.scrapPercent || item.scrap_percent || 0) : '0',
+                              length: item ? item.length : '',
+                              width: item ? item.width : '',
+                              thickness: item ? item.thickness : '',
+                              diameter: item ? item.diameter : '',
+                              outer_diameter: item ? item.outer_diameter : ''
+                            });
+                          }}
+                          subLabelField="subLabel"
+                        />
+                      </div>
+                      <div className="md:col-span-3 space-y-1">
+                        <label className="text-xs  text-slate-500 ml-1">Parent Level</label>
+                        <select
+                          className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                          value={componentForm.parentId}
+                          onChange={(e) => setComponentForm({ ...componentForm, parentId: e.target.value })}
                         >
-                          <Plus className="w-4 h-4" />
-                          Add
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  <div className={`grid grid-cols-1 ${(() => {
-                    const isWeightBasedGroup = ['raw materials', 'raw material', 'rm', 'consumables', 'consumable', 'con'].includes((componentForm.itemGroup || '').toLowerCase().trim());
-                    const isKg = (componentForm.uom || '').toLowerCase() === 'kg';
-                    return (isWeightBasedGroup && isKg) ? 'md:grid-cols-6' : 'md:grid-cols-4';
-                  })()} gap-2 mt-3`}>
-                    <div className="space-y-1">
-                      <label className="text-xs  text-slate-500 ml-1">Unit Rate (₹)</label>
-                      <input type="number" className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all" placeholder="0.00" step="0.01" value={componentForm.rate} onChange={(e) => setComponentForm({ ...componentForm, rate: e.target.value })} />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-xs  text-slate-500 ml-1">Process Loss %</label>
-                      <input type="number" className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-rose-600 focus:ring-2 focus:ring-indigo-500 outline-none transition-all" placeholder="0.00" step="0.01" value={componentForm.lossPercent} onChange={(e) => setComponentForm({ ...componentForm, lossPercent: e.target.value })} />
-                    </div>
+                          <option value="">None (Top Level)</option>
+                          {bomData.components.map(c => (
+                            <option key={c.id} value={c.id}>{c.component_code || c.componentCode}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="md:col-span-2 space-y-1">
+                        <label className="text-xs  text-slate-500 ml-1">Qty</label>
+                        <input type="number" className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all" placeholder="0.00" step="0.01" value={componentForm.quantity} onChange={(e) => setComponentForm({ ...componentForm, quantity: e.target.value })} />
+                      </div>
+                      <div className="md:col-span-1 space-y-1">
+                        <label className="text-xs  text-slate-500 ml-1">UOM</label>
+                        <select className="w-full px-2 py-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all" value={componentForm.uom} onChange={(e) => setComponentForm({ ...componentForm, uom: e.target.value })}>
+                          <option value="Kg">Kg</option>
+                          <option value="Nos">Nos</option>
+                          <option value="Mtr">Mtr</option>
+                          <option value="Litre (Ltr)">Litre (Ltr)</option>
+                        </select>
+                      </div>
 
-                    {(() => {
+                      <div className="md:col-span-2 space-y-1 flex flex-col justify-end">
+                        {editingSectionItem?.section === 'components' ? (
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleUpdateSectionItem('components', componentForm, setComponentForm, { componentCode: '', quantity: '1', uom: 'Kg', rate: '', lossPercent: '', notes: '', parentId: '', description: '', weightPerUnit: '', scrapPercent: '0', itemGroup: '', length: '', width: '', thickness: '', diameter: '', outer_diameter: '' })}
+                              className="flex-1 py-2 bg-blue-600 text-white rounded  text-xs  hover:bg-blue-700 shadow-lg shadow-blue-100 transition-all active:scale-95 flex items-center justify-center gap-2"
+                            >
+                              <Save className="w-4 h-4" />
+                              Update
+                            </button>
+                            <button
+                              onClick={() => handleCancelEditSectionItem('components')}
+                              className="px-3 py-2 bg-slate-100 text-slate-600 rounded  text-xs  hover:bg-slate-200 transition-all active:scale-95"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => handleAddSectionItem('components', componentForm, setComponentForm, { componentCode: '', quantity: '1', uom: 'Kg', rate: '', lossPercent: '', notes: '', parentId: '', description: '', weightPerUnit: '', scrapPercent: '0', itemGroup: '', length: '', width: '', thickness: '', diameter: '', outer_diameter: '' })}
+                            className="w-full py-2 bg-indigo-600 text-white rounded  text-xs  hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all active:scale-95 flex items-center justify-center gap-2"
+                          >
+                            <Plus className="w-4 h-4" />
+                            Add
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <div className={`grid grid-cols-1 ${(() => {
                       const isWeightBasedGroup = ['raw materials', 'raw material', 'rm', 'consumables', 'consumable', 'con'].includes((componentForm.itemGroup || '').toLowerCase().trim());
                       const isKg = (componentForm.uom || '').toLowerCase() === 'kg';
-                      
-                      if (isWeightBasedGroup && isKg) {
-                        return (
-                          <>
-                            <div className="space-y-1">
-                              <label className="text-xs text-slate-500 ml-1">Weight/Unit (Kg)</label>
-                              <input 
-                                type="text" 
-                                className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs text-slate-500 outline-none " 
-                                value={componentForm.weightPerUnit ? (parseFloat(componentForm.weightPerUnit) * (1 + parseFloat(componentForm.scrapPercent || 0))).toFixed(3) : ''} 
-                                readOnly 
-                                placeholder="Auto"
-                              />
-                            </div>
-                            <div className="space-y-1">
-                              <label className="text-xs text-slate-500 ml-1">Scrap(kg)</label>
-                              <input 
-                                type="number" 
-                                className="w-full p-2 bg-white border border-slate-200 rounded text-xs text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none" 
-                                value={componentForm.scrapPercent} 
-                                onChange={(e) => setComponentForm({ ...componentForm, scrapPercent: e.target.value })}
-                                placeholder="0"
-                              />
-                            </div>
-                          </>
-                        );
-                      }
-                      return null;
-                    })()}
+                      return (isWeightBasedGroup && isKg) ? 'md:grid-cols-6' : 'md:grid-cols-4';
+                    })()} gap-2 mt-3`}>
+                      <div className="space-y-1">
+                        <label className="text-xs  text-slate-500 ml-1">Unit Rate (₹)</label>
+                        <input type="number" className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all" placeholder="0.00" step="0.01" value={componentForm.rate} onChange={(e) => setComponentForm({ ...componentForm, rate: e.target.value })} />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs  text-slate-500 ml-1">Process Loss %</label>
+                        <input type="number" className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-rose-600 focus:ring-2 focus:ring-indigo-500 outline-none transition-all" placeholder="0.00" step="0.01" value={componentForm.lossPercent} onChange={(e) => setComponentForm({ ...componentForm, lossPercent: e.target.value })} />
+                      </div>
 
-                    <div className="md:col-span-2 space-y-1">
-                      <label className="text-xs  text-slate-500 ml-1">Component Notes</label>
-                      <input type="text" className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-600 focus:ring-2 focus:ring-indigo-500 outline-none transition-all" placeholder="Special handling or revision notes..." value={componentForm.notes} onChange={(e) => setComponentForm({ ...componentForm, notes: e.target.value })} />
+                      {(() => {
+                        const isWeightBasedGroup = ['raw materials', 'raw material', 'rm', 'consumables', 'consumable', 'con'].includes((componentForm.itemGroup || '').toLowerCase().trim());
+                        const isKg = (componentForm.uom || '').toLowerCase() === 'kg';
+
+                        if (isWeightBasedGroup && isKg) {
+                          return (
+                            <>
+                              <div className="space-y-1">
+                                <label className="text-xs text-slate-500 ml-1">Weight/Unit (Kg)</label>
+                                <input
+                                  type="text"
+                                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs text-slate-500 outline-none "
+                                  value={componentForm.weightPerUnit ? (parseFloat(componentForm.weightPerUnit) * (1 + parseFloat(componentForm.scrapPercent || 0))).toFixed(3) : ''}
+                                  readOnly
+                                  placeholder="Auto"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="text-xs text-slate-500 ml-1">Scrap(kg)</label>
+                                <input
+                                  type="number"
+                                  className="w-full p-2 bg-white border border-slate-200 rounded text-xs text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none"
+                                  value={componentForm.scrapPercent}
+                                  onChange={(e) => setComponentForm({ ...componentForm, scrapPercent: e.target.value })}
+                                  placeholder="0"
+                                />
+                              </div>
+                            </>
+                          );
+                        }
+                        return null;
+                      })()}
+
+                      <div className="md:col-span-2 space-y-1">
+                        <label className="text-xs  text-slate-500 ml-1">Component Notes</label>
+                        <input type="text" className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-600 focus:ring-2 focus:ring-indigo-500 outline-none transition-all" placeholder="Special handling or revision notes..." value={componentForm.notes} onChange={(e) => setComponentForm({ ...componentForm, notes: e.target.value })} />
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {bomData.components.length > 0 ? (
-                <div className="overflow-x-auto border border-slate-100 rounded  ">
-                  <table className="min-w-full divide-y divide-slate-100 bg-white">
-                    <thead className="bg-slate-50/50">
-                      <tr>
-                        <th className="p-2  text-left text-xs   text-slate-400 ">Item</th>
-                        <th className="p-2  text-center text-xs   text-slate-400 ">Type</th>
-                        <th className="p-2  text-center text-xs   text-slate-400 ">Unit Details</th>
-                        <th className="p-2  text-center text-xs   text-slate-400 ">Total Wt</th>
-                        <th className="p-2  text-center text-xs   text-slate-400 ">Rate (₹)</th>
-                        <th className="p-2  text-center text-xs   text-slate-400 ">Total (₹)</th>
-                        {!isReadOnly && <th className="p-2  text-right text-xs   text-slate-400 ">Actions</th>}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-50">
-                      {bomData.components.filter(c => !c.parent_id && !c.parentId).map((c) => (
-                        <RecursiveBOMRow
-                          key={c.id}
-                          item={c}
-                          onRemove={handleDeleteSectionItem}
-                          onEdit={(item) => handleStartEditSectionItem('components', item)}
-                          isReadOnly={isReadOnly}
-                          childrenMap={childrenMap}
-                          type="component"
-                          isComponentSection={true}
-                        />
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <div className="py-2 flex flex-col items-center justify-center border-2 border-dashed border-slate-100 rounded  bg-slate-50/30">
-                  <div className="w-8 h-8 bg-slate-100 rounded  flex items-center justify-center text-slate-300 mb-3">
-                    <Layers className="w-8 h-8" />
+                {bomData.components.length > 0 ? (
+                  <div className="overflow-x-auto border border-slate-100 rounded  ">
+                    <table className="min-w-full divide-y divide-slate-100 bg-white">
+                      <thead className="bg-slate-50/50">
+                        <tr>
+                          <th className="p-2  text-left text-xs   text-slate-400 ">Item</th>
+                          <th className="p-2  text-center text-xs   text-slate-400 ">Type</th>
+                          <th className="p-2  text-center text-xs   text-slate-400 ">Unit Details</th>
+                          <th className="p-2  text-center text-xs   text-slate-400 ">Total Wt</th>
+                          <th className="p-2  text-center text-xs   text-slate-400 ">Rate (₹)</th>
+                          <th className="p-2  text-center text-xs   text-slate-400 ">Total (₹)</th>
+                          {!isReadOnly && <th className="p-2  text-right text-xs   text-slate-400 ">Actions</th>}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50">
+                        {bomData.components.filter(c => !c.parent_id && !c.parentId).map((c) => (
+                          <RecursiveBOMRow
+                            key={c.id}
+                            item={c}
+                            onRemove={handleDeleteSectionItem}
+                            onEdit={(item) => handleStartEditSectionItem('components', item)}
+                            isReadOnly={isReadOnly}
+                            childrenMap={childrenMap}
+                            type="component"
+                            isComponentSection={true}
+                          />
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-                  <p className="text-xs  text-slate-400 ">No components added yet</p>
-                </div>
-              )}
-            </div>
-          )}
+                ) : (
+                  <div className="py-2 flex flex-col items-center justify-center border-2 border-dashed border-slate-100 rounded  bg-slate-50/30">
+                    <div className="w-8 h-8 bg-slate-100 rounded  flex items-center justify-center text-slate-300 mb-3">
+                      <Layers className="w-8 h-8" />
+                    </div>
+                    <p className="text-xs  text-slate-400 ">No components added yet</p>
+                  </div>
+                )}
+              </div>
+            )}
           </Card>
         )}
 
@@ -2699,7 +2709,7 @@ const BOMFormPage = () => {
                             const itemCode = (item.item_code || "").toUpperCase();
                             const type = (item.material_type || "").toLowerCase();
                             const group = (item.item_group || "").toLowerCase();
-                            
+
                             // EXCLUDE FG and Sub-assemblies ONLY (Keep Raw Materials, Consumables, PM, etc.)
                             if (itemCode.startsWith("FG-") || itemCode.startsWith("SA-") || itemCode.startsWith("SFG-")) return false;
                             if (type.includes("finished") || type.includes("assembly")) return false;
@@ -2733,12 +2743,12 @@ const BOMFormPage = () => {
                             }
 
                             if (showAllDrawings) return true;
-                            
+
                             const productDrawing = (selectedItem?.drawing_no || productForm.drawingNo || '').trim();
                             const itemDrawing = (item.drawing_no || '').trim();
 
                             if (!productDrawing) return true;
-                            
+
                             // If item has no drawing or N/A, it's a generic raw material/consumable - ALWAYS show it
                             if (!itemDrawing || itemDrawing === 'N/A') return true;
 
@@ -2757,20 +2767,20 @@ const BOMFormPage = () => {
                         }
                         value={stockItems.find(i => i.material_name === materialForm.materialName)?.item_code || ''}
                         onChange={(e) => {
-                          const item = stockItems.find(i => i.item_code === e.target.value) || 
-                                       stockItems.find(i => i.material_name === e.target.value);
+                          const item = stockItems.find(i => i.item_code === e.target.value) ||
+                            stockItems.find(i => i.material_name === e.target.value);
                           // Check if this material is a sub-assembly and has an approved BOM cost
                           const bomInfo = item ? approvedBOMs.find(b => b.item_code === item.item_code) : null;
                           const bomCost = bomInfo ? parseFloat(bomInfo.bom_cost) : 0;
 
                           let autoGroup = materialForm.itemGroup;
                           if (item) {
-                             const ig = (item.material_type || item.item_group || item.materialType || "").toLowerCase().replace(/_/g, ' ').trim();
-                             const matchingGroup = itemGroups.find(g => {
-                               const gName = g.name.toLowerCase().replace(/_/g, ' ').trim();
-                               return gName === ig || ig.includes(gName) || gName.includes(ig);
-                             });
-                             autoGroup = matchingGroup ? matchingGroup.name : getMaterialItemGroupFromType(item);
+                            const ig = (item.material_type || item.item_group || item.materialType || "").toLowerCase().replace(/_/g, ' ').trim();
+                            const matchingGroup = itemGroups.find(g => {
+                              const gName = g.name.toLowerCase().replace(/_/g, ' ').trim();
+                              return gName === ig || ig.includes(gName) || gName.includes(ig);
+                            });
+                            autoGroup = matchingGroup ? matchingGroup.name : getMaterialItemGroupFromType(item);
                           }
 
                           setMaterialForm({
@@ -2821,26 +2831,26 @@ const BOMFormPage = () => {
                     {(() => {
                       const isWeightBasedGroup = ['raw materials', 'raw material', 'rm', 'consumables', 'consumable', 'con'].includes((materialForm.itemGroup || '').toLowerCase().trim());
                       const isKg = (materialForm.uom || '').toLowerCase() === 'kg';
-                      
+
                       if (isWeightBasedGroup && isKg) {
                         return (
                           <>
                             <div className="md:col-span-2 space-y-1">
                               <label className="text-xs  text-slate-500 ml-1">Weight/Unit (Kg)</label>
-                              <input 
-                                type="text" 
-                                className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs text-slate-500 outline-none " 
-                                value={materialForm.weightPerUnit ? (parseFloat(materialForm.weightPerUnit) * (1 + (parseFloat(materialForm.scrapPercent) || 0))).toFixed(3) : ''} 
-                                readOnly 
+                              <input
+                                type="text"
+                                className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs text-slate-500 outline-none "
+                                value={materialForm.weightPerUnit ? (parseFloat(materialForm.weightPerUnit) * (1 + (parseFloat(materialForm.scrapPercent) || 0))).toFixed(3) : ''}
+                                readOnly
                                 placeholder="Auto"
                               />
                             </div>
                             <div className="md:col-span-1 space-y-1">
                               <label className="text-xs  text-slate-500 ml-1">Scrap(kg)</label>
-                              <input 
-                                type="number" 
-                                className="w-full p-2 bg-white border border-slate-200 rounded text-xs text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none" 
-                                value={materialForm.scrapPercent} 
+                              <input
+                                type="number"
+                                className="w-full p-2 bg-white border border-slate-200 rounded text-xs text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none"
+                                value={materialForm.scrapPercent}
                                 onChange={(e) => setMaterialForm({ ...materialForm, scrapPercent: e.target.value })}
                                 placeholder="0"
                               />
@@ -3069,10 +3079,10 @@ const BOMFormPage = () => {
                         <option value="">Select Resource</option>
                         {(() => {
                           const op = operationsList.find(o => o.operation_name === operationForm.operationName);
-                          const filteredWS = op && op.workstation_codes 
+                          const filteredWS = op && op.workstation_codes
                             ? workstations.filter(ws => op.workstation_codes.split(', ').includes(ws.workstation_code))
                             : workstations;
-                          
+
                           // If after filtering we have no workstations but we have global workstations, 
                           // show all as a fallback so user can still select something
                           const displayWS = (filteredWS.length === 0 && workstations.length > 0) ? workstations : filteredWS;
@@ -3181,7 +3191,7 @@ const BOMFormPage = () => {
                         const setupPerUnit = batchQty > 0 ? (setupTime / batchQty) : 0;
                         const totalTimeMinPerUnit = cycleTime + setupPerUnit;
                         const operationCost = (totalTimeMinPerUnit / 60) * hourlyRate;
-                        
+
                         return (
                           <tr key={o.id} className="hover:bg-slate-50/80 transition-colors group">
                             <td className="p-2  whitespace-nowrap">
@@ -3323,7 +3333,7 @@ const BOMFormPage = () => {
                             if (showAllDrawings) return true;
                             const productDrawing = (selectedItem?.drawing_no || productForm.drawingNo || '').trim();
                             const itemDrawing = (item.drawing_no || '').trim();
-                            
+
                             if (!productDrawing) return true;
                             return itemDrawing === productDrawing;
                           })
@@ -3627,140 +3637,138 @@ const BOMFormPage = () => {
 
         {/* BOM Version History */}
         {(itemId && itemId !== 'bom-form') && (
-        <Card className="p-0 border-slate-200 overflow-hidden h-full">
-          <div className="bg-white  flex items-center justify-between border-b border-slate-100">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-indigo-600 rounded flex items-center justify-center text-white text-sm">
-                <History className="w-4 h-4" />
+          <Card className="p-0 border-slate-200 overflow-hidden h-full">
+            <div className="bg-white  flex items-center justify-between border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-indigo-600 rounded flex items-center justify-center text-white text-sm">
+                  <History className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-sm  text-slate-800">BOM Version History</h4>
+                  <p className="text-xs text-slate-400">Manage BOM revisions and compare changes</p>
+                </div>
               </div>
-              <div>
-                <h4 className="text-sm  text-slate-800">BOM Version History</h4>
-                <p className="text-xs text-slate-400">Manage BOM revisions and compare changes</p>
-              </div>
+              <button
+                onClick={() => handleCreateBOM('Active', true)}
+                className="text-xs text-indigo-600  hover:underline flex items-center gap-1"
+              >
+                <Plus className="w-3 h-3" /> Save as New Version
+              </button>
             </div>
-            <button 
-              onClick={() => handleCreateBOM('Active', true)}
-              className="text-xs text-indigo-600  hover:underline flex items-center gap-1"
-            >
-              <Plus className="w-3 h-3" /> Save as New Version
-            </button>
-          </div>
-          <div className=" my-2 overflow-auto max-h-[350px]">
-            {loadingHistory ? (
-              <div className="py-2 text-center text-slate-400">
-                <Loader2 className="w-6 h-6 animate-spin mx-auto mb-3" />
-                <p className="text-xs ">Retrieving version history...</p>
-              </div>
-            ) : bomHistory.length > 0 ? (
-              <div className="grid grid-cols-1 gap-2">
-                {bomHistory.map((v, idx) => {
-                  const isViewing = String(v.id) === String(itemId);
-                  const isLatest = idx === bomHistory.length - 1;
-                  return (
-                    <div 
-                      key={v.id || idx}
-                      onClick={() => navigate(`/bom-form/${v.id}?view=true`)}
-                      className={`group relative p-2 rounded border transition-all cursor-pointer ${
-                        isViewing 
-                          ? 'bg-indigo-50/50 border-indigo-200 ring-1 ring-indigo-100' 
-                          : 'bg-white border-slate-100 hover:border-indigo-200 hover:shadow-md hover:shadow-indigo-50'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-4 h-4 p-1 rounded flex items-center justify-center  text-xs ${
-                            isViewing ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'bg-slate-100 text-slate-600 group-hover:bg-indigo-50 group-hover:text-indigo-600'
-                          }`}>
-                            V{v.version || '1'}
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm  text-slate-800">
-                                ₹{parseFloat(v.total_cost || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                              </span>
-                              {isLatest && (
-                                <span className="p-1 bg-emerald-100 text-emerald-700 rounded text-xs   ">Current</span>
-                              )}
-                              {(isViewing && !isLatest) && (
-                                <span className="p-1 bg-amber-100 text-amber-700 rounded text-xs   ">Viewing</span>
-                              )}
+            <div className=" my-2 overflow-auto max-h-[350px]">
+              {loadingHistory ? (
+                <div className="py-2 text-center text-slate-400">
+                  <Loader2 className="w-6 h-6 animate-spin mx-auto mb-3" />
+                  <p className="text-xs ">Retrieving version history...</p>
+                </div>
+              ) : bomHistory.length > 0 ? (
+                <div className="grid grid-cols-1 gap-2">
+                  {bomHistory.map((v, idx) => {
+                    const isViewing = String(v.id) === String(itemId);
+                    const isLatest = idx === bomHistory.length - 1;
+                    return (
+                      <div
+                        key={v.id || idx}
+                        onClick={() => navigate(`/bom-form/${v.id}?view=true`)}
+                        className={`group relative p-2 rounded border transition-all cursor-pointer ${isViewing
+                            ? 'bg-indigo-50/50 border-indigo-200 ring-1 ring-indigo-100'
+                            : 'bg-white border-slate-100 hover:border-indigo-200 hover:shadow-md hover:shadow-indigo-50'
+                          }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-4 h-4 p-1 rounded flex items-center justify-center  text-xs ${isViewing ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'bg-slate-100 text-slate-600 group-hover:bg-indigo-50 group-hover:text-indigo-600'
+                              }`}>
+                              V{v.version || '1'}
                             </div>
-                            <div className="flex items-center gap-2 mt-0.5">
-                              <Clock className="w-3 h-3 text-slate-400" />
-                              <span className="text-xs text-slate-500">
-                                {v.revision_date ? new Date(v.revision_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
-                              </span>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm  text-slate-800">
+                                  ₹{parseFloat(v.total_cost || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                </span>
+                                {isLatest && (
+                                  <span className="p-1 bg-emerald-100 text-emerald-700 rounded text-xs   ">Current</span>
+                                )}
+                                {(isViewing && !isLatest) && (
+                                  <span className="p-1 bg-amber-100 text-amber-700 rounded text-xs   ">Viewing</span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <Clock className="w-3 h-3 text-slate-400" />
+                                <span className="text-xs text-slate-500">
+                                  {v.revision_date ? new Date(v.revision_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                                </span>
+                              </div>
                             </div>
                           </div>
+
+                          <div className="text-right">
+                            <div className="text-xs  text-slate-600">{v.changed_by || 'SPTECH'}</div>
+                            <div className="text-xs text-slate-400">Technical Design</div>
+
+                          </div>
                         </div>
-                        
-                        <div className="text-right">
-                          <div className="text-xs  text-slate-600">{v.changed_by || 'SPTECH'}</div>
-                          <div className="text-xs text-slate-400">Technical Design</div>
-                          
-                        </div>
-                      </div>
-                      <div className="mt-2 flex flex-col gap-1 items-end">
-                            <div className="flex gap-1">
-                              <button 
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDeleteVersion(v.id, v.version || '1');
-                                }}
-                                className="text-xs bg-rose-50 text-rose-700 px-2 py-1 rounded border border-rose-100 hover:bg-rose-100 transition-colors flex items-center gap-1"
-                                title="Permanently delete this version"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                                Delete
-                              </button>
-                              <button 
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  const effectiveSOItemId = (itemId && itemId !== 'bom-form') ? itemId : (selectedItem?.id);
-                                  handleUpdateQuotation(effectiveSOItemId, v.total_cost);
-                                }}
-                                className="text-xs bg-emerald-50 text-emerald-700 px-2 py-1 rounded border border-emerald-100 hover:bg-emerald-100 transition-colors flex items-center gap-1"
-                                title="Update linked quotations with this value"
-                              >
-                                <RefreshCw className="w-3 h-3" />
-                                Update Quotation
-                              </button>
-                               <span className="text-xs text-indigo-600  flex items-center gap-1 group-hover:opacity-100 transition-opacity">
+                        <div className="mt-2 flex flex-col gap-1 items-end">
+                          <div className="flex gap-1">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteVersion(v.id, v.version || '1');
+                              }}
+                              className="text-xs bg-rose-50 text-rose-700 px-2 py-1 rounded border border-rose-100 hover:bg-rose-100 transition-colors flex items-center gap-1"
+                              title="Permanently delete this version"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                              Delete
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const effectiveSOItemId = (itemId && itemId !== 'bom-form') ? itemId : (selectedItem?.id);
+                                handleUpdateQuotation(effectiveSOItemId, v.total_cost);
+                              }}
+                              className="text-xs bg-emerald-50 text-emerald-700 px-2 py-1 rounded border border-emerald-100 hover:bg-emerald-100 transition-colors flex items-center gap-1"
+                              title="Update linked quotations with this value"
+                            >
+                              <RefreshCw className="w-3 h-3" />
+                              Update Quotation
+                            </button>
+                            <span className="text-xs text-indigo-600  flex items-center gap-1 group-hover:opacity-100 transition-opacity">
                               View Details <ChevronRight className="w-3 h-3" />
                             </span>
-                            </div>
-                           
                           </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="py-2 text-center">
-                <div className="w-12 h-12 bg-slate-50 rounded flex items-center justify-center mx-auto mb-3">
-                  <History className="w-6 h-6 text-slate-300" />
+
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-                <p className="text-xs text-slate-400 ">No version history found for this item</p>
-                <p className="text-xs text-slate-300 mt-1">This appears to be the initial version.</p>
-              </div>
-            )}
-          </div>
-          <div className="p-2 border-t border-slate-50 bg-slate-50/30">
-            <button 
-              onClick={() => navigate(`${deptPrefix}/bom-approval`)}
-              className="text-xs text-indigo-600  hover:underline"
-            >
-              View Full Version History →
-            </button>
-          </div>
-        </Card>
+              ) : (
+                <div className="py-2 text-center">
+                  <div className="w-12 h-12 bg-slate-50 rounded flex items-center justify-center mx-auto mb-3">
+                    <History className="w-6 h-6 text-slate-300" />
+                  </div>
+                  <p className="text-xs text-slate-400 ">No version history found for this item</p>
+                  <p className="text-xs text-slate-300 mt-1">This appears to be the initial version.</p>
+                </div>
+              )}
+            </div>
+            <div className="p-2 border-t border-slate-50 bg-slate-50/30">
+              <button
+                onClick={() => navigate(`${deptPrefix}/bom-approval`)}
+                className="text-xs text-indigo-600  hover:underline"
+              >
+                View Full Version History →
+              </button>
+            </div>
+          </Card>
         )}
 
       </div>
 
       {/* Footer Actions */}
       <div className="flex justify-end gap-2 pb-8">
-        <Button 
+        <Button
           variant="default"
           onClick={() => navigate(`${deptPrefix}/bom-creation`)}
         >
@@ -3768,21 +3776,21 @@ const BOMFormPage = () => {
         </Button>
         {!isReadOnly && (
           <div className="flex gap-2">
-            <Button 
+            <Button
               variant="light"
-              onClick={() => handleCreateBOM('Draft')} 
+              onClick={() => handleCreateBOM('Draft')}
               icon={FileText}
             >
               Save as Draft
             </Button>
-            <Button 
+            <Button
               variant="secondary"
-              onClick={() => handleCreateBOM('Active', true)} 
+              onClick={() => handleCreateBOM('Active', true)}
               icon={History}
             >
               Save as New Version
             </Button>
-            <Button 
+            <Button
               variant="primary"
               onClick={() => handleCreateBOM('Active')}
             >
@@ -3792,14 +3800,14 @@ const BOMFormPage = () => {
         )}
       </div>
 
-      <DrawingPreviewModal 
+      <DrawingPreviewModal
         isOpen={showPreviewModal}
         onClose={() => setShowPreviewModal(false)}
         drawing={previewDrawing}
       />
     </div >
-      
-      );
+
+  );
 };
 
 export default BOMFormPage;

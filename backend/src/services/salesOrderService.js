@@ -958,10 +958,15 @@ const getApprovedDrawings = async (companyId = null) => {
     
     // Fetch sub-assemblies for each item if it's an FG
     for (const item of order.items) {
-      const g = (item.item_group_calc || '').toUpperCase();
-      const isFG = (g.includes('FG') || g.includes('FINISHED')) && !g.includes('SA') && !g.includes('SUB');
-      if (isFG || true) { // Fetch for all to be safe, filtering below handles it
-        const components = await bomService.getItemComponents(item.id, item.item_code, item.drawing_no);
+      const g = (item.item_group || '').toUpperCase();
+      const t = (item.item_type || '').toUpperCase();
+      const isSA = g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY') || t.includes('SA') || t.includes('SUB') || t.includes('ASSEMBLY');
+      const components = await bomService.getItemComponents(item.id, item.item_code, item.drawing_no);
+
+      const isDrawingOrSA = isSA || g.includes('PART') || t.includes('PART') || (item.drawing_no && item.drawing_no !== '—');
+      if (isDrawingOrSA) {
+        item.sub_assemblies = components;
+      } else {
         item.sub_assemblies = components.filter(c => {
           const code = (c.item_code || c.component_code || '').toUpperCase();
           const group = (c.item_group || '').toUpperCase();
@@ -971,8 +976,6 @@ const getApprovedDrawings = async (companyId = null) => {
                   desc.includes('ASSEMBLY') || desc.includes('UNIT')) &&
                  !group.includes('FG');
         });
-      } else {
-        item.sub_assemblies = [];
       }
     }
     
@@ -991,7 +994,7 @@ const getApprovedDrawings = async (companyId = null) => {
 const getOrderTimeline = async salesOrderId => {
   // 1. Get order-specific items
   const [items] = await pool.query(
-    `SELECT soi.*, sb.material_type as item_group, sb.product_type,
+    `SELECT soi.*, COALESCE(soi.item_group, sb.material_type) as item_group, sb.product_type,
             so.status as sales_order_status,
             so.public_id as sales_order_public_id,
             COALESCE(soi.drawing_id, cd.latest_drawing_id) as drawing_id,
@@ -1019,7 +1022,7 @@ const getOrderTimeline = async salesOrderId => {
   
   if (drawingNos.length > 0) {
     const [masterItems] = await pool.query(
-      `SELECT soi.*, sb.material_type as item_group, sb.product_type,
+      `SELECT soi.*, COALESCE(soi.item_group, sb.material_type) as item_group, sb.product_type,
               'MASTER' as sales_order_status,
               NULL as sales_order_public_id,
               COALESCE(soi.drawing_id, cd.latest_drawing_id) as drawing_id,
@@ -1166,9 +1169,7 @@ const getOrderTimeline = async salesOrderId => {
     const calculatedBomCost = orderQty > 0 ? totalOrderCost / orderQty : 0;
     
     item.bom_cost = (item.bom_cost && parseFloat(item.bom_cost) > 0) ? parseFloat(item.bom_cost) : calculatedBomCost;
-    // Fix: has_bom should only be true if an order-specific BOM exists. 
-    // This prevents "template leakage" and makes the delete button work correctly (by only showing it for order-specific BOMs).
-    item.has_bom = hasOrderSpecific;
+    item.has_bom = hasOrderSpecific || (item.bom_id !== null && item.sales_order_id !== null);
 
     // Add has_master_bom to indicate if a template exists for this code or drawing
     item.has_master_bom = (

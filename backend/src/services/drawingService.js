@@ -88,14 +88,16 @@ const listDrawings = async (search = '', onlyShared = false, clientName = null) 
     if (row.sales_order_item_id || row.item_code || row.drawing_no) {
       try {
         const components = await bomService.getItemComponents(row.sales_order_item_id, row.item_code, row.drawing_no);
-        const sub_assemblies = components.filter(c => {
+        const g = (row.item_group || '').toUpperCase();
+        const isDrawingOrSA = g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY') || g.includes('PART') || (row.drawing_no && row.drawing_no !== '—');
+        const sub_assemblies = isDrawingOrSA ? components : components.filter(c => {
           const code = (c.item_code || c.component_code || '').toUpperCase();
           const group = (c.item_group || '').toUpperCase();
           const desc = (c.description || '').toUpperCase();
-          return (code.startsWith('SA-') || code.startsWith('SFG-') ||
+          return (code.startsWith('SA-') || code.startsWith('SFG-') || code.startsWith('PART-') ||
             group.includes('SA') || group.includes('SUB') || group.includes('ASSEMBLY') ||
-            desc.includes('ASSEMBLY') || desc.includes('UNIT')) &&
-            !group.includes('FG');
+            desc.includes('ASSEMBLY') || desc.includes('UNIT') ||
+            group.includes('PART') || (c.drawing_no && c.drawing_no !== '—'));
         });
         return { ...row, sub_assemblies };
       } catch (err) {
@@ -186,14 +188,16 @@ const getDrawingById = async (id) => {
   if (row.sales_order_item_id || row.item_code || row.drawing_no) {
     try {
       const components = await bomService.getItemComponents(row.sales_order_item_id, row.item_code, row.drawing_no);
-      const sub_assemblies = components.filter(c => {
+      const g = (row.item_group || '').toUpperCase();
+      const isDrawingOrSA = g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY') || g.includes('PART') || (row.drawing_no && row.drawing_no !== '—');
+      const sub_assemblies = isDrawingOrSA ? components : components.filter(c => {
         const code = (c.item_code || c.component_code || "").toUpperCase();
         const group = (c.item_group || "").toUpperCase();
         const desc = (c.description || "").toUpperCase();
-        return (code.startsWith("SA-") || code.startsWith("SFG-") ||
+        return (code.startsWith("SA-") || code.startsWith("SFG-") || code.startsWith('PART-') ||
           group.includes("SA") || group.includes("SUB") || group.includes("ASSEMBLY") ||
-          desc.includes("ASSEMBLY") || desc.includes("UNIT")) &&
-          !group.includes("FG");
+          desc.includes("ASSEMBLY") || desc.includes("UNIT") ||
+          group.includes('PART') || (c.drawing_no && c.drawing_no !== '—'));
       });
       row.sub_assemblies = sub_assemblies;
     } catch (err) {
@@ -879,12 +883,16 @@ const getApprovedDrawings = async () => {
     if (isFG && row.id) {
       try {
         const components = await bomService.getItemComponents(row.id);
-        const sub_assemblies = components.filter(c => {
-          const code = (c.item_code || '').toUpperCase();
+        const g = (row.item_group || '').toUpperCase();
+        const isDrawingOrSA = g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY') || g.includes('PART') || (row.drawing_no && row.drawing_no !== '—');
+        const sub_assemblies = isDrawingOrSA ? components : components.filter(c => {
+          const code = (c.item_code || c.component_code || '').toUpperCase();
           const group = (c.item_group || '').toUpperCase();
-          return (code.startsWith('SA-') || code.startsWith('SFG-') ||
-            group.includes('SA') || group.includes('SUB') || group.includes('ASSEMBLY')) &&
-            !group.includes('FG');
+          const desc = (c.description || '').toUpperCase();
+          return (code.startsWith('SA-') || code.startsWith('SFG-') || code.startsWith('PART-') ||
+            group.includes('SA') || group.includes('SUB') || group.includes('ASSEMBLY') ||
+            desc.includes('ASSEMBLY') || desc.includes('UNIT') ||
+            group.includes('PART') || (c.drawing_no && c.drawing_no !== '—'));
         });
         return { ...row, sub_assemblies };
       } catch (err) {

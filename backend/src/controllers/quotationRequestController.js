@@ -82,14 +82,16 @@ const getQuotationRequests = async (req, res, next) => {
             row.batch_id, 
             row.created_at
           );
-          const sub_assemblies = components.filter(c => {
+          const g = (row.item_group || '').toUpperCase();
+          const isDrawingOrSA = g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY') || g.includes('PART') || (row.drawing_no && row.drawing_no !== '—');
+          const sub_assemblies = isDrawingOrSA ? components : components.filter(c => {
             const code = (c.item_code || c.component_code || '').toUpperCase();
             const group = (c.item_group || '').toUpperCase();
             const desc = (c.description || '').toUpperCase();
-            return (code.startsWith('SA-') || code.startsWith('SFG-') || 
-                    group.includes('SA') || group.includes('SUB') || group.includes('ASSEMBLY') ||
-                    desc.includes('ASSEMBLY') || desc.includes('UNIT')) &&
-                   !group.includes('FG');
+            return code.startsWith('SA-') || code.startsWith('SFG-') || code.startsWith('PART-') ||
+                   group.includes('SA') || group.includes('SUB') || group.includes('ASSEMBLY') ||
+                   desc.includes('ASSEMBLY') || desc.includes('UNIT') ||
+                   group.includes('PART') || (c.drawing_no && c.drawing_no !== '—');
           });
           return { ...row, sub_assemblies };
         } catch (err) {
@@ -218,7 +220,7 @@ const getQuotationVersionHistory = async (req, res, next) => {
         r.version === row.version && 
         r.batch_id === row.batch_id && 
         (r.status || '').toUpperCase() === 'COMPONENT' &&
-        (r.rejection_reason === row.drawing_no || r.rejection_reason === row.item_description)
+        (r.rejection_reason === row.drawing_no || r.rejection_reason === row.item_description || r.rejection_reason === String(row.id))
       );
 
       if (snapshots.length > 0) {
@@ -254,7 +256,9 @@ const getQuotationVersionHistory = async (req, res, next) => {
             bomService.getItemScrap(`HISTORICAL_${row.sales_order_item_id}`, row.item_code, row.drawing_no)
           ]);
           
-          itemData.sub_assemblies = components.filter(c => {
+          const g = (row.item_group || '').toUpperCase();
+          const isDrawingOrSA = g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY') || g.includes('PART') || (row.drawing_no && row.drawing_no !== '—');
+          itemData.sub_assemblies = isDrawingOrSA ? components : components.filter(c => {
             const code = (c.item_code || c.component_code || '').toUpperCase();
             const group = (c.item_group || '').toUpperCase();
             return (code.startsWith('SA-') || group.includes('SA') || group.includes('SUB') || group.includes('ASSEMBLY')) && !group.includes('FG');
@@ -507,7 +511,7 @@ const sendQuotationViaEmail = async (req, res, next) => {
               sa.unit || 'Nos',
               sa.quantity || 0,
               batchId,
-              'SUB ASSEMBLY',
+              sa.item_group || 'SUB ASSEMBLY',
               sa.bom_cost || 0,
               projectName || null,
               sa.item_code || null,
@@ -901,6 +905,7 @@ const getQuotationVersionDetails = async (req, res, next) => {
         unit: sn.unit,
         bom_cost: parseFloat(sn.bom_cost) || 0,
         rate: parseFloat(sn.received_amount) || parseFloat(sn.bom_cost) || 0,
+        item_group: sn.item_group,
         is_snapshot: true
       }));
 

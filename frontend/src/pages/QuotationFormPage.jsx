@@ -401,9 +401,15 @@ const QuotationFormPage = () => {
         // Default to loading the latest version if we're not in a fresh creation mode
         const currentMode = initialData?.mode || mode;
         if (sortedHistory.length > 0 && currentMode !== 'create') {
-          // Newest is the last item in ASC sort
-          const latest = sortedHistory[sortedHistory.length - 1];
-          await loadVersionData(latest, currentMode === 'revise');
+          // If we have selectedVersionId, load that specific version.
+          // Otherwise load the latest.
+          const target = selectedVersionId 
+            ? (sortedHistory.find(vh => vh.id === selectedVersionId) || sortedHistory[sortedHistory.length - 1])
+            : sortedHistory[sortedHistory.length - 1];
+          
+          // We only force next version if we are initially in revise mode AND we have NOT selected a saved version yet
+          const shouldForce = currentMode === 'revise' && !selectedVersionId;
+          await loadVersionData(target, shouldForce);
         }
       }
     } catch (error) {
@@ -1215,17 +1221,21 @@ const QuotationFormPage = () => {
                                       <span className="text-sm  text-slate-900 ">{item.description || 'No Description'}</span>
                                       <div className="flex items-center gap-2 mt-0.5">
                                         <span className="text-xs   text-slate-500">{item.drawing_no || 'Manual Item'}</span>
-                                        {item.item_group && (
-                                          <span className={`px-1.5 py-0.5 rounded text-xs   border  ${
-                                            (item.item_group.toUpperCase().includes('SA') || item.item_group.toUpperCase().includes('SUB') || item.item_group.toUpperCase().includes('ASSEMBLY')) && !item.item_group.toUpperCase().includes('FG')
-                                              ? 'bg-amber-50 text-amber-600 border-amber-100'
-                                              : 'bg-emerald-50 text-emerald-700 border-emerald-100'
-                                          }`}>
-                                            {(item.item_group.toUpperCase().includes('SA') || item.item_group.toUpperCase().includes('SUB') || item.item_group.toUpperCase().includes('ASSEMBLY')) && !item.item_group.toUpperCase().includes('FG') 
-                                              ? (item.item_group.toUpperCase().includes('SA') || item.item_group.toUpperCase().includes('SUB') ? 'SA' : 'ASSY')
-                                              : 'FG'}
-                                          </span>
-                                        )}
+                                        {(() => {
+                                          const g = (item.item_group || '').toUpperCase();
+                                          const isSA = g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY');
+                                          const isFG = g.includes('FG') || g.includes('FINISHED');
+                                          if (isFG) return null;
+                                          return (
+                                            <span className={`px-1.5 py-0.5 rounded text-xs border ${
+                                              isSA 
+                                                ? 'bg-blue-100 text-blue-700 border-blue-200' 
+                                                : 'bg-emerald-100 text-emerald-700 border-emerald-200'
+                                            }`}>
+                                              {isSA ? (g.includes('ASSEMBLY') && !g.includes('SUB') ? 'ASSY' : 'SA') : item.item_group}
+                                            </span>
+                                          );
+                                        })()}
                                       </div>
                                     </div>
                                   ) : (item.isManual || mode === 'revise') ? (
@@ -1245,17 +1255,21 @@ const QuotationFormPage = () => {
                                           onChange={(e) => handleItemChange(item.id, 'drawing_no', e.target.value)}
                                           className="flex-1 px-0 py-0 text-xs   text-slate-500 border-none focus:ring-0 placeholder:text-slate-300 bg-transparent"
                                         />
-                                        {item.item_group && (
-                                          <span className={`px-1.5 py-0.5 rounded text-xs   border  ${
-                                            (item.item_group.toUpperCase().includes('SA') || item.item_group.toUpperCase().includes('SUB') || item.item_group.toUpperCase().includes('ASSEMBLY')) && !item.item_group.toUpperCase().includes('FG')
-                                              ? 'bg-amber-50 text-amber-600 border-amber-100'
-                                              : 'bg-emerald-50 text-emerald-700 border-emerald-100'
-                                          }`}>
-                                            {(item.item_group.toUpperCase().includes('SA') || item.item_group.toUpperCase().includes('SUB') || item.item_group.toUpperCase().includes('ASSEMBLY')) && !item.item_group.toUpperCase().includes('FG') 
-                                              ? (item.item_group.toUpperCase().includes('SA') || item.item_group.toUpperCase().includes('SUB') ? 'SA' : 'ASSY')
-                                              : 'FG'}
-                                          </span>
-                                        )}
+                                        {(() => {
+                                          const g = (item.item_group || '').toUpperCase();
+                                          const isSA = g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY');
+                                          const isFG = g.includes('FG') || g.includes('FINISHED');
+                                          if (isFG) return null;
+                                          return (
+                                            <span className={`px-1.5 py-0.5 rounded text-xs border ${
+                                              isSA 
+                                                ? 'bg-blue-100 text-blue-700 border-blue-200' 
+                                                : 'bg-emerald-100 text-emerald-700 border-emerald-200'
+                                            }`}>
+                                              {isSA ? (g.includes('ASSEMBLY') && !g.includes('SUB') ? 'ASSY' : 'SA') : item.item_group}
+                                            </span>
+                                          );
+                                        })()}
                                       </div>
                                     </div>
                                   ) : (
@@ -1304,17 +1318,21 @@ const QuotationFormPage = () => {
                                             className="border-none p-0 focus-within:ring-0 shadow-none bg-transparent text-xs   text-slate-500 hide-arrow"
                                           />
                                         </div>
-                                        {item.item_group && (
-                                          <span className={`px-1.5 py-0.5 rounded text-xs   border  ${
-                                            (item.item_group.toUpperCase().includes('SA') || item.item_group.toUpperCase().includes('SUB') || item.item_group.toUpperCase().includes('ASSEMBLY')) && !item.item_group.toUpperCase().includes('FG')
-                                              ? 'bg-amber-50 text-amber-600 border-amber-100'
-                                              : 'bg-emerald-50 text-emerald-700 border-emerald-100'
-                                          }`}>
-                                            {(item.item_group.toUpperCase().includes('SA') || item.item_group.toUpperCase().includes('SUB') || item.item_group.toUpperCase().includes('ASSEMBLY')) && !item.item_group.toUpperCase().includes('FG') 
-                                              ? (item.item_group.toUpperCase().includes('SA') || item.item_group.toUpperCase().includes('SUB') ? 'SA' : 'ASSY')
-                                              : 'FG'}
-                                          </span>
-                                        )}
+                                        {(() => {
+                                          const g = (item.item_group || '').toUpperCase();
+                                          const isSA = g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY');
+                                          const isFG = g.includes('FG') || g.includes('FINISHED');
+                                          if (isFG) return null;
+                                          return (
+                                            <span className={`px-1.5 py-0.5 rounded text-xs border ${
+                                              isSA 
+                                                ? 'bg-blue-100 text-blue-700 border-blue-200' 
+                                                : 'bg-emerald-100 text-emerald-700 border-emerald-200'
+                                            }`}>
+                                              {isSA ? (g.includes('ASSEMBLY') && !g.includes('SUB') ? 'ASSY' : 'SA') : item.item_group}
+                                            </span>
+                                          );
+                                        })()}
                                       </div>
                                     </div>
                                   )}
@@ -1380,7 +1398,9 @@ const QuotationFormPage = () => {
                                     <span className="text-[11px] text-slate-700 font-semibold">{sa.description}</span>
                                     <div className="flex items-center gap-2 mt-0.5">
                                       <span className="text-[9px] text-slate-500 font-mono ">{sa.drawing_no}</span>
-                                      <span className="px-1 py-0.5 rounded-[3px] text-[8px]  bg-blue-50 text-blue-600 border border-blue-100/50">SA</span>
+                                      <span className="px-1 py-0.5 rounded-[3px] text-[8px] border bg-emerald-50 text-emerald-600 border-emerald-100/50">
+                                        PART
+                                      </span>
                                     </div>
                                   </div>
                                 </div>
@@ -1391,12 +1411,8 @@ const QuotationFormPage = () => {
                               <td className="p-2 border-b border-slate-100 text-[11px] text-indigo-600  bg-indigo-50/30">
                                 {formatCurrency(sa.bom_cost)}
                               </td>
-                              <td className="p-2 border-b border-slate-100 text-[11px] text-slate-700 ">
-                                {formatCurrency(sa.rate || sa.bom_cost)}
-                              </td>
-                              <td className="p-2 border-b border-slate-100 text-[11px] text-slate-900 ">
-                                {formatCurrency((parseFloat(sa.rate || sa.bom_cost) || 0) * (parseFloat(sa.quantity || 0) * (parseFloat(item.quantity) || 0)))}
-                              </td>
+                              <td className="p-2 border-b border-slate-100"></td>
+                              <td className="p-2 border-b border-slate-100"></td>
                               {!isLocked && <td className="p-2 border-b border-slate-100"></td>}
                             </tr>
                           );

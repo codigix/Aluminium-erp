@@ -545,7 +545,7 @@ const BOMCreation = () => {
 
     const drawingsList = Object.values(drawingsMap);
     return drawingsList.length > 0 && drawingsList.every(dwgItems =>
-      dwgItems.some(i => i.has_bom && (i.item_group === 'FG' || i.product_type === 'FG' || (i.item_group || '').toLowerCase().includes('finished')))
+      dwgItems.some(i => i.has_bom || i.has_master_bom)
     );
   };
 
@@ -689,6 +689,7 @@ const BOMCreation = () => {
             const isDwgExpanded = expandedDrawings[dwgKey];
             const drawingName = dwgItems[0].drawing_name || dwgItems[0].item_name || dwgItems[0].item_description || 'No Description';
             const drawingId = dwgItems[0].drawing_id;
+            const drawingType = dwgItems.find(i => i.drawing_type)?.drawing_type || '';
             const itemsWithBOM = dwgItems.filter(i => i.has_bom || i.has_master_bom);
 
             // Calculate total FG/SA cost for this drawing
@@ -709,7 +710,7 @@ const BOMCreation = () => {
 
             // Refined status logic
             let dwgStatus = 'PENDING';
-            if (itemsWithBOM.some(i => (i.item_group === 'FG' || i.product_type === 'FG' || (i.item_group || '').toLowerCase().includes('finished')))) {
+            if (itemsWithBOM.length > 0) {
               dwgStatus = 'COMPLETED';
             } else if (dwgItems.length > 0) {
               dwgStatus = 'DESIGN_APPROVED'; // Custom label for UI
@@ -738,6 +739,11 @@ const BOMCreation = () => {
                           </span>
                         ) : (
                           <StatusBadge status={dwgStatus} />
+                        )}
+                        {drawingType && (
+                          <span className="p-1 bg-slate-100 text-slate-600 rounded text-xs border border-slate-200 font-medium">
+                            {drawingType}
+                          </span>
                         )}
                       </div>
                     </div>

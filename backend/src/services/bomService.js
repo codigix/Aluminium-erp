@@ -257,15 +257,15 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
     }
   }
 
-  // Dynamically fetch latest BOM cost for Sub-Assemblies in BULK to avoid N+1 problem
+  // Dynamically fetch latest BOM cost for Sub-Assemblies and Parts in BULK to avoid N+1 problem
   const saComponents = rows.filter(row => {
     const compCode = (row.item_code || row.component_code || row.componentCode || '').toUpperCase();
     const group = (row.item_group || '').toUpperCase();
     const desc = (row.description || '').toUpperCase();
-    return (compCode.startsWith('SA-') || compCode.startsWith('SFG-') || 
+    return compCode.startsWith('SA-') || compCode.startsWith('SFG-') || compCode.startsWith('PART-') ||
            group.includes('SA') || group.includes('SUB') || group.includes('ASSEMBLY') ||
-           desc.includes('ASSEMBLY') || desc.includes('UNIT')) &&
-           !group.includes('FG');
+           desc.includes('ASSEMBLY') || desc.includes('UNIT') ||
+           group.includes('PART') || (row.drawing_no && row.drawing_no !== '—');
   });
 
   if (saComponents.length > 0) {
@@ -379,10 +379,10 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
           const compCode = (row.component_code || row.componentCode || '').toUpperCase();
           const group = (row.item_group || '').toUpperCase();
           const desc = (row.description || '').toUpperCase();
-          const isSubAssy = (compCode.startsWith('SA-') || compCode.startsWith('SFG-') || 
+          const isSubAssy = compCode.startsWith('SA-') || compCode.startsWith('SFG-') || compCode.startsWith('PART-') ||
                              group.includes('SA') || group.includes('SUB') || group.includes('ASSEMBLY') ||
-                             desc.includes('ASSEMBLY') || desc.includes('UNIT')) &&
-                             !group.includes('FG');
+                             desc.includes('ASSEMBLY') || desc.includes('UNIT') ||
+                             group.includes('PART') || (row.drawing_no && row.drawing_no !== '—');
           
           if (isSubAssy && compCode) {
             const key = `${compCode}|${row.drawing_no || ''}`;
@@ -421,7 +421,10 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
       const compCode = (row.item_code || row.component_code || row.componentCode || '').toUpperCase();
       const g = (row.item_group || '').toUpperCase();
       const d = (row.description || '').toUpperCase();
-      const isSA = (compCode.startsWith('SA-') || compCode.startsWith('SFG-') || g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY') || d.includes('ASSEMBLY') || d.includes('UNIT')) && !g.includes('FG');
+      const isSA = compCode.startsWith('SA-') || compCode.startsWith('SFG-') || compCode.startsWith('PART-') ||
+                   g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY') ||
+                   d.includes('ASSEMBLY') || d.includes('UNIT') ||
+                   g.includes('PART') || (row.drawing_no && row.drawing_no !== '—');
       
       if (isSA) return parseFloat(row.rate || 0);
       
@@ -844,6 +847,26 @@ const createBOMRequest = async (bomData) => {
   try {
     await connection.beginTransaction();
 
+    let resolvedSalesOrderId = salesOrderId || null;
+    if (typeof resolvedSalesOrderId === 'string' && resolvedSalesOrderId.length === 36) {
+      const [soRows] = await connection.query('SELECT id FROM sales_orders WHERE public_id = ?', [resolvedSalesOrderId]);
+      if (soRows.length > 0) {
+        resolvedSalesOrderId = soRows[0].id;
+      } else {
+        resolvedSalesOrderId = null;
+      }
+    }
+
+    let resolvedDrawingId = drawing_id || null;
+    if (typeof resolvedDrawingId === 'string' && resolvedDrawingId.length === 36) {
+      const [dwgRows] = await connection.query('SELECT id FROM customer_drawings WHERE public_id = ?', [resolvedDrawingId]);
+      if (dwgRows.length > 0) {
+        resolvedDrawingId = dwgRows[0].id;
+      } else {
+        resolvedDrawingId = null;
+      }
+    }
+
     const safeItemCode = itemCode || null;
 
     let itemType = 'FG';
@@ -889,7 +912,7 @@ const createBOMRequest = async (bomData) => {
           isActive ? 1 : 0, 
           isDefault ? 1 : 0, 
           drawingNo || null, 
-          drawing_id || null, 
+          resolvedDrawingId || null, 
           bom_cost,
           effectiveBomId || itemId,
           finalStatus === 'Draft' ? 'DRAFT' : 'PENDING',
@@ -907,10 +930,10 @@ const createBOMRequest = async (bomData) => {
     } else {
       // 2. CREATE or NEW VERSION Mode
       let initialStatus = finalStatus === 'Draft' ? 'DRAFT' : 'PENDING';
-      if (salesOrderId && drawingNo) {
+      if (resolvedSalesOrderId && drawingNo) {
         const [approvalCheck] = await connection.query(
           "SELECT status FROM sales_order_items WHERE sales_order_id = ? AND drawing_no = ? AND UPPER(TRIM(status)) = 'APPROVED' LIMIT 1",
-          [salesOrderId, drawingNo]
+          [resolvedSalesOrderId, drawingNo]
         );
         if (approvalCheck.length > 0) initialStatus = approvalCheck[0].status;
       }
@@ -920,7 +943,7 @@ const createBOMRequest = async (bomData) => {
          (sales_order_id, bom_id, item_code, item_type, item_group, unit, revision_no, description, is_active, is_default, quantity, drawing_no, drawing_id, bom_cost, status)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
-          salesOrderId || null,
+          resolvedSalesOrderId || null,
           effectiveBomId, // Will be NULL if completely new, or parent ID if new version
           safeItemCode,
           itemType,
@@ -932,7 +955,7 @@ const createBOMRequest = async (bomData) => {
           isDefault ? 1 : 0,
           quantity || 0,
           drawingNo || null,
-          drawing_id || null,
+          resolvedDrawingId || null,
           bom_cost,
           initialStatus
         ]

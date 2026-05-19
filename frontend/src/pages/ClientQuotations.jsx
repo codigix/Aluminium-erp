@@ -264,19 +264,17 @@ const ClientQuotations = () => {
           const t = (item.item_type || '').trim().toUpperCase();
           const p = (item.product_type || '').trim().toUpperCase();
 
-          // Refined detection: prioritize FG even if it has SA/ASSEMBLY in name if it's explicitly marked as FG type/group
-          const isFG = (g.includes('FG') || t.includes('FG') || p.includes('FG') || g.includes('FINISHED') || t.includes('FINISHED')) && !g.includes('SA') && !g.includes('SUB') && !t.includes('SA') && !t.includes('SUB');
-          const isSA = (g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY') || t.includes('SA') || t.includes('SUB') || t.includes('ASSEMBLY')) && !isFG;
+          const isSA = (g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY') || t.includes('SA') || t.includes('SUB') || t.includes('ASSEMBLY'));
+          const isFG = !isSA;
 
-          // Skip if rejected, or if it's an FG with no cost (SA/ASSEMBLY can have 0 cost)
-          if ((!isFG && !isSA) || item.status === 'REJECTED' || (isFG && !Number(item.bom_cost))) return;
+          // Skip if rejected, or if it is a non-assembly and has no cost
+          if (item.status === 'REJECTED' || (isFG && !Number(item.bom_cost))) return;
 
           // Set calc group for UI badge
-          item.item_group_calc = isFG ? 'FG' : (g.includes('ASSEMBLY') || t.includes('ASSEMBLY') ? (g.includes('SUB') || t.includes('SUB') ? 'SUB ASSEMBLY' : 'ASSEMBLY') : 'SUB ASSEMBLY');
+          item.item_group_calc = isSA ? (g.includes('ASSEMBLY') || t.includes('ASSEMBLY') ? (g.includes('SUB') || t.includes('SUB') ? 'SUB ASSEMBLY' : 'ASSEMBLY') : 'SUB ASSEMBLY') : (g || 'PART');
 
-          // Hide sub-assemblies from top-level if they are part of another item (identified by is_component > 0)
-          // Exception: if it's an FG, always show it at top level
-          if (item.is_component > 0 && !isFG) return;
+          // Hide sub-assemblies/parts from top-level if they are part of another item (identified by is_component > 0)
+          if (item.is_component > 0) return;
 
           const identity = `${item.drawing_no || 'NA'}_${item.item_code || 'NA'}_${item.item_group_calc}`;
           const existing = grouped[clientName].all_items_map[identity];
@@ -330,10 +328,10 @@ const ClientQuotations = () => {
           const t = (item.item_type || '').trim().toUpperCase();
           const p = (item.product_type || '').trim().toUpperCase();
 
-          // Be very specific about FG vs SA
-          const isFG = (g === 'FG' || g.includes('FINISHED') || t.includes('FG') || p.includes('FG')) && !g.includes('SA') && !g.includes('SUB') && !t.includes('SA');
+          const isSA = (g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY') || t.includes('SA') || t.includes('SUB') || t.includes('ASSEMBLY'));
+          const isFG = !isSA;
 
-          if (isFG) return true; // Always show FGs at top level
+          if (isFG) return true; // Always show FGs/Parts at top level
 
           const code = (item.item_code || '').trim().toUpperCase();
           const drawing = (item.drawing_no || '').trim().toUpperCase();
@@ -381,7 +379,7 @@ const ClientQuotations = () => {
 
           const g = (item.item_group_calc || '').toUpperCase();
           const isSA = (g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY')) && !g.includes('FG');
-          const isFG = (g.includes('FG') || g.includes('FINISHED')) && !isSA;
+          const isFG = !isSA;
 
           if (item.bom_cost && Number(item.bom_cost) > 0) {
             // Calculate price for both FG and Sub-Assemblies as per user request
@@ -515,7 +513,7 @@ const ClientQuotations = () => {
         const billableQuotes = group.quotes.filter(q => {
           const g = (q.item_group || q.item_group_calc || '').toUpperCase();
           const isSA = (g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY')) && !g.includes('FG');
-          const isFG = (g.includes('FG') || g.includes('FINISHED')) && !isSA;
+          const isFG = !isSA;
           return isFG || isSA;
         });
 
@@ -651,7 +649,7 @@ const ClientQuotations = () => {
         const billableLatestQuotes = latestQuotes.filter(q => {
           const g = (q.item_group || q.item_group_calc || '').toUpperCase();
           const isSA = (g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY')) && !g.includes('FG');
-          const isFG = (g.includes('FG') || g.includes('FINISHED')) && !isSA;
+          const isFG = !isSA;
           return isFG || isSA;
         });
 
@@ -807,7 +805,7 @@ const ClientQuotations = () => {
                   (group.quotes || []).forEach(item => {
                     const g = (item.item_group || item.item_group_calc || '').toUpperCase();
                     const isSA = g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY');
-                    const isFG = (g.includes('FG') || g.includes('FINISHED')) && !isSA;
+                    const isFG = !isSA;
 
                     if (isFG || isSA) {
                       const rate = parseFloat(quotePricesMap[group.company_name]?.[item.id]) || 0;
@@ -1042,18 +1040,17 @@ const ClientQuotations = () => {
                         {sorted.flatMap((item) => {
                           const g = (item.item_group || item.item_group_calc || '').toUpperCase();
                           const isSA = (g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY')) && !g.includes('FG');
-                          const isFG = (g.includes('FG') || g.includes('FINISHED')) && !isSA;
+                          const isFG = !isSA;
 
-                          const displayGroup = isSA ? (g.includes('ASSEMBLY') && !g.includes('SUB') ? 'ASSY' : 'SA') : (isFG ? 'FG' : g);
+                          const displayGroup = isSA ? (g.includes('ASSEMBLY') && !g.includes('SUB') ? 'ASSY' : 'SA') : (g.includes('FG') || g.includes('FINISHED') ? 'FG' : g);
 
                           const mainRow = (
                             <tr key={item.id} className={`hover:bg-slate-50/50 transition-colors ${isSA ? 'bg-slate-50/20' : ''}`}>
                               <td className="px-4 p-2">
                                 <div className="flex flex-col">
-                                  <div className={`flex items-center gap-2 mb-0.5 ${isSA ? 'ml-4' : ''}`}>
-                                    {isSA && <GitBranch size={10} className="text-slate-400 rotate-180" />}
+                                  <div className="flex items-center gap-2 mb-0.5">
                                     <span className="text-xs  text-slate-900 ">{item.description || item.item_description || '—'}</span>
-                                    {displayGroup && (
+                                    {displayGroup && displayGroup !== 'FG' && (
                                       <span className={`px-1.5 py-0.5 rounded text-xs    ${isSA
                                         ? 'bg-blue-100 text-blue-700 border border-blue-200'
                                         : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
@@ -1062,11 +1059,9 @@ const ClientQuotations = () => {
                                       </span>
                                     )}
                                   </div>
-                                  {!isSA && (
-                                    <span className="text-xs  text-slate-500  ">
-                                      DRAWING: {item.drawing_no || 'NA'}
-                                    </span>
-                                  )}
+                                  <span className="text-xs  text-slate-500  ">
+                                    DRAWING: {item.drawing_no || 'NA'}
+                                  </span>
                                 </div>
                               </td>
                               <td className="px-4 p-2 text-center">
@@ -1099,103 +1094,91 @@ const ClientQuotations = () => {
                               </td>
                               {isPending ? (
                                 <>
-                                  {!isSA ? (
-                                    <>
-                                      <td className="px-4 p-2">
-                                        <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded px-2 py-1">
-                                          <input
-                                            type="text"
-                                            value={profitMap[group.company_name]?.[item.id]}
-                                            onChange={(e) => handleProfitChange(group.company_name, item, e.target.value)}
-                                            className="w-full bg-transparent text-xs text-slate-900 focus:outline-none "
-                                          />
-                                          <span className="text-slate-400 text-xs ">%</span>
-                                        </div>
-                                      </td>
-                                      <td className="px-4 p-2">
-                                        <div className="flex items-center gap-1.5 bg-indigo-50 border border-indigo-100 rounded px-2 py-1">
-                                          <span className="text-indigo-600 text-xs  ">₹</span>
-                                          <input
-                                            type="text"
-                                            value={quotePricesMap[group.company_name]?.[item.id]}
-                                            onChange={(e) => handlePriceChange(group.company_name, item, e.target.value)}
-                                            className="w-full bg-transparent text-xs text-indigo-700 focus:outline-none "
-                                          />
-                                        </div>
-                                      </td>
-                                      <td className="px-4 p-2">
-                                        <select
-                                          value={gstMap[group.company_name]?.[item.id]}
-                                          onChange={(e) => handleGstChange(group.company_name, item.id, e.target.value)}
-                                          className="w-full bg-slate-50 border border-slate-200 rounded px-1.5 py-1 text-xs text-slate-700 focus:outline-none"
-                                        >
-                                          <option value="0">0%</option>
-                                          <option value="5">5%</option>
-                                          <option value="12">12%</option>
-                                          <option value="18">18%</option>
-                                          <option value="28">28%</option>
-                                        </select>
-                                      </td>
-                                      <td className="px-4 p-2 text-right pr-6">
-                                        <div className="flex flex-col">
-                                          <span className="text-xs  text-slate-900">
-                                            {formatCurrency((parseFloat(quotePricesMap[group.company_name]?.[item.id]) || 0) * (parseFloat(item.design_qty || item.item_qty) || 0))}
-                                          </span>
-                                          <span className="text-[9px] text-slate-400">Base Amount</span>
-                                        </div>
-                                      </td>
-                                    </>
-                                  ) : (
-                                    <td colSpan={4} className="bg-slate-50/5"></td>
-                                  )}
+                                  <td className="px-4 p-2">
+                                    <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded px-2 py-1">
+                                      <input
+                                        type="text"
+                                        value={profitMap[group.company_name]?.[item.id]}
+                                        onChange={(e) => handleProfitChange(group.company_name, item, e.target.value)}
+                                        className="w-full bg-transparent text-xs text-slate-900 focus:outline-none "
+                                      />
+                                      <span className="text-slate-400 text-xs ">%</span>
+                                    </div>
+                                  </td>
+                                  <td className="px-4 p-2">
+                                    <div className="flex items-center gap-1.5 bg-indigo-50 border border-indigo-100 rounded px-2 py-1">
+                                      <span className="text-indigo-600 text-xs  ">₹</span>
+                                      <input
+                                        type="text"
+                                        value={quotePricesMap[group.company_name]?.[item.id]}
+                                        onChange={(e) => handlePriceChange(group.company_name, item, e.target.value)}
+                                        className="w-full bg-transparent text-xs text-indigo-700 focus:outline-none "
+                                      />
+                                    </div>
+                                  </td>
+                                  <td className="px-4 p-2">
+                                    <select
+                                      value={gstMap[group.company_name]?.[item.id]}
+                                      onChange={(e) => handleGstChange(group.company_name, item.id, e.target.value)}
+                                      className="w-full bg-slate-50 border border-slate-200 rounded px-1.5 py-1 text-xs text-slate-700 focus:outline-none"
+                                    >
+                                      <option value="0">0%</option>
+                                      <option value="5">5%</option>
+                                      <option value="12">12%</option>
+                                      <option value="18">18%</option>
+                                      <option value="28">28%</option>
+                                    </select>
+                                  </td>
+                                  <td className="px-4 p-2 text-right pr-6">
+                                    <div className="flex flex-col">
+                                      <span className="text-xs  text-slate-900">
+                                        {formatCurrency((parseFloat(quotePricesMap[group.company_name]?.[item.id]) || 0) * (parseFloat(item.design_qty || item.item_qty) || 0))}
+                                      </span>
+                                      <span className="text-[9px] text-slate-400">Base Amount</span>
+                                    </div>
+                                  </td>
                                 </>
                               ) : (
                                 <>
-                                  {!isSA ? (
-                                    <>
-                                      <td className="px-4 p-2 text-right">
-                                        <div className="flex items-center justify-end gap-1.5">
-                                          {editingItemRates[item.id] !== undefined ? (
-                                            <div className="flex items-center gap-1 bg-emerald-50 border border-emerald-100 rounded px-2 py-1">
-                                              <span className="text-emerald-600 text-xs ">₹</span>
-                                              <input
-                                                type="text"
-                                                value={editingItemRates[item.id]}
-                                                onChange={(e) => {
-                                                  const val = e.target.value;
-                                                  if (val === '' || /^\d*\.?\d*$/.test(val)) {
-                                                    setEditingItemRates(prev => ({ ...prev, [item.id]: val }));
-                                                  }
-                                                }}
-                                                className="w-16 bg-transparent text-emerald-700 text-xs focus:outline-none"
-                                              />
-                                              <button
-                                                onClick={() => saveItemRate(item)}
-                                                disabled={savingItemRateId === item.id}
-                                                className="text-emerald-600 hover:text-emerald-800"
-                                              >
-                                                {savingItemRateId === item.id ? <Loader2 size={10} className="animate-spin" /> : <Save size={10} />}
-                                              </button>
-                                            </div>
-                                          ) : (
-                                            <button
-                                              onClick={() => setEditingItemRates(prev => ({ ...prev, [item.id]: (parseFloat(item.unit_rate) || (parseFloat(item.total_amount) / (parseFloat(item.item_qty) || 1))).toFixed(2) }))}
-                                              className="text-xs  text-slate-600 hover:text-indigo-600"
-                                            >
-                                              {formatCurrency(item.unit_rate || (parseFloat(item.total_amount) / (parseFloat(item.item_qty) || 1)))}
-                                            </button>
-                                          )}
+                                  <td className="px-4 p-2 text-right">
+                                    <div className="flex items-center justify-end gap-1.5">
+                                      {editingItemRates[item.id] !== undefined ? (
+                                        <div className="flex items-center gap-1 bg-emerald-50 border border-emerald-100 rounded px-2 py-1">
+                                          <span className="text-emerald-600 text-xs ">₹</span>
+                                          <input
+                                            type="text"
+                                            value={editingItemRates[item.id]}
+                                            onChange={(e) => {
+                                              const val = e.target.value;
+                                              if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                                                setEditingItemRates(prev => ({ ...prev, [item.id]: val }));
+                                              }
+                                            }}
+                                            className="w-16 bg-transparent text-emerald-700 text-xs focus:outline-none"
+                                          />
+                                          <button
+                                            onClick={() => saveItemRate(item)}
+                                            disabled={savingItemRateId === item.id}
+                                            className="text-emerald-600 hover:text-emerald-800"
+                                          >
+                                            {savingItemRateId === item.id ? <Loader2 size={10} className="animate-spin" /> : <Save size={10} />}
+                                          </button>
                                         </div>
-                                      </td>
-                                      <td className="px-4 p-2 text-right pr-6">
-                                        <span className="text-xs  text-slate-900">
-                                          {formatCurrency(parseFloat(item.total_amount) || 0)}
-                                        </span>
-                                      </td>
-                                    </>
-                                  ) : (
-                                    <td colSpan={2} className="bg-slate-50/5"></td>
-                                  )}
+                                      ) : (
+                                        <button
+                                          onClick={() => setEditingItemRates(prev => ({ ...prev, [item.id]: (parseFloat(item.unit_rate) || (parseFloat(item.total_amount) / (parseFloat(item.item_qty) || 1))).toFixed(2) }))}
+                                          className="text-xs  text-slate-600 hover:text-indigo-600"
+                                        >
+                                          {formatCurrency(item.unit_rate || (parseFloat(item.total_amount) / (parseFloat(item.item_qty) || 1)))}
+                                        </button>
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td className="px-4 p-2 text-right pr-6">
+                                    <span className="text-xs  text-slate-900">
+                                      {formatCurrency(parseFloat(item.total_amount) || 0)}
+                                    </span>
+                                  </td>
                                 </>
                               )}
                             </tr>
@@ -1203,7 +1186,7 @@ const ClientQuotations = () => {
 
                           // Sub-assembly components logic
                           // ONLY show nested sub-assemblies for Finished Goods to avoid redundant display
-                          const subRows = (isFG && item.sub_assemblies && item.sub_assemblies.length > 0) ? item.sub_assemblies.map(sa => (
+                           const subRows = (item.sub_assemblies && item.sub_assemblies.length > 0) ? item.sub_assemblies.map(sa => (
                             <tr key={`sa_${sa.id || Math.random()}`} className="bg-slate-50/10 hover:bg-slate-50/30 transition-colors">
                               <td className="px-4 p-2 pl-8 border-l-2 border-slate-100">
                                 <div className="flex items-center gap-2">
@@ -1211,8 +1194,8 @@ const ClientQuotations = () => {
                                   <span className="text-[11px] text-slate-600 italic">
                                     {sa.description || sa.component_code}
                                   </span>
-                                  <span className="px-1 py-0.5 rounded text-[9px] bg-blue-50 text-blue-600 border border-blue-100">
-                                    SA
+                                  <span className="px-1 py-0.5 rounded text-[9px] bg-emerald-50 text-emerald-600 border border-emerald-100">
+                                    PART
                                   </span>
                                 </div>
                               </td>
@@ -1270,9 +1253,9 @@ const ClientQuotations = () => {
                 (group.quotes || []).forEach(item => {
                   const g = (item.item_group || item.item_group_calc || '').toUpperCase();
                   const isSA = (g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY')) && !g.includes('FG');
-                  const isFG = (g.includes('FG') || g.includes('FINISHED')) && !isSA;
+                  const isFG = !isSA;
 
-                  if (isFG) {
+                  if (isFG || isSA) {
                     const unitRate = parseFloat(quotePricesMap[group.company_name]?.[item.id]) || 0;
                     const qty = parseFloat(item.design_qty) || 0;
                     const gstRate = parseFloat(gstMap[group.company_name]?.[item.id]) || 18;
