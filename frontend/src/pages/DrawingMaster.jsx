@@ -28,11 +28,13 @@ const DrawingMaster = () => {
   const [expandedRevisions, setExpandedRevisions] = useState({});
   const [revisionsLoading, setRevisionsLoading] = useState({});
   const [drawingExpandedRows, setDrawingExpandedRows] = useState(new Set());
+  const [singleLoading, setSingleLoading] = useState(false);
   
   // Edit Modal State
   const [showEditForm, setShowEditForm] = useState(false);
   const [editData, setEditData] = useState({
     id: '',
+    public_id: '',
     drawing_no: '',
     revision_no: '',
     description: '',
@@ -70,7 +72,6 @@ const DrawingMaster = () => {
   const fetchDrawings = useCallback(async (search = '') => {
     try {
       setLoading(true);
-      setDrawings([]); // Clear stale data before fetching new data
       const token = localStorage.getItem('authToken');
       const params = new URLSearchParams();
       params.append('onlyShared', 'true');
@@ -509,6 +510,7 @@ const DrawingMaster = () => {
 
     setEditData({
       id: drawing.drawing_master_id,
+      public_id: drawing.public_id || '',
       drawing_no: drawing.drawing_no,
       revision_no: drawing.revision || drawing.revision_no || '0',
       description: drawing.drawing_description || drawing.item_description || drawing.description || '',
@@ -529,14 +531,12 @@ const DrawingMaster = () => {
       drawing_pdf: null,
       file_path: drawing.file_path || drawing.drawing_pdf || ''
     });
-    if (!location.pathname.includes(`${deptPrefix}/drawing-master/edit`)) {
-      navigate(`${deptPrefix}/drawing-master/edit?id=${drawing.public_id || drawing.drawing_master_id}`);
-    }
     setShowEditForm(true);
   };
 
   const fetchSingleDrawing = async (id) => {
     try {
+      setSingleLoading(true);
       const token = localStorage.getItem('authToken');
       const response = await fetch(`${API_BASE}/drawings/${id}`, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -548,6 +548,8 @@ const DrawingMaster = () => {
       console.error(error);
       errorToast('Failed to load drawing details');
       navigate(`${deptPrefix}/drawing-master`);
+    } finally {
+      setSingleLoading(false);
     }
   };
 
@@ -555,20 +557,38 @@ const DrawingMaster = () => {
     const isEditPath = location.pathname.includes(`${deptPrefix}/drawing-master/edit`);
     const id = searchParams.get('id');
 
-    if (isEditPath && id) {
-      const drawing = drawings.find(d => (d.public_id === id) || (String(d.drawing_master_id) === String(id)));
-      if (drawing) {
-        if (!showEditForm || String(editData.id) !== String(id)) {
-          handleEdit(drawing);
-        }
-      } else if (!loading && drawings.length === 0) {
-        // Only fetch if list is empty and not already loading
-        fetchSingleDrawing(id);
+    if (!isEditPath || !id) {
+      if (showEditForm) {
+        setShowEditForm(false);
       }
-    } else if (!isEditPath && showEditForm) {
-      setShowEditForm(false);
+      return;
     }
-  }, [location.pathname, searchParams, drawings, loading]);
+
+    // Prevent resetting form again and again
+    if (showEditForm) {
+      return;
+    }
+
+    const drawing = drawings.find(
+      d =>
+        String(d.public_id) === String(id) ||
+        String(d.drawing_master_id) === String(id)
+    );
+
+    if (drawing) {
+      handleEdit(drawing);
+    } else if (!singleLoading && !loading) {
+      fetchSingleDrawing(id);
+    }
+  }, [
+    location.pathname,
+    drawings,
+    loading,
+    singleLoading,
+    showEditForm,
+    deptPrefix,
+    searchParams
+  ]);
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -661,6 +681,10 @@ const DrawingMaster = () => {
     }
   };
 
+  const isEditPath = location.pathname.includes(`${deptPrefix}/drawing-master/edit`);
+  const id = searchParams.get('id');
+  const isDataLoaded = String(editData.id) === String(id) || editData.public_id === id;
+
   return (
     <div className=" space-y-2  animate-in fade-in duration-500">
       {/* Header */}
@@ -684,7 +708,7 @@ const DrawingMaster = () => {
         </div>
       </div>
 
-      {!showEditForm ? (
+      {!isEditPath ? (
         <Card className="">
           <div className="p-2 border-b border-slate-50 flex items-center justify-between">
             <div className="relative flex-1 max-w-md group">
@@ -808,6 +832,11 @@ const DrawingMaster = () => {
               }}
             />
           </div>
+        </Card>
+      ) : !isDataLoaded ? (
+        <Card className="p-8 flex flex-col items-center justify-center min-h-[400px] space-y-4">
+          <RefreshCw size={24} className="animate-spin text-indigo-600" />
+          <p className="text-sm text-slate-500 font-medium animate-pulse">Loading drawing master details...</p>
         </Card>
       ) : (
         <Card className=" animate-in slide-in-from-bottom-4 duration-500">

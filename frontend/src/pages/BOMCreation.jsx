@@ -10,6 +10,34 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/
 
 const cleanText = (text) => text ? text.replace(/\s*\(.*$/, '').trim() : '';
 
+const parseVerToComparable = (v) => {
+  if (v === null || v === undefined) return '';
+  let s = String(v).trim().toUpperCase();
+  if (s.startsWith('REV')) {
+    s = s.substring(3).trim();
+  } else if (s.startsWith('V')) {
+    s = s.substring(1).trim();
+  }
+  return s;
+};
+
+const compareVersions = (a, b) => {
+  const sA = parseVerToComparable(a);
+  const sB = parseVerToComparable(b);
+  
+  if (sA === sB) return 0;
+  if (sA === '') return -1;
+  if (sB === '') return 1;
+  
+  const numA = Number(sA);
+  const numB = Number(sB);
+  if (!isNaN(numA) && !isNaN(numB)) {
+    return numA - numB;
+  }
+  
+  return sA.localeCompare(sB, undefined, { numeric: true, sensitivity: 'base' });
+};
+
 const formatDate = (dateString) => {
   if (!dateString) return '—';
   return new Date(dateString).toLocaleDateString('en-IN', {
@@ -186,20 +214,28 @@ const BOMCreation = () => {
       if (!response.ok) throw new Error('Failed to fetch design orders');
       const data = await response.json();
 
-      const clientGroups = data.reduce((acc, item) => {
+      const projectGroups = data.reduce((acc, item) => {
+        // Use sales_order_id as the primary key for grouping projects
+        const key = item.sales_order_id || item.id;
         const clientName = item.company_name || 'Unknown Client';
-        if (!acc[clientName]) {
-          acc[clientName] = {
-            id: clientName,
+        
+        if (!acc[key]) {
+          acc[key] = {
+            id: key,
             client_name: clientName,
+            project_name: item.project_name || 'No Project',
             items: []
           };
         }
-        acc[clientName].items.push(item);
+        acc[key].items.push(item);
         return acc;
       }, {});
 
-      const groupedArray = Object.values(clientGroups).sort((a, b) => (a.client_name || '').localeCompare(b.client_name || ''));
+      const groupedArray = Object.values(projectGroups).sort((a, b) => {
+        const clientComp = (a.client_name || '').localeCompare(b.client_name || '');
+        if (clientComp !== 0) return clientComp;
+        return (a.project_name || '').localeCompare(b.project_name || '');
+      });
       setOrders(groupedArray);
 
       for (const client of groupedArray) {
@@ -427,7 +463,7 @@ const BOMCreation = () => {
 
       const result = await Swal.fire({
         title: '<span class="text-base  text-slate-800">Send for Approval?</span>',
-        html: `<span class="text-xs text-slate-600">Are you sure you want to send BOMs for <span class=" text-indigo-600">${client.client_name}</span> for approval? <br/><small class="text-slate-400">(${salesOrderIds.length} order(s) will be submitted)</small></span>`,
+        html: `<span class="text-xs text-slate-600">Are you sure you want to send BOMs for <span class=" text-indigo-600">${client.project_name || client.client_name}</span> for approval?</span>`,
         icon: 'question',
         showCancelButton: true,
         confirmButtonColor: '#10b981',
@@ -464,7 +500,7 @@ const BOMCreation = () => {
           throw new Error(`Failed to send ${failed.length} order(s) for approval.`);
         }
 
-        successToast('BOMs sent for approval successfully.');
+        successToast(`BOMs for ${client.project_name || 'project'} sent for approval successfully.`);
         fetchOrders();
       }
     } catch (error) {
@@ -495,35 +531,53 @@ const BOMCreation = () => {
 
       drawings.forEach(dwgNo => {
         const dwgItems = drawingsMap[dwgNo];
+        const childBOMs = items.filter(i => i.parent_bom_id && dwgItems.some(p => p.id === i.parent_bom_id));
+        const allDwgItems = [...dwgItems, ...childBOMs];
 
         // Group by item to handle versions in cost calculation
-        const itemGroups = dwgItems.reduce((acc, i) => {
+        const itemGroups = allDwgItems.reduce((acc, i) => {
           const groupId = i.item_code || cleanText(i.description || i.item_name || i.material_name || 'BOM Item');
           if (!acc[groupId]) acc[groupId] = [];
           acc[groupId].push(i);
           return acc;
         }, {});
 
-        Object.values(itemGroups).forEach(versions => {
-          // Sort to get latest version
-          const latest = versions.sort((a, b) => {
-            const vA = parseFloat(a.version || a.revision_no || 0);
-            const vB = parseFloat(b.version || b.revision_no || 0);
-            if (vB !== vA) return vB - vA;
+        const latestVersions = Object.values(itemGroups).map(versions => {
+          return versions.sort((a, b) => {
+            const vA = a.version || a.revision_no || '';
+            const vB = b.version || b.revision_no || '';
+            const comp = compareVersions(vA, vB);
+            if (comp !== 0) return -comp;
             return b.id - a.id;
           })[0];
-
-          const isFG = (latest.item_group === 'FG' || latest.product_type === 'FG' || (latest.item_group || '').toLowerCase().includes('finished'));
-          if (isFG && (latest.has_bom || latest.has_master_bom)) {
-            totalCost += (parseFloat(latest.bom_cost || 0) * (latest.quantity || 0));
-          }
         });
 
-        const hasFGBOM = Object.values(itemGroups).some(versions => {
-          const latest = versions[0];
-          return (latest.has_bom || latest.has_master_bom) && (latest.item_group === 'FG' || latest.product_type === 'FG' || (latest.item_group || '').toLowerCase().includes('finished'));
-        });
-        if (hasFGBOM) completedDrawings++;
+        // Find items directly representing the drawing (drawing_no === dwgNo)
+        const mainItems = latestVersions.filter(i => cleanText(i.drawing_no) === cleanText(dwgNo));
+        let drawingCost = 0;
+        let drawingHasBOM = false;
+
+        if (mainItems.length > 0) {
+          mainItems.forEach(latest => {
+            if (latest.has_bom || latest.has_master_bom || parseFloat(latest.bom_cost) > 0) {
+              drawingCost += (parseFloat(latest.bom_cost || 0) * (latest.quantity || 0));
+              drawingHasBOM = true;
+            }
+          });
+        } else {
+          // Fallback to old logic (FG or SA items)
+          latestVersions.forEach(latest => {
+            const isFG = (latest.item_group === 'FG' || latest.product_type === 'FG' || (latest.item_group || '').toLowerCase().includes('finished'));
+            const isSA = (latest.item_code || '').startsWith('SA-') || (latest.item_group || '').includes('SA') || (latest.item_group || '').toLowerCase().includes('assembly');
+            if ((isFG || isSA) && (latest.has_bom || latest.has_master_bom || parseFloat(latest.bom_cost) > 0)) {
+              drawingCost += (parseFloat(latest.bom_cost || 0) * (latest.quantity || 0));
+              drawingHasBOM = true;
+            }
+          });
+        }
+
+        totalCost += drawingCost;
+        if (drawingHasBOM) completedDrawings++;
       });
     });
 
@@ -580,35 +634,60 @@ const BOMCreation = () => {
       }
     },
     {
-      label: 'FG BOM Cost',
+      label: 'Est. BOM Cost',
       key: 'fg_bom_cost',
       render: (_, row) => {
         const items = clientData[row.id]?.items || [];
-
-        // Group by item to handle versions
-        const itemGroups = items.reduce((acc, i) => {
-          const groupId = i.item_code || cleanText(i.description || i.item_name || i.material_name || 'BOM Item');
-          if (!acc[groupId]) acc[groupId] = [];
-          acc[groupId].push(i);
+        const topLevelItems = items.filter(item => !item.parent_bom_id);
+        const drawingsMap = topLevelItems.reduce((acc, item) => {
+          const dwg = cleanText(item.drawing_no || 'N/A');
+          if (!acc[dwg]) acc[dwg] = [];
+          acc[dwg].push(item);
           return acc;
         }, {});
 
-        const fgBomCost = Object.values(itemGroups).reduce((total, versions) => {
-          const latest = versions.sort((a, b) => {
-            const vA = parseFloat(a.version || a.revision_no || 0);
-            const vB = parseFloat(b.version || b.revision_no || 0);
-            if (vB !== vA) return vB - vA;
-            return b.id - a.id;
-          })[0];
+        let clientTotalCost = 0;
 
-          const isFG = (latest.item_group === 'FG' || latest.product_type === 'FG' || (latest.item_group || '').toLowerCase().includes('finished'));
-          if (isFG && (latest.has_bom || latest.has_master_bom)) {
-            return total + (parseFloat(latest.bom_cost || 0) * (latest.quantity || 0));
+        Object.entries(drawingsMap).forEach(([dwgNo, dwgItems]) => {
+          const childBOMs = items.filter(i => i.parent_bom_id && dwgItems.some(p => p.id === i.parent_bom_id));
+          const allDwgItems = [...dwgItems, ...childBOMs];
+
+          // Group by item to handle versions
+          const itemGroups = allDwgItems.reduce((acc, i) => {
+            const groupId = i.item_code || cleanText(i.description || i.item_name || i.material_name || 'BOM Item');
+            if (!acc[groupId]) acc[groupId] = [];
+            acc[groupId].push(i);
+            return acc;
+          }, {});
+
+          const latestVersions = Object.values(itemGroups).map(versions => {
+            return versions.sort((a, b) => {
+              const vA = a.version || a.revision_no || '';
+              const vB = b.version || b.revision_no || '';
+              const comp = compareVersions(vA, vB);
+              if (comp !== 0) return -comp;
+              return b.id - a.id;
+            })[0];
+          });
+
+          const mainItems = latestVersions.filter(i => cleanText(i.drawing_no) === cleanText(dwgNo));
+
+          if (mainItems.length > 0) {
+            mainItems.forEach(latest => {
+              clientTotalCost += (parseFloat(latest.bom_cost || 0) * (latest.quantity || 0));
+            });
+          } else {
+            latestVersions.forEach(latest => {
+              const isFG = (latest.item_group === 'FG' || latest.product_type === 'FG' || (latest.item_group || '').toLowerCase().includes('finished'));
+              const isSA = (latest.item_code || '').startsWith('SA-') || (latest.item_group || '').includes('SA') || (latest.item_group || '').toLowerCase().includes('assembly');
+              if (isFG || isSA) {
+                clientTotalCost += (parseFloat(latest.bom_cost || 0) * (latest.quantity || 0));
+              }
+            });
           }
-          return total;
-        }, 0);
+        });
 
-        return <span className=" text-slate-900">₹{fgBomCost.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>;
+        return <span className=" text-slate-900">₹{clientTotalCost.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>;
       }
     },
     {
@@ -703,21 +782,31 @@ const BOMCreation = () => {
             const allDwgItems = [...dwgItems, ...childBOMs];
             const allItemsWithBOM = [...parentBOMs, ...childBOMs];
 
-            // Calculate total FG/SA cost for this drawing
-            const fgItems = allDwgItems.filter(i =>
-              (i.item_group === 'FG' || i.product_type === 'FG' || (i.item_group || '').toLowerCase().includes('finished'))
-            );
-            const topItems = fgItems.length > 0 ? fgItems : allDwgItems.filter(i =>
-              (i.item_code || '').startsWith('SA-') || (i.item_group || '').includes('SA')
-            );
-            const latestCosts = topItems.reduce((acc, i) => {
+            // Group all unique items under this drawing to resolve versions
+            const latestCosts = allDwgItems.reduce((acc, i) => {
               const key = i.item_code || i.description;
-              if (!acc[key] || (parseFloat(i.version || i.revision_no || 0) > parseFloat(acc[key].version || acc[key].revision_no || 0))) {
+              if (!acc[key]) {
                 acc[key] = i;
+              } else {
+                const vA = i.version || i.revision_no || '';
+                const vB = acc[key].version || acc[key].revision_no || '';
+                const verComp = compareVersions(vA, vB);
+                if (verComp > 0 || (verComp === 0 && i.id > acc[key].id)) {
+                  acc[key] = i;
+                }
               }
               return acc;
             }, {});
-            const totalDisplayCost = Object.values(latestCosts).reduce((sum, i) => sum + parseFloat(i.bom_cost || 0), 0);
+
+            // Filter latestCosts to find items belonging directly to this drawing (drawing_no matches card dwgNo)
+            const drawingMainItems = Object.values(latestCosts).filter(i => 
+              cleanText(i.drawing_no) === cleanText(dwgNo)
+            );
+            
+            // Sum cost of main items if found, else fallback to sum of all items in latestCosts
+            const totalDisplayCost = drawingMainItems.length > 0
+              ? drawingMainItems.reduce((sum, i) => sum + parseFloat(i.bom_cost || 0), 0)
+              : Object.values(latestCosts).reduce((sum, i) => sum + parseFloat(i.bom_cost || 0), 0);
 
             // Refined status logic
             let dwgStatus = 'PENDING';
@@ -832,9 +921,10 @@ const BOMCreation = () => {
 
                             Object.entries(groupedBOMs).forEach(([groupId, versions]) => {
                               const sortedVersions = versions.sort((a, b) => {
-                                const vA = parseFloat(a.version || a.revision_no || 0);
-                                const vB = parseFloat(b.version || b.revision_no || 0);
-                                if (vB !== vA) return vB - vA;
+                                const vA = a.version || a.revision_no || '';
+                                const vB = b.version || b.revision_no || '';
+                                const comp = compareVersions(vA, vB);
+                                if (comp !== 0) return -comp;
                                 return b.id - a.id;
                               });
                               const latest = sortedVersions[0];

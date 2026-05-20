@@ -64,7 +64,7 @@ const getQuotationRequests = async (req, res, next) => {
     query += ' ORDER BY created_at DESC';
 
     const [rows] = await pool.query(query, params);
-    
+
     // Enrich with sub-assemblies for items with BOM structure
     const enrichedRows = await Promise.all(rows.map(async (row) => {
       // Fetch components for items that might have a BOM (FG or SA)
@@ -76,10 +76,10 @@ const getQuotationRequests = async (req, res, next) => {
       if (soiId || itemCode || drawingNo) {
         try {
           const components = await bomService.getItemComponents(
-            `HISTORICAL_${soiId}`, 
-            itemCode, 
-            drawingNo, 
-            row.batch_id, 
+            `HISTORICAL_${soiId}`,
+            itemCode,
+            drawingNo,
+            row.batch_id,
             row.created_at
           );
           const g = (row.item_group || '').toUpperCase();
@@ -89,9 +89,9 @@ const getQuotationRequests = async (req, res, next) => {
             const group = (c.item_group || '').toUpperCase();
             const desc = (c.description || '').toUpperCase();
             return code.startsWith('SA-') || code.startsWith('SFG-') || code.startsWith('PART-') ||
-                   group.includes('SA') || group.includes('SUB') || group.includes('ASSEMBLY') ||
-                   desc.includes('ASSEMBLY') || desc.includes('UNIT') ||
-                   group.includes('PART') || (c.drawing_no && c.drawing_no !== '—');
+              group.includes('SA') || group.includes('SUB') || group.includes('ASSEMBLY') ||
+              desc.includes('ASSEMBLY') || desc.includes('UNIT') ||
+              group.includes('PART') || (c.drawing_no && c.drawing_no !== '—');
           });
           return { ...row, sub_assemblies };
         } catch (err) {
@@ -111,7 +111,7 @@ const getQuotationRequests = async (req, res, next) => {
 const getQuotationVersionHistory = async (req, res, next) => {
   try {
     const { id } = req.params;
-    
+
     // First, find the root parent ID and other metadata for grouping siblings
     const [quotes] = await pool.query(
       'SELECT id, parent_id, company_id, project_name, created_at, batch_id FROM quotation_requests WHERE id = ?',
@@ -124,7 +124,7 @@ const getQuotationVersionHistory = async (req, res, next) => {
 
     const targetQuote = quotes[0];
     let rootId = targetQuote.parent_id || targetQuote.id;
-    
+
     // Fetch all items in the chain. 
     // We search by parent_id link, OR same batch_id, OR same legacy grouping (company + project + created_at)
     const [rows] = await pool.query(
@@ -176,7 +176,7 @@ const getQuotationVersionHistory = async (req, res, next) => {
         };
         versionGroups.push(versionMap[row.version]);
       }
-      
+
       const group = versionMap[row.version];
       const s = (row.status || '').toUpperCase();
 
@@ -188,12 +188,12 @@ const getQuotationVersionHistory = async (req, res, next) => {
 
       const lineTotal = parseFloat(row.total_amount) || 0;
       const lineTotalInclGst = parseFloat(row.received_amount) || 0;
-      
+
       group.total_amount += lineTotal;
       group.received_amount += lineTotalInclGst;
-      
+
       const itemRate = parseFloat(lineTotal / (row.item_qty || 1)) || 0;
-      
+
       const itemData = {
         id: row.id,
         sales_order_item_id: row.sales_order_item_id,
@@ -216,9 +216,9 @@ const getQuotationVersionHistory = async (req, res, next) => {
       };
 
       // 2. ENRICH: Find component snapshots in the SAME VERSION and SAME BATCH for this item
-      const snapshots = rows.filter(r => 
-        r.version === row.version && 
-        r.batch_id === row.batch_id && 
+      const snapshots = rows.filter(r =>
+        r.version === row.version &&
+        r.batch_id === row.batch_id &&
         (r.status || '').toUpperCase() === 'COMPONENT' &&
         (r.rejection_reason === row.drawing_no || r.rejection_reason === row.item_description || r.rejection_reason === String(row.id))
       );
@@ -232,9 +232,10 @@ const getQuotationVersionHistory = async (req, res, next) => {
           unit: sn.item_unit,
           bom_cost: parseFloat(sn.bom_cost) || 0,
           rate: parseFloat(sn.received_amount) || parseFloat(sn.bom_cost) || 0,
+          pending_bom_cost: sn.pending_bom_cost ? parseFloat(sn.pending_bom_cost) : null,
           is_snapshot: true
         }));
-        
+
         // Even if we have snapshots, we might need materials/ops for the full breakdown calculation in frontend
         try {
           const [materials, operations, scrap] = await Promise.all([
@@ -255,7 +256,7 @@ const getQuotationVersionHistory = async (req, res, next) => {
             bomService.getItemOperations(`HISTORICAL_${row.sales_order_item_id}`, row.item_code, row.drawing_no),
             bomService.getItemScrap(`HISTORICAL_${row.sales_order_item_id}`, row.item_code, row.drawing_no)
           ]);
-          
+
           const g = (row.item_group || '').toUpperCase();
           const isDrawingOrSA = g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY') || g.includes('PART') || (row.drawing_no && row.drawing_no !== '—');
           itemData.sub_assemblies = isDrawingOrSA ? components : components.filter(c => {
@@ -284,7 +285,7 @@ const getQuotationVersionHistory = async (req, res, next) => {
 const approveQuotationRequest = async (req, res, next) => {
   try {
     const { id } = req.params;
-    
+
     await pool.execute(
       'UPDATE quotation_requests SET status = ?, updated_at = NOW() WHERE id = ?',
       ['Approved', id]
@@ -300,7 +301,7 @@ const batchApproveQuotationRequests = async (req, res, next) => {
   const connection = await pool.getConnection();
   try {
     let ids = req.body?.ids;
-    
+
     // Handle FormData stringified array
     if (typeof ids === 'string') {
       try {
@@ -394,7 +395,7 @@ const rejectQuotationRequest = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { reason } = req.body;
-    
+
     await pool.execute(
       'UPDATE quotation_requests SET status = ?, rejection_reason = ?, updated_at = NOW() WHERE id = ?',
       ['REJECTED', reason || null, id]
@@ -412,14 +413,14 @@ const sendQuotationViaEmail = async (req, res, next) => {
     const { clientId, clientEmail, clientName, items, totalAmount, notes, emailRequired = true, status, projectName, clearPendingBomId } = req.body;
 
     if (!clientId || !items || items.length === 0) {
-      return res.status(400).json({ 
-        error: 'Missing required fields: clientId, items' 
+      return res.status(400).json({
+        error: 'Missing required fields: clientId, items'
       });
     }
 
     if (emailRequired && (!clientEmail || !clientName)) {
-      return res.status(400).json({ 
-        error: 'Missing required fields for email: clientEmail, clientName' 
+      return res.status(400).json({
+        error: 'Missing required fields for email: clientEmail, clientName'
       });
     }
 
@@ -432,12 +433,30 @@ const sendQuotationViaEmail = async (req, res, next) => {
       );
     }
 
+    // Fetch all existing valid sales order IDs
+    const [orderRows] = await connection.query('SELECT id FROM sales_orders');
+    const validOrderIds = new Set(orderRows.map(r => r.id));
+
+    // Fetch all existing valid sales order item IDs
+    const [itemRows] = await connection.query('SELECT id FROM sales_order_items');
+    const validOrderItemIds = new Set(itemRows.map(r => r.id));
+
     const batchId = req.body.batch_id || `BATCH-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     const finalVersion = req.body.version || 1;
-    const finalParentId = req.body.parentId || null;
+
+    // Sanitize and validate parent_id to avoid foreign key violations
+    const rawParentId = req.body.parentId || null;
+    let finalParentId = null;
+    if (rawParentId) {
+      const [parentRows] = await connection.query('SELECT id FROM quotation_requests WHERE id = ?', [rawParentId]);
+      if (parentRows.length > 0) {
+        finalParentId = Number(rawParentId);
+      }
+    }
 
     const quotationIds = [];
-    
+    const sanitizedSalesOrderIds = new Set();
+
     // Process items SEQUENTIALLY to allow linking components to their parent insertId
     for (const item of items) {
       try {
@@ -445,9 +464,20 @@ const sendQuotationViaEmail = async (req, res, next) => {
         const lineTotal = (item.quotedPrice || 0) * (item.quantity || 1);
         const gstRate = parseFloat(item.gst_percentage) || 18;
         const lineTotalInclGst = lineTotal * (1 + gstRate / 100);
-        
+
         const finalStatus = (status || item.status || 'SENT').toUpperCase();
-        
+
+        // Sanitize sales_order_id and sales_order_item_id
+        const rawOrderId = Number(item.orderId);
+        const salesOrderId = (!isNaN(rawOrderId) && validOrderIds.has(rawOrderId)) ? rawOrderId : null;
+
+        const rawOrderItemId = Number(item.salesOrderItemId);
+        const salesOrderItemId = (!isNaN(rawOrderItemId) && validOrderItemIds.has(rawOrderItemId)) ? rawOrderItemId : null;
+
+        if (salesOrderId) {
+          sanitizedSalesOrderIds.add(salesOrderId);
+        }
+
         const [result] = await connection.execute(
           `INSERT INTO quotation_requests (
              sales_order_id, sales_order_item_id, item_qty, company_id, 
@@ -457,14 +487,14 @@ const sendQuotationViaEmail = async (req, res, next) => {
              project_name, batch_id, item_group, bom_cost, item_code
            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
-            item.orderId || null, 
-            item.salesOrderItemId || null, 
-            item.quantity || 0, 
-            clientId, 
-            finalStatus, 
-            lineTotal, 
-            lineTotalInclGst, 
-            item.rejection_reason || null, 
+            salesOrderId,
+            salesOrderItemId,
+            item.quantity || 0,
+            clientId,
+            finalStatus,
+            lineTotal,
+            lineTotalInclGst,
+            item.rejection_reason || null,
             notes || null,
             item.profit_percentage || 0,
             gstRate,
@@ -480,16 +510,21 @@ const sendQuotationViaEmail = async (req, res, next) => {
             item.item_code || null
           ]
         );
-        
+
         const parentQrId = result.insertId;
         quotationIds.push(parentQrId);
 
         // 2. Save Sub-Assemblies (Components) linked by parentQrId
-        const components = await bomService.getItemComponents(
-          item.salesOrderItemId,
-          item.item_code,
-          item.drawing_no
-        );
+        // Prioritize sub_assemblies passed from the frontend to preserve snapshot costs
+        let components = item.sub_assemblies && item.sub_assemblies.length > 0 ? item.sub_assemblies : null;
+        
+        if (!components) {
+          components = await bomService.getItemComponents(
+            item.salesOrderItemId,
+            item.item_code,
+            item.drawing_no
+          );
+        }
 
         for (const sa of components) {
           await connection.execute(
@@ -525,7 +560,7 @@ const sendQuotationViaEmail = async (req, res, next) => {
       }
     }
 
-    const uniqueOrderIds = [...new Set(items.map(i => i.orderId))].filter(Boolean);
+    const uniqueOrderIds = [...sanitizedSalesOrderIds];
 
     if (uniqueOrderIds.length > 0 && (status || 'SENT').toUpperCase() !== 'DRAFT') {
       // Link SO to the first quotation ID in the batch to mark it as quoted
@@ -538,7 +573,7 @@ const sendQuotationViaEmail = async (req, res, next) => {
     }
 
     await connection.commit();
-    
+
     let emailSent = false;
     let emailMessageId = null;
     const firstQuotationId = quotationIds[0];
@@ -561,7 +596,7 @@ const sendQuotationViaEmail = async (req, res, next) => {
 
         // Log to communications for ALL quotations in this batch
         const messageText = `Quotation ${quoteNumber} sent to client.\nTotal Amount (Incl. GST): ₹${totalAmountNum.toLocaleString('en-IN')}\nItems: ${items.length}`;
-        
+
         for (const qId of quotationIds) {
           await pool.execute(
             `INSERT INTO quotation_communications 
@@ -592,7 +627,7 @@ const sendQuotationViaEmail = async (req, res, next) => {
 const deleteQuotationRequest = async (req, res, next) => {
   try {
     const { id } = req.params;
-    
+
     const [result] = await pool.execute(
       'DELETE FROM quotation_requests WHERE id = ?',
       [id]
@@ -612,7 +647,7 @@ const batchUploadReplyPDF = async (req, res, next) => {
   const connection = await pool.getConnection();
   try {
     let ids = req.body?.ids;
-    
+
     // Handle FormData stringified array
     if (typeof ids === 'string') {
       try {
@@ -651,7 +686,7 @@ const batchUploadReplyPDF = async (req, res, next) => {
 const batchDeleteQuotationRequests = async (req, res, next) => {
   try {
     const { ids } = req.body;
-    
+
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
       return res.status(400).json({ error: 'IDs array is required' });
     }
@@ -661,7 +696,7 @@ const batchDeleteQuotationRequests = async (req, res, next) => {
       ids
     );
 
-    res.json({ 
+    res.json({
       message: 'Quotation requests deleted successfully',
       affectedRows: result.affectedRows
     });
@@ -701,7 +736,7 @@ const updateQuotationRates = async (req, res, next) => {
 const downloadQuotationPDF = async (req, res, next) => {
   try {
     const { id } = req.params;
-    
+
     // 1. Fetch the representative quotation to get client info and timestamp
     const [quotes] = await pool.query(
       `SELECT qr.*, c.company_name, c.id as client_id 
@@ -716,7 +751,7 @@ const downloadQuotationPDF = async (req, res, next) => {
     }
 
     const representative = quotes[0];
-    
+
     // 2. Fetch all quotations in this batch (same client, same approx timestamp)
     // We exclude COMPONENT rows as they are snapshots for sub-assemblies
     const [batchQuotes] = await pool.query(
@@ -763,7 +798,7 @@ const downloadQuotationPDF = async (req, res, next) => {
     }, 0);
 
     const quoteNumber = `QRT-${String(representative.id).padStart(4, '0')}`;
-    
+
     const pdfBuffer = await emailService.generateQuotationPDF(
       representative.company_name,
       items,
@@ -807,7 +842,7 @@ const updateQuotationFromBOM = async (req, res, next) => {
     // This will update component rates, latest sales_order_item costs, parent BOMs, and quotations
     await bomService.updateItemCostAndPropagate(item_code, drawing_no, bomCost);
 
-    res.json({ 
+    res.json({
       message: `BOM value ₹${bomCost} has been applied to this item and propagated to all parent assemblies and linked quotations.`
     });
   } catch (error) {
@@ -818,7 +853,7 @@ const updateQuotationFromBOM = async (req, res, next) => {
 const getQuotationVersionDetails = async (req, res, next) => {
   try {
     const { id } = req.params;
-    
+
     // 1. Fetch the main record to get batch_id and version
     const [quotes] = await pool.query(
       `SELECT qr.*, c.company_name
@@ -905,6 +940,7 @@ const getQuotationVersionDetails = async (req, res, next) => {
         unit: sn.unit,
         bom_cost: parseFloat(sn.bom_cost) || 0,
         rate: parseFloat(sn.received_amount) || parseFloat(sn.bom_cost) || 0,
+        pending_bom_cost: sn.pending_bom_cost ? parseFloat(sn.pending_bom_cost) : null,
         item_group: sn.item_group,
         is_snapshot: true
       }));
@@ -950,7 +986,7 @@ const requestQuotationUpdateFromBOM = async (req, res, next) => {
     // d) Match by description (as last resort)
     // e) Match if it's a SUB-COMPONENT of a parent that is in a quotation
     let [qrs] = await pool.query(
-      `SELECT qr.id, c.company_name, qr.batch_id
+      `SELECT qr.id, c.company_name, qr.batch_id, qr.sales_order_item_id
        FROM quotation_requests qr
        JOIN companies c ON qr.company_id = c.id
        WHERE (qr.sales_order_item_id = ? 
@@ -961,11 +997,13 @@ const requestQuotationUpdateFromBOM = async (req, res, next) => {
       [salesOrderItemId, item_code, drawing_no, drawing_no, description]
     );
 
+    let isParentNotification = false;
+
     // 2.1 IF NO QUOTATIONS FOUND, check if it's a sub-assembly component of an active FG quotation
     if (qrs.length === 0) {
       console.log(`[requestQuotationUpdateFromBOM] No direct quotations for ${item_code}. Checking parents...`);
       const [parentQrs] = await pool.query(
-        `SELECT DISTINCT qr.id, c.company_name, qr.batch_id, qr.description as parent_desc
+        `SELECT DISTINCT qr.id, c.company_name, qr.batch_id, qr.description as parent_desc, qr.sales_order_item_id
          FROM quotation_requests qr
          JOIN companies c ON qr.company_id = c.id
          JOIN sales_order_item_components sic ON sic.sales_order_item_id = qr.sales_order_item_id
@@ -973,10 +1011,11 @@ const requestQuotationUpdateFromBOM = async (req, res, next) => {
          AND qr.status NOT IN ('COMPLETED', 'REJECTED', 'CANCELLED')`,
         [item_code, drawing_no]
       );
-      
+
       if (parentQrs.length > 0) {
         console.log(`[requestQuotationUpdateFromBOM] Found ${parentQrs.length} parent quotations to notify.`);
         qrs = parentQrs;
+        isParentNotification = true;
       }
     }
 
@@ -996,14 +1035,35 @@ const requestQuotationUpdateFromBOM = async (req, res, next) => {
         [qr.id, 'INTERNAL', 'SYSTEM', message]
       );
 
+      let targetPendingCost = bomCost;
+      if (isParentNotification && qr.sales_order_item_id) {
+        const [parentItemRow] = await pool.query(
+          'SELECT bom_cost FROM sales_order_items WHERE id = ?',
+          [qr.sales_order_item_id]
+        );
+        if (parentItemRow.length > 0 && parseFloat(parentItemRow[0].bom_cost) > 0) {
+          targetPendingCost = parseFloat(parentItemRow[0].bom_cost);
+        }
+      }
+
       // Update the quotation request with the pending cost
       await pool.execute(
         'UPDATE quotation_requests SET pending_bom_cost = ? WHERE id = ?',
-        [bomCost, qr.id]
+        [targetPendingCost, qr.id]
+      );
+
+      // Also, update the pending_bom_cost of the component row inside quotation_requests
+      // where status = 'COMPONENT' and rejection_reason = String(qr.id)
+      await pool.execute(
+        `UPDATE quotation_requests 
+         SET pending_bom_cost = ?, updated_at = NOW() 
+         WHERE status = 'COMPONENT' AND rejection_reason = ?
+         AND (item_code = ? OR drawing_no = ?)`,
+        [bomCost, String(qr.id), item_code, drawing_no]
       );
     }
 
-    res.json({ 
+    res.json({
       message: `Request to update ${qrs.length} quotations has been sent to the Sales/Purchase team.`
     });
   } catch (error) {

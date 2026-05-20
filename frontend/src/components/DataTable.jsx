@@ -4,6 +4,7 @@ import { Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from '
 const DataTable = ({ 
   columns, 
   data, 
+  loading,
   searchPlaceholder = "Search...", 
   initialPageSize = 25,
   onRowClick,
@@ -17,9 +18,9 @@ const DataTable = ({
 
   // Filter data based on search term
   const filteredData = useMemo(() => {
-    if (!searchTerm) return data;
+    if (!searchTerm) return data || [];
     
-    return data.filter(row => {
+    return (data || []).filter(row => {
       return columns.some(col => {
         const value = row[col.key];
         if (value === null || value === undefined) return false;
@@ -87,6 +88,14 @@ const DataTable = ({
 
       {/* Table Container with Sticky Header */}
       <div className="overflow-x-auto relative max-h-[calc(100vh-300px)]">
+        {loading && (
+          <div className="absolute inset-0 bg-white/60 z-20 flex items-center justify-center backdrop-blur-[1px]">
+            <div className="flex flex-col items-center gap-2">
+              <div className="w-8 h-8 border-4 border-rose-600 border-t-transparent rounded-full animate-spin"></div>
+              <span className="text-xs font-medium text-rose-600">Loading data...</span>
+            </div>
+          </div>
+        )}
         <table className="min-w-full divide-y divide-slate-200">
           <thead className="bg-slate-50 sticky top-0 z-10 shadow-sm">
             <tr>

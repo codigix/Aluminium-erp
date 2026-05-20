@@ -119,12 +119,16 @@ const ItemsMaster = () => {
     
     if (path.endsWith('/item-master/add-items')) {
       setActiveTab('items');
-      if (!showItemForm || isEditingItem) {
-        handleClearItemForm();
-        
-        // Handle initial data from state if present
+
+      // ALWAYS RESET FIRST
+      setShowItemForm(false);
+
+      handleClearItemForm();
+
+      setTimeout(() => {
         if (location.state?.item) {
           const { item } = location.state;
+
           setItemFormData(prev => ({
             ...prev,
             drawingNo: item.drawing_no || '',
@@ -132,10 +136,12 @@ const ItemsMaster = () => {
             defaultUom: item.unit || 'Nos'
           }));
         }
-        
+
         setShowItemForm(true);
+
         fetchNextItemCode();
-      }
+      }, 0);
+
       return;
     }
 
@@ -186,7 +192,6 @@ const ItemsMaster = () => {
   const fetchItemsList = useCallback(async () => {
     try {
       setItemsLoading(true);
-      setItemsList([]); // Clear stale data
       const token = localStorage.getItem('authToken');
       const response = await fetch(`${API_BASE}/stock/balance?includeAll=true`, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -290,19 +295,21 @@ const ItemsMaster = () => {
     return () => window.removeEventListener('popstate', handlePopState);
   }, [fetchItemsList, fetchItemGroups, fetchShapes, fetchMaterials, fetchApprovedDrawings]);
 
-  // Fetch all master data on path or state changes
+  // Fetch all master data on path changes
   useEffect(() => {
     fetchItemsList();
     fetchItemGroups();
     fetchShapes();
     fetchMaterials();
     fetchApprovedDrawings();
-    
-    // Check if we have initial data from navigation
+
     if (location.state?.addItem && !location.pathname.endsWith('/item-master/add-items')) {
-      navigate(`${deptPrefix}/item-master/add-items`, { state: location.state, replace: true });
+      navigate(`${deptPrefix}/item-master/add-items`, {
+        state: location.state,
+        replace: true
+      });
     }
-  }, [location.pathname, location.state, fetchItemsList, fetchItemGroups, fetchShapes, fetchMaterials, fetchApprovedDrawings, navigate, deptPrefix]);
+  }, [location.pathname, fetchItemsList, fetchItemGroups, fetchShapes, fetchMaterials, fetchApprovedDrawings, navigate, deptPrefix]);
 
   const fetchNextItemCode = useCallback(async (itemName = '', itemGroup = '') => {
     try {
@@ -321,7 +328,12 @@ const ItemsMaster = () => {
 
   const handleItemNameSelect = (e) => {
     const value = e.target.value;
-    const drawing = approvedDrawings.find(d => d.drawing_no === value);
+    const drawing = approvedDrawings.find(
+      d =>
+        d.drawing_no === value ||
+        d.material_name === value ||
+        d.item_description === value
+    );
     const existingItem = itemsList.find(i => i.item_code === value || i.material_name === value);
     
     if (drawing) {
@@ -358,8 +370,7 @@ const ItemsMaster = () => {
     } else {
       setItemFormData(prev => ({ 
         ...prev, 
-        itemName: value,
-        drawingNo: '' 
+        itemName: value
       }));
       if (!isEditingItem) {
         fetchNextItemCode(value, itemFormData.itemGroup);
@@ -868,6 +879,13 @@ const ItemsMaster = () => {
     );
   }, [itemsList, searchTerm]);
 
+  const path = location.pathname;
+  const isAddPath = path.endsWith('/item-master/add-items');
+  const isEditPath = path.includes('/item-master/edit-item/');
+  const isCopyPath = path.includes('/item-master/copy-item/');
+  const isFormPath = isAddPath || isEditPath || isCopyPath;
+  const isFormReady = showItemForm && (!isEditPath && !isCopyPath || editingItemId !== null);
+
   return (
     <div className=" space-y-2  animate-in fade-in duration-500">
       {/* Header */}
@@ -887,7 +905,7 @@ const ItemsMaster = () => {
         />
       </div>
 
-      {activeTab === 'items' && !showItemForm && (
+      {activeTab === 'items' && !isFormPath && (
         <Card className="overflow-hidden">
           <div className="p-4 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white">
             <div className="relative flex-1 max-w-md">
@@ -929,8 +947,14 @@ const ItemsMaster = () => {
         </Card>
       )}
 
-      {activeTab === 'items' && showItemForm && (
-        <Card className="animate-in slide-in-from-bottom-4 duration-500">
+      {activeTab === 'items' && isFormPath && (
+        !isFormReady ? (
+          <Card className="p-8 flex flex-col items-center justify-center min-h-[400px] space-y-4">
+            <RefreshCw size={24} className="animate-spin text-indigo-600" />
+            <p className="text-sm text-slate-500 font-medium animate-pulse">Loading item details...</p>
+          </Card>
+        ) : (
+          <Card className="animate-in slide-in-from-bottom-4 duration-500">
           <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-white">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-rose-50 text-rose-600 rounded">
@@ -988,7 +1012,7 @@ const ItemsMaster = () => {
                       subLabel: `Item: ${item.item_code} | Group: ${item.material_type || item.item_group}`
                     }))
                   ]}
-                  value={itemFormData.drawingNo || itemFormData.itemName}
+                  value={itemFormData.itemName}
                   onChange={handleItemNameSelect}
                   placeholder="Enter or select item name"
                   allowCustom={true}
@@ -1243,7 +1267,7 @@ const ItemsMaster = () => {
             </div>
           </form>
         </Card>
-      )}
+      ))}
 
       {activeTab === 'groups' && (
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 animate-in fade-in duration-500">

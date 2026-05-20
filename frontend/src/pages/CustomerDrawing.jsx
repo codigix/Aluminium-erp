@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useFormik } from 'formik';
 import * as Yup from 'yup';
@@ -9,6 +9,19 @@ import Swal from 'sweetalert2';
 import { successToast, errorToast, warningToast, infoToast } from '../utils/toast';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
+
+const getEmptyDrawingRow = () => ({
+  id: crypto.randomUUID(),
+  drawing_no: '',
+  revision: '',
+  qty: 1,
+  description: '',
+  hsn_code: '',
+  delivery_date: '',
+  drawing_type: 'Part',
+  file: null,
+  remarks: ''
+});
 
 const CustomerDrawing = () => {
   const location = useLocation();
@@ -77,8 +90,13 @@ const CustomerDrawing = () => {
       label: 'Project Name',
       key: 'project_name',
       sortable: true,
-      render: (val) => (
-        <span className=" text-slate-900">{val || '—'}</span>
+      render: (val, row) => (
+        <div className="flex flex-col">
+          <span className="text-slate-900 font-medium">{val || '—'}</span>
+          {row.drawing_count > 0 && (
+            <span className="text-xs text-indigo-600 font-semibold">{row.drawing_count} Drawings</span>
+          )}
+        </div>
       )
     },
     {
@@ -86,12 +104,7 @@ const CustomerDrawing = () => {
       key: 'client_name',
       sortable: true,
       render: (val, row) => (
-        <div className="flex flex-col">
-          <span className=" text-slate-900">{val || row.company_name || '—'}</span>
-          {row.drawing_count > 0 && (
-            <span className="text-xs  text-indigo-600 font-semibold">{row.drawing_count} Drawings</span>
-          )}
-        </div>
+        <span className=" text-slate-900">{val || row.company_name || '—'}</span>
       )
     },
     {
@@ -146,8 +159,10 @@ const CustomerDrawing = () => {
           >
             <Edit2 size={15} />
           </button>
-          {/* Unify Send to Design buttons: Show if there are unshared drawings OR if the requirement status is CREATED */}
-          {(drawings.some(d => (d.client_name === (row.client_name || row.company_name)) && (d.status !== 'SHARED')) ||
+          {/* Unify Send to Design buttons: Show if there are unshared drawings AND the requirement isn't already in review */}
+          {row.status?.toUpperCase() !== 'DESIGN_IN_REVIEW' && 
+           row.status?.toUpperCase() !== 'DESIGN_APPROVED' && 
+           (row.original_items?.some(d => !['SHARED', 'DESIGN_IN_REVIEW', 'APPROVED'].includes(d.status?.toUpperCase())) ||
             row.status?.toUpperCase() === 'CREATED') && (
               <button
                 onClick={() => handleShareClientGroupWithDesign(row.client_name || row.company_name, row)}
@@ -158,9 +173,9 @@ const CustomerDrawing = () => {
               </button>
             )}
           <button
-            onClick={() => handleDeleteRequirement(row.company_id, row.client_name)}
+            onClick={() => handleDeleteProject(row.id, row.project_name)}
             className="p-1.5 text-rose-600 hover:bg-rose-50 rounded transition-all"
-            title="Delete Client & Requirements"
+            title="Delete Project & Drawings"
           >
             <Trash2 size={15} />
           </button>
@@ -182,7 +197,6 @@ const CustomerDrawing = () => {
   const fetchDrawings = async (search = '') => {
     try {
       setLoading(true);
-      setDrawings([]); // Clear stale data
       const token = localStorage.getItem('authToken');
       const url = search
         ? `${API_BASE}/drawings?search=${encodeURIComponent(search)}`
@@ -206,7 +220,6 @@ const CustomerDrawing = () => {
 
   const fetchCompanies = async () => {
     try {
-      setCompanies([]); // Clear stale data
       const token = localStorage.getItem('authToken');
       const response = await fetch(`${API_BASE}/companies`, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -222,7 +235,6 @@ const CustomerDrawing = () => {
   const fetchApprovedDrawings = async () => {
     try {
       setApprovedLoading(true);
-      setApprovedGroupedByClient({}); // Clear stale data
       const token = localStorage.getItem('authToken');
       const response = await fetch(`${API_BASE}/sales-orders/approved-drawings`, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -376,31 +388,62 @@ const CustomerDrawing = () => {
     }
   };
 
-  const groupedDrawings = drawings.reduce((acc, drawing) => {
-    const client = drawing.client_name || 'Unassigned';
-    if (!acc[client]) acc[client] = [];
+  const normalize = (s) => (s || '').toLowerCase().replace(/\s+/g, ' ').trim();
 
-    // Ensure uniqueness by drawing_master_id
-    if (!acc[client].some(d => d.drawing_master_id === drawing.drawing_master_id)) {
-      acc[client].push(drawing);
-    }
-    return acc;
-  }, {});
+  const groupedDrawings = useMemo(() => {
+    return drawings.reduce((acc, drawing) => {
+      const client = normalize(drawing.client_name || 'Unassigned');
+      const project = normalize(drawing.project_name || 'No Project');
+      
+      if (!acc[client]) acc[client] = {};
+      if (!acc[client][project]) acc[client][project] = [];
+
+      const isDuplicate = acc[client][project].some(d => {
+        if (d.drawing_master_id && drawing.drawing_master_id) {
+          return d.drawing_master_id === drawing.drawing_master_id;
+        }
+        return d.id === drawing.id;
+      });
+
+      if (!isDuplicate) {
+        acc[client][project].push(drawing);
+      }
+      return acc;
+    }, {});
+  }, [drawings]);
 
   useEffect(() => {
     const clientName = searchParams.get('client_name');
+    const projectName = searchParams.get('project_name');
+    
     if (clientName && !loading && drawings.length > 0 && !viewingClient) {
-      const lowerName = clientName.toLowerCase().trim();
-      const matchedKey = Object.keys(groupedDrawings).find(k => k.toLowerCase().trim() === lowerName);
-      if (matchedKey) {
-        setViewingClient({
-          name: matchedKey,
-          drawings: groupedDrawings[matchedKey]
-        });
-        setShowClientDrawingsModal(true);
+      const lowerClient = normalize(clientName);
+      const lowerProject = projectName ? normalize(projectName) : null;
+
+      if (groupedDrawings[lowerClient]) {
+        let drawingsToShow = [];
+        let finalProjectName = projectName;
+
+        if (lowerProject) {
+          drawingsToShow = groupedDrawings[lowerClient][lowerProject] || [];
+          if (drawingsToShow.length > 0) {
+            finalProjectName = drawingsToShow[0].project_name || drawingsToShow[0].projectName;
+          }
+        } else {
+          drawingsToShow = Object.values(groupedDrawings[lowerClient]).flat();
+        }
+
+        if (drawingsToShow.length > 0) {
+          setViewingClient({
+            name: drawingsToShow[0].client_name || drawingsToShow[0].clientName,
+            projectName: finalProjectName,
+            drawings: drawingsToShow
+          });
+          setShowClientDrawingsModal(true);
+        }
       }
     }
-  }, [drawings, searchParams, loading, viewingClient]);
+  }, [drawings, searchParams, loading, groupedDrawings, viewingClient]);
 
   const fetchSingleDrawing = async (id) => {
     try {
@@ -443,29 +486,38 @@ const CustomerDrawing = () => {
     }
   };
 
-  const fetchRequirements = async () => {
+  const fetchRequirements = async (initial = false) => {
     try {
+      if (initial) setRequirements([]); 
       setReqLoading(true);
-      setRequirements([]); // Clear stale data
       const token = localStorage.getItem('authToken');
       const response = await fetch(`${API_BASE}/sales-orders?includeWithoutPo=true`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!response.ok) throw new Error('Failed to fetch requirements');
       const data = await response.json();
-      const filtered = data.filter(so =>
-        so.project_name?.includes('Design Review') ||
-        ['DESIGN_ENG', 'SALES', 'PRODUCTION', 'SHIPMENT', 'QUALITY', 'QC', 'ACCOUNTS'].includes(so.current_department)
-      );
+      const filtered = data.filter(so => {
+        const dept = (so.current_department || '').toUpperCase().trim();
+        const status = (so.status || '').toUpperCase().trim();
+        
+        // Show if it's a "Design Review" project OR if it's in relevant departments
+        // Sales should see things in SALES, DESIGN_ENG (shared), or initial departments
+        return so.project_name?.includes('Design Review') || 
+               ['SALES', 'DESIGN_ENG', 'PRODUCTION', 'SHIPMENT', 'QUALITY', 'QC', 'ACCOUNTS'].includes(dept) || 
+               dept === '';
+      });
 
-      // Group by client to avoid duplicates
+      // Group by Sales Order Public ID (Project ID) to keep projects separate
       const grouped = filtered.reduce((acc, so) => {
         const clientName = so.client_name || so.company_name || 'Unassigned';
-        if (!acc[clientName]) {
+        // Use public_id for grouping as requested, fallback to id
+        const key = so.public_id || so.id;
+        
+        if (!acc[key]) {
           // Find first item with contact info if available
           const firstDrawingWithContact = so.items?.find(item => item.contact_person || item.phone || item.email);
 
-          acc[clientName] = {
+          acc[key] = {
             ...so,
             client_name: clientName,
             project_name: so.project_name,
@@ -486,12 +538,12 @@ const CustomerDrawing = () => {
 
         // Count items that are actual drawings (not existing items)
         const items = so.items?.filter(item => !item.item_code) || [];
-        acc[clientName].drawing_count += items.length;
-        acc[clientName].original_items = [...acc[clientName].original_items, ...items];
+        acc[key].drawing_count += items.length;
+        acc[key].original_items = [...acc[key].original_items, ...items];
 
         // Keep the most recent delivery date if multiple exist
-        if (so.delivery_date && (!acc[clientName].delivery_date || new Date(so.delivery_date) > new Date(acc[clientName].delivery_date))) {
-          acc[clientName].delivery_date = so.delivery_date;
+        if (so.delivery_date && (!acc[key].delivery_date || new Date(so.delivery_date) > new Date(acc[key].delivery_date))) {
+          acc[key].delivery_date = so.delivery_date;
         }
 
         return acc;
@@ -508,7 +560,7 @@ const CustomerDrawing = () => {
   useEffect(() => {
     fetchDrawings(searchTerm);
     fetchCompanies();
-    fetchRequirements();
+    fetchRequirements(true);
 
     // Initial check on mount or path change
     const path = window.location.pathname;
@@ -582,7 +634,7 @@ const CustomerDrawing = () => {
         setEditingRequirementId(null);
         setEditingRequirementData(null);
         fetchDrawings(searchTerm);
-        fetchRequirements();
+        setTimeout(() => fetchRequirements(), 1000);
       } else if (currentPath.includes(`${deptPrefix}/customer-drawing/addclient`)) {
         setFormMode('add');
         setEditingRequirementId(null);
@@ -651,7 +703,7 @@ const CustomerDrawing = () => {
       const company = companies.find(c => c.company_name === (row.client_name || row.company_name));
 
       const manualDrawings = (row.original_items || []).map(item => ({
-        id: item.id || Date.now() + Math.random(),
+        id: item.id || crypto.randomUUID(),
         drawing_id: item.drawing_id || item.drawing_master_id,
         drawing_no: item.drawing_no || '',
         revision: item.revision || item.revision_no || '',
@@ -680,9 +732,7 @@ const CustomerDrawing = () => {
         uploadMode: row.excel_path ? 'bulk' : 'manual',
         file: row.excel_path ? { name: row.excel_path.split('/').pop() } : null,
         zipFile: row.zip_path ? { name: row.zip_path.split('/').pop() } : null,
-        manualDrawings: manualDrawings.length > 0 ? manualDrawings : [
-          { id: Date.now(), drawing_no: '', revision: '', qty: 1, description: '', file: null, remarks: '' }
-        ]
+        manualDrawings: manualDrawings.length > 0 ? manualDrawings : [getEmptyDrawingRow()]
       });
       setClientLocked(true);
       if (row.excel_path) {
@@ -695,13 +745,30 @@ const CustomerDrawing = () => {
 
   // Keep viewingClient drawings in sync with the main drawings list
   useEffect(() => {
-    if (viewingClient && groupedDrawings[viewingClient.name]) {
-      setViewingClient(prev => ({
-        ...prev,
-        drawings: groupedDrawings[viewingClient.name]
-      }));
+    if (viewingClient) {
+      const clientKey = normalize(viewingClient.name);
+      const projectKey = viewingClient.projectName ? normalize(viewingClient.projectName) : null;
+      
+      if (groupedDrawings[clientKey]) {
+        let updatedDrawings = null;
+        if (projectKey) {
+          if (groupedDrawings[clientKey][projectKey]) {
+            updatedDrawings = groupedDrawings[clientKey][projectKey];
+          }
+        } else {
+          updatedDrawings = Object.values(groupedDrawings[clientKey]).flat();
+        }
+        
+        // Only update if data actually changed and it's a valid array to avoid infinite loops
+        if (Array.isArray(updatedDrawings) && JSON.stringify(updatedDrawings) !== JSON.stringify(viewingClient.drawings)) {
+          setViewingClient(prev => ({
+            ...prev,
+            drawings: updatedDrawings
+          }));
+        }
+      }
     }
-  }, [groupedDrawings]);
+  }, [groupedDrawings, viewingClient?.name, viewingClient?.projectName]);
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -900,9 +967,7 @@ const CustomerDrawing = () => {
       zipFile: null,
       remarks: '',
       uploadMode: 'bulk',
-      manualDrawings: [
-        { id: Date.now() + Math.random(), drawing_no: '', revision: '', qty: 1, description: '', hsn_code: '', delivery_date: '', drawing_type: 'Part', file: null, remarks: '' }
-      ],
+      manualDrawings: [getEmptyDrawingRow()],
     },
     validationSchema,
     onSubmit: async (values) => {
@@ -915,7 +980,31 @@ const CustomerDrawing = () => {
           if (result) {
             successToast(result.isExcelUpload ? `${result.count} Excel drawings imported successfully` : 'Drawing added successfully');
             successCount = result.isExcelUpload ? (result.count || 1) : 1;
-            formik.resetForm();
+            formik.resetForm({
+              values: {
+                client_name: '',
+                project_name: '',
+                contact_person: '',
+                phone_number: '',
+                email_address: '',
+                customer_type: '',
+                gstin: '',
+                city: '',
+                state: '',
+                billing_address: '',
+                shipping_address: '',
+                drawing_no: '',
+                revision: '',
+                qty: 1,
+                description: '',
+                drawing_type: 'Part',
+                file: null,
+                zipFile: null,
+                remarks: '',
+                uploadMode: 'bulk',
+                manualDrawings: [getEmptyDrawingRow()],
+              }
+            });
             setShowFormModal(false);
             setClientLocked(false);
             if (window.location.pathname !== `${deptPrefix}/customer-drawing`) {
@@ -985,7 +1074,11 @@ const CustomerDrawing = () => {
                 }
               } else {
                 // Add new drawing to existing requirement
-                await saveSingleDrawing({ ...values, ...drawing }, false);
+                await saveSingleDrawing({ 
+                  ...values, 
+                  ...drawing, 
+                  salesOrderId: editingRequirementId 
+                }, false);
               }
               successCount++;
             }
@@ -995,9 +1088,18 @@ const CustomerDrawing = () => {
               warningToast('No valid drawings found to update');
             }
           } else {
+            let sharedSalesOrderId = null;
             for (const drawing of values.manualDrawings) {
               if (!drawing.drawing_no) continue;
-              await saveSingleDrawing({ ...values, ...drawing }, false);
+              const result = await saveSingleDrawing({ 
+                ...values, 
+                ...drawing, 
+                salesOrderId: sharedSalesOrderId 
+              }, false);
+              
+              if (result && result.salesOrderId && !sharedSalesOrderId) {
+                sharedSalesOrderId = result.salesOrderId;
+              }
               successCount++;
             }
 
@@ -1015,14 +1117,38 @@ const CustomerDrawing = () => {
           setEditingRequirementId(null);
           setEditingRequirementData(null);
           setClientLocked(false);
-          formik.resetForm();
+          formik.resetForm({
+            values: {
+              client_name: '',
+              project_name: '',
+              contact_person: '',
+              phone_number: '',
+              email_address: '',
+              customer_type: '',
+              gstin: '',
+              city: '',
+              state: '',
+              billing_address: '',
+              shipping_address: '',
+              drawing_no: '',
+              revision: '',
+              qty: 1,
+              description: '',
+              drawing_type: 'Part',
+              file: null,
+              zipFile: null,
+              remarks: '',
+              uploadMode: 'bulk',
+              manualDrawings: [getEmptyDrawingRow()],
+            }
+          });
           if (window.location.pathname !== `${deptPrefix}/customer-drawing`) {
             window.history.pushState({}, '', `${deptPrefix}/customer-drawing`);
           }
         }
 
         fetchDrawings(searchTerm);
-        fetchRequirements();
+        setTimeout(() => fetchRequirements(), 1000);
       } catch (error) {
         errorToast(error.message);
       } finally {
@@ -1039,13 +1165,34 @@ const CustomerDrawing = () => {
   // Reset form to clear stale/old data when entering add mode or closing form modal
   useEffect(() => {
     if (!showFormModal) {
-      formik.resetForm();
-      setClientLocked(false);
-    } else if (formMode === 'add') {
-      formik.resetForm();
+      formik.resetForm({
+        values: {
+          client_name: '',
+          project_name: '',
+          contact_person: '',
+          phone_number: '',
+          email_address: '',
+          customer_type: '',
+          gstin: '',
+          city: '',
+          state: '',
+          billing_address: '',
+          shipping_address: '',
+          drawing_no: '',
+          revision: '',
+          qty: 1,
+          description: '',
+          drawing_type: 'Part',
+          file: null,
+          zipFile: null,
+          remarks: '',
+          uploadMode: 'bulk',
+          manualDrawings: [getEmptyDrawingRow()],
+        }
+      });
       setClientLocked(false);
     }
-  }, [showFormModal, formMode]);
+  }, [showFormModal]);
 
   const [clientSuggestions, setClientSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -1076,7 +1223,7 @@ const CustomerDrawing = () => {
   };
 
   const addManualDrawingRow = () => {
-    const newRow = { id: Date.now() + Math.random(), drawing_no: '', revision: '', qty: 1, description: '', hsn_code: '', delivery_date: '', drawing_type: 'Part', file: null, remarks: '' };
+    const newRow = getEmptyDrawingRow();
     formik.setFieldValue('manualDrawings', [newRow, ...formik.values.manualDrawings]);
   };
 
@@ -1093,9 +1240,7 @@ const CustomerDrawing = () => {
       formik.setFieldValue('manualDrawings', updatedManualDrawings);
     } else {
       // If it's the last row, clear it instead of removing it
-      formik.setFieldValue('manualDrawings', [
-        { id: Date.now() + Math.random(), drawing_no: '', revision: '', qty: 1, description: '', hsn_code: '', delivery_date: '', drawing_type: 'Part', file: null, remarks: '' }
-      ]);
+      formik.setFieldValue('manualDrawings', [getEmptyDrawingRow()]);
     }
   };
 
@@ -1185,6 +1330,9 @@ const CustomerDrawing = () => {
       formData.append('drawing_type', drawingData.drawing_type || 'Part');
       formData.append('remarks', drawingData.remarks || '');
       formData.append('fileType', fileExt);
+      if (drawingData.salesOrderId) {
+        formData.append('salesOrderId', drawingData.salesOrderId);
+      }
       if (drawingData.file) {
         formData.append('file', drawingData.file);
       }
@@ -1207,6 +1355,7 @@ const CustomerDrawing = () => {
 
       const savedDrawing = await response.json();
       const drawingId = savedDrawing.id || savedDrawing.drawing_id;
+      const salesOrderId = savedDrawing.salesOrderId;
       const isExcelUpload = isExcel && savedDrawing.count;
 
       if (sendToDesign && drawingId) {
@@ -1215,7 +1364,7 @@ const CustomerDrawing = () => {
         await sendBulkUploadedToDesign(drawingData.client_name, savedDrawing.count);
       }
 
-      return { drawingId, isExcelUpload, count: savedDrawing.count };
+      return { drawingId, salesOrderId, isExcelUpload, count: savedDrawing.count };
     } catch (error) {
       console.error(error);
       throw error;
@@ -1257,7 +1406,7 @@ const CustomerDrawing = () => {
           window.history.pushState({}, '', `${deptPrefix}/customer-drawing`);
         }
         fetchDrawings(searchTerm);
-        fetchRequirements();
+        setTimeout(() => fetchRequirements(), 1000);
       }
     } catch (error) {
       console.error(error);
@@ -1268,9 +1417,9 @@ const CustomerDrawing = () => {
   const clientDrawingColumns = [
     { label: '#', key: 'id', render: (_, __, rowIdx) => rowIdx + 1, width: '50px' },
     { label: 'Drawing No', key: 'drawing_no', className: ' text-slate-900' },
-    { label: 'Project Name', key: 'project_name' },
-    { label: 'Description', key: 'drawing_description' },
-    { label: 'HSN Code', key: 'hsn_code' },
+    { label: 'Project Name', key: 'project_name', render: (val, row) => val || row.projectName || row.project_name || viewingClient?.projectName || '—' },
+    { label: 'Description', key: 'drawing_description', render: (val, row) => val || row.drawing_description || row.description || row.item_description || '—' },
+    { label: 'HSN Code', key: 'hsn_code', render: (val, row) => val || row.hsnCode || row.hsn_code || '—' },
     {
       label: 'Item Delivery',
       key: 'delivery_date',
@@ -1310,6 +1459,20 @@ const CustomerDrawing = () => {
         </button>
       ) : (
         <span className="text-slate-300 italic text-xs">No File</span>
+      )
+    },
+    {
+      label: 'Actions',
+      key: 'actions',
+      className: 'text-center',
+      render: (_, row) => (
+        <button
+          onClick={() => handleDelete(row.drawing_master_id || row.id)}
+          className="p-1.5 text-rose-600 hover:bg-rose-50 rounded transition-all"
+          title="Delete Drawing"
+        >
+          <Trash2 size={15} />
+        </button>
       )
     },
   ];
@@ -1395,12 +1558,22 @@ const CustomerDrawing = () => {
   ];
 
   const handleShareClientGroupWithDesign = async (clientName, requirement = null) => {
-    const unsharedDrawings = groupedDrawings[clientName]?.filter(d => d.status !== 'SHARED') || [];
+    // If requirement is provided, use its specific items, otherwise fallback to global groupedDrawings
+    let drawingsToConsider = [];
+    if (requirement && requirement.original_items && requirement.original_items.length > 0) {
+      drawingsToConsider = requirement.original_items;
+    } else {
+      drawingsToConsider = groupedDrawings[clientName] || [];
+    }
+
+    const unsharedDrawings = drawingsToConsider.filter(d => 
+      !['SHARED', 'DESIGN_IN_REVIEW', 'APPROVED'].includes(d.status?.toUpperCase())
+    ) || [];
 
     const isCreatedStatus = requirement?.status?.toUpperCase() === 'CREATED';
 
     if (unsharedDrawings.length === 0 && !isCreatedStatus) {
-      infoToast('All drawings for this client are already shared and requirement is in progress.');
+      infoToast('All drawings for this project are already shared and requirement is in progress.');
       return;
     }
 
@@ -1447,7 +1620,7 @@ const CustomerDrawing = () => {
 
         successToast(`Successfully sent to Design Department`);
         fetchDrawings(searchTerm);
-        fetchRequirements();
+        setTimeout(() => fetchRequirements(), 1000);
       } catch (error) {
         console.error(error);
         errorToast(error.message);
@@ -1499,9 +1672,21 @@ const CustomerDrawing = () => {
             'Authorization': `Bearer ${token}`
           }
         });
-        if (!response.ok) throw new Error('Delete failed');
+        if (!response.ok) {
+          const errData = await response.json();
+          throw new Error(errData.error || errData.message || 'Delete failed');
+        }
         successToast('Drawing has been deleted.');
         fetchDrawings(searchTerm);
+        setTimeout(() => fetchRequirements(), 1000);
+
+        // Update local state if viewing in modal
+        if (viewingClient) {
+          setViewingClient(prev => ({
+            ...prev,
+            drawings: prev.drawings.filter(d => (d.drawing_master_id || d.id) !== id)
+          }));
+        }
       } catch (error) {
         errorToast(error.message);
       }
@@ -1510,51 +1695,79 @@ const CustomerDrawing = () => {
 
   const handleViewClientDrawings = (client) => {
     // Handle both string (clientName) or object (row)
-    const name = typeof client === 'string' ? client : (client.client_name || client.company_name);
+    const isRowObject = typeof client === 'object' && client !== null;
+    const name = isRowObject ? (client.client_name || client.company_name) : client;
+    const projectName = isRowObject ? client.project_name : null;
 
-    // Use a case-insensitive search if direct match fails
-    let drawingsForClient = groupedDrawings[name] || [];
-    if (drawingsForClient.length === 0 && name) {
-      const lowerName = name.toLowerCase().trim();
-      const matchedKey = Object.keys(groupedDrawings).find(k => k.toLowerCase().trim() === lowerName);
-      if (matchedKey) drawingsForClient = groupedDrawings[matchedKey];
+    // If it's a row object from the requirements table, use its specific items
+    let drawingsForClient = [];
+    if (isRowObject && client.original_items) {
+      drawingsForClient = client.original_items;
+    } else {
+      // Use a case-insensitive search if direct match fails
+      const clientObj = groupedDrawings[name] || {};
+      if (Object.keys(clientObj).length === 0 && name) {
+        const lowerName = name.toLowerCase().trim();
+        const matchedClientKey = Object.keys(groupedDrawings).find(k => k.toLowerCase().trim() === lowerName);
+        if (matchedClientKey) {
+          const projectObj = groupedDrawings[matchedClientKey];
+          if (projectName) {
+            const lowerProj = projectName.toLowerCase().trim();
+            const matchedProjKey = Object.keys(projectObj).find(pk => pk.toLowerCase().trim() === lowerProj);
+            if (matchedProjKey) drawingsForClient = projectObj[matchedProjKey];
+          } else {
+            drawingsForClient = Object.values(projectObj).flat();
+          }
+        }
+      } else if (projectName) {
+        const lowerProj = projectName.toLowerCase().trim();
+        const matchedProjKey = Object.keys(clientObj).find(pk => pk.toLowerCase().trim() === lowerProj);
+        if (matchedProjKey) drawingsForClient = clientObj[matchedProjKey];
+        else drawingsForClient = clientObj[projectName] || [];
+      } else {
+        drawingsForClient = Object.values(clientObj).flat();
+      }
     }
 
     const viewData = {
       name: name,
+      projectName: projectName,
       drawings: drawingsForClient
     };
     setViewingClient(viewData);
     setShowClientDrawingsModal(true);
 
     // Update URL behavior
-    navigate(`${deptPrefix}/customer-drawing/view-draw?client_name=${encodeURIComponent(name)}`, {
+    navigate(`${deptPrefix}/customer-drawing/view-draw?client_name=${encodeURIComponent(name)}${projectName ? `&project_name=${encodeURIComponent(projectName)}` : ''}`, {
       state: { type: 'view-client-drawings', data: viewData }
     });
   };
 
-  const handleDeleteRequirement = async (companyId, clientName) => {
+  const handleDeleteProject = async (projectId, projectName) => {
     const result = await Swal.fire({
-      title: 'Delete Client?',
-      text: `This will remove ${clientName} and all associated requirements/drawings. You won't be able to revert this!`,
+      title: 'Delete Project?',
+      text: `This will remove project "${projectName}" and all associated drawings. You won't be able to revert this!`,
       icon: 'warning',
       showCancelButton: true,
       confirmButtonColor: '#dc2626',
       cancelButtonColor: '#6b7280',
-      confirmButtonText: 'Yes, delete everything'
+      confirmButtonText: 'Yes, delete project'
     });
 
     if (result.isConfirmed) {
       try {
         const token = localStorage.getItem('authToken');
-        const response = await fetch(`${API_BASE}/companies/${companyId}`, {
+        const response = await fetch(`${API_BASE}/sales-orders/${projectId}`, {
           method: 'DELETE',
           headers: {
             'Authorization': `Bearer ${token}`
           }
         });
-        if (!response.ok) throw new Error('Delete failed');
-        successToast('Client and all associated data have been deleted.');
+        if (!response.ok) {
+          const errData = await response.json();
+          throw new Error(errData.error || errData.message || 'Delete failed');
+        }
+        successToast('Project and associated drawings have been deleted.');
         fetchRequirements();
         fetchDrawings();
       } catch (error) {
@@ -1590,7 +1803,31 @@ const CustomerDrawing = () => {
               setFormMode('add');
               setEditingRequirementId(null);
               setEditingRequirementData(null);
-              formik.resetForm();
+              formik.resetForm({
+                values: {
+                  client_name: '',
+                  project_name: '',
+                  contact_person: '',
+                  phone_number: '',
+                  email_address: '',
+                  customer_type: '',
+                  gstin: '',
+                  city: '',
+                  state: '',
+                  billing_address: '',
+                  shipping_address: '',
+                  drawing_no: '',
+                  revision: '',
+                  qty: 1,
+                  description: '',
+                  drawing_type: 'Part',
+                  file: null,
+                  zipFile: null,
+                  remarks: '',
+                  uploadMode: 'bulk',
+                  manualDrawings: [getEmptyDrawingRow()],
+                }
+              });
               setClientLocked(false);
               window.history.pushState({}, '', `${deptPrefix}/customer-drawing/addclient`);
               setShowFormModal(true);
@@ -2054,7 +2291,31 @@ const CustomerDrawing = () => {
           setFormMode('add');
           setEditingRequirementId(null);
           setEditingRequirementData(null);
-          formik.resetForm();
+          formik.resetForm({
+            values: {
+              client_name: '',
+              project_name: '',
+              contact_person: '',
+              phone_number: '',
+              email_address: '',
+              customer_type: '',
+              gstin: '',
+              city: '',
+              state: '',
+              billing_address: '',
+              shipping_address: '',
+              drawing_no: '',
+              revision: '',
+              qty: 1,
+              description: '',
+              drawing_type: 'Part',
+              file: null,
+              zipFile: null,
+              remarks: '',
+              uploadMode: 'bulk',
+              manualDrawings: [getEmptyDrawingRow()],
+            }
+          });
           setClientLocked(false);
           if (location.pathname !== `${deptPrefix}/customer-drawing`) {
             window.history.pushState({}, '', `${deptPrefix}/customer-drawing`);
@@ -2516,7 +2777,31 @@ const CustomerDrawing = () => {
               type="button"
               onClick={() => {
                 setShowFormModal(false);
-                formik.resetForm();
+                formik.resetForm({
+                  values: {
+                    client_name: '',
+                    project_name: '',
+                    contact_person: '',
+                    phone_number: '',
+                    email_address: '',
+                    customer_type: '',
+                    gstin: '',
+                    city: '',
+                    state: '',
+                    billing_address: '',
+                    shipping_address: '',
+                    drawing_no: '',
+                    revision: '',
+                    qty: 1,
+                    description: '',
+                    drawing_type: 'Part',
+                    file: null,
+                    zipFile: null,
+                    remarks: '',
+                    uploadMode: 'bulk',
+                    manualDrawings: [getEmptyDrawingRow()],
+                  }
+                });
                 setClientLocked(false);
                 setFormMode('add');
                 setEditingRequirementId(null);
@@ -2550,7 +2835,14 @@ const CustomerDrawing = () => {
           fetchDrawings(searchTerm);
           fetchRequirements();
         }}
-        title={viewingClient ? `Drawings for ${viewingClient.name}` : 'Client Drawings'}
+        title={viewingClient ? (
+          <div className="flex flex-col">
+            <span>Drawings for {viewingClient.name}</span>
+            {viewingClient.projectName && (
+              <span className="text-xs text-slate-500 font-normal">Project: {viewingClient.projectName}</span>
+            )}
+          </div>
+        ) : 'Client Drawings'}
         width="max-w-5xl"
       >
         {viewingClient && (

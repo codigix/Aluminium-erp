@@ -70,28 +70,28 @@ app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    
+
     if (req.method === 'OPTIONS') {
       return res.sendStatus(200);
     }
 
     const parts = url.split('/uploads/');
     const fileName = decodeURIComponent(parts[parts.length - 1].split('?')[0]);
-    
+
     // Set proper Content-Type for PDFs to help browser rendering
     if (fileName.toLowerCase().endsWith('.pdf')) {
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', 'inline; filename="' + fileName + '"');
     }
-    
+
     // Try serving directly from configured uploadsPath
     return res.sendFile(path.join(uploadsPath, fileName), { headers: { 'X-Public-Upload': 'true' } }, (err) => {
       if (!err) return;
-      
+
       // Fallback 1: Root uploads folder
       res.sendFile(path.join(process.cwd(), 'uploads', fileName), (err1) => {
         if (!err1) return;
-        
+
         // Fallback 2: backend/uploads folder
         res.sendFile(path.join(process.cwd(), 'backend', 'uploads', fileName), (err2) => {
           if (err2) {

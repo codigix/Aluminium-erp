@@ -280,7 +280,7 @@ const QuotationFormPage = () => {
           const hasSAs = item.sub_assemblies && item.sub_assemblies.length > 0;
           const saChanged = matchedDrawing.sub_assemblies && JSON.stringify(item.sub_assemblies) !== JSON.stringify(matchedDrawing.sub_assemblies);
           
-          if (matchedDrawing.sub_assemblies && (!hasSAs || saChanged)) {
+          if (matchedDrawing.sub_assemblies && (!hasSAs || (saChanged && !item.has_pending_bom_applied))) {
             newItem.sub_assemblies = matchedDrawing.sub_assemblies;
             changed = true;
           }
@@ -300,7 +300,7 @@ const QuotationFormPage = () => {
 
           const costChanged = drwRate > 0 && Math.abs(currentBOMCost - drwRate) > 0.01;
           
-          if (costChanged && (shouldSync || saChanged)) {
+          if (costChanged && (shouldSync || saChanged) && !item.has_pending_bom_applied) {
             newItem.bom_cost = drwRate;
             changed = true;
             
@@ -465,29 +465,52 @@ const QuotationFormPage = () => {
         const itemsSnapshot = JSON.parse(JSON.stringify(versionData.items));
         
         setItems(itemsSnapshot.map(item => {
-          // Map saved sub-assemblies first to ensure they are available for cost logic
-          const savedSubAssemblies = (item.sub_assemblies || []).map(sa => ({
-            ...sa,
-            bom_cost: parseFloat(sa.bom_cost || sa.rate || 0),
-            rate: parseFloat(sa.rate || sa.bom_cost || 0)
-          }));
-
           // Apply overrides ONLY if we are preparing a NEW version (forceNextVersion)
           const override = forceNextVersion ? initialData?.items?.find(oi => 
             (oi.salesOrderItemId && String(oi.salesOrderItemId) === String(item.sales_order_item_id)) ||
             (oi.item_code && oi.item_code === item.item_code && oi.drawing_no === item.drawing_no)
           ) : null;
 
+          // Map saved sub-assemblies first to ensure they are available for cost logic.
+          // Prioritize override sub_assemblies if they exist.
+          const savedSubAssemblies = ((override?.sub_assemblies || item.sub_assemblies) || []).map(sa => {
+            let saBomCost = parseFloat(sa.bom_cost || sa.rate || 0);
+            if (forceNextVersion && sa.pending_bom_cost && parseFloat(sa.pending_bom_cost) > 0) {
+              saBomCost = parseFloat(sa.pending_bom_cost);
+            }
+            return {
+              ...sa,
+              bom_cost: saBomCost,
+              rate: sa.rate ? parseFloat(sa.rate) : saBomCost,
+              pending_bom_cost: sa.pending_bom_cost ? parseFloat(sa.pending_bom_cost) : undefined
+            };
+          });
+
           // For NEW revisions or DRAFTS, we prefer latest master cost if available, otherwise trust the base record
           const latestBOMCost = parseFloat(item.latest_bom_cost || 0);
           const storedBOMCost = parseFloat(item.bom_cost || 0);
           
-          // If it's a draft/new version and master has a newer/different cost, consider it for sync
-          let bomCost = (forceNextVersion || s === 'DRAFT') && latestBOMCost > 0 
-            ? latestBOMCost 
-            : storedBOMCost;
+          let bomCost = storedBOMCost;
+          if (forceNextVersion) {
+            if (override?.bom_cost > 0) {
+              bomCost = parseFloat(override.bom_cost);
+            } else if (item.pending_bom_cost > 0) {
+              bomCost = parseFloat(item.pending_bom_cost);
+            } else if (latestBOMCost > 0) {
+              bomCost = latestBOMCost;
+            }
+          } else if (s === 'DRAFT' && latestBOMCost > 0) {
+            bomCost = latestBOMCost;
+          }
 
           let drwRate = parseFloat(override?.quotedPrice || item.quotedPrice || item.rate || bomCost || 0);
+          if (forceNextVersion) {
+            if (override?.rate > 0) {
+              drwRate = parseFloat(override.rate);
+            } else if (item.pending_bom_cost > 0) {
+              drwRate = parseFloat(item.pending_bom_cost);
+            }
+          }
 
           // If we synced to latest BOM cost, we should also update the rate if they were previously matching
           if (bomCost !== storedBOMCost && Math.abs(parseFloat(item.rate || 0) - storedBOMCost) < 0.01) {
@@ -517,8 +540,12 @@ const QuotationFormPage = () => {
             }, 0);
 
             const calculatedTotal = saSum + materialSum + operationSum;
+            const hasNestedComponents = savedSubAssemblies.length > 0 || (item.materials && item.materials.length > 0) || (item.operations && item.operations.length > 0);
             
-            if (calculatedTotal > (drwRate || bomCost)) {
+            if (hasNestedComponents && calculatedTotal > 0) {
+              drwRate = calculatedTotal;
+              bomCost = calculatedTotal;
+            } else if (calculatedTotal > (drwRate || bomCost)) {
               drwRate = calculatedTotal;
               bomCost = calculatedTotal;
             }
@@ -526,6 +553,7 @@ const QuotationFormPage = () => {
 
           return {
             ...item,
+            has_pending_bom_applied: override?.has_pending_bom_applied || item.has_pending_bom_applied,
             id: item.id || Date.now() + Math.random(),
             salesOrderItemId: item.sales_order_item_id || item.salesOrderItemId,
             drawing_id: item.drawing_id,
@@ -839,7 +867,8 @@ const QuotationFormPage = () => {
             quantity: sa.quantity,
             bom_cost: parseFloat(sa.bom_cost) || 0,
             rate: parseFloat(sa.rate || sa.bom_cost) || 0,
-            unit: sa.unit || 'Nos'
+            unit: sa.unit || 'Nos',
+            item_group: sa.item_group || 'PART'
           }))
         })),
         totalAmount: summary.totalAmount,

@@ -41,6 +41,34 @@ const getFileUrl = (path) => {
   return window.location.origin + (url.startsWith('/') ? url : '/' + url);
 };
 
+const parseVerToComparable = (v) => {
+  if (v === null || v === undefined) return '';
+  let s = String(v).trim().toUpperCase();
+  if (s.startsWith('REV')) {
+    s = s.substring(3).trim();
+  } else if (s.startsWith('V')) {
+    s = s.substring(1).trim();
+  }
+  return s;
+};
+
+const compareVersions = (a, b) => {
+  const sA = parseVerToComparable(a);
+  const sB = parseVerToComparable(b);
+  
+  if (sA === sB) return 0;
+  if (sA === '') return -1;
+  if (sB === '') return 1;
+  
+  const numA = Number(sA);
+  const numB = Number(sB);
+  if (!isNaN(numA) && !isNaN(numB)) {
+    return numA - numB;
+  }
+  
+  return sA.localeCompare(sB, undefined, { numeric: true, sensitivity: 'base' });
+};
+
 const ClientQuotations = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('pending'); // 'pending', 'sent', or 'received'
@@ -279,16 +307,12 @@ const ClientQuotations = () => {
           const identity = `${item.drawing_no || 'NA'}_${item.item_code || 'NA'}_${item.item_group_calc}`;
           const existing = grouped[clientName].all_items_map[identity];
 
-          const parseVer = (v) => parseFloat(String(v || 0).replace(/[^\d.]/g, '')) || 0;
-
           if (!existing) {
             grouped[clientName].all_items_map[identity] = { ...item, project_name: order.project_name };
           } else {
-            const currentRev = parseVer(item.revision_no || item.version);
-            const existingRev = parseVer(existing.revision_no || existing.version);
-
+            const comp = compareVersions(item.revision_no || item.version, existing.revision_no || existing.version);
             // Prioritize higher revision, then higher ID
-            if (currentRev > existingRev || (currentRev === existingRev && parseInt(item.id) > parseInt(existing.id))) {
+            if (comp > 0 || (comp === 0 && parseInt(item.id) > parseInt(existing.id))) {
               grouped[clientName].all_items_map[identity] = { ...item, project_name: order.project_name };
             }
           }
@@ -1819,16 +1843,31 @@ const ClientQuotations = () => {
             items: latestQuotes.map(q => {
               // Apply pending BOM cost if it's the target item (direct match)
               // OR if the target item is a sub-assembly component of this quote item
-              const isTarget = q.id === targetItem.id;
+              const isTarget = String(q.id) === String(targetItem.id);
 
               const targetComp = (q.sub_assemblies || []).find(sa =>
-                (sa.component_code === targetItem.item_code || sa.component_code === targetItem.component_code) &&
+                (sa.component_code === targetItem.item_code || sa.component_code === targetItem.component_code ||
+                 sa.item_code === targetItem.item_code || sa.item_code === targetItem.component_code) &&
                 sa.drawing_no === targetItem.drawing_no
               );
 
               const newBomCost = isTarget
                 ? targetItem.pending_bom_cost
-                : (q.bom_cost || q.latest_bom_cost || 0);
+                : (q.pending_bom_cost || q.latest_bom_cost || q.bom_cost || 0);
+
+              const updatedSubAssemblies = (q.sub_assemblies || []).map(sa => {
+                const isSubTarget = sa.component_code === targetItem.item_code || sa.component_code === targetItem.component_code ||
+                                     sa.item_code === targetItem.item_code || sa.item_code === targetItem.component_code;
+                if (isSubTarget) {
+                  return {
+                    ...sa,
+                    bom_cost: targetItem.pending_bom_cost,
+                    rate: targetItem.pending_bom_cost,
+                    pending_bom_cost: targetItem.pending_bom_cost
+                  };
+                }
+                return sa;
+              });
 
               return {
                 id: Date.now() + Math.random(),
@@ -1842,10 +1881,14 @@ const ClientQuotations = () => {
                 unit: q.item_unit || q.uom || 'Nos',
                 rate: newBomCost, // Match rate with new BOM cost
                 bom_cost: newBomCost,
+                has_pending_bom_applied: isTarget || (q.sub_assemblies || []).some(sa => 
+                  sa.component_code === targetItem.item_code || sa.component_code === targetItem.component_code ||
+                  sa.item_code === targetItem.item_code || sa.item_code === targetItem.component_code
+                ),
                 gst_percentage: q.gst_percentage || 18,
                 item_group: q.item_group,
                 status: 'PENDING',
-                sub_assemblies: q.sub_assemblies || []
+                sub_assemblies: updatedSubAssemblies
               };
             }),
             notes: firstQuote?.notes || ''

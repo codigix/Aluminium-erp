@@ -1589,8 +1589,16 @@ const deleteSalesOrder = async (salesOrderId) => {
       await connection.execute('DELETE FROM sales_order_item_scrap WHERE sales_order_item_id = ?', [soi.id]);
     }
 
-    // 3. Delete sales order items
+    // 3. Delete sales order items and linked drawings
+    const [drawings] = await connection.execute('SELECT drawing_id FROM sales_order_items WHERE sales_order_id = ? AND drawing_id IS NOT NULL', [salesOrderId]);
+    
     await connection.execute('DELETE FROM sales_order_items WHERE sales_order_id = ?', [salesOrderId]);
+
+    if (drawings.length > 0) {
+      const drawingIds = drawings.map(d => d.drawing_id);
+      const placeholders = drawingIds.map(() => '?').join(',');
+      await connection.execute(`DELETE FROM customer_drawings WHERE id IN (${placeholders})`, drawingIds);
+    }
 
     // 4. Delete the sales order itself
     await connection.execute('DELETE FROM sales_orders WHERE id = ?', [salesOrderId]);

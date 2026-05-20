@@ -641,7 +641,7 @@ export const DataTable = ({
   };
 
   const sortedData = React.useMemo(() => {
-    let sortableData = [...data];
+    let sortableData = Array.isArray(data) ? [...data] : [];
     if (sortConfig !== null) {
       sortableData.sort((a, b) => {
         if (a[sortConfig.key] < b[sortConfig.key]) {

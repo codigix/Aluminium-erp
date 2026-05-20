@@ -207,7 +207,8 @@ const createDrawing = async (req, res, next) => {
 
         const count = await drawingService.createBatchCustomerDrawings(batchData, {
           excelPath: dbFilePath,
-          zipPath: zipFile ? `uploads/${zipFile.filename}` : null
+          zipPath: zipFile ? `uploads/${zipFile.filename}` : null,
+          salesOrderId: salesOrderId ? parseInt(salesOrderId) : null
         });
         return res.status(201).json({
           message: `${count} drawings imported from Excel successfully`,

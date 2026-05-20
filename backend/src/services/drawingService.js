@@ -444,7 +444,7 @@ const createCustomerDrawing = async (data) => {
     clientName, projectName, drawingNo, revision, qty, description, filePath, fileType, remarks,
     uploadedBy, contactPerson, phoneNumber, emailAddress,
     customerType, gstin, city, state, billingAddress, shippingAddress,
-    drawing_type, hsnCode, deliveryDate
+    drawing_type, hsnCode, deliveryDate, salesOrderId: providedSalesOrderId
   } = data;
 
   const connection = await pool.getConnection();
@@ -452,7 +452,8 @@ const createCustomerDrawing = async (data) => {
     await connection.beginTransaction();
 
     const drawingPublicId = crypto.randomUUID();
-    const salesOrderPublicId = crypto.randomUUID();
+    let salesOrderId = providedSalesOrderId;
+    let salesOrderPublicId = null;
 
     // 1. Insert into customer_drawings
     const [result] = await connection.execute(
@@ -511,31 +512,34 @@ const createCustomerDrawing = async (data) => {
       }
     }
 
-    // 3. Create Sales Order Requirement
-    const [soResult] = await connection.execute(
-      `INSERT INTO sales_orders (public_id, company_id, project_name, drawing_required, production_priority, target_dispatch_date, status, current_department, request_accepted, billing_address, shipping_address, city, state, gstin, customer_type, excel_path, zip_path)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        salesOrderPublicId,
-        companyId,
-        projectName || `Design Review - Drawing ${drawingNo} for ${clientName}`,
-        1,
-        'NORMAL',
-        deliveryDate || null,
-        'CREATED',
-        'SALES',
-        0,
-        billingAddress || null,
-        shippingAddress || null,
-        city || null,
-        state || null,
-        gstin || null,
-        customerType || null,
-        fileType === 'XLSX' || fileType === 'XLS' ? filePath : null,
-        null // zip_path handled in batch
-      ]
-    );
-    const salesOrderId = soResult.insertId;
+    // 3. Create Sales Order Requirement ONLY IF not provided
+    if (!salesOrderId) {
+      salesOrderPublicId = crypto.randomUUID();
+      const [soResult] = await connection.execute(
+        `INSERT INTO sales_orders (public_id, company_id, project_name, drawing_required, production_priority, target_dispatch_date, status, current_department, request_accepted, billing_address, shipping_address, city, state, gstin, customer_type, excel_path, zip_path)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          salesOrderPublicId,
+          companyId,
+          projectName || `Design Review - Drawing ${drawingNo} for ${clientName}`,
+          1,
+          'NORMAL',
+          deliveryDate || null,
+          'CREATED',
+          'SALES',
+          0,
+          billingAddress || null,
+          shippingAddress || null,
+          city || null,
+          state || null,
+          gstin || null,
+          customerType || null,
+          fileType === 'XLSX' || fileType === 'XLS' ? filePath : null,
+          null // zip_path handled in batch
+        ]
+      );
+      salesOrderId = soResult.insertId;
+    }
 
     // 4. Create Sales Order Item
     await connection.execute(
@@ -545,7 +549,7 @@ const createCustomerDrawing = async (data) => {
     );
 
     await connection.commit();
-    return drawingId;
+    return { drawingId, salesOrderId };
   } catch (error) {
     await connection.rollback();
     throw error;
@@ -559,6 +563,7 @@ const createBatchCustomerDrawings = async (batchData, batchInfo = {}) => {
   try {
     await connection.beginTransaction();
     let count = 0;
+    let salesOrderId = batchInfo.salesOrderId || null;
 
     for (const data of batchData) {
       const {
@@ -569,7 +574,6 @@ const createBatchCustomerDrawings = async (batchData, batchInfo = {}) => {
       } = data;
 
       const drawingPublicId = crypto.randomUUID();
-      const salesOrderPublicId = crypto.randomUUID();
 
       // 1. Insert into customer_drawings
       const [result] = await connection.execute(
@@ -622,37 +626,40 @@ const createBatchCustomerDrawings = async (batchData, batchInfo = {}) => {
         }
       }
 
-      // 3. Create Sales Order Requirement
-      const [soResult] = await connection.execute(
-        `INSERT INTO sales_orders (public_id, company_id, project_name, drawing_required, production_priority, target_dispatch_date, status, current_department, request_accepted, billing_address, shipping_address, city, state, gstin, customer_type, excel_path, zip_path)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          salesOrderPublicId,
-          companyId,
-          projectName || `Design Review - Drawing ${drawingNo} for ${clientName}`,
-          1,
-          'NORMAL',
-          deliveryDate || null,
-          'CREATED',
-          'SALES',
-          0,
-          billingAddress || null,
-          shippingAddress || null,
-          city || null,
-          state || null,
-          gstin || null,
-          customerType || null,
-          batchInfo.excelPath || null,
-          batchInfo.zipPath || null
-        ]
-      );
-      const salesOrderId = soResult.insertId;
+      // 3. Create Sales Order Requirement ONLY ONCE per batch
+      if (!salesOrderId) {
+        const salesOrderPublicId = crypto.randomUUID();
+        const [soResult] = await connection.execute(
+          `INSERT INTO sales_orders (public_id, company_id, project_name, drawing_required, production_priority, target_dispatch_date, status, current_department, request_accepted, billing_address, shipping_address, city, state, gstin, customer_type, excel_path, zip_path)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            salesOrderPublicId,
+            companyId,
+            projectName || `Design Review - Batch Upload for ${clientName}`,
+            1,
+            'NORMAL',
+            deliveryDate || null,
+            'CREATED',
+            'SALES',
+            0,
+            billingAddress || null,
+            shippingAddress || null,
+            city || null,
+            state || null,
+            gstin || null,
+            customerType || null,
+            batchInfo.excelPath || null,
+            batchInfo.zipPath || null
+          ]
+        );
+        salesOrderId = soResult.insertId;
+      }
 
       // 4. Create Sales Order Item
       await connection.execute(
         `INSERT INTO sales_order_items (sales_order_id, drawing_no, drawing_id, revision_no, drawing_pdf, description, drawing_type, quantity, unit, delivery_date, status)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')`,
-        [salesOrderId, drawingNo, drawingId, revision || '0', filePath, description || 'Customer Drawing', drawing_type || 'Part', qty || 1, 'NOS', deliveryDate || null]
+        [salesOrderId, drawingNo, drawingId, revision || null, filePath, description || null, drawing_type || 'Part', qty || 1, 'NOS', deliveryDate || null]
       );
 
       count++;

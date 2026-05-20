@@ -391,6 +391,34 @@ const RecursiveBOMRow = ({
 
 const cleanText = (text) => text ? text.replace(/\s*\(.*$/, '').trim() : '';
 
+const parseVerToComparable = (v) => {
+  if (v === null || v === undefined) return '';
+  let s = String(v).trim().toUpperCase();
+  if (s.startsWith('REV')) {
+    s = s.substring(3).trim();
+  } else if (s.startsWith('V')) {
+    s = s.substring(1).trim();
+  }
+  return s;
+};
+
+const compareVersions = (a, b) => {
+  const sA = parseVerToComparable(a);
+  const sB = parseVerToComparable(b);
+  
+  if (sA === sB) return 0;
+  if (sA === '') return -1;
+  if (sB === '') return 1;
+  
+  const numA = Number(sA);
+  const numB = Number(sB);
+  if (!isNaN(numA) && !isNaN(numB)) {
+    return numA - numB;
+  }
+  
+  return sA.localeCompare(sB, undefined, { numeric: true, sensitivity: 'base' });
+};
+
 const getDimensionString = (item) => {
   if (!item) return '';
   const dimensions = [];
@@ -754,8 +782,7 @@ const BOMFormPage = () => {
       if (!seenCodes.has(item.item_code)) {
         // Find if this item has an approved BOM cost, prioritizing those with non-zero cost
         const matchingBOMs = approvedBOMs.filter(b => b.item_code === item.item_code);
-        const parseVer = (v) => parseInt((v || '').toString().replace(/[^0-9]/g, '') || '0');
-        const bomInfo = matchingBOMs.length > 0 ? matchingBOMs.sort((a, b) => parseVer(b.version || b.revision_no) - parseVer(a.version || a.revision_no))[0] : null;
+        const bomInfo = matchingBOMs.length > 0 ? matchingBOMs.sort((a, b) => compareVersions(b.version || b.revision_no, a.version || a.revision_no))[0] : null;
         const bomCost = bomInfo ? (parseFloat(bomInfo.bom_cost) || 0) : 0;
         const dims = getDimensionString(item);
 
@@ -811,8 +838,7 @@ const BOMFormPage = () => {
           if (a.item_code === item.item_code && b.item_code !== item.item_code) return -1;
           if (b.item_code === item.item_code && a.item_code !== item.item_code) return 1;
           // Then prioritize cost
-          const parseVer = (v) => parseInt((v || '').toString().replace(/[^0-9]/g, '') || '0');
-          return parseVer(b.version || b.revision_no) - parseVer(a.version || a.revision_no);
+          return compareVersions(b.version || b.revision_no, a.version || a.revision_no);
         })[0] : null;
 
         const bomCost = (item.bom_cost && parseFloat(item.bom_cost) > 0) ? parseFloat(item.bom_cost) : (bomInfo ? (parseFloat(bomInfo.bom_cost) || 0) : 0);
@@ -1330,20 +1356,7 @@ const BOMFormPage = () => {
         if (!payload.materialName || !payload.qty) {
           throw new Error('Material Name and Quantity are required');
         }
-        // Drawing Validation
-        const stockItem = stockItems.find(i => i.material_name === payload.materialName);
-        const cleanStockDwg = cleanText(stockItem?.drawing_no || 'N/A');
-        const cleanSelectedDwg = cleanText(selectedItem?.drawing_no || productForm.drawingNo || 'N/A');
-
-        if (!showAllDrawings && stockItem?.drawing_no && stockItem.drawing_no !== 'N/A' && (selectedItem?.drawing_no || productForm.drawingNo) && cleanStockDwg !== cleanSelectedDwg) {
-          const confirm = await Swal.fire({
-            title: 'Drawing Mismatch',
-            text: `This material is linked to drawing ${cleanStockDwg}, but the product drawing is ${cleanSelectedDwg}. Continue?`,
-            icon: 'warning',
-            showCancelButton: true
-          });
-          if (!confirm.isConfirmed) return;
-        }
+        // Drawing Validation removed as requested
         payload.qtyPerPc = parseFloat(formData.qty) || 0;
         payload.qty_per_pc = payload.qtyPerPc;
         payload.weight_per_unit = parseFloat(formData.weightPerUnit) || 0;
@@ -1359,22 +1372,7 @@ const BOMFormPage = () => {
         if (!payload.componentCode || !payload.quantity) {
           throw new Error('Component Code and Quantity are required');
         }
-        // Drawing Validation
-        const stockItem = stockItems.find(i => i.item_code === payload.componentCode);
-        const approvedItem = approvedDrawings.find(i => i.item_code === payload.componentCode);
-        const linkedItem = stockItem || approvedItem;
-        const cleanStockDwg = cleanText(linkedItem?.drawing_no || 'N/A');
-        const cleanSelectedDwg = cleanText(selectedItem?.drawing_no || productForm.drawingNo || 'N/A');
-
-        if (!showAllDrawings && linkedItem?.drawing_no && linkedItem.drawing_no !== 'N/A' && (selectedItem?.drawing_no || productForm.drawingNo) && cleanStockDwg !== cleanSelectedDwg) {
-          const confirm = await Swal.fire({
-            title: 'Drawing Mismatch',
-            text: `This component is linked to drawing ${cleanStockDwg}, but the product drawing is ${cleanSelectedDwg}. Continue?`,
-            icon: 'warning',
-            showCancelButton: true
-          });
-          if (!confirm.isConfirmed) return;
-        }
+        // Drawing Validation removed as requested
         payload.component_code = payload.componentCode;
         payload.loss_percent = payload.lossPercent;
         payload.quantity = parseFloat(payload.quantity) || 0;
@@ -1399,22 +1397,7 @@ const BOMFormPage = () => {
         if (!payload.itemCode || payload.inputQty === '' || payload.rate === '') {
           throw new Error('Item Code, Input Qty, and Rate are required');
         }
-        // Drawing Validation
-        const stockItem = stockItems.find(i => i.item_code === payload.itemCode);
-        const approvedItem = approvedDrawings.find(i => i.item_code === payload.itemCode);
-        const linkedItem = stockItem || approvedItem;
-        const cleanStockDwg = cleanText(linkedItem?.drawing_no || 'N/A');
-        const cleanSelectedDwg = cleanText(selectedItem?.drawing_no || productForm.drawingNo || 'N/A');
-
-        if (!showAllDrawings && linkedItem?.drawing_no && linkedItem.drawing_no !== 'N/A' && (selectedItem?.drawing_no || productForm.drawingNo) && cleanStockDwg !== cleanSelectedDwg) {
-          const confirm = await Swal.fire({
-            title: 'Drawing Mismatch',
-            text: `This scrap item is linked to drawing ${cleanStockDwg}, but the product drawing is ${cleanSelectedDwg}. Continue?`,
-            icon: 'warning',
-            showCancelButton: true
-          });
-          if (!confirm.isConfirmed) return;
-        }
+        // Drawing Validation removed as requested
         payload.inputQty = parseFloat(payload.inputQty) || 0;
         payload.lossPercent = parseFloat(payload.lossPercent) || 0;
         payload.rate = parseFloat(payload.rate) || 0;

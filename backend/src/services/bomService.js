@@ -3,7 +3,7 @@ const pool = require('../config/db');
 const getItemMaterials = async (itemId, itemCode = null, drawingNo = null) => {
   const parsedItemId = (itemId === 'null' || itemId === 'undefined' || !itemId) ? null : itemId;
   let rows = [];
-  
+
   let isHistorical = false;
   if (parsedItemId) {
     const [itemCheck] = await pool.query('SELECT status, bom_cost FROM sales_order_items WHERE id = ?', [parsedItemId]);
@@ -32,7 +32,7 @@ const getItemMaterials = async (itemId, itemCode = null, drawingNo = null) => {
       [parsedItemId]
     );
   }
-  
+
   // Fallback to Master/Template if no specific ID data found or NO ID provided
   if (rows.length === 0 && (itemCode || drawingNo)) {
     // If we have an ID but it's a specific revision, we should NOT fallback to master 
@@ -98,9 +98,9 @@ const getItemMaterials = async (itemId, itemCode = null, drawingNo = null) => {
 const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refBatchId = null, refDate = null) => {
   let parsedItemId = (itemId === 'null' || itemId === 'undefined' || !itemId) ? null : itemId;
   let rows = [];
-  
+
   let isHistorical = !!refBatchId;
-  
+
   // Handle manual historical override from controllers
   if (typeof parsedItemId === 'string' && parsedItemId.startsWith('HISTORICAL_')) {
     isHistorical = true;
@@ -108,22 +108,52 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
     if (parsedItemId === 'null' || !parsedItemId) parsedItemId = null;
   }
 
-  if (parsedItemId) {
-    isHistorical = true;
+  if (parsedItemId && !isHistorical) {
+    const [itemCheck] = await pool.query('SELECT status, bom_cost FROM sales_order_items WHERE id = ?', [parsedItemId]);
+    if (itemCheck.length > 0) {
+      const s = String(itemCheck[0].status).toUpperCase();
+      isHistorical = ['APPROVED', 'RELEASED', 'COMPLETED', 'REVISED', 'SENT'].includes(s);
+    }
   }
 
   // PRIORITY 0: If we have a batch ID, try to fetch components from the quotation snapshot first
   // This is the most accurate way to get frozen costs for ANY saved quotation version (even Drafts)
   if (refBatchId) {
-    const [batchRows] = await pool.query(
-      `SELECT id, drawing_no, description, item_unit as unit, item_qty as quantity,
-              item_group, bom_cost, received_amount as rate, item_code,
-              1 as is_cost_frozen
-       FROM quotation_requests 
-       WHERE batch_id = ? AND status = 'COMPONENT'
-       AND (rejection_reason = ? OR ? IS NULL)`,
-      [refBatchId, drawingNo, drawingNo]
+    // 1. Find all parent quotation items in this batch to match by rejection_reason (which stores parentQrId)
+    const [parents] = await pool.query(
+      `SELECT id, drawing_no, description FROM quotation_requests 
+       WHERE batch_id = ? AND status != 'COMPONENT'
+       AND (
+         (item_code = ? AND item_code IS NOT NULL) OR 
+         (drawing_no = ? AND drawing_no IS NOT NULL AND drawing_no != '—' AND drawing_no != 'NA')
+       )`,
+      [refBatchId, itemCode, drawingNo]
     );
+
+    const parentIds = parents.map(p => String(p.id));
+    const parentDrawings = parents.map(p => p.drawing_no).filter(d => d && d !== '—' && d !== 'NA');
+    const parentDescs = parents.map(p => p.description).filter(Boolean);
+
+    const matchCandidates = [...new Set([
+      ...parentIds,
+      ...parentDrawings,
+      ...parentDescs,
+      drawingNo
+    ])].filter(d => d && d !== '—' && d !== 'NA');
+
+    let batchRows = [];
+    if (matchCandidates.length > 0) {
+      [batchRows] = await pool.query(
+        `SELECT id, drawing_no, description, item_unit as unit, item_qty as quantity,
+                item_group, bom_cost, received_amount as rate, item_code, pending_bom_cost,
+                1 as is_cost_frozen
+         FROM quotation_requests 
+         WHERE batch_id = ? AND status = 'COMPONENT'
+         AND rejection_reason IN (?)`,
+        [refBatchId, matchCandidates]
+      );
+    }
+
     if (batchRows.length > 0) {
       // IF WE FOUND SNAPSHOT DATA, RETURN IT IMMEDIATELY
       // This is a frozen snapshot, we MUST NOT fall back to other queries or latest costs
@@ -133,10 +163,12 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
         quantity: row.quantity || row.qty,
         rate: parseFloat(row.rate || 0),
         bom_cost: parseFloat(row.bom_cost || 0),
+        pending_bom_cost: row.pending_bom_cost ? parseFloat(row.pending_bom_cost) : null,
         is_cost_frozen: true
       }));
     }
   }
+
 
   if (rows.length === 0 && parsedItemId) {
     if (!isHistorical) {
@@ -158,7 +190,7 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
       [parsedItemId]
     );
   }
-  
+
   // Fallback to Master/Template if no specific ID data found or NO ID provided
   if (rows.length === 0 && (itemCode || drawingNo)) {
     if (parsedItemId) {
@@ -187,7 +219,7 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
                      GROUP BY item_code
                    ) i ON c.component_code = i.item_code
                    WHERE c.sales_order_item_id = ?`;
-      
+
       [rows] = await pool.query(query + ' ORDER BY c.created_at ASC', [latestIdRow[0].id]);
     }
 
@@ -263,16 +295,19 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
     const group = (row.item_group || '').toUpperCase();
     const desc = (row.description || '').toUpperCase();
     return compCode.startsWith('SA-') || compCode.startsWith('SFG-') || compCode.startsWith('PART-') ||
-           group.includes('SA') || group.includes('SUB') || group.includes('ASSEMBLY') ||
-           desc.includes('ASSEMBLY') || desc.includes('UNIT') ||
-           group.includes('PART') || (row.drawing_no && row.drawing_no !== '—');
+      group.includes('SA') || group.includes('SUB') || group.includes('ASSEMBLY') ||
+      desc.includes('ASSEMBLY') || desc.includes('UNIT') ||
+      group.includes('PART') || (row.drawing_no && row.drawing_no !== '—');
   });
+
+  console.log("[DEBUG] saComponents length:", saComponents.length);
 
   if (saComponents.length > 0) {
     // Determine if we should even override the rates.
     // RULE: For non-historical items (New/Draft), or when we have a specific batch/date snapshot,
     // we should override the template/master rates.
     let shouldOverride = !isHistorical || !!refBatchId || !!refDate;
+    console.log("[DEBUG] shouldOverride:", shouldOverride, "isHistorical:", isHistorical);
 
     if (shouldOverride) {
       const codes = [...new Set(saComponents.map(c => c.component_code || c.componentCode))];
@@ -338,7 +373,7 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
 
         const costMap = new Map();
         const pendingMap = new Map();
-        
+
         // Apply latest costs first (as baseline)
         latestCosts.forEach(c => {
           const key = `${c.item_code}|${c.drawing_no || ''}`;
@@ -380,17 +415,19 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
           const group = (row.item_group || '').toUpperCase();
           const desc = (row.description || '').toUpperCase();
           const isSubAssy = compCode.startsWith('SA-') || compCode.startsWith('SFG-') || compCode.startsWith('PART-') ||
-                             group.includes('SA') || group.includes('SUB') || group.includes('ASSEMBLY') ||
-                             desc.includes('ASSEMBLY') || desc.includes('UNIT') ||
-                             group.includes('PART') || (row.drawing_no && row.drawing_no !== '—');
-          
+            group.includes('SA') || group.includes('SUB') || group.includes('ASSEMBLY') ||
+            desc.includes('ASSEMBLY') || desc.includes('UNIT') ||
+            group.includes('PART') || (row.drawing_no && row.drawing_no !== '—');
+
           if (isSubAssy && compCode) {
             const key = `${compCode}|${row.drawing_no || ''}`;
             const targetRate = costMap.get(key) || costMap.get(compCode);
+            console.log(`[DEBUG] compCode: ${compCode}, key: ${key}, targetRate: ${targetRate}, row.is_cost_frozen: ${row.is_cost_frozen}, isSubAssy: ${isSubAssy}`);
             if (targetRate !== undefined) {
               row.rate = targetRate;
-              row.bom_cost = targetRate; 
+              row.bom_cost = targetRate;
               row.is_cost_frozen = true; // Mark as explicitly frozen from history/batch
+              console.log(`[DEBUG] Set rate to ${targetRate} for ${compCode}`);
             }
             const pendingRate = pendingMap.get(key) || pendingMap.get(compCode);
             if (pendingRate !== undefined) {
@@ -422,12 +459,12 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
       const g = (row.item_group || '').toUpperCase();
       const d = (row.description || '').toUpperCase();
       const isSA = compCode.startsWith('SA-') || compCode.startsWith('SFG-') || compCode.startsWith('PART-') ||
-                   g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY') ||
-                   d.includes('ASSEMBLY') || d.includes('UNIT') ||
-                   g.includes('PART') || (row.drawing_no && row.drawing_no !== '—');
-      
+        g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY') ||
+        d.includes('ASSEMBLY') || d.includes('UNIT') ||
+        g.includes('PART') || (row.drawing_no && row.drawing_no !== '—');
+
       if (isSA) return parseFloat(row.rate || 0);
-      
+
       // For materials: weight * valuation_rate
       const vRate = (isHistorical || row.is_cost_frozen) ? (parseFloat(row.rate) || 0) : (parseFloat(row.latest_valuation_rate) || 0);
       return (parseFloat(row.weight_per_pc || row.weight_per_unit || 0) * vRate);
@@ -438,14 +475,14 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
 const getItemOperations = async (itemId, itemCode = null, drawingNo = null) => {
   const parsedItemId = (itemId === 'null' || itemId === 'undefined' || !itemId) ? null : itemId;
   let rows = [];
-  
+
   if (parsedItemId) {
     [rows] = await pool.query(
       'SELECT * FROM sales_order_item_operations WHERE sales_order_item_id = ? ORDER BY created_at ASC',
       [parsedItemId]
     );
   }
-  
+
   // Fallback to Master/Template if no specific ID data found or NO ID provided
   if (rows.length === 0 && (itemCode || drawingNo)) {
     if (parsedItemId) {
@@ -491,14 +528,14 @@ const getItemOperations = async (itemId, itemCode = null, drawingNo = null) => {
 const getItemScrap = async (itemId, itemCode = null, drawingNo = null) => {
   const parsedItemId = (itemId === 'null' || itemId === 'undefined' || !itemId) ? null : itemId;
   let rows = [];
-  
+
   if (parsedItemId) {
     [rows] = await pool.query(
       'SELECT * FROM sales_order_item_scrap WHERE sales_order_item_id = ? ORDER BY created_at ASC',
       [parsedItemId]
     );
   }
-  
+
   // Fallback to Master/Template if no specific ID data found or NO ID provided
   if (rows.length === 0 && (itemCode || drawingNo)) {
     if (parsedItemId) {
@@ -536,35 +573,35 @@ const getItemScrap = async (itemId, itemCode = null, drawingNo = null) => {
 };
 
 const addItemMaterial = async (itemId, materialData) => {
-  const { 
-    itemCode, drawingNo, materialName, materialType, 
-    itemGroup, qtyPerPc, uom, rate, warehouse, 
+  const {
+    itemCode, drawingNo, materialName, materialType,
+    itemGroup, qtyPerPc, uom, rate, warehouse,
     operation, parentId, description,
     weight_per_unit, scrap_percent,
     length, width, thickness, diameter, outer_diameter
   } = materialData;
   const parsedItemId = (itemId === 'null' || itemId === 'undefined' || !itemId) ? null : itemId;
-  
+
   // Raw materials are GLOBAL - they should not be linked to any specific drawing
   const effectiveDrawingNo = itemGroup === 'Raw Material' ? null : (drawingNo || null);
 
   const [result] = await pool.execute(
     'INSERT INTO sales_order_item_materials (sales_order_item_id, item_code, drawing_no, parent_id, material_name, material_type, item_group, qty_per_pc, uom, rate, warehouse, operation, description, weight_per_unit, scrap_percent, length, width, thickness, diameter, outer_diameter) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     [
-      parsedItemId, 
-      itemCode || null, 
-      effectiveDrawingNo, 
-      parentId || null, 
-      materialName || null, 
-      materialType || null, 
-      itemGroup || null, 
-      qtyPerPc || null, 
-      uom || null, 
-      rate || 0, 
-      warehouse || null, 
-      operation || null, 
-      description || null, 
-      weight_per_unit || 0, 
+      parsedItemId,
+      itemCode || null,
+      effectiveDrawingNo,
+      parentId || null,
+      materialName || null,
+      materialType || null,
+      itemGroup || null,
+      qtyPerPc || null,
+      uom || null,
+      rate || 0,
+      warehouse || null,
+      operation || null,
+      description || null,
+      weight_per_unit || 0,
       scrap_percent || 0,
       length || 0,
       width || 0,
@@ -577,24 +614,24 @@ const addItemMaterial = async (itemId, materialData) => {
 };
 
 const addComponent = async (itemId, componentData) => {
-  const { 
+  const {
     itemCode, drawingNo, componentCode, description, quantity, uom, rate, lossPercent, notes, parentId,
-    itemGroup, weight_per_unit, scrap_percent, length, width, thickness, diameter, outer_diameter 
+    itemGroup, weight_per_unit, scrap_percent, length, width, thickness, diameter, outer_diameter
   } = componentData;
   const parsedItemId = (itemId === 'null' || itemId === 'undefined' || !itemId) ? null : itemId;
   const [result] = await pool.execute(
     'INSERT INTO sales_order_item_components (sales_order_item_id, item_code, drawing_no, parent_id, component_code, description, quantity, uom, rate, loss_percent, notes, item_group, weight_per_unit, scrap_percent, length, width, thickness, diameter, outer_diameter) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     [
-      parsedItemId, 
-      itemCode || null, 
-      drawingNo || null, 
-      parentId || null, 
-      componentCode || null, 
-      description || null, 
-      quantity || null, 
-      uom || null, 
-      rate || null, 
-      lossPercent || null, 
+      parsedItemId,
+      itemCode || null,
+      drawingNo || null,
+      parentId || null,
+      componentCode || null,
+      description || null,
+      quantity || null,
+      uom || null,
+      rate || null,
+      lossPercent || null,
       notes || null,
       itemGroup || null,
       weight_per_unit || 0,
@@ -610,31 +647,31 @@ const addComponent = async (itemId, componentData) => {
 };
 
 const addOperation = async (itemId, operationData) => {
-  const { 
-    itemCode, 
-    drawingNo, 
-    operationName, 
-    workstation, 
-    cycleTimeMin, 
-    setupTimeMin, 
-    hourlyRate, 
+  const {
+    itemCode,
+    drawingNo,
+    operationName,
+    workstation,
+    cycleTimeMin,
+    setupTimeMin,
+    hourlyRate,
     operationType,
-    operation_type, 
-    targetWarehouse 
+    operation_type,
+    targetWarehouse
   } = operationData;
   const parsedItemId = (itemId === 'null' || itemId === 'undefined' || !itemId) ? null : itemId;
   const [result] = await pool.execute(
     'INSERT INTO sales_order_item_operations (sales_order_item_id, item_code, drawing_no, operation_name, workstation, cycle_time_min, setup_time_min, hourly_rate, operation_type, target_warehouse) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     [
-      parsedItemId, 
-      itemCode || null, 
-      drawingNo || null, 
-      operationName || null, 
-      workstation || null, 
-      cycleTimeMin || 0, 
-      setupTimeMin || 0, 
-      hourlyRate || 0, 
-      operationType || operation_type || 'In-House', 
+      parsedItemId,
+      itemCode || null,
+      drawingNo || null,
+      operationName || null,
+      workstation || null,
+      cycleTimeMin || 0,
+      setupTimeMin || 0,
+      hourlyRate || 0,
+      operationType || operation_type || 'In-House',
       targetWarehouse || null
     ]
   );
@@ -647,14 +684,14 @@ const addScrap = async (itemId, scrapData) => {
   const [result] = await pool.execute(
     'INSERT INTO sales_order_item_scrap (sales_order_item_id, item_code, drawing_no, parent_id, scrap_item_code, item_name, input_qty, loss_percent, rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
     [
-      parsedItemId, 
-      parentItemCode || null, 
+      parsedItemId,
+      parentItemCode || null,
       drawingNo || null,
       parentId || null,
-      scrapItemCode || itemCode || null, 
-      itemName || null, 
-      inputQty || 0, 
-      lossPercent || 0, 
+      scrapItemCode || itemCode || null,
+      itemName || null,
+      inputQty || 0,
+      lossPercent || 0,
       rate || 0
     ]
   );
@@ -662,44 +699,44 @@ const addScrap = async (itemId, scrapData) => {
 };
 
 const updateItemMaterial = async (materialId, materialData) => {
-  const { 
-    materialName, material_name, 
-    materialType, material_type, 
-    itemGroup, item_group, 
-    qtyPerPc, qty_per_pc, 
-    uom, rate, warehouse, operation, description, 
-    weight_per_unit, weightPerUnit, 
-    scrap_percent, scrapPercent 
+  const {
+    materialName, material_name,
+    materialType, material_type,
+    itemGroup, item_group,
+    qtyPerPc, qty_per_pc,
+    uom, rate, warehouse, operation, description,
+    weight_per_unit, weightPerUnit,
+    scrap_percent, scrapPercent
   } = materialData;
 
   await pool.execute(
     'UPDATE sales_order_item_materials SET material_name = ?, material_type = ?, item_group = ?, qty_per_pc = ?, uom = ?, rate = ?, warehouse = ?, operation = ?, description = ?, weight_per_unit = ?, scrap_percent = ? WHERE id = ?',
     [
-      material_name || materialName || null, 
-      material_type || materialType || null, 
-      item_group || itemGroup || null, 
-      qty_per_pc || qtyPerPc || 0, 
-      uom || null, 
-      rate || 0, 
-      warehouse || null, 
-      operation || null, 
-      description || null, 
-      weight_per_unit || weightPerUnit || 0, 
-      scrap_percent || scrapPercent || 0, 
+      material_name || materialName || null,
+      material_type || materialType || null,
+      item_group || itemGroup || null,
+      qty_per_pc || qtyPerPc || 0,
+      uom || null,
+      rate || 0,
+      warehouse || null,
+      operation || null,
+      description || null,
+      weight_per_unit || weightPerUnit || 0,
+      scrap_percent || scrapPercent || 0,
       materialId
     ]
   );
 };
 
 const updateOperation = async (id, data) => {
-  const { 
-    operation_name, operationName, 
-    workstation, 
-    cycle_time_min, cycleTimeMin, 
-    setup_time_min, setupTimeMin, 
-    hourly_rate, hourlyRate, 
-    operation_type, operationType, 
-    target_warehouse, targetWarehouse 
+  const {
+    operation_name, operationName,
+    workstation,
+    cycle_time_min, cycleTimeMin,
+    setup_time_min, setupTimeMin,
+    hourly_rate, hourlyRate,
+    operation_type, operationType,
+    target_warehouse, targetWarehouse
   } = data;
 
   await pool.execute(
@@ -720,14 +757,14 @@ const updateOperation = async (id, data) => {
 };
 
 const updateComponent = async (id, data) => {
-  const { 
-    component_code, componentCode, 
-    description, quantity, uom, rate, 
-    loss_percent, lossPercent, 
-    notes, 
-    item_group, itemGroup, 
-    weight_per_unit, weightPerUnit, 
-    scrap_percent, scrapPercent 
+  const {
+    component_code, componentCode,
+    description, quantity, uom, rate,
+    loss_percent, lossPercent,
+    notes,
+    item_group, itemGroup,
+    weight_per_unit, weightPerUnit,
+    scrap_percent, scrapPercent
   } = data;
 
   await pool.execute(
@@ -735,12 +772,12 @@ const updateComponent = async (id, data) => {
      SET component_code = ?, description = ?, quantity = ?, uom = ?, rate = ?, loss_percent = ?, notes = ?, item_group = ?, weight_per_unit = ?, scrap_percent = ? 
      WHERE id = ?`,
     [
-      component_code || componentCode || null, 
-      description || null, 
-      quantity || 0, 
-      uom || null, 
-      rate || 0, 
-      loss_percent || lossPercent || 0, 
+      component_code || componentCode || null,
+      description || null,
+      quantity || 0,
+      uom || null,
+      rate || 0,
+      loss_percent || lossPercent || 0,
       notes || null,
       item_group || itemGroup || null,
       weight_per_unit || weightPerUnit || 0,
@@ -751,13 +788,13 @@ const updateComponent = async (id, data) => {
 };
 
 const updateScrap = async (id, data) => {
-  const { 
-    scrap_item_code, scrapItemCode, 
-    item_code, itemCode, 
-    item_name, itemName, 
-    input_qty, inputQty, 
-    loss_percent, lossPercent, 
-    rate 
+  const {
+    scrap_item_code, scrapItemCode,
+    item_code, itemCode,
+    item_name, itemName,
+    input_qty, inputQty,
+    loss_percent, lossPercent,
+    rate
   } = data;
 
   await pool.execute(
@@ -765,11 +802,11 @@ const updateScrap = async (id, data) => {
      SET scrap_item_code = ?, item_name = ?, input_qty = ?, loss_percent = ?, rate = ? 
      WHERE id = ?`,
     [
-      scrap_item_code || scrapItemCode || item_code || itemCode || null, 
-      item_name || itemName || null, 
-      input_qty || inputQty || 0, 
-      loss_percent || lossPercent || 0, 
-      rate || 0, 
+      scrap_item_code || scrapItemCode || item_code || itemCode || null,
+      item_name || itemName || null,
+      input_qty || inputQty || 0,
+      loss_percent || lossPercent || 0,
+      rate || 0,
       id
     ]
   );
@@ -785,13 +822,13 @@ const deleteComponent = async (id) => {
   for (const child of childComponents) {
     await deleteComponent(child.id);
   }
-  
+
   // Delete child materials
   await pool.execute('DELETE FROM sales_order_item_materials WHERE parent_id = ?', [id]);
-  
+
   // Delete child scrap
   await pool.execute('DELETE FROM sales_order_item_scrap WHERE parent_id = ?', [id]);
-  
+
   // Delete the component itself
   await pool.execute('DELETE FROM sales_order_item_components WHERE id = ?', [id]);
 };
@@ -836,16 +873,36 @@ const getBOMBySalesOrder = async (salesOrderId) => {
 const createBOMRequest = async (bomData) => {
   const { itemId, salesOrderId, status, productForm, materials, components, operations, scrap, source, costing, isNewVersion, parentDrawingNo } = bomData;
   console.log(`[createBOMRequest] ItemID: ${itemId}, SOID: ${salesOrderId}, Status: ${status}, Source: ${source}, Drawing: ${productForm.drawingNo}, isNewVersion: ${isNewVersion}, parentDrawingNo: ${parentDrawingNo}`);
-  
+
   const { itemCode, itemGroup, uom, revision, description, notes, isActive, isDefault, quantity, drawingNo, drawing_id } = productForm;
   const bom_cost = costing?.costPerUnit || 0;
   const finalStatus = status || 'Active';
-  
+
   const effectiveDescription = (notes && notes.trim()) ? notes : description;
 
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
+
+    let targetItemId = itemId;
+    let effectiveBomId = null;
+    let existingSalesOrderId = null;
+
+    if (itemId) {
+      // Get existing bom_id and sales_order_id
+      const [existing] = await connection.query('SELECT bom_id, sales_order_id FROM sales_order_items WHERE id = ?', [itemId]);
+      if (existing.length > 0) {
+        effectiveBomId = existing[0].bom_id;
+        existingSalesOrderId = existing[0].sales_order_id;
+
+        // If the original item doesn't have a bom_id yet, it becomes the root
+        if (!effectiveBomId) {
+          effectiveBomId = itemId;
+          // Update the original item to point to itself as the root
+          await connection.execute('UPDATE sales_order_items SET bom_id = ? WHERE id = ?', [itemId, itemId]);
+        }
+      }
+    }
 
     let resolvedSalesOrderId = salesOrderId || null;
     if (typeof resolvedSalesOrderId === 'string' && resolvedSalesOrderId.length === 36) {
@@ -855,6 +912,18 @@ const createBOMRequest = async (bomData) => {
       } else {
         resolvedSalesOrderId = null;
       }
+    }
+
+    // Validate that resolvedSalesOrderId actually exists in sales_orders table
+    if (resolvedSalesOrderId) {
+      const [soCheck] = await connection.query('SELECT id FROM sales_orders WHERE id = ?', [resolvedSalesOrderId]);
+      if (soCheck.length === 0) {
+        // Fall back to existing item's sales_order_id if available, or null
+        resolvedSalesOrderId = existingSalesOrderId || null;
+      }
+    } else {
+      // Fall back to existing item's sales_order_id
+      resolvedSalesOrderId = existingSalesOrderId || null;
     }
 
     let resolvedDrawingId = drawing_id || null;
@@ -887,24 +956,6 @@ const createBOMRequest = async (bomData) => {
       else if (safeItemCode.startsWith('RM-')) itemType = 'RM';
     }
 
-    let targetItemId = itemId;
-    let effectiveBomId = null;
-
-    if (itemId) {
-      // Get existing bom_id
-      const [existing] = await connection.query('SELECT bom_id FROM sales_order_items WHERE id = ?', [itemId]);
-      if (existing.length > 0) {
-        effectiveBomId = existing[0].bom_id;
-        
-        // If the original item doesn't have a bom_id yet, it becomes the root
-        if (!effectiveBomId) {
-          effectiveBomId = itemId;
-          // Update the original item to point to itself as the root
-          await connection.execute('UPDATE sales_order_items SET bom_id = ? WHERE id = ?', [itemId, itemId]);
-        }
-      }
-    }
-
     if (itemId && !isNewVersion) {
       // 1. UPDATE Mode
       await connection.execute(
@@ -914,17 +965,17 @@ const createBOMRequest = async (bomData) => {
              status = CASE WHEN UPPER(TRIM(status)) = 'APPROVED' THEN status ELSE ? END,
              parent_bom_id = COALESCE(parent_bom_id, ?)
          WHERE id = ?`,
-         [
-          safeItemCode, 
+        [
+          safeItemCode,
           itemType,
-          itemGroup || null, 
-          uom || null, 
-          revision || null, 
-          effectiveDescription || null, 
-          isActive ? 1 : 0, 
-          isDefault ? 1 : 0, 
-          drawingNo || null, 
-          resolvedDrawingId || null, 
+          itemGroup || null,
+          uom || null,
+          revision || null,
+          effectiveDescription || null,
+          isActive ? 1 : 0,
+          isDefault ? 1 : 0,
+          drawingNo || null,
+          resolvedDrawingId || null,
           bom_cost,
           effectiveBomId || itemId,
           finalStatus === 'Draft' ? 'DRAFT' : 'PENDING',
@@ -984,11 +1035,11 @@ const createBOMRequest = async (bomData) => {
 
     // 3. Insert new BOM items
     let targetIds = [{ id: targetItemId }];
-    
+
     for (const target of targetIds) {
       const linkId = target.id;
-      const idMap = {}; 
-      const componentUpdateList = []; 
+      const idMap = {};
+      const componentUpdateList = [];
 
       if (components && components.length > 0) {
         for (const c of components) {
@@ -999,17 +1050,17 @@ const createBOMRequest = async (bomData) => {
           const [result] = await connection.execute(
             'INSERT INTO sales_order_item_components (sales_order_item_id, item_code, drawing_no, source_fg, parent_id, component_code, description, quantity, uom, rate, loss_percent, notes, item_group, weight_per_unit, scrap_percent, length, width, thickness, diameter, outer_diameter) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
             [
-              linkId, 
-              safeItemCode, 
+              linkId,
+              safeItemCode,
               drawingNo || null,
               sourceFg,
               null, // Temporarily set parent_id to null
-              compCode, 
-              c.description || null, 
-              c.quantity || c.qty || 0, 
-              c.uom || null, 
-              c.rate || 0, 
-              c.loss_percent || c.lossPercent || 0, 
+              compCode,
+              c.description || null,
+              c.quantity || c.qty || 0,
+              c.uom || null,
+              c.rate || 0,
+              c.loss_percent || c.lossPercent || 0,
               c.notes || null,
               c.item_group || c.itemGroup || null,
               c.weight_per_unit || c.weightPerUnit || 0,
@@ -1021,11 +1072,11 @@ const createBOMRequest = async (bomData) => {
               c.outer_diameter || 0
             ]
           );
-          
+
           const newId = result.insertId;
           const oldId = c.id;
           idMap[oldId] = newId;
-          
+
           const oldParentId = c.parent_id || c.parentId;
           if (oldParentId) {
             componentUpdateList.push({ id: newId, oldParentId });
@@ -1052,17 +1103,17 @@ const createBOMRequest = async (bomData) => {
           await connection.execute(
             'INSERT INTO sales_order_item_materials (sales_order_item_id, item_code, drawing_no, parent_id, material_name, material_type, item_group, qty_per_pc, uom, rate, warehouse, operation, description, weight_per_unit, scrap_percent, length, width, thickness, diameter, outer_diameter) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
             [
-              linkId, 
-              safeItemCode, 
+              linkId,
+              safeItemCode,
               drawingNo || null,
               newParentId,
-              m.material_name || m.materialName || null, 
-              m.material_type || m.materialType || null, 
-              m.item_group || m.itemGroup || null, 
-              m.qty_per_pc || m.qtyPerPc || m.qty || 0, 
-              m.uom || null, 
-              m.rate || 0, 
-              m.warehouse || null, 
+              m.material_name || m.materialName || null,
+              m.material_type || m.materialType || null,
+              m.item_group || m.itemGroup || null,
+              m.qty_per_pc || m.qtyPerPc || m.qty || 0,
+              m.uom || null,
+              m.rate || 0,
+              m.warehouse || null,
               m.operation || null,
               m.description || null,
               m.weight_per_unit || m.weightPerUnit || 0,
@@ -1082,15 +1133,15 @@ const createBOMRequest = async (bomData) => {
           await connection.execute(
             'INSERT INTO sales_order_item_operations (sales_order_item_id, item_code, drawing_no, operation_name, workstation, cycle_time_min, setup_time_min, hourly_rate, operation_type, target_warehouse) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
             [
-              linkId, 
-              safeItemCode, 
+              linkId,
+              safeItemCode,
               drawingNo || null,
-              o.operation_name || o.operationName || null, 
-              o.workstation || null, 
-              o.cycle_time_min || o.cycleTimeMin || 0, 
-              o.setup_time_min || o.setupTimeMin || 0, 
-              o.hourly_rate || o.hourlyRate || 0, 
-              o.operation_type || o.operationType || 'In-House', 
+              o.operation_name || o.operationName || null,
+              o.workstation || null,
+              o.cycle_time_min || o.cycleTimeMin || 0,
+              o.setup_time_min || o.setupTimeMin || 0,
+              o.hourly_rate || o.hourlyRate || 0,
+              o.operation_type || o.operationType || 'In-House',
               o.target_warehouse || o.targetWarehouse || null
             ]
           );
@@ -1105,14 +1156,14 @@ const createBOMRequest = async (bomData) => {
           await connection.execute(
             'INSERT INTO sales_order_item_scrap (sales_order_item_id, item_code, drawing_no, parent_id, scrap_item_code, item_name, input_qty, loss_percent, rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
             [
-              linkId, 
-              safeItemCode, 
+              linkId,
+              safeItemCode,
               drawingNo || null,
               newParentId,
-              s.scrap_item_code || s.scrapItemCode || s.item_code || s.itemCode || null, 
-              s.item_name || s.itemName || null, 
-              s.input_qty || s.inputQty || 0, 
-              s.loss_percent || s.lossPercent || 0, 
+              s.scrap_item_code || s.scrapItemCode || s.item_code || s.itemCode || null,
+              s.item_name || s.itemName || null,
+              s.input_qty || s.inputQty || 0,
+              s.loss_percent || s.lossPercent || 0,
               s.rate || 0
             ]
           );
@@ -1170,7 +1221,7 @@ const createBOMRequest = async (bomData) => {
     } catch (syncError) {
       console.error('[Relation Sync Error] Failed to sync parent_bom_id:', syncError.message);
     }
-    
+
     await connection.commit();
 
     // 5. Post-Commit: Propagate costs and sync latest versions
@@ -1277,7 +1328,7 @@ const deleteBOM = async (itemId) => {
     // 2. Delete item-specific BOM entries
     // For components, we might have a hierarchy. To avoid FK issues, we delete from leaf to root or disable checks
     await connection.execute('SET FOREIGN_KEY_CHECKS = 0');
-    
+
     await connection.execute('DELETE FROM sales_order_item_materials WHERE sales_order_item_id = ?', [itemId]);
     await connection.execute('DELETE FROM sales_order_item_components WHERE sales_order_item_id = ?', [itemId]);
     await connection.execute('DELETE FROM sales_order_item_operations WHERE sales_order_item_id = ?', [itemId]);
@@ -1321,12 +1372,12 @@ const findAnyBOM = async (itemCode, drawingNo) => {
   `, [itemCode, drawingNo, itemCode]);
 
   if (rows.length === 0) return null;
-  
+
   const itemId = rows[0].id;
   const materials = await getItemMaterials(itemId);
   const components = await getItemComponents(itemId);
   const operations = await getItemOperations(itemId);
-  
+
   return { materials, components, operations };
 };
 
@@ -1372,7 +1423,7 @@ const getBOMHistory = async (itemCode, drawingNo, itemId = null) => {
     if (clauses.length === 0) {
       return [];
     }
-    
+
     whereClause = `(${clauses.join(' OR ')})`;
   }
 
@@ -1390,7 +1441,7 @@ const getBOMHistory = async (itemCode, drawingNo, itemId = null) => {
     WHERE ${whereClause}
     ORDER BY CAST(soi.revision_no AS UNSIGNED) ASC, soi.id ASC
   `;
-  
+
   const [rows] = await pool.query(sql, queryParams);
   return rows;
 };
@@ -1405,6 +1456,9 @@ const getLatestBOMCost = async (itemCode, drawingNo, bomId) => {
   } else if (itemCode && drawingNo) {
     whereClause = 'soi.item_code = ? AND soi.drawing_no = ?';
     queryParams.push(itemCode, drawingNo);
+  } else if (itemCode) {
+    whereClause = 'soi.item_code = ?';
+    queryParams.push(itemCode);
   } else {
     return { bom_cost: 0, revision_no: null };
   }
@@ -1422,8 +1476,8 @@ const getLatestBOMCost = async (itemCode, drawingNo, bomId) => {
 
   const [rows] = await pool.query(sql, queryParams);
   if (rows.length > 0) {
-    return { 
-      bom_cost: parseFloat(rows[0].bom_cost) || 0, 
+    return {
+      bom_cost: parseFloat(rows[0].bom_cost) || 0,
       revision_no: rows[0].revision_no,
       id: rows[0].id
     };
@@ -1434,17 +1488,18 @@ const getLatestBOMCost = async (itemCode, drawingNo, bomId) => {
 /**
  * Recalculates the cost of a BOM based on its latest finalized version components
  */
+
 const recalculateBOMCost = async (itemId, forceUpdate = false) => {
   if (!itemId) return 0;
 
   // 1. Fetch item info and its components, materials, operations, and scrap
-  const [itemRows] = await pool.query('SELECT item_code, drawing_no, quantity, status, bom_cost FROM sales_order_items WHERE id = ?', [itemId]);
+  const [itemRows] = await pool.query('SELECT item_code, drawing_no, quantity, status, bom_cost, sales_order_id FROM sales_order_items WHERE id = ?', [itemId]);
   if (itemRows.length === 0) return 0;
   const parentItem = itemRows[0];
 
   const status = String(parentItem.status || '').toUpperCase();
   const isApproved = ['APPROVED', 'RELEASED', 'COMPLETED'].includes(status);
-  
+
   // If it's an approved or finalized version, we usually skip unless forced
   if (isApproved && !forceUpdate) {
     console.log(`[recalculateBOMCost] Skipping update for APPROVED version ${itemId} (Force: ${forceUpdate})`);
@@ -1462,20 +1517,29 @@ const recalculateBOMCost = async (itemId, forceUpdate = false) => {
     const itemGroup = (item.item_group || '').toLowerCase();
     const materialType = (item.material_type || '').toLowerCase();
     const materialName = (item.material_name || '').toLowerCase();
-    
-    const isConsumable = itemGroup.includes('consumable') || 
-                         materialType.includes('consumable') || 
-                         materialName.includes('consumable');
+
+    const isConsumable = itemGroup.includes('consumable') ||
+      materialType.includes('consumable') ||
+      materialName.includes('consumable');
 
     const qty = parseFloat(isMaterial ? (item.qty_per_pc || 0) : (item.quantity || 0));
     let rate = parseFloat(item.rate || 0);
 
-    // If it's a sub-assembly component, fetch its LATEST cost instead of using stored rate
+    // If it's a sub-assembly component or part, fetch its LATEST cost instead of using stored rate
     // We use latest cost if parent is NOT approved OR if we are forcing an update
-    const isSA = item.component_code && (item.component_code.startsWith('SA-') || item.component_code.startsWith('SFG-'));
-    
+    const compCode = (item.component_code || '').toUpperCase();
+    const g = (item.item_group || '').toUpperCase();
+    const d = (item.description || '').toUpperCase();
+    const isSA = compCode && (
+      compCode.startsWith('SA-') || compCode.startsWith('SFG-') || compCode.startsWith('PART-') ||
+      g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY') ||
+      d.includes('ASSEMBLY') || d.includes('UNIT') ||
+      g.includes('PART') || (item.drawing_no && item.drawing_no !== '—')
+    );
+
     if ((!isApproved || forceUpdate) && !isMaterial && isSA) {
-      const latest = await getLatestBOMCost(item.component_code, item.drawing_no);
+      // Query by component code since parent component table's drawing_no column stores the parent's drawing number, not the component's
+      const latest = await getLatestBOMCost(item.component_code);
       if (latest.bom_cost > 0) {
         rate = latest.bom_cost;
       }
@@ -1520,7 +1584,7 @@ const recalculateBOMCost = async (itemId, forceUpdate = false) => {
 
   // 4. Scrap Loss
   const batchQty = parseFloat(parentItem.quantity || 1);
-  
+
   let totalScrapLoss = 0;
   scrap.forEach(s => {
     const input = parseFloat(s.input_qty || 0);
@@ -1542,37 +1606,40 @@ const recalculateBOMCost = async (itemId, forceUpdate = false) => {
   });
 
   const finalCost = (totalComponentsCost + totalMaterialsCost - scrapLossPerUnit) + totalOperationsCost;
-  
-  console.log(`[recalculateBOMCost] Recalculated cost for item ${itemId} (${parentItem.item_code}): ${finalCost}`);
-    
-    // Update the specific item version
-    await pool.execute('UPDATE sales_order_items SET bom_cost = ?, updated_at = NOW() WHERE id = ?', [finalCost, itemId]);
 
-    // Also update the rate in all component references to this item to ensure future recalculations are correct
-    // CRITICAL: Only update the rate in LATEST or PENDING versions of parent BOMs to maintain snapshot integrity
-    if (parentItem.item_code) {
-      await pool.execute(`
+  console.log(`[recalculateBOMCost] Recalculated cost for item ${itemId} (${parentItem.item_code}): ${finalCost}`);
+
+  // Update the specific item version
+  await pool.execute('UPDATE sales_order_items SET bom_cost = ?, updated_at = NOW() WHERE id = ?', [finalCost, itemId]);
+
+  // Also update the rate in all component references to this item to ensure future recalculations are correct
+  // CRITICAL: Only update the rate in LATEST or PENDING versions of parent BOMs to maintain snapshot integrity
+  if (parentItem.item_code) {
+    const salesOrderId = parentItem.sales_order_id;
+    await pool.execute(`
         UPDATE sales_order_item_components 
         SET rate = ? 
         WHERE component_code = ? 
-        AND (drawing_no = ? OR drawing_no IS NULL OR ? IS NULL)
         AND sales_order_item_id IN (
             SELECT id FROM sales_order_items 
-            WHERE status NOT IN ('APPROVED', 'RELEASED', 'COMPLETED')
-            OR id IN (
-                SELECT max_id FROM (
-                    SELECT MAX(id) as max_id 
-                    FROM sales_order_items 
-                    GROUP BY sales_order_id, IFNULL(bom_id, item_code)
-                ) as t
+            WHERE (sales_order_id = ? OR (sales_order_id IS NULL AND ? IS NULL))
+            AND (
+              status NOT IN ('APPROVED', 'RELEASED', 'COMPLETED')
+              OR id IN (
+                  SELECT max_id FROM (
+                      SELECT MAX(id) as max_id 
+                      FROM sales_order_items 
+                      GROUP BY sales_order_id, IFNULL(bom_id, item_code)
+                  ) as t
+              )
             )
         )
-      `, [finalCost, parentItem.item_code, parentItem.drawing_no, parentItem.drawing_no]);
-    }
+      `, [finalCost, parentItem.item_code, salesOrderId, salesOrderId]);
+  }
 
-    // Also update all matching LATEST versions across all sales orders to keep lists in sync
-    if (parentItem.item_code) {
-      await pool.execute(`
+  // Also update all matching LATEST versions across all sales orders to keep lists in sync
+  if (parentItem.item_code) {
+    await pool.execute(`
         UPDATE sales_order_items 
         SET bom_cost = ?, updated_at = NOW()
         WHERE item_code = ? 
@@ -1585,11 +1652,11 @@ const recalculateBOMCost = async (itemId, forceUpdate = false) => {
           ) as t
         )
       `, [finalCost, parentItem.item_code, parentItem.drawing_no, parentItem.drawing_no]);
-    }
+  }
 
-    // Also update all linked quotations with the new cost
-    await syncQuotationCosts(itemId, finalCost);
-  
+  // Also update all linked quotations with the new cost
+  await syncQuotationCosts(itemId, finalCost);
+
   return finalCost;
 };
 
@@ -1599,38 +1666,41 @@ const recalculateBOMCost = async (itemId, forceUpdate = false) => {
 const propagateCostToParents = async (itemCode, drawingNo) => {
   if (!itemCode) return;
   console.log(`[Cost Propagation] Checking parents for: ${itemCode} (${drawingNo})`);
-  
-  // 1. Fetch the absolute latest cost for this item to ensure we propagate the most recent value
+
+  // 1. Fetch the absolute latest cost and sales_order_id for this item to ensure we propagate the most recent value
   const [itemData] = await pool.query(`
-    SELECT bom_cost FROM sales_order_items 
+    SELECT bom_cost, sales_order_id FROM sales_order_items 
     WHERE item_code = ? AND (drawing_no = ? OR (drawing_no IS NULL AND ? IS NULL)) 
     ORDER BY id DESC LIMIT 1
   `, [itemCode, drawingNo, drawingNo]);
-  
+
   if (itemData.length === 0 || parseFloat(itemData[0].bom_cost) <= 0) {
     console.log(`[Cost Propagation] Skipping - no valid cost found for ${itemCode}`);
     return;
   }
   const currentCost = parseFloat(itemData[0].bom_cost);
+  const salesOrderId = itemData[0].sales_order_id;
 
-  // 2. Update this item's rate in ALL parent component lists before recalculating parents
+  // 2. Update this item's rate in ALL parent component lists for this sales order before recalculating parents
   // This ensures that when recalculateBOMCost(parent.id) is called, it uses the new rate.
-  // We update even COMPLETED ones just in case (though recalculateBOMCost will skip them if not forced)
   await pool.execute(`
     UPDATE sales_order_item_components 
     SET rate = ? 
     WHERE component_code = ? 
-    AND (drawing_no = ? OR drawing_no IS NULL OR ? IS NULL)
-  `, [currentCost, itemCode, drawingNo, drawingNo]);
+    AND sales_order_item_id IN (
+      SELECT id FROM sales_order_items 
+      WHERE (sales_order_id = ? OR (sales_order_id IS NULL AND ? IS NULL))
+    )
+  `, [currentCost, itemCode, salesOrderId, salesOrderId]);
 
-  // 3. Find all LATEST or ACTIVE versions of sales_order_items that use this component_code
+  // 3. Find all LATEST or ACTIVE versions of sales_order_items that use this component_code under the same sales order
   // We want to update any BOM that is currently "live" or is the latest draft/version.
   const [parents] = await pool.query(`
     SELECT DISTINCT soi.id, soi.item_code, soi.drawing_no, soi.status
     FROM sales_order_items soi
     JOIN sales_order_item_components soc ON soi.id = soc.sales_order_item_id
     WHERE soc.component_code = ?
-    AND (soc.drawing_no = ? OR soc.drawing_no IS NULL OR ? IS NULL)
+    AND (soi.sales_order_id = ? OR (soi.sales_order_id IS NULL AND ? IS NULL))
     AND (
       -- Update absolute latest version of any BOM
       soi.id IN (
@@ -1644,7 +1714,7 @@ const propagateCostToParents = async (itemCode, drawingNo) => {
       -- Also update anything that isn't fully completed/cancelled
       soi.status NOT IN ('COMPLETED', 'CANCELLED', 'REJECTED')
     )
-  `, [itemCode, drawingNo, drawingNo]);
+  `, [itemCode, salesOrderId, salesOrderId]);
 
   console.log(`[Cost Propagation] Found ${parents.length} parent BOMs to update for ${itemCode}`);
 
@@ -1652,10 +1722,9 @@ const propagateCostToParents = async (itemCode, drawingNo) => {
     // We force update even if approved to ensure consistency, 
     // BUT recalculateBOMCost itself has logic to handle historical snapshots.
     // For this "Smart Sync", we pass forceUpdate=true for LATEST versions.
-    const isLatest = true; // Query above already filters for latest or active
     const newCost = await recalculateBOMCost(parent.id, true);
     console.log(`[Cost Propagation] Updated parent ${parent.item_code} (ID: ${parent.id}) to new cost: ₹${newCost}`);
-    
+
     // 4. Recurse upwards to grandparents
     if (parent.item_code) {
       await propagateCostToParents(parent.item_code, parent.drawing_no);
@@ -1668,7 +1737,7 @@ const propagateCostToParents = async (itemCode, drawingNo) => {
  */
 const updateItemCostAndPropagate = async (itemCode, drawingNo, newCost) => {
   console.log(`[Service] Forcing cost update and propagation for ${itemCode} (${drawingNo}) to ₹${newCost}`);
-  
+
   // 1. Update the latest version's cost in sales_order_items
   // This is the "source" for propagation
   await pool.execute(`
@@ -1687,14 +1756,14 @@ const updateItemCostAndPropagate = async (itemCode, drawingNo, newCost) => {
 
   // 2. Propagate to parents (this will also update component rates and quotations)
   await propagateCostToParents(itemCode, drawingNo);
-  
+
   // 3. Sync quotations for this item itself (since propagateCostToParents only does parents)
   const [matchingItems] = await pool.query(`
     SELECT id FROM sales_order_items 
     WHERE item_code = ? AND (drawing_no = ? OR (drawing_no IS NULL AND ? IS NULL)) 
     ORDER BY id DESC LIMIT 1
   `, [itemCode, drawingNo, drawingNo]);
-  
+
   if (matchingItems.length > 0) {
     await syncQuotationCosts(matchingItems[0].id, newCost);
   }
@@ -1743,7 +1812,7 @@ const syncQuotationCosts = async (itemId, bomCost) => {
       const profit = parseFloat(qr.profit_percentage) || 0;
       const gst = parseFloat(qr.gst_percentage) || 18;
       const qty = parseFloat(qr.item_qty) || 1;
-      
+
       const newRate = bomCost * (1 + profit / 100);
       const newTotalBase = newRate * qty;
       const newTotalInclGst = newTotalBase * (1 + gst / 100);
@@ -1755,7 +1824,7 @@ const syncQuotationCosts = async (itemId, bomCost) => {
         [bomCost, newTotalBase, newTotalInclGst, itemId, qr.id]
       );
     }
-    
+
     if (qrs.length > 0) {
       console.log(`[syncQuotationCosts] Updated ${qrs.length} quotations for item ${item_code || drawing_no} with new cost ₹${bomCost}`);
     }

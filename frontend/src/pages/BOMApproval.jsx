@@ -8,6 +8,34 @@ import { successToast, errorToast } from '../utils/toast';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
+const parseVerToComparable = (v) => {
+  if (v === null || v === undefined) return '';
+  let s = String(v).trim().toUpperCase();
+  if (s.startsWith('REV')) {
+    s = s.substring(3).trim();
+  } else if (s.startsWith('V')) {
+    s = s.substring(1).trim();
+  }
+  return s;
+};
+
+const compareVersions = (a, b) => {
+  const sA = parseVerToComparable(a);
+  const sB = parseVerToComparable(b);
+  
+  if (sA === sB) return 0;
+  if (sA === '') return -1;
+  if (sB === '') return 1;
+  
+  const numA = Number(sA);
+  const numB = Number(sB);
+  if (!isNaN(numA) && !isNaN(numB)) {
+    return numA - numB;
+  }
+  
+  return sA.localeCompare(sB, undefined, { numeric: true, sensitivity: 'base' });
+};
+
 const BOMApproval = () => {
   const [orders, setOrders] = useState([]);
   const [history, setHistory] = useState([]);
@@ -125,10 +153,13 @@ const BOMApproval = () => {
       // Group items by identity to only show the latest version for approval
       const grouped = (data || []).reduce((acc, item) => {
         const identity = `${item.drawing_no || 'NA'}_${item.item_code || 'NA'}`;
-        if (!acc[identity] || 
-            (parseFloat(item.revision_no || item.version || 0) > parseFloat(acc[identity].revision_no || acc[identity].version || 0)) ||
-            (parseFloat(item.revision_no || item.version || 0) === parseFloat(acc[identity].revision_no || acc[identity].version || 0) && item.id > acc[identity].id)) {
+        if (!acc[identity]) {
           acc[identity] = item;
+        } else {
+          const comp = compareVersions(item.revision_no || item.version, acc[identity].revision_no || acc[identity].version);
+          if (comp > 0 || (comp === 0 && item.id > acc[identity].id)) {
+            acc[identity] = item;
+          }
         }
         return acc;
       }, {});

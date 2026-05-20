@@ -5,12 +5,12 @@ const mysql = require('mysql2/promise');
 
 const baseConfig = {
   host: process.env.DB_HOST || 'localhost',
-  port: Number(process.env.DB_PORT || 3306),
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || 'backend'
+  port: Number(process.env.DB_PORT || 3307),
+  user: process.env.DB_USER || 'aluminium_user',
+  password: process.env.DB_PASSWORD || 'C0digix$309',
 };
 
-const database = process.env.DB_NAME || 'sales_erp';
+const database = process.env.DB_NAME || 'spTech_dev';
 const schemaPath = path.resolve(__dirname, '../../../database/schema.sql');
 
 const pool = mysql.createPool({
@@ -23,6 +23,15 @@ const pool = mysql.createPool({
   namedPlaceholders: true,
   dateStrings: true
 });
+
+console.log("DB pool initialization details:", {
+  host: baseConfig.host,
+  port: baseConfig.port,
+  user: baseConfig.user,
+  database: database,
+  env_db_name: process.env.DB_NAME
+});
+
 
 const ensureJobCardColumns = async () => {
   let connection;
@@ -221,7 +230,7 @@ const ensurePurchaseOrderItemColumns = async () => {
     connection = await pool.getConnection();
     const [columns] = await connection.query('SHOW COLUMNS FROM purchase_order_items');
     const existing = new Set(columns.map(column => column.Field));
-    
+
     // Update precision if needed
     await connection.query("ALTER TABLE purchase_order_items MODIFY COLUMN quantity DECIMAL(14, 3)");
     await connection.query("ALTER TABLE purchase_order_items MODIFY COLUMN planned_qty DECIMAL(14, 3) DEFAULT 0");
@@ -273,7 +282,7 @@ const ensureQuotationItemColumns = async () => {
   let connection;
   try {
     connection = await pool.getConnection();
-    
+
     // Update quotations table first
     const [qCols] = await connection.query('SHOW COLUMNS FROM quotations');
     const existingQCols = new Set(qCols.map(c => c.Field));
@@ -281,7 +290,7 @@ const ensureQuotationItemColumns = async () => {
       { name: 'tax_amount', definition: 'DECIMAL(14, 2) DEFAULT 0' },
       { name: 'grand_total', definition: 'DECIMAL(14, 2) DEFAULT 0' }
     ];
-    
+
     const missingQCols = requiredQCols.filter(c => !existingQCols.has(c.name));
     if (missingQCols.length > 0) {
       const alterQSql = `ALTER TABLE quotations ${missingQCols
@@ -293,7 +302,7 @@ const ensureQuotationItemColumns = async () => {
 
     const [columns] = await connection.query('SHOW COLUMNS FROM quotation_items');
     const existing = new Set(columns.map(column => column.Field));
-    
+
     // Update precision if needed
     await connection.query("ALTER TABLE quotation_items MODIFY COLUMN quantity DECIMAL(14, 3)");
     await connection.query("ALTER TABLE quotation_items MODIFY COLUMN design_qty DECIMAL(14, 3) DEFAULT 0");
@@ -440,7 +449,7 @@ const ensurePoMaterialRequestColumns = async () => {
   let connection;
   try {
     connection = await pool.getConnection();
-    
+
     // Update purchase_orders table
     const [poCols] = await connection.query('SHOW COLUMNS FROM purchase_orders');
     const existingPoCols = new Set(poCols.map(c => c.Field));
@@ -453,7 +462,7 @@ const ensurePoMaterialRequestColumns = async () => {
       { name: 'approved_at', definition: 'TIMESTAMP NULL' },
       { name: 'public_id', definition: 'VARCHAR(100) UNIQUE NULL' }
     ];
-    
+
     const missingPoCols = requiredPoCols.filter(c => !existingPoCols.has(c.name));
     if (missingPoCols.length > 0) {
       const alterPoSql = `ALTER TABLE purchase_orders ${missingPoCols
@@ -516,7 +525,7 @@ const ensureMaterialRequestColumns = async () => {
     connection = await pool.getConnection();
     const [columns] = await connection.query('SHOW COLUMNS FROM material_requests');
     const existing = new Set(columns.map(column => column.Field));
-    
+
     const requiredColumns = [
       { name: 'linked_po_id', definition: 'INT NULL' },
       { name: 'linked_po_number', definition: 'VARCHAR(100) NULL' },
@@ -526,7 +535,7 @@ const ensureMaterialRequestColumns = async () => {
     ];
 
     const missing = requiredColumns.filter(column => !existing.has(column.name));
-    
+
     // Update status enum if needed
     const statusCol = columns.find(c => c.Field === 'status');
     if (statusCol && (!statusCol.Type.includes('ORDERED') || !statusCol.Type.includes('COMPLETED') || !statusCol.Type.includes('PO_CREATED'))) {
@@ -583,7 +592,7 @@ const ensureStockColumns = async () => {
   let connection;
   try {
     connection = await pool.getConnection();
-    
+
     // Update stock_ledger table
     const [ledgerCols] = await connection.query('SHOW COLUMNS FROM stock_ledger');
     const existingLedgerCols = new Set(ledgerCols.map(c => c.Field));
@@ -607,7 +616,7 @@ const ensureStockColumns = async () => {
       { name: 'public_id', definition: 'VARCHAR(100) UNIQUE NULL' },
       { name: 'hsn_code', definition: 'VARCHAR(50) NULL' }
     ];
-    
+
     const missingLedgerCols = requiredStockCols.filter(c => !existingLedgerCols.has(c.name));
     if (missingLedgerCols.length > 0) {
       const alterLedgerSql = `ALTER TABLE stock_ledger ${missingLedgerCols
@@ -620,7 +629,7 @@ const ensureStockColumns = async () => {
     // Update stock_balance table
     const [balanceCols] = await connection.query('SHOW COLUMNS FROM stock_balance');
     const existingBalanceCols = new Set(balanceCols.map(c => c.Field));
-    
+
     const missingBalanceCols = requiredStockCols.filter(c => !existingBalanceCols.has(c.name));
     if (missingBalanceCols.length > 0) {
       console.log('Missing columns in stock_balance:', missingBalanceCols.map(c => c.name));
@@ -778,7 +787,7 @@ const ensureCustomerDrawingTable = async () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
-    
+
     // Add drawing_type column if it doesn't exist
     const [drawingTypeCols] = await connection.query("SHOW COLUMNS FROM customer_drawings LIKE 'drawing_type'");
     if (drawingTypeCols.length === 0) {
@@ -953,7 +962,7 @@ const ensureQuotationRequestTables = async () => {
 
     const [quotationCols] = await connection.query('SHOW COLUMNS FROM quotation_requests');
     const existing = new Set(quotationCols.map(c => c.Field));
-    
+
     // Ensure sales_order_id is NULL for manual quotations
     const salesOrderIdCol = quotationCols.find(c => c.Field === 'sales_order_id');
     if (salesOrderIdCol && salesOrderIdCol.Null === 'NO') {
@@ -975,7 +984,7 @@ const ensureQuotationRequestTables = async () => {
       { name: 'item_unit', definition: 'VARCHAR(50) DEFAULT "Nos"' },
       { name: 'batch_id', definition: 'VARCHAR(100) NULL' }
     ];
-    
+
     const missing = requiredColumns.filter(c => !existing.has(c.name));
     if (missing.length > 0) {
       const alterSql = `ALTER TABLE quotation_requests ${missing
@@ -1129,7 +1138,7 @@ const ensureShipmentOrdersTable = async () => {
         FOREIGN KEY (customer_id) REFERENCES companies(id) ON DELETE SET NULL
       )
     `);
-    
+
     // Ensure status column is updated for existing table
     const [cols] = await connection.query("SHOW COLUMNS FROM shipment_orders LIKE 'status'");
     if (cols.length > 0 && (!cols[0].Type.includes('RETURN_INITIATED') || !cols[0].Type.includes('REJECTED'))) {
@@ -1206,7 +1215,7 @@ const ensureBOMAdditionalTables = async () => {
   let connection;
   try {
     connection = await pool.getConnection();
-    
+
     // Components Table
     await connection.query(`
       CREATE TABLE IF NOT EXISTS sales_order_item_components (
@@ -1275,11 +1284,11 @@ const ensureBOMMasterColumns = async () => {
   try {
     connection = await pool.getConnection();
     const tables = ['sales_order_item_materials', 'sales_order_item_components', 'sales_order_item_operations', 'sales_order_item_scrap'];
-    
+
     for (const table of tables) {
       const [columns] = await connection.query(`SHOW COLUMNS FROM ${table}`);
       let existing = new Set(columns.map(column => column.Field));
-      
+
       // Special case for scrap table: rename existing item_code to scrap_item_code if it's the only one
       if (table === 'sales_order_item_scrap' && existing.has('item_code') && !existing.has('scrap_item_code')) {
         // Check if item_code is in the old position (likely at the end or after item_name)
@@ -1297,7 +1306,7 @@ const ensureBOMMasterColumns = async () => {
         await connection.query(`ALTER TABLE ${table} MODIFY sales_order_item_id INT NULL`);
         console.log(`Made sales_order_item_id nullable in ${table}`);
       }
-      
+
       // 2. Add item_code column (this will be the master item code)
       if (!existing.has('item_code')) {
         await connection.query(`ALTER TABLE ${table} ADD COLUMN item_code VARCHAR(100) NULL AFTER sales_order_item_id`);
@@ -1316,11 +1325,11 @@ const ensureBOMDrawingColumns = async () => {
   try {
     connection = await pool.getConnection();
     const tables = ['sales_order_item_materials', 'sales_order_item_components', 'sales_order_item_operations', 'sales_order_item_scrap'];
-    
+
     for (const table of tables) {
       const [columns] = await connection.query(`SHOW COLUMNS FROM ${table}`);
       const existing = new Set(columns.map(column => column.Field));
-      
+
       if (!existing.has('drawing_no')) {
         await connection.query(`ALTER TABLE ${table} ADD COLUMN drawing_no VARCHAR(120) NULL AFTER item_code`);
         console.log(`Added drawing_no column to ${table}`);
@@ -1338,11 +1347,11 @@ const ensureBOMHierarchyColumns = async () => {
   try {
     connection = await pool.getConnection();
     const tables = ['sales_order_item_materials', 'sales_order_item_components', 'sales_order_item_scrap'];
-    
+
     for (const table of tables) {
       const [columns] = await connection.query(`SHOW COLUMNS FROM ${table}`);
       const existing = new Set(columns.map(column => column.Field));
-      
+
       if (!existing.has('parent_id')) {
         await connection.query(`ALTER TABLE ${table} ADD COLUMN parent_id INT NULL AFTER item_code`);
         console.log(`Added parent_id column to ${table}`);
@@ -1413,7 +1422,7 @@ const ensureOperationsTable = async () => {
         FOREIGN KEY (workstation_id) REFERENCES workstations(id) ON DELETE SET NULL
       )
     `);
-    
+
     // Check for missing hourly_rate column if table already exists
     const [columns] = await connection.query('SHOW COLUMNS FROM operations');
     const hasHourlyRate = columns.some(col => col.Field === 'hourly_rate');
@@ -1434,7 +1443,7 @@ const ensureProductionPlanTables = async () => {
   let connection;
   try {
     connection = await pool.getConnection();
-    
+
     // Create production_plans table
     await connection.query(`
       CREATE TABLE IF NOT EXISTS production_plans (
@@ -1493,7 +1502,7 @@ const ensureProductionPlanTables = async () => {
     // Ensure missing columns and remove strict FKs for direct orders
     const [ppiCols] = await connection.query('SHOW COLUMNS FROM production_plan_items');
     const existingPpiCols = new Set(ppiCols.map(c => c.Field));
-    
+
     // 1. Make columns nullable for direct orders support
     const soIdCol = ppiCols.find(c => c.Field === 'sales_order_id');
     if (soIdCol && soIdCol.Null === 'NO') {
@@ -1678,19 +1687,19 @@ const ensureWorkOrderTables = async () => {
     try {
       // Try to drop FKs that might reference sales_orders/items to support direct orders
       await connection.query('ALTER TABLE work_orders DROP FOREIGN KEY work_orders_ibfk_1');
-    } catch (e) {}
+    } catch (e) { }
     try {
       await connection.query('ALTER TABLE work_orders DROP FOREIGN KEY work_orders_ibfk_2');
-    } catch (e) {}
+    } catch (e) { }
     try {
       await connection.query('ALTER TABLE work_orders DROP FOREIGN KEY work_orders_ibfk_3');
-    } catch (e) {}
+    } catch (e) { }
     try {
       await connection.query('ALTER TABLE work_orders DROP FOREIGN KEY work_orders_ibfk_4');
-    } catch (e) {}
+    } catch (e) { }
     try {
       await connection.query('ALTER TABLE work_orders DROP FOREIGN KEY work_orders_ibfk_5');
-    } catch (e) {}
+    } catch (e) { }
 
     if (!existingWoCols.has('plan_id')) await connection.query('ALTER TABLE work_orders ADD COLUMN plan_id INT AFTER production_plan_item_id');
     if (!existingWoCols.has('parent_wo_id')) await connection.query('ALTER TABLE work_orders ADD COLUMN parent_wo_id INT AFTER production_plan_item_id');
@@ -1700,7 +1709,7 @@ const ensureWorkOrderTables = async () => {
     if (!existingWoCols.has('source_type')) await connection.query('ALTER TABLE work_orders ADD COLUMN source_type ENUM("FG", "SA") DEFAULT "FG" AFTER bom_no');
     if (!existingWoCols.has('source_fg')) await connection.query('ALTER TABLE work_orders ADD COLUMN source_fg VARCHAR(120) AFTER source_type');
     if (!existingWoCols.has('public_id')) await connection.query('ALTER TABLE work_orders ADD COLUMN public_id VARCHAR(100) UNIQUE NULL');
-    
+
     // Update status enum and make sales order columns nullable
     await connection.query("ALTER TABLE work_orders MODIFY COLUMN sales_order_id INT NULL");
     await connection.query("ALTER TABLE work_orders MODIFY COLUMN sales_order_item_id INT NULL");
@@ -1738,7 +1747,7 @@ const ensureWorkOrderTables = async () => {
     if (!existingJcCols.has('job_card_no')) await connection.query('ALTER TABLE job_cards ADD COLUMN job_card_no VARCHAR(50) UNIQUE AFTER id');
     if (!existingJcCols.has('accepted_qty')) await connection.query('ALTER TABLE job_cards ADD COLUMN accepted_qty DECIMAL(12, 3) DEFAULT 0 AFTER produced_qty');
     if (!existingJcCols.has('actual_start_date')) await connection.query('ALTER TABLE job_cards ADD COLUMN actual_start_date DATE NULL AFTER rejected_qty');
-    
+
     // Update status enum if necessary
     await connection.query("ALTER TABLE job_cards MODIFY COLUMN status ENUM('DRAFT', 'PENDING', 'IN_PROGRESS', 'COMPLETED', 'PAUSED') DEFAULT 'DRAFT'");
 
@@ -1842,7 +1851,7 @@ const ensureMaterialRequestTables = async () => {
     // Ensure columns exist for existing tables
     const [itemCols] = await connection.query('SHOW COLUMNS FROM material_request_items');
     const existingItemCols = new Set(itemCols.map(c => c.Field));
-    
+
     if (!existingItemCols.has('design_qty')) {
       await connection.query('ALTER TABLE material_request_items ADD COLUMN design_qty DECIMAL(14, 3) DEFAULT 0 AFTER quantity');
     }
@@ -1975,7 +1984,7 @@ const ensureOrdersTable = async () => {
     // Ensure columns exist for existing tables
     const [columns] = await connection.query('SHOW COLUMNS FROM orders');
     const existing = new Set(columns.map(c => c.Field));
-    
+
     if (!existing.has('source_type')) await connection.query('ALTER TABLE orders ADD COLUMN source_type VARCHAR(50) DEFAULT "DIRECT"');
     if (!existing.has('warehouse')) await connection.query('ALTER TABLE orders ADD COLUMN warehouse VARCHAR(100)');
     if (!existing.has('cgst_rate')) await connection.query('ALTER TABLE orders ADD COLUMN cgst_rate DECIMAL(5,2) DEFAULT 0');
@@ -2021,7 +2030,7 @@ const ensureOutwardChallanTables = async () => {
     if (!ocFields.has('dispatch_date')) {
       await connection.query("ALTER TABLE outward_challans ADD COLUMN dispatch_date DATE AFTER dispatch_qty");
     }
-    
+
     // Update status enum if needed
     const statusCol = ocCols.find(c => c.Field === 'status');
     if (statusCol && !statusCol.Type.includes('DISPATCHED')) {
@@ -2083,7 +2092,7 @@ const ensureDeliveryChallansTable = async () => {
   let connection;
   try {
     connection = await pool.getConnection();
-    
+
     // 1. Create delivery_challans table
     await connection.query(`
       CREATE TABLE IF NOT EXISTS delivery_challans (
@@ -2131,11 +2140,11 @@ const ensureSalesOrderColumns = async () => {
   let connection;
   try {
     connection = await pool.getConnection();
-    
+
     const [columns] = await connection.query('SHOW COLUMNS FROM sales_orders');
     const existingColumns = new Set(columns.map(c => c.Field));
     const customerPoIdCol = columns.find(c => c.Field === 'customer_po_id');
-    
+
     if (customerPoIdCol && customerPoIdCol.Null === 'NO') {
       console.log('[ensureSalesOrderColumns] Making customer_po_id nullable...');
       try {
@@ -2305,7 +2314,7 @@ const ensureStockEntryTables = async () => {
     // Ensure material_name and material_type columns exist
     const [seItemsCols] = await connection.query("SHOW COLUMNS FROM stock_entry_items");
     const existingSeItemsCols = new Set(seItemsCols.map(c => c.Field));
-    
+
     if (!existingSeItemsCols.has('material_name')) {
       await connection.query("ALTER TABLE stock_entry_items ADD COLUMN material_name VARCHAR(255) AFTER item_code");
     }
@@ -2351,7 +2360,7 @@ const ensureGrnItemsTable = async () => {
         FOREIGN KEY (grn_id) REFERENCES grns(id) ON DELETE CASCADE
       )
     `);
-    
+
     // Ensure all columns exist
     const [columns] = await connection.query('SHOW COLUMNS FROM grn_items');
     const existing = new Set(columns.map(c => c.Field));
@@ -2369,13 +2378,13 @@ const ensureGrnItemsTable = async () => {
       { name: 'density', def: 'DECIMAL(12, 6) DEFAULT 0' },
       { name: 'weight_per_unit', def: 'DECIMAL(12, 6) DEFAULT 0' }
     ];
-    
+
     for (const col of required) {
       if (!existing.has(col.name)) {
         await connection.query(`ALTER TABLE grn_items ADD COLUMN ${col.name} ${col.def}`);
       }
     }
-    
+
     console.log('GRN items table synchronized');
   } catch (error) {
     console.error('GRN items table sync failed', error.message);
@@ -2415,7 +2424,7 @@ const ensureQCInspectionsTable = async () => {
   let connection;
   try {
     connection = await pool.getConnection();
-    
+
     // Create qc_inspections table
     await connection.query(`
       CREATE TABLE IF NOT EXISTS qc_inspections (
@@ -2475,7 +2484,7 @@ const ensureQCInspectionsTable = async () => {
       await connection.query("ALTER TABLE qc_inspection_items ADD COLUMN remarks TEXT AFTER status");
       console.log('QC Inspection items remarks column added');
     }
-    
+
     console.log('QC Inspections tables synchronized');
   } catch (error) {
     console.error('QC Inspections table sync failed', error.message);
@@ -2537,7 +2546,7 @@ const ensureItemGroupsTable = async () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
-    
+
     // Seed initial data if table is empty
     const [rows] = await connection.query('SELECT COUNT(*) as count FROM item_groups');
     if (rows[0].count === 0) {
@@ -2601,7 +2610,7 @@ const ensureProcurementRfqTables = async () => {
     // Ensure dimension columns exist in procurement_rfq_items
     const [cols] = await connection.query("SHOW COLUMNS FROM procurement_rfq_items");
     const existing = new Set(cols.map(c => c.Field));
-    
+
     // Update precision if needed
     await connection.query("ALTER TABLE procurement_rfq_items MODIFY COLUMN quantity DECIMAL(14, 3)");
     await connection.query("ALTER TABLE procurement_rfq_items MODIFY COLUMN planned_qty DECIMAL(14, 3)");
