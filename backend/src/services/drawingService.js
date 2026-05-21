@@ -89,16 +89,13 @@ const listDrawings = async (search = '', onlyShared = false, clientName = null) 
       try {
         const components = await bomService.getItemComponents(row.sales_order_item_id, row.item_code, row.drawing_no);
         const g = (row.item_group || '').toUpperCase();
-        const isDrawingOrSA = g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY') || g.includes('PART') || (row.drawing_no && row.drawing_no !== '—');
-        const sub_assemblies = isDrawingOrSA ? components : components.filter(c => {
-          const code = (c.item_code || c.component_code || '').toUpperCase();
-          const group = (c.item_group || '').toUpperCase();
-          const desc = (c.description || '').toUpperCase();
-          return (code.startsWith('SA-') || code.startsWith('SFG-') || code.startsWith('PART-') ||
-            group.includes('SA') || group.includes('SUB') || group.includes('ASSEMBLY') ||
-            desc.includes('ASSEMBLY') || desc.includes('UNIT') ||
-            group.includes('PART') || (c.drawing_no && c.drawing_no !== '—'));
-        });
+        const isAssembly = g.includes('ASSEMBLY');
+        const sub_assemblies = isAssembly
+          ? components.filter(c => {
+              const group = (c.item_group || '').toUpperCase();
+              return group.includes('PART');
+            })
+          : [];
         return { ...row, sub_assemblies };
       } catch (err) {
         console.error(`Error fetching components for item ${row.sales_order_item_id}:`, err);

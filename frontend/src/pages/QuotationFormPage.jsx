@@ -102,53 +102,29 @@ const QuotationFormPage = () => {
       setProjectName(initialData.projectName || '');
       
       const allSourceItems = initialData.items || [];
-      const nestedIdentities = new Set();
-      
-      // Build set of nested identities
-      allSourceItems.forEach(item => {
-        if (item.sub_assemblies && item.sub_assemblies.length > 0) {
-          item.sub_assemblies.forEach(sa => {
-            const code = (sa.component_code || sa.componentCode || '').trim().toUpperCase();
-            const drawing = (sa.drawing_no || '').trim().toUpperCase();
-            const desc = (sa.description || sa.item_description || '').trim().toUpperCase();
-            
-            if (code) {
-              nestedIdentities.add(`${drawing}_${code}`);
-              nestedIdentities.add(`_ANY_DRAWING_${code}`);
-            }
-            if (desc) {
-              nestedIdentities.add(`${drawing}_DESC_${desc}`);
-              nestedIdentities.add(`_ANY_DRAWING_DESC_${desc}`);
-            }
-          });
-        }
+      const nestedPartCodes = new Set();
+
+      (allSourceItems || []).forEach(item => {
+        (item.sub_assemblies || []).forEach(sa => {
+          nestedPartCodes.add(
+            String(sa.component_code || sa.item_code || '')
+              .trim()
+              .toUpperCase()
+          );
+        });
       });
 
       const mappedItems = allSourceItems
         .filter(item => {
-          // 1. Basic filter for identifying info
-          if (!(item.drawing_no || item.description || item.item_code)) return false;
+          const group = (item.item_group || '').toUpperCase();
+          const code = String(item.item_code || '').trim().toUpperCase();
+          const isPart = group.includes('PART');
 
-          // 2. Duplicate filter (Hide if it's already a nested child of another item)
-          const g = (item.item_group || '').toUpperCase();
-          const t = (item.item_type || '').trim().toUpperCase();
-          const isFG = (g.includes('FG') || t.includes('FG') || g.includes('FINISHED')) && !g.includes('SA') && !g.includes('SUB');
-          
-          if (!isFG) {
-            const code = (item.item_code || '').trim().toUpperCase();
-            const drawing = (item.drawing_no || '').trim().toUpperCase();
-            const desc = (item.description || '').trim().toUpperCase();
-            
-            const identity = `${drawing}_${code}`;
-            const identityDesc = `${drawing}_DESC_${desc}`;
-            
-            if (nestedIdentities.has(identity) || 
-                nestedIdentities.has(`_ANY_DRAWING_${code}`) ||
-                nestedIdentities.has(identityDesc) ||
-                nestedIdentities.has(`_ANY_DRAWING_DESC_${desc}`)) {
-              return false;
-            }
+          // Remove PART rows already nested inside assembly
+          if (isPart && nestedPartCodes.has(code)) {
+            return false;
           }
+
           return true;
         })
         .map(item => {
@@ -160,19 +136,10 @@ const QuotationFormPage = () => {
             drwRate = bomCost;
           }
 
-          // Recalculate based on sub-assemblies if they exist - helps catch stale FG costs
           if (item.sub_assemblies && item.sub_assemblies.length > 0) {
-            const saSum = item.sub_assemblies.reduce((sum, sa) => {
-              const saCost = parseFloat(sa.bom_cost || sa.rate || 0);
-              const saQty = parseFloat(sa.quantity || 0);
-              return sum + (saCost * saQty);
-            }, 0);
-            
-            // If the sum of known sub-assemblies is higher than the stored FG cost, trust the sum
-            if (saSum > (bomCost || drwRate)) {
-              bomCost = saSum;
-              drwRate = saSum;
-            }
+            // NEVER recalculate FG/Assembly from child parts
+            drwRate = parseFloat(item.bom_cost || drwRate || 0);
+            bomCost = drwRate;
           }
 
           return {
@@ -183,7 +150,19 @@ const QuotationFormPage = () => {
             total: (parseFloat(item.quantity) || 0) * drwRate,
             gst_percentage: item.gst_percentage || 18,
             isManual: !item.drawing_id && !!item.drawing_no,
-            sub_assemblies: item.sub_assemblies || []
+            sub_assemblies: (() => {
+            const g = (item.item_group || '').toUpperCase();
+            if (!g.includes('ASSEMBLY')) {
+              return [];
+            }
+            return (item.sub_assemblies || []).filter(sa =>
+              (sa.item_group || '').toUpperCase().includes('PART')
+            ).map(sa => ({
+              ...sa,
+              bom_cost: parseFloat(sa.bom_cost || sa.rate || 0),
+              rate: parseFloat(sa.rate || sa.bom_cost || 0)
+            }));
+          })()
           };
         });
       
@@ -211,11 +190,11 @@ const QuotationFormPage = () => {
     if (canSync) {
       const updatedItems = items.map(item => {
         const itemG = (item.item_group || '').toUpperCase();
-        const itemIsSA = (itemG.includes('SA') || itemG.includes('SUB') || itemG.includes('ASSEMBLY')) && !itemG.includes('FG');
+        const itemIsPart = itemG.includes('PART');
         
         const matchedDrawing = drawings.find(d => {
           const drwG = (d.item_group || '').toUpperCase();
-          const drwIsSA = (drwG.includes('SA') || drwG.includes('SUB') || drwG.includes('ASSEMBLY')) && !drwG.includes('FG');
+          const drwIsPart = drwG.includes('PART');
 
           // 1. Match by drawing_id (Absolute Priority - Direct link)
           if (item.drawing_id && String(d.drawing_master_id) === String(item.drawing_id)) return true;
@@ -228,8 +207,8 @@ const QuotationFormPage = () => {
             const itemDesc = String(item.description || '').trim().toLowerCase();
             const drwDesc = String(d.description || '').trim().toLowerCase();
             
-            // Group must match (SA vs FG)
-            if (itemIsSA === drwIsSA) {
+            // Group must match (PART vs ASSEMBLY)
+            if (itemIsPart === drwIsPart) {
               // Description match is critical when multiple items share a drawing number
               const descMatch = !itemDesc || !drwDesc || drwDesc === itemDesc || drwDesc.includes(itemDesc) || itemDesc.includes(drwDesc);
               if (descMatch) return true;
@@ -242,24 +221,11 @@ const QuotationFormPage = () => {
         if (matchedDrawing) {
           let drwRate = parseFloat(matchedDrawing.bom_cost || matchedDrawing.rate || matchedDrawing.quotedPrice || 0);
           
-          // Recalculate based on sub-assemblies if they exist - helps catch stale FG costs
-          if (matchedDrawing.sub_assemblies && matchedDrawing.sub_assemblies.length > 0) {
-            const saSum = matchedDrawing.sub_assemblies.reduce((sum, sa) => {
-              const saCost = parseFloat(sa.bom_cost || sa.rate || 0);
-              const saQty = parseFloat(sa.quantity || 0);
-              return sum + (saCost * saQty);
-            }, 0);
-            
-            // If the sum of known sub-assemblies is higher than the stored FG cost, trust the sum.
-            // BUT: if drwRate (from Master) is higher, it likely includes materials/operations, so we trust it.
-            if (saSum > drwRate) {
-              drwRate = saSum;
-            }
-          }
+          
 
           const g = (item.item_group || matchedDrawing.item_group || '').toUpperCase();
-          const isSA = (g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY')) && !g.includes('FG');
-          const isFG = !isSA;
+          const isPart = g.includes('PART');
+                                            
           
           let newItem = { ...item };
           let changed = false;
@@ -278,10 +244,10 @@ const QuotationFormPage = () => {
 
           // Sync sub_assemblies if missing or if the master has different data
           const hasSAs = item.sub_assemblies && item.sub_assemblies.length > 0;
-          const saChanged = matchedDrawing.sub_assemblies && JSON.stringify(item.sub_assemblies) !== JSON.stringify(matchedDrawing.sub_assemblies);
+          const saChanged = false;
           
-          if (matchedDrawing.sub_assemblies && (!hasSAs || (saChanged && !item.has_pending_bom_applied))) {
-            newItem.sub_assemblies = matchedDrawing.sub_assemblies;
+          if (matchedDrawing.sub_assemblies && matchedDrawing.sub_assemblies.length > 0 && (!hasSAs || saChanged)) {
+            newItem.sub_assemblies = item.sub_assemblies?.length > 0 ? item.sub_assemblies : matchedDrawing.sub_assemblies;
             changed = true;
           }
 
@@ -300,7 +266,11 @@ const QuotationFormPage = () => {
 
           const costChanged = drwRate > 0 && Math.abs(currentBOMCost - drwRate) > 0.01;
           
-          if (costChanged && (shouldSync || saChanged) && !item.has_pending_bom_applied) {
+          // NEVER downgrade an Assembly's BOM cost if the Quotation data already has a higher, finalized cost from the BOM module.
+          // Master drawings might have stale base costs if they haven't been dynamically synced with full BOM materials/operations.
+          const isDowngradeForAssembly = g.includes('ASSEMBLY') && currentBOMCost > drwRate;
+
+          if (costChanged && (shouldSync || saChanged) && !item.has_pending_bom_applied && !isDowngradeForAssembly) {
             newItem.bom_cost = drwRate;
             changed = true;
             
@@ -316,21 +286,18 @@ const QuotationFormPage = () => {
         return item;
       });
       
-      const hasChanges = updatedItems.some((it, idx) => 
-        it.drawing_id !== items[idx].drawing_id || 
-        Math.abs(parseFloat(it.rate || 0) - parseFloat(items[idx].rate || 0)) > 0.01 ||
-        Math.abs(parseFloat(it.bom_cost || 0) - parseFloat(items[idx].bom_cost || 0)) > 0.01 ||
-        JSON.stringify(it.sub_assemblies || []) !== JSON.stringify(items[idx].sub_assemblies || [])
-      );
+      const currentJson = JSON.stringify(items);
+      const updatedJson = JSON.stringify(updatedItems);
 
-      if (hasChanges) {
-        setItems(updatedItems);
+      if (currentJson === updatedJson) {
+        return;
       }
+
+      setItems(updatedItems);
     }
   }, [
     drawings, 
     isLocked, 
-    items.map(i => `${i.id}-${i.drawing_id}-${i.drawing_no}-${i.item_code}`).join('|'), 
     mode, 
     version, 
     selectedVersionId
@@ -474,80 +441,26 @@ const QuotationFormPage = () => {
           // Map saved sub-assemblies first to ensure they are available for cost logic.
           // Prioritize override sub_assemblies if they exist.
           const savedSubAssemblies = ((override?.sub_assemblies || item.sub_assemblies) || []).map(sa => {
-            let saBomCost = parseFloat(sa.bom_cost || sa.rate || 0);
-            if (forceNextVersion && sa.pending_bom_cost && parseFloat(sa.pending_bom_cost) > 0) {
-              saBomCost = parseFloat(sa.pending_bom_cost);
-            }
+            const actualPartCost =
+              parseFloat(sa.part_bom_cost || sa.component_cost || sa.bom_cost || sa.rate || 0);
             return {
               ...sa,
-              bom_cost: saBomCost,
-              rate: sa.rate ? parseFloat(sa.rate) : saBomCost,
-              pending_bom_cost: sa.pending_bom_cost ? parseFloat(sa.pending_bom_cost) : undefined
+              bom_cost: actualPartCost,
+              rate: actualPartCost
             };
           });
 
-          // For NEW revisions or DRAFTS, we prefer latest master cost if available, otherwise trust the base record
-          const latestBOMCost = parseFloat(item.latest_bom_cost || 0);
-          const storedBOMCost = parseFloat(item.bom_cost || 0);
-          
-          let bomCost = storedBOMCost;
+          // Use ONLY backend BOM cost snapshot
+          let bomCost = parseFloat(item.bom_cost || 0);
+          let drwRate = parseFloat(item.rate || bomCost || 0);
+
+          // If override for next version (revisions) has values, use them
           if (forceNextVersion) {
-            if (override?.bom_cost > 0) {
-              bomCost = parseFloat(override.bom_cost);
-            } else if (item.pending_bom_cost > 0) {
+            if (override?.bom_cost > 0) bomCost = parseFloat(override.bom_cost);
+            if (override?.rate > 0) drwRate = parseFloat(override.rate);
+            if (item.pending_bom_cost > 0) {
               bomCost = parseFloat(item.pending_bom_cost);
-            } else if (latestBOMCost > 0) {
-              bomCost = latestBOMCost;
-            }
-          } else if (s === 'DRAFT' && latestBOMCost > 0) {
-            bomCost = latestBOMCost;
-          }
-
-          let drwRate = parseFloat(override?.quotedPrice || item.quotedPrice || item.rate || bomCost || 0);
-          if (forceNextVersion) {
-            if (override?.rate > 0) {
-              drwRate = parseFloat(override.rate);
-            } else if (item.pending_bom_cost > 0) {
               drwRate = parseFloat(item.pending_bom_cost);
-            }
-          }
-
-          // If we synced to latest BOM cost, we should also update the rate if they were previously matching
-          if (bomCost !== storedBOMCost && Math.abs(parseFloat(item.rate || 0) - storedBOMCost) < 0.01) {
-            drwRate = bomCost;
-          }
-
-          // For NEW revisions, we might want to recalculate based on updated sub-assemblies, materials and operations
-          // For HISTORICAL versions (Sent, Approved, etc.), we MUST NOT recalculate - we trust the snapshot exactly
-          if (!isHistorical) {
-            const saSum = savedSubAssemblies.reduce((sum, sa) => {
-              const saCost = parseFloat(sa.bom_cost || sa.rate || 0);
-              const saQty = parseFloat(sa.quantity || 0);
-              return sum + (saCost * saQty);
-            }, 0);
-
-            const materialSum = (item.materials || []).reduce((sum, m) => {
-              const mCost = parseFloat(m.rate || 0);
-              const mQty = parseFloat(m.qty_per_pc || m.quantity || 0);
-              const weight = parseFloat(m.weight_per_unit || 0);
-              return sum + (mQty * weight * mCost);
-            }, 0);
-
-            const operationSum = (item.operations || []).reduce((sum, o) => {
-              const rate = parseFloat(o.hourly_rate || 0);
-              const time = (parseFloat(o.cycle_time_min || 0) + (parseFloat(o.setup_time_min || 0) / (parseFloat(item.quantity) || 1)));
-              return sum + (time / 60 * rate);
-            }, 0);
-
-            const calculatedTotal = saSum + materialSum + operationSum;
-            const hasNestedComponents = savedSubAssemblies.length > 0 || (item.materials && item.materials.length > 0) || (item.operations && item.operations.length > 0);
-            
-            if (hasNestedComponents && calculatedTotal > 0) {
-              drwRate = calculatedTotal;
-              bomCost = calculatedTotal;
-            } else if (calculatedTotal > (drwRate || bomCost)) {
-              drwRate = calculatedTotal;
-              bomCost = calculatedTotal;
             }
           }
 
@@ -565,7 +478,11 @@ const QuotationFormPage = () => {
             description: item.description,
             bom_id: item.bom_id,
             revision_no: item.revision_no,
-            sub_assemblies: savedSubAssemblies
+            sub_assemblies: savedSubAssemblies.map(sa => ({
+              ...sa,
+              bom_cost: parseFloat(sa.bom_cost || sa.rate || 0),
+              rate: parseFloat(sa.rate || sa.bom_cost || 0)
+            }))
           };
         }));
       }
@@ -780,7 +697,12 @@ const QuotationFormPage = () => {
   const calculateSummary = () => {
     // Include all items in summary if they have a rate
     const billableItems = items.filter(item => {
-      return (parseFloat(item.rate) || 0) > 0 || (item.item_group || '').toUpperCase().includes('FG');
+      const g = (item.item_group || '').toUpperCase();
+      return (
+        (parseFloat(item.rate) || 0) > 0 ||
+        g.includes('ASSEMBLY') ||
+        g.includes('PART')
+      );
     });
 
     const baseAmount = billableItems.reduce((sum, item) => sum + (parseFloat(item.total) || 0), 0);
@@ -797,6 +719,7 @@ const QuotationFormPage = () => {
   };
 
   const summary = calculateSummary();
+  console.log('Quotation Items for UI:', items);
 
   const handleSave = async (status = 'Draft', sendEmail = null) => {
     if (!selectedClient) {
@@ -1247,24 +1170,23 @@ const QuotationFormPage = () => {
                                 <div className="flex-1">
                                   {(mode === 'received' || isLocked) ? (
                                     <div className="flex flex-col">
-                                      <span className="text-sm  text-slate-900 ">{item.description || 'No Description'}</span>
-                                      <div className="flex items-center gap-2 mt-0.5">
-                                        <span className="text-xs   text-slate-500">{item.drawing_no || 'Manual Item'}</span>
+                                      <div className="flex items-center gap-2 mb-0.5">
+                                        <span className="text-sm text-slate-900">{item.description || 'No Description'}</span>
                                         {(() => {
                                           const g = (item.item_group || '').toUpperCase();
-                                          const isSA = g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY');
-                                          const isFG = g.includes('FG') || g.includes('FINISHED');
-                                          if (isFG) return null;
+                                          const isPart = g.includes('PART');
                                           return (
                                             <span className={`px-1.5 py-0.5 rounded text-xs border ${
-                                              isSA 
-                                                ? 'bg-blue-100 text-blue-700 border-blue-200' 
-                                                : 'bg-emerald-100 text-emerald-700 border-emerald-200'
+                                              isPart 
+                                                ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-blue-100 text-blue-700 border-blue-200'
                                             }`}>
-                                              {isSA ? (g.includes('ASSEMBLY') && !g.includes('SUB') ? 'ASSY' : 'SA') : item.item_group}
+                                              {isPart ? 'PART' : 'ASSEMBLY'}
                                             </span>
                                           );
                                         })()}
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-xs text-slate-500 font-mono">{item.drawing_no || 'Manual Item'}</span>
                                       </div>
                                     </div>
                                   ) : (item.isManual || mode === 'revise') ? (
@@ -1286,16 +1208,13 @@ const QuotationFormPage = () => {
                                         />
                                         {(() => {
                                           const g = (item.item_group || '').toUpperCase();
-                                          const isSA = g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY');
-                                          const isFG = g.includes('FG') || g.includes('FINISHED');
-                                          if (isFG) return null;
+                                          const isPart = g.includes('PART');
                                           return (
                                             <span className={`px-1.5 py-0.5 rounded text-xs border ${
-                                              isSA 
-                                                ? 'bg-blue-100 text-blue-700 border-blue-200' 
-                                                : 'bg-emerald-100 text-emerald-700 border-emerald-200'
+                                              isPart 
+                                                ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-blue-100 text-blue-700 border-blue-200'
                                             }`}>
-                                              {isSA ? (g.includes('ASSEMBLY') && !g.includes('SUB') ? 'ASSY' : 'SA') : item.item_group}
+                                              {isPart ? 'PART' : 'ASSEMBLY'}
                                             </span>
                                           );
                                         })()}
@@ -1321,7 +1240,8 @@ const QuotationFormPage = () => {
                                               const updatedItems = items.map(it => {
                                                 if (it.id === item.id) {
                                                   const g = (drw?.item_group || it.item_group || '').toUpperCase();
-                                                  const isSA = (g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY')) && !g.includes('FG');
+                                                  const isPart = g.includes('PART');
+                                            
                                                   const drwRate = parseFloat(drw?.rate || drw?.quotedPrice || drw?.bom_cost || it.rate || 0);
                                                   
                                                   return {
@@ -1333,7 +1253,15 @@ const QuotationFormPage = () => {
                                                     bom_cost: drwRate,
                                                     item_group: drw?.item_group || it.item_group,
                                                     total: (parseFloat(it.quantity) || 0) * drwRate,
-                                                    sub_assemblies: drw?.sub_assemblies || []
+                                                    sub_assemblies: g.includes('ASSEMBLY')
+                                                    ? ((drw?.sub_assemblies && drw.sub_assemblies.length > 0)
+                                                        ? drw.sub_assemblies.filter(sa => (sa.item_group || '').toUpperCase().includes('PART'))
+                                                        : (it.sub_assemblies || []).filter(sa => (sa.item_group || '').toUpperCase().includes('PART'))).map(sa => ({
+                                                      ...sa,
+                                                      bom_cost: parseFloat(sa.bom_cost || sa.rate || 0),
+                                                      rate: parseFloat(sa.rate || sa.bom_cost || 0)
+                                                    }))
+                                                    : []
                                                   };
                                                 }
                                                 return it;
@@ -1349,16 +1277,13 @@ const QuotationFormPage = () => {
                                         </div>
                                         {(() => {
                                           const g = (item.item_group || '').toUpperCase();
-                                          const isSA = g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY');
-                                          const isFG = g.includes('FG') || g.includes('FINISHED');
-                                          if (isFG) return null;
+                                          const isPart = g.includes('PART');
                                           return (
                                             <span className={`px-1.5 py-0.5 rounded text-xs border ${
-                                              isSA 
-                                                ? 'bg-blue-100 text-blue-700 border-blue-200' 
-                                                : 'bg-emerald-100 text-emerald-700 border-emerald-200'
+                                              isPart 
+                                                ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-blue-100 text-blue-700 border-blue-200'
                                             }`}>
-                                              {isSA ? (g.includes('ASSEMBLY') && !g.includes('SUB') ? 'ASSY' : 'SA') : item.item_group}
+                                              {isPart ? 'PART' : 'ASSEMBLY'}
                                             </span>
                                           );
                                         })()}
@@ -1416,7 +1341,12 @@ const QuotationFormPage = () => {
 
                       // Sub-Assembly Rows
                       if (item.sub_assemblies && item.sub_assemblies.length > 0) {
-                        item.sub_assemblies.forEach((sa, saIdx) => {
+                        const uniqueSubAssemblies = item.sub_assemblies.filter(
+                          (sa, index, self) => index === self.findIndex(
+                            x => x.component_code === sa.component_code && x.description === sa.description
+                          )
+                        );
+                        uniqueSubAssemblies.forEach((sa, saIdx) => {
                           rows.push(
                             <tr key={`${item.id}-sa-${sa.id || saIdx}`} className="bg-slate-50/40">
                               <td className="p-2 border-b border-slate-100"></td>
@@ -1427,8 +1357,12 @@ const QuotationFormPage = () => {
                                     <span className="text-[11px] text-slate-700 font-semibold">{sa.description}</span>
                                     <div className="flex items-center gap-2 mt-0.5">
                                       <span className="text-[9px] text-slate-500 font-mono ">{sa.drawing_no}</span>
-                                      <span className="px-1 py-0.5 rounded-[3px] text-[8px] border bg-emerald-50 text-emerald-600 border-emerald-100/50">
-                                        PART
+                                      <span className={`px-1 py-0.5 rounded-[3px] text-[8px] border ${
+                                        (sa.item_group || '').toUpperCase().includes('ASSEMBLY')
+                                          ? 'bg-blue-50 text-blue-600 border-blue-100/50'
+                                          : 'bg-emerald-50 text-emerald-600 border-emerald-100/50'
+                                      }`}>
+                                        {(sa.item_group || 'PART').toUpperCase()}
                                       </span>
                                     </div>
                                   </div>
@@ -1438,7 +1372,7 @@ const QuotationFormPage = () => {
                                 {(parseFloat(sa.quantity || 0) * (parseFloat(item.quantity) || 0)).toFixed(3)} {sa.unit || 'Nos'}
                               </td>
                               <td className="p-2 border-b border-slate-100 text-[11px] text-indigo-600  bg-indigo-50/30">
-                                {formatCurrency(sa.bom_cost)}
+                                {formatCurrency(sa.component_bom_cost || sa.child_bom_cost || sa.rate || 0)}
                               </td>
                               <td className="p-2 border-b border-slate-100"></td>
                               <td className="p-2 border-b border-slate-100"></td>

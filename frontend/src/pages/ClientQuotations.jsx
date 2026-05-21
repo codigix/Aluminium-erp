@@ -262,11 +262,31 @@ const ClientQuotations = () => {
       if (!response.ok) throw new Error('Failed to fetch approved orders');
       const data = await response.json();
 
+      const normalizedDrawings = data.filter(item => {
+        const g = (item.item_group || '').toUpperCase();
+
+        // Remove PART rows already nested under assembly
+        if (g.includes('PART')) {
+          const belongsToAssembly = data.some(parent =>
+            (parent.sub_assemblies || []).some(sa =>
+              (sa.component_code || '').trim().toUpperCase() ===
+              (item.item_code || '').trim().toUpperCase()
+            )
+          );
+
+          if (belongsToAssembly) {
+            return false;
+          }
+        }
+
+        return true;
+      });
+
       const grouped = {};
       const initialPrices = {};
       const initialProfits = {};
       const initialGst = {};
-      data.forEach(order => {
+      normalizedDrawings.forEach(order => {
         const clientName = order.company_name || 'Unassigned';
         if (!grouped[clientName]) {
           grouped[clientName] = {
@@ -292,14 +312,14 @@ const ClientQuotations = () => {
           const t = (item.item_type || '').trim().toUpperCase();
           const p = (item.product_type || '').trim().toUpperCase();
 
-          const isSA = (g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY') || t.includes('SA') || t.includes('SUB') || t.includes('ASSEMBLY'));
-          const isFG = !isSA;
+          const isPart = g.includes('PART') || (typeof t !== 'undefined' && t.includes('PART'));
+          const isAssembly = !isPart;
 
           // Skip if rejected, or if it is a non-assembly and has no cost
-          if (item.status === 'REJECTED' || (isFG && !Number(item.bom_cost))) return;
+          if (item.status === 'REJECTED' || (isAssembly && !Number(item.bom_cost))) return;
 
           // Set calc group for UI badge
-          item.item_group_calc = isSA ? (g.includes('ASSEMBLY') || t.includes('ASSEMBLY') ? (g.includes('SUB') || t.includes('SUB') ? 'SUB ASSEMBLY' : 'ASSEMBLY') : 'SUB ASSEMBLY') : (g || 'PART');
+          item.item_group_calc = isPart ? 'PART' : 'ASSEMBLY';
 
           // Hide sub-assemblies/parts from top-level if they are part of another item (identified by is_component > 0)
           if (item.is_component > 0) return;
@@ -352,10 +372,10 @@ const ClientQuotations = () => {
           const t = (item.item_type || '').trim().toUpperCase();
           const p = (item.product_type || '').trim().toUpperCase();
 
-          const isSA = (g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY') || t.includes('SA') || t.includes('SUB') || t.includes('ASSEMBLY'));
-          const isFG = !isSA;
+          const isPart = g.includes('PART') || (typeof t !== 'undefined' && t.includes('PART'));
+          const isAssembly = !isPart;
 
-          if (isFG) return true; // Always show FGs/Parts at top level
+          if (isAssembly) return true; // Always show FGs/Parts at top level
 
           const code = (item.item_code || '').trim().toUpperCase();
           const drawing = (item.drawing_no || '').trim().toUpperCase();
@@ -376,15 +396,15 @@ const ClientQuotations = () => {
         items.sort((a, b) => {
           const gA = (a.item_group_calc || '').toUpperCase();
           const gB = (b.item_group_calc || '').toUpperCase();
-          const isSAA = (gA.includes('SA') || gA.includes('SUB') || gA.includes('ASSEMBLY')) && !gA.includes('FG');
-          const isSAB = (gB.includes('SA') || gB.includes('SUB') || gB.includes('ASSEMBLY')) && !gB.includes('FG');
-          const isFGA = (gA.includes('FG') || gA.includes('FINISHED')) && !isSAA;
-          const isFGB = (gB.includes('FG') || gB.includes('FINISHED')) && !isSAB;
+          const isPartA = gA.includes('PART');
+          const isPartB = gB.includes('PART');
+          const isAssemblyA = !isPartA;
+          const isAssemblyB = !isPartB;
 
-          if (isFGA && !isFGB) return -1;
-          if (!isFGA && isFGB) return 1;
-          if (isSAA && !isSAB) return -1;
-          if (!isSAA && isSAB) return 1;
+          if (isAssemblyA && !isAssemblyB) return -1;
+          if (!isAssemblyA && isAssemblyB) return 1;
+          if (isPartA && !isPartB) return -1;
+          if (!isPartA && isPartB) return 1;
           return 0;
         });
 
@@ -402,12 +422,12 @@ const ClientQuotations = () => {
           initialGst[clientName][item.id] = 18;
 
           const g = (item.item_group_calc || '').toUpperCase();
-          const isSA = (g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY')) && !g.includes('FG');
-          const isFG = !isSA;
+          const isPart = g.includes('PART');
+          const isAssembly = !isPart;
 
           if (item.bom_cost && Number(item.bom_cost) > 0) {
             // Calculate price for both FG and Sub-Assemblies as per user request
-            const calculatedPrice = (isFG || isSA) ? Number(item.bom_cost) * (1 + margin / 100) : 0;
+            const calculatedPrice = (isAssembly || isPart) ? Number(item.bom_cost) * (1 + margin / 100) : 0;
             initialPrices[clientName][item.id] = calculatedPrice.toFixed(2);
           } else {
             initialPrices[clientName][item.id] = "0.00";
@@ -536,9 +556,9 @@ const ClientQuotations = () => {
       filtered.forEach(group => {
         const billableQuotes = group.quotes.filter(q => {
           const g = (q.item_group || q.item_group_calc || '').toUpperCase();
-          const isSA = (g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY')) && !g.includes('FG');
-          const isFG = !isSA;
-          return isFG || isSA;
+          const isPart = g.includes('PART');
+          const isAssembly = !isPart;
+          return isAssembly || isPart;
         });
 
         group.total_amount = billableQuotes.reduce((sum, q) => sum + (parseFloat(q.total_amount) || 0), 0);
@@ -587,6 +607,26 @@ const ClientQuotations = () => {
       });
       if (!response.ok) throw new Error('Failed to fetch received quotations');
       const data = await response.json();
+
+      const normalizedDrawings = data.filter(item => {
+        const g = (item.item_group || '').toUpperCase();
+
+        // Remove PART rows already nested under assembly
+        if (g.includes('PART')) {
+          const belongsToAssembly = data.some(parent =>
+            (parent.sub_assemblies || []).some(sa =>
+              (sa.component_code || '').trim().toUpperCase() ===
+              (item.item_code || '').trim().toUpperCase()
+            )
+          );
+
+          if (belongsToAssembly) {
+            return false;
+          }
+        }
+
+        return true;
+      });
 
       const grouped = {};
       data.forEach(quote => {
@@ -672,9 +712,9 @@ const ClientQuotations = () => {
 
         const billableLatestQuotes = latestQuotes.filter(q => {
           const g = (q.item_group || q.item_group_calc || '').toUpperCase();
-          const isSA = (g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY')) && !g.includes('FG');
-          const isFG = !isSA;
-          return isFG || isSA;
+          const isPart = g.includes('PART');
+          const isAssembly = !isPart;
+          return isAssembly || isPart;
         });
 
         group.total_amount = billableLatestQuotes.reduce((sum, q) => sum + (parseFloat(q.total_amount) || 0), 0);
@@ -792,17 +832,17 @@ const ClientQuotations = () => {
               const items = group.quotes || [];
               const fgCount = items.filter(q => {
                 const g = (q.item_group || q.item_group_calc || '').toUpperCase();
-                const isSA = g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY');
-                return (g === 'FG' || g === 'FINISHED GOODS' || g === 'FINISHED_GOODS' || g.includes('FG')) && !isSA;
+                const isPart = g.includes('PART');
+                return !isPart;
               }).length;
               const saCount = items.filter(q => {
                 const g = (q.item_group || q.item_group_calc || '').toUpperCase();
-                return g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY');
+                return g.includes('PART');
               }).length;
 
               const parts = [];
-              if (fgCount > 0) parts.push(`${fgCount} FG`);
-              if (saCount > 0) parts.push(`${saCount} SA`);
+              if (fgCount > 0) parts.push(`\${fgCount} ASSY`);
+              if (saCount > 0) parts.push(`\${saCount} PART`);
 
               return (
                 <span className="text-xs  text-slate-400  bg-slate-50 px-1 rounded border border-slate-100">
@@ -828,10 +868,10 @@ const ClientQuotations = () => {
                   let total = 0;
                   (group.quotes || []).forEach(item => {
                     const g = (item.item_group || item.item_group_calc || '').toUpperCase();
-                    const isSA = g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY');
-                    const isFG = !isSA;
+                    const isPart = g.includes('PART');
+                    const isAssembly = !isPart;
 
-                    if (isFG || isSA) {
+                    if (isAssembly || isPart) {
                       const rate = parseFloat(quotePricesMap[group.company_name]?.[item.id]) || 0;
                       const qty = parseFloat(item.design_qty) || 0;
                       const gst = parseFloat(gstMap[group.company_name]?.[item.id]) || 18;
@@ -1042,15 +1082,15 @@ const ClientQuotations = () => {
                     const sorted = [...dItems].sort((a, b) => {
                       const gA = (a.item_group || a.item_group_calc || '').toUpperCase();
                       const gB = (b.item_group || b.item_group_calc || '').toUpperCase();
-                      const isSAA = (gA.includes('SA') || gA.includes('SUB') || gA.includes('ASSEMBLY')) && !gA.includes('FG');
-                      const isSAB = (gB.includes('SA') || gB.includes('SUB') || gB.includes('ASSEMBLY')) && !gB.includes('FG');
-                      const isFGA = (gA.includes('FG') || gA.includes('FINISHED')) && !isSAA;
-                      const isFGB = (gB.includes('FG') || gB.includes('FINISHED')) && !isSAB;
+                      const isPartA = gA.includes('PART');
+                      const isPartB = gB.includes('PART');
+                      const isAssemblyA = !isPartA;
+                      const isAssemblyB = !isPartB;
 
-                      if (isFGA && !isFGB) return -1;
-                      if (!isFGA && isFGB) return 1;
-                      if (isSAA && !isSAB) return -1;
-                      if (!isSAA && isSAB) return 1;
+                      if (isAssemblyA && !isAssemblyB) return -1;
+                      if (!isAssemblyA && isAssemblyB) return 1;
+                      if (isPartA && !isPartB) return -1;
+                      if (!isPartA && isPartB) return 1;
                       return 0;
                     });
 
@@ -1063,19 +1103,19 @@ const ClientQuotations = () => {
                         </tr>
                         {sorted.flatMap((item) => {
                           const g = (item.item_group || item.item_group_calc || '').toUpperCase();
-                          const isSA = (g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY')) && !g.includes('FG');
-                          const isFG = !isSA;
+                          const isPart = g.includes('PART');
+                          const isAssembly = !isPart;
 
-                          const displayGroup = isSA ? (g.includes('ASSEMBLY') && !g.includes('SUB') ? 'ASSY' : 'SA') : (g.includes('FG') || g.includes('FINISHED') ? 'FG' : g);
+                          const displayGroup = isPart ? 'PART' : 'ASSEMBLY';
 
                           const mainRow = (
-                            <tr key={item.id} className={`hover:bg-slate-50/50 transition-colors ${isSA ? 'bg-slate-50/20' : ''}`}>
+                            <tr key={item.id} className={`hover:bg-slate-50/50 transition-colors ${isPart ? 'bg-slate-50/20' : ''}`}>
                               <td className="px-4 p-2">
                                 <div className="flex flex-col">
                                   <div className="flex items-center gap-2 mb-0.5">
                                     <span className="text-xs  text-slate-900 ">{item.description || item.item_description || '—'}</span>
                                     {displayGroup && displayGroup !== 'FG' && (
-                                      <span className={`px-1.5 py-0.5 rounded text-xs    ${isSA
+                                      <span className={`px-1.5 py-0.5 rounded text-xs    ${isPart
                                         ? 'bg-blue-100 text-blue-700 border border-blue-200'
                                         : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
                                         }`}>
@@ -1219,7 +1259,7 @@ const ClientQuotations = () => {
                                     {sa.description || sa.component_code}
                                   </span>
                                   <span className="px-1 py-0.5 rounded text-[9px] bg-emerald-50 text-emerald-600 border border-emerald-100">
-                                    PART
+                                    {sa.item_group || 'PART'}
                                   </span>
                                 </div>
                               </td>
@@ -1276,10 +1316,10 @@ const ClientQuotations = () => {
 
                 (group.quotes || []).forEach(item => {
                   const g = (item.item_group || item.item_group_calc || '').toUpperCase();
-                  const isSA = (g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY')) && !g.includes('FG');
-                  const isFG = !isSA;
+                  const isPart = g.includes('PART');
+                  const isAssembly = !isPart;
 
-                  if (isFG || isSA) {
+                  if (isAssembly || isPart) {
                     const unitRate = parseFloat(quotePricesMap[group.company_name]?.[item.id]) || 0;
                     const qty = parseFloat(item.design_qty) || 0;
                     const gstRate = parseFloat(gstMap[group.company_name]?.[item.id]) || 18;
@@ -1802,11 +1842,11 @@ const ClientQuotations = () => {
           <div style="margin-top: 15px; padding: 10px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
             <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
               <span>Current BOM Cost:</span>
-              <span style="font-weight: 600; color: #64748b;">${formatCurrency(targetItem.bom_cost || targetItem.latest_bom_cost)}</span>
+              <span style="font-weight: 600; color: #64748b;">${formatCurrency(parseFloat(targetItem.bom_cost || targetItem.final_bom_cost || targetItem.current_bom_cost || targetItem.rate || 0))}</span>
             </div>
             <div style="display: flex; justify-content: space-between;">
               <span>New BOM Cost:</span>
-              <span style="font-weight: 700; color: #e11d48;">${formatCurrency(targetItem.pending_bom_cost)}</span>
+              <span style="font-weight: 700; color: #e11d48;">${formatCurrency(parseFloat(targetItem.pending_bom_cost || targetItem.latest_bom_cost || targetItem.bom_cost || 0))}</span>
             </div>
           </div>
           <p style="margin-top: 15px; color: #64748b;">This will open the quotation revision form with the updated costs.</p>

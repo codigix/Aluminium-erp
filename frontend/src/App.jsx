@@ -343,6 +343,20 @@ function App() {
 
   const [accessRules, setAccessRules] = useState(null)
 
+  const routeDept = useMemo(() => {
+    const segments = location.pathname.split('/').filter(Boolean)
+    const firstSegment = segments[0]
+    if (firstSegment) {
+      const entry = Object.entries(DEPARTMENT_PREFIXES).find(([_, prefix]) => prefix === firstSegment.toLowerCase())
+      if (entry) {
+        return entry[0]
+      }
+    }
+    return null
+  }, [location.pathname])
+
+  const sidebarDept = routeDept || user?.department_code || 'SALES'
+
   const allowedModules = useMemo(() => {
     let modules = []
     if (accessRules && accessRules.allowedModules) {
@@ -1191,15 +1205,15 @@ function App() {
 
   const allNavigationItems = [
     { label: 'GENERAL', isGroup: true, groupId: 'general-group' },
-    { label: 'Dashboard', moduleId: 'dashboard', icon: 'dashboard', indent: true, prefix: user?.department_code ? `/${DEPARTMENT_PREFIXES[user.department_code]}` : '' },
+    { label: 'Dashboard', moduleId: 'dashboard', icon: 'dashboard', indent: true, prefix: sidebarDept ? `/${DEPARTMENT_PREFIXES[sidebarDept]}` : '' },
     { label: 'Project Analysis', moduleId: 'project-analysis', icon: 'chart', indent: true, prefix: '/admin' },
     { label: 'Material Consumption', moduleId: 'material-consumption', icon: 'layers', indent: true, prefix: '/admin' },
     { label: 'Machine Analysis', moduleId: 'machine-analysis', icon: 'monitor', indent: true, prefix: '/admin' },
     { label: 'OEE Analysis', moduleId: 'oee-analysis', icon: 'activity', indent: true, prefix: '/admin' },
     { label: 'Active Clients', moduleId: 'active-clients', icon: 'users', indent: true, deptCode: 'ADMIN', prefix: '/admin' },
     { label: 'Suppliers', moduleId: 'suppliers', icon: 'truck', indent: true, deptCode: 'ADMIN', prefix: '/admin' },
-    { label: 'Company Master', moduleId: 'company-master', icon: 'building', indent: true, prefix: user?.department_code ? `/${DEPARTMENT_PREFIXES[user.department_code]}` : '' },
-    { label: 'Client Contacts', moduleId: 'client-contacts', icon: 'users', indent: true, prefix: user?.department_code ? `/${DEPARTMENT_PREFIXES[user.department_code]}` : '' },
+    { label: 'Company Master', moduleId: 'company-master', icon: 'building', indent: true, prefix: sidebarDept ? `/${DEPARTMENT_PREFIXES[sidebarDept]}` : '' },
+    { label: 'Client Contacts', moduleId: 'client-contacts', icon: 'users', indent: true, prefix: sidebarDept ? `/${DEPARTMENT_PREFIXES[sidebarDept]}` : '' },
 
     { label: 'SALES', isGroup: true, groupId: 'sales-group' },
     { label: 'Customer Drawings', moduleId: 'customer-drawing', icon: 'file-search', indent: true, prefix: '/sales' },
@@ -1267,7 +1281,45 @@ function App() {
     { label: 'Shipment Reports', moduleId: 'shipment-reports', icon: 'files', indent: true, prefix: '/shipment' }
   ]
 
+  const isGroupAllowedForDept = (groupId, deptCode) => {
+    if (groupId === 'general-group') return true
+    if (!deptCode) return false
+    
+    const mapping = {
+      SALES: 'sales-group',
+      DESIGN_ENG: 'design-group',
+      PRODUCTION: 'production-group',
+      PROCUREMENT: 'procurement-group',
+      INVENTORY: 'inventory-group',
+      QUALITY: 'quality-group',
+      ACCOUNTS: 'accounts-main-group',
+      SHIPMENT: 'shipment-group'
+    }
+    
+    return mapping[deptCode] === groupId
+  }
+
   const navigationItems = allowedModules ? allNavigationItems.filter((item, index) => {
+    let parentGroup = null
+    if (item.isGroup) {
+      parentGroup = item
+    } else {
+      for (let i = index; i >= 0; i--) {
+        if (allNavigationItems[i].isGroup) {
+          parentGroup = allNavigationItems[i]
+          break
+        }
+      }
+    }
+
+    if (parentGroup) {
+      const isGroupAllowed = parentGroup.groupId === 'general-group' || 
+                             (sidebarDept && isGroupAllowedForDept(parentGroup.groupId, sidebarDept))
+      if (!isGroupAllowed) {
+        return false
+      }
+    }
+
     const isAdmin = user?.department_code === 'ADMIN'
     
     if (item.isGroup) {
@@ -1585,7 +1637,7 @@ function App() {
                 </div>
                 <div className="min-w-0">
                   <p className="text-sm  text-slate-900  leading-none">ILLUMIUM</p>
-                  <p className="text-[9px] text-rose-500   tracking-[0.15em] mt-1.5 truncate">{user?.department_code || 'ERP System'}</p>
+                  <p className="text-[9px] text-rose-500   tracking-[0.15em] mt-1.5 truncate">{sidebarDept || 'ERP System'}</p>
                 </div>
               </div>
               <button

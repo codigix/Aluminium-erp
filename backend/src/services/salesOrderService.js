@@ -946,9 +946,9 @@ const getApprovedDrawings = async (companyId = null) => {
             AND (TRIM(soi.drawing_no) = TRIM(poi.drawing_no) AND soi.drawing_no IS NOT NULL)
        WHERE soi.sales_order_id = ? 
        AND (
-         TRIM(UPPER(soi.item_group)) IN ('FG', 'FINISHED GOODS', 'FINISHED_GOODS', 'SA', 'SUB ASSEMBLY', 'SUB_ASSEMBLY', 'ASSEMBLY') 
+         TRIM(UPPER(soi.item_group)) IN ('ASSEMBLY', 'PART') 
          OR (
-           TRIM(UPPER(soi.item_type)) IN ('FG', 'FINISHED GOODS', 'FINISHED_GOODS', 'SA', 'SUB ASSEMBLY', 'SUB_ASSEMBLY', 'ASSEMBLY')
+           TRIM(UPPER(soi.item_type)) IN ('ASSEMBLY', 'PART')
          )
        )
        AND (soi.status IS NULL OR TRIM(UPPER(soi.status)) NOT IN ('REJECTED', 'CANCELLED'))`,
@@ -956,25 +956,22 @@ const getApprovedDrawings = async (companyId = null) => {
     );
     order.items = items;
 
-    // Fetch sub-assemblies for each item if it's an FG
+    // Fetch sub-assemblies for each item if it's an ASSEMBLY
     for (const item of order.items) {
       const g = (item.item_group || '').toUpperCase();
       const t = (item.item_type || '').toUpperCase();
-      const isSA = g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY') || t.includes('SA') || t.includes('SUB') || t.includes('ASSEMBLY');
+      const isPart = g.includes('PART') || t.includes('PART');
       const components = await bomService.getItemComponents(item.id, item.item_code, item.drawing_no);
 
       const isDrawingOrSA = isSA || g.includes('PART') || t.includes('PART') || (item.drawing_no && item.drawing_no !== '—');
-      if (isDrawingOrSA) {
+      if (isDrawingOrPart) {
         item.sub_assemblies = components;
       } else {
         item.sub_assemblies = components.filter(c => {
           const code = (c.item_code || c.component_code || '').toUpperCase();
           const group = (c.item_group || '').toUpperCase();
           const desc = (c.description || '').toUpperCase();
-          return (code.startsWith('SA-') || code.startsWith('SFG-') ||
-            group.includes('SA') || group.includes('SUB') || group.includes('ASSEMBLY') ||
-            desc.includes('ASSEMBLY') || desc.includes('UNIT')) &&
-            !group.includes('FG');
+          return group.includes('PART') || code.startsWith('PART-') || desc.includes('PART');
         });
       }
     }

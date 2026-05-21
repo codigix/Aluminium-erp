@@ -28,7 +28,7 @@ const getQuotationRequests = async (req, res, next) => {
                ) as item_qty,
                COALESCE(soi.unit, qr.item_unit, 'NOS') as item_unit,
                COALESCE(soi.unit, qr.item_unit, 'NOS') as uom,
-               COALESCE(qr.item_group, soi.item_group, 'FG') as item_group,
+               COALESCE(qr.item_group, soi.item_group, 'ASSEMBLY') as item_group,
                COALESCE(soi.item_code, qr.item_code) as item_code,
                (
                  SELECT bom_cost FROM sales_order_items v2 
@@ -67,7 +67,7 @@ const getQuotationRequests = async (req, res, next) => {
 
     // Enrich with sub-assemblies for items with BOM structure
     const enrichedRows = await Promise.all(rows.map(async (row) => {
-      // Fetch components for items that might have a BOM (FG or SA)
+      // Fetch components for items that might have a BOM (ASSEMBLY or PART)
       // Use direct identifiers from QR if available as they are more reliable for the specific version
       const itemCode = row.item_code || null;
       const drawingNo = (row.drawing_no && row.drawing_no !== '—') ? row.drawing_no : null;
@@ -83,16 +83,14 @@ const getQuotationRequests = async (req, res, next) => {
             row.created_at
           );
           const g = (row.item_group || '').toUpperCase();
-          const isDrawingOrSA = g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY') || g.includes('PART') || (row.drawing_no && row.drawing_no !== '—');
-          const sub_assemblies = isDrawingOrSA ? components : components.filter(c => {
-            const code = (c.item_code || c.component_code || '').toUpperCase();
-            const group = (c.item_group || '').toUpperCase();
-            const desc = (c.description || '').toUpperCase();
-            return code.startsWith('SA-') || code.startsWith('SFG-') || code.startsWith('PART-') ||
-              group.includes('SA') || group.includes('SUB') || group.includes('ASSEMBLY') ||
-              desc.includes('ASSEMBLY') || desc.includes('UNIT') ||
-              group.includes('PART') || (c.drawing_no && c.drawing_no !== '—');
-          });
+          const isAssembly = g.includes('ASSEMBLY');
+          const isPart = g.includes('PART');
+          const sub_assemblies = isAssembly
+            ? components.filter(c => {
+                const group = (c.item_group || '').toUpperCase();
+                return group.includes('PART');
+              })
+            : [];
           return { ...row, sub_assemblies };
         } catch (err) {
           console.error(`Error fetching sub-assemblies for QR ${row.id}:`, err);
@@ -230,8 +228,9 @@ const getQuotationVersionHistory = async (req, res, next) => {
           description: sn.description,
           quantity: sn.item_qty,
           unit: sn.item_unit,
+          item_group: sn.item_group,
           bom_cost: parseFloat(sn.bom_cost) || 0,
-          rate: parseFloat(sn.received_amount) || parseFloat(sn.bom_cost) || 0,
+          rate: parseFloat(sn.bom_cost) || 0,
           pending_bom_cost: sn.pending_bom_cost ? parseFloat(sn.pending_bom_cost) : null,
           is_snapshot: true
         }));
@@ -258,12 +257,14 @@ const getQuotationVersionHistory = async (req, res, next) => {
           ]);
 
           const g = (row.item_group || '').toUpperCase();
-          const isDrawingOrSA = g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY') || g.includes('PART') || (row.drawing_no && row.drawing_no !== '—');
-          itemData.sub_assemblies = isDrawingOrSA ? components : components.filter(c => {
-            const code = (c.item_code || c.component_code || '').toUpperCase();
-            const group = (c.item_group || '').toUpperCase();
-            return (code.startsWith('SA-') || group.includes('SA') || group.includes('SUB') || group.includes('ASSEMBLY')) && !group.includes('FG');
-          });
+          const isAssembly = g.includes('ASSEMBLY');
+          const isPart = g.includes('PART');
+          itemData.sub_assemblies = isAssembly
+            ? components.filter(c => {
+                const group = (c.item_group || '').toUpperCase();
+                return group.includes('PART');
+              })
+            : [];
 
           itemData.materials = materials;
           itemData.operations = operations;
@@ -546,7 +547,7 @@ const sendQuotationViaEmail = async (req, res, next) => {
               sa.unit || 'Nos',
               sa.quantity || 0,
               batchId,
-              sa.item_group || 'SUB ASSEMBLY',
+              sa.item_group || 'PART',
               sa.bom_cost || 0,
               projectName || null,
               sa.item_code || null,
@@ -939,7 +940,7 @@ const getQuotationVersionDetails = async (req, res, next) => {
         quantity: sn.item_qty,
         unit: sn.unit,
         bom_cost: parseFloat(sn.bom_cost) || 0,
-        rate: parseFloat(sn.received_amount) || parseFloat(sn.bom_cost) || 0,
+        rate: parseFloat(sn.bom_cost) || 0,
         pending_bom_cost: sn.pending_bom_cost ? parseFloat(sn.pending_bom_cost) : null,
         item_group: sn.item_group,
         is_snapshot: true
@@ -999,7 +1000,7 @@ const requestQuotationUpdateFromBOM = async (req, res, next) => {
 
     let isParentNotification = false;
 
-    // 2.1 IF NO QUOTATIONS FOUND, check if it's a sub-assembly component of an active FG quotation
+    // 2.1 IF NO QUOTATIONS FOUND, check if it's a sub-assembly component of an active ASSEMBLY quotation
     if (qrs.length === 0) {
       console.log(`[requestQuotationUpdateFromBOM] No direct quotations for ${item_code}. Checking parents...`);
       const [parentQrs] = await pool.query(

@@ -5,7 +5,7 @@ const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
   console.log(`Sales ERP backend running on port ${PORT}`);
-  
+
   // Start real email receiver to fetch replies
   try {
     // emailReceiver.startEmailReceiver();

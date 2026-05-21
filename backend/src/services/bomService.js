@@ -271,10 +271,14 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
                 i.weight_per_unit as latest_weight_per_unit,
                 i.length as latest_length, i.width as latest_width, i.thickness as latest_thickness,
                 i.diameter as latest_diameter, i.outer_diameter as latest_outer_diameter,
-                bi.component_code as component_code
+                bi.component_code as component_code,
+                cb.bom_cost, cb.drawing_no
          FROM bom_items bi
          JOIN bom b ON bi.bom_id = b.id
          JOIN items i ON bi.component_code = i.item_code
+         LEFT JOIN bom cb ON cb.item_code = bi.component_code AND cb.id = (
+           SELECT MAX(id) FROM bom WHERE item_code = bi.component_code
+         )
          WHERE (b.item_code = ? OR (b.drawing_no = ? AND b.drawing_no IS NOT NULL AND b.drawing_no != '—'))
          AND b.id = (
            SELECT MAX(id) FROM bom 

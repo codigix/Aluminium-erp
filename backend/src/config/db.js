@@ -4,13 +4,13 @@ require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env') });
 const mysql = require('mysql2/promise');
 
 const baseConfig = {
-  host: process.env.DB_HOST || 'localhost',
-  port: Number(process.env.DB_PORT || 3307),
-  user: process.env.DB_USER || 'aluminium_user',
-  password: process.env.DB_PASSWORD || 'C0digix$309',
+  host: process.env.DB_HOST,
+  port: process.env.DB_PORT ? Number(process.env.DB_PORT) : undefined,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
 };
 
-const database = process.env.DB_NAME || 'spTech_dev';
+const database = process.env.DB_NAME;
 const schemaPath = path.resolve(__dirname, '../../../database/schema.sql');
 
 const pool = mysql.createPool({
