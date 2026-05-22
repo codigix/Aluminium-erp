@@ -1372,7 +1372,13 @@ const QuotationFormPage = () => {
                                 {(parseFloat(sa.quantity || 0) * (parseFloat(item.quantity) || 0)).toFixed(3)} {sa.unit || 'Nos'}
                               </td>
                               <td className="p-2 border-b border-slate-100 text-[11px] text-indigo-600  bg-indigo-50/30">
-                                {formatCurrency(sa.component_bom_cost || sa.child_bom_cost || sa.rate || 0)}
+                                {formatCurrency(
+                                  sa.component_bom_cost ||
+                                  sa.child_bom_cost ||
+                                  sa.bom_cost ||
+                                  sa.rate ||
+                                  0
+                                )}
                               </td>
                               <td className="p-2 border-b border-slate-100"></td>
                               <td className="p-2 border-b border-slate-100"></td>
