@@ -178,8 +178,21 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
     }
 
     [rows] = await pool.query(
-      `SELECT c.*, i.selling_rate as latest_selling_rate, i.valuation_rate as latest_valuation_rate, i.weight_per_unit as latest_weight_per_unit
+      `SELECT c.*, 
+              COALESCE(soi.drawing_no, c.drawing_no) as drawing_no,
+              COALESCE(soi.description, c.description) as description,
+              i.selling_rate as latest_selling_rate, i.valuation_rate as latest_valuation_rate, i.weight_per_unit as latest_weight_per_unit
        FROM sales_order_item_components c
+       LEFT JOIN (
+         SELECT item_code, drawing_no, description
+         FROM sales_order_items 
+         WHERE id IN (
+           SELECT MAX(id) 
+           FROM sales_order_items 
+           WHERE sales_order_id IS NULL AND bom_cost > 0
+           GROUP BY item_code
+         )
+       ) soi ON c.component_code = soi.item_code
        LEFT JOIN (
          SELECT item_code, MAX(selling_rate) as selling_rate, MAX(valuation_rate) as valuation_rate, MAX(weight_per_unit) as weight_per_unit
          FROM stock_balance 
@@ -211,14 +224,23 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
     );
 
     if (latestIdRow.length > 0) {
-      let query = `SELECT c.*, i.selling_rate as latest_selling_rate, i.valuation_rate as latest_valuation_rate, i.weight_per_unit as latest_weight_per_unit
-                   FROM sales_order_item_components c
-                   LEFT JOIN (
-                     SELECT item_code, MAX(selling_rate) as selling_rate, MAX(valuation_rate) as valuation_rate, MAX(weight_per_unit) as weight_per_unit
-                     FROM stock_balance 
-                     GROUP BY item_code
-                   ) i ON c.component_code = i.item_code
-                   WHERE c.sales_order_item_id = ?`;
+      let query = `SELECT c.*, 
+                           COALESCE(soi.drawing_no, c.drawing_no) as drawing_no,
+                           COALESCE(soi.description, c.description) as description,
+                           i.selling_rate as latest_selling_rate, i.valuation_rate as latest_valuation_rate, i.weight_per_unit as latest_weight_per_unit
+                    FROM sales_order_item_components c
+                    LEFT JOIN (
+                      SELECT item_code, MAX(drawing_no) as drawing_no, MAX(description) as description
+                      FROM sales_order_items 
+                      WHERE sales_order_id IS NULL AND bom_cost > 0
+                      GROUP BY item_code
+                    ) soi ON c.component_code = soi.item_code
+                    LEFT JOIN (
+                      SELECT item_code, MAX(selling_rate) as selling_rate, MAX(valuation_rate) as valuation_rate, MAX(weight_per_unit) as weight_per_unit
+                      FROM stock_balance 
+                      GROUP BY item_code
+                    ) i ON c.component_code = i.item_code
+                    WHERE c.sales_order_item_id = ?`;
 
       [rows] = await pool.query(query + ' ORDER BY c.created_at ASC', [latestIdRow[0].id]);
     }
@@ -249,14 +271,23 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
       }
 
       if (fallbackId) {
-        let fallbackQuery = `SELECT c.*, i.selling_rate as latest_selling_rate, i.valuation_rate as latest_valuation_rate, i.weight_per_unit as latest_weight_per_unit
-                   FROM sales_order_item_components c
-                   LEFT JOIN (
-                     SELECT item_code, MAX(selling_rate) as selling_rate, MAX(valuation_rate) as valuation_rate, MAX(weight_per_unit) as weight_per_unit
-                     FROM stock_balance 
-                     GROUP BY item_code
-                   ) i ON c.component_code = i.item_code
-                   WHERE c.sales_order_item_id = ?`;
+        let fallbackQuery = `SELECT c.*, 
+                                    COALESCE(soi.drawing_no, c.drawing_no) as drawing_no,
+                                    COALESCE(soi.description, c.description) as description,
+                                    i.selling_rate as latest_selling_rate, i.valuation_rate as latest_valuation_rate, i.weight_per_unit as latest_weight_per_unit
+                             FROM sales_order_item_components c
+                             LEFT JOIN (
+                               SELECT item_code, MAX(drawing_no) as drawing_no, MAX(description) as description
+                               FROM sales_order_items 
+                               WHERE sales_order_id IS NULL AND bom_cost > 0
+                               GROUP BY item_code
+                             ) soi ON c.component_code = soi.item_code
+                             LEFT JOIN (
+                               SELECT item_code, MAX(selling_rate) as selling_rate, MAX(valuation_rate) as valuation_rate, MAX(weight_per_unit) as weight_per_unit
+                               FROM stock_balance 
+                               GROUP BY item_code
+                             ) i ON c.component_code = i.item_code
+                             WHERE c.sales_order_item_id = ?`;
         [rows] = await pool.query(fallbackQuery + ' ORDER BY c.created_at ASC', [fallbackId]);
       }
     }
@@ -310,7 +341,9 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
     // Determine if we should even override the rates.
     // RULE: For non-historical items (New/Draft), or when we have a specific batch/date snapshot,
     // we should override the template/master rates.
-    let shouldOverride = !isHistorical || !!refBatchId || !!refDate;
+    // MODIFICATION: We always allow overriding in the service to provide latest info, 
+    // the UI/Controller can choose to ignore it if they want to freeze.
+    let shouldOverride = true; // !isHistorical || !!refBatchId || !!refDate;
     console.log("[DEBUG] shouldOverride:", shouldOverride, "isHistorical:", isHistorical);
 
     if (shouldOverride) {
@@ -343,7 +376,7 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
                   WHERE item_code IN (?)
                   AND bom_cost > 0
                   AND created_at <= ?
-                  GROUP BY item_code, IFNULL(drawing_no, '')
+                  GROUP BY item_code
               ) as t
             )
           `, [codes, refDate, codes, refDate]);
@@ -353,64 +386,74 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
         let latestCosts = [];
         if (!refDate) {
           [latestCosts] = await pool.query(`
-            SELECT soi.item_code, soi.drawing_no, soi.bom_cost,
+            SELECT LOWER(TRIM(soi.item_code)) as item_code, LOWER(TRIM(soi.drawing_no)) as drawing_no, soi.bom_cost,
                    (SELECT qr.pending_bom_cost 
                     FROM quotation_requests qr 
                     WHERE (qr.sales_order_item_id = soi.id 
-                       OR (qr.item_code = soi.item_code AND qr.drawing_no = soi.drawing_no AND qr.item_code IS NOT NULL))
+                       OR (LOWER(TRIM(qr.item_code)) = LOWER(TRIM(soi.item_code)) AND LOWER(TRIM(qr.drawing_no)) = LOWER(TRIM(soi.drawing_no)) AND qr.item_code IS NOT NULL))
                     AND qr.pending_bom_cost IS NOT NULL 
                     ORDER BY qr.id DESC LIMIT 1) as pending_bom_cost
             FROM sales_order_items soi
-            WHERE soi.item_code IN (?)
+            WHERE LOWER(TRIM(soi.item_code)) IN (?)
             AND soi.bom_cost > 0
             AND soi.id IN (
-              SELECT max_id FROM (
-                  SELECT MAX(id) as max_id
+              SELECT id FROM (
+                  SELECT id, ROW_NUMBER() OVER (PARTITION BY LOWER(TRIM(item_code)) ORDER BY (sales_order_id IS NULL) DESC, id DESC) as rn
                   FROM sales_order_items
-                  WHERE item_code IN (?)
+                  WHERE LOWER(TRIM(item_code)) IN (?)
                   AND bom_cost > 0
-                  GROUP BY item_code, IFNULL(drawing_no, '')
               ) as t
+              WHERE rn = 1
             )
-          `, [codes, codes]);
+          `, [codes.map(c => String(c).toLowerCase().trim()), codes.map(c => String(c).toLowerCase().trim())]);
         }
 
         const costMap = new Map();
         const pendingMap = new Map();
 
+        console.log(`[getItemComponents] latestCosts found: ${latestCosts.length}`);
+
         // Apply latest costs first (as baseline)
         latestCosts.forEach(c => {
-          const key = `${c.item_code}|${c.drawing_no || ''}`;
+          const cleanCode = String(c.item_code).toLowerCase().trim();
+          const cleanDwg = String(c.drawing_no || '').toLowerCase().trim();
+          const key = `${cleanCode}|${cleanDwg}`;
+          
           costMap.set(key, parseFloat(c.bom_cost));
           if (c.pending_bom_cost) {
             pendingMap.set(key, parseFloat(c.pending_bom_cost));
           }
-          if (!costMap.has(c.item_code)) {
-            costMap.set(c.item_code, parseFloat(c.bom_cost));
+          if (!costMap.has(cleanCode)) {
+            costMap.set(cleanCode, parseFloat(c.bom_cost));
           }
+          console.log(`[getItemComponents] Mapped cost ${c.bom_cost} for key ${key} and code ${cleanCode}`);
         });
 
         // OVERRIDE with historical costs active at refDate
         historicalCosts.forEach(c => {
-          const key = `${c.item_code}|${c.drawing_no || ''}`;
+          const cleanCode = String(c.item_code).toLowerCase().trim();
+          const cleanDwg = String(c.drawing_no || '').toLowerCase().trim();
+          const key = `${cleanCode}|${cleanDwg}`;
           const hCost = parseFloat(c.bom_cost || 0);
           if (hCost > 0) {
             costMap.set(key, hCost);
-            costMap.set(c.item_code, hCost);
+            costMap.set(cleanCode, hCost);
           }
         });
 
         // OVERRIDE with batch-specific costs (Highest Priority)
         batchCosts.forEach(c => {
-          const key = `${c.item_code}|${c.drawing_no || ''}`;
+          const cleanCode = String(c.item_code).toLowerCase().trim();
+          const cleanDwg = String(c.drawing_no || '').toLowerCase().trim();
+          const key = `${cleanCode}|${cleanDwg}`;
           const bCost = parseFloat(c.bom_cost || c.rate || 0);
           if (bCost > 0) {
             costMap.set(key, bCost);
-            costMap.set(c.item_code, bCost);
+            costMap.set(cleanCode, bCost);
           }
           if (c.pending_bom_cost) {
             pendingMap.set(key, parseFloat(c.pending_bom_cost));
-            pendingMap.set(c.item_code, parseFloat(c.pending_bom_cost));
+            pendingMap.set(cleanCode, parseFloat(c.pending_bom_cost));
           }
         });
 
@@ -424,16 +467,19 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
             group.includes('PART') || (row.drawing_no && row.drawing_no !== '—');
 
           if (isSubAssy && compCode) {
-            const key = `${compCode}|${row.drawing_no || ''}`;
-            const targetRate = costMap.get(key) || costMap.get(compCode);
-            console.log(`[DEBUG] compCode: ${compCode}, key: ${key}, targetRate: ${targetRate}, row.is_cost_frozen: ${row.is_cost_frozen}, isSubAssy: ${isSubAssy}`);
+            const cleanCode = compCode.toLowerCase().trim();
+            const cleanDwg = String(row.drawing_no || '').toLowerCase().trim();
+            const key = `${cleanCode}|${cleanDwg}`;
+            const targetRate = costMap.get(key) || costMap.get(cleanCode);
+            
+            console.log(`[DEBUG] rowCompCode: ${compCode}, cleanCode: ${cleanCode}, cleanDwg: ${cleanDwg}, targetRate: ${targetRate}`);
+            
             if (targetRate !== undefined) {
               row.rate = targetRate;
               row.bom_cost = targetRate;
               row.is_cost_frozen = true; // Mark as explicitly frozen from history/batch
-              console.log(`[DEBUG] Set rate to ${targetRate} for ${compCode}`);
             }
-            const pendingRate = pendingMap.get(key) || pendingMap.get(compCode);
+            const pendingRate = pendingMap.get(key) || pendingMap.get(cleanCode);
             if (pendingRate !== undefined) {
               row.pending_bom_cost = pendingRate;
             }
@@ -455,9 +501,10 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
     thickness: (isHistorical && parseFloat(row.thickness) > 0) ? row.thickness : (row.thickness || row.latest_thickness || 0),
     diameter: (isHistorical && parseFloat(row.diameter) > 0) ? row.diameter : (row.diameter || row.latest_diameter || 0),
     outer_diameter: (isHistorical && parseFloat(row.outer_diameter) > 0) ? row.outer_diameter : (row.outer_diameter || row.latest_outer_diameter || 0),
-    rate: (isHistorical || row.is_cost_frozen) ? (parseFloat(row.rate) || 0) : (parseFloat(row.latest_selling_rate) || parseFloat(row.rate) || 0),
-    selling_rate: (isHistorical || row.is_cost_frozen) ? (parseFloat(row.rate) || 0) : (parseFloat(row.latest_selling_rate) || parseFloat(row.rate) || 0),
-    valuation_rate: (isHistorical || row.is_cost_frozen) ? (parseFloat(row.rate) || 0) : (parseFloat(row.latest_valuation_rate) || parseFloat(row.rate) || 0),
+    rate: (row.is_cost_frozen) ? (parseFloat(row.rate) || 0) : (isHistorical ? (parseFloat(row.rate) || 0) : (parseFloat(row.latest_selling_rate) || parseFloat(row.rate) || 0)),
+    selling_rate: (row.is_cost_frozen) ? (parseFloat(row.rate) || 0) : (isHistorical ? (parseFloat(row.rate) || 0) : (parseFloat(row.latest_selling_rate) || parseFloat(row.rate) || 0)),
+    valuation_rate: (row.is_cost_frozen) ? (parseFloat(row.rate) || 0) : (isHistorical ? (parseFloat(row.rate) || 0) : (parseFloat(row.latest_valuation_rate) || parseFloat(row.rate) || 0)),
+    resolved_bom_cost: (parseFloat(row.rate) || 0).toFixed(2),
     bom_cost: (() => {
       const compCode = (row.item_code || row.component_code || row.componentCode || '').toUpperCase();
       const g = (row.item_group || '').toUpperCase();
@@ -470,7 +517,7 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
       if (isSA) return parseFloat(row.rate || 0);
 
       // For materials: weight * valuation_rate
-      const vRate = (isHistorical || row.is_cost_frozen) ? (parseFloat(row.rate) || 0) : (parseFloat(row.latest_valuation_rate) || 0);
+      const vRate = (row.is_cost_frozen) ? (parseFloat(row.rate) || 0) : (isHistorical ? (parseFloat(row.rate) || 0) : (parseFloat(row.latest_valuation_rate) || 0));
       return (parseFloat(row.weight_per_pc || row.weight_per_unit || 0) * vRate);
     })()
   }));

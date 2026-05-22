@@ -2035,25 +2035,30 @@ const BOMFormPage = () => {
   useEffect(() => {
     const group = (productForm.itemGroup || "").toUpperCase();
     const isFG = group.includes("FG") || group.includes("FINISHED") || group.includes("GOOD");
+    const isAssembly = group.includes("ASSEMBLY");
 
-    // ONLY auto-update if we have an existing BOM (itemId present) and NOT in read-only mode
-    if (itemId && itemId !== 'bom-form' && !isReadOnly && !loading && totalBOMCost > 0 && !hasAutoUpdated.current) {
+    // ONLY auto-update if we have an existing BOM (itemId present)
+    if (itemId && itemId !== 'bom-form' && !loading && totalBOMCost > 0 && !hasAutoUpdated.current) {
       // Robust parsing: remove everything except numbers and decimal point
       const savedCost = parseFloat(String(productForm.bom_cost || 0).replace(/[^0-9.]/g, ''));
       const currentCost = parseFloat(totalBOMCost);
 
-      if (isFG && Math.abs(savedCost - currentCost) > 0.01) {
+      // Auto-click update for FG and Assembly items - even in read-only mode
+      if ((isFG || isAssembly) && Math.abs(savedCost - currentCost) > 0.01) {
         console.log(`[AutoUpdate] Syncing cost mismatch for ${itemId}. Saved: ${savedCost}, Calculated: ${currentCost}`);
         hasAutoUpdated.current = true;
 
         const timer = setTimeout(() => {
-          handleCreateBOM('Active', false, true); // (status, isNewVersion, silent)
+          // Pass status=Active, isNewVersion=false, silent=true
+          // IMPORTANT: handleCreateBOM currently doesn't check isReadOnly internally at the very top,
+          // it only has UI-level guards. So calling it directly here will work.
+          handleCreateBOM('Active', false, true); 
         }, 100);
 
         return () => clearTimeout(timer);
       }
     }
-  }, [totalBOMCost, productForm.bom_cost, loading, productForm.itemGroup, itemId, isReadOnly]);
+  }, [totalBOMCost, productForm.bom_cost, loading, productForm.itemGroup, itemId]);
 
   if (loading && stockItems.length === 0 && bomData.materials.length === 0 && bomData.components.length === 0) return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-2">
@@ -3654,7 +3659,7 @@ const BOMFormPage = () => {
                 </div>
                 <div className="p-2 bg-emerald-50 rounded-md border border-emerald-100">
                   <p className="text-xs text-emerald-600  mb-1">Total Cost / FG</p>
-                  <p className="text-xl  text-emerald-900">₹{parseFloat(isReadOnly ? (productForm.bom_cost || totalBOMCost) : totalBOMCost).toFixed(2)}</p>
+                  <p className="text-xl  text-emerald-900">₹{totalBOMCost.toFixed(2)}</p>
                   <p className="text-xs text-emerald-400  mt-1">Base Quantity: {batchQty}</p>
                 </div>
               </div>

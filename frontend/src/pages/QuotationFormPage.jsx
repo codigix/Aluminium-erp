@@ -157,11 +157,17 @@ const QuotationFormPage = () => {
             }
             return (item.sub_assemblies || []).filter(sa =>
               (sa.item_group || '').toUpperCase().includes('PART')
-            ).map(sa => ({
-              ...sa,
-              bom_cost: parseFloat(sa.bom_cost || sa.rate || 0),
-              rate: parseFloat(sa.rate || sa.bom_cost || 0)
-            }));
+            ).map(sa => {
+              let actualCost = parseFloat(sa.bom_cost || sa.rate || 0);
+              if (!isLocked && sa.pending_bom_cost > 0) {
+                actualCost = parseFloat(sa.pending_bom_cost);
+              }
+              return {
+                ...sa,
+                bom_cost: actualCost,
+                rate: actualCost
+              };
+            });
           })()
           };
         });
@@ -441,8 +447,14 @@ const QuotationFormPage = () => {
           // Map saved sub-assemblies first to ensure they are available for cost logic.
           // Prioritize override sub_assemblies if they exist.
           const savedSubAssemblies = ((override?.sub_assemblies || item.sub_assemblies) || []).map(sa => {
-            const actualPartCost =
+            let actualPartCost =
               parseFloat(sa.part_bom_cost || sa.component_cost || sa.bom_cost || sa.rate || 0);
+
+            // Apply pending BOM cost if available and we are editing/revising
+            if (!isLocked && sa.pending_bom_cost > 0) {
+              actualPartCost = parseFloat(sa.pending_bom_cost);
+            }
+
             return {
               ...sa,
               bom_cost: actualPartCost,

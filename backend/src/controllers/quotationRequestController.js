@@ -42,7 +42,7 @@ const getQuotationRequests = async (req, res, next) => {
         LEFT JOIN sales_orders so ON so.id = qr.sales_order_id
         JOIN companies c ON c.id = qr.company_id
         LEFT JOIN customer_pos cp ON cp.id = so.customer_po_id
-        LEFT JOIN sales_order_items soi ON soi.id = qr.sales_order_item_id
+        LEFT JOIN sales_order_items soi ON (soi.id = qr.sales_order_item_id AND qr.status != 'COMPONENT')
         LEFT JOIN customer_po_items poi ON so.customer_po_id = poi.customer_po_id 
              AND (TRIM(soi.drawing_no) = TRIM(poi.drawing_no) AND soi.drawing_no IS NOT NULL)
       ) qry
@@ -141,7 +141,7 @@ const getQuotationVersionHistory = async (req, res, next) => {
               ) as latest_bom_cost
        FROM quotation_requests qr
        JOIN companies c ON qr.company_id = c.id
-       LEFT JOIN sales_order_items soi ON soi.id = qr.sales_order_item_id
+       LEFT JOIN sales_order_items soi ON (soi.id = qr.sales_order_item_id AND qr.status != 'COMPONENT')
        WHERE qr.id = ? OR qr.parent_id = ? 
           OR qr.parent_id IN (SELECT id FROM quotation_requests WHERE id = ? OR parent_id = ?)
           OR qr.id IN (SELECT parent_id FROM quotation_requests WHERE id = ?)
@@ -883,7 +883,7 @@ const getQuotationVersionDetails = async (req, res, next) => {
               COALESCE(soi.unit, qr.item_unit) as unit,
               COALESCE(soi.item_code, qr.item_code) as item_code
        FROM quotation_requests qr
-       LEFT JOIN sales_order_items soi ON soi.id = qr.sales_order_item_id
+       LEFT JOIN sales_order_items soi ON (soi.id = qr.sales_order_item_id AND qr.status != 'COMPONENT')
        WHERE qr.version = ?
          AND (
            (qr.batch_id IS NOT NULL AND qr.batch_id = ?)
@@ -987,14 +987,15 @@ const requestQuotationUpdateFromBOM = async (req, res, next) => {
     // d) Match by description (as last resort)
     // e) Match if it's a SUB-COMPONENT of a parent that is in a quotation
     let [qrs] = await pool.query(
-      `SELECT qr.id, c.company_name, qr.batch_id, qr.sales_order_item_id
+      `SELECT qr.id, c.company_name, qr.batch_id, qr.sales_order_item_id, qr.status
        FROM quotation_requests qr
        JOIN companies c ON qr.company_id = c.id
        WHERE (qr.sales_order_item_id = ? 
           OR (qr.item_code IS NOT NULL AND qr.item_code = ? AND qr.drawing_no = ?)
           OR (qr.item_code IS NULL AND qr.drawing_no = ? AND qr.drawing_no IS NOT NULL)
           OR (qr.drawing_no IS NULL AND qr.description = ? AND qr.description IS NOT NULL))
-          AND qr.status NOT IN ('COMPLETED', 'REJECTED', 'CANCELLED')`,
+          AND qr.status NOT IN ('COMPLETED', 'REJECTED', 'CANCELLED')
+          AND qr.status != 'COMPONENT'`,
       [salesOrderItemId, item_code, drawing_no, drawing_no, description]
     );
 
