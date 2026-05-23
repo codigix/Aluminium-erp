@@ -1255,9 +1255,16 @@ const ClientQuotations = () => {
                               <td className="px-4 p-2 pl-8 border-l-2 border-slate-100">
                                 <div className="flex items-center gap-2">
                                   <GitBranch size={10} className="text-slate-400" />
-                                  <span className="text-[11px] text-slate-600 italic">
-                                    {sa.description || sa.component_code}
-                                  </span>
+                                  <div className="flex flex-col">
+                                    <span className="text-[11px] text-slate-600 italic">
+                                      {sa.description || sa.component_code}
+                                    </span>
+                                    {sa.drawing_no && sa.drawing_no !== 'NA' && (
+                                      <span className="text-[9px] text-slate-400">
+                                        DR: {sa.drawing_no}
+                                      </span>
+                                    )}
+                                  </div>
                                   <span className="px-1 py-0.5 rounded text-[9px] bg-emerald-50 text-emerald-600 border border-emerald-100">
                                     {sa.item_group || 'PART'}
                                   </span>

@@ -17,8 +17,8 @@ const getQuotationRequests = async (req, res, next) => {
                (SELECT phone FROM contacts WHERE company_id = c.id AND (contact_type = 'PRIMARY' OR contact_type = 'PURCHASE') LIMIT 1) as client_phone,
                (SELECT CONCAT(line1, ', ', IFNULL(line2, ''), city, ', ', state, ' ', pincode) FROM company_addresses WHERE company_id = c.id LIMIT 1) as client_address,
                cp.po_number,
-               COALESCE(soi.drawing_no, qr.drawing_no, '—') as drawing_no,
-               COALESCE(soi.description, qr.description, '—') as item_description,
+               qr.drawing_no as drawing_no,
+               COALESCE(qr.description, soi.description, '—') as item_description,
                COALESCE(
                  qr.item_qty, 
                  poi.quantity,
@@ -87,9 +87,9 @@ const getQuotationRequests = async (req, res, next) => {
           const isPart = g.includes('PART');
           const sub_assemblies = isAssembly
             ? components.filter(c => {
-                const group = (c.item_group || '').toUpperCase();
-                return group.includes('PART');
-              })
+              const group = (c.item_group || '').toUpperCase();
+              return group.includes('PART');
+            })
             : [];
           return { ...row, sub_assemblies };
         } catch (err) {
@@ -127,8 +127,8 @@ const getQuotationVersionHistory = async (req, res, next) => {
     // We search by parent_id link, OR same batch_id, OR same legacy grouping (company + project + created_at)
     const [rows] = await pool.query(
       `SELECT qr.*, c.company_name, 
-              COALESCE(soi.drawing_no, qr.drawing_no) as drawing_no,
-              COALESCE(soi.description, qr.description) as item_description,
+              qr.drawing_no as drawing_no,
+              COALESCE(qr.description, soi.description) as item_description,
               COALESCE(soi.unit, qr.item_unit) as item_unit,
               COALESCE(soi.item_code, qr.item_code) as item_code,
               (
@@ -222,7 +222,15 @@ const getQuotationVersionHistory = async (req, res, next) => {
       );
 
       if (snapshots.length > 0) {
-        itemData.sub_assemblies = snapshots.map(sn => ({
+        const seen = new Set();
+        const uniqueSnapshots = snapshots.filter(sn => {
+          const code = String(sn.item_code || sn.drawing_no || sn.description || '').trim().toLowerCase();
+          if (seen.has(code)) return false;
+          seen.add(code);
+          return true;
+        });
+
+        itemData.sub_assemblies = uniqueSnapshots.map(sn => ({
           item_code: sn.item_code,
           drawing_no: sn.drawing_no,
           description: sn.description,
@@ -261,9 +269,9 @@ const getQuotationVersionHistory = async (req, res, next) => {
           const isPart = g.includes('PART');
           itemData.sub_assemblies = isAssembly
             ? components.filter(c => {
-                const group = (c.item_group || '').toUpperCase();
-                return group.includes('PART');
-              })
+              const group = (c.item_group || '').toUpperCase();
+              return group.includes('PART');
+            })
             : [];
 
           itemData.materials = materials;
@@ -518,7 +526,7 @@ const sendQuotationViaEmail = async (req, res, next) => {
         // 2. Save Sub-Assemblies (Components) linked by parentQrId
         // Prioritize sub_assemblies passed from the frontend to preserve snapshot costs
         let components = item.sub_assemblies && item.sub_assemblies.length > 0 ? item.sub_assemblies : null;
-        
+
         if (!components) {
           components = await bomService.getItemComponents(
             item.salesOrderItemId,
@@ -932,7 +940,15 @@ const getQuotationVersionDetails = async (req, res, next) => {
         return false;
       });
 
-      itemData.sub_assemblies = snapshots.map(sn => ({
+      const seen = new Set();
+      const uniqueSnapshots = snapshots.filter(sn => {
+        const code = String(sn.item_code || sn.drawing_no || sn.description || '').trim().toLowerCase();
+        if (seen.has(code)) return false;
+        seen.add(code);
+        return true;
+      });
+
+      itemData.sub_assemblies = uniqueSnapshots.map(sn => ({
         id: sn.id,
         item_code: sn.item_code,
         drawing_no: sn.drawing_no,

@@ -159,15 +159,23 @@ const CustomerPO = ({
           sgstPercent: gst / 2,
           igstPercent: 0,
           item_group: item.item_group,
-          sub_assemblies: (item.sub_assemblies || []).map(sa => ({
-            ...sa,
-            drawingNo: sa.drawing_no || sa.component_code || sa.item_code || '',
-            description: sa.description || `Sub-assembly`,
-            quantity: parseFloat(sa.qty || sa.quantity || 0),
-            unit: sa.uom || sa.unit || 'NOS',
-            rate: parseFloat(sa.rate || sa.bom_cost || 0).toFixed(2),
-            item_group: sa.item_group || 'SA'
-          }))
+          sub_assemblies: (() => {
+            const seen = new Set();
+            return (item.sub_assemblies || []).filter(sa => {
+              const code = String(sa.component_code || sa.item_code || sa.drawing_no || sa.drawingNo || sa.description || '').trim().toLowerCase();
+              if (seen.has(code)) return false;
+              seen.add(code);
+              return true;
+            }).map(sa => ({
+              ...sa,
+              drawingNo: sa.drawing_no || sa.component_code || sa.item_code || '',
+              description: sa.description || `Sub-assembly`,
+              quantity: parseFloat(sa.quantity || sa.qty || 0),
+              unit: sa.uom || sa.unit || 'NOS',
+              rate: parseFloat(sa.rate || sa.bom_cost || 0).toFixed(2),
+              item_group: sa.item_group || 'SA'
+            }));
+          })()
         });
       });
 
@@ -295,7 +303,15 @@ const CustomerPO = ({
             cgstPercent: item.cgst_percent || 0,
             sgstPercent: item.sgst_percent || 0,
             igstPercent: item.igst_percent || 0,
-            sub_assemblies: item.sub_assemblies || []
+            sub_assemblies: (() => {
+              const seen = new Set();
+              return (item.sub_assemblies || []).filter(sa => {
+                const code = String(sa.component_code || sa.item_code || sa.drawing_no || sa.drawingNo || sa.description || '').trim().toLowerCase();
+                if (seen.has(code)) return false;
+                seen.add(code);
+                return true;
+              });
+            })()
           }))
         });
       } catch (error) {
@@ -945,9 +961,21 @@ const CustomerPO = ({
                                   <td className="p-2 border-b border-slate-100">
                                     <div className="flex flex-col pl-3">
                                       <span className="text-[11px] text-slate-700 font-semibold">{sa.description}</span>
-                                      <div className="flex items-center gap-2 mt-0.5">
-                                        <span className="px-1 py-0.5 rounded-[3px] text-[8px]  bg-blue-50 text-blue-600 border border-blue-100/50">SA</span>
-                                      </div>
+                                      {(() => {
+                                        const saGroup = (sa.item_group || '').toUpperCase();
+                                        const isSaPart = saGroup.includes('PART');
+                                        const displaySaGroup = isSaPart ? 'PART' : 'SA';
+                                        return (
+                                          <div className="flex items-center gap-2 mt-0.5">
+                                            <span className={`px-1 py-0.5 rounded-[3px] text-[8px] ${isSaPart
+                                              ? 'bg-blue-50 text-blue-600 border border-blue-100/50'
+                                              : 'bg-emerald-50 text-emerald-600 border border-emerald-100/50'
+                                              }`}>
+                                              {displaySaGroup}
+                                            </span>
+                                          </div>
+                                        );
+                                      })()}
                                     </div>
                                   </td>
                                   <td className="p-2 border-b border-slate-100 text-center text-[11px] text-slate-600 ">

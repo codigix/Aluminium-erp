@@ -172,6 +172,7 @@ const QuotationFormPage = () => {
               }
               return {
                 ...sa,
+                drawing_no: sa.drawing_no || sa.drawingNo,
                 bom_cost: actualCost,
                 rate: actualCost
               };
@@ -324,10 +325,11 @@ const QuotationFormPage = () => {
                   finalCost = parseFloat(matchedSA.component_bom_cost || matchedSA.child_bom_cost || matchedSA.part_bom_cost || matchedSA.component_cost || 0);
                 }
                 
-                if (Math.abs(parseFloat(sa.bom_cost || 0) - finalCost) > 0.01 || Math.abs(parseFloat(sa.rate || 0) - finalCost) > 0.01) {
+                if (Math.abs(parseFloat(sa.bom_cost || 0) - finalCost) > 0.01 || Math.abs(parseFloat(sa.rate || 0) - finalCost) > 0.01 || sa.drawing_no !== matchedSA.drawing_no) {
                   saChanged = true;
                   return {
                     ...sa,
+                    drawing_no: matchedSA.drawing_no || sa.drawing_no,
                     bom_cost: finalCost,
                     rate: finalCost
                   };
@@ -871,16 +873,24 @@ const QuotationFormPage = () => {
           item_group: item.item_group || null,
           status: status.toUpperCase() === 'REVISED' ? 'REVISED' : (item.status || 'SENT'),
           profit_percentage: 0,
-          sub_assemblies: (item.sub_assemblies || []).map(sa => ({
-            item_code: sa.component_code || sa.item_code,
-            drawing_no: sa.drawing_no,
-            description: sa.description,
-            quantity: sa.quantity,
-            bom_cost: parseFloat(sa.bom_cost) || 0,
-            rate: parseFloat(sa.rate || sa.bom_cost) || 0,
-            unit: sa.unit || 'Nos',
-            item_group: sa.item_group || 'PART'
-          }))
+          sub_assemblies: (() => {
+            const seen = new Set();
+            return (item.sub_assemblies || []).filter(sa => {
+              const code = String(sa.component_code || sa.item_code || sa.drawing_no || sa.drawingNo || sa.description || '').trim().toLowerCase();
+              if (seen.has(code)) return false;
+              seen.add(code);
+              return true;
+            }).map(sa => ({
+              item_code: sa.component_code || sa.item_code,
+              drawing_no: sa.drawing_no,
+              description: sa.description,
+              quantity: sa.quantity,
+              bom_cost: parseFloat(sa.bom_cost) || 0,
+              rate: parseFloat(sa.rate || sa.bom_cost) || 0,
+              unit: sa.unit || 'Nos',
+              item_group: sa.item_group || 'PART'
+            }));
+          })()
         })),
         totalAmount: summary.totalAmount,
         notes: notes,

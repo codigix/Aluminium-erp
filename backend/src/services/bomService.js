@@ -144,12 +144,25 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
     let batchRows = [];
     if (matchCandidates.length > 0) {
       [batchRows] = await pool.query(
-        `SELECT id, drawing_no, description, item_unit as unit, item_qty as quantity,
-                item_group, bom_cost, received_amount as rate, item_code, pending_bom_cost,
+        `SELECT qr.id, 
+                COALESCE(soi.drawing_no, qr.drawing_no, qr.item_code) as drawing_no, 
+                COALESCE(soi.description, qr.description) as description, 
+                qr.item_unit as unit, qr.item_qty as quantity,
+                qr.item_group, qr.bom_cost, qr.received_amount as rate, qr.item_code, qr.pending_bom_cost,
                 1 as is_cost_frozen
-         FROM quotation_requests 
-         WHERE batch_id = ? AND status = 'COMPONENT'
-         AND rejection_reason IN (?)`,
+         FROM quotation_requests qr
+         LEFT JOIN (
+           SELECT item_code, drawing_no, description
+           FROM sales_order_items 
+           WHERE id IN (
+             SELECT MAX(id) 
+             FROM sales_order_items 
+             WHERE sales_order_id IS NULL
+             GROUP BY item_code
+           )
+         ) soi ON LOWER(TRIM(qr.item_code)) = LOWER(TRIM(soi.item_code))
+         WHERE qr.batch_id = ? AND qr.status = 'COMPONENT'
+         AND qr.rejection_reason IN (?)`,
         [refBatchId, matchCandidates]
       );
     }
@@ -179,8 +192,9 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
 
     [rows] = await pool.query(
       `SELECT c.*, 
-              COALESCE(soi.drawing_no, c.drawing_no) as drawing_no,
+              COALESCE(i.drawing_no, soi.drawing_no, c.drawing_no) as drawing_no,
               COALESCE(soi.description, c.description) as description,
+              COALESCE(c.component_code, c.item_code) as item_code,
               i.selling_rate as latest_selling_rate, i.valuation_rate as latest_valuation_rate, i.weight_per_unit as latest_weight_per_unit
        FROM sales_order_item_components c
        LEFT JOIN (
@@ -189,15 +203,15 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
          WHERE id IN (
            SELECT MAX(id) 
            FROM sales_order_items 
-           WHERE sales_order_id IS NULL AND bom_cost > 0
+           WHERE sales_order_id IS NULL
            GROUP BY item_code
          )
-       ) soi ON c.component_code = soi.item_code
+       ) soi ON LOWER(TRIM(COALESCE(c.component_code, c.item_code))) = LOWER(TRIM(soi.item_code))
        LEFT JOIN (
-         SELECT item_code, MAX(selling_rate) as selling_rate, MAX(valuation_rate) as valuation_rate, MAX(weight_per_unit) as weight_per_unit
+         SELECT item_code, MAX(selling_rate) as selling_rate, MAX(valuation_rate) as valuation_rate, MAX(weight_per_unit) as weight_per_unit, MAX(drawing_no) as drawing_no
          FROM stock_balance 
          GROUP BY item_code
-       ) i ON c.component_code = i.item_code
+       ) i ON LOWER(TRIM(COALESCE(c.component_code, c.item_code))) = LOWER(TRIM(i.item_code))
        WHERE c.sales_order_item_id = ? 
        ORDER BY c.created_at ASC`,
       [parsedItemId]
@@ -225,21 +239,22 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
 
     if (latestIdRow.length > 0) {
       let query = `SELECT c.*, 
-                           COALESCE(soi.drawing_no, c.drawing_no) as drawing_no,
+                           COALESCE(i.drawing_no, soi.drawing_no, c.drawing_no) as drawing_no,
                            COALESCE(soi.description, c.description) as description,
+                           COALESCE(c.component_code, c.item_code) as item_code,
                            i.selling_rate as latest_selling_rate, i.valuation_rate as latest_valuation_rate, i.weight_per_unit as latest_weight_per_unit
                     FROM sales_order_item_components c
                     LEFT JOIN (
                       SELECT item_code, MAX(drawing_no) as drawing_no, MAX(description) as description
                       FROM sales_order_items 
-                      WHERE sales_order_id IS NULL AND bom_cost > 0
+                      WHERE sales_order_id IS NULL
                       GROUP BY item_code
-                    ) soi ON c.component_code = soi.item_code
+                    ) soi ON LOWER(TRIM(COALESCE(c.component_code, c.item_code))) = LOWER(TRIM(soi.item_code))
                     LEFT JOIN (
-                      SELECT item_code, MAX(selling_rate) as selling_rate, MAX(valuation_rate) as valuation_rate, MAX(weight_per_unit) as weight_per_unit
+                      SELECT item_code, MAX(selling_rate) as selling_rate, MAX(valuation_rate) as valuation_rate, MAX(weight_per_unit) as weight_per_unit, MAX(drawing_no) as drawing_no
                       FROM stock_balance 
                       GROUP BY item_code
-                    ) i ON c.component_code = i.item_code
+                    ) i ON LOWER(TRIM(COALESCE(c.component_code, c.item_code))) = LOWER(TRIM(i.item_code))
                     WHERE c.sales_order_item_id = ?`;
 
       [rows] = await pool.query(query + ' ORDER BY c.created_at ASC', [latestIdRow[0].id]);
@@ -272,21 +287,22 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
 
       if (fallbackId) {
         let fallbackQuery = `SELECT c.*, 
-                                    COALESCE(soi.drawing_no, c.drawing_no) as drawing_no,
+                                    COALESCE(i.drawing_no, soi.drawing_no, c.drawing_no) as drawing_no,
                                     COALESCE(soi.description, c.description) as description,
+                                    COALESCE(c.component_code, c.item_code) as item_code,
                                     i.selling_rate as latest_selling_rate, i.valuation_rate as latest_valuation_rate, i.weight_per_unit as latest_weight_per_unit
                              FROM sales_order_item_components c
                              LEFT JOIN (
                                SELECT item_code, MAX(drawing_no) as drawing_no, MAX(description) as description
                                FROM sales_order_items 
-                               WHERE sales_order_id IS NULL AND bom_cost > 0
+                               WHERE sales_order_id IS NULL
                                GROUP BY item_code
-                             ) soi ON c.component_code = soi.item_code
+                             ) soi ON LOWER(TRIM(COALESCE(c.component_code, c.item_code))) = LOWER(TRIM(soi.item_code))
                              LEFT JOIN (
-                               SELECT item_code, MAX(selling_rate) as selling_rate, MAX(valuation_rate) as valuation_rate, MAX(weight_per_unit) as weight_per_unit
+                               SELECT item_code, MAX(selling_rate) as selling_rate, MAX(valuation_rate) as valuation_rate, MAX(weight_per_unit) as weight_per_unit, MAX(drawing_no) as drawing_no
                                FROM stock_balance 
                                GROUP BY item_code
-                             ) i ON c.component_code = i.item_code
+                             ) i ON LOWER(TRIM(COALESCE(c.component_code, c.item_code))) = LOWER(TRIM(i.item_code))
                              WHERE c.sales_order_item_id = ?`;
         [rows] = await pool.query(fallbackQuery + ' ORDER BY c.created_at ASC', [fallbackId]);
       }
@@ -367,14 +383,12 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
             SELECT soi.item_code, soi.drawing_no, soi.bom_cost
             FROM sales_order_items soi
             WHERE soi.item_code IN (?)
-            AND soi.bom_cost > 0
             AND soi.created_at <= ?
             AND soi.id IN (
               SELECT max_id FROM (
                   SELECT MAX(id) as max_id
                   FROM sales_order_items
                   WHERE item_code IN (?)
-                  AND bom_cost > 0
                   AND created_at <= ?
                   GROUP BY item_code, IFNULL(drawing_no, '')
               ) as t
@@ -395,13 +409,11 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
                     ORDER BY qr.id DESC LIMIT 1) as pending_bom_cost
             FROM sales_order_items soi
             WHERE LOWER(TRIM(soi.item_code)) IN (?)
-            AND soi.bom_cost > 0
             AND soi.id IN (
               SELECT id FROM (
                   SELECT id, ROW_NUMBER() OVER (PARTITION BY LOWER(TRIM(item_code)), LOWER(TRIM(IFNULL(drawing_no, ''))) ORDER BY updated_at DESC, id DESC) as rn
                   FROM sales_order_items
                   WHERE LOWER(TRIM(item_code)) IN (?)
-                  AND bom_cost > 0
               ) as t
               WHERE rn = 1
             )
@@ -418,13 +430,14 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
           const cleanCode = String(c.item_code).toLowerCase().trim();
           const cleanDwg = String(c.drawing_no || '').toLowerCase().trim();
           const key = `${cleanCode}|${cleanDwg}`;
-          
-          costMap.set(key, parseFloat(c.bom_cost));
+
+          const data = { cost: parseFloat(c.bom_cost), drawing_no: c.drawing_no };
+          costMap.set(key, data);
           if (c.pending_bom_cost) {
             pendingMap.set(key, parseFloat(c.pending_bom_cost));
           }
           if (!costMap.has(cleanCode)) {
-            costMap.set(cleanCode, parseFloat(c.bom_cost));
+            costMap.set(cleanCode, data);
           }
           console.log(`[getItemComponents] Mapped cost ${c.bom_cost} for key ${key} and code ${cleanCode}`);
         });
@@ -436,8 +449,9 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
           const key = `${cleanCode}|${cleanDwg}`;
           const hCost = parseFloat(c.bom_cost || 0);
           if (hCost > 0) {
-            costMap.set(key, hCost);
-            costMap.set(cleanCode, hCost);
+            const data = { cost: hCost, drawing_no: c.drawing_no };
+            costMap.set(key, data);
+            costMap.set(cleanCode, data);
           }
         });
 
@@ -448,8 +462,9 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
           const key = `${cleanCode}|${cleanDwg}`;
           const bCost = parseFloat(c.bom_cost || c.rate || 0);
           if (bCost > 0) {
-            costMap.set(key, bCost);
-            costMap.set(cleanCode, bCost);
+            const data = { cost: bCost, drawing_no: c.drawing_no };
+            costMap.set(key, data);
+            costMap.set(cleanCode, data);
           }
           if (c.pending_bom_cost) {
             pendingMap.set(key, parseFloat(c.pending_bom_cost));
@@ -470,13 +485,16 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
             const cleanCode = compCode.toLowerCase().trim();
             const cleanDwg = String(row.drawing_no || '').toLowerCase().trim();
             const key = `${cleanCode}|${cleanDwg}`;
-            const targetRate = costMap.get(key) || costMap.get(cleanCode);
-            
-            console.log(`[DEBUG] rowCompCode: ${compCode}, cleanCode: ${cleanCode}, cleanDwg: ${cleanDwg}, targetRate: ${targetRate}`);
-            
-            if (targetRate !== undefined) {
-              row.rate = targetRate;
-              row.bom_cost = targetRate;
+            const targetData = costMap.get(key) || costMap.get(cleanCode);
+
+            console.log(`[DEBUG] rowCompCode: ${compCode}, cleanCode: ${cleanCode}, cleanDwg: ${cleanDwg}, targetData:`, targetData);
+
+            if (targetData !== undefined) {
+              row.rate = targetData.cost;
+              row.bom_cost = targetData.cost;
+              if (targetData.drawing_no) {
+                row.drawing_no = targetData.drawing_no;
+              }
               row.is_cost_frozen = true; // Mark as explicitly frozen from history/batch
             }
             const pendingRate = pendingMap.get(key) || pendingMap.get(cleanCode);
