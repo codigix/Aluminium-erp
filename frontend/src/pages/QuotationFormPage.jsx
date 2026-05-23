@@ -1284,7 +1284,7 @@ const QuotationFormPage = () => {
                                         })()}
                                       </div>
                                       <div className="flex items-center gap-2">
-                                        <span className="text-xs text-slate-500 font-mono">{item.drawing_no || 'Manual Item'}</span>
+                                        <span className="text-xs text-slate-500 font-mono">{(item.drawing_no || 'Manual Item').toUpperCase()}</span>
                                       </div>
                                     </div>
                                   ) : (item.isManual || mode === 'revise') ? (
@@ -1461,7 +1461,7 @@ const QuotationFormPage = () => {
                                   <div className="flex flex-col">
                                     <span className="text-[11px] text-slate-700 font-semibold">{sa.description}</span>
                                     <div className="flex items-center gap-2 mt-0.5">
-                                      <span className="text-[9px] text-slate-500 font-mono ">{sa.drawing_no}</span>
+                                      <span className="text-[9px] text-slate-500 font-mono ">{(sa.drawing_no || '').toUpperCase()}</span>
                                       <span className={`px-1 py-0.5 rounded-[3px] text-[8px] border ${
                                         (sa.item_group || '').toUpperCase().includes('ASSEMBLY')
                                           ? 'bg-blue-50 text-blue-600 border-blue-100/50'

@@ -1124,7 +1124,7 @@ const ClientQuotations = () => {
                                     )}
                                   </div>
                                   <span className="text-xs  text-slate-500  ">
-                                    DRAWING: {item.drawing_no || 'NA'}
+                                    DRAWING: {(item.drawing_no || 'NA').toUpperCase()}
                                   </span>
                                 </div>
                               </td>
@@ -1261,7 +1261,7 @@ const ClientQuotations = () => {
                                     </span>
                                     {sa.drawing_no && sa.drawing_no !== 'NA' && (
                                       <span className="text-[9px] text-slate-400">
-                                        DR: {sa.drawing_no}
+                                        DR: {(sa.drawing_no || '').toUpperCase()}
                                       </span>
                                     )}
                                   </div>
