@@ -303,7 +303,7 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
                 i.length as latest_length, i.width as latest_width, i.thickness as latest_thickness,
                 i.diameter as latest_diameter, i.outer_diameter as latest_outer_diameter,
                 bi.component_code as component_code,
-                cb.bom_cost, cb.drawing_no
+                NULL as bom_cost, cb.drawing_no
          FROM bom_items bi
          JOIN bom b ON bi.bom_id = b.id
          JOIN items i ON bi.component_code = i.item_code
@@ -376,7 +376,7 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
                   WHERE item_code IN (?)
                   AND bom_cost > 0
                   AND created_at <= ?
-                  GROUP BY item_code
+                  GROUP BY item_code, IFNULL(drawing_no, '')
               ) as t
             )
           `, [codes, refDate, codes, refDate]);
@@ -398,7 +398,7 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
             AND soi.bom_cost > 0
             AND soi.id IN (
               SELECT id FROM (
-                  SELECT id, ROW_NUMBER() OVER (PARTITION BY LOWER(TRIM(item_code)) ORDER BY (sales_order_id IS NULL) DESC, id DESC) as rn
+                  SELECT id, ROW_NUMBER() OVER (PARTITION BY LOWER(TRIM(item_code)), LOWER(TRIM(IFNULL(drawing_no, ''))) ORDER BY updated_at DESC, id DESC) as rn
                   FROM sales_order_items
                   WHERE LOWER(TRIM(item_code)) IN (?)
                   AND bom_cost > 0
@@ -504,6 +504,7 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
     rate: (row.is_cost_frozen) ? (parseFloat(row.rate) || 0) : (isHistorical ? (parseFloat(row.rate) || 0) : (parseFloat(row.latest_selling_rate) || parseFloat(row.rate) || 0)),
     selling_rate: (row.is_cost_frozen) ? (parseFloat(row.rate) || 0) : (isHistorical ? (parseFloat(row.rate) || 0) : (parseFloat(row.latest_selling_rate) || parseFloat(row.rate) || 0)),
     valuation_rate: (row.is_cost_frozen) ? (parseFloat(row.rate) || 0) : (isHistorical ? (parseFloat(row.rate) || 0) : (parseFloat(row.latest_valuation_rate) || parseFloat(row.rate) || 0)),
+    pending_bom_cost: row.pending_bom_cost || null,
     resolved_bom_cost: (parseFloat(row.rate) || 0).toFixed(2),
     bom_cost: (() => {
       const compCode = (row.item_code || row.component_code || row.componentCode || '').toUpperCase();
@@ -1519,9 +1520,7 @@ const getLatestBOMCost = async (itemCode, drawingNo, bomId) => {
     FROM sales_order_items soi
     WHERE ${whereClause}
     AND bom_cost > 0
-    ORDER BY 
-      CAST(REGEXP_REPLACE(IFNULL(revision_no, '0'), '[^0-9]', '') AS UNSIGNED) DESC, 
-      id DESC
+    ORDER BY updated_at DESC, id DESC
     LIMIT 1
   `;
 
@@ -1588,8 +1587,9 @@ const recalculateBOMCost = async (itemId, forceUpdate = false) => {
       g.includes('PART') || (item.drawing_no && item.drawing_no !== '—')
     );
 
-    if ((!isApproved || forceUpdate) && !isMaterial && isSA) {
+    if (!isApproved && !forceUpdate && !isMaterial && isSA) {
       // Query by component code since parent component table's drawing_no column stores the parent's drawing number, not the component's
+      // We skip this if forceUpdate is true, because propagateCostToParents already sets the correct rate in item.rate.
       const latest = await getLatestBOMCost(item.component_code);
       if (latest.bom_cost > 0) {
         rate = latest.bom_cost;
@@ -1666,26 +1666,22 @@ const recalculateBOMCost = async (itemId, forceUpdate = false) => {
   // Also update the rate in all component references to this item to ensure future recalculations are correct
   // CRITICAL: Only update the rate in LATEST or PENDING versions of parent BOMs to maintain snapshot integrity
   if (parentItem.item_code) {
-    const salesOrderId = parentItem.sales_order_id;
     await pool.execute(`
         UPDATE sales_order_item_components 
         SET rate = ? 
         WHERE component_code = ? 
         AND sales_order_item_id IN (
             SELECT id FROM sales_order_items 
-            WHERE (sales_order_id = ? OR (sales_order_id IS NULL AND ? IS NULL))
-            AND (
-              status NOT IN ('APPROVED', 'RELEASED', 'COMPLETED')
-              OR id IN (
-                  SELECT max_id FROM (
-                      SELECT MAX(id) as max_id 
-                      FROM sales_order_items 
-                      GROUP BY sales_order_id, IFNULL(bom_id, item_code)
-                  ) as t
-              )
+            WHERE status NOT IN ('APPROVED', 'RELEASED', 'COMPLETED')
+            OR id IN (
+                SELECT max_id FROM (
+                    SELECT MAX(id) as max_id 
+                    FROM sales_order_items 
+                    GROUP BY sales_order_id, IFNULL(bom_id, item_code)
+                ) as t
             )
         )
-      `, [finalCost, parentItem.item_code, salesOrderId, salesOrderId]);
+      `, [finalCost, parentItem.item_code]);
   }
 
   // Also update all matching LATEST versions across all sales orders to keep lists in sync
@@ -1732,26 +1728,21 @@ const propagateCostToParents = async (itemCode, drawingNo) => {
   const currentCost = parseFloat(itemData[0].bom_cost);
   const salesOrderId = itemData[0].sales_order_id;
 
-  // 2. Update this item's rate in ALL parent component lists for this sales order before recalculating parents
+  // 2. Update this item's rate in ALL parent component lists across all sales orders before recalculating parents
   // This ensures that when recalculateBOMCost(parent.id) is called, it uses the new rate.
   await pool.execute(`
     UPDATE sales_order_item_components 
     SET rate = ? 
     WHERE component_code = ? 
-    AND sales_order_item_id IN (
-      SELECT id FROM sales_order_items 
-      WHERE (sales_order_id = ? OR (sales_order_id IS NULL AND ? IS NULL))
-    )
-  `, [currentCost, itemCode, salesOrderId, salesOrderId]);
+  `, [currentCost, itemCode]);
 
-  // 3. Find all LATEST or ACTIVE versions of sales_order_items that use this component_code under the same sales order
+  // 3. Find all LATEST or ACTIVE versions of sales_order_items that use this component_code across ALL sales orders
   // We want to update any BOM that is currently "live" or is the latest draft/version.
   const [parents] = await pool.query(`
     SELECT DISTINCT soi.id, soi.item_code, soi.drawing_no, soi.status
     FROM sales_order_items soi
     JOIN sales_order_item_components soc ON soi.id = soc.sales_order_item_id
     WHERE soc.component_code = ?
-    AND (soi.sales_order_id = ? OR (soi.sales_order_id IS NULL AND ? IS NULL))
     AND (
       -- Update absolute latest version of any BOM
       soi.id IN (
@@ -1765,7 +1756,7 @@ const propagateCostToParents = async (itemCode, drawingNo) => {
       -- Also update anything that isn't fully completed/cancelled
       soi.status NOT IN ('COMPLETED', 'CANCELLED', 'REJECTED')
     )
-  `, [itemCode, salesOrderId, salesOrderId]);
+  `, [itemCode]);
 
   console.log(`[Cost Propagation] Found ${parents.length} parent BOMs to update for ${itemCode}`);
 
@@ -1873,6 +1864,14 @@ const syncQuotationCosts = async (itemId, bomCost) => {
          SET bom_cost = ?, total_amount = ?, received_amount = ?, sales_order_item_id = ?, updated_at = NOW() 
          WHERE id = ?`,
         [bomCost, newTotalBase, newTotalInclGst, itemId, qr.id]
+      );
+
+      // Also update the component snapshot for this quotation if it exists as a child part in its parent assembly
+      await pool.execute(
+        `UPDATE quotation_requests 
+         SET bom_cost = ?, updated_at = NOW() 
+         WHERE status = 'COMPONENT' AND rejection_reason = ? AND (sales_order_item_id = ? OR LOWER(TRIM(item_code)) = LOWER(TRIM(?)))`,
+        [bomCost, String(qr.id), itemId, item_code]
       );
     }
 

@@ -13,11 +13,8 @@ async function describeTable() {
     const connection = await mysql.createConnection(config);
 
     try {
-        const [cols] = await connection.query('DESCRIBE quotation_requests');
-        console.log('quotation_requests columns:', cols);
-        
-        const [rows] = await connection.query('SELECT COUNT(*) as count FROM material_requests');
-        console.log('material_requests row count:', rows[0].count);
+        const [cols] = await connection.query('DESCRIBE sales_order_item_components');
+        console.log('sales_order_item_components columns:', cols.map(c => c.Field));
 
     } catch (error) {
         console.error('Error:', error);

@@ -1060,7 +1060,7 @@ const requestQuotationUpdateFromBOM = async (req, res, next) => {
         `UPDATE quotation_requests 
          SET pending_bom_cost = ?, updated_at = NOW() 
          WHERE status = 'COMPONENT' AND rejection_reason = ?
-         AND (item_code = ? OR drawing_no = ?)`,
+         AND (LOWER(TRIM(item_code)) = LOWER(TRIM(?)) OR LOWER(TRIM(drawing_no) ) = LOWER(TRIM(?)))`,
         [bomCost, String(qr.id), item_code, drawing_no]
       );
     }

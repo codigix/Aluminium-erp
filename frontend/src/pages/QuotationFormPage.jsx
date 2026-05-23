@@ -42,6 +42,7 @@ const QuotationFormPage = () => {
   const [batchId, setBatchId] = useState(null);
   const [versionHistory, setVersionHistory] = useState([]);
   const [mode, setMode] = useState('create'); // 'create', 'revise', or 'received'
+  const [isBOMUpdateRequest, setIsBOMUpdateRequest] = useState(false);
   const [selectedVersionId, setSelectedVersionId] = useState(null);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [refreshingDrawings, setRefreshingDrawings] = useState(false);
@@ -88,6 +89,9 @@ const QuotationFormPage = () => {
       setParentId(initialData.parentId || null);
       setBatchId(initialData.batchId || null);
       setMode(initialData.mode || 'create');
+      if (initialData.isBOMUpdateRequest) {
+        setIsBOMUpdateRequest(true);
+      }
       if (initialData.parentId || initialData.id) {
         fetchVersionHistory(initialData.parentId || initialData.id);
       }
@@ -158,7 +162,11 @@ const QuotationFormPage = () => {
             return (item.sub_assemblies || []).filter(sa =>
               (sa.item_group || '').toUpperCase().includes('PART')
             ).map(sa => {
-              let actualCost = parseFloat(sa.bom_cost || sa.rate || 0);
+              let actualCost = parseFloat(sa.component_bom_cost || sa.child_bom_cost || sa.part_bom_cost || sa.component_cost || sa.bom_cost || sa.rate || 0);
+              const parentBOMCost = parseFloat(item.bom_cost || item.rate || 0);
+              if (Math.abs(actualCost - parentBOMCost) < 0.01) {
+                actualCost = parseFloat(sa.component_bom_cost || sa.child_bom_cost || sa.part_bom_cost || sa.component_cost || 0);
+              }
               if (!isLocked && sa.pending_bom_cost > 0) {
                 actualCost = parseFloat(sa.pending_bom_cost);
               }
@@ -186,12 +194,14 @@ const QuotationFormPage = () => {
     // 2. We are NOT viewing a historical snapshot
     // 3. The current status is NOT a snapshot status (must be Draft or new Revision)
     // 4. We are NOT in 'received' mode
+    // 5. This is NOT a BOM Update Request (preventing drawings sync override)
     const canSync = items.length > 0 && 
                     drawings.length > 0 && 
                     !isHistoricalView &&
                     !isSnapshotStatus && 
                     mode !== 'received' &&
-                    !isLocked;
+                    !isLocked &&
+                    !isBOMUpdateRequest;
 
     if (canSync) {
       const updatedItems = items.map(item => {
@@ -248,14 +258,7 @@ const QuotationFormPage = () => {
             changed = true;
           }
 
-          // Sync sub_assemblies if missing or if the master has different data
-          const hasSAs = item.sub_assemblies && item.sub_assemblies.length > 0;
-          const saChanged = false;
-          
-          if (matchedDrawing.sub_assemblies && matchedDrawing.sub_assemblies.length > 0 && (!hasSAs || saChanged)) {
-            newItem.sub_assemblies = item.sub_assemblies?.length > 0 ? item.sub_assemblies : matchedDrawing.sub_assemblies;
-            changed = true;
-          }
+
 
           // Sync BOM Cost logic
           const currentBOMCost = parseFloat(item.bom_cost || 0);
@@ -276,7 +279,7 @@ const QuotationFormPage = () => {
           // Master drawings might have stale base costs if they haven't been dynamically synced with full BOM materials/operations.
           const isDowngradeForAssembly = g.includes('ASSEMBLY') && currentBOMCost > drwRate;
 
-          if (costChanged && (shouldSync || saChanged) && !item.has_pending_bom_applied && !isDowngradeForAssembly) {
+          if (costChanged && shouldSync && !item.has_pending_bom_applied && !isDowngradeForAssembly) {
             newItem.bom_cost = drwRate;
             changed = true;
             
@@ -284,6 +287,72 @@ const QuotationFormPage = () => {
             if (currentRate === 0 || rateMatchesCost || mode === 'revise' || mode === 'create') {
               newItem.rate = drwRate;
               newItem.total = (parseFloat(item.quantity) || 0) * drwRate;
+            }
+          }
+
+          // Sync sub-assemblies if it is an ASSEMBLY item to pick up latest correct child PART costs
+          const gUpper = (item.item_group || '').toUpperCase();
+          if (gUpper.includes('ASSEMBLY') && matchedDrawing.sub_assemblies && matchedDrawing.sub_assemblies.length > 0) {
+            const currentSAs = item.sub_assemblies || [];
+            let saChanged = false;
+            
+            const updatedSAs = currentSAs.map(sa => {
+              const cleanSaCode = String(sa.component_code || sa.item_code || sa.component_code || '').trim().toLowerCase();
+              const cleanSaDwg = String(sa.drawing_no || '').trim().toLowerCase();
+              
+              // Find matching sa component in matchedDrawing
+              const matchedSA = matchedDrawing.sub_assemblies.find(msa => {
+                const cleanMsaCode = String(msa.component_code || msa.item_code || msa.component_code || '').trim().toLowerCase();
+                const cleanMsaDwg = String(msa.drawing_no || '').trim().toLowerCase();
+                
+                if (cleanSaCode && cleanMsaCode && cleanSaCode === cleanMsaCode) return true;
+                if (cleanSaDwg && cleanMsaDwg && cleanSaDwg === cleanMsaDwg) {
+                  const saDesc = String(sa.description || '').trim().toLowerCase();
+                  const msaDesc = String(msa.description || '').trim().toLowerCase();
+                  return !saDesc || !msaDesc || saDesc === msaDesc || saDesc.includes(msaDesc) || msaDesc.includes(saDesc);
+                }
+                return false;
+              });
+              
+              if (matchedSA) {
+                const correctCost = parseFloat(matchedSA.component_bom_cost || matchedSA.child_bom_cost || matchedSA.part_bom_cost || matchedSA.component_cost || matchedSA.bom_cost || matchedSA.rate || 0);
+                const parentBOMCost = parseFloat(drwRate || item.bom_cost || 0);
+                
+                // Block inheritance
+                let finalCost = correctCost;
+                if (Math.abs(finalCost - parentBOMCost) < 0.01) {
+                  finalCost = parseFloat(matchedSA.component_bom_cost || matchedSA.child_bom_cost || matchedSA.part_bom_cost || matchedSA.component_cost || 0);
+                }
+                
+                if (Math.abs(parseFloat(sa.bom_cost || 0) - finalCost) > 0.01 || Math.abs(parseFloat(sa.rate || 0) - finalCost) > 0.01) {
+                  saChanged = true;
+                  return {
+                    ...sa,
+                    bom_cost: finalCost,
+                    rate: finalCost
+                  };
+                }
+              }
+              return sa;
+            });
+            
+            if (currentSAs.length === 0) {
+              newItem.sub_assemblies = matchedDrawing.sub_assemblies.map(sa => {
+                let actualPartCost = parseFloat(sa.component_bom_cost || sa.child_bom_cost || sa.part_bom_cost || sa.component_cost || sa.bom_cost || sa.rate || 0);
+                const parentBOMCost = parseFloat(drwRate || item.bom_cost || 0);
+                if (Math.abs(actualPartCost - parentBOMCost) < 0.01) {
+                  actualPartCost = parseFloat(sa.component_bom_cost || sa.child_bom_cost || sa.part_bom_cost || sa.component_cost || 0);
+                }
+                return {
+                  ...sa,
+                  bom_cost: actualPartCost,
+                  rate: actualPartCost
+                };
+              });
+              changed = true;
+            } else if (saChanged) {
+              newItem.sub_assemblies = updatedSAs;
+              changed = true;
             }
           }
 
@@ -306,7 +375,8 @@ const QuotationFormPage = () => {
     isLocked, 
     mode, 
     version, 
-    selectedVersionId
+    selectedVersionId,
+    isBOMUpdateRequest
   ]);
 
   useEffect(() => {
@@ -448,7 +518,13 @@ const QuotationFormPage = () => {
           // Prioritize override sub_assemblies if they exist.
           const savedSubAssemblies = ((override?.sub_assemblies || item.sub_assemblies) || []).map(sa => {
             let actualPartCost =
-              parseFloat(sa.part_bom_cost || sa.component_cost || sa.bom_cost || sa.rate || 0);
+              parseFloat(sa.component_bom_cost || sa.child_bom_cost || sa.part_bom_cost || sa.component_cost || sa.bom_cost || sa.rate || 0);
+            
+            // COMPLETELY BLOCK parent/assembly bom_cost inheritance!
+            const parentBOMCost = parseFloat(item.bom_cost || item.rate || 0);
+            if (Math.abs(actualPartCost - parentBOMCost) < 0.01) {
+              actualPartCost = parseFloat(sa.component_bom_cost || sa.child_bom_cost || sa.part_bom_cost || sa.component_cost || 0);
+            }
 
             // Apply pending BOM cost if available and we are editing/revising
             if (!isLocked && sa.pending_bom_cost > 0) {
@@ -796,7 +872,7 @@ const QuotationFormPage = () => {
           status: status.toUpperCase() === 'REVISED' ? 'REVISED' : (item.status || 'SENT'),
           profit_percentage: 0,
           sub_assemblies: (item.sub_assemblies || []).map(sa => ({
-            item_code: sa.item_code || sa.component_code,
+            item_code: sa.component_code || sa.item_code,
             drawing_no: sa.drawing_no,
             description: sa.description,
             quantity: sa.quantity,
@@ -1268,11 +1344,18 @@ const QuotationFormPage = () => {
                                                     sub_assemblies: g.includes('ASSEMBLY')
                                                     ? ((drw?.sub_assemblies && drw.sub_assemblies.length > 0)
                                                         ? drw.sub_assemblies.filter(sa => (sa.item_group || '').toUpperCase().includes('PART'))
-                                                        : (it.sub_assemblies || []).filter(sa => (sa.item_group || '').toUpperCase().includes('PART'))).map(sa => ({
-                                                      ...sa,
-                                                      bom_cost: parseFloat(sa.bom_cost || sa.rate || 0),
-                                                      rate: parseFloat(sa.rate || sa.bom_cost || 0)
-                                                    }))
+                                                        : (it.sub_assemblies || []).filter(sa => (sa.item_group || '').toUpperCase().includes('PART'))).map(sa => {
+                                                        let actualPartCost = parseFloat(sa.component_bom_cost || sa.child_bom_cost || sa.part_bom_cost || sa.component_cost || sa.bom_cost || sa.rate || 0);
+                                                        const parentBOMCost = parseFloat(drwRate || it.bom_cost || 0);
+                                                        if (Math.abs(actualPartCost - parentBOMCost) < 0.01) {
+                                                          actualPartCost = parseFloat(sa.component_bom_cost || sa.child_bom_cost || sa.part_bom_cost || sa.component_cost || 0);
+                                                        }
+                                                        return {
+                                                          ...sa,
+                                                          bom_cost: actualPartCost,
+                                                          rate: actualPartCost
+                                                        };
+                                                      })
                                                     : []
                                                   };
                                                 }
@@ -1385,11 +1468,28 @@ const QuotationFormPage = () => {
                               </td>
                               <td className="p-2 border-b border-slate-100 text-[11px] text-indigo-600  bg-indigo-50/30">
                                 {formatCurrency(
-                                  sa.component_bom_cost ||
-                                  sa.child_bom_cost ||
-                                  sa.bom_cost ||
-                                  sa.rate ||
-                                  0
+                                  (() => {
+                                    const parentCost = parseFloat(item.bom_cost || item.rate || 0);
+                                    const candidates = [
+                                      sa.component_bom_cost,
+                                      sa.child_bom_cost,
+                                      sa.part_bom_cost,
+                                      sa.component_cost,
+                                      sa.bom_cost,
+                                      sa.rate
+                                    ];
+                                    for (const cost of candidates) {
+                                      const val = parseFloat(cost || 0);
+                                      if (val > 0 && Math.abs(val - parentCost) > 0.01) {
+                                        return val;
+                                      }
+                                    }
+                                    const fallback = parseFloat(sa.component_bom_cost || sa.child_bom_cost || sa.part_bom_cost || sa.component_cost || sa.bom_cost || sa.rate || 0);
+                                    if (Math.abs(fallback - parentCost) < 0.01) {
+                                      return sa.pending_bom_cost || 0;
+                                    }
+                                    return fallback;
+                                  })()
                                 )}
                               </td>
                               <td className="p-2 border-b border-slate-100"></td>

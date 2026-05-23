@@ -963,8 +963,9 @@ const getApprovedDrawings = async (companyId = null) => {
       const isPart = g.includes('PART') || t.includes('PART');
       const components = await bomService.getItemComponents(item.id, item.item_code, item.drawing_no);
 
+      const isSA = g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY') || t.includes('SA') || t.includes('SUB') || t.includes('ASSEMBLY');
       const isDrawingOrSA = isSA || g.includes('PART') || t.includes('PART') || (item.drawing_no && item.drawing_no !== '—');
-      if (isDrawingOrPart) {
+      if (isDrawingOrSA) {
         item.sub_assemblies = components;
       } else {
         item.sub_assemblies = components.filter(c => {

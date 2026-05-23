@@ -841,8 +841,8 @@ const ClientQuotations = () => {
               }).length;
 
               const parts = [];
-              if (fgCount > 0) parts.push(`\${fgCount} ASSY`);
-              if (saCount > 0) parts.push(`\${saCount} PART`);
+              if (fgCount > 0) parts.push(`${fgCount} ASSY`);
+              if (saCount > 0) parts.push(`${saCount} PART`);
 
               return (
                 <span className="text-xs  text-slate-400  bg-slate-50 px-1 rounded border border-slate-100">
@@ -1834,6 +1834,40 @@ const ClientQuotations = () => {
   };
 
   const handleApplyPendingBOM = async (group, targetItem) => {
+    let currentCost = 0;
+    if (targetItem) {
+      const possibleValues = [
+        targetItem.rate,
+        targetItem.bom_cost,
+        targetItem.latest_bom_cost,
+        targetItem.final_bom_cost,
+        targetItem.current_bom_cost
+      ];
+      for (const val of possibleValues) {
+        const parsed = parseFloat(val);
+        if (!isNaN(parsed) && parsed > 0) {
+          currentCost = parsed;
+          break;
+        }
+      }
+    }
+
+    let newCost = 0;
+    if (targetItem) {
+      const possibleNewValues = [
+        targetItem.pending_bom_cost,
+        targetItem.latest_bom_cost,
+        targetItem.bom_cost
+      ];
+      for (const val of possibleNewValues) {
+        const parsed = parseFloat(val);
+        if (!isNaN(parsed) && parsed > 0) {
+          newCost = parsed;
+          break;
+        }
+      }
+    }
+
     const result = await Swal.fire({
       title: 'Apply New BOM Cost?',
       html: `
@@ -1842,11 +1876,11 @@ const ClientQuotations = () => {
           <div style="margin-top: 15px; padding: 10px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
             <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
               <span>Current BOM Cost:</span>
-              <span style="font-weight: 600; color: #64748b;">${formatCurrency(parseFloat(targetItem.bom_cost || targetItem.final_bom_cost || targetItem.current_bom_cost || targetItem.rate || 0))}</span>
+              <span style="font-weight: 600; color: #64748b;">${formatCurrency(currentCost)}</span>
             </div>
             <div style="display: flex; justify-content: space-between;">
               <span>New BOM Cost:</span>
-              <span style="font-weight: 700; color: #e11d48;">${formatCurrency(parseFloat(targetItem.pending_bom_cost || targetItem.latest_bom_cost || targetItem.bom_cost || 0))}</span>
+              <span style="font-weight: 700; color: #e11d48;">${formatCurrency(newCost)}</span>
             </div>
           </div>
           <p style="margin-top: 15px; color: #64748b;">This will open the quotation revision form with the updated costs.</p>
@@ -1880,30 +1914,32 @@ const ClientQuotations = () => {
             batchId: null,
             projectName: group.project_name || '',
             mode: 'revise',
+            isBOMUpdateRequest: true,
             items: latestQuotes.map(q => {
               // Apply pending BOM cost if it's the target item (direct match)
               // OR if the target item is a sub-assembly component of this quote item
               const isTarget = String(q.id) === String(targetItem.id);
-
-              const targetComp = (q.sub_assemblies || []).find(sa =>
-                (sa.component_code === targetItem.item_code || sa.component_code === targetItem.component_code ||
-                 sa.item_code === targetItem.item_code || sa.item_code === targetItem.component_code) &&
-                sa.drawing_no === targetItem.drawing_no
-              );
 
               const newBomCost = isTarget
                 ? targetItem.pending_bom_cost
                 : (q.pending_bom_cost || q.latest_bom_cost || q.bom_cost || 0);
 
               const updatedSubAssemblies = (q.sub_assemblies || []).map(sa => {
-                const isSubTarget = sa.component_code === targetItem.item_code || sa.component_code === targetItem.component_code ||
-                                     sa.item_code === targetItem.item_code || sa.item_code === targetItem.component_code;
-                if (isSubTarget) {
+                const isSubTarget = (sa.component_code && targetItem.item_code && sa.component_code === targetItem.item_code) ||
+                                     (sa.component_code && targetItem.component_code && sa.component_code === targetItem.component_code) ||
+                                     (sa.item_code && targetItem.item_code && sa.item_code === targetItem.item_code) ||
+                                     (sa.item_code && targetItem.component_code && sa.item_code === targetItem.component_code);
+                
+                // Prioritize the target's pending cost if it's the direct sub-target
+                // Otherwise fallback to its own pending cost if available
+                const effectivePendingCost = isSubTarget ? targetItem.pending_bom_cost : (sa.pending_bom_cost || 0);
+
+                if (effectivePendingCost > 0) {
                   return {
                     ...sa,
-                    bom_cost: targetItem.pending_bom_cost,
-                    rate: targetItem.pending_bom_cost,
-                    pending_bom_cost: targetItem.pending_bom_cost
+                    bom_cost: parseFloat(effectivePendingCost),
+                    rate: parseFloat(effectivePendingCost),
+                    pending_bom_cost: parseFloat(effectivePendingCost)
                   };
                 }
                 return sa;
