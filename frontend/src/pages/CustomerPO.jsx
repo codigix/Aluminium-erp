@@ -150,7 +150,7 @@ const CustomerPO = ({
 
         // Add the main FG item with its sub-assemblies nested
         items.push({
-          drawingNo: (item.drawing_no || item.drawingNo || '') !== '—' ? (item.drawing_no || item.drawingNo || '') : '',
+          drawingNo: (item.drawing_no || item.drawingNo || '') !== '—' ? (item.drawing_no || item.drawingNo || '').toUpperCase() : '',
           description: item.item_description || item.description,
           quantity: qty,
           unit: item.item_unit || item.unit || 'NOS',
@@ -168,7 +168,7 @@ const CustomerPO = ({
               return true;
             }).map(sa => ({
               ...sa,
-              drawingNo: sa.drawing_no || sa.component_code || sa.item_code || '',
+              drawingNo: (sa.drawing_no || sa.component_code || sa.item_code || '').toUpperCase(),
               description: sa.description || `Sub-assembly`,
               quantity: parseFloat(sa.quantity || sa.qty || 0),
               unit: sa.uom || sa.unit || 'NOS',
@@ -852,8 +852,8 @@ const CustomerPO = ({
                                   required
                                   type="text"
                                   disabled={formMode === 'VIEW'}
-                                  value={item.drawingNo}
-                                  onChange={(e) => handleItemChange(index, 'drawingNo', e.target.value)}
+                                  value={item.drawingNo?.toUpperCase() || ''}
+                                  onChange={(e) => handleItemChange(index, 'drawingNo', e.target.value.toUpperCase())}
                                   placeholder="DRW-101"
                                   className="w-full bg-slate-50 border border-slate-200 rounded  p-2 text-xs  focus:border-indigo-500 focus:bg-white outline-none transition-all  text-slate-700"
                                 />
@@ -955,7 +955,7 @@ const CustomerPO = ({
                                   <td className="p-2 border-b border-slate-100">
                                     <div className="flex items-center gap-2 pl-3">
                                       <GitBranch size={12} className="text-blue-400 rotate-180" />
-                                      <span className="text-[9px] text-slate-500 font-mono ">{sa.drawingNo}</span>
+                                      <span className="text-[9px] text-slate-500 font-mono ">{(sa.drawingNo || '').toUpperCase()}</span>
                                     </div>
                                   </td>
                                   <td className="p-2 border-b border-slate-100">

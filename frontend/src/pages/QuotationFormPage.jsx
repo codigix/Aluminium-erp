@@ -1300,8 +1300,8 @@ const QuotationFormPage = () => {
                                         <input 
                                           type="text"
                                           placeholder="Drawing No..."
-                                          value={item.drawing_no}
-                                          onChange={(e) => handleItemChange(item.id, 'drawing_no', e.target.value)}
+                                          value={item.drawing_no?.toUpperCase() || ''}
+                                          onChange={(e) => handleItemChange(item.id, 'drawing_no', e.target.value.toUpperCase())}
                                           className="flex-1 px-0 py-0 text-xs   text-slate-500 border-none focus:ring-0 placeholder:text-slate-300 bg-transparent"
                                         />
                                         {(() => {
@@ -1345,7 +1345,7 @@ const QuotationFormPage = () => {
                                                   return {
                                                     ...it,
                                                     drawing_id: val,
-                                                    drawing_no: drw?.drawing_no || '',
+                                                    drawing_no: (drw?.drawing_no || '').toUpperCase(),
                                                     description: drw?.description || '',
                                                     rate: drwRate,
                                                     bom_cost: drwRate,

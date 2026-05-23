@@ -338,7 +338,8 @@ const DrawingMaster = () => {
       label: 'Drawing No', 
       key: 'drawing_no',
       sortable: true,
-      className: ' text-indigo-600'
+      className: ' text-indigo-600',
+      render: (val) => <span className="uppercase">{val}</span>
     },
     { 
       label: 'Description', 

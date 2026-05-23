@@ -162,7 +162,7 @@ const RecursiveBOMRow = ({
                 </span>
                 {(item.drawing_no || item.drawingNo) && (item.drawing_no || item.drawingNo) !== 'N/A' && (
                   <span className="text-[10px] text-slate-500 font-mono">
-                    {item.drawing_no || item.drawingNo}
+                    {(item.drawing_no || item.drawingNo || '').toUpperCase()}
                   </span>
                 )}
                 {getDimensionString(item) && (
@@ -720,7 +720,7 @@ const BOMFormPage = () => {
     });
 
     return Array.from(drawingMap.entries())
-      .map(([no, name]) => ({ label: cleanText(name) || '', value: no, subLabel: no }))
+      .map(([no, name]) => ({ label: cleanText(name) || '', value: no, subLabel: (no || '').toUpperCase() }))
       .sort((a, b) => (a.label || '').localeCompare(b.label || ''));
   }, [approvedDrawings, stockItems, isReadOnly]);
 
@@ -789,7 +789,7 @@ const BOMFormPage = () => {
         options.push({
           label: `${item.item_code} – ${item.material_name}${bomCost > 0 ? ` (₹${bomCost.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})` : ''}`,
           value: item.item_code,
-          subLabel: `${dims ? `${dims}\n` : ''}${item.drawing_no && item.drawing_no !== 'N/A' ? `Drawing: ${item.drawing_no}${bomCost > 0 ? ` [BOM Cost: ₹${bomCost.toLocaleString('en-IN', { minimumFractionDigits: 2 })}]` : ''}` : `Stock Item${bomCost > 0 ? ` [BOM Cost: ₹${bomCost.toLocaleString('en-IN', { minimumFractionDigits: 2 })}]` : ''}`}`,
+          subLabel: `${dims ? `${dims}\n` : ''}${item.drawing_no && item.drawing_no !== 'N/A' ? `Drawing: ${item.drawing_no.toUpperCase()}${bomCost > 0 ? ` [BOM Cost: ₹${bomCost.toLocaleString('en-IN', { minimumFractionDigits: 2 })}]` : ''}` : `Stock Item${bomCost > 0 ? ` [BOM Cost: ₹${bomCost.toLocaleString('en-IN', { minimumFractionDigits: 2 })}]` : ''}`}`,
           rate: bomCost > 0 ? bomCost : (item.selling_rate > 0 ? item.selling_rate : (item.valuation_rate || 0)),
           uom: item.unit || 'Kg',
           description: item.material_name,
@@ -801,8 +801,8 @@ const BOMFormPage = () => {
           thickness: item.thickness,
           diameter: item.diameter,
           outer_diameter: item.outer_diameter,
-          drawingNo: item.drawing_no || 'N/A',
-          drawing_no: item.drawing_no || 'N/A'
+          drawingNo: (item.drawing_no || 'N/A').toUpperCase(),
+          drawing_no: (item.drawing_no || 'N/A').toUpperCase()
         });
         seenCodes.add(item.item_code);
       }
@@ -847,7 +847,7 @@ const BOMFormPage = () => {
         options.push({
           label: `${item.item_code} – ${item.description || item.material_name}${bomCost > 0 ? ` (₹${bomCost.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})` : ''}`,
           value: item.item_code,
-          subLabel: `${dims ? `${dims}\n` : ''}Drawing: ${item.drawing_no} (Order Item)${bomCost > 0 ? ` [BOM Cost: ₹${bomCost.toLocaleString('en-IN', { minimumFractionDigits: 2 })}]` : ''}`,
+          subLabel: `${dims ? `${dims}\n` : ''}Drawing: ${(item.drawing_no || '').toUpperCase()} (Order Item)${bomCost > 0 ? ` [BOM Cost: ₹${bomCost.toLocaleString('en-IN', { minimumFractionDigits: 2 })}]` : ''}`,
           rate: bomCost > 0 ? bomCost : (item.rate || 0),
           uom: item.unit || 'Kg',
           description: item.description || item.material_name,
@@ -859,8 +859,8 @@ const BOMFormPage = () => {
           thickness: item.thickness,
           diameter: item.diameter,
           outer_diameter: item.outer_diameter,
-          drawingNo: item.drawing_no || 'N/A',
-          drawing_no: item.drawing_no || 'N/A'
+          drawingNo: (item.drawing_no || 'N/A').toUpperCase(),
+          drawing_no: (item.drawing_no || 'N/A').toUpperCase()
         });
         seenCodes.add(item.item_code);
       }
