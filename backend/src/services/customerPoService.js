@@ -158,8 +158,8 @@ const createCustomerPo = async payload => {
         for (const sa of item.sub_assemblies) {
           await connection.execute(
             `INSERT INTO customer_po_item_subassemblies
-              (po_item_id, drawing_no, description, quantity, unit, rate)
-             VALUES (?, ?, ?, ?, ?, ?)`
+              (po_item_id, drawing_no, description, quantity, unit, rate, hsn_code, delivery_date)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
             ,
             [
               poItemId,
@@ -167,7 +167,9 @@ const createCustomerPo = async payload => {
               sa.description || null,
               sa.quantity || 0,
               sa.unit || 'NOS',
-              sa.rate || 0
+              sa.rate || 0,
+              sa.hsn_code || null,
+              sa.delivery_date || null
             ]
           );
         }
@@ -267,7 +269,7 @@ const getCustomerPoById = async id => {
   const enrichedItems = await Promise.all(items.map(async (item) => {
     // 1. Try to fetch stored sub-assemblies first (as a snapshot)
     const [storedSA] = await pool.query(
-      `SELECT drawing_no as drawingNo, description, quantity, unit, rate 
+      `SELECT drawing_no as drawingNo, description, quantity, unit, rate, hsn_code, delivery_date 
        FROM customer_po_item_subassemblies 
        WHERE po_item_id = ?`,
       [item.id]
@@ -407,8 +409,8 @@ const updateCustomerPo = async (id, payload) => {
         for (const sa of item.sub_assemblies) {
           await connection.execute(
             `INSERT INTO customer_po_item_subassemblies
-              (po_item_id, drawing_no, description, quantity, unit, rate)
-             VALUES (?, ?, ?, ?, ?, ?)`
+              (po_item_id, drawing_no, description, quantity, unit, rate, hsn_code, delivery_date)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
             ,
             [
               poItemId,
@@ -416,7 +418,9 @@ const updateCustomerPo = async (id, payload) => {
               sa.description || null,
               sa.quantity || 0,
               sa.unit || 'NOS',
-              sa.rate || 0
+              sa.rate || 0,
+              sa.hsn_code || null,
+              sa.delivery_date || null
             ]
           );
         }
@@ -619,13 +623,14 @@ const generateCustomerPoPDF = async poId => {
         <table class="items-table">
           <thead>
             <tr>
-              <th style="width: 30px;">Sl No.</th>
+              <th style="width: 25px;">Sl No.</th>
               <th>Description of Goods</th>
-              <th style="width: 70px;">HSN/SAC</th>
-              <th style="width: 60px;">Quantity</th>
-              <th style="width: 80px;">Rate</th>
-              <th style="width: 40px;">per</th>
-              <th style="width: 90px;">Amount</th>
+              <th style="width: 65px;">HSN Code</th>
+              <th style="width: 75px;">Delivery Date</th>
+              <th style="width: 55px;">Quantity</th>
+              <th style="width: 75px;">Rate</th>
+              <th style="width: 35px;">per</th>
+              <th style="width: 85px;">Amount</th>
             </tr>
           </thead>
           <tbody>
@@ -637,6 +642,7 @@ const generateCustomerPoPDF = async poId => {
                 {{#drawing_no}}<div style="font-size: 8px; color: #444;">DRW: {{drawing_no}}</div>{{/drawing_no}}
               </td>
               <td style="text-align: center;">{{hsn_code}}</td>
+              <td style="text-align: center;">{{formatted_delivery_date}}</td>
               <td style="text-align: center;">{{quantity}} {{unit}}</td>
               <td style="text-align: right;">{{rate}}</td>
               <td style="text-align: center;">{{unit}}</td>
@@ -648,7 +654,8 @@ const generateCustomerPoPDF = async poId => {
               <td>
                 <div style="font-weight: bold;">{{description}} ({{drawingNo}})</div>
               </td>
-              <td style="text-align: center;">-</td>
+              <td style="text-align: center;">{{hsn_code}}</td>
+              <td style="text-align: center;">{{formatted_delivery_date}}</td>
               <td style="text-align: center;">{{displayQuantity}}</td>
               <td style="text-align: right;">{{displayRate}}</td>
               <td style="text-align: center;">{{unit}}</td>
@@ -658,7 +665,7 @@ const generateCustomerPoPDF = async poId => {
             {{/items}}
             {{#empty_rows}}
             <tr style="height: 25px;">
-              <td></td><td></td><td></td><td></td><td></td><td></td><td></td>
+              <td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>
             </tr>
             {{/empty_rows}}
           </tbody>
@@ -815,6 +822,8 @@ const generateCustomerPoPDF = async poId => {
       quantity: Number(i.quantity).toFixed(0),
       rate: formatCurrency(i.rate),
       basic_amount: formatCurrency(i.basic_amount),
+      hsn_code: i.hsn_code || '—',
+      formatted_delivery_date: i.delivery_date ? formatDate(i.delivery_date) : '—',
       sub_assemblies: (i.sub_assemblies || []).map(sa => {
         const saQty = (parseFloat(sa.quantity || 0) * (parseFloat(i.quantity) || 0));
         const saRate = parseFloat(sa.rate || 0);
@@ -823,7 +832,9 @@ const generateCustomerPoPDF = async poId => {
           displayQuantity: saQty.toFixed(3),
           displayRate: formatCurrency(saRate),
           displayTotal: formatCurrency(saQty * saRate),
-          unit: sa.unit || 'NOS'
+          unit: sa.unit || 'NOS',
+          hsn_code: sa.hsn_code || i.hsn_code || '—',
+          formatted_delivery_date: sa.delivery_date ? formatDate(sa.delivery_date) : (i.delivery_date ? formatDate(i.delivery_date) : '—')
         };
       })
     })),

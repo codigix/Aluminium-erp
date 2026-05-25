@@ -318,7 +318,13 @@ const SalesOrders = () => {
               cgst_percent: cgst,
               sgst_percent: sgst,
               igst_percent: igst,
-              sub_assemblies: item.sub_assemblies || []
+              hsn_code: item.hsn_code,
+              delivery_date: item.delivery_date,
+              sub_assemblies: (item.sub_assemblies || []).map(sa => ({
+                ...sa,
+                hsn_code: sa.hsn_code,
+                delivery_date: sa.delivery_date
+              }))
             };
           });
         }
@@ -356,6 +362,8 @@ const SalesOrders = () => {
           quantity: qty,
           rate: baseRate,
           amount: baseRate * qty,
+          hsn_code: item.hsn_code,
+          delivery_date: item.item_delivery || item.delivery_date,
           sub_assemblies: (item.sub_assemblies || []).map(sa => ({
             ...sa,
             drawingNo: sa.drawing_no || sa.component_code || sa.item_code || '',
@@ -363,7 +371,9 @@ const SalesOrders = () => {
             quantity: parseFloat(sa.qty || sa.quantity || 0),
             unit: sa.uom || sa.unit || 'NOS',
             rate: parseFloat(sa.rate || sa.bom_cost || 0).toFixed(2),
-            item_group: sa.item_group || 'SA'
+            item_group: sa.item_group || 'SA',
+            hsn_code: sa.hsn_code,
+            delivery_date: sa.delivery_date
           }))
         };
       });
@@ -488,6 +498,7 @@ const SalesOrders = () => {
           orderDate: data.order_date?.split('T')[0] || data.created_at?.split('T')[0] || new Date().toISOString().split('T')[0],
           deliveryDate: data.delivery_date ? data.delivery_date.split('T')[0] : (data.target_dispatch_date ? data.target_dispatch_date.split('T')[0] : ''),
           orderType: 'Sales',
+          projectName: data.project_name || '',
           customerId: data.client_id || data.company_id || '',
           customerEmail: data.contact_email || data.email_address || '',
           customerPhone: data.contact_mobile || data.contact_phone || '',
@@ -1170,6 +1181,8 @@ const SalesOrders = () => {
                     <tr>
                       <th className="p-2  text-left">Item Code</th>
                       <th className="p-2  text-left">Type</th>
+                      <th className="p-2  text-left">HSN Code</th>
+                      <th className="p-2  text-left">Item Delivery</th>
                       <th className="p-2  text-center w-24">Qty</th>
                       <th className="p-2  text-right">Rate</th>
                       <th className="p-2  text-right">Amount</th>
@@ -1187,6 +1200,10 @@ const SalesOrders = () => {
                             <div className="text-xs text-slate-400 font-sans mt-0.5">{item.description}</div>
                           </td>
                           <td className="p-2  text-slate-500">{item.type || 'Standard'}</td>
+                          <td className="p-2  text-slate-500">{item.hsn_code || '—'}</td>
+                          <td className="p-2  text-slate-500">
+                            {item.delivery_date ? new Date(item.delivery_date).toLocaleDateString() : '—'}
+                          </td>
                           <td className="p-2  text-center">
                             {item.quantity}
                           </td>
@@ -1213,8 +1230,26 @@ const SalesOrders = () => {
                               <td className="p-2 border-b border-slate-100">
                                 <div className="flex items-center gap-2 pl-4">
                                   <span className="text-xs  text-slate-700 ">{sa.description}</span>
-                                  <span className="px-1 py-0.5 rounded-[2px] text-[8px]  bg-blue-50 text-blue-600 border border-blue-100/50">SA</span>
+                                  {(() => {
+                                    const saGroup = (sa.item_group || '').toUpperCase();
+                                    const isSaPart = saGroup.includes('PART');
+                                    const displaySaGroup = isSaPart ? 'PART' : 'SA';
+                                    return (
+                                      <span className={`px-1 py-0.5 rounded-[2px] text-[8px] border ${isSaPart
+                                        ? 'bg-blue-50 text-blue-600 border-blue-100/50'
+                                        : 'bg-emerald-50 text-emerald-600 border-emerald-100/50'
+                                        }`}>
+                                        {displaySaGroup}
+                                      </span>
+                                    );
+                                  })()}
                                 </div>
+                              </td>
+                              <td className="p-2 border-b border-slate-100 text-xs text-slate-500">
+                                {sa.hsn_code || '—'}
+                              </td>
+                              <td className="p-2 border-b border-slate-100 text-xs text-slate-500">
+                                {sa.delivery_date ? new Date(sa.delivery_date).toLocaleDateString() : '—'}
                               </td>
                               <td className="p-2 border-b border-slate-100 text-center text-xs  text-slate-600">
                                 {saQty.toFixed(3)}
@@ -1251,6 +1286,7 @@ const SalesOrders = () => {
                   disabled={formMode === 'view'}
                 >
                   <option value="Draft">Draft</option>
+                  <option value="Created">Created</option>
                   <option value="Active">Active</option>
                   <option value="Completed">Completed</option>
                   <option value="Cancelled">Cancelled</option>

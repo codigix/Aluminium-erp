@@ -1636,7 +1636,7 @@ const QuotationFormPage = () => {
                             {new Date(v.created_at).toLocaleDateString('en-GB')}
                           </div>
                           {isViewable && (
-                            <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <div className="flex items-center gap-2 transition-opacity">
                               <button 
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -1645,7 +1645,6 @@ const QuotationFormPage = () => {
                                 className="px-1.5 py-0.5 text-[9px]  bg-indigo-50 text-indigo-600 border border-indigo-100 rounded hover:bg-indigo-100 transition-all flex items-center gap-1"
                                 title="View PDF"
                               >
-                                <FileText size={8} />
                                 View PDF
                               </button>
                             </div>

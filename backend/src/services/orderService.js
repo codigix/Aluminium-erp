@@ -133,14 +133,16 @@ const createOrder = async (orderData) => {
       for (const item of items) {
         await connection.execute(`
           INSERT INTO order_items
-          (order_id, item_code, drawing_no, description, type, quantity, rate, amount)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          (order_id, item_code, drawing_no, description, type, hsn_code, delivery_date, quantity, rate, amount)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
           orderId,
           item.item_code,
           item.drawing_no,
           item.description,
           item.type,
+          item.hsn_code || null,
+          item.delivery_date || null,
           item.quantity || 0,
           item.rate || 0,
           item.amount || 0
@@ -192,7 +194,7 @@ const getOrderById = async (id) => {
 
       if (poItems.length > 0) {
         const [storedSA] = await pool.query(
-          `SELECT drawing_no as drawingNo, description, quantity, unit, rate 
+          `SELECT drawing_no as drawingNo, description, quantity, unit, rate, hsn_code, delivery_date 
            FROM customer_po_item_subassemblies 
            WHERE po_item_id = ?`,
           [poItems[0].id]
@@ -300,14 +302,16 @@ const updateOrder = async (id, orderData) => {
       for (const item of items) {
         await connection.execute(`
           INSERT INTO order_items
-          (order_id, item_code, drawing_no, description, type, quantity, rate, amount)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          (order_id, item_code, drawing_no, description, type, hsn_code, delivery_date, quantity, rate, amount)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
           id,
           item.item_code,
           item.drawing_no,
           item.description,
           item.type,
+          item.hsn_code || null,
+          item.delivery_date || null,
           item.quantity || 0,
           item.rate || 0,
           item.amount || 0
@@ -448,7 +452,7 @@ const generateOrderPDF = async (orderId) => {
 
       if (poItems.length > 0) {
         const [storedSA] = await pool.query(
-          `SELECT drawing_no as drawingNo, description, quantity, unit, rate 
+          `SELECT drawing_no as drawingNo, description, quantity, unit, rate, hsn_code, delivery_date 
            FROM customer_po_item_subassemblies 
            WHERE po_item_id = ?`,
           [poItems[0].id]
@@ -598,6 +602,7 @@ const generateOrderPDF = async (orderId) => {
               <th style="width: 30px;">Sl No.</th>
               <th>Description of Goods</th>
               <th style="width: 70px;">HSN/SAC</th>
+              <th style="width: 70px;">Delivery Date</th>
               <th style="width: 60px;">Quantity</th>
               <th style="width: 80px;">Rate</th>
               <th style="width: 40px;">per</th>
@@ -613,6 +618,7 @@ const generateOrderPDF = async (orderId) => {
                 {{#drawing_no}}<div style="font-size: 8px; color: #444;">DRW: {{drawing_no}}</div>{{/drawing_no}}
               </td>
               <td style="text-align: center;">{{hsn_code}}</td>
+              <td style="text-align: center;">{{formatted_delivery_date}}</td>
               <td style="text-align: center;">{{quantity}} {{unit}}</td>
               <td style="text-align: right;">{{rate}}</td>
               <td style="text-align: center;">{{unit}}</td>
@@ -625,7 +631,8 @@ const generateOrderPDF = async (orderId) => {
                 <div>{{description}}</div>
                 {{#drawingNo}}<div class="sa-drw">DRW: {{drawingNo}}</div>{{/drawingNo}}
               </td>
-              <td style="text-align: center;">-</td>
+              <td style="text-align: center;">{{hsn_code}}</td>
+              <td style="text-align: center;">{{formatted_delivery_date}}</td>
               <td style="text-align: center;">{{quantity}} {{unit}}</td>
               <td style="text-align: right;">{{rate}}</td>
               <td style="text-align: center;">{{unit}}</td>
@@ -702,12 +709,16 @@ const generateOrderPDF = async (orderId) => {
     rate: formatCurrency(item.rate),
     item_amount: formatCurrency(item.amount),
     unit: item.unit || 'Nos',
+    hsn_code: item.hsn_code || '—',
+    formatted_delivery_date: item.delivery_date ? formatDate(item.delivery_date) : '—',
     sub_assemblies: (item.sub_assemblies || []).map(sa => ({
       ...sa,
       quantity: Number(sa.quantity || 0).toFixed(3),
       rate: formatCurrency(sa.rate),
       amount: formatCurrency(Number(sa.quantity || 0) * Number(sa.rate || 0)),
-      unit: sa.unit || 'Nos'
+      unit: sa.unit || 'Nos',
+      hsn_code: sa.hsn_code || item.hsn_code || '—',
+      formatted_delivery_date: sa.delivery_date ? formatDate(sa.delivery_date) : (item.delivery_date ? formatDate(item.delivery_date) : '—')
     }))
   }));
 

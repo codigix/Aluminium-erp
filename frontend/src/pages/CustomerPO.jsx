@@ -35,6 +35,7 @@ const CustomerPO = ({
   const [selectedQuoteId, setSelectedQuoteId] = useState('')
   const [showEmailModal, setShowEmailModal] = useState(false)
   const [emailPoData, setEmailPoData] = useState(null)
+  const [allDrawings, setAllDrawings] = useState([])
 
   const [poForm, setPoForm] = useState({
     companyId: '',
@@ -51,6 +52,8 @@ const CustomerPO = ({
       {
         drawingNo: '',
         description: '',
+        hsnCode: '',
+        deliveryDate: '',
         quantity: '',
         unit: 'NOS',
         rate: '',
@@ -60,6 +63,90 @@ const CustomerPO = ({
       }
     ]
   })
+
+  // Fetch drawings for lookup when company changes
+  React.useEffect(() => {
+    const fetchAllDrawings = async () => {
+      try {
+        const data = await apiRequest('/drawings');
+        if (data) setAllDrawings(data);
+      } catch (error) {
+        console.error('Error fetching drawings:', error);
+      }
+    };
+    if (showPoForm) {
+      fetchAllDrawings();
+    }
+  }, [showPoForm]);
+
+  // Sync HSN and Delivery Date from drawing master
+  React.useEffect(() => {
+    if (allDrawings.length === 0 || poForm.items.length === 0) return;
+
+    let changed = false;
+    const updatedItems = poForm.items.map(item => {
+      let itemChanged = false;
+      const matchedDwg = allDrawings.find(d => 
+        String(d.drawing_no).trim().toUpperCase() === String(item.drawingNo).trim().toUpperCase()
+      );
+
+      let newItem = { ...item };
+
+      if (matchedDwg) {
+        if (!item.hsnCode && matchedDwg.hsn_code) {
+          newItem.hsnCode = matchedDwg.hsn_code;
+          itemChanged = true;
+        }
+        if (!item.deliveryDate && matchedDwg.delivery_date) {
+          newItem.deliveryDate = new Date(matchedDwg.delivery_date).toISOString().split('T')[0];
+          itemChanged = true;
+        }
+      }
+
+      // Sync sub-assemblies
+      if (item.sub_assemblies && item.sub_assemblies.length > 0) {
+        const updatedSAs = item.sub_assemblies.map(sa => {
+          let saChanged = false;
+          const matchedSaDwg = allDrawings.find(d => 
+            String(d.drawing_no).trim().toUpperCase() === String(sa.drawingNo).trim().toUpperCase()
+          );
+
+          let newSA = { ...sa };
+          if (matchedSaDwg) {
+            if (!sa.hsnCode && matchedSaDwg.hsn_code) {
+              newSA.hsnCode = matchedSaDwg.hsn_code;
+              saChanged = true;
+            }
+            if (!sa.deliveryDate && matchedSaDwg.delivery_date) {
+              newSA.deliveryDate = new Date(matchedSaDwg.delivery_date).toISOString().split('T')[0];
+              saChanged = true;
+            }
+          }
+
+          // Fallback: Inherit from parent if still empty
+          if (!newSA.hsnCode && newItem.hsnCode) {
+            newSA.hsnCode = newItem.hsnCode;
+            saChanged = true;
+          }
+          if (!newSA.deliveryDate && newItem.deliveryDate) {
+            newSA.deliveryDate = newItem.deliveryDate;
+            saChanged = true;
+          }
+
+          if (saChanged) itemChanged = true;
+          return saChanged ? newSA : sa;
+        });
+        if (itemChanged) newItem.sub_assemblies = updatedSAs;
+      }
+
+      if (itemChanged) changed = true;
+      return itemChanged ? newItem : item;
+    });
+
+    if (changed) {
+      setPoForm(prev => ({ ...prev, items: updatedItems }));
+    }
+  }, [allDrawings, poForm.items]); 
 
   // Auto-generate PO Number when form opens
   React.useEffect(() => {
@@ -148,10 +235,15 @@ const CustomerPO = ({
         const unitRate = qty > 0 ? (totalAmount / qty) : totalAmount;
         const gst = item.gst_percentage || 18;
 
+        const parentHsn = item.hsn_code || item.hsnCode || '';
+        const parentDelivery = item.delivery_date || item.deliveryDate ? new Date(item.delivery_date || item.deliveryDate).toISOString().split('T')[0] : '';
+
         // Add the main FG item with its sub-assemblies nested
         items.push({
           drawingNo: (item.drawing_no || item.drawingNo || '') !== '—' ? (item.drawing_no || item.drawingNo || '').toUpperCase() : '',
           description: item.item_description || item.description,
+          hsnCode: parentHsn,
+          deliveryDate: parentDelivery,
           quantity: qty,
           unit: item.item_unit || item.unit || 'NOS',
           rate: unitRate.toFixed(2),
@@ -170,6 +262,8 @@ const CustomerPO = ({
               ...sa,
               drawingNo: (sa.drawing_no || sa.component_code || sa.item_code || '').toUpperCase(),
               description: sa.description || `Sub-assembly`,
+              hsnCode: sa.hsn_code || sa.hsnCode || parentHsn,
+              deliveryDate: (sa.delivery_date || sa.deliveryDate) ? new Date(sa.delivery_date || sa.deliveryDate).toISOString().split('T')[0] : parentDelivery,
               quantity: parseFloat(sa.quantity || sa.qty || 0),
               unit: sa.uom || sa.unit || 'NOS',
               rate: parseFloat(sa.rate || sa.bom_cost || 0).toFixed(2),
@@ -215,6 +309,8 @@ const CustomerPO = ({
         {
           drawingNo: '',
           description: '',
+          hsnCode: '',
+          deliveryDate: '',
           quantity: '',
           unit: 'NOS',
           rate: '',
@@ -263,6 +359,8 @@ const CustomerPO = ({
         {
           drawingNo: '',
           description: '',
+          hsnCode: '',
+          deliveryDate: '',
           quantity: '',
           unit: 'NOS',
           rate: '',
@@ -297,6 +395,8 @@ const CustomerPO = ({
           items: data.items.map(item => ({
             drawingNo: item.drawing_no || '',
             description: item.description || '',
+            hsnCode: item.hsn_code || '',
+            deliveryDate: item.delivery_date ? new Date(item.delivery_date).toISOString().split('T')[0] : '',
             quantity: item.quantity || '',
             unit: item.unit || 'NOS',
             rate: item.rate || '',
@@ -310,7 +410,17 @@ const CustomerPO = ({
                 if (seen.has(code)) return false;
                 seen.add(code);
                 return true;
-              });
+              }).map(sa => ({
+                ...sa,
+                drawingNo: (sa.drawing_no || sa.component_code || sa.item_code || '').toUpperCase(),
+                description: sa.description || `Sub-assembly`,
+                hsnCode: sa.hsn_code || '',
+                deliveryDate: sa.delivery_date ? new Date(sa.delivery_date).toISOString().split('T')[0] : '',
+                quantity: parseFloat(sa.quantity || sa.qty || 0),
+                unit: sa.uom || sa.unit || 'NOS',
+                rate: parseFloat(sa.rate || sa.bom_cost || 0).toFixed(2),
+                item_group: sa.item_group || 'SA'
+              }));
             })()
           }))
         });
@@ -350,9 +460,13 @@ const CustomerPO = ({
         items: poForm.items.map(item => ({
           ...item,
           drawingNo: (item.drawingNo || '').toUpperCase(),
+          hsn_code: item.hsnCode,
+          delivery_date: item.deliveryDate,
           sub_assemblies: (item.sub_assemblies || []).map(sa => ({
             drawingNo: (sa.drawingNo || '').toUpperCase(),
             description: sa.description,
+            hsn_code: sa.hsnCode,
+            delivery_date: sa.deliveryDate,
             quantity: sa.quantity,
             unit: sa.unit,
             rate: sa.rate
@@ -498,10 +612,11 @@ const CustomerPO = ({
         <div className="flex items-center justify-end gap-2">
           <button
             onClick={() => handleDownloadPdf(row.id, row.po_number)}
-            className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all border border-transparent hover:border-indigo-100"
+            className="px-2.5 py-1.5 bg-indigo-50 text-indigo-600 rounded text-xs   hover:bg-indigo-100 transition-all border border-indigo-100 flex items-center gap-1.5"
             title="View PDF"
           >
-            <Download className="w-4 h-4" />
+            <Download className="w-3.5 h-3.5" />
+            View PDF
           </button>
           <button
             onClick={() => openPoInMode('VIEW', row.id)}
@@ -830,14 +945,16 @@ const CustomerPO = ({
                         <tr className="bg-slate-50 border-b-2 border-slate-100">
                           <th className="p-2  text-xs  text-slate-400   text-left w-32">Drawing No *</th>
                           <th className="p-2  text-xs  text-slate-400   text-left">Description *</th>
-                          <th className="p-2  text-xs  text-slate-400   text-center w-24">Qty *</th>
-                          <th className="p-2  text-xs  text-slate-400   text-center w-20">Unit</th>
-                          <th className="p-2  text-xs  text-slate-400   text-center w-32">Rate *</th>
-                          <th className="p-2  text-xs  text-slate-400   text-center w-20">CGST %</th>
-                          <th className="p-2  text-xs  text-slate-400   text-center w-20">SGST %</th>
-                          <th className="p-2  text-xs  text-slate-400   text-center w-20">IGST %</th>
-                          <th className="p-2  text-xs  text-slate-400   text-right pr-6 w-32">Total</th>
-                          <th className="p-2  text-xs  text-slate-400   text-center w-16">Action</th>
+                          <th className="p-2  text-xs  text-slate-400   text-center w-24">HSN Code</th>
+                          <th className="p-2  text-xs  text-slate-400   text-center w-32">Item Delivery</th>
+                          <th className="p-2  text-xs  text-slate-400   text-center w-20">Qty *</th>
+                          <th className="p-2  text-xs  text-slate-400   text-center w-16">Unit</th>
+                          <th className="p-2  text-xs  text-slate-400   text-center w-24">Rate *</th>
+                          <th className="p-2  text-xs  text-slate-400   text-center w-12">CGST%</th>
+                          <th className="p-2  text-xs  text-slate-400   text-center w-12">SGST%</th>
+                          <th className="p-2  text-xs  text-slate-400   text-center w-12">IGST%</th>
+                          <th className="p-2  text-xs  text-slate-400   text-right pr-6 w-28">Total</th>
+                          <th className="p-2  text-xs  text-slate-400   text-center w-12">Action</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
@@ -867,6 +984,25 @@ const CustomerPO = ({
                                   value={item.description}
                                   onChange={(e) => handleItemChange(index, 'description', e.target.value)}
                                   placeholder="Item description..."
+                                  className="w-full bg-slate-50 border border-slate-200 rounded  p-2 text-xs  focus:border-indigo-500 focus:bg-white outline-none transition-all  text-slate-700"
+                                />
+                              </td>
+                              <td className="p-2">
+                                <input
+                                  type="text"
+                                  disabled={formMode === 'VIEW'}
+                                  value={item.hsnCode || ''}
+                                  onChange={(e) => handleItemChange(index, 'hsnCode', e.target.value)}
+                                  placeholder="HSN..."
+                                  className="w-full bg-slate-50 border border-slate-200 rounded  p-2 text-xs  focus:border-indigo-500 focus:bg-white outline-none transition-all  text-slate-700"
+                                />
+                              </td>
+                              <td className="p-2">
+                                <input
+                                  type="date"
+                                  disabled={formMode === 'VIEW'}
+                                  value={item.deliveryDate || ''}
+                                  onChange={(e) => handleItemChange(index, 'deliveryDate', e.target.value)}
                                   className="w-full bg-slate-50 border border-slate-200 rounded  p-2 text-xs  focus:border-indigo-500 focus:bg-white outline-none transition-all  text-slate-700"
                                 />
                               </td>
@@ -978,6 +1114,12 @@ const CustomerPO = ({
                                         );
                                       })()}
                                     </div>
+                                  </td>
+                                  <td className="p-2 border-b border-slate-100 text-center text-[10px] text-slate-500 ">
+                                    {sa.hsnCode || '—'}
+                                  </td>
+                                  <td className="p-2 border-b border-slate-100 text-center text-[10px] text-slate-500 ">
+                                    {sa.deliveryDate ? new Date(sa.deliveryDate).toLocaleDateString('en-GB') : '—'}
                                   </td>
                                   <td className="p-2 border-b border-slate-100 text-center text-[11px] text-slate-600 ">
                                     {saQty.toFixed(3)}

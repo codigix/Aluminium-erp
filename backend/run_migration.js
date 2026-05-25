@@ -10,22 +10,22 @@ async function run() {
   });
 
   try {
-    console.log('Describing customer_drawings...');
-    const [rows] = await connection.query("DESCRIBE customer_drawings");
+    console.log('Describing customer_po_item_subassemblies...');
+    const [rows] = await connection.query("DESCRIBE customer_po_item_subassemblies");
     console.table(rows);
   } catch (err) {
-    console.error('Error describing customer_drawings:', err.message);
+    console.error('Error describing customer_po_item_subassemblies:', err.message);
   }
 
   try {
-    console.log('Adding drawing_type to sales_order_items...');
-    await connection.query("ALTER TABLE sales_order_items ADD COLUMN drawing_type VARCHAR(50) DEFAULT 'Part' AFTER description");
+    console.log('Adding hsn_code and delivery_date to customer_po_item_subassemblies...');
+    await connection.query("ALTER TABLE customer_po_item_subassemblies ADD COLUMN hsn_code VARCHAR(20) DEFAULT NULL, ADD COLUMN delivery_date DATE DEFAULT NULL");
     console.log('Success.');
   } catch (err) {
     if (err.code === 'ER_DUP_COLUMN_NAME') {
-      console.log('Column drawing_type already exists in sales_order_items.');
+      console.log('Columns already exist.');
     } else {
-      console.error('Error adding to sales_order_items:', err.message);
+      console.error('Error adding columns:', err.message);
     }
   }
 
