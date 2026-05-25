@@ -297,7 +297,7 @@ const approveQuotationRequest = async (req, res, next) => {
 
     await pool.execute(
       'UPDATE quotation_requests SET status = ?, updated_at = NOW() WHERE id = ?',
-      ['Approved', id]
+      ['APPROVED', id]
     );
 
     res.json({ message: 'Quotation request approved' });
@@ -331,12 +331,12 @@ const batchApproveQuotationRequests = async (req, res, next) => {
       if (replyPdfPath) {
         await connection.execute(
           'UPDATE quotation_requests SET status = ?, reply_pdf = ?, updated_at = NOW() WHERE id = ?',
-          ['Approved', replyPdfPath, id]
+          ['APPROVED', replyPdfPath, id]
         );
       } else {
         await connection.execute(
           'UPDATE quotation_requests SET status = ?, updated_at = NOW() WHERE id = ?',
-          ['Approved', id]
+          ['APPROVED', id]
         );
       }
     }
@@ -897,7 +897,8 @@ const getQuotationVersionDetails = async (req, res, next) => {
            (qr.batch_id IS NOT NULL AND qr.batch_id = ?)
            OR (qr.parent_id = ?)
            OR (qr.id = ?)
-         )`,
+         )
+       ORDER BY qr.sales_order_item_id ASC, qr.id ASC`,
       [version, batch_id, mainQuote.parent_id || mainQuote.id, id]
     );
 

@@ -495,6 +495,11 @@ const BOMFormPage = () => {
     return (lastSegment && lastSegment !== 'bom-form') ? lastSegment : null;
   }, [location.pathname]);
 
+  const isFromSalesOrder = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return !!params.get('sales_order_id');
+  }, [location.search]);
+
   const [loading, setLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState(null);
   const selectedItemRef = useRef(null);
@@ -1921,7 +1926,9 @@ const BOMFormPage = () => {
       }
 
       // Instead of resetting and navigating to list, stay on the page in view mode
-      if (newId) {
+      if (isFromSalesOrder) {
+        navigate(-1);
+      } else if (newId) {
         navigate(`/bom-form/${newId}?view=true`);
       } else if (itemId && itemId !== 'bom-form' && !isNewVersion) {
         navigate(`/bom-form/${itemId}?view=true`);
@@ -3718,12 +3725,14 @@ const BOMFormPage = () => {
                   <p className="text-xs text-slate-400">Manage BOM revisions and compare changes</p>
                 </div>
               </div>
-              <button
-                onClick={() => handleCreateBOM('Active', true)}
-                className="text-xs text-indigo-600  hover:underline flex items-center gap-1"
-              >
-                <Plus className="w-3 h-3" /> Save as New Version
-              </button>
+              {!isFromSalesOrder && (
+                <button
+                  onClick={() => handleCreateBOM('Active', true)}
+                  className="text-xs text-indigo-600  hover:underline flex items-center gap-1"
+                >
+                  <Plus className="w-3 h-3" /> Save as New Version
+                </button>
+              )}
             </div>
             <div className=" my-2 overflow-auto max-h-[350px]">
               {loadingHistory ? (
@@ -3853,13 +3862,15 @@ const BOMFormPage = () => {
             >
               Save as Draft
             </Button>
-            <Button
-              variant="secondary"
-              onClick={() => handleCreateBOM('Active', true)}
-              icon={History}
-            >
-              Save as New Version
-            </Button>
+            {!isFromSalesOrder && (
+              <Button
+                variant="secondary"
+                onClick={() => handleCreateBOM('Active', true)}
+                icon={History}
+              >
+                Save as New Version
+              </Button>
+            )}
             <Button
               variant="primary"
               onClick={() => handleCreateBOM('Active')}

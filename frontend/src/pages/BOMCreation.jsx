@@ -111,7 +111,26 @@ const BOMCreation = () => {
       });
       if (!response.ok) throw new Error('Failed to fetch BOM details');
       const data = await response.json();
-      setBomOrderItems(data);
+      
+      // Filter to show only the latest version of each item
+      const itemGroups = (data || []).reduce((acc, item) => {
+        const key = `${item.item_code}-${item.drawing_no || 'N/A'}`;
+        if (!acc[key]) acc[key] = [];
+        acc[key].push(item);
+        return acc;
+      }, {});
+
+      const latestItems = Object.values(itemGroups).map(versions => {
+        return versions.sort((a, b) => {
+          const vA = a.version || a.revision_no || '0';
+          const vB = b.version || b.revision_no || '0';
+          const comp = compareVersions(vA, vB);
+          if (comp !== 0) return -comp;
+          return (b.id || 0) - (a.id || 0);
+        })[0];
+      });
+
+      setBomOrderItems(latestItems);
     } catch (error) {
       console.error(error);
       errorToast('Failed to load BOM details');
@@ -629,8 +648,26 @@ const BOMCreation = () => {
       key: 'total_drawings',
       render: (_, row) => {
         const items = clientData[row.id]?.items || [];
-        const drawingsSet = new Set(items.map(i => cleanText(i.drawing_no || 'N/A')));
-        return <span className="text-sm text-slate-700">{drawingsSet.size}</span>;
+        // Only consider top-level items to avoid counting sub-parts
+        const topLevelItems = items.filter(item => !item.parent_bom_id);
+        
+        // Group by drawing_no to count unique drawings
+        const drawingsMap = topLevelItems.reduce((acc, item) => {
+          const dwg = cleanText(item.drawing_no || 'N/A');
+          if (!acc[dwg]) acc[dwg] = [];
+          acc[dwg].push(item);
+          return acc;
+        }, {});
+
+        // Filter unique drawings to only include those that have at least one PART or ASSEMBLY item
+        const filteredDrawingsCount = Object.values(drawingsMap).filter(dwgItems => {
+          return dwgItems.some(item => {
+            const group = (item.item_group || item.itemGroup || '').toUpperCase();
+            return group === 'PART' || group === 'ASSEMBLY';
+          });
+        }).length;
+
+        return <span className="text-sm text-slate-700">{filteredDrawingsCount}</span>;
       }
     },
     {
@@ -810,10 +847,22 @@ const BOMCreation = () => {
 
             // Refined status logic
             let dwgStatus = 'PENDING';
-            if (allItemsWithBOM.length > 0) {
-              dwgStatus = 'COMPLETED';
-            } else if (dwgItems.length > 0) {
-              dwgStatus = 'DESIGN_APPROVED'; // Custom label for UI
+            const isAssemblyDrawing = (drawingType || '').toUpperCase().includes('ASSEMBLY');
+
+            if (isAssemblyDrawing) {
+              // For Assembly drawings, only show COMPLETED if the assembly item itself has a BOM
+              const hasAssemblyBOM = dwgItems.some(i => i.has_bom || i.has_master_bom);
+              if (hasAssemblyBOM) {
+                dwgStatus = 'COMPLETED';
+              } else if (dwgItems.length > 0) {
+                dwgStatus = 'DESIGN_APPROVED';
+              }
+            } else {
+              if (allItemsWithBOM.length > 0) {
+                dwgStatus = 'COMPLETED';
+              } else if (dwgItems.length > 0) {
+                dwgStatus = 'DESIGN_APPROVED'; // Custom label for UI
+              }
             }
 
             return (
@@ -1144,7 +1193,13 @@ const BOMCreation = () => {
                         <div>
                           <p className="text-xs  text-slate-400   mb-1">Total Drawings</p>
                           <div className="flex items-baseline gap-1">
-                            <span className="text-xl  text-slate-900 ">{bomOrderItems.filter(i => i.status !== 'REJECTED').length}</span>
+                            <span className="text-xl  text-slate-900 ">
+                              {bomOrderItems.filter(item => {
+                                if (item.status === 'REJECTED') return false;
+                                const group = (item.item_group || item.itemGroup || '').toUpperCase();
+                                return group === 'PART' || group === 'ASSEMBLY';
+                              }).length}
+                            </span>
                             <span className="text-xs  text-slate-400 italic">Sets</span>
                           </div>
                         </div>
@@ -1161,6 +1216,9 @@ const BOMCreation = () => {
                             <span className="text-xl  text-white er">
                               {bomOrderItems.reduce((total, item) => {
                                 if (item.status === 'REJECTED') return total;
+                                const group = (item.item_group || item.itemGroup || '').toUpperCase();
+                                if (group !== 'PART' && group !== 'ASSEMBLY') return total;
+                                
                                 const mat = item.materials?.reduce((sum, m) => sum + (parseFloat(m.qty_per_pc || 0) * parseFloat(item.quantity) * parseFloat(m.rate || 0)), 0) || 0;
                                 const comp = item.components?.reduce((sum, c) => sum + (parseFloat(c.quantity || 0) * parseFloat(item.quantity) * parseFloat(c.rate || 0)), 0) || 0;
                                 const labor = item.operations?.reduce((sum, o) => {
@@ -1183,7 +1241,12 @@ const BOMCreation = () => {
                     </div>
 
                     <div className="grid grid-cols-1 gap-2">
-                      {bomOrderItems.map((item) => {
+                      {bomOrderItems
+                        .filter(item => {
+                          const group = (item.item_group || item.itemGroup || '').toUpperCase();
+                          return group === 'PART' || group === 'ASSEMBLY';
+                        })
+                        .map((item) => {
                         const matCost = item.materials?.reduce((sum, m) => sum + (parseFloat(m.qty_per_pc || 0) * parseFloat(item.quantity || 0) * parseFloat(m.rate || 0)), 0) || 0;
                         const compCost = item.components?.reduce((sum, c) => sum + (parseFloat(c.quantity || 0) * parseFloat(item.quantity || 0) * parseFloat(c.rate || 0)), 0) || 0;
                         const laborCost = item.operations?.reduce((sum, o) => {

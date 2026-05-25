@@ -349,8 +349,9 @@ const CustomerPO = ({
         creditDays: poForm.creditDays,
         items: poForm.items.map(item => ({
           ...item,
+          drawingNo: (item.drawingNo || '').toUpperCase(),
           sub_assemblies: (item.sub_assemblies || []).map(sa => ({
-            drawingNo: sa.drawingNo,
+            drawingNo: (sa.drawingNo || '').toUpperCase(),
             description: sa.description,
             quantity: sa.quantity,
             unit: sa.unit,

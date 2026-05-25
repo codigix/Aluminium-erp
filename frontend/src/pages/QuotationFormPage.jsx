@@ -172,7 +172,7 @@ const QuotationFormPage = () => {
               }
               return {
                 ...sa,
-                drawing_no: sa.drawing_no || sa.drawingNo,
+                drawing_no: (sa.drawing_no || sa.drawingNo || '').toUpperCase(),
                 bom_cost: actualCost,
                 rate: actualCost
               };
@@ -250,6 +250,13 @@ const QuotationFormPage = () => {
           // Sync drawing_id if missing (using drawing_master_id for the link)
           if (!item.drawing_id && matchedDrawing.drawing_master_id) {
             newItem.drawing_id = matchedDrawing.drawing_master_id;
+            changed = true;
+          }
+
+          // Sync drawing_no if it is an ID or mismatching
+          const drwNo = (matchedDrawing.drawing_no || '').toUpperCase();
+          if (drwNo && item.drawing_no !== drwNo) {
+            newItem.drawing_no = drwNo;
             changed = true;
           }
 
@@ -864,7 +871,7 @@ const QuotationFormPage = () => {
           bom_cost: parseFloat(item.bom_cost) || 0,
           orderId: item.orderId || null,
           drawing_id: item.drawing_id || null,
-          drawing_no: item.drawing_no,
+          drawing_no: (item.drawing_no || '').toUpperCase(),
           description: item.description,
           quantity: parseFloat(item.quantity) || 0,
           unit: item.unit || 'Nos',
@@ -882,7 +889,7 @@ const QuotationFormPage = () => {
               return true;
             }).map(sa => ({
               item_code: sa.component_code || sa.item_code,
-              drawing_no: sa.drawing_no,
+              drawing_no: (sa.drawing_no || sa.drawingNo || '').toUpperCase(),
               description: sa.description,
               quantity: sa.quantity,
               bom_cost: parseFloat(sa.bom_cost) || 0,
