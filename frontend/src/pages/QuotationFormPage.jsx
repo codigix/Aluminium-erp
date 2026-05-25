@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   Plus, Trash2, Save, X, Send, 
@@ -34,6 +34,19 @@ const QuotationFormPage = () => {
   const [selectedClient, setSelectedClient] = useState(null);
   const [projectName, setProjectName] = useState('');
   const [items, setItems] = useState([]);
+  
+  const sortedItems = useMemo(() => {
+    return [...items].sort((a, b) => {
+      const dwgA = (a.drawing_no || '').trim().toUpperCase();
+      const dwgB = (b.drawing_no || '').trim().toUpperCase();
+      
+      if (!dwgA && !dwgB) return 0;
+      if (!dwgA) return 1;
+      if (!dwgB) return -1;
+      
+      return dwgA.localeCompare(dwgB, undefined, { numeric: true, sensitivity: 'base' });
+    });
+  }, [items]);
   const [notes, setNotes] = useState('');
   const [clients, setClients] = useState([]);
   const [drawings, setDrawings] = useState([]);
@@ -793,7 +806,7 @@ const QuotationFormPage = () => {
 
   const calculateSummary = () => {
     // Include all items in summary if they have a rate
-    const billableItems = items.filter(item => {
+    const billableItems = sortedItems.filter(item => {
       const g = (item.item_group || '').toUpperCase();
       return (
         (parseFloat(item.rate) || 0) > 0 ||
@@ -816,7 +829,7 @@ const QuotationFormPage = () => {
   };
 
   const summary = calculateSummary();
-  console.log('Quotation Items for UI:', items);
+  console.log('Quotation Items for UI:', sortedItems);
 
   const handleSave = async (status = 'Draft', sendEmail = null) => {
     if (!selectedClient) {
@@ -863,7 +876,7 @@ const QuotationFormPage = () => {
         clientName: selectedClient.company_name,
         clientEmail: selectedClient.email,
         projectName: projectName,
-        items: items.map(item => ({
+        items: sortedItems.map(item => ({
           salesOrderItemId: item.salesOrderItemId || null,
           bom_id: item.bom_id || null,
           revision_no: item.revision_no || null,
@@ -1255,14 +1268,14 @@ const QuotationFormPage = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
-                  {items.length === 0 ? (
+                  {sortedItems.length === 0 ? (
                     <tr>
                       <td colSpan={isLocked ? "5" : "6"} className="p-2 text-center text-slate-400 text-xs italic">
                         {isLocked ? "No items in this version." : "No items added yet. Click \"Add Item\" to begin."}
                       </td>
                     </tr>
                   ) : (
-                    items.flatMap((item, index) => {
+                    sortedItems.flatMap((item, index) => {
                       const rows = [];
                       
                       // Parent Item Row
