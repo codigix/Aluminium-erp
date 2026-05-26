@@ -726,6 +726,8 @@ const generateItemCode = async (itemName, itemGroup) => {
     prefix = 'CON';
   } else if (group === 'PACKING MATERIAL' || group === 'PACKING MATERIALS' || group === 'PAC') {
     prefix = 'PAC';
+  } else if (group === 'BOUGHT OUT' || group === 'BO') {
+    prefix = 'BO';
   } else if (group) {
     prefix = group.substring(0, 3).toUpperCase();
   }

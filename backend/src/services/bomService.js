@@ -1048,6 +1048,7 @@ const createBOMRequest = async (bomData) => {
       if (safeItemCode.startsWith('SA-')) itemType = 'SA';
       else if (safeItemCode.startsWith('SFG-')) itemType = 'SFG';
       else if (safeItemCode.startsWith('RM-')) itemType = 'RM';
+      else if (safeItemCode.startsWith('BO-')) itemType = 'BO';
     }
 
     if (itemId && !isNewVersion) {

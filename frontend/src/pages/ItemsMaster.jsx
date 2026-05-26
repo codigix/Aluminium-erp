@@ -1319,6 +1319,7 @@ const ItemsMaster = () => {
                       <option value="ASSEMBLY">ASSEMBLY</option>
                       <option value="CON">CON (Consumables)</option>
                       <option value="PAC">PAC (Packing Material)</option>
+                      <option value="BO">BO (Bought Out)</option>
                       <option value="SCRAP">SCRAP</option>
                       <option value="OTHER">OTHER</option>
                     </select>
