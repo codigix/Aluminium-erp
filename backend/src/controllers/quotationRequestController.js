@@ -80,17 +80,13 @@ const getQuotationRequests = async (req, res, next) => {
             itemCode,
             drawingNo,
             row.batch_id,
-            row.created_at
+            row.created_at,
+            row.version
           );
           const g = (row.item_group || '').toUpperCase();
           const isAssembly = g.includes('ASSEMBLY');
           const isPart = g.includes('PART');
-          const sub_assemblies = isAssembly
-            ? components.filter(c => {
-              const group = (c.item_group || '').toUpperCase();
-              return group.includes('PART');
-            })
-            : [];
+          const sub_assemblies = isAssembly ? components : [];
           return { ...row, sub_assemblies };
         } catch (err) {
           console.error(`Error fetching sub-assemblies for QR ${row.id}:`, err);
@@ -131,6 +127,7 @@ const getQuotationVersionHistory = async (req, res, next) => {
               COALESCE(qr.description, soi.description) as item_description,
               COALESCE(soi.unit, qr.item_unit) as item_unit,
               COALESCE(soi.item_code, qr.item_code) as item_code,
+              COALESCE(sb.current_balance, 0) as available_stock,
               (
                 SELECT bom_cost FROM sales_order_items v2 
                 WHERE ((v2.bom_id = soi.bom_id AND soi.bom_id IS NOT NULL)
@@ -142,6 +139,11 @@ const getQuotationVersionHistory = async (req, res, next) => {
        FROM quotation_requests qr
        JOIN companies c ON qr.company_id = c.id
        LEFT JOIN sales_order_items soi ON (soi.id = qr.sales_order_item_id AND qr.status != 'COMPONENT')
+       LEFT JOIN (
+         SELECT item_code, SUM(current_balance) as current_balance
+         FROM stock_balance
+         GROUP BY item_code
+       ) sb ON LOWER(TRIM(COALESCE(soi.item_code, qr.item_code))) = LOWER(TRIM(sb.item_code))
        WHERE qr.id = ? OR qr.parent_id = ? 
           OR qr.parent_id IN (SELECT id FROM quotation_requests WHERE id = ? OR parent_id = ?)
           OR qr.id IN (SELECT parent_id FROM quotation_requests WHERE id = ?)
@@ -240,7 +242,8 @@ const getQuotationVersionHistory = async (req, res, next) => {
           bom_cost: parseFloat(sn.bom_cost) || 0,
           rate: parseFloat(sn.bom_cost) || 0,
           pending_bom_cost: sn.pending_bom_cost ? parseFloat(sn.pending_bom_cost) : null,
-          is_snapshot: true
+          is_snapshot: true,
+          available_stock: parseFloat(sn.available_stock || 0)
         }));
 
         // Even if we have snapshots, we might need materials/ops for the full breakdown calculation in frontend
@@ -259,7 +262,7 @@ const getQuotationVersionHistory = async (req, res, next) => {
         try {
           const [materials, components, operations, scrap] = await Promise.all([
             bomService.getItemMaterials(`HISTORICAL_${row.sales_order_item_id}`, row.item_code, row.drawing_no),
-            bomService.getItemComponents(`HISTORICAL_${row.sales_order_item_id}`, row.item_code, row.drawing_no, row.batch_id, row.created_at),
+            bomService.getItemComponents(`HISTORICAL_${row.sales_order_item_id}`, row.item_code, row.drawing_no, row.batch_id, row.created_at, row.version),
             bomService.getItemOperations(`HISTORICAL_${row.sales_order_item_id}`, row.item_code, row.drawing_no),
             bomService.getItemScrap(`HISTORICAL_${row.sales_order_item_id}`, row.item_code, row.drawing_no)
           ]);
@@ -267,12 +270,7 @@ const getQuotationVersionHistory = async (req, res, next) => {
           const g = (row.item_group || '').toUpperCase();
           const isAssembly = g.includes('ASSEMBLY');
           const isPart = g.includes('PART');
-          itemData.sub_assemblies = isAssembly
-            ? components.filter(c => {
-              const group = (c.item_group || '').toUpperCase();
-              return group.includes('PART');
-            })
-            : [];
+          itemData.sub_assemblies = isAssembly ? components : [];
 
           itemData.materials = materials;
           itemData.operations = operations;
@@ -889,9 +887,15 @@ const getQuotationVersionDetails = async (req, res, next) => {
               COALESCE(soi.drawing_no, qr.drawing_no) as drawing_no,
               COALESCE(soi.description, qr.description) as description,
               COALESCE(soi.unit, qr.item_unit) as unit,
-              COALESCE(soi.item_code, qr.item_code) as item_code
+              COALESCE(soi.item_code, qr.item_code) as item_code,
+              COALESCE(sb.current_balance, 0) as available_stock
        FROM quotation_requests qr
        LEFT JOIN sales_order_items soi ON (soi.id = qr.sales_order_item_id AND qr.status != 'COMPONENT')
+       LEFT JOIN (
+         SELECT item_code, SUM(current_balance) as current_balance
+         FROM stock_balance
+         GROUP BY item_code
+       ) sb ON LOWER(TRIM(COALESCE(soi.item_code, qr.item_code))) = LOWER(TRIM(sb.item_code))
        WHERE qr.version = ?
          AND (
            (qr.batch_id IS NOT NULL AND qr.batch_id = ?)
@@ -960,7 +964,8 @@ const getQuotationVersionDetails = async (req, res, next) => {
         rate: parseFloat(sn.bom_cost) || 0,
         pending_bom_cost: sn.pending_bom_cost ? parseFloat(sn.pending_bom_cost) : null,
         item_group: sn.item_group,
-        is_snapshot: true
+        is_snapshot: true,
+        available_stock: parseFloat(sn.available_stock || 0)
       }));
 
       return itemData;

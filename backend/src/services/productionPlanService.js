@@ -516,6 +516,7 @@ const getReadySalesOrderItems = async () => {
              soi.quantity as total_qty, 
              soi.quantity as design_qty,
              soi.unit as unit,
+             soi.parent_bom_id as parent_bom_id,
              COALESCE(planned.already_planned_qty, 0) as already_planned_qty
       FROM sales_order_items soi
       JOIN sales_orders so ON soi.sales_order_id = so.id
@@ -532,6 +533,12 @@ const getReadySalesOrderItems = async () => {
       WHERE (soi.status IS NULL OR TRIM(UPPER(soi.status)) NOT IN ('REJECTED', 'CANCELLED')) 
       AND (TRIM(UPPER(soi.item_type)) IN ('FG', 'FINISHED GOODS', 'FINISHED_GOODS', 'ASSEMBLY'))
       AND (COALESCE(planned.already_planned_qty, 0) < soi.quantity)
+      AND soi.parent_bom_id IS NULL
+      AND soi.item_code != 'XXX'
+      AND soi.item_code IS NOT NULL
+      AND soi.item_code != ''
+      AND soi.item_code NOT LIKE '%XXX%'
+      AND soi.item_code NOT LIKE '%NO CODE%'
 
       UNION ALL
 
@@ -549,10 +556,12 @@ const getReadySalesOrderItems = async () => {
              oi.quantity as total_qty,
              oi.quantity as design_qty,
              'Nos' as unit,
+             soi.parent_bom_id as parent_bom_id,
              COALESCE(planned.already_planned_qty, 0) as already_planned_qty
       FROM order_items oi
       JOIN orders o ON oi.order_id = o.id
       JOIN companies c ON o.client_id = c.id
+      LEFT JOIN sales_order_items soi ON (TRIM(oi.drawing_no) = TRIM(soi.drawing_no) AND soi.sales_order_id = o.quotation_id)
       LEFT JOIN (
         SELECT sales_order_item_id, SUM(planned_qty) as already_planned_qty
         FROM production_plan_items 
@@ -562,6 +571,12 @@ const getReadySalesOrderItems = async () => {
       WHERE o.quotation_id IS NULL 
       AND (TRIM(UPPER(oi.type)) IN ('FG', 'FINISHED GOODS', 'FINISHED_GOODS', 'ASSEMBLY'))
       AND (COALESCE(planned.already_planned_qty, 0) < oi.quantity)
+      AND (soi.parent_bom_id IS NULL)
+      AND oi.item_code != 'XXX'
+      AND oi.item_code IS NOT NULL
+      AND oi.item_code != ''
+      AND oi.item_code NOT LIKE '%XXX%'
+      AND oi.item_code NOT LIKE '%NO CODE%'
     ) combined
     ORDER BY production_priority DESC, created_at ASC`
   );
@@ -649,6 +664,7 @@ const getSalesOrderFullDetails = async (id) => {
                 'Nos' as unit,
                 soi.status,
                 soi.created_at,
+                soi.parent_bom_id as parent_bom_id,
                 COALESCE(planned.already_planned_qty, 0) as already_planned_qty,
                 ROW_NUMBER() OVER (PARTITION BY TRIM(oi.drawing_no), TRIM(oi.item_code) ORDER BY soi.bom_cost DESC, soi.id DESC) as rn
          FROM order_items oi
@@ -663,6 +679,12 @@ const getSalesOrderFullDetails = async (id) => {
          AND (TRIM(UPPER(oi.type)) IN ('FG', 'FINISHED GOODS', 'FINISHED_GOODS', 'ASSEMBLY') 
               OR TRIM(UPPER(soi.item_type)) IN ('FG', 'FINISHED GOODS', 'FINISHED_GOODS', 'ASSEMBLY'))
          AND (soi.status IS NULL OR TRIM(UPPER(soi.status)) NOT IN ('REJECTED', 'CANCELLED'))
+         AND (soi.parent_bom_id IS NULL)
+         AND oi.item_code != 'XXX'
+         AND oi.item_code IS NOT NULL
+         AND oi.item_code != ''
+         AND oi.item_code NOT LIKE '%XXX%'
+         AND oi.item_code NOT LIKE '%NO CODE%'
       ) t WHERE rn = 1`,
       [id]
     );
@@ -703,6 +725,7 @@ const getSalesOrderFullDetails = async (id) => {
               soi.unit,
               soi.status,
               soi.rejection_reason,
+              soi.parent_bom_id as parent_bom_id,
               COALESCE(planned.already_planned_qty, 0) as already_planned_qty,
               ROW_NUMBER() OVER (PARTITION BY TRIM(soi.drawing_no), TRIM(soi.item_code) ORDER BY soi.bom_cost DESC, soi.id DESC) as rn
        FROM sales_order_items soi
@@ -716,6 +739,12 @@ const getSalesOrderFullDetails = async (id) => {
        AND (TRIM(UPPER(soi.item_type)) IN ('FG', 'FINISHED GOODS', 'FINISHED_GOODS', 'ASSEMBLY'))
        AND TRIM(UPPER(COALESCE(soi.item_group, ''))) NOT IN ('SUB ASSEMBLY', 'SUB_ASSEMBLY', 'SA')
        AND (soi.status IS NULL OR TRIM(UPPER(soi.status)) NOT IN ('REJECTED', 'CANCELLED'))
+       AND (soi.parent_bom_id IS NULL)
+       AND soi.item_code != 'XXX'
+       AND soi.item_code IS NOT NULL
+       AND soi.item_code != ''
+       AND soi.item_code NOT LIKE '%XXX%'
+       AND soi.item_code NOT LIKE '%NO CODE%'
     ) t WHERE rn = 1
     ORDER BY id DESC`,
     [id]
@@ -1316,12 +1345,12 @@ const getMaterialRequestItemsForPlan = async (planId) => {
     const code = (itemCode || name).trim();
     const key = code.toUpperCase();
 
-    // Skip SFG and FG items from material request
+    // Skip SFG, FG and PART items from material request
     const c = code.toUpperCase();
     const cat = (category || '').toUpperCase();
     if (
-      c.startsWith('SA-') || c.startsWith('FG-') || c.startsWith('SFG-') ||
-      cat === 'SUB ASSEMBLY' || cat === 'SUB_ASSEMBLY' || cat === 'SA' || cat === 'SFG' || cat === 'FG'
+      c.startsWith('PART-') || c.startsWith('SA-') || c.startsWith('FG-') || c.startsWith('SFG-') ||
+      cat.includes('PART') || cat.includes('ASSEMBLY') || cat.includes('SA') || cat.includes('SFG') || cat.includes('FG') || cat.includes('FINISHED')
     ) {
       return;
     }
@@ -1442,7 +1471,7 @@ ON (ppm.item_code = issued.item_code OR ppm.material_name = issued.material_name
 
   for (const mat of materials) {
     const code = (mat.actual_item_code || mat.item_code || '').toUpperCase();
-    if (code.startsWith('SA-') || code.startsWith('FG-') || code.startsWith('SFG-')) continue;
+    if (code.startsWith('PART-') || code.startsWith('SA-') || code.startsWith('FG-') || code.startsWith('SFG-')) continue;
 
     // If material request is fulfilled or completed, show full quantity as available
     const isFulfilled = (mat.status_rank || 0) >= 4;
@@ -1507,12 +1536,12 @@ const createMaterialRequestFromPlan = async (planId, userId, customItems = null)
       const code = (itemCode || name).trim();
       const key = code.toUpperCase();
 
-      // Skip SFG and FG items from material request
+      // Skip SFG, FG and PART items from material request
       const c = code.toUpperCase();
       const cat = (category || '').toUpperCase();
       if (
-        c.startsWith('SA-') || c.startsWith('FG-') || c.startsWith('SFG-') ||
-        cat === 'SUB ASSEMBLY' || cat === 'SUB_ASSEMBLY' || cat === 'SA' || cat === 'SFG' || cat === 'FG'
+        c.startsWith('PART-') || c.startsWith('SA-') || c.startsWith('FG-') || c.startsWith('SFG-') ||
+        cat.includes('PART') || cat.includes('ASSEMBLY') || cat.includes('SA') || cat.includes('SFG') || cat.includes('FG') || cat.includes('FINISHED')
       ) {
         return;
       }

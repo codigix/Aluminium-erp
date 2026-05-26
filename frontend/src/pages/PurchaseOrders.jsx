@@ -51,6 +51,14 @@ const formatCurrency = (value, currency = 'INR') => {
 const PurchaseOrders = () => {
   const location = useLocation();
   const navigate = useNavigate();
+
+  const getDeptPrefix = () => {
+    const segments = location.pathname.split('/').filter(Boolean);
+    const prefixes = ['sales', 'design', 'production', 'procurement', 'inventory', 'quality', 'shipment', 'accounts', 'hr', 'admin'];
+    return prefixes.includes(segments[0]) ? `/${segments[0]}` : '';
+  };
+  const deptPrefix = getDeptPrefix();
+
   const [pos, setPos] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -65,7 +73,7 @@ const PurchaseOrders = () => {
   useEffect(() => {
     const path = location.pathname;
     
-    if (path === '/purchase-orders/add') {
+    if (path === `${deptPrefix}/purchase-orders/add`) {
       if (!showCreateModal) {
         setFormData({
           quotationId: '',
@@ -80,14 +88,14 @@ const PurchaseOrders = () => {
         setShowManualCreateModal(false);
         setViewMode('list');
       }
-    } else if (path === '/purchase-orders/manual-add') {
+    } else if (path === `${deptPrefix}/purchase-orders/manual-add`) {
       if (!showManualCreateModal) {
         setManualFormData({ id: null, vendorId: '', quotationId: '', expectedDeliveryDate: '', notes: '', currency: 'INR (Indian Rupee)', items: [] });
         setShowManualCreateModal(true);
         setShowCreateModal(false);
         setViewMode('list');
       }
-    } else if (path.startsWith('/purchase-orders/edit-manual/')) {
+    } else if (path.startsWith(`${deptPrefix}/purchase-orders/edit-manual/`)) {
       const id = path.split('/').pop();
       const po = pos.find(p => p.id.toString() === id);
       if (po && po.status === 'PO_REQUEST') {
@@ -98,22 +106,28 @@ const PurchaseOrders = () => {
           setViewMode('list');
         }
       }
-    } else if (path.startsWith('/purchase-orders/view/')) {
+    } else if (path.startsWith(`${deptPrefix}/purchase-orders/view/`)) {
       const id = path.split('/').pop();
       if (id && (viewMode !== 'detail' || selectedPO?.id?.toString() !== id.toString())) {
         handleViewPODetail(id);
         setShowCreateModal(false);
         setShowManualCreateModal(false);
       }
-    } else if (path === '/purchase-orders') {
-      if (showCreateModal) setShowCreateModal(false);
-      if (showManualCreateModal) setShowManualCreateModal(false);
+    } else if (path === `${deptPrefix}/purchase-orders`) {
+      if (showCreateModal) {
+        setShowCreateModal(false);
+        setPoItems([]);
+      }
+      if (showManualCreateModal) {
+        setShowManualCreateModal(false);
+        setManualFormData({ id: null, vendorId: '', expectedDeliveryDate: '', notes: '', currency: 'INR (Indian Rupee)', items: [] });
+      }
       if (viewMode === 'detail') {
         setViewMode('list');
         setSelectedPO(null);
       }
     }
-  }, [location.pathname, pos]);
+  }, [location.pathname, pos, deptPrefix]);
 
   const [emailData, setEmailData] = useState({
     to: '',
@@ -1036,7 +1050,7 @@ const PurchaseOrders = () => {
             </button>
           )}
           <button
-            onClick={() => navigate(`/procurement/purchase-orders/view/${row.id}`)}
+            onClick={() => navigate(`${deptPrefix}/purchase-orders/view/${row.id}`)}
             className="p-1 text-blue-500 hover:bg-blue-50 rounded  transition-all active:scale-90"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1074,7 +1088,7 @@ const PurchaseOrders = () => {
           <button
             onClick={() => {
                 if (row.status === 'PO_REQUEST') {
-                    navigate(`/procurement/purchase-orders/edit-manual/${row.id}`);
+                    navigate(`${deptPrefix}/purchase-orders/edit-manual/${row.id}`);
                 } else {
                     handleEditPO(row.id);
                 }
@@ -1113,7 +1127,7 @@ const PurchaseOrders = () => {
     return (
       <PurchaseOrderDetail 
         po={selectedPO} 
-        onBack={() => navigate('/procurement/purchase-orders')} 
+        onBack={() => navigate(`${deptPrefix}/purchase-orders`)} 
         onRefresh={() => {
           handleViewPODetail(selectedPO.id);
           fetchPOs();
@@ -1164,7 +1178,7 @@ const PurchaseOrders = () => {
           />
           <Button
             variant="primary"
-            onClick={() => navigate('/procurement/purchase-orders/manual-add')}
+            onClick={() => navigate(`${deptPrefix}/purchase-orders/manual-add`)}
             icon={Plus}
           >
             Create Order
@@ -1252,7 +1266,7 @@ const PurchaseOrders = () => {
             <div className="flex justify-between items-center p-2 border-b border-slate-50">
               <h2 className="text-xl  text-slate-800">{manualFormData.id ? 'Edit Purchase Order Request' : 'Create New Purchase Order'}</h2>
               <button 
-                onClick={() => navigate('/procurement/purchase-orders')}
+                onClick={() => navigate(`${deptPrefix}/purchase-orders`)}
                 className="p-2 hover:bg-slate-100 rounded transition-colors text-slate-400"
               >
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
@@ -1487,8 +1501,7 @@ const PurchaseOrders = () => {
                 <button
                   type="button"
                   onClick={() => {
-                    setShowManualCreateModal(false);
-                    setManualFormData({ id: null, vendorId: '', expectedDeliveryDate: '', notes: '', currency: 'INR (Indian Rupee)', items: [] });
+                    navigate(`${deptPrefix}/purchase-orders`);
                   }}
                   className="px-6 py-2.5 border border-slate-200 text-slate-600 rounded text-xs  hover:bg-slate-50 transition-all "
                 >
@@ -1515,8 +1528,7 @@ const PurchaseOrders = () => {
               <h2 className="text-xl  text-slate-800">Create PO from Quotation</h2>
               <button 
                 onClick={() => {
-                  setShowCreateModal(false);
-                  setPoItems([]);
+                  navigate(`${deptPrefix}/purchase-orders`);
                 }}
                 className="p-2 hover:bg-slate-100 rounded transition-colors text-slate-400"
               >
@@ -1671,7 +1683,7 @@ const PurchaseOrders = () => {
               <div className="flex items-center justify-end gap-2 pt-2">
                 <button
                   type="button"
-                  onClick={() => setShowCreateModal(false)}
+                  onClick={() => navigate(`${deptPrefix}/purchase-orders`)}
                   className="px-6 py-2.5 border border-slate-200 text-slate-600 rounded text-xs  hover:bg-slate-50 transition-all "
                 >
                   Cancel

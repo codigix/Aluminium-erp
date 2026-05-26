@@ -1233,7 +1233,7 @@ const SalesOrders = () => {
                                   {(() => {
                                     const saGroup = (sa.item_group || '').toUpperCase();
                                     const isSaPart = saGroup.includes('PART');
-                                    const displaySaGroup = isSaPart ? 'PART' : 'SA';
+                                    const displaySaGroup = 'PART';
                                     return (
                                       <span className={`px-1 py-0.5 rounded-[2px] text-[8px] border ${isSaPart
                                         ? 'bg-blue-50 text-blue-600 border-blue-100/50'

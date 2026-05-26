@@ -449,24 +449,37 @@ const getSalesDashboardStats = async (filters = {}) => {
   // 1. Quotation Activity (KPIs)
   const [[quoteStats]] = await pool.query(`
     SELECT 
-      COUNT(*) as totalQuotes,
-      SUM(CASE WHEN qr.status IN ('SENT', 'RECEIVED') THEN 1 ELSE 0 END) as sentQuotes,
-      SUM(CASE WHEN qr.status IN ('Approved', 'Approved ', 'COMPLETED', 'Completed', 'ACCEPTED', 'Accepted') THEN 1 ELSE 0 END) as approvedQuotes,
-      SUM(CASE WHEN qr.status = 'REJECTED' THEN 1 ELSE 0 END) as rejectedQuotes
+      COUNT(DISTINCT COALESCE(qr.parent_id, qr.id)) as totalQuotes,
+      COUNT(DISTINCT CASE WHEN qr.status IN ('SENT', 'RECEIVED') THEN COALESCE(qr.parent_id, qr.id) END) as sentQuotes,
+      COUNT(DISTINCT CASE WHEN qr.status IN ('Approved', 'Approved ', 'COMPLETED', 'Completed', 'ACCEPTED', 'Accepted', 'APPROVED') THEN COALESCE(qr.parent_id, qr.id) END) as approvedQuotes,
+      COUNT(DISTINCT CASE WHEN qr.status = 'REJECTED' THEN COALESCE(qr.parent_id, qr.id) END) as rejectedQuotes
     FROM quotation_requests qr
     JOIN companies c ON qr.company_id = c.id
-    WHERE (qr.parent_id IS NULL OR qr.parent_id = 0)
+    WHERE 1=1
     ${dateFilter.replace('created_at', 'qr.created_at')}
     ${customerFilter}
   `, [...params, ...(customer && customer !== 'All' ? [customer] : [])]);
 
-  // 2. Converted Orders
+  // 2. Converted Orders & All Orders
   const [[orderStats]] = await pool.query(`
-    SELECT COUNT(*) as convertedOrders 
+    SELECT 
+      COUNT(*) as totalSalesOrders,
+      SUM(CASE WHEN o.source_type = 'QUOTATION' OR o.source_type = 'DRAWING' THEN 1 ELSE 0 END) as convertedOrders 
     FROM orders o
     JOIN companies c ON o.client_id = c.id
     WHERE o.status != 'CANCELLED'
     ${dateFilter.replace('created_at', 'o.created_at')}
+    ${customerFilter}
+  `, [...params, ...(customer && customer !== 'All' ? [customer] : [])]);
+
+  // 2.1 Customer POs Activity
+  const [[poActivityStats]] = await pool.query(`
+    SELECT 
+      COUNT(*) as totalCustomerPos
+    FROM customer_pos cp
+    JOIN companies c ON cp.company_id = c.id
+    WHERE cp.status != 'CANCELLED'
+    ${dateFilter.replace('created_at', 'cp.created_at')}
     ${customerFilter}
   `, [...params, ...(customer && customer !== 'All' ? [customer] : [])]);
 
@@ -536,7 +549,7 @@ const getSalesDashboardStats = async (filters = {}) => {
       qr.created_at as time
     FROM quotation_requests qr
     JOIN companies c ON c.id = qr.company_id
-    WHERE qr.status IN ('Approved', 'Approved ', 'COMPLETED', 'Completed')
+    WHERE qr.status IN ('Approved', 'Approved ', 'COMPLETED', 'Completed', 'APPROVED')
     ${customerFilter}
     ORDER BY qr.created_at DESC LIMIT 3)
     UNION ALL
@@ -562,7 +575,7 @@ const getSalesDashboardStats = async (filters = {}) => {
       DATE_FORMAT(qr.created_at, '%d %b %Y') as date
     FROM quotation_requests qr
     JOIN companies c ON qr.company_id = c.id
-    WHERE qr.status IN ('Approved', 'Approved ', 'COMPLETED', 'Completed')
+    WHERE qr.status IN ('Approved', 'Approved ', 'COMPLETED', 'Completed', 'APPROVED')
     ${dateFilter.replace('created_at', 'qr.created_at')}
     ${customerFilter}
     ORDER BY qr.created_at DESC LIMIT 50
@@ -613,6 +626,8 @@ const getSalesDashboardStats = async (filters = {}) => {
       sentQuotes: quoteStats.sentQuotes || 0,
       approvedQuotes: quoteStats.approvedQuotes || 0,
       rejectedQuotes: quoteStats.rejectedQuotes || 0,
+      totalSalesOrders: orderStats.totalSalesOrders || 0,
+      totalCustomerPos: poActivityStats.totalCustomerPos || 0,
       conversionRate
     },
     chartData,

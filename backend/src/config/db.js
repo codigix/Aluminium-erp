@@ -1023,7 +1023,7 @@ const ensureQuotationRequestStatus = async () => {
       if (!type.includes('DRAFT') || !type.includes('SENT') || !type.includes('REVISED')) {
         await connection.query(`
           ALTER TABLE quotation_requests 
-          MODIFY COLUMN status ENUM('PENDING', 'APPROVAL', 'Approved', 'REJECTED', 'COMPLETED', 'ACCEPTED', 'DRAFT', 'SENT', 'REVISED') DEFAULT 'PENDING'
+          MODIFY COLUMN status ENUM('PENDING', 'APPROVAL', 'APPROVED', 'REJECTED', 'COMPLETED', 'ACCEPTED', 'DRAFT', 'SENT', 'REVISED') DEFAULT 'PENDING'
         `);
         console.log('Quotation Request status updated with DRAFT, SENT, REVISED');
       }
@@ -1103,8 +1103,8 @@ const ensureSalesOrderStatuses = async () => {
         await connection.query(`
           ALTER TABLE sales_orders 
           MODIFY COLUMN status ENUM(
-            'CREATED', 'DESIGN_IN_REVIEW', 'DESIGN_Approved', 'DESIGN_QUERY', 'QUOTATION_SENT',
-            'BOM_SUBMITTED', 'BOM_Approved', 'PROCUREMENT_IN_PROGRESS', 
+            'CREATED', 'DESIGN_IN_REVIEW', 'DESIGN_APPROVED', 'DESIGN_QUERY', 'QUOTATION_SENT',
+            'BOM_SUBMITTED', 'BOM_APPROVED', 'PROCUREMENT_IN_PROGRESS', 
             'MATERIAL_PURCHASE_IN_PROGRESS', 'MATERIAL_READY', 'IN_PRODUCTION', 
             'PRODUCTION_COMPLETED', 'QC_IN_PROGRESS', 'QC_APPROVED', 'QC_REJECTED', 'READY_FOR_SHIPMENT', 'SHIPPED', 'CLOSED'
           ) DEFAULT 'CREATED'
@@ -1822,7 +1822,7 @@ const ensureMaterialRequestTables = async () => {
         requested_by INT,
         required_by DATE,
         purpose ENUM('Purchase Request', 'Internal Transfer', 'Material Issue') NOT NULL,
-        status ENUM('DRAFT', 'Approved ', 'PROCESSING', 'FULFILLED', 'CANCELLED', 'ORDERED', 'COMPLETED', 'PO_CREATED') DEFAULT 'DRAFT',
+        status ENUM('DRAFT', 'APPROVED', 'PROCESSING', 'FULFILLED', 'CANCELLED', 'ORDERED', 'COMPLETED', 'PO_CREATED') DEFAULT 'DRAFT',
         notes TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -2257,9 +2257,9 @@ const ensurePurchaseOrderVendorNullable = async () => {
     }
 
     const statusCol = columns.find(c => c.Field === 'status');
-    if (statusCol && !statusCol.Type.includes('PO_REQUEST')) {
-      console.log('[ensurePurchaseOrderVendorNullable] Adding PO_REQUEST to purchase_orders status enum...');
-      await connection.query(`ALTER TABLE purchase_orders MODIFY status ENUM('DRAFT', 'PO_REQUEST', 'ORDERED', 'Sent ', 'ACKNOWLEDGED', 'RECEIVED', 'PARTIALLY_RECEIVED', 'CLOSED', 'COMPLETED') DEFAULT 'ORDERED'`);
+    if (statusCol && (!statusCol.Type.includes('PO_REQUEST') || !statusCol.Type.includes('FULFILLED') || !statusCol.Type.includes('APPROVED'))) {
+      console.log('[ensurePurchaseOrderVendorNullable] Updating purchase_orders status enum...');
+      await connection.query(`ALTER TABLE purchase_orders MODIFY status ENUM('DRAFT', 'PO_REQUEST', 'ORDERED', 'SENT', 'ACKNOWLEDGED', 'RECEIVED', 'PARTIALLY_RECEIVED', 'CLOSED', 'COMPLETED', 'FULFILLED', 'APPROVED', 'PENDING_PAYMENT', 'PAID') DEFAULT 'ORDERED'`);
     }
   } catch (error) {
     if (error.code !== 'ER_NO_SUCH_TABLE') {
@@ -2433,7 +2433,7 @@ const ensureQCInspectionsTable = async () => {
         inspection_date DATE,
         pass_quantity DECIMAL(12, 3) DEFAULT 0,
         fail_quantity DECIMAL(12, 3) DEFAULT 0,
-        status ENUM('PENDING', 'IN_PROGRESS', 'PASSED', 'FAILED', 'ACCEPTED', 'REJECTED', 'SHORTAGE') DEFAULT 'PENDING',
+        status ENUM('PENDING', 'IN_PROGRESS', 'PASSED', 'FAILED', 'SHORTAGE', 'OVERAGE', 'ACCEPTED', 'REJECTED') DEFAULT 'PENDING',
         defects TEXT,
         remarks TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -2441,6 +2441,19 @@ const ensureQCInspectionsTable = async () => {
         FOREIGN KEY (grn_id) REFERENCES grns(id) ON DELETE CASCADE
       )
     `);
+
+    // Ensure status enum is updated
+    const [statusCols] = await connection.query("SHOW COLUMNS FROM qc_inspections LIKE 'status'");
+    if (statusCols.length > 0) {
+      const type = statusCols[0].Type;
+      if (!type.includes('OVERAGE') || !type.includes('REJECTED')) {
+        await connection.query(`
+          ALTER TABLE qc_inspections 
+          MODIFY COLUMN status ENUM('PENDING', 'IN_PROGRESS', 'PASSED', 'FAILED', 'SHORTAGE', 'OVERAGE', 'ACCEPTED', 'REJECTED') DEFAULT 'PENDING'
+        `);
+        console.log('QC Inspections status ENUM updated');
+      }
+    }
 
     // Ensure invoice_url column exists in qc_inspections
     const [qcCols] = await connection.query("SHOW COLUMNS FROM qc_inspections LIKE 'invoice_url'");
@@ -2655,9 +2668,36 @@ const ensureMaterialColumns = async () => {
   }
 };
 
+const ensureGrnStatus = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    const [columns] = await connection.query("SHOW COLUMNS FROM grns LIKE 'status'");
+    if (columns.length > 0) {
+      const type = columns[0].Type;
+      if (type.includes('Approved ') || !type.includes('APPROVED')) {
+        console.log('Standardizing GRN status enum...');
+        await connection.query(`
+          ALTER TABLE grns 
+          MODIFY COLUMN status ENUM('PENDING', 'RECEIVED', 'INSPECTED', 'APPROVED', 'REJECTED') DEFAULT 'PENDING'
+        `);
+        // Also update any existing 'Approved ' values
+        await connection.query("UPDATE grns SET status = 'APPROVED' WHERE status = 'Approved '");
+      }
+    }
+  } catch (error) {
+    if (error.code !== 'ER_NO_SUCH_TABLE') {
+      console.error('GRN status sync failed', error.message);
+    }
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
 const bootstrapDatabase = async () => {
   await ensureDatabase();
   await ensureMaterialColumns();
+  await ensureGrnStatus();
   await ensureSchema();
   await ensureSeed();
   await ensureItemGroupsTable();

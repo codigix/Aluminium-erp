@@ -1101,7 +1101,7 @@ const CustomerPO = ({
                                       {(() => {
                                         const saGroup = (sa.item_group || '').toUpperCase();
                                         const isSaPart = saGroup.includes('PART');
-                                        const displaySaGroup = isSaPart ? 'PART' : 'SA';
+                                        const displaySaGroup = 'PART';
                                         return (
                                           <div className="flex items-center gap-2 mt-0.5">
                                             <span className={`px-1 py-0.5 rounded-[3px] text-[8px] ${isSaPart

@@ -181,23 +181,23 @@ const SalesReport = () => {
         </div>
       </div>
 
-      {/* Quotation Activity KPIs */}
+      {/* Activity KPIs */}
       <div className="space-y-3">
-        <h3 className="text-sm text-slate-900   ">Quotation Activity</h3>
+        <h3 className="text-sm text-slate-900   ">Activity Overview</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
           <KPIStoreCard 
-            title="Total Quotations" 
-            value={stats.kpis.totalQuotes} 
-            subtitle="All Time" 
-            icon={FileText} 
+            title="Total Sales Orders" 
+            value={stats.kpis.totalSalesOrders} 
+            subtitle="This Period" 
+            icon={ShoppingCart} 
             color="text-indigo-600" 
             subColor="bg-indigo-50" 
           />
           <KPIStoreCard 
-            title="Sent Quotations" 
-            value={stats.kpis.sentQuotes} 
+            title="Total Customer POs" 
+            value={stats.kpis.totalCustomerPos} 
             subtitle="This Period" 
-            icon={Send} 
+            icon={FileText} 
             color="text-blue-600" 
             subColor="bg-blue-50" 
           />

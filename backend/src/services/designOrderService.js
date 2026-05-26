@@ -124,10 +124,18 @@ const getDesignOrderItemsBySalesOrder = async (salesOrderId) => {
       oi.id as item_id,
       oi.drawing_no,
       oi.description,
-      oi.quantity as qty
+      oi.quantity as qty,
+      soi.parent_bom_id as parent_bom_id
     FROM order_items oi
     JOIN orders o ON oi.order_id = o.id
+    LEFT JOIN sales_order_items soi ON (TRIM(oi.drawing_no) = TRIM(soi.drawing_no) AND soi.sales_order_id = o.quotation_id)
     WHERE o.id = ? AND oi.type = 'FG'
+    AND (soi.parent_bom_id IS NULL)
+    AND oi.item_code != 'XXX'
+    AND oi.item_code IS NOT NULL
+    AND oi.item_code != ''
+    AND oi.item_code NOT LIKE '%XXX%'
+    AND oi.item_code NOT LIKE '%NO CODE%'
   `, [salesOrderId]);
 
   // Fallback to legacy sales_order_items
@@ -142,13 +150,20 @@ const getDesignOrderItemsBySalesOrder = async (salesOrderId) => {
           poi.quantity, 
           (SELECT MAX(quantity) FROM sales_order_items WHERE sales_order_id = soi.sales_order_id AND TRIM(drawing_no) = TRIM(soi.drawing_no)),
           soi.quantity
-        ) as qty
+        ) as qty,
+        soi.parent_bom_id as parent_bom_id
       FROM sales_order_items soi
       JOIN sales_orders so ON soi.sales_order_id = so.id
       LEFT JOIN customer_po_items poi ON so.customer_po_id = poi.customer_po_id 
            AND soi.item_code = poi.item_code 
            AND (soi.drawing_no = poi.drawing_no OR (soi.drawing_no IS NULL AND poi.drawing_no IS NULL))
       WHERE soi.sales_order_id = ? AND (soi.item_type = 'FG')
+      AND (soi.parent_bom_id IS NULL)
+      AND soi.item_code != 'XXX'
+      AND soi.item_code IS NOT NULL
+      AND soi.item_code != ''
+      AND soi.item_code NOT LIKE '%XXX%'
+      AND soi.item_code NOT LIKE '%NO CODE%'
     `, [salesOrderId]);
   }
   return rows;

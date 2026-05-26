@@ -200,7 +200,7 @@ const QCGrnDetails = () => {
                             <td className="p-3 text-slate-500">{item.unit || 'NOS'}</td>
                             <td className="p-3">
                                 <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${
-                                    item.status === 'Approved ' || item.status === 'ACCEPTED' 
+                                    item.status === 'APPROVED' || item.status === 'ACCEPTED' 
                                     ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' 
                                     : 'bg-rose-50 text-rose-600 border border-rose-100'
                                 }`}>

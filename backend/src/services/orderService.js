@@ -163,16 +163,38 @@ const createOrder = async (orderData) => {
 const getOrderById = async (id) => {
   const [rows] = await pool.query(`
     SELECT o.*, c.company_name AS client, 
-           ct.email AS contact_email, ct.phone AS contact_mobile,
-           COALESCE(NULLIF(o.project_name, ''), NULLIF(cp.project_name, ''), 'General Project') as project_name
+           COALESCE(ct.email, cd_client.email, "") AS contact_email, 
+           COALESCE(ct.phone, cd_client.phone, "") AS contact_mobile,
+           COALESCE(NULLIF(o.project_name, ''), NULLIF(cp.project_name, ''), 'General Project') as project_name,
+           COALESCE(ct.name, cd_client.contact_person, "") as contact_person,
+           COALESCE(so.billing_address, ba.billing_address, cd_client.billing_address, "") as billing_address,
+           COALESCE(so.shipping_address, sa.shipping_address, cd_client.shipping_address, "") as shipping_address
     FROM orders o
     JOIN companies c ON c.id = o.client_id
     LEFT JOIN customer_pos cp ON cp.id = o.quotation_id AND o.source_type = 'DIRECT'
+    LEFT JOIN sales_orders so ON so.id = o.quotation_id AND o.source_type = 'DRAWING'
     LEFT JOIN (
-       SELECT company_id, email, phone, 
+       SELECT company_id, email, phone, name,
               ROW_NUMBER() OVER (PARTITION BY company_id ORDER BY contact_type = 'PRIMARY' DESC, id ASC) as rn
        FROM contacts
     ) ct ON ct.company_id = c.id AND ct.rn = 1
+    LEFT JOIN (
+       SELECT company_id, CONCAT_WS(', ', NULLIF(line1, ''), NULLIF(line2, ''), NULLIF(city, ''), NULLIF(state, ''), NULLIF(pincode, ''), NULLIF(country, '')) as billing_address,
+              ROW_NUMBER() OVER(PARTITION BY company_id ORDER BY id DESC) as rn
+       FROM company_addresses 
+       WHERE address_type = 'BILLING'
+    ) ba ON ba.company_id = c.id AND ba.rn = 1
+    LEFT JOIN (
+       SELECT company_id, CONCAT_WS(', ', NULLIF(line1, ''), NULLIF(line2, ''), NULLIF(city, ''), NULLIF(state, ''), NULLIF(pincode, ''), NULLIF(country, '')) as shipping_address,
+              ROW_NUMBER() OVER(PARTITION BY company_id ORDER BY id DESC) as rn
+       FROM company_addresses 
+       WHERE address_type = 'SHIPPING'
+    ) sa ON sa.company_id = c.id AND sa.rn = 1
+    LEFT JOIN (
+       SELECT client_name, MAX(billing_address) as billing_address, MAX(shipping_address) as shipping_address, MAX(contact_person) as contact_person, MAX(email) as email, MAX(phone) as phone
+       FROM customer_drawings 
+       GROUP BY client_name
+    ) cd_client ON cd_client.client_name = c.company_name
     WHERE o.id = ? OR o.public_id = ?
   `, [id, id]);
   

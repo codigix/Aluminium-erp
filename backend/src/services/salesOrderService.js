@@ -94,8 +94,11 @@ const getSalesOrderById = async (id) => {
     `SELECT so.*, 
             COALESCE(so.project_name, cp.project_name) as project_name,
             so.target_dispatch_date as delivery_date, c.company_name, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path,
-            COALESCE(ct.email, "") as email_address, COALESCE(ct.phone, "") as contact_phone,
-            COALESCE(ct.name, "") as contact_person
+            COALESCE(ct.email, cd_client.email, "") as email_address, 
+            COALESCE(ct.phone, cd_client.phone, "") as contact_phone,
+            COALESCE(ct.name, cd_client.contact_person, "") as contact_person,
+            COALESCE(so.billing_address, ba.billing_address, cd_client.billing_address, "") as billing_address,
+            COALESCE(so.shipping_address, sa.shipping_address, cd_client.shipping_address, "") as shipping_address
      FROM sales_orders so
      LEFT JOIN companies c ON c.id = so.company_id
      LEFT JOIN customer_pos cp ON cp.id = so.customer_po_id
@@ -104,6 +107,23 @@ const getSalesOrderById = async (id) => {
               ROW_NUMBER() OVER (PARTITION BY company_id ORDER BY contact_type = 'PRIMARY' DESC, id ASC) as rn
        FROM contacts
      ) ct ON ct.company_id = c.id AND ct.rn = 1
+     LEFT JOIN (
+       SELECT company_id, CONCAT_WS(', ', NULLIF(line1, ''), NULLIF(line2, ''), NULLIF(city, ''), NULLIF(state, ''), NULLIF(pincode, ''), NULLIF(country, '')) as billing_address,
+              ROW_NUMBER() OVER(PARTITION BY company_id ORDER BY id DESC) as rn
+       FROM company_addresses 
+       WHERE address_type = 'BILLING'
+     ) ba ON ba.company_id = c.id AND ba.rn = 1
+     LEFT JOIN (
+       SELECT company_id, CONCAT_WS(', ', NULLIF(line1, ''), NULLIF(line2, ''), NULLIF(city, ''), NULLIF(state, ''), NULLIF(pincode, ''), NULLIF(country, '')) as shipping_address,
+              ROW_NUMBER() OVER(PARTITION BY company_id ORDER BY id DESC) as rn
+       FROM company_addresses 
+       WHERE address_type = 'SHIPPING'
+     ) sa ON sa.company_id = c.id AND sa.rn = 1
+     LEFT JOIN (
+       SELECT client_name, MAX(billing_address) as billing_address, MAX(shipping_address) as shipping_address, MAX(contact_person) as contact_person, MAX(email) as email, MAX(phone) as phone
+       FROM customer_drawings 
+       GROUP BY client_name
+     ) cd_client ON cd_client.client_name = c.company_name
      WHERE ${whereClause}`,
     [id]
   );
@@ -119,6 +139,18 @@ const getSalesOrderById = async (id) => {
      WHERE soi.sales_order_id = ?`,
     [order.id]
   );
+
+  if (items.length > 0) {
+    const itemIds = items.map(i => i.id);
+    const [components] = await pool.query(
+      `SELECT * FROM sales_order_item_components WHERE sales_order_item_id IN (?)`,
+      [itemIds]
+    );
+    items.forEach(item => {
+      item.sub_assemblies = components.filter(c => c.sales_order_item_id === item.id);
+    });
+  }
+
   order.items = items;
 
   return order;

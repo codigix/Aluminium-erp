@@ -339,7 +339,7 @@ const DrawingMaster = () => {
       key: 'drawing_no',
       sortable: true,
       className: ' text-indigo-600',
-      render: (val) => <span className="uppercase">{val}</span>
+      render: (val) => <span className="uppercase font-mono">{String(val || '').toUpperCase()}</span>
     },
     { 
       label: 'Description', 
@@ -598,7 +598,7 @@ const DrawingMaster = () => {
       const token = localStorage.getItem('authToken');
       const formData = new FormData();
       formData.append('id', editData.id);
-      formData.append('drawingNo', editData.drawing_no);
+      formData.append('drawingNo', String(editData.drawing_no || '').trim().toUpperCase());
       formData.append('revisionNo', editData.revision_no);
       formData.append('description', editData.description);
       formData.append('clientName', editData.client_name);
@@ -848,7 +848,7 @@ const DrawingMaster = () => {
                     </div>
                     <div>
                         <h2 className="text-md  text-slate-900">Edit Drawing Details</h2>
-                        <p className="text-xs text-slate-500 ">Update metadata for {editData.drawing_no}</p>
+                         <p className="text-xs text-slate-500 ">Update metadata for {String(editData.drawing_no || '').toUpperCase()}</p>
                     </div>
                 </div>
                 <button 

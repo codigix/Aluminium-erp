@@ -130,6 +130,8 @@ const DEPARTMENT_ACCESS_RULES = {
       'DASHBOARD_VIEW',
       'PROD_VIEW',
       'QC_VIEW', 'QC_CREATE', 'QC_EDIT',
+      'GRN_VIEW',
+      'BOM_VIEW',
       'PURCHASE_ORDER_CREATE'
     ]
   },

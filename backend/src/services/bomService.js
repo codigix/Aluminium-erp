@@ -95,7 +95,7 @@ const getItemMaterials = async (itemId, itemCode = null, drawingNo = null) => {
   }));
 };
 
-const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refBatchId = null, refDate = null) => {
+const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refBatchId = null, refDate = null, version = null) => {
   let parsedItemId = (itemId === 'null' || itemId === 'undefined' || !itemId) ? null : itemId;
   let rows = [];
 
@@ -120,15 +120,20 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
   // This is the most accurate way to get frozen costs for ANY saved quotation version (even Drafts)
   if (refBatchId) {
     // 1. Find all parent quotation items in this batch to match by rejection_reason (which stores parentQrId)
-    const [parents] = await pool.query(
-      `SELECT id, drawing_no, description FROM quotation_requests 
-       WHERE batch_id = ? AND status != 'COMPONENT'
-       AND (
-         (item_code = ? AND item_code IS NOT NULL) OR 
-         (drawing_no = ? AND drawing_no IS NOT NULL AND drawing_no != '—' AND drawing_no != 'NA')
-       )`,
-      [refBatchId, itemCode, drawingNo]
-    );
+    // Only select parent items of matching version if version is provided, to avoid version cross-talk
+    let parentQuery = `SELECT id, drawing_no, description FROM quotation_requests 
+                       WHERE batch_id = ? AND status != 'COMPONENT'
+                       AND (
+                         (item_code = ? AND item_code IS NOT NULL) OR 
+                         (drawing_no = ? AND drawing_no IS NOT NULL AND drawing_no != '—' AND drawing_no != 'NA')
+                       )`;
+    const parentParams = [refBatchId, itemCode, drawingNo];
+    if (version) {
+      parentQuery += ` AND version = ?`;
+      parentParams.push(version);
+    }
+
+    const [parents] = await pool.query(parentQuery, parentParams);
 
     const parentIds = parents.map(p => String(p.id));
     const parentDrawings = parents.map(p => p.drawing_no).filter(d => d && d !== '—' && d !== 'NA');
@@ -143,13 +148,14 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
 
     let batchRows = [];
     if (matchCandidates.length > 0) {
-      [batchRows] = await pool.query(
-        `SELECT qr.id, 
+      let batchQuery = `
+         SELECT qr.id, 
                 COALESCE(soi.drawing_no, qr.drawing_no, qr.item_code) as drawing_no, 
                 COALESCE(soi.description, qr.description) as description, 
                 qr.item_unit as unit, qr.item_qty as quantity,
                 qr.item_group, qr.bom_cost, qr.received_amount as rate, qr.item_code, qr.pending_bom_cost,
-                1 as is_cost_frozen
+                1 as is_cost_frozen,
+                COALESCE(sb.current_balance, 0) as available_stock
          FROM quotation_requests qr
          LEFT JOIN (
            SELECT item_code, drawing_no, description
@@ -161,10 +167,23 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
              GROUP BY item_code
            )
          ) soi ON LOWER(TRIM(qr.item_code)) = LOWER(TRIM(soi.item_code))
+         LEFT JOIN (
+           SELECT item_code, SUM(current_balance) as current_balance
+           FROM stock_balance
+           GROUP BY item_code
+         ) sb ON LOWER(TRIM(qr.item_code)) = LOWER(TRIM(sb.item_code))
          WHERE qr.batch_id = ? AND qr.status = 'COMPONENT'
-         AND qr.rejection_reason IN (?)`,
-        [refBatchId, matchCandidates]
-      );
+         AND qr.rejection_reason IN (?)
+      `;
+      const batchQueryParams = [refBatchId, matchCandidates];
+      if (version) {
+        batchQuery += ` AND qr.version = ?`;
+        batchQueryParams.push(version);
+      } else {
+        batchQuery += ` AND qr.version = (SELECT MAX(v.version) FROM quotation_requests v WHERE v.batch_id = qr.batch_id AND v.status = 'COMPONENT')`;
+      }
+
+      [batchRows] = await pool.query(batchQuery, batchQueryParams);
     }
 
     if (batchRows.length > 0) {
@@ -177,7 +196,8 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
         rate: parseFloat(row.rate || 0),
         bom_cost: parseFloat(row.bom_cost || 0),
         pending_bom_cost: row.pending_bom_cost ? parseFloat(row.pending_bom_cost) : null,
-        is_cost_frozen: true
+        is_cost_frozen: true,
+        available_stock: parseFloat(row.available_stock || 0)
       }));
     }
   }
@@ -195,7 +215,8 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
               COALESCE(i.drawing_no, soi.drawing_no, c.drawing_no) as drawing_no,
               COALESCE(soi.description, c.description) as description,
               COALESCE(c.component_code, c.item_code) as item_code,
-              i.selling_rate as latest_selling_rate, i.valuation_rate as latest_valuation_rate, i.weight_per_unit as latest_weight_per_unit
+              i.selling_rate as latest_selling_rate, i.valuation_rate as latest_valuation_rate, i.weight_per_unit as latest_weight_per_unit,
+              COALESCE(i.current_balance, 0) as available_stock
        FROM sales_order_item_components c
        LEFT JOIN (
          SELECT item_code, drawing_no, description
@@ -208,7 +229,7 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
          )
        ) soi ON LOWER(TRIM(COALESCE(c.component_code, c.item_code))) = LOWER(TRIM(soi.item_code))
        LEFT JOIN (
-         SELECT item_code, MAX(selling_rate) as selling_rate, MAX(valuation_rate) as valuation_rate, MAX(weight_per_unit) as weight_per_unit, MAX(drawing_no) as drawing_no
+         SELECT item_code, MAX(selling_rate) as selling_rate, MAX(valuation_rate) as valuation_rate, MAX(weight_per_unit) as weight_per_unit, MAX(drawing_no) as drawing_no, SUM(current_balance) as current_balance
          FROM stock_balance 
          GROUP BY item_code
        ) i ON LOWER(TRIM(COALESCE(c.component_code, c.item_code))) = LOWER(TRIM(i.item_code))
@@ -242,7 +263,8 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
                            COALESCE(i.drawing_no, soi.drawing_no, c.drawing_no) as drawing_no,
                            COALESCE(soi.description, c.description) as description,
                            COALESCE(c.component_code, c.item_code) as item_code,
-                           i.selling_rate as latest_selling_rate, i.valuation_rate as latest_valuation_rate, i.weight_per_unit as latest_weight_per_unit
+                           i.selling_rate as latest_selling_rate, i.valuation_rate as latest_valuation_rate, i.weight_per_unit as latest_weight_per_unit,
+                           COALESCE(i.current_balance, 0) as available_stock
                     FROM sales_order_item_components c
                     LEFT JOIN (
                       SELECT item_code, MAX(drawing_no) as drawing_no, MAX(description) as description
@@ -251,7 +273,7 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
                       GROUP BY item_code
                     ) soi ON LOWER(TRIM(COALESCE(c.component_code, c.item_code))) = LOWER(TRIM(soi.item_code))
                     LEFT JOIN (
-                      SELECT item_code, MAX(selling_rate) as selling_rate, MAX(valuation_rate) as valuation_rate, MAX(weight_per_unit) as weight_per_unit, MAX(drawing_no) as drawing_no
+                      SELECT item_code, MAX(selling_rate) as selling_rate, MAX(valuation_rate) as valuation_rate, MAX(weight_per_unit) as weight_per_unit, MAX(drawing_no) as drawing_no, SUM(current_balance) as current_balance
                       FROM stock_balance 
                       GROUP BY item_code
                     ) i ON LOWER(TRIM(COALESCE(c.component_code, c.item_code))) = LOWER(TRIM(i.item_code))
@@ -290,7 +312,8 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
                                     COALESCE(i.drawing_no, soi.drawing_no, c.drawing_no) as drawing_no,
                                     COALESCE(soi.description, c.description) as description,
                                     COALESCE(c.component_code, c.item_code) as item_code,
-                                    i.selling_rate as latest_selling_rate, i.valuation_rate as latest_valuation_rate, i.weight_per_unit as latest_weight_per_unit
+                                    i.selling_rate as latest_selling_rate, i.valuation_rate as latest_valuation_rate, i.weight_per_unit as latest_weight_per_unit,
+                                    COALESCE(i.current_balance, 0) as available_stock
                              FROM sales_order_item_components c
                              LEFT JOIN (
                                SELECT item_code, MAX(drawing_no) as drawing_no, MAX(description) as description
@@ -299,7 +322,7 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
                                GROUP BY item_code
                              ) soi ON LOWER(TRIM(COALESCE(c.component_code, c.item_code))) = LOWER(TRIM(soi.item_code))
                              LEFT JOIN (
-                               SELECT item_code, MAX(selling_rate) as selling_rate, MAX(valuation_rate) as valuation_rate, MAX(weight_per_unit) as weight_per_unit, MAX(drawing_no) as drawing_no
+                               SELECT item_code, MAX(selling_rate) as selling_rate, MAX(valuation_rate) as valuation_rate, MAX(weight_per_unit) as weight_per_unit, MAX(drawing_no) as drawing_no, SUM(current_balance) as current_balance
                                FROM stock_balance 
                                GROUP BY item_code
                              ) i ON LOWER(TRIM(COALESCE(c.component_code, c.item_code))) = LOWER(TRIM(i.item_code))
@@ -513,6 +536,7 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
     ...row,
     qty: row.quantity || row.qty,
     quantity: row.quantity || row.qty,
+    available_stock: parseFloat(row.available_stock || 0),
     weight_per_unit: (isHistorical && parseFloat(row.weight_per_unit) > 0) ? row.weight_per_unit : (row.weight_per_unit || row.latest_weight_per_unit),
     length: (isHistorical && parseFloat(row.length) > 0) ? row.length : (row.length || row.latest_length || 0),
     width: (isHistorical && parseFloat(row.width) > 0) ? row.width : (row.width || row.latest_width || 0),

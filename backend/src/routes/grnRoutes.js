@@ -5,7 +5,7 @@ const grnItemService = require('../services/grnItemService');
 const generatePoPdf = require('../utils/generatePoPdf');
 const { authenticate, authorize } = require('../middleware/authMiddleware');
 
-router.get('/stats', authenticate, authorize(['GRN_VIEW']), async (req, res) => {
+router.get('/stats', authenticate, authorize(['GRN_VIEW', 'QC_VIEW']), async (req, res) => {
   try {
     const stats = await grnService.getGRNStats();
     res.json(stats);
@@ -14,7 +14,7 @@ router.get('/stats', authenticate, authorize(['GRN_VIEW']), async (req, res) => 
   }
 });
 
-router.get('/:grnId/pdf', authenticate, authorize(['GRN_VIEW']), async (req, res) => {
+router.get('/:grnId/pdf', authenticate, authorize(['GRN_VIEW', 'QC_VIEW']), async (req, res) => {
   try {
     const { grnId } = req.params;
     const grn = await grnService.getGRNWithDetails(grnId);
@@ -45,7 +45,7 @@ router.get('/:grnId/pdf', authenticate, authorize(['GRN_VIEW']), async (req, res
   }
 });
 
-router.get('/', authenticate, authorize(['GRN_VIEW']), async (req, res) => {
+router.get('/', authenticate, authorize(['GRN_VIEW', 'QC_VIEW']), async (req, res) => {
   try {
     const grns = await grnService.getAllGRNs();
     res.json(grns);
@@ -54,7 +54,7 @@ router.get('/', authenticate, authorize(['GRN_VIEW']), async (req, res) => {
   }
 });
 
-router.get('/:grnId', authenticate, authorize(['GRN_VIEW']), async (req, res) => {
+router.get('/:grnId', authenticate, authorize(['GRN_VIEW', 'QC_VIEW']), async (req, res) => {
   try {
     const grn = await grnService.getGRNWithDetails(req.params.grnId);
     if (!grn) {

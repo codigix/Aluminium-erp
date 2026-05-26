@@ -696,11 +696,28 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
         // Populate available BOMs from SO items
         // Filter to ensure we only show BOMs for this specific order and avoid duplicates by identity
         const rawItems = (data.items && data.items.length > 0) ? data.items : (designData || []);
+        const seen = new Set();
         const filteredBoms = rawItems.filter(item => {
           if (!item) return false;
+          
           // Ensure item belongs to the selected order (some fallback items might not)
           const itemOrderId = item.order_id || item.sales_order_id;
-          return !itemOrderId || String(itemOrderId) === String(orderId);
+          if (itemOrderId && String(itemOrderId) !== String(orderId)) return false;
+          
+          // 1. Exclude Child Parts (parent_bom_id must be null or undefined)
+          if (item.parent_bom_id !== null && item.parent_bom_id !== undefined) return false;
+          
+          // 2. Exclude "No Code" / placeholder BOMs (e.g. XXX, No Code, or null/empty item code)
+          const code = (item.item_code || '').toUpperCase().trim();
+          const desc = (item.description || '').toUpperCase().trim();
+          if (!code || code === 'XXX' || code === 'NO CODE' || code.includes('NO CODE') || desc.includes('NO CODE') || code.startsWith('XXX-') || code.includes('NO_CODE')) return false;
+          
+          // 3. Prevent duplicate PART BOMs by keeping track of uniqueness
+          const identityKey = `${code}-${(item.drawing_no || '').trim()}`;
+          if (seen.has(identityKey)) return false;
+          seen.add(identityKey);
+          
+          return true;
         });
         setAvailableBoms(filteredBoms);
 

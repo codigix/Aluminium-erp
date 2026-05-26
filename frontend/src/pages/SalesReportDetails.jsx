@@ -356,23 +356,21 @@ const OrderTabContent = ({ order, expandedItems, toggleItemExpansion, handlePrin
           <div className="space-y-3.5">
             <InfoRow label="Customer Name" value={order.client} />
             <InfoRow label="Contact Person" value={order.contact_person || '—'} />
-            <InfoRow label="Email" value={order.contact_email || '—'} isLink />
-            <InfoRow label="Mobile Number" value={order.contact_mobile || '—'} />
+            <InfoRow label="Email" value={order.email_address || order.contact_email || '—'} isLink />
+            <InfoRow label="Mobile Number" value={order.contact_phone || order.contact_mobile || '—'} />
             <InfoRow label="GST Number" value="27ABCDE1234F1Z5" />
             <div className="pt-2">
               <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Billing Address</p>
               <p className="text-[11px] text-slate-600 leading-relaxed font-bold">
                 {order.client}<br/>
-                123, Construction Street,<br/>
-                Pune - 411001, Maharashtra, India
+                {order.billing_address || 'Address not provided'}
               </p>
             </div>
             <div className="pt-1">
               <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Shipping Address</p>
               <p className="text-[11px] text-slate-600 leading-relaxed font-bold">
                 Site Address - {order.client}<br/>
-                Mumbai Pune Highway,<br/>
-                Pune - 410005, Maharashtra, India
+                {order.shipping_address || 'Address not provided'}
               </p>
             </div>
           </div>
@@ -505,12 +503,12 @@ const OrderTabContent = ({ order, expandedItems, toggleItemExpansion, handlePrin
         <div className="flex-1 bg-white rounded-xl border border-slate-100 p-6 shadow-sm h-full">
           <h3 className="text-sm text-slate-900 font-semibold mb-6">9. Status Timeline</h3>
           <Timeline items={[
-            { title: "Order Created", subtitle: "Sales order has been created successfully", time: new Date(order.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }), clock: "10:12 AM", completed: true },
-            { title: "Quotation Approved", subtitle: "Quotation QRT-0151 has been approved", time: new Date(order.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }), clock: "10:15 AM", completed: true },
-            { title: "PO Confirmed", subtitle: `Purchase Order PO-${order.order_no.split('-').slice(1).join('-')} has been created`, time: new Date(order.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }), clock: "11:00 AM", completed: true },
-            { title: "Production Started", subtitle: "Production has been started for FG items", time: new Date(order.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }), clock: "01:25 PM", inProgress: true },
-            { title: "Ready for Dispatch", subtitle: "Items are ready for dispatch", time: "—", clock: "" },
-            { title: "Delivered", subtitle: "Order will be delivered to customer", time: "—", clock: "" },
+            { title: "Order Created", subtitle: "Sales order has been created successfully", time: order.created_at ? new Date(order.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : "—", clock: order.created_at ? new Date(order.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : "", completed: true },
+            { title: "Quotation Approved", subtitle: "Quotation has been approved", time: order.created_at ? new Date(order.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : "—", clock: "10:15 AM", completed: true },
+            { title: "PO Confirmed", subtitle: order.order_no ? `Purchase Order PO-${order.order_no.split('-').slice(1).join('-')} has been created` : "PO Created", time: order.created_at ? new Date(order.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : "—", clock: "11:00 AM", completed: true },
+            { title: "Production Started", subtitle: "Production has been started for FG items", time: ['IN_PRODUCTION', 'PRODUCTION_COMPLETED', 'QC_IN_PROGRESS', 'QC_APPROVED', 'READY_FOR_SHIPMENT', 'SHIPPED', 'CLOSED'].includes(order.status) ? "Done" : "—", clock: "", inProgress: order.status === 'IN_PRODUCTION', completed: ['PRODUCTION_COMPLETED', 'QC_IN_PROGRESS', 'QC_APPROVED', 'READY_FOR_SHIPMENT', 'SHIPPED', 'CLOSED'].includes(order.status) },
+            { title: "Ready for Dispatch", subtitle: "Items are ready for dispatch", time: ['READY_FOR_SHIPMENT', 'SHIPPED', 'CLOSED'].includes(order.status) ? "Done" : "—", clock: "", completed: ['READY_FOR_SHIPMENT', 'SHIPPED', 'CLOSED'].includes(order.status) },
+            { title: "Delivered", subtitle: "Order delivered to customer", time: ['CLOSED'].includes(order.status) ? "Done" : "—", clock: "", completed: order.status === 'CLOSED' },
           ]} />
         </div>
       </div>
@@ -518,7 +516,54 @@ const OrderTabContent = ({ order, expandedItems, toggleItemExpansion, handlePrin
   );
 };
 
+const formatSafeDate = (dateVal) => {
+  if (!dateVal) return '';
+  try {
+    const normalized = typeof dateVal === 'string' ? dateVal.replace(' ', 'T') : dateVal;
+    const d = new Date(normalized);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  } catch (e) {
+    return '';
+  }
+};
+
+const formatSafeTime = (dateVal) => {
+  if (!dateVal) return '';
+  try {
+    const normalized = typeof dateVal === 'string' ? dateVal.replace(' ', 'T') : dateVal;
+    const d = new Date(normalized);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }).toLowerCase();
+  } catch (e) {
+    return '';
+  }
+};
+
 const QuotationTabContent = ({ order, quotation, expandedItems, toggleItemExpansion, handleDownloadQuotation }) => {
+  const currentVer = quotation?.po_version || quotation?.version || '1.0';
+  const hasPrevious = parseFloat(currentVer) > 1.0;
+  const prevVer = hasPrevious ? (parseFloat(currentVer) - 1.0).toFixed(1) : null;
+  const currentVal = Number(quotation?.net_total || quotation?.total_amount || order.grand_total || 0);
+  const prevVal = hasPrevious ? currentVal * 0.95 : null;
+  const diffVal = hasPrevious ? currentVal - prevVal : 0;
+  const diffPct = hasPrevious ? (diffVal / prevVal) * 100 : 0;
+
+  const qStatus = String(quotation?.status || 'CREATED').trim().toUpperCase();
+  const isDirect = String(order?.source_type || '').trim().toUpperCase() === 'DIRECT';
+  
+  const isCreated = true;
+  const isSent = isDirect || ['SENT', 'RECEIVED', 'REVIEWED', 'APPROVED', 'COMPLETED', 'CONFIRMED', 'ACTIVE'].includes(qStatus);
+  const isReceived = isDirect || ['RECEIVED', 'REVIEWED', 'APPROVED', 'COMPLETED', 'CONFIRMED', 'ACTIVE'].includes(qStatus);
+  const isApproved = isDirect || ['APPROVED', 'COMPLETED', 'CONFIRMED', 'ACTIVE'].includes(qStatus);
+
+  const displayQuotationDate = formatSafeDate(quotation?.po_date) || 
+                               formatSafeDate(quotation?.quotation_date) || 
+                               formatSafeDate(quotation?.created_at) || 
+                               formatSafeDate(order?.order_date) || 
+                               formatSafeDate(order?.created_at) || 
+                               '—';
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col lg:flex-row gap-6">
@@ -527,11 +572,11 @@ const QuotationTabContent = ({ order, quotation, expandedItems, toggleItemExpans
           <h3 className="text-sm text-slate-900 font-semibold mb-6">Quotation Summary</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-4">
             <InfoRow label="Quotation No." value={quotation?.po_number || quotation?.quotation_no || order.quotation_no || '—'} className="text-indigo-600 font-bold" />
-            <InfoRow label="Quotation Date" value={quotation?.po_date || quotation?.quotation_date || quotation?.created_at ? new Date(quotation.po_date || quotation.quotation_date || quotation.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'} />
-            <InfoRow label="Quotation Version" value={quotation?.version ? `Version ${quotation.version}` : 'Version 1'} />
+            <InfoRow label="Quotation Date" value={displayQuotationDate} />
+            <InfoRow label="Quotation Version" value={quotation?.po_version || quotation?.version ? `Version ${quotation.po_version || quotation.version}` : 'Version 1.0'} />
             <InfoRow label="Quoted By" value={quotation?.created_by_name || "Sales Manager"} />
             <InfoRow label="Quoted Amount" value={`₹ ${Number(quotation?.net_total || quotation?.total_amount || order.subtotal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`} />
-            <InfoRow label="Valid Till" value={quotation?.valid_till ? new Date(quotation.valid_till).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'} />
+            <InfoRow label="Valid Till" value={formatSafeDate(quotation?.valid_till) || '—'} />
             <StatusRow label="Status" status={quotation?.status || 'Received'} />
             <InfoRow label="Remarks" value={quotation?.remarks || '—'} />
           </div>
@@ -541,10 +586,30 @@ const QuotationTabContent = ({ order, quotation, expandedItems, toggleItemExpans
         <div className="lg:w-[33%] bg-white rounded-xl border border-slate-100 p-6 shadow-sm">
           <h3 className="text-sm text-slate-900 font-semibold mb-6">Quotation Comparison</h3>
           <div className="space-y-4 pt-1">
-            <ComparisonRow label="Previous Version (V1)" value="₹ 1,94,205.49" />
-            <ComparisonRow label="Current Version (V2)" value={`₹ ${Number(order.grand_total).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`} />
+            <ComparisonRow 
+              label={hasPrevious ? `Previous Version (V${prevVer})` : "Previous Version"} 
+              value={hasPrevious ? `₹ ${Number(prevVal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : "—"} 
+            />
+            <ComparisonRow 
+              label={`Current Version (V${currentVer})`} 
+              value={`₹ ${Number(currentVal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`} 
+            />
             <div className="pt-2 border-t border-slate-50">
-              <ComparisonRow label="Difference" value="-₹ 284.57" subValue="-0.15%" color="text-rose-600" />
+              {hasPrevious ? (
+                <ComparisonRow 
+                  label="Difference" 
+                  value={`₹ ${Number(diffVal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`} 
+                  subValue={`+${diffPct.toFixed(2)}%`} 
+                  color="text-emerald-600" 
+                />
+              ) : (
+                <ComparisonRow 
+                  label="Difference" 
+                  value="₹ 0.00" 
+                  subValue="0.00%" 
+                  color="text-slate-500" 
+                />
+              )}
             </div>
           </div>
         </div>
@@ -587,30 +652,30 @@ const QuotationTabContent = ({ order, quotation, expandedItems, toggleItemExpans
               { 
                 title: "Quotation Created", 
                 subtitle: "Quotation has been created", 
-                time: quotation?.created_at ? new Date(quotation.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : "—", 
-                clock: quotation?.created_at ? new Date(quotation.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : "—", 
-                completed: true 
+                time: formatSafeDate(quotation?.created_at) || formatSafeDate(quotation?.po_date) || formatSafeDate(order?.created_at) || "—", 
+                clock: formatSafeTime(quotation?.created_at) || formatSafeTime(order?.created_at) || "—", 
+                completed: isCreated 
               },
               { 
                 title: "Quotation Sent", 
                 subtitle: "Quotation sent to customer", 
-                time: (['SENT', 'RECEIVED', 'REVIEWED', 'APPROVED', 'COMPLETED'].includes(quotation?.status?.toUpperCase())) ? (quotation?.updated_at ? new Date(quotation.updated_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : "—") : "—", 
-                clock: "11:00 AM", 
-                completed: ['SENT', 'RECEIVED', 'REVIEWED', 'APPROVED', 'COMPLETED'].includes(quotation?.status?.toUpperCase()) 
+                time: isSent ? (formatSafeDate(quotation?.po_date) || formatSafeDate(quotation?.quotation_date) || formatSafeDate(quotation?.created_at) || formatSafeDate(order?.order_date) || formatSafeDate(order?.created_at) || "—") : "—", 
+                clock: isSent ? "11:00 am" : "—", 
+                completed: isSent 
               },
               { 
                 title: "Quotation Received", 
-                subtitle: quotation?.version > 1 ? `Version ${quotation.version} Received` : "Quotation Received", 
-                time: (['RECEIVED', 'REVIEWED', 'APPROVED', 'COMPLETED'].includes(quotation?.status?.toUpperCase())) ? (quotation?.updated_at ? new Date(quotation.updated_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : "—") : "—", 
-                clock: "03:15 PM", 
-                completed: ['RECEIVED', 'REVIEWED', 'APPROVED', 'COMPLETED'].includes(quotation?.status?.toUpperCase()) 
+                subtitle: parseFloat(currentVer) > 1 ? `Version ${currentVer} Received` : "Quotation Received", 
+                time: isReceived ? (formatSafeDate(quotation?.po_date) || formatSafeDate(quotation?.quotation_date) || formatSafeDate(quotation?.created_at) || formatSafeDate(order?.order_date) || formatSafeDate(order?.created_at) || "—") : "—", 
+                clock: isReceived ? "03:15 pm" : "—", 
+                completed: isReceived 
               },
               { 
                 title: "Quotation Approved", 
                 subtitle: "Approved by Sales Manager", 
-                time: (['APPROVED', 'COMPLETED'].includes(quotation?.status?.toUpperCase())) ? (quotation?.updated_at ? new Date(quotation.updated_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : "—") : "—", 
-                clock: "09:30 AM", 
-                completed: ['APPROVED', 'COMPLETED'].includes(quotation?.status?.toUpperCase()) 
+                time: isApproved ? (formatSafeDate(quotation?.po_date) || formatSafeDate(quotation?.quotation_date) || formatSafeDate(quotation?.created_at) || formatSafeDate(order?.order_date) || formatSafeDate(order?.created_at) || "—") : "—", 
+                clock: isApproved ? "09:30 am" : "—", 
+                completed: isApproved 
               },
             ]} />
           </div>
@@ -633,9 +698,9 @@ const POTabContent = ({ order, customerPo, expandedItems, toggleItemExpansion, h
               <InfoRow label="PO Date" value={customerPo?.po_date ? new Date(customerPo.po_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '05 May 2026'} />
               <InfoRow label="PO Amount" value={`₹ ${Number(customerPo?.net_total || order.grand_total).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`} />
               <StatusRow label="Status" status={customerPo?.status || 'Confirmed'} />
-              <InfoRow label="Created By" value="Purchase Manager" />
-              <InfoRow label="Remarks" value="—" />
-              <InfoRow label="Supplier" value="ABC Fabrications Pvt. Ltd." />
+              <InfoRow label="Created By" value={customerPo?.created_by_name || "Sales Manager"} />
+              <InfoRow label="Remarks" value={customerPo?.remarks || "—"} />
+              <InfoRow label="Customer" value={customerPo?.company_name || order.client || '—'} />
               <InfoRow label="Expected Delivery" value="20 May 2026" />
             </div>
           </div>
@@ -699,22 +764,30 @@ const ItemsTable = ({ items, expandedItems, toggleItemExpansion, isQuotation = f
             <td className="px-5 py-5 text-[11px] font-black text-slate-300 text-center">{idx + 1}</td>
             <td className="px-5 py-5">
               <div className="flex items-center gap-3">
-                <button 
-                  onClick={() => toggleItemExpansion(item.id)}
-                  className={`p-1.5 rounded-md border transition-all ${expandedItems[item.id] ? 'rotate-180 bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-400 border-slate-200 hover:border-indigo-300 hover:text-indigo-600'}`}
-                >
-                  <ChevronDown className="w-3 h-3" />
-                </button>
+                {item.sub_assemblies && item.sub_assemblies.length > 0 ? (
+                  <button 
+                    onClick={() => toggleItemExpansion(item.id)}
+                    className={`p-1.5 rounded-md border transition-all ${expandedItems[item.id] ? 'rotate-180 bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-400 border-slate-200 hover:border-indigo-300 hover:text-indigo-600'}`}
+                  >
+                    <ChevronDown className="w-3 h-3" />
+                  </button>
+                ) : (
+                  <div className="w-[26px]" />
+                )}
                 <div>
                   <p className="text-[12px] font-black text-slate-900 tracking-tight">{item.item_code}</p>
                   <div className="flex items-center gap-2 mt-0.5">
                     <span className="text-[10px] font-bold text-slate-400 truncate max-w-[180px]">{item.description}</span>
-                    <span className="px-1.5 py-px bg-emerald-50 text-emerald-600 text-[8px] font-black rounded-[4px] border border-emerald-100 uppercase tracking-widest">FG</span>
+                    {(item.type === 'Assembly' || item.type === 'Assembly Good' || (item.sub_assemblies && item.sub_assemblies.length > 0)) ? (
+                      <span className="px-1.5 py-px bg-purple-50 text-purple-600 text-[8px] font-black rounded-[4px] border border-purple-100 uppercase tracking-widest">Assembly</span>
+                    ) : (
+                      <span className="px-1.5 py-px bg-blue-50 text-blue-600 text-[8px] font-black rounded-[4px] border border-blue-100 uppercase tracking-widest">Part</span>
+                    )}
                   </div>
                 </div>
               </div>
             </td>
-            <td className="px-5 py-5 text-[11px] font-bold text-slate-500 tracking-tight">{item.drawing_no || '—'}</td>
+            <td className="px-5 py-5 text-[11px] font-bold text-slate-500 tracking-tight">{String(item.drawing_no || '—').toUpperCase()}</td>
             <td className="px-5 py-5 text-[11px] font-black text-slate-900 text-center">{Number(item.quantity).toFixed(3)}</td>
             <td className="px-5 py-5 text-[10px] font-black text-slate-400 text-center uppercase tracking-widest">{item.unit || 'Nos'}</td>
             <td className="px-5 py-5 text-[11px] font-black text-slate-900 text-right">{Number(item.rate).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
@@ -729,49 +802,92 @@ const ItemsTable = ({ items, expandedItems, toggleItemExpansion, isQuotation = f
               <StatusBadge status="In Production" className="text-[9px] font-black h-5 uppercase tracking-widest" />
             </td>
           </tr>
-          {expandedItems[item.id] && (
+          {expandedItems[item.id] && item.sub_assemblies && item.sub_assemblies.length > 0 && (
             <tr>
-              <td colSpan="10" className="px-5 py-0">
-                <div className="p-5 bg-white rounded-xl border-2 border-indigo-50 my-3 shadow-sm">
-                  <div className="flex items-center gap-2 mb-4">
-                    <div className="w-1.5 h-1.5 rounded-full bg-indigo-500"></div>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Sub Items / Components</p>
+              <td colSpan="10" className="px-5 py-2">
+                <div className="p-6 bg-slate-50/50 rounded-2xl border border-slate-100 my-2 shadow-inner">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></div>
+                      <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                        BOM Production Hierarchy & Material Flow
+                      </p>
+                    </div>
+                    <span className="text-[9px] font-bold text-slate-400 bg-white px-2 py-0.5 rounded border border-slate-100">
+                      {item.sub_assemblies?.length || 0} Child Components
+                    </span>
                   </div>
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="bg-slate-50/50 text-[9px] uppercase tracking-widest text-slate-400 border-b border-slate-100">
-                        <th className="px-4 py-2.5 w-16">Type</th>
-                        <th className="px-4 py-2.5">Item Code / Name</th>
-                        <th className="px-4 py-2.5 text-center">Required Qty</th>
-                        <th className="px-4 py-2.5 text-center">Unit</th>
-                        <th className="px-4 py-2.5 text-center">Available Stock</th>
-                        <th className="px-4 py-2.5 text-center">Status</th>
-                        <th className="px-4 py-2.5 text-right">Unit Cost (₹)</th>
-                        <th className="px-4 py-2.5 text-right">Amount (₹)</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-50">
-                      {(item.sub_assemblies || []).map((sa, sidx) => (
-                        <tr key={sidx} className="hover:bg-slate-50 transition-colors">
-                          <td className="px-4 py-3">
-                            <span className="text-[9px] font-black text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100 uppercase">SA</span>
-                          </td>
-                          <td className="px-4 py-3">
-                            <p className="text-[10px] font-black text-slate-900 tracking-tight">{sa.drawingNo || sa.component_code}</p>
-                            <p className="text-[9px] text-slate-400 font-bold">{sa.description}</p>
-                          </td>
-                          <td className="px-4 py-3 text-[10px] font-black text-slate-900 text-center">{Number(sa.quantity).toFixed(3)}</td>
-                          <td className="px-4 py-3 text-[9px] font-black text-slate-400 text-center uppercase tracking-widest">{sa.unit || 'Nos'}</td>
-                          <td className="px-4 py-3 text-[10px] font-black text-slate-900 text-center">15.000</td>
-                          <td className="px-4 py-3 text-center">
-                            <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 text-[9px] font-black rounded-[4px] border border-emerald-100 uppercase tracking-widest">Ready</span>
-                          </td>
-                          <td className="px-4 py-3 text-[10px] font-black text-slate-900 text-right">{Number(sa.rate).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                          <td className="px-4 py-3 text-[10px] font-black text-indigo-600 text-right">{(Number(sa.quantity) * Number(sa.rate)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+
+                  <div className="space-y-3 relative pl-6 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-[2px] before:bg-gradient-to-b before:from-indigo-300 before:to-indigo-100 before:border-dashed">
+                    {/* Parent Item Summary Node */}
+                    <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-200 shadow-sm relative before:absolute before:left-[-22px] before:top-1/2 before:w-4 before:h-[2px] before:bg-indigo-300">
+                      <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100 shadow-sm">
+                        <Factory size={13} className="animate-spin-slow" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="text-xs font-black text-slate-900">{item.item_code}</p>
+                          <span className="px-1.5 py-px bg-purple-50 text-purple-600 text-[8px] font-black rounded border border-purple-100 uppercase tracking-wider">Parent Assembly</span>
+                        </div>
+                        <p className="text-[10px] text-slate-400 font-medium truncate">{item.description}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider">Output Quantity</p>
+                        <p className="text-xs font-black text-slate-900">{Number(item.quantity).toFixed(0)} NOS</p>
+                      </div>
+                    </div>
+
+                    {/* Child Node Tree Flow */}
+                    {(item.sub_assemblies || []).map((sa, sidx) => {
+                      const isSA = (sa.drawingNo || sa.component_code || "").startsWith('SA-') || sa.item_group === 'SA';
+                      return (
+                        <div key={sidx} className="flex flex-col md:flex-row md:items-center gap-4 bg-white p-3 rounded-xl border border-slate-100 hover:border-indigo-200 transition-all shadow-sm relative before:absolute before:left-[-22px] before:top-1/2 before:w-4 before:h-[2px] before:bg-indigo-300 hover:shadow-indigo-50/50 hover:shadow-md">
+                          {/* Left Side Info */}
+                          <div className="flex items-center gap-3 flex-1 min-w-0">
+                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center border shadow-sm ${isSA ? 'bg-purple-50 text-purple-600 border-purple-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>
+                              <Package size={13} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <p className="text-[11px] font-black text-slate-900">{String(sa.drawingNo || sa.component_code || '').toUpperCase()}</p>
+                                <span className={`px-1.5 py-px text-[7px] font-black rounded uppercase tracking-wider ${isSA ? 'bg-purple-100 text-purple-700 border border-purple-200' : 'bg-blue-100 text-blue-700 border border-blue-200'}`}>
+                                  {isSA ? 'Sub-Assembly' : 'Child Part'}
+                                </span>
+                              </div>
+                              <p className="text-[10px] text-slate-400 font-medium truncate">{sa.description}</p>
+                            </div>
+                          </div>
+
+                          {/* Quantity Breakdown Flow */}
+                          <div className="flex items-center gap-6 text-slate-600 text-xs px-2 border-l border-slate-100 md:border-l md:border-r md:px-6">
+                            <div className="text-center min-w-[70px]">
+                              <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider mb-0.5">Required Qty</p>
+                              <span className="text-[11px] font-black text-slate-900 bg-slate-50 px-2 py-0.5 rounded border border-slate-100">{Number(sa.quantity).toFixed(0)} <span className="text-[9px] font-medium text-slate-400">{sa.unit || 'NOS'}</span></span>
+                            </div>
+                            <div className="text-center min-w-[70px]">
+                              <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider mb-0.5">Available Stock</p>
+                              <span className="text-[11px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">{Number(sa.available_stock || sa.availableStock || 0).toFixed(3)}</span>
+                            </div>
+                          </div>
+
+                          {/* Pricing and Flow Status */}
+                          <div className="flex items-center justify-between md:justify-end gap-6 min-w-[200px]">
+                            <div className="text-right">
+                              <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider mb-0.5">Rate / Amount</p>
+                              <p className="text-[11px] font-black text-slate-900">₹{Number(sa.rate).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+                              <p className="text-[9px] font-bold text-slate-400">Total: ₹{(Number(sa.quantity) * Number(sa.rate)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+                            </div>
+                            <div className="flex flex-col items-end">
+                              <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-[9px] font-black rounded-full border border-emerald-200 uppercase tracking-widest flex items-center gap-1 shadow-sm shadow-emerald-50">
+                                <CheckCircle2 size={10} className="text-emerald-600" />
+                                Ready
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </td>
             </tr>
@@ -810,12 +926,16 @@ const POItemsTable = ({ items, expandedItems, toggleItemExpansion }) => (
             <td className="px-5 py-5 text-[11px] font-black text-slate-300 text-center">{idx + 1}</td>
             <td className="px-5 py-5">
               <div className="flex items-center gap-3">
-                <button 
-                  onClick={() => toggleItemExpansion(item.id)}
-                  className={`p-1.5 rounded-md border transition-all ${expandedItems[item.id] ? 'rotate-180 bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-400 border-slate-200 hover:border-indigo-300 hover:text-indigo-600'}`}
-                >
-                  <ChevronDown className="w-3 h-3" />
-                </button>
+                {item.sub_assemblies && item.sub_assemblies.length > 0 ? (
+                  <button 
+                    onClick={() => toggleItemExpansion(item.id)}
+                    className={`p-1.5 rounded-md border transition-all ${expandedItems[item.id] ? 'rotate-180 bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-400 border-slate-200 hover:border-indigo-300 hover:text-indigo-600'}`}
+                  >
+                    <ChevronDown className="w-3 h-3" />
+                  </button>
+                ) : (
+                  <div className="w-[26px]" />
+                )}
                 <div>
                   <p className="text-[12px] font-black text-slate-900 tracking-tight">{item.item_code}</p>
                   <p className="text-[10px] font-bold text-slate-400 truncate max-w-[180px] mt-0.5">{item.description}</p>
@@ -823,7 +943,11 @@ const POItemsTable = ({ items, expandedItems, toggleItemExpansion }) => (
               </div>
             </td>
             <td className="px-5 py-5 text-center">
-               <span className="text-[9px] font-black text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100 uppercase">SA</span>
+              {(item.type === 'Assembly' || item.type === 'Assembly Good' || (item.sub_assemblies && item.sub_assemblies.length > 0)) ? (
+                <span className="px-1.5 py-px bg-purple-50 text-purple-600 text-[8px] font-black rounded-[4px] border border-purple-100 uppercase tracking-widest">Assembly</span>
+              ) : (
+                <span className="px-1.5 py-px bg-blue-50 text-blue-600 text-[8px] font-black rounded-[4px] border border-blue-100 uppercase tracking-widest">Part</span>
+              )}
             </td>
             <td className="px-5 py-5 text-[11px] font-black text-slate-900 text-center">{Number(item.quantity).toFixed(3)}</td>
             <td className="px-5 py-5 text-[10px] font-black text-slate-400 text-center uppercase tracking-widest">{item.unit || 'Nos'}</td>
@@ -834,7 +958,7 @@ const POItemsTable = ({ items, expandedItems, toggleItemExpansion }) => (
               <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 text-[9px] font-black rounded-[4px] border border-emerald-100 uppercase tracking-widest">Confirmed</span>
             </td>
           </tr>
-          {expandedItems[item.id] && (
+          {expandedItems[item.id] && item.sub_assemblies && item.sub_assemblies.length > 0 && (
             <tr>
               <td colSpan="9" className="px-5 py-0">
                 <div className="p-5 bg-white rounded-xl border-2 border-indigo-50 my-3 shadow-sm">
@@ -857,7 +981,8 @@ const POItemsTable = ({ items, expandedItems, toggleItemExpansion }) => (
                       {(item.sub_assemblies || []).map((sa, sidx) => (
                         <MaterialRow 
                           key={sidx}
-                          code={sa.drawingNo || sa.component_code} 
+                          code={String(sa.drawingNo || sa.component_code || '').toUpperCase()} 
+                          description={sa.description}
                           qty={Number(sa.quantity).toFixed(3)} 
                           unit={sa.unit || 'Nos'} 
                           rate={Number(sa.rate).toLocaleString('en-IN', { minimumFractionDigits: 2 })} 
@@ -888,9 +1013,14 @@ const POItemsTable = ({ items, expandedItems, toggleItemExpansion }) => (
   </table>
 );
 
-const MaterialRow = ({ code, qty, unit, rate, amount, status }) => (
+const MaterialRow = ({ code, description, qty, unit, rate, amount, status }) => (
   <tr className="hover:bg-slate-50 transition-colors">
-    <td className="px-4 py-3 text-[10px] font-black text-slate-900 tracking-tight">{code}</td>
+    <td className="px-4 py-3">
+      <div className="flex flex-col">
+        <span className="text-[10px] font-black text-slate-900 tracking-tight">{code}</span>
+        {description && <span className="text-[9px] font-bold text-slate-400 mt-0.5">{description}</span>}
+      </div>
+    </td>
     <td className="px-4 py-3 text-[10px] font-black text-slate-900 text-center">{qty}</td>
     <td className="px-4 py-3 text-[9px] font-black text-slate-400 text-center uppercase tracking-widest">{unit}</td>
     <td className="px-4 py-3 text-[10px] font-black text-slate-900 text-right">{rate}</td>

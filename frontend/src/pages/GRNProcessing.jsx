@@ -26,7 +26,7 @@ import {
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
 const itemStatusColors = {
-  Approved : 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  APPROVED: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   SHORTAGE: 'bg-amber-50 text-amber-700 border-amber-200',
   OVERAGE: 'bg-orange-50 text-orange-700 border-orange-200',
   PENDING: 'bg-slate-50 text-slate-700 border-slate-200',
@@ -294,7 +294,7 @@ const GRNProcessing = () => {
   const getItemStatus = (poQty, acceptedQty) => {
     const po = Number(poQty);
     const accepted = Number(acceptedQty);
-    if (accepted === po) return 'Approved ';
+    if (accepted === po) return 'APPROVED';
     if (accepted < po) return 'SHORTAGE';
     if (accepted > po) return 'OVERAGE';
     return 'PENDING';

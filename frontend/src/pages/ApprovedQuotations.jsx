@@ -40,6 +40,15 @@ const ApprovedQuotations = () => {
   const [quotations, setQuotations] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedKeys, setExpandedKeys] = useState(new Set());
+  const [expandedItems, setExpandedItems] = useState({});
+  
+  const toggleItemExpansion = (itemId) => {
+    setExpandedItems(prev => ({
+      ...prev,
+      [itemId]: !prev[itemId]
+    }));
+  };
+
   const [dateRange, setDateRange] = useState({
     start: '2026-04-01',
     end: new Date().toISOString().split('T')[0]
@@ -306,13 +315,12 @@ const ApprovedQuotations = () => {
                 <th className="px-3 py-2.5 text-left text-[10px] font-black text-slate-500 uppercase tracking-wider">Drawings</th>
                 <th className="px-3 py-2.5 text-left text-[10px] font-black text-slate-500 uppercase tracking-wider">Amount</th>
                 <th className="px-3 py-2.5 text-center text-[10px] font-black text-slate-500 uppercase tracking-wider">Status</th>
-                <th className="px-3 py-2.5 text-right text-[10px] font-black text-slate-500 uppercase tracking-wider">Action</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan="7" className="px-6 py-12 text-center">
+                  <td colSpan="6" className="px-6 py-12 text-center">
                     <div className="flex flex-col items-center gap-2">
                       <div className="w-6 h-6 border-2 border-slate-100 border-t-rose-600 rounded-full animate-spin"></div>
                       <p className="text-[11px] text-slate-500 font-bold">Loading...</p>
@@ -358,28 +366,32 @@ const ApprovedQuotations = () => {
                                const uniqueDrawings = [...new Set((row.quotes || []).map(q => q.drawing_no).filter(Boolean))];
                                return uniqueDrawings.length > 1 
                                  ? `${uniqueDrawings.length} Drawings` 
-                                 : (uniqueDrawings[0] || '—');
+                                 : String(uniqueDrawings[0] || '—').toUpperCase();
                              })()}
                           </span>
                           <div className="flex items-center gap-1 mt-0.5">
-                             <span className="px-1 py-0.5 bg-slate-100 text-slate-500 text-[8px] font-black rounded border border-slate-200 uppercase">
-                               {row.quotes?.filter(q => {
-                                 const g = (q.item_group || q.item_group_calc || '').toUpperCase();
-                                 const isSA = g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY');
-                                 return (g.includes('FG') || g.includes('FINISHED')) && !isSA;
-                               }).length || 0} FG
-                             </span>
-                             {row.quotes?.filter(q => {
-                               const g = (q.item_group || q.item_group_calc || '').toUpperCase();
-                               return g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY');
-                             }).length > 0 && (
-                               <span className="px-1 py-0.5 bg-blue-50 text-blue-500 text-[8px] font-black rounded border border-blue-100 uppercase">
-                                 {row.quotes?.filter(q => {
-                                   const g = (q.item_group || q.item_group_calc || '').toUpperCase();
-                                   return g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY');
-                                 }).length} SA
-                               </span>
-                             )}
+                            {row.quotes?.filter(q => {
+                              const g = String(q.item_group || q.item_group_calc || '').toUpperCase();
+                              return g.includes('ASSEMBLY') || (q.sub_assemblies && q.sub_assemblies.length > 0);
+                            }).length > 0 && (
+                              <span className="px-1 py-0.5 bg-purple-50 text-purple-600 text-[8px] font-black rounded border border-purple-100 uppercase tracking-wider">
+                                {row.quotes?.filter(q => {
+                                  const g = String(q.item_group || q.item_group_calc || '').toUpperCase();
+                                  return g.includes('ASSEMBLY') || (q.sub_assemblies && q.sub_assemblies.length > 0);
+                                }).length} Assembly
+                              </span>
+                            )}
+                            {row.quotes?.filter(q => {
+                              const g = String(q.item_group || q.item_group_calc || '').toUpperCase();
+                              return !g.includes('ASSEMBLY') && !(q.sub_assemblies && q.sub_assemblies.length > 0);
+                            }).length > 0 && (
+                              <span className="px-1 py-0.5 bg-blue-50 text-blue-500 text-[8px] font-black rounded border border-blue-100 uppercase tracking-wider">
+                                {row.quotes?.filter(q => {
+                                  const g = String(q.item_group || q.item_group_calc || '').toUpperCase();
+                                  return !g.includes('ASSEMBLY') && !(q.sub_assemblies && q.sub_assemblies.length > 0);
+                                }).length} Part
+                              </span>
+                            )}
                           </div>
                         </div>
                       </td>
@@ -394,32 +406,10 @@ const ApprovedQuotations = () => {
                       <td className="px-3 py-2 text-center">
                         <StatusBadge status={row.status} />
                       </td>
-                      <td className="px-3 py-2 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <button 
-                            onClick={() => handleView(row)}
-                            className="p-1.5 hover:bg-white text-slate-400 hover:text-rose-600 rounded-lg transition-all border border-transparent hover:border-slate-200"
-                            title="View Details"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                          </button>
-                          {row.reply_pdf && (
-                            <a 
-                              href={getFileUrl(row.reply_pdf)} 
-                              target="_blank" 
-                              rel="noreferrer"
-                              className="p-1.5 hover:bg-white text-slate-400 hover:text-rose-600 rounded-lg transition-all border border-transparent hover:border-slate-200"
-                              title="Download"
-                            >
-                              <Download className="w-3.5 h-3.5" />
-                            </a>
-                          )}
-                        </div>
-                      </td>
                     </tr>
                     {expandedKeys.has(row.uniqueKey) && (
                       <tr>
-                        <td colSpan="7" className="p-0">
+                        <td colSpan="6" className="p-0">
                           <div className="bg-slate-50/50 p-2 border-t border-slate-100">
                             <div className="bg-white rounded-lg border border-slate-200 overflow-hidden shadow-sm">
                               <table className="min-w-full divide-y divide-slate-100">
@@ -433,35 +423,126 @@ const ApprovedQuotations = () => {
                                 </thead>
                                 <tbody className="divide-y divide-slate-50">
                                   {row.quotes.map((item, idx) => {
-                                    const g = (item.item_group || item.item_group_calc || '').toUpperCase();
-                                    const isSA = (g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY')) && !g.includes('FG');
-                                    const isFG = (g.includes('FG') || g.includes('FINISHED')) && !isSA;
+                                    const g = String(item.item_group || item.item_group_calc || '').toUpperCase();
+                                    const isAssembly = g.includes('ASSEMBLY') || (item.sub_assemblies && item.sub_assemblies.length > 0);
                                     
                                     return (
-                                      <tr key={idx} className="hover:bg-slate-50/30">
-                                        <td className="px-4 py-2">
-                                          <div className="flex flex-col">
-                                            <div className="flex items-center gap-1.5">
-                                              {isSA && <GitBranch size={10} className="text-slate-400 rotate-180" />}
-                                              <span className="text-[11px] font-bold text-slate-800 truncate max-w-[200px]">{item.description || item.item_description}</span>
-                                              <span className={`px-1 rounded-[3px] text-[8px] font-black uppercase border ${isFG ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>
-                                                {isFG ? 'FG' : 'SA'}
-                                              </span>
+                                      <React.Fragment key={idx}>
+                                        <tr className={`hover:bg-slate-50/30 transition-colors ${expandedItems[item.id] ? 'bg-indigo-50/10' : ''}`}>
+                                          <td className="px-4 py-2">
+                                            <div className="flex items-center gap-3">
+                                              {item.sub_assemblies && item.sub_assemblies.length > 0 ? (
+                                                <button 
+                                                  onClick={() => toggleItemExpansion(item.id)}
+                                                  className={`p-1 rounded-md border transition-all ${expandedItems[item.id] ? 'rotate-180 bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-400 border-slate-200 hover:border-indigo-300 hover:text-indigo-600'}`}
+                                                >
+                                                  <ChevronDown className="w-2.5 h-2.5" />
+                                                </button>
+                                              ) : (
+                                                <div className="w-6" />
+                                              )}
+                                              <div className="flex flex-col">
+                                                <div className="flex items-center gap-1.5 flex-wrap">
+                                                  <span className="text-[11px] font-bold text-slate-800 truncate max-w-[200px]">{item.description || item.item_description}</span>
+                                                  <span className={`px-1.5 py-px text-[7px] font-black rounded uppercase tracking-wider border ${isAssembly ? 'bg-purple-50 text-purple-600 border-purple-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>
+                                                    {isAssembly ? 'Assembly' : 'Part'}
+                                                  </span>
+                                                </div>
+                                                <span className="text-[9px] text-slate-400 font-bold mt-0.5">DRW: {String(item.drawing_no || 'NA').toUpperCase()} | {item.item_code}</span>
+                                              </div>
                                             </div>
-                                            <span className="text-[9px] text-slate-400 font-bold mt-0.5">DRW: {item.drawing_no || 'NA'} | {item.item_code}</span>
-                                          </div>
-                                        </td>
-                                        <td className="px-4 py-2 text-center">
-                                          <span className="text-[11px] font-black text-slate-900">{parseFloat(item.item_qty || item.design_qty).toFixed(2)}</span>
-                                          <span className="text-[8px] text-slate-400 ml-0.5 font-bold uppercase">{item.item_unit || item.unit || 'Nos'}</span>
-                                        </td>
-                                        <td className="px-4 py-2 text-right text-[11px] font-bold text-slate-600 italic">
-                                          {formatCurrency(parseFloat(item.total_amount) / (parseFloat(item.item_qty || item.design_qty) || 1))}
-                                        </td>
-                                        <td className="px-4 py-2 text-right text-[11px] font-black text-slate-900 pr-6">
-                                          {formatCurrency(item.total_amount)}
-                                        </td>
-                                      </tr>
+                                          </td>
+                                          <td className="px-4 py-2 text-center">
+                                            <span className="text-[11px] font-black text-slate-900">{parseFloat(item.item_qty || item.design_qty || 1).toFixed(2)}</span>
+                                            <span className="text-[8px] text-slate-400 ml-0.5 font-bold uppercase">{item.item_unit || item.unit || 'Nos'}</span>
+                                          </td>
+                                          <td className="px-4 py-2 text-right text-[11px] font-bold text-slate-600 italic">
+                                            {formatCurrency(parseFloat(item.total_amount) / (parseFloat(item.item_qty || item.design_qty) || 1))}
+                                          </td>
+                                          <td className="px-4 py-2 text-right text-[11px] font-black text-slate-900 pr-6">
+                                            {formatCurrency(item.total_amount)}
+                                          </td>
+                                        </tr>
+                                        {expandedItems[item.id] && item.sub_assemblies && item.sub_assemblies.length > 0 && (
+                                          <tr>
+                                            <td colSpan="4" className="px-4 py-2 bg-slate-50/30">
+                                              <div className="p-4 bg-white rounded-xl border border-slate-150 my-2 shadow-sm">
+                                                <div className="flex items-center justify-between mb-3">
+                                                  <div className="flex items-center gap-1.5">
+                                                    <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse"></div>
+                                                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
+                                                      BOM Production Hierarchy & Material Flow
+                                                    </p>
+                                                  </div>
+                                                  <span className="text-[8px] font-bold text-slate-400 bg-white px-2 py-0.5 rounded border border-slate-100">
+                                                    {item.sub_assemblies?.length || 0} Child Components
+                                                  </span>
+                                                </div>
+
+                                                <div className="space-y-2 relative pl-6 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-[2px] before:bg-gradient-to-b before:from-indigo-300 before:to-indigo-100 before:border-dashed text-left">
+                                                  {/* Parent Item Summary Node */}
+                                                  <div className="flex items-center gap-3 bg-white p-2.5 rounded-lg border border-slate-200 shadow-sm relative before:absolute before:left-[-22px] before:top-1/2 before:w-4 before:h-[2px] before:bg-indigo-300">
+                                                    <div className="w-6 h-6 rounded bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100 shadow-sm">
+                                                      <Package size={11} />
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                      <div className="flex items-center gap-2">
+                                                        <p className="text-[10px] font-black text-slate-900">{item.item_code}</p>
+                                                        <span className="px-1 py-px bg-purple-50 text-purple-600 text-[7px] font-black rounded border border-purple-100 uppercase tracking-wider">Parent Assembly</span>
+                                                      </div>
+                                                      <p className="text-[9px] text-slate-400 font-medium truncate">{item.description || item.item_description}</p>
+                                                    </div>
+                                                    <div className="text-right">
+                                                      <p className="text-[7px] font-black text-slate-400 uppercase tracking-wider">Qty</p>
+                                                      <p className="text-[10px] font-black text-slate-900">{Number(item.item_qty || item.quantity || 1).toFixed(0)} NOS</p>
+                                                    </div>
+                                                  </div>
+
+                                                  {/* Child Node Tree Flow */}
+                                                  {(item.sub_assemblies || []).map((sa, sidx) => {
+                                                    const isChildSA = String(sa.drawingNo || sa.drawing_no || sa.component_code || "").startsWith('SA-') || sa.item_group === 'SA';
+                                                    return (
+                                                      <div key={sidx} className="flex flex-col md:flex-row md:items-center gap-3 bg-white p-2.5 rounded-lg border border-slate-100 hover:border-indigo-200 transition-all shadow-sm relative before:absolute before:left-[-22px] before:top-1/2 before:w-4 before:h-[2px] before:bg-indigo-300 hover:shadow-indigo-50/50 hover:shadow-md">
+                                                        {/* Left Side Info */}
+                                                        <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                                                          <div className={`w-6 h-6 rounded flex items-center justify-center border shadow-sm ${isChildSA ? 'bg-purple-50 text-purple-600 border-purple-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>
+                                                            <Package size={11} />
+                                                          </div>
+                                                          <div className="flex-1 min-w-0">
+                                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                              <p className="text-[10px] font-black text-slate-900">{String(sa.drawingNo || sa.drawing_no || sa.component_code || sa.item_code || '').toUpperCase()}</p>
+                                                              <span className={`px-1 py-px text-[7px] font-black rounded uppercase tracking-wider ${isChildSA ? 'bg-purple-100 text-purple-700 border border-purple-200' : 'bg-blue-100 text-blue-700 border border-blue-200'}`}>
+                                                                {isChildSA ? 'Sub-Assembly' : 'Child Part'}
+                                                              </span>
+                                                            </div>
+                                                            <p className="text-[9px] text-slate-400 font-medium truncate">{sa.description}</p>
+                                                          </div>
+                                                        </div>
+
+                                                        {/* Quantity Breakdown Flow */}
+                                                        <div className="flex items-center gap-4 text-slate-600 text-[10px] px-2 border-l border-slate-100 md:border-l md:border-r md:px-4">
+                                                          <div className="text-center min-w-[50px]">
+                                                            <p className="text-[7px] font-black text-slate-400 uppercase tracking-wider mb-0.5">Required Qty</p>
+                                                            <span className="text-[9px] font-black text-slate-900 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100">{Number(sa.quantity || sa.item_qty || 1).toFixed(0)} <span className="text-[8px] font-medium text-slate-400">{sa.unit || 'NOS'}</span></span>
+                                                          </div>
+                                                        </div>
+
+                                                        {/* Pricing and Flow Status */}
+                                                        <div className="flex items-center justify-between md:justify-end gap-4 min-w-[120px]">
+                                                          <div className="text-right">
+                                                            <p className="text-[7px] font-black text-slate-400 uppercase tracking-wider mb-0.5">Rate</p>
+                                                            <p className="text-[10px] font-black text-slate-900">₹{Number(sa.rate || sa.bom_cost || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+                                                          </div>
+                                                        </div>
+                                                      </div>
+                                                    );
+                                                  })}
+                                                </div>
+                                              </div>
+                                            </td>
+                                          </tr>
+                                        )}
+                                      </React.Fragment>
                                     );
                                   })}
                                 </tbody>
