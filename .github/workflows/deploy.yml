@@ -2,23 +2,25 @@ name: Deploy Aluminium ERP
 
 on:
   push:
-    branches: [ production_branch ]
+    branches:
+      - production_branch
+  workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: 🛎️ Checkout code
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: 🚀 Deploy via SSH
+      - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
-            echo "🔄 Starting deployment..."
+            echo "Starting deployment..."
 
             cd /var/www/Aluminium-erp
 
@@ -26,20 +28,20 @@ jobs:
             git reset --hard origin/production_branch
 
             # === FRONTEND ===
-            echo "🎨 Rebuilding frontend..."
+            echo "Rebuilding frontend..."
             cd frontend
             npm install
             npm run build
 
             # === BACKEND ===
-            echo "📦 Updating backend..."
+            echo "Updating backend..."
             cd ../backend
             npm install --production
             npx prisma migrate deploy --schema=prisma/schema.prisma
             pm2 restart aluminium-erp || pm2 start src/app.js --name "aluminium-erp"
 
             # === RELOAD NGINX ===
-            echo "🔁 Reloading Nginx..."
+            echo "Reloading Nginx..."
             sudo nginx -t && sudo systemctl reload nginx
 
-            echo "✅ Deployment successful!"
+            echo "Deployment successful!"
