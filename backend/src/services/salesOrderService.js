@@ -312,6 +312,7 @@ const createSalesOrder = async (orderData) => {
       if (item.item_code) {
         if (item.item_code.startsWith('SA-')) itemType = 'SA';
         else if (item.item_code.startsWith('RM-')) itemType = 'RM';
+        else if (item.item_code.startsWith('BO-')) itemType = 'BO';
         // Note: SFG- items are treated as FG for Production Planning purposes
       }
       if (item.item_type) itemType = item.item_type;
@@ -516,6 +517,7 @@ const updateSalesOrder = async (id, orderData) => {
         if (item.item_code) {
           if (item.item_code.startsWith('SA-')) itemType = 'SA';
           else if (item.item_code.startsWith('RM-')) itemType = 'RM';
+          else if (item.item_code.startsWith('BO-')) itemType = 'BO';
           // Note: SFG- items are treated as FG for Production Planning purposes
         }
         if (item.item_type) itemType = item.item_type;
