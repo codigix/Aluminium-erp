@@ -301,7 +301,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
     try {
       const result = await Swal.fire({
         title: 'Create Work Orders?',
-        text: "This will generate work orders for all finished goods and sub-assemblies in this plan.",
+        text: "This will generate work orders for all assemblies and parts in this plan.",
         icon: 'question',
         showCancelButton: true,
         confirmButtonColor: '#4f46e5',
@@ -1642,10 +1642,10 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                   <div>
                     <div className="flex items-center gap-2 ">
                       <span className="text-xs  text-blue-600">02</span>
-                      <h2 className="text-sm  text-slate-800">Finished Goods</h2>
+                      <h2 className="text-sm  text-slate-800">ASSEMBLY</h2>
                       <span className="p-1  bg-blue-50 text-blue-600 text-xs   rounded  ml-2  ">{newPlan.items.length} ITEMS</span>
                     </div>
-                    <p className="text-xs text-slate-400">Finished goods and target fulfillment</p>
+                    <p className="text-xs text-slate-400">Assembly items and target fulfillment</p>
                   </div>
                   <button className="ml-auto p-1 hover:bg-slate-50 rounded text-blue-400">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 15l7-7 7 7" /></svg>
@@ -1664,7 +1664,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                   />
                   {newPlan.items.length === 0 && (
                     <div className="px-4 py-8 text-center text-slate-400 italic text-xs border border-slate-100 rounded-b">
-                      No finished goods selected. Please select a sales order and BOM.
+                      No assemblies selected. Please select a sales order and BOM.
                     </div>
                   )}
                 </div>
@@ -1679,10 +1679,10 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                   <div>
                     <div className="flex items-center gap-2 ">
                       <span className="text-xs  text-rose-600">04</span>
-                      <h2 className="text-sm  text-slate-800">Sub Assemblies</h2>
+                      <h2 className="text-sm  text-slate-800">PART</h2>
                       <span className="p-1  bg-rose-50 text-rose-600 text-xs   rounded  ml-2  ">{subAssembliesToDisplay.length} ITEMS</span>
                     </div>
-                    <p className="text-xs text-slate-400">Manufacturing breakdown of intermediate components</p>
+                    <p className="text-xs text-slate-400">Manufacturing breakdown of intermediate parts</p>
                     <p className="text-xs text-rose-600 mt-1   ">Target Quantity: {newPlan.targetQuantity} UNIT (Quantity fetched from Design Order)</p>
                   </div>
                   <button className="ml-auto p-1 hover:bg-slate-50 rounded text-rose-400">
@@ -1695,7 +1695,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                     <thead className="bg-slate-50/50">
                       <tr className="text-lefttext-xs   text-slate-400  ">
                         <th className="p-2  ">No.</th>
-                        <th className="p-2  ">Sub Assembly Item Code</th>
+                        <th className="p-2  ">Part Item Code</th>
                         <th className="p-2  ">Target Warehouse</th>
                         <th className="p-2  ">Scheduled Date</th>
                         <th className="p-2   text-center">Design Qty</th>
@@ -1721,7 +1721,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                                   </div>
                                   <div>
                                     <div className=" text-slate-800 text-xs">{sa.itemCode || sa.item_code}</div>
-                                    <div className="text-xs text-slate-400">{sa.description || 'Sub-Assembly'}</div>
+                                    <div className="text-xs text-slate-400">{sa.description || 'PART'}</div>
                                   </div>
                                 </div>
                               </td>
@@ -2721,7 +2721,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                                 <span className="text-slate-700 ">{op.operation_name}</span>
                                 <div className="text-xs  text-slate-400 font-normal  flex items-center gap-1">
                                   <span className={op.item_type === 'FG' ? 'text-indigo-500' : 'text-rose-500'}>
-                                    {op.item_type === 'FG' ? 'Finished Goods' : 'Sub Assembly'}:
+                                    {op.item_type === 'FG' ? 'ASSEMBLY' : 'PART'}:
                                   </span>
                                   <span className="text-slate-500">{op.source_item || op.itemCode || 'Main Item'}</span>
                                 </div>

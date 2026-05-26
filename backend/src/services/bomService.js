@@ -212,7 +212,7 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
 
     [rows] = await pool.query(
       `SELECT c.*, 
-              COALESCE(i.drawing_no, soi.drawing_no, c.drawing_no) as drawing_no,
+              COALESCE(i.drawing_no, soi.drawing_no) as drawing_no,
               COALESCE(soi.description, c.description) as description,
               COALESCE(c.component_code, c.item_code) as item_code,
               i.selling_rate as latest_selling_rate, i.valuation_rate as latest_valuation_rate, i.weight_per_unit as latest_weight_per_unit,
@@ -260,7 +260,7 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
 
     if (latestIdRow.length > 0) {
       let query = `SELECT c.*, 
-                           COALESCE(i.drawing_no, soi.drawing_no, c.drawing_no) as drawing_no,
+                           COALESCE(i.drawing_no, soi.drawing_no) as drawing_no,
                            COALESCE(soi.description, c.description) as description,
                            COALESCE(c.component_code, c.item_code) as item_code,
                            i.selling_rate as latest_selling_rate, i.valuation_rate as latest_valuation_rate, i.weight_per_unit as latest_weight_per_unit,
@@ -309,7 +309,7 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
 
       if (fallbackId) {
         let fallbackQuery = `SELECT c.*, 
-                                    COALESCE(i.drawing_no, soi.drawing_no, c.drawing_no) as drawing_no,
+                                    COALESCE(i.drawing_no, soi.drawing_no) as drawing_no,
                                     COALESCE(soi.description, c.description) as description,
                                     COALESCE(c.component_code, c.item_code) as item_code,
                                     i.selling_rate as latest_selling_rate, i.valuation_rate as latest_valuation_rate, i.weight_per_unit as latest_weight_per_unit,

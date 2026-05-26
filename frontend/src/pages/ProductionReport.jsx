@@ -582,7 +582,7 @@ const ProductionReport = () => {
                     <div className="flex flex-col gap-1">
                       <div className="flex items-center gap-1.5">
                         <span className={`text-[8px]  ${isSA ? 'text-amber-700' : 'text-indigo-700'}`}>
-                          {isSA ? 'Sub-Assembly' : 'Finished Goods'}
+                          {isSA ? 'PART' : 'ASSEMBLY'}
                         </span>
                         <span className={`text-[8px]    ${isSubcontract ? 'text-amber-600' : 'text-blue-600'}`}>
                           ({isSubcontract ? 'Outsource' : 'In-house'})

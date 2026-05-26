@@ -135,7 +135,7 @@ const WorkOrderDetail = () => {
             <h3 className="text-sm text-slate-900 font-semibold">{jobCard.op_name}</h3>
             <StatusBadge status={jobCard.status} />
           </div>
-          <p className="text-[10px] text-slate-500 mt-1">Sub-Assembly • {jobCard.item_name}</p>
+          <p className="text-[10px] text-slate-500 mt-1">PART • {jobCard.item_name}</p>
         </div>
         <div className="bg-white p-4 border border-slate-100 rounded shadow-sm">
           <p className="text-[10px] text-slate-400 uppercase mb-1">Work Center</p>

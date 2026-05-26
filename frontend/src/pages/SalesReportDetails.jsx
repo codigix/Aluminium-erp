@@ -851,7 +851,7 @@ const ItemsTable = ({ items, expandedItems, toggleItemExpansion, isQuotation = f
                               <div className="flex items-center gap-2 flex-wrap">
                                 <p className="text-[11px] font-black text-slate-900">{String(sa.drawingNo || sa.component_code || '').toUpperCase()}</p>
                                 <span className={`px-1.5 py-px text-[7px] font-black rounded uppercase tracking-wider ${isSA ? 'bg-purple-100 text-purple-700 border border-purple-200' : 'bg-blue-100 text-blue-700 border border-blue-200'}`}>
-                                  {isSA ? 'Sub-Assembly' : 'Child Part'}
+                                  {isSA ? 'PART' : 'PART'}
                                 </span>
                               </div>
                               <p className="text-[10px] text-slate-400 font-medium truncate">{sa.description}</p>

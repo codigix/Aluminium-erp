@@ -512,7 +512,7 @@ const ApprovedQuotations = () => {
                                                             <div className="flex items-center gap-1.5 flex-wrap">
                                                               <p className="text-[10px] font-black text-slate-900">{String(sa.drawingNo || sa.drawing_no || sa.component_code || sa.item_code || '').toUpperCase()}</p>
                                                               <span className={`px-1 py-px text-[7px] font-black rounded uppercase tracking-wider ${isChildSA ? 'bg-purple-100 text-purple-700 border border-purple-200' : 'bg-blue-100 text-blue-700 border border-blue-200'}`}>
-                                                                {isChildSA ? 'Sub-Assembly' : 'Child Part'}
+                                                                {isChildSA ? 'PART' : 'PART'}
                                                               </span>
                                                             </div>
                                                             <p className="text-[9px] text-slate-400 font-medium truncate">{sa.description}</p>

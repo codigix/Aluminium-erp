@@ -985,9 +985,10 @@ const getItemBOMDetails = async (salesOrderItemId) => {
       const [soC] = await pool.query(`
         SELECT c.*, 
                MAX(soi.item_type) as item_type, 
-               MAX(soi.item_group) as item_group
+               MAX(soi.item_group) as item_group,
+               MAX(soi.drawing_no) as drawing_no
         FROM sales_order_item_components c
-        LEFT JOIN sales_order_items soi ON (c.component_code = soi.item_code OR (c.drawing_no = soi.drawing_no AND c.drawing_no IS NOT NULL))
+        LEFT JOIN sales_order_items soi ON c.component_code = soi.item_code
         AND soi.sales_order_id <=> (SELECT sales_order_id FROM sales_order_items WHERE id = ? LIMIT 1)
         WHERE c.sales_order_item_id IN (?) AND c.parent_id <=> ?
         GROUP BY c.id`, [refId, targetSoIds, parentId]);

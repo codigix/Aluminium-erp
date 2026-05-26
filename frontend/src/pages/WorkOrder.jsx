@@ -120,9 +120,9 @@ const WorkOrder = () => {
       key: 'source_type',
       render: (val) => (
         <span className={`text-[10px]  ${
-          val === 'SA' ? 'text-amber-600' : 'text-indigo-600'
+          val === 'FG' || val === 'ASSEMBLY' ? 'text-indigo-600' : 'text-amber-600'
         }`}>
-          {val === 'ASSEMBLY' || val === 'SA' ? 'ASSEMBLY' : 'PART'}
+          {val === 'FG' || val === 'ASSEMBLY' ? 'ASSEMBLY' : 'PART'}
         </span>
       )
     },
