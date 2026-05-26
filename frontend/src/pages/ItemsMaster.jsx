@@ -927,7 +927,7 @@ const ItemsMaster = () => {
                 className={itemsLoading ? 'animate-spin' : ''}
               />
               <Button 
-                variant="primary"
+                variant="rosey"
                 onClick={() => navigate(`${deptPrefix}/item-master/add-items`)}
                 icon={Plus}
               >
