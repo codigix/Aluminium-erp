@@ -1,4 +1,4 @@
-name: Deploy Aluminium ERP
+name: Deploy Aluminium ERP Prod
 
 on:
   push:
