@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import { Card, DataTable, StatusBadge, Button } from '../components/ui.jsx';
 import { 
@@ -17,6 +17,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/
 
 const SalesReport = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(new Date());
@@ -432,7 +433,11 @@ const SalesReport = () => {
               <p className="text-xs text-slate-400   mt-1">Top active clients based on orders</p>
             </div>
             <button 
-              onClick={() => navigate('/sales/active-clients')}
+              onClick={() => {
+                const segments = location.pathname.split('/').filter(Boolean);
+                const currentPrefix = segments[0] || 'sales';
+                navigate(`/${currentPrefix}/active-clients`);
+              }}
               className="text-xs  text-indigo-600 hover:text-indigo-700   flex items-center gap-1 transition-colors"
             >
               View all clients <ChevronRight className="w-3 h-3" />

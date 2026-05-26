@@ -175,7 +175,9 @@ const DEPARTMENT_ACCESS_RULES = {
       'DATA_EXPORT',
       'PAYMENT_VIEW',
       'PAYMENT_PROCESS',
-      'PAYMENT_EDIT'
+      'PAYMENT_EDIT',
+      'VENDOR_VIEW',
+      'VENDOR_EDIT'
     ]
   },
 
@@ -217,7 +219,7 @@ const DEPARTMENT_ACCESS_RULES = {
     canEditDocuments: ['customer_pos', 'sales_orders'],
     canChangeStatusTo: Object.values(DOCUMENT_STATUS_FLOW),
     allowedModules: [
-      'dashboard', 'sales-report', 'procurement-report', 'production-report', 'inventory-report', 'quality-reports', 
+      'dashboard', 'active-clients', 'suppliers', 'sales-report', 'procurement-report', 'production-report', 'inventory-report', 'quality-reports', 
       'payment-history', 'customer-payment-history', 'accounts-report', 'shipment-tracking', 
       'shipment-reports', 'project-analysis', 'material-consumption', 
       'oee-analysis', 'machine-analysis'

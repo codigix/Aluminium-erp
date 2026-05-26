@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import { Card, DataTable, StatusBadge, Button } from '../components/ui.jsx';
 import { 
@@ -19,6 +19,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/
 
 const AccountsReport = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(new Date());
@@ -615,7 +616,11 @@ const AccountsReport = () => {
               <p className="text-xs text-slate-400   mt-1">By outstanding amount</p>
             </div>
             <button 
-              onClick={() => navigate('/sales/active-clients')}
+              onClick={() => {
+                const segments = location.pathname.split('/').filter(Boolean);
+                const currentPrefix = segments[0] || 'accounts';
+                navigate(`/${currentPrefix}/active-clients`);
+              }}
               className="text-xs  text-indigo-600   flex items-center gap-1"
             >
               View all customers <ChevronRight className="w-3 h-3" />
@@ -683,7 +688,11 @@ const AccountsReport = () => {
               <p className="text-xs text-slate-400   mt-1">By outstanding amount</p>
             </div>
             <button 
-              onClick={() => navigate('/procurement/suppliers?from=accounts-report')}
+              onClick={() => {
+                const segments = location.pathname.split('/').filter(Boolean);
+                const currentPrefix = segments[0] || 'accounts';
+                navigate(`/${currentPrefix}/suppliers`);
+              }}
               className="text-xs  text-indigo-600   flex items-center gap-1"
             >
               View all vendors <ChevronRight className="w-3 h-3" />
