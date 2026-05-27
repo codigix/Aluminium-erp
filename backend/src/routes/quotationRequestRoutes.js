@@ -12,6 +12,7 @@ router.get('/versions/:id', authorize(['PO_VIEW']), quotationRequestController.g
 router.get('/version-details/:id', authorize(['PO_VIEW']), quotationRequestController.getQuotationVersionDetails);
 router.get('/download-pdf/:id', authorize(['PO_VIEW']), quotationRequestController.downloadQuotationPDF);
 router.post('/send', authorize(['PO_EDIT']), quotationRequestController.sendQuotationViaEmail);
+router.post('/:id/send-email', authorize(['PO_EDIT']), quotationRequestController.sendExistingQuotationEmail);
 router.post('/batch-approve', authorize(['PO_EDIT']), upload.single('reply_pdf'), quotationRequestController.batchApproveQuotationRequests);
 router.post('/batch-upload-reply', authorize(['PO_EDIT']), upload.single('reply_pdf'), quotationRequestController.batchUploadReplyPDF);
 router.post('/batch-send-to-design', authorize(['PO_EDIT']), quotationRequestController.batchSendToDesign);

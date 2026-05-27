@@ -470,7 +470,11 @@ const BOMCreation = () => {
       // Filter items to find eligible sales orders (those not already submitted or further)
       const eligibleItems = (client.items || []).filter(i => {
         const s = (i.sales_order_status || '').toUpperCase();
-        return !s.includes('BOM_SUBMITTED') && !s.includes('BOM_APPROVED') && !s.includes('QUOTATION') && !s.includes('PO_');
+        return !s.includes('BOM_SUBMITTED') && !s.includes('BOM_APPROVED') && 
+               !s.includes('QUOTATION') && !s.includes('PO_') &&
+               !s.includes('PRODUCTION') && !s.includes('PLAN') && 
+               !s.includes('SHIPMENT') && !s.includes('COMPLETED') && 
+               !s.includes('PAID');
       });
 
       const salesOrderIds = [...new Set(eligibleItems.map(i => i.sales_order_id))].filter(id => id);
@@ -756,10 +760,23 @@ const BOMCreation = () => {
             >
               <Trash2 className="w-4 h-4" />
             </button>
-            {(row.items?.some(i => {
-              const s = (i.sales_order_status || '').toUpperCase();
-              return !s.includes('BOM_SUBMITTED') && !s.includes('BOM_APPROVED') && !s.includes('QUOTATION') && !s.includes('PO_');
-            })) && (
+            {(() => {
+              // Check if BOM has already been sent for approval or has progressed further
+              const isSentOrBeyond = row.items?.some(i => {
+                const s = (i.sales_order_status || '').toUpperCase();
+                return s.includes('BOM_SUBMITTED') || s.includes('BOM_APPROVED') || 
+                       s.includes('QUOTATION') || s.includes('PO_') ||
+                       s.includes('PRODUCTION') || s.includes('PLAN') || 
+                       s.includes('SHIPMENT') || s.includes('COMPLETED') || 
+                       s.includes('PAID');
+              });
+
+              if (isSentOrBeyond) {
+                return null; // Never show again after sending for approval
+              }
+
+              // Before Send: Show active "Send for Approval"
+              return (
                 <button
                   onClick={(e) => { e.stopPropagation(); handleSendForApproval(row); }}
                   disabled={!isCompleted}
@@ -773,7 +790,8 @@ const BOMCreation = () => {
                   </svg>
                   Send for Approval
                 </button>
-              )}
+              );
+            })()}
           </div>
         );
       }

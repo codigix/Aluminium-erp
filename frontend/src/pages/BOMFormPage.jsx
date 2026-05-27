@@ -742,6 +742,12 @@ const BOMFormPage = () => {
       const c = (code || '').toUpperCase();
       const n = (name || '').toLowerCase();
 
+      // STRICT USER RULE: Component dropdown MUST fetch ALL PART items and ALL ASSEMBLY items.
+      // Therefore, if the item code starts with PART-, ASSEMBLY-, SA-, SFG-, ASSY- OR if the type/group includes part or assembly, we always include it.
+      if (c.startsWith('PART-') || c.startsWith('ASSEMBLY-') || c.startsWith('SA-') || c.startsWith('SFG-') || c.startsWith('ASSY-') || t.includes('part') || t.includes('assembly')) {
+        return true;
+      }
+
       // EXCLUDE assemblies, finished goods, and sub-assemblies
       if (c.startsWith('SA-') || c.startsWith('SFG-') || c.startsWith('FG-') || c.startsWith('ASSEMBLY-') || c.startsWith('ASSY-')) {
         return false;
@@ -776,7 +782,7 @@ const BOMFormPage = () => {
       // Strict FG check by code prefix
       if (item.item_code && item.item_code.startsWith("FG-")) return;
 
-      const isSA = (item.item_code || "").startsWith("SA-") || (item.item_code || "").startsWith("SFG-") || (item.item_code || "").startsWith("PART-") || type.includes("assembly") || type.includes("sub") || type.includes("semi") || type.includes("sfg") || type.includes("consumable") || type.includes("part");
+      const isSA = (item.item_code || "").startsWith("SA-") || (item.item_code || "").startsWith("SFG-") || (item.item_code || "").startsWith("PART-") || (item.item_code || "").startsWith("ASSEMBLY-") || (item.item_code || "").startsWith("ASSY-") || type.includes("assembly") || type.includes("sub") || type.includes("semi") || type.includes("sfg") || type.includes("consumable") || type.includes("part");
 
       if (!showAllDrawings) {
         if (["Part", "FG"].includes(productForm.itemGroup) && !isSA) return;
@@ -818,7 +824,7 @@ const BOMFormPage = () => {
       const type = (item.item_group || "").toLowerCase();
       if (!isComponentType(type, item.item_code, item.description || item.material_name)) return;
 
-      const isSA = (item.item_code || "").startsWith("SA-") || (item.item_code || "").startsWith("SFG-") || (item.item_code || "").startsWith("PART-") || type.includes("assembly") || type.includes("sub") || type.includes("semi") || type.includes("sfg") || type.includes("consumable") || type.includes("part");
+      const isSA = (item.item_code || "").startsWith("SA-") || (item.item_code || "").startsWith("SFG-") || (item.item_code || "").startsWith("PART-") || (item.item_code || "").startsWith("ASSEMBLY-") || (item.item_code || "").startsWith("ASSY-") || type.includes("assembly") || type.includes("sub") || type.includes("semi") || type.includes("sfg") || type.includes("consumable") || type.includes("part");
 
       if (!isSA && !showAllDrawings) return;
       // Strict FG check
@@ -2221,6 +2227,25 @@ const BOMFormPage = () => {
                           const group = (opt.item_group || '').toLowerCase();
                           const name = (opt.label || '').toLowerCase();
 
+                          // If explicitly a part or assembly, bypass aggressive name checks
+                          const isExplicitPartOrAssembly = 
+                            group.includes('part') || 
+                            group.includes('assembly') || 
+                            group.includes('assy') || 
+                            group.includes('fg') || 
+                            group.includes('sfg') || 
+                            group.includes('finished') || 
+                            group.includes('semi') || 
+                            code.startsWith('SA-') || 
+                            code.startsWith('SFG-') || 
+                            code.startsWith('FG-') || 
+                            code.startsWith('ASSEMBLY-') || 
+                            code.startsWith('PART-');
+
+                          if (isExplicitPartOrAssembly) {
+                            return true;
+                          }
+
                           // Exclude raw materials, consumables, hardware, services, packaging
                           if (group.includes('raw') || group.includes('material') || group.includes('consumable') || 
                               group.includes('hardware') || group.includes('service') || group.includes('pack') ||
@@ -2236,13 +2261,7 @@ const BOMFormPage = () => {
                             return false;
                           }
 
-                          // Include only valid BOM-able groups: FG, SA, SFG, Part, Assembly, Semi-Finished
-                          const isBOMableGroup = group.includes('fg') || group.includes('sfg') || group.includes('finished') || 
-                                                 group.includes('assembly') || group.includes('assy') || group.includes('part') || 
-                                                 group.includes('semi') || code.startsWith('SA-') || code.startsWith('SFG-') || 
-                                                 code.startsWith('FG-') || code.startsWith('ASSEMBLY-') || code.startsWith('PART-');
-
-                          return isBOMableGroup;
+                          return false;
                         }).sort((a, b) => {
                           if (drawingFilter) {
                             const cleanA = String(a.drawing_no || '').replace(/\s*\($/, '');
@@ -2331,6 +2350,25 @@ const BOMFormPage = () => {
                         const group = (opt.item_group || '').toLowerCase();
                         const name = (opt.subLabel || '').toLowerCase();
 
+                        // If explicitly a part or assembly, bypass aggressive name checks
+                        const isExplicitPartOrAssembly = 
+                          group.includes('part') || 
+                          group.includes('assembly') || 
+                          group.includes('assy') || 
+                          group.includes('fg') || 
+                          group.includes('sfg') || 
+                          group.includes('finished') || 
+                          group.includes('semi') || 
+                          code.startsWith('SA-') || 
+                          code.startsWith('SFG-') || 
+                          code.startsWith('FG-') || 
+                          code.startsWith('ASSEMBLY-') || 
+                          code.startsWith('PART-');
+
+                        if (isExplicitPartOrAssembly) {
+                          return true;
+                        }
+
                         // Exclude raw materials, consumables, hardware, services, packaging
                         if (group.includes('raw') || group.includes('material') || group.includes('consumable') || 
                             group.includes('hardware') || group.includes('service') || group.includes('pack') ||
@@ -2346,13 +2384,7 @@ const BOMFormPage = () => {
                           return false;
                         }
 
-                        // Include only valid BOM-able groups: FG, SA, SFG, Part, Assembly, Semi-Finished
-                        const isBOMableGroup = group.includes('fg') || group.includes('sfg') || group.includes('finished') || 
-                                               group.includes('assembly') || group.includes('assy') || group.includes('part') || 
-                                               group.includes('semi') || code.startsWith('SA-') || code.startsWith('SFG-') || 
-                                               code.startsWith('FG-') || code.startsWith('ASSEMBLY-') || code.startsWith('PART-');
-
-                        return isBOMableGroup;
+                        return false;
                       }).sort((a, b) => {
                         // Sort matching drawings to the top
                         if (drawingFilter) {

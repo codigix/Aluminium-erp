@@ -12,6 +12,7 @@ router.get('/:id', authorize(['PO_VIEW']), customerPoController.getCustomerPo);
 router.get('/:id/pdf', authorize(['PO_VIEW']), customerPoController.generateCustomerPoPdf);
 router.post('/:id/send-email', authorize(['PO_VIEW']), customerPoController.sendCustomerPoEmail);
 router.put('/:id', authorize(['PO_EDIT']), upload.single('poPdf'), customerPoController.updateCustomerPo);
+router.patch('/:id/upload-pdf', authorize(['PO_EDIT', 'PO_CREATE']), upload.single('poPdf'), customerPoController.uploadCustomerPoPdfOnly);
 router.delete('/:id', authorize(['PO_DELETE', 'PO_EDIT']), customerPoController.deleteCustomerPo);
 
 module.exports = router;

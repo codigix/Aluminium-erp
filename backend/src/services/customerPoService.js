@@ -858,11 +858,32 @@ const generateCustomerPoPDF = async poId => {
   return pdf;
 };
 
+const uploadCustomerPoPdf = async (id, pdfPath) => {
+  const [rows] = await pool.query('SELECT pdf_path FROM customer_pos WHERE id = ?', [id]);
+  if (!rows.length) return false;
+  let newPath = pdfPath;
+  if (rows[0].pdf_path) {
+    const existing = rows[0].pdf_path.split(',').map(f => f.trim()).filter(Boolean);
+    if (!existing.includes(pdfPath)) {
+      newPath = `${rows[0].pdf_path},${pdfPath}`;
+    } else {
+      newPath = rows[0].pdf_path;
+    }
+  }
+  const [result] = await pool.query(
+    'UPDATE customer_pos SET pdf_path = ? WHERE id = ?',
+    [newPath, id]
+  );
+  return result.affectedRows > 0;
+};
+
 module.exports = {
   createCustomerPo,
   listCustomerPos,
   getCustomerPoById,
   updateCustomerPo,
   deleteCustomerPo,
-  generateCustomerPoPDF
+  generateCustomerPoPDF,
+  uploadCustomerPoPdf
 };
+

@@ -1,4 +1,5 @@
 const fs = require('fs');
+const path = require('path');
 const parsePoPdf = require('../utils/poParser');
 const parseExcelPo = require('../utils/excelPoParser');
 const customerPoService = require('../services/customerPoService');
@@ -282,6 +283,22 @@ const sendCustomerPoEmail = async (req, res, next) => {
   }
 };
 
+const uploadCustomerPoPdfOnly = async (req, res, next) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'No file uploaded' });
+    }
+    const relativePath = path.relative(process.cwd(), req.file.path);
+    const success = await customerPoService.uploadCustomerPoPdf(req.params.id, relativePath);
+    if (!success) {
+      return res.status(404).json({ message: 'Customer PO not found' });
+    }
+    res.json({ message: 'Customer PO file uploaded successfully', pdf_path: relativePath });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   createCustomerPo,
   parseCustomerPoPdf,
@@ -290,5 +307,6 @@ module.exports = {
   generateCustomerPoPdf,
   updateCustomerPo,
   deleteCustomerPo,
-  sendCustomerPoEmail
+  sendCustomerPoEmail,
+  uploadCustomerPoPdfOnly
 };
