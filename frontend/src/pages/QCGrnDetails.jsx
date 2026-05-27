@@ -25,6 +25,11 @@ const QCGrnDetails = () => {
   const [grnItems, setGrnItems] = useState([]);
   const [qcInspections, setQcInspections] = useState([]);
   const [rejections, setRejections] = useState([]);
+  const [attachments, setAttachments] = useState([]);
+  const [downloading, setDownloading] = useState(false);
+  const [printing, setPrinting] = useState(false);
+  const [inspectionFilter, setInspectionFilter] = useState('All');
+  const [searchQuery, setSearchTerm] = useState('');
 
   useEffect(() => {
     fetchData();
@@ -53,30 +58,98 @@ const QCGrnDetails = () => {
       const qcRes = await fetch(`${API_BASE}/qc-inspections`, { headers });
       if (qcRes.ok) {
         const allQcs = await qcRes.json();
-        const grnQcs = allQcs.filter(qc => qc.grn_id === parseInt(grnId));
+        const grnQcs = allQcs.filter(qc => String(qc.grn_id) === String(grnId));
         
-        // Fetch items for each inspection to count them or show details
+        // Fetch items and attachments for each inspection
         const detailedQcs = await Promise.all(grnQcs.map(async (qc) => {
             const itemsRes = await fetch(`${API_BASE}/qc-inspections/${qc.id}`, { headers });
+            const attachRes = await fetch(`${API_BASE}/qc-inspections/${qc.id}/attachments`, { headers });
+            
+            let qcData = { ...qc };
             if (itemsRes.ok) {
-                return await itemsRes.json();
+                const detailed = await itemsRes.json();
+                qcData = { ...qcData, ...detailed };
             }
-            return qc;
+            if (attachRes.ok) {
+                const attachData = await attachRes.json();
+                qcData.attachments = attachData;
+            }
+            return qcData;
         }));
         
         setQcInspections(detailedQcs);
         
-        // Extract rejections
+        // Extract all rejections and attachments
         const allRejections = detailedQcs.flatMap(qc => 
             (qc.items || []).filter(item => parseFloat(item.rejected_qty) > 0)
         );
         setRejections(allRejections);
+
+        const allAttachments = detailedQcs.flatMap(qc => qc.attachments || []);
+        setAttachments(allAttachments);
       }
 
     } catch (error) {
       console.error('Error fetching QC GRN details:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDownloadPDF = async () => {
+    if (!qcInspections || qcInspections.length === 0) return;
+    const qcId = qcInspections[0].id;
+    try {
+      setDownloading(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/qc-inspections/${qcId}/pdf`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `QC_Report_${qcId}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      } else {
+        throw new Error('Failed to download PDF');
+      }
+    } catch (error) {
+      console.error('Error downloading PDF:', error);
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  const handlePrintPDF = async () => {
+    if (!qcInspections || qcInspections.length === 0) return;
+    const qcId = qcInspections[0].id;
+    try {
+      setPrinting(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/qc-inspections/${qcId}/pdf`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const printWindow = window.open(url, '_blank');
+        if (printWindow) {
+          printWindow.onload = () => {
+            printWindow.print();
+          };
+        }
+      } else {
+        throw new Error('Failed to print PDF');
+      }
+    } catch (error) {
+      console.error('Error printing PDF:', error);
+    } finally {
+      setPrinting(false);
     }
   };
 
@@ -135,19 +208,33 @@ const QCGrnDetails = () => {
   
   const overallRemarks = qcInspections.length > 0 ? qcInspections[0].remarks : 'No inspections recorded yet.';
 
+  const filteredGrnItems = grnItems.filter(item => {
+    const matchesSearch = 
+      item.item_code?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      item.material_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      item.description?.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    const matchesStatus = inspectionFilter === 'All' || 
+      (inspectionFilter === 'Accepted' && (item.status === 'APPROVED' || item.status === 'ACCEPTED')) ||
+      (inspectionFilter === 'Rejected' && (parseFloat(item.rejected_qty) > 0));
+
+    return matchesSearch && matchesStatus;
+  });
+
   const renderGRNDetails = () => (
     <div className="space-y-4 animate-in fade-in slide-in-from-bottom duration-500">
       <Card className="bg-white border border-slate-100 rounded-xl overflow-hidden shadow-sm">
         <div className="p-4 border-b border-slate-50 flex items-center justify-between">
             <h3 className="font-semibold text-slate-800 text-sm">GRN Items & QC Inspection Details</h3>
             <div className="flex gap-2">
-                <select className="text-xs border border-slate-200 rounded px-2 py-1 outline-none focus:ring-1 focus:ring-blue-500">
-                    <option>All Inspection Status</option>
-                    <option>Accepted</option>
-                    <option>Rejected</option>
-                </select>
-                <select className="text-xs border border-slate-200 rounded px-2 py-1 outline-none focus:ring-1 focus:ring-blue-500">
-                    <option>All Item Status</option>
+                <select 
+                  className="text-xs border border-slate-200 rounded px-2 py-1 outline-none focus:ring-1 focus:ring-blue-500"
+                  value={inspectionFilter}
+                  onChange={(e) => setInspectionFilter(e.target.value)}
+                >
+                    <option value="All">All Inspection Status</option>
+                    <option value="Accepted">Accepted</option>
+                    <option value="Rejected">Rejected</option>
                 </select>
                 <div className="relative">
                     <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -155,16 +242,10 @@ const QCGrnDetails = () => {
                         type="text" 
                         placeholder="Search by item code / description..." 
                         className="pl-8 pr-3 py-1 border border-slate-200 rounded text-xs outline-none focus:ring-1 focus:ring-blue-500 w-64"
+                        value={searchQuery}
+                        onChange={(e) => setSearchTerm(e.target.value)}
                     />
                 </div>
-                <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white gap-1.5 h-8">
-                    <ShieldCheck className="w-3.5 h-3.5" />
-                    QC Inspection
-                </Button>
-                <Button size="sm" variant="outline" className="gap-1.5 h-8">
-                    <RotateCcw className="w-3.5 h-3.5" />
-                    Re-Inspect
-                </Button>
             </div>
         </div>
         <div className="overflow-x-auto">
@@ -181,11 +262,10 @@ const QCGrnDetails = () => {
                         <th className="p-3">QC Status</th>
                         <th className="p-3">Inspection Date</th>
                         <th className="p-3">Inspected By</th>
-                        <th className="p-3 text-right">Actions</th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
-                    {grnItems.map((item, idx) => (
+                    {filteredGrnItems.map((item, idx) => (
                         <tr key={idx} className="hover:bg-slate-50/50 transition-colors group text-[11px]">
                             <td className="p-3 text-slate-400">{idx + 1}</td>
                             <td className="p-3">
@@ -209,29 +289,24 @@ const QCGrnDetails = () => {
                             </td>
                             <td className="p-3 text-slate-500">{formatDateTime(item.updated_at)}</td>
                             <td className="p-3 text-slate-500">
-                                <p className="font-medium">Ramesh Patil</p>
-                                <p className="text-[9px]">(QA Inspector)</p>
-                            </td>
-                            <td className="p-3 text-right">
-                                <div className="flex items-center justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <button className="p-1.5 hover:bg-blue-50 text-blue-600 rounded-md transition-all border border-transparent hover:border-blue-100">
-                                        <Eye className="w-3.5 h-3.5" />
-                                    </button>
-                                    <button className="p-1.5 hover:bg-slate-100 text-slate-400 rounded-md transition-all border border-transparent hover:border-slate-200">
-                                        <FileSpreadsheet className="w-3.5 h-3.5" />
-                                    </button>
-                                </div>
+                                <p className="font-medium">Authorized Inspector</p>
+                                <p className="text-[9px]">(QA Department)</p>
                             </td>
                         </tr>
                     ))}
-                    {grnItems.length > 0 && (
+                    {filteredGrnItems.length > 0 && (
                         <tr className="bg-slate-50/50 font-bold text-[11px] text-slate-900">
                             <td colSpan={2} className="p-3">Total</td>
-                            <td className="p-3 text-center">{grnItems.reduce((s, i) => s + parseFloat(i.po_qty || 0), 0).toFixed(3)}</td>
-                            <td className="p-3 text-center">{totalReceived.toFixed(3)}</td>
-                            <td className="p-3 text-center text-emerald-600">{totalAccepted.toFixed(3)}</td>
-                            <td className="p-3 text-center text-rose-600">{totalRejected.toFixed(3)}</td>
-                            <td colSpan={5}></td>
+                            <td className="p-3 text-center">{filteredGrnItems.reduce((s, i) => s + parseFloat(i.po_qty || 0), 0).toFixed(3)}</td>
+                            <td className="p-3 text-center">{filteredGrnItems.reduce((s, i) => s + parseFloat(i.received_qty || 0), 0).toFixed(3)}</td>
+                            <td className="p-3 text-center text-emerald-600">{filteredGrnItems.reduce((s, i) => s + parseFloat(i.accepted_qty || 0), 0).toFixed(3)}</td>
+                            <td className="p-3 text-center text-rose-600">{filteredGrnItems.reduce((s, i) => s + parseFloat(i.rejected_qty || 0), 0).toFixed(3)}</td>
+                            <td colSpan={4}></td>
+                        </tr>
+                    )}
+                    {filteredGrnItems.length === 0 && (
+                        <tr>
+                            <td colSpan={10} className="p-8 text-center text-slate-400 italic">No items matching current filters.</td>
                         </tr>
                     )}
                 </tbody>
@@ -296,7 +371,7 @@ const QCGrnDetails = () => {
                       </div>
                       <div>
                           <p className="text-[10px] text-slate-400">Inspected By</p>
-                          <p className="text-xs font-bold text-slate-900">Ramesh Patil (QA Inspector)</p>
+                          <p className="text-xs font-bold text-slate-900">Authorized Inspector</p>
                       </div>
                   </div>
               </div>
@@ -317,20 +392,34 @@ const QCGrnDetails = () => {
                       <h3 className="font-semibold text-slate-800 text-sm">Attachments</h3>
                   </div>
                   <div className="p-3 space-y-2">
-                      <div className="flex items-center justify-between p-2 border border-slate-100 rounded-lg hover:bg-slate-50 transition-colors group">
-                          <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded bg-rose-50 flex items-center justify-center">
-                                  <FileSpreadsheet className="w-4 h-4 text-rose-600" />
+                      {attachments.length > 0 ? attachments.map((file, fIdx) => (
+                          <div key={fIdx} className="flex items-center justify-between p-2 border border-slate-100 rounded-lg hover:bg-slate-50 transition-colors group">
+                              <div className="flex items-center gap-3">
+                                  <div className="w-8 h-8 rounded bg-rose-50 flex items-center justify-center">
+                                      <FileSpreadsheet className="w-4 h-4 text-rose-600" />
+                                  </div>
+                                  <div>
+                                      <p className="text-[11px] font-medium text-slate-700">{file.file_name}</p>
+                                      <p className="text-[9px] text-slate-400">QC Attachment</p>
+                                  </div>
                               </div>
-                              <div>
-                                  <p className="text-[11px] font-medium text-slate-700">inspection_report_GRN-2026-0012.pdf</p>
-                                  <p className="text-[9px] text-slate-400">245 KB</p>
-                              </div>
+                              <button 
+                                onClick={() => {
+                                  const token = localStorage.getItem('authToken');
+                                  const url = file.file_url.startsWith('http') ? file.file_url : `${API_BASE}/${file.file_url}`;
+                                  window.open(url, '_blank');
+                                }}
+                                className="p-1.5 text-slate-400 hover:text-blue-600 transition-colors"
+                              >
+                                  <Download className="w-4 h-4" />
+                              </button>
                           </div>
-                          <button className="p-1.5 text-slate-400 hover:text-blue-600 transition-colors">
-                              <Download className="w-4 h-4" />
-                          </button>
-                      </div>
+                      )) : (
+                        <div className="text-center py-4">
+                            <Paperclip className="w-8 h-8 text-slate-200 mx-auto mb-2" />
+                            <p className="text-[10px] text-slate-400">No attachments found</p>
+                        </div>
+                      )}
                   </div>
               </Card>
           </div>
@@ -373,13 +462,23 @@ const QCGrnDetails = () => {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" className="h-9 gap-2 text-xs font-semibold bg-white">
-            <Printer className="w-4 h-4" />
-            Print
+          <Button 
+            variant="outline" 
+            className="h-9 gap-2 text-xs font-semibold bg-white"
+            onClick={handlePrintPDF}
+            disabled={printing || qcInspections.length === 0}
+          >
+            <Printer className={`w-4 h-4 ${printing ? 'animate-pulse' : ''}`} />
+            {printing ? 'Printing...' : 'Print'}
           </Button>
-          <Button variant="outline" className="h-9 gap-2 text-xs font-semibold bg-white">
-            <Download className="w-4 h-4" />
-            Download (PDF)
+          <Button 
+            variant="outline" 
+            className="h-9 gap-2 text-xs font-semibold bg-white"
+            onClick={handleDownloadPDF}
+            disabled={downloading || qcInspections.length === 0}
+          >
+            <Download className={`w-4 h-4 ${downloading ? 'animate-bounce' : ''}`} />
+            {downloading ? 'Downloading...' : 'Download (PDF)'}
           </Button>
           <div className="w-px h-6 bg-slate-200 mx-1" />
           <Button variant="ghost" className="w-9 h-9 p-0 hover:bg-white border border-transparent hover:border-slate-100">
@@ -406,23 +505,19 @@ const QCGrnDetails = () => {
                 <span className="px-2 py-0.5 rounded-[4px] text-[9px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-100 mt-1 uppercase">Active Supplier</span>
                 <div className="mt-3 text-center">
                     <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Address</p>
-                    <p className="text-[10px] text-slate-500 font-medium">Gokul Nagar, Katraj, Pune - 411048</p>
+                    <p className="text-[10px] text-slate-500 font-medium">{grnData.supplier_address || grnData.vendorAddress || 'No address provided'}</p>
                 </div>
-                <Button size="sm" variant="outline" className="mt-3 h-7 text-[10px] gap-1.5 px-3">
-                    <User className="w-3 h-3" />
-                    View Supplier
-                </Button>
             </div>
           </div>
           <div className="p-4">
             <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider mb-2">Received By</p>
-            <p className="text-xs font-bold text-slate-900">Warehouse Incharge</p>
+            <p className="text-xs font-bold text-slate-900">{grnData.receivedBy || 'Warehouse Incharge'}</p>
             <p className="text-[10px] text-slate-400 mt-2 font-semibold uppercase tracking-wider">Warehouse</p>
-            <p className="text-xs font-bold text-slate-900">Main Warehouse</p>
+            <p className="text-xs font-bold text-slate-900">{grnData.warehouse_name || 'Main Warehouse'}</p>
             <p className="text-[10px] text-slate-400 mt-2 font-semibold uppercase tracking-wider">Received As Per</p>
             <p className="text-xs font-bold text-slate-900">PO Qty</p>
             <p className="text-[10px] text-slate-400 mt-2 font-semibold uppercase tracking-wider">Received By User</p>
-            <p className="text-xs font-bold text-slate-900">Ramesh Patil</p>
+            <p className="text-xs font-bold text-slate-900">{grnData.received_by_user || 'Ramesh Patil'}</p>
           </div>
           <div className="p-4">
             <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider mb-2">QC Inspection Status</p>
@@ -437,10 +532,6 @@ const QCGrnDetails = () => {
                 <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider mb-1">Overall Remarks</p>
                 <p className="text-[11px] text-slate-600 font-medium leading-relaxed">{overallRemarks || 'All items verified and accepted.'}</p>
             </div>
-            <Button size="sm" variant="outline" className="mt-6 h-8 text-xs gap-1.5 w-full">
-                <Clock className="w-3.5 h-3.5 text-slate-400" />
-                View QC History
-            </Button>
           </div>
           <div className="p-4 bg-slate-50/30">
             <div className="space-y-3">
@@ -492,17 +583,90 @@ const QCGrnDetails = () => {
       {/* Tab Content */}
       {activeTab === 'GRN Details' && renderGRNDetails()}
       {activeTab === 'QC Inspections' && (
-        <div className="p-8 text-center bg-white rounded-xl border border-slate-100 shadow-sm">
-            <ClipboardList className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-            <h3 className="text-sm font-semibold text-slate-900">QC Inspections List</h3>
-            <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">Multiple inspection records are consolidated in the main details view.</p>
+        <div className="space-y-4 animate-in fade-in slide-in-from-bottom duration-500">
+            <Card className="bg-white border border-slate-100 rounded-xl overflow-hidden shadow-sm">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                        <thead>
+                            <tr className="bg-slate-50 text-[10px] text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                                <th className="p-3">Inspection ID</th>
+                                <th className="p-3">Date</th>
+                                <th className="p-3 text-center">Items</th>
+                                <th className="p-3 text-center">Pass Qty</th>
+                                <th className="p-3 text-center">Fail Qty</th>
+                                <th className="p-3">Status</th>
+                                <th className="p-3">Remarks</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-50">
+                            {qcInspections.map((qc, idx) => (
+                                <tr key={idx} className="hover:bg-slate-50/50 transition-colors group text-[11px]">
+                                    <td className="p-3 font-bold text-blue-600">QC-{String(qc.id).padStart(4, '0')}</td>
+                                    <td className="p-3 text-slate-500">{formatDateTime(qc.inspection_date)}</td>
+                                    <td className="p-3 text-center font-medium text-slate-900">{qc.items?.length || 0}</td>
+                                    <td className="p-3 text-center font-bold text-emerald-600">{parseFloat(qc.pass_quantity || 0).toFixed(3)}</td>
+                                    <td className="p-3 text-center font-bold text-rose-600">{parseFloat(qc.fail_quantity || 0).toFixed(3)}</td>
+                                    <td className="p-3">
+                                        <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${
+                                            qc.status === 'PASSED' || qc.status === 'QC_APPROVED' 
+                                            ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' 
+                                            : 'bg-rose-50 text-rose-600 border border-rose-100'
+                                        }`}>
+                                            {qc.status}
+                                        </span>
+                                    </td>
+                                    <td className="p-3 text-slate-500 truncate max-w-[200px]">{qc.remarks || '—'}</td>
+                                </tr>
+                            ))}
+                            {qcInspections.length === 0 && (
+                                <tr>
+                                    <td colSpan={7} className="p-8 text-center text-slate-400 italic">No inspection records found.</td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </Card>
         </div>
       )}
       {activeTab === 'Rejections' && (
-        <div className="p-8 text-center bg-white rounded-xl border border-slate-100 shadow-sm">
-            <XCircle className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-            <h3 className="text-sm font-semibold text-slate-900">No Rejections Recorded</h3>
-            <p className="text-xs text-slate-500 mt-1">All items passed the quality inspection criteria.</p>
+        <div className="space-y-4 animate-in fade-in slide-in-from-bottom duration-500">
+            <Card className="bg-white border border-slate-100 rounded-xl overflow-hidden shadow-sm">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                        <thead>
+                            <tr className="bg-slate-50 text-[10px] text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                                <th className="p-3">#</th>
+                                <th className="p-3">Item Details</th>
+                                <th className="p-3 text-center">Rejected Qty</th>
+                                <th className="p-3">Unit</th>
+                                <th className="p-3">Reason / Remarks</th>
+                                <th className="p-3">Warehouse</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-50">
+                            {rejections.map((item, idx) => (
+                                <tr key={idx} className="hover:bg-slate-50/50 transition-colors group text-[11px]">
+                                    <td className="p-3 text-slate-400">{idx + 1}</td>
+                                    <td className="p-3">
+                                        <p className="font-bold text-slate-900">{item.item_code}</p>
+                                        <p className="text-slate-500">{item.material_name || item.description}</p>
+                                    </td>
+                                    <td className="p-3 text-center font-bold text-rose-600">{parseFloat(item.rejected_qty || 0).toFixed(3)}</td>
+                                    <td className="p-3 text-slate-500">{item.unit || 'NOS'}</td>
+                                    <td className="p-3 text-slate-500">{item.remarks || 'Quality deviation detected.'}</td>
+                                    <td className="p-3 text-slate-500">{item.warehouse_name || 'Main Warehouse'}</td>
+                                </tr>
+                            ))}
+                            {rejections.length === 0 && (
+                                <tr>
+                                    <td colSpan={6} className="p-8 text-center text-slate-400 italic">No rejections found for this GRN.</td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </Card>
         </div>
       )}
     </div>

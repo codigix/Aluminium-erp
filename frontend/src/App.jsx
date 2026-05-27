@@ -204,7 +204,7 @@ const DEPARTMENT_MODULES = {
     'dashboard', 'admin-dashboard', 'project-analysis', 'sales-report', 'approved-quotations', 'sales-report-details', 'procurement-report', 'production-report', 'inventory-report', 'accounts-report', 'oee-analysis', 'machine-analysis', 'material-consumption',
     'quality-reports',
     'payment-history', 'customer-payment-history',
-    'shipment-tracking', 'shipment-reports', 'work-order-details', 'grn-po-details', 'stock-details'
+    'shipment-tracking', 'shipment-reports', 'work-order-details', 'grn-po-details', 'stock-details', 'active-clients', 'suppliers'
   ]
 }
 
@@ -384,7 +384,7 @@ function App() {
     if (modules.includes('sales-report') && !modules.includes('approved-quotations')) {
       modules.push('approved-quotations')
     }
-    if ((modules.includes('sales-report') || modules.includes('production-report')) && !modules.includes('active-clients')) {
+    if ((modules.includes('sales-report') || modules.includes('production-report') || modules.includes('accounts-report')) && !modules.includes('active-clients')) {
       modules.push('active-clients')
     }
     if ((modules.includes('purchase-orders') || modules.includes('grn') || modules.includes('procurement-report') || modules.includes('po-receipts')) && !modules.includes('grn-po-details')) {

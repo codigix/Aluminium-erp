@@ -57,6 +57,63 @@ const GRNPOdetails = () => {
   const [poData, setPoData] = useState(null);
   const [rfqData, setRfqData] = useState(null);
   const [grnData, setGrnData] = useState(null);
+  const [downloading, setDownloading] = useState(false);
+  const [printing, setPrinting] = useState(false);
+
+  const handleDownloadPDF = async () => {
+    if (!poData?.id) return;
+    try {
+      setDownloading(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/purchase-orders/${poData.id}/pdf`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `PO_${poData.po_number || poData.id}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      } else {
+        throw new Error('Failed to download PDF');
+      }
+    } catch (error) {
+      console.error('Error downloading PDF:', error);
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  const handlePrintPDF = async () => {
+    if (!poData?.id) return;
+    try {
+      setPrinting(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/purchase-orders/${poData.id}/pdf`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const printWindow = window.open(url, '_blank');
+        if (printWindow) {
+          printWindow.onload = () => {
+            printWindow.print();
+          };
+        }
+      } else {
+        throw new Error('Failed to print PDF');
+      }
+    } catch (error) {
+      console.error('Error printing PDF:', error);
+    } finally {
+      setPrinting(false);
+    }
+  };
 
   useEffect(() => {
     fetchData();
@@ -148,7 +205,6 @@ const GRNPOdetails = () => {
     const quotedAmounts = quotes.map(q => parseFloat(q.grand_total || q.total_amount) || 0).filter(a => a > 0);
     
     const amountSummary = [
-        { label: 'Estimated Amount', value: formatCurrency(rfqData.items?.reduce((sum, item) => sum + (parseFloat(item.quantity) * parseFloat(item.unit_rate || 0)), 0) || 0) },
         { label: 'Lowest Quoted', value: quotedAmounts.length ? formatCurrency(Math.min(...quotedAmounts)) : '—' },
         { label: 'Highest Quoted', value: quotedAmounts.length ? formatCurrency(Math.max(...quotedAmounts)) : '—' },
         { label: 'Average Quoted', value: quotedAmounts.length ? formatCurrency(quotedAmounts.reduce((a, b) => a + b, 0) / quotedAmounts.length) : '—' }
@@ -213,8 +269,6 @@ const GRNPOdetails = () => {
                                 <th className="p-2 text-center">Required Qty</th>
                                 <th className="p-2">Unit</th>
                                 <th className="p-2">Specification</th>
-                                <th className="p-2 text-right">Estimated Rate (₹)</th>
-                                <th className="p-2 text-right">Estimated Amount (₹)</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-50">
@@ -227,8 +281,6 @@ const GRNPOdetails = () => {
                                     <td className="p-2 text-center font-medium text-slate-900">{item.quantity}</td>
                                     <td className="p-2 text-slate-500">{item.uom || 'NOS'}</td>
                                     <td className="p-2 text-slate-500 text-[9px]">IS 2062 Gr. B</td>
-                                    <td className="p-2 text-right text-slate-900">850.00</td>
-                                    <td className="p-2 text-right font-medium text-slate-900">{(item.quantity * 850).toFixed(2)}</td>
                                 </tr>
                             ))}
                         </tbody>
@@ -255,21 +307,6 @@ const GRNPOdetails = () => {
             </Card>
 
             <Card className="bg-white border border-slate-100 rounded-xl overflow-hidden shadow-sm">
-                <div className="p-3 border-b border-slate-50 flex items-center gap-2">
-                    <TrendingUp className="w-4 h-4 text-emerald-600" />
-                    <h3 className="font-semibold text-slate-800 text-sm">RFQ Amount Summary</h3>
-                </div>
-                <div className="p-3 space-y-2">
-                    {amountSummary.map((kpi, idx) => (
-                        <div key={idx} className="flex justify-between items-center">
-                            <span className="text-[10px] text-slate-500">{kpi.label}</span>
-                            <span className="text-xs font-semibold text-slate-900">{kpi.value}</span>
-                        </div>
-                    ))}
-                </div>
-            </Card>
-
-            <Card className="bg-white border border-slate-100 rounded-xl overflow-hidden shadow-sm">
                 <div className="p-3 border-b border-slate-50">
                     <h3 className="font-semibold text-slate-800 text-sm">Supplier Responses</h3>
                 </div>
@@ -279,7 +316,6 @@ const GRNPOdetails = () => {
                             <tr className="bg-slate-50 text-[10px] text-slate-400 uppercase tracking-wider border-b border-slate-100">
                                 <th className="p-2">Supplier</th>
                                 <th className="p-2">Response Date</th>
-                                <th className="p-2 text-right">Quoted Amount (₹)</th>
                                 <th className="p-2">Status</th>
                             </tr>
                         </thead>
@@ -290,7 +326,6 @@ const GRNPOdetails = () => {
                                         <p className="font-medium text-slate-900">{quote.vendor_name}</p>
                                     </td>
                                     <td className="p-2 text-slate-500">{formatDate(quote.created_at)}</td>
-                                    <td className="p-2 text-right font-medium text-slate-900">{formatCurrency(quote.grand_total || quote.total_amount).replace('₹', '')}</td>
                                     <td className="p-2">
                                         <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium ${
                                             quote.status === 'REVIEWED' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-blue-50 text-blue-600 border border-blue-100'
@@ -730,8 +765,26 @@ const GRNPOdetails = () => {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="default" size="sm" icon={Printer} className="text-[10px] py-1 h-8">Print PO</Button>
-          <Button variant="default" size="sm" icon={Download} className="text-[10px] py-1 h-8">Download PDF</Button>
+          <Button 
+            variant="default" 
+            size="sm" 
+            icon={Printer} 
+            onClick={handlePrintPDF} 
+            loading={printing}
+            className="text-[10px] py-1 h-8"
+          >
+            Print PO
+          </Button>
+          <Button 
+            variant="default" 
+            size="sm" 
+            icon={Download} 
+            onClick={handleDownloadPDF} 
+            loading={downloading}
+            className="text-[10px] py-1 h-8"
+          >
+            Download PDF
+          </Button>
           <button className="p-1.5 text-slate-400 hover:text-slate-600">
             <MoreVertical className="w-4 h-4" />
           </button>

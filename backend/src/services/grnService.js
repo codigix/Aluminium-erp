@@ -14,6 +14,7 @@ const getGRNWithDetails = async (grnId) => {
       g.updated_at AS updatedAt,
       po.vendor_id AS vendorId,
       v.vendor_name AS vendorName,
+      v.location AS vendorAddress,
       COALESCE(
         (SELECT project_name FROM sales_orders WHERE id = po.sales_order_id),
         (SELECT so.project_name 
@@ -50,6 +51,7 @@ const getAllGRNs = async () => {
       g.updated_at AS updatedAt,
       po.vendor_id AS vendorId,
       v.vendor_name AS vendorName,
+      v.location AS vendorAddress,
       COALESCE(
         (SELECT project_name FROM sales_orders WHERE id = po.sales_order_id),
         (SELECT so.project_name 

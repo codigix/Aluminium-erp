@@ -614,7 +614,10 @@ const ensureStockColumns = async () => {
       { name: 'qty_in', definition: 'DECIMAL(12, 3) DEFAULT 0' },
       { name: 'qty_out', definition: 'DECIMAL(12, 3) DEFAULT 0' },
       { name: 'public_id', definition: 'VARCHAR(100) UNIQUE NULL' },
-      { name: 'hsn_code', definition: 'VARCHAR(50) NULL' }
+      { name: 'hsn_code', definition: 'VARCHAR(50) NULL' },
+      { name: 'min_stock', definition: 'DECIMAL(12, 3) DEFAULT 10.000' },
+      { name: 'max_stock', definition: 'DECIMAL(12, 3) DEFAULT 500.000' },
+      { name: 'reorder_level', definition: 'DECIMAL(12, 3) DEFAULT 20.000' }
     ];
 
     const missingLedgerCols = requiredStockCols.filter(c => !existingLedgerCols.has(c.name));

@@ -189,6 +189,9 @@ const getStockBalance = async (drawingNo = null, includeAll = false) => {
       MAX(sb.warehouse) as warehouse,
       COALESCE(MAX(sb.hsn_code), MAX(d.hsn_code)) as hsn_code,
       MAX(sb.last_updated) as last_updated,
+      MAX(sb.min_stock) as min_stock,
+      MAX(sb.max_stock) as max_stock,
+      MAX(sb.reorder_level) as reorder_level,
       SUM(sb.current_balance) as current_balance,
       COALESCE(MAX(sl.accepted_qty), 0) as accepted_qty,
       COALESCE(MAX(sl.issued_qty), 0) as issued_qty,
@@ -269,6 +272,9 @@ const getStockBalance = async (drawingNo = null, includeAll = false) => {
     density: balance.density,
     warehouse: balance.warehouse,
     hsn_code: balance.hsn_code,
+    min_stock: parseFloat(balance.min_stock || 0),
+    max_stock: parseFloat(balance.max_stock || 0),
+    reorder_level: parseFloat(balance.reorder_level || 0),
     last_updated: balance.last_updated
   }));
 };
@@ -276,6 +282,7 @@ const getStockBalance = async (drawingNo = null, includeAll = false) => {
 const getStockBalanceByItem = async (itemCode) => {
   const [balance] = await pool.query(`
     SELECT sb.id, sb.item_code, sb.item_description, sb.material_name, sb.material_type, sb.unit, sb.current_balance, sb.valuation_rate as avg_cost, sb.drawing_no, sb.drawing_id, 
+           sb.min_stock, sb.max_stock, sb.reorder_level,
            COALESCE(sb.hsn_code, (SELECT MAX(hsn_code) FROM customer_drawings WHERE drawing_no = sb.drawing_no)) as hsn_code, sb.last_updated 
     FROM stock_balance sb
     WHERE sb.item_code = ?
@@ -293,6 +300,32 @@ const getStockBalanceByItem = async (itemCode) => {
   
   const poQty = parseFloat(poItems[0]?.po_qty || 0);
 
+  // Find Preferred Supplier (Vendor with highest ordered qty or who quoted)
+  const [preferredSupplierRows] = await pool.query(`
+    SELECT v.vendor_name 
+    FROM purchase_order_items poi
+    JOIN purchase_orders po ON poi.purchase_order_id = po.id
+    JOIN vendors v ON po.vendor_id = v.id
+    WHERE poi.item_code = ?
+    GROUP BY po.vendor_id, v.vendor_name
+    ORDER BY SUM(poi.quantity) DESC 
+    LIMIT 1
+  `, [itemCode]);
+
+  let preferredSupplier = preferredSupplierRows[0]?.vendor_name || null;
+
+  if (!preferredSupplier) {
+    const [quotedSupplierRows] = await pool.query(`
+      SELECT v.vendor_name 
+      FROM quotation_items qi
+      JOIN quotations q ON qi.quotation_id = q.id
+      JOIN vendors v ON q.vendor_id = v.id
+      WHERE qi.item_code = ?
+      LIMIT 1
+    `, [itemCode]);
+    preferredSupplier = quotedSupplierRows[0]?.vendor_name || null;
+  }
+
   return {
     id: balance[0].id,
     item_code: balance[0].item_code,
@@ -309,6 +342,10 @@ const getStockBalanceByItem = async (itemCode) => {
     current_balance: parseFloat(balance[0].current_balance || 0),
     avg_cost: parseFloat(balance[0].avg_cost || 0),
     unit: balance[0].unit || 'NOS',
+    preferred_supplier: preferredSupplier,
+    min_stock: parseFloat(balance[0].min_stock || 0),
+    max_stock: parseFloat(balance[0].max_stock || 0),
+    reorder_level: parseFloat(balance[0].reorder_level || 0),
     last_updated: balance[0].last_updated
   };
 };

@@ -103,6 +103,111 @@ const StockDetails = () => {
     });
   }, [ledgerData, activeTab]);
 
+  // Dynamic trend data calculated from actual ledger entries
+  const trendData = useMemo(() => {
+    if (!ledgerData || ledgerData.length === 0) {
+      return [
+        { name: 'Current', value: stockInfo?.current_balance || 0 }
+      ];
+    }
+    
+    // Sort oldest to newest
+    const sorted = [...ledgerData].sort((a, b) => new Date(a.transaction_date) - new Date(b.transaction_date));
+    
+    // Limit to last 15 entries for visual readability
+    const visibleEntries = sorted.slice(-15);
+    
+    return visibleEntries.map(entry => {
+      const d = new Date(entry.transaction_date);
+      return {
+        name: d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }),
+        value: parseFloat(entry.balance_after || 0)
+      };
+    });
+  }, [ledgerData, stockInfo]);
+
+  // Dynamic usage data calculated from actual outward movements in ledger
+  const usageData = useMemo(() => {
+    let productionQty = 0;
+    let issueQty = 0;
+    let adjustmentQty = 0;
+    let otherQty = 0;
+    let totalOut = 0;
+
+    if (ledgerData && ledgerData.length > 0) {
+      ledgerData.forEach(entry => {
+        const qtyOut = parseFloat(entry.qty_out || 0);
+        if (qtyOut > 0) {
+          totalOut += qtyOut;
+          const remarks = String(entry.remarks || '').toLowerCase();
+          const refType = String(entry.reference_doc_type || '').toLowerCase();
+          const txType = String(entry.transaction_type || '').toLowerCase();
+
+          if (refType === 'material_consumption' || remarks.includes('consumption') || remarks.includes('consumed') || remarks.includes('production')) {
+            productionQty += qtyOut;
+          } else if (refType === 'material_issue' || txType === 'material_issue' || remarks.includes('issued') || remarks.includes('issue')) {
+            issueQty += qtyOut;
+          } else if (txType === 'adjustment' || remarks.includes('adjust') || remarks.includes('scrap')) {
+            adjustmentQty += qtyOut;
+          } else {
+            otherQty += qtyOut;
+          }
+        }
+      });
+    }
+
+    if (totalOut === 0) {
+      return [
+        { name: 'Production', value: 0, color: '#6366f1' },
+        { name: 'Material Issue', value: 0, color: '#06b6d4' },
+        { name: 'Other', value: 0, color: '#f59e0b' }
+      ];
+    }
+
+    const usage = [];
+    if (productionQty > 0) {
+      usage.push({ name: 'Production', value: parseFloat(((productionQty / totalOut) * 100).toFixed(1)), color: '#6366f1' });
+    }
+    if (issueQty > 0) {
+      usage.push({ name: 'Material Issue', value: parseFloat(((issueQty / totalOut) * 100).toFixed(1)), color: '#06b6d4' });
+    }
+    if (adjustmentQty > 0) {
+      usage.push({ name: 'Adjusted / Scrap', value: parseFloat(((adjustmentQty / totalOut) * 100).toFixed(1)), color: '#f43f5e' });
+    }
+    if (otherQty > 0) {
+      usage.push({ name: 'Other', value: parseFloat(((otherQty / totalOut) * 100).toFixed(1)), color: '#f59e0b' });
+    }
+
+    if (usage.length === 0) {
+      usage.push({ name: 'Outbound', value: 100, color: '#6366f1' });
+    }
+
+    return usage;
+  }, [ledgerData]);
+
+  // Dynamic stock summary details calculated from actual ledger entries
+  const summaryDetails = useMemo(() => {
+    let totalReceived = parseFloat(stockInfo?.accepted_qty || 0);
+    let totalIssued = parseFloat(stockInfo?.issued_qty || 0);
+    let totalAdjusted = 0;
+
+    if (ledgerData && ledgerData.length > 0) {
+      ledgerData.forEach(entry => {
+        if (entry.transaction_type === 'ADJUSTMENT') {
+          const qtyIn = parseFloat(entry.qty_in || 0);
+          const qtyOut = parseFloat(entry.qty_out || 0);
+          totalAdjusted += (qtyIn - qtyOut);
+        }
+      });
+    }
+
+    return {
+      received: totalReceived,
+      issued: totalIssued,
+      adjusted: totalAdjusted
+    };
+  }, [ledgerData, stockInfo]);
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center p-20 space-y-4">
@@ -122,24 +227,6 @@ const StockDetails = () => {
       </div>
     );
   }
-
-  // Mock trend data based on ledger
-  const trendData = [
-    { name: '08 Apr', value: 160 },
-    { name: '13 Apr', value: 120 },
-    { name: '18 Apr', value: 110 },
-    { name: '23 Apr', value: 85 },
-    { name: '28 Apr', value: 75 },
-    { name: '03 May', value: 45 },
-    { name: '07 May', value: stockInfo?.current_balance || 0 }
-  ];
-
-  const usageData = [
-    { name: 'Production', value: 72.3, color: '#6366f1' },
-    { name: 'Material Issue', value: 18.2, color: '#06b6d4' },
-    { name: 'Sample / R&D', value: 5.5, color: '#f59e0b' },
-    { name: 'Scrap / Adjusted', value: 4.0, color: '#f43f5e' }
-  ];
 
   return (
     <div className="space-y-4 pb-12 animate-in fade-in duration-500">
@@ -218,9 +305,9 @@ const StockDetails = () => {
               <h3 className="text-[10px] font-black text-slate-900 uppercase tracking-[0.2em] mb-4">Stock Summary</h3>
               <div className="space-y-4 mt-2">
                 {[
-                  { label: 'Total Received', value: Number(stockInfo.accepted_qty || 0).toFixed(3), color: 'text-emerald-600' },
-                  { label: 'Total Issued', value: Number(stockInfo.issued_qty || 0).toFixed(3), color: 'text-rose-600' },
-                  { label: 'Total Adjusted', value: '0.000', color: 'text-amber-500' }
+                  { label: 'Total Received', value: Number(summaryDetails.received).toFixed(3), color: 'text-emerald-600' },
+                  { label: 'Total Issued', value: Number(summaryDetails.issued).toFixed(3), color: 'text-rose-600' },
+                  { label: 'Total Adjusted', value: Number(summaryDetails.adjusted).toFixed(3), color: 'text-amber-500' }
                 ].map((item, i) => (
                   <div key={i} className="flex justify-between items-center border-b border-slate-50 pb-3 last:border-0 last:pb-0">
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">{item.label}</span>
@@ -383,10 +470,10 @@ const StockDetails = () => {
                 { label: 'Item Name', value: stockInfo.material_name || 'Aluminium Profile' },
                 { label: 'Category', value: stockInfo.material_type || 'Raw Material' },
                 { label: 'Unit', value: stockInfo.unit || 'Mtr' },
-                { label: 'Min. Stock Level', value: '10.000 ' + (stockInfo.unit || 'Mtr') },
-                { label: 'Max. Stock Level', value: '500.000 ' + (stockInfo.unit || 'Mtr') },
-                { label: 'Reorder Level', value: '20.000 ' + (stockInfo.unit || 'Mtr') },
-                { label: 'Preferred Supplier', value: 'ABC Wires Pvt. Ltd.' },
+                { label: 'Min. Stock Level', value: Number(stockInfo.min_stock !== undefined ? stockInfo.min_stock : 10).toFixed(3) + ' ' + (stockInfo.unit || 'Mtr') },
+                { label: 'Max. Stock Level', value: Number(stockInfo.max_stock !== undefined ? stockInfo.max_stock : 500).toFixed(3) + ' ' + (stockInfo.unit || 'Mtr') },
+                { label: 'Reorder Level', value: Number(stockInfo.reorder_level !== undefined ? stockInfo.reorder_level : 20).toFixed(3) + ' ' + (stockInfo.unit || 'Mtr') },
+                { label: 'Preferred Supplier', value: stockInfo.preferred_supplier || 'Not Assigned' },
                 { label: 'Location', value: 'RM-HOLD' },
                 { label: 'Last Updated', value: formatDate(stockInfo.last_updated) }
               ].map((item, i) => (

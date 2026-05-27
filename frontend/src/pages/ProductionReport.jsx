@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import { cleanProjectName } from '../utils/formatters';
 import { Card, DataTable, StatusBadge, Button } from '../components/ui.jsx';
@@ -19,6 +19,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/
 
 const ProductionReport = () => {
   const navigate = useNavigate();
+  const location = useLocation();
 
   const formatLocalTime = (isoString) => {
     if (!isoString) return '';
@@ -422,7 +423,11 @@ const ProductionReport = () => {
               <p className="text-xs text-slate-400   mt-1">Projects with highest production output</p>
             </div>
             <button 
-              onClick={() => navigate('/sales/active-clients')}
+              onClick={() => {
+                const segments = location.pathname.split('/').filter(Boolean);
+                const currentPrefix = segments[0] || 'sales';
+                navigate(`/${currentPrefix}/active-clients`);
+              }}
               className="text-xs  text-indigo-600   flex items-center gap-1"
             >
               View all projects <ChevronRight className="w-3 h-3" />

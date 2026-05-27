@@ -1095,6 +1095,116 @@ const requestQuotationUpdateFromBOM = async (req, res, next) => {
   }
 };
 
+const sendExistingQuotationEmail = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    // 1. Fetch the representative quotation to get client info and timestamp
+    // Corrected SQL query to fetch client email from contacts table
+    const [quotes] = await pool.query(
+      `SELECT qr.*, c.company_name, c.id as client_id,
+              (SELECT email FROM contacts WHERE company_id = c.id AND (contact_type = 'PRIMARY' OR contact_type = 'PURCHASE') LIMIT 1) as client_email
+       FROM quotation_requests qr 
+       JOIN companies c ON qr.company_id = c.id 
+       WHERE qr.id = ?`,
+      [id]
+    );
+
+    if (quotes.length === 0) {
+      return res.status(404).json({ error: 'Quotation not found' });
+    }
+
+    const representative = quotes[0];
+    const clientEmail = representative.client_email;
+    const clientName = representative.company_name;
+
+    if (!clientEmail) {
+      return res.status(400).json({ error: 'Client email is required to send quotation' });
+    }
+
+    // 2. Fetch all quotations in this batch (same client, same approx timestamp)
+    // We exclude COMPONENT rows as they are snapshots for sub-assemblies
+    const [batchQuotes] = await pool.query(
+      `SELECT qr.*, 
+              COALESCE(soi.drawing_no, qr.drawing_no) as effective_drawing_no, 
+              COALESCE(soi.description, qr.description) as effective_description
+       FROM quotation_requests qr
+       LEFT JOIN sales_order_items soi ON qr.sales_order_item_id = soi.id
+       WHERE qr.company_id = ? 
+       AND ABS(TIMESTAMPDIFF(SECOND, qr.created_at, ?)) <= 10
+       AND qr.status != 'COMPONENT'`,
+      [representative.company_id, representative.created_at]
+    );
+
+    const items = await Promise.all(batchQuotes.map(async q => {
+      // Fetch component snapshots for this item
+      const [components] = await pool.query(
+        'SELECT * FROM quotation_requests WHERE status = ? AND rejection_reason = ?',
+        ['COMPONENT', String(q.id)]
+      );
+
+      return {
+        id: q.id,
+        drawing_no: q.effective_drawing_no || '—',
+        description: q.effective_description || '',
+        quantity: q.item_qty || 1,
+        quotedPrice: (parseFloat(q.total_amount) / (q.item_qty || 1)) || 0,
+        profit_percentage: q.profit_percentage || 0,
+        gst_percentage: q.gst_percentage || 18,
+        status: q.status,
+        sub_assemblies: components.map(sa => ({
+          drawing_no: sa.drawing_no,
+          description: sa.description,
+          quantity: sa.item_qty,
+          unit: sa.item_unit,
+          rate: parseFloat(sa.received_amount) || parseFloat(sa.bom_cost) || 0
+        }))
+      };
+    }));
+
+    const totalAmount = batchQuotes.reduce((sum, q) => {
+      if (q.status === 'REJECTED') return sum;
+      return sum + (parseFloat(q.total_amount) || 0);
+    }, 0);
+
+    const quoteNumber = `QRT-${String(representative.id).padStart(4, '0')}`;
+    const totalAmountNum = parseFloat(totalAmount) || 0;
+
+    const emailResult = await emailService.sendQuotationEmail(
+      clientEmail,
+      clientName,
+      items,
+      totalAmountNum,
+      representative.notes,
+      representative.client_id,
+      quoteNumber
+    );
+
+    const emailMessageId = emailResult?.messageId || null;
+
+    // Log to communications for ALL quotations in this batch
+    const messageText = `Quotation ${quoteNumber} sent to client.\nTotal Amount (Incl. GST): ₹${totalAmountNum.toLocaleString('en-IN')}\nItems: ${items.length}`;
+
+    for (const q of batchQuotes) {
+      await pool.execute(
+        `INSERT INTO quotation_communications 
+         (quotation_id, quotation_type, sender_type, message, email_message_id, created_at, is_read) 
+         VALUES (?, ?, ?, ?, ?, NOW(), 1)`,
+        [q.id, 'CLIENT', 'SYSTEM', messageText, emailMessageId]
+      );
+    }
+
+    res.json({
+      message: 'Quotation sent to client successfully',
+      emailSent: true
+    });
+
+  } catch (error) {
+    console.error('[Quotation Controller] Email sending failed:', error);
+    next(error);
+  }
+};
+
 module.exports = {
   getQuotationRequests,
   getQuotationVersionHistory,
@@ -1110,5 +1220,6 @@ module.exports = {
   batchDeleteQuotationRequests,
   updateQuotationRates,
   updateQuotationFromBOM,
-  requestQuotationUpdateFromBOM
+  requestQuotationUpdateFromBOM,
+  sendExistingQuotationEmail
 };

@@ -1,7 +1,11 @@
 const pool = require('./src/config/db');
 async function run() {
     try {
-        const [rows] = await pool.query('SELECT id, item_code, drawing_no, description, item_group, bom_cost FROM sales_order_items WHERE item_code = "PART-GFMBUSHMOU-0001"');
+        const [rows] = await pool.query(`
+            SELECT id, company_id, status, current_department 
+            FROM sales_orders 
+            ORDER BY id DESC LIMIT 10
+        `);
         console.table(rows);
     } catch (e) {
         console.error(e);

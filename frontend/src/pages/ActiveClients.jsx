@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   Users, Search, Filter, Download, ChevronRight, 
   ArrowLeft, Calendar, Building2, 
@@ -12,7 +12,25 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/
 
 const ActiveClients = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [loading, setLoading] = useState(true);
+
+  const handleBack = () => {
+    const segments = location.pathname.split('/').filter(Boolean);
+    const prefix = segments[0] || 'sales';
+    
+    if (window.history.state && window.history.state.idx > 0) {
+      navigate(-1);
+    } else {
+      if (prefix === 'production') {
+        navigate('/production/production-report');
+      } else if (prefix === 'accounts') {
+        navigate('/accounts/accounts-report');
+      } else {
+        navigate('/sales/sales-report');
+      }
+    }
+  };
   const [data, setData] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [dateRange, setDateRange] = useState({
@@ -220,7 +238,7 @@ const ActiveClients = () => {
           <p className="text-slate-500 text-xs font-medium">Manage all clients and their details</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => navigate('/sales/sales-report')} className="flex items-center gap-1.5 font-bold text-xs h-10 px-4">
+          <Button variant="outline" onClick={handleBack} className="flex items-center gap-1.5 font-bold text-xs h-10 px-4">
             <ArrowLeft className="w-4 h-4" />
             Back
           </Button>

@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react'
 import {
   Loader2, ChevronRight, Eye, Plus, Trash2, X, Download, Pencil, Send,
   Search, RefreshCw, Filter, FileText, Calendar, Building2,
-  DollarSign, Package, CheckCircle2, Clock, AlertCircle, GitBranch
+  DollarSign, Package, CheckCircle2, Clock, AlertCircle, GitBranch, Upload
 } from 'lucide-react'
 import { Card, DataTable } from '../components/ui.jsx'
 import SendEmailModal from '../components/SendEmailModal'
@@ -36,6 +36,69 @@ const CustomerPO = ({
   const [showEmailModal, setShowEmailModal] = useState(false)
   const [emailPoData, setEmailPoData] = useState(null)
   const [allDrawings, setAllDrawings] = useState([])
+  const [uploadLoading, setUploadLoading] = useState(false)
+  const [showUploadModal, setShowUploadModal] = useState(false)
+  const [selectedPoForModal, setSelectedPoForModal] = useState(null)
+
+  const handleOpenPdf = (pdfPath) => {
+    if (!pdfPath) return;
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
+    let cleanPath = pdfPath.replace(/\\/g, '/');
+    if (!cleanPath.startsWith('http')) {
+      if (!cleanPath.startsWith('uploads/') && !cleanPath.startsWith('/uploads/')) {
+        cleanPath = `uploads/${cleanPath}`;
+      }
+      if (cleanPath.startsWith('/')) {
+        cleanPath = cleanPath.slice(1);
+      }
+      cleanPath = `${baseUrl.replace(/\/api$/, '')}/${cleanPath}`;
+    }
+    window.open(cleanPath, '_blank');
+  };
+
+  const handleOpenUploadModal = (po) => {
+    setSelectedPoForModal(po);
+    setShowUploadModal(true);
+  };
+
+  const handleCloseUploadModal = () => {
+    setShowUploadModal(false);
+    setSelectedPoForModal(null);
+  };
+
+  const handleFileChangeInsideModal = async (e) => {
+    const file = e.target.files[0];
+    if (!file || !selectedPoForModal) return;
+
+    setUploadLoading(true);
+    try {
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
+      const token = localStorage.getItem('authToken');
+
+      const formData = new FormData();
+      formData.append('poPdf', file);
+
+      const response = await fetch(`${baseUrl}/customer-pos/${selectedPoForModal.id}/upload-pdf`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
+
+      const resData = await response.json();
+      if (!response.ok) {
+        throw new Error(resData.message || resData.error || 'Failed to upload document');
+      }
+
+      showToast('Customer PO document uploaded successfully');
+      if (onRefresh) onRefresh();
+    } catch (error) {
+      showToast(error.message || 'Error uploading file');
+    } finally {
+      setUploadLoading(false);
+    }
+  };
 
   const [poForm, setPoForm] = useState({
     companyId: '',
@@ -610,14 +673,25 @@ const CustomerPO = ({
       className: 'text-right',
       render: (_, row) => (
         <div className="flex items-center justify-end gap-2">
-          <button
-            onClick={() => handleDownloadPdf(row.id, row.po_number)}
-            className="px-2.5 py-1.5 bg-indigo-50 text-indigo-600 rounded text-xs   hover:bg-indigo-100 transition-all border border-indigo-100 flex items-center gap-1.5"
-            title="View PDF"
-          >
-            <Download className="w-3.5 h-3.5" />
-            View PDF
-          </button>
+          {row.pdf_path ? (
+            <button
+              onClick={() => handleOpenUploadModal(row)}
+              className="px-2.5 py-1.5 bg-indigo-50 text-indigo-600 rounded text-xs hover:bg-indigo-100 transition-all border border-indigo-100 flex items-center gap-1.5"
+              title="View or Manage PO Documents"
+            >
+              <Eye className="w-3.5 h-3.5" />
+              View/Manage PO
+            </button>
+          ) : (
+            <button
+              onClick={() => handleOpenUploadModal(row)}
+              className="px-2.5 py-1.5 bg-emerald-50 text-emerald-600 rounded text-xs hover:bg-emerald-100 transition-all border border-emerald-100 flex items-center gap-1.5 shadow-sm active:scale-95"
+              title="Upload PO document"
+            >
+              <Upload className="w-3.5 h-3.5" />
+              Upload PO
+            </button>
+          )}
           <button
             onClick={() => openPoInMode('VIEW', row.id)}
             className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all border border-transparent hover:border-indigo-100"
@@ -752,6 +826,102 @@ const CustomerPO = ({
           </div>
         )}
       </div>
+
+      {/* Manage PO Documents Modal */}
+      {showUploadModal && selectedPoForModal && (() => {
+        const activePo = customerPos.find(p => p.id === selectedPoForModal.id) || selectedPoForModal;
+        const files = activePo.pdf_path ? activePo.pdf_path.split(',').map(f => f.trim()).filter(Boolean) : [];
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300" onClick={handleCloseUploadModal} />
+            <div className="relative w-full max-w-md bg-white shadow-2xl rounded-xl flex flex-col overflow-hidden animate-in fade-in zoom-in duration-300 border border-slate-100">
+              {/* Header */}
+              <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-800">Manage PO Documents</h3>
+                  <p className="text-[11px] text-indigo-600 font-medium mt-0.5">{activePo.po_number || 'No PO#'}</p>
+                </div>
+                <button
+                  onClick={handleCloseUploadModal}
+                  className="p-1.5 rounded-full hover:bg-slate-200/70 transition-all text-slate-400 hover:text-slate-700 bg-slate-100 animate-none"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="p-4 space-y-4">
+                {/* Existing files list */}
+                <div>
+                  <h4 className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Uploaded Files ({files.length})</h4>
+                  {files.length === 0 ? (
+                    <div className="text-center py-6 bg-slate-50 border border-dashed border-slate-200 rounded-lg">
+                      <FileText className="w-6 h-6 text-slate-300 mx-auto mb-1.5" />
+                      <p className="text-xs text-slate-500">No documents uploaded yet</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                      {files.map((file, idx) => {
+                        const rawName = file.split('/').pop() || file.split('\\').pop() || '';
+                        const parts = rawName.split('-');
+                        const fileName = parts.length > 1 ? parts.slice(1).join('-') : rawName;
+                        
+                        return (
+                          <div key={idx} className="flex items-center justify-between p-2 bg-slate-50 border border-slate-100 rounded-lg hover:bg-slate-100/70 transition-all">
+                            <div className="flex items-center gap-2 overflow-hidden mr-2">
+                              <FileText className="w-4 h-4 text-indigo-500 shrink-0" />
+                              <span className="text-xs text-slate-700 truncate font-medium" title={fileName}>{fileName}</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenPdf(file)}
+                              className="flex items-center gap-1 text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 bg-white border border-slate-200 px-2.5 py-1 rounded transition-all hover:border-indigo-100 shadow-sm shrink-0 active:scale-95"
+                            >
+                              <Eye className="w-3 h-3" />
+                              View
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Upload Form */}
+                <div>
+                  <h4 className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Attach New Document</h4>
+                  <div className="border-2 border-dashed border-slate-200 rounded-lg p-4 text-center hover:border-indigo-300 transition-all cursor-pointer bg-slate-50/50 group relative">
+                    <input
+                      type="file"
+                      onChange={handleFileChangeInsideModal}
+                      className="absolute inset-0 opacity-0 cursor-pointer"
+                      accept=".pdf,.png,.jpg,.jpeg"
+                      disabled={uploadLoading}
+                    />
+                    <div className="flex flex-col items-center justify-center gap-1.5">
+                      {uploadLoading ? (
+                        <>
+                          <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
+                          <p className="text-xs font-semibold text-slate-600">Uploading document...</p>
+                        </>
+                      ) : (
+                        <>
+                          <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600 group-hover:bg-indigo-100 transition-all">
+                            <Upload className="w-5.5 h-5.5" />
+                          </div>
+                          <p className="text-xs font-semibold text-slate-700">Click to upload file</p>
+                          <p className="text-[10px] text-slate-400">PDF, PNG, JPG, JPEG up to 10MB</p>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Manual PO Form Modal */}
       {showPoForm && (

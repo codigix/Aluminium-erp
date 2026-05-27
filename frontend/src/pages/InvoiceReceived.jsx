@@ -310,7 +310,7 @@ const VendorInvoices = () => {
                 <div className="space-y-2">
                   <div className="flex justify-between items-start text-xs">
                     <span className="text-slate-400">Address</span>
-                    <span className="text-slate-800 text-right max-w-[200px]">{selectedPO.shipping_address || 'Gokul Nagar, Katraj, Pune - 411048'}</span>
+                    <span className="text-slate-800 text-right max-w-[200px]">{selectedPO.vendor_location || selectedPO.vendor_address || 'No address provided'}</span>
                   </div>
                   <div className="flex justify-between items-center text-xs">
                     <span className="text-slate-400">Incoterm</span>

@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { 
-  Plus, Trash2, Save, X, Send, 
-  FileText, Calendar, User, Hash, 
+import {
+  Plus, Trash2, Save, X, Send,
+  FileText, Calendar, User, Hash,
   ChevronLeft, Loader2, Calculator, RefreshCw,
   Building2, Mail, Phone, MapPin,
   GitBranch, Clock, AlertCircle, ArrowUpRight,
@@ -34,16 +34,16 @@ const QuotationFormPage = () => {
   const [selectedClient, setSelectedClient] = useState(null);
   const [projectName, setProjectName] = useState('');
   const [items, setItems] = useState([]);
-  
+
   const sortedItems = useMemo(() => {
     return [...items].sort((a, b) => {
       const dwgA = (a.drawing_no || '').trim().toUpperCase();
       const dwgB = (b.drawing_no || '').trim().toUpperCase();
-      
+
       if (!dwgA && !dwgB) return 0;
       if (!dwgA) return 1;
       if (!dwgB) return -1;
-      
+
       return dwgA.localeCompare(dwgB, undefined, { numeric: true, sensitivity: 'base' });
     });
   }, [items]);
@@ -67,7 +67,7 @@ const QuotationFormPage = () => {
     ...(versionHistory.map(vh => vh.version) || [0])
   );
   const isLatest = version >= maxVersion;
-  
+
   // STRICT GUARD: Determine if the current view is a historical snapshot that must be frozen
   // A version is historical if a specific ID is selected that is NOT the absolute latest in history
   const latestInHistory = versionHistory.length > 0 ? versionHistory[versionHistory.length - 1] : null;
@@ -94,7 +94,7 @@ const QuotationFormPage = () => {
 
   useEffect(() => {
     fetchClients();
-    
+
     if (initialData && !hasInitialized.current) {
       hasInitialized.current = true;
       generateQuotationNo();
@@ -117,7 +117,7 @@ const QuotationFormPage = () => {
         address: initialData.address
       });
       setProjectName(initialData.projectName || '');
-      
+
       const allSourceItems = initialData.items || [];
       const nestedPartCodes = new Set();
 
@@ -168,32 +168,32 @@ const QuotationFormPage = () => {
             gst_percentage: item.gst_percentage || 18,
             isManual: !item.drawing_id && !!item.drawing_no,
             sub_assemblies: (() => {
-            const g = (item.item_group || '').toUpperCase();
-            if (!g.includes('ASSEMBLY')) {
-              return [];
-            }
-            return (item.sub_assemblies || []).filter(sa =>
-              (sa.item_group || '').toUpperCase().includes('PART')
-            ).map(sa => {
-              let actualCost = parseFloat(sa.component_bom_cost || sa.child_bom_cost || sa.part_bom_cost || sa.component_cost || sa.bom_cost || sa.rate || 0);
-              const parentBOMCost = parseFloat(item.bom_cost || item.rate || 0);
-              if (Math.abs(actualCost - parentBOMCost) < 0.01) {
-                actualCost = parseFloat(sa.component_bom_cost || sa.child_bom_cost || sa.part_bom_cost || sa.component_cost || 0);
+              const g = (item.item_group || '').toUpperCase();
+              if (!g.includes('ASSEMBLY')) {
+                return [];
               }
-              if (!isLocked && sa.pending_bom_cost > 0) {
-                actualCost = parseFloat(sa.pending_bom_cost);
-              }
-              return {
-                ...sa,
-                drawing_no: (sa.drawing_no || sa.drawingNo || '').toUpperCase(),
-                bom_cost: actualCost,
-                rate: actualCost
-              };
-            });
-          })()
+              return (item.sub_assemblies || []).filter(sa =>
+                (sa.item_group || '').toUpperCase().includes('PART')
+              ).map(sa => {
+                let actualCost = parseFloat(sa.component_bom_cost || sa.child_bom_cost || sa.part_bom_cost || sa.component_cost || sa.bom_cost || sa.rate || 0);
+                const parentBOMCost = parseFloat(item.bom_cost || item.rate || 0);
+                if (Math.abs(actualCost - parentBOMCost) < 0.01) {
+                  actualCost = parseFloat(sa.component_bom_cost || sa.child_bom_cost || sa.part_bom_cost || sa.component_cost || 0);
+                }
+                if (!isLocked && sa.pending_bom_cost > 0) {
+                  actualCost = parseFloat(sa.pending_bom_cost);
+                }
+                return {
+                  ...sa,
+                  drawing_no: (sa.drawing_no || sa.drawingNo || '').toUpperCase(),
+                  bom_cost: actualCost,
+                  rate: actualCost
+                };
+              });
+            })()
           };
         });
-      
+
       setItems(mappedItems);
       setNotes(initialData.notes || '');
     } else if (!hasInitialized.current) {
@@ -209,19 +209,19 @@ const QuotationFormPage = () => {
     // 3. The current status is NOT a snapshot status (must be Draft or new Revision)
     // 4. We are NOT in 'received' mode
     // 5. This is NOT a BOM Update Request (preventing drawings sync override)
-    const canSync = items.length > 0 && 
-                    drawings.length > 0 && 
-                    !isHistoricalView &&
-                    !isSnapshotStatus && 
-                    mode !== 'received' &&
-                    !isLocked &&
-                    !isBOMUpdateRequest;
+    const canSync = items.length > 0 &&
+      drawings.length > 0 &&
+      !isHistoricalView &&
+      !isSnapshotStatus &&
+      mode !== 'received' &&
+      !isLocked &&
+      !isBOMUpdateRequest;
 
     if (canSync) {
       const updatedItems = items.map(item => {
         const itemG = (item.item_group || '').toUpperCase();
         const itemIsPart = itemG.includes('PART');
-        
+
         const matchedDrawing = drawings.find(d => {
           const drwG = (d.item_group || '').toUpperCase();
           const drwIsPart = drwG.includes('PART');
@@ -236,7 +236,7 @@ const QuotationFormPage = () => {
           if (item.drawing_no && String(d.drawing_no).trim().toLowerCase() === String(item.drawing_no).trim().toLowerCase()) {
             const itemDesc = String(item.description || '').trim().toLowerCase();
             const drwDesc = String(d.description || '').trim().toLowerCase();
-            
+
             // Group must match (PART vs ASSEMBLY)
             if (itemIsPart === drwIsPart) {
               // Description match is critical when multiple items share a drawing number
@@ -250,13 +250,13 @@ const QuotationFormPage = () => {
 
         if (matchedDrawing) {
           let drwRate = parseFloat(matchedDrawing.bom_cost || matchedDrawing.rate || matchedDrawing.quotedPrice || 0);
-          
-          
+
+
 
           const g = (item.item_group || matchedDrawing.item_group || '').toUpperCase();
           const isPart = g.includes('PART');
-                                            
-          
+
+
           let newItem = { ...item };
           let changed = false;
 
@@ -285,7 +285,7 @@ const QuotationFormPage = () => {
           const currentBOMCost = parseFloat(item.bom_cost || 0);
           const currentRate = parseFloat(item.rate || 0);
           const rateMatchesCost = Math.abs(currentRate - currentBOMCost) < 0.01;
-          
+
           // SYNC LOGIC: 
           // 1. Always sync if current cost is 0 and we found a rate in Master
           // 2. Sync if the Master cost is different and we have a solid link (item_code OR drawing_no)
@@ -295,7 +295,7 @@ const QuotationFormPage = () => {
           const shouldSync = (currentBOMCost === 0) || isItemCodeMatch || isDrawingNoMatch;
 
           const costChanged = drwRate > 0 && Math.abs(currentBOMCost - drwRate) > 0.01;
-          
+
           // NEVER downgrade an Assembly's BOM cost if the Quotation data already has a higher, finalized cost from the BOM module.
           // Master drawings might have stale base costs if they haven't been dynamically synced with full BOM materials/operations.
           const isDowngradeForAssembly = g.includes('ASSEMBLY') && currentBOMCost > drwRate;
@@ -303,7 +303,7 @@ const QuotationFormPage = () => {
           if (costChanged && shouldSync && !item.has_pending_bom_applied && !isDowngradeForAssembly) {
             newItem.bom_cost = drwRate;
             changed = true;
-            
+
             // Update rate to new BOM cost if it was 0, matched old cost, OR we are in a mode that allows auto-update
             if (currentRate === 0 || rateMatchesCost || mode === 'revise' || mode === 'create') {
               newItem.rate = drwRate;
@@ -316,16 +316,16 @@ const QuotationFormPage = () => {
           if (gUpper.includes('ASSEMBLY') && matchedDrawing.sub_assemblies && matchedDrawing.sub_assemblies.length > 0) {
             const currentSAs = item.sub_assemblies || [];
             let saChanged = false;
-            
+
             const updatedSAs = currentSAs.map(sa => {
               const cleanSaCode = String(sa.component_code || sa.item_code || sa.component_code || '').trim().toLowerCase();
               const cleanSaDwg = String(sa.drawing_no || '').trim().toLowerCase();
-              
+
               // Find matching sa component in matchedDrawing
               const matchedSA = matchedDrawing.sub_assemblies.find(msa => {
                 const cleanMsaCode = String(msa.component_code || msa.item_code || msa.component_code || '').trim().toLowerCase();
                 const cleanMsaDwg = String(msa.drawing_no || '').trim().toLowerCase();
-                
+
                 if (cleanSaCode && cleanMsaCode && cleanSaCode === cleanMsaCode) return true;
                 if (cleanSaDwg && cleanMsaDwg && cleanSaDwg === cleanMsaDwg) {
                   const saDesc = String(sa.description || '').trim().toLowerCase();
@@ -334,17 +334,17 @@ const QuotationFormPage = () => {
                 }
                 return false;
               });
-              
+
               if (matchedSA) {
                 const correctCost = parseFloat(matchedSA.component_bom_cost || matchedSA.child_bom_cost || matchedSA.part_bom_cost || matchedSA.component_cost || matchedSA.bom_cost || matchedSA.rate || 0);
                 const parentBOMCost = parseFloat(drwRate || item.bom_cost || 0);
-                
+
                 // Block inheritance
                 let finalCost = correctCost;
                 if (Math.abs(finalCost - parentBOMCost) < 0.01) {
                   finalCost = parseFloat(matchedSA.component_bom_cost || matchedSA.child_bom_cost || matchedSA.part_bom_cost || matchedSA.component_cost || 0);
                 }
-                
+
                 if (Math.abs(parseFloat(sa.bom_cost || 0) - finalCost) > 0.01 || Math.abs(parseFloat(sa.rate || 0) - finalCost) > 0.01 || sa.drawing_no !== matchedSA.drawing_no) {
                   saChanged = true;
                   return {
@@ -357,7 +357,7 @@ const QuotationFormPage = () => {
               }
               return sa;
             });
-            
+
             if (currentSAs.length === 0) {
               newItem.sub_assemblies = matchedDrawing.sub_assemblies.map(sa => {
                 let actualPartCost = parseFloat(sa.component_bom_cost || sa.child_bom_cost || sa.part_bom_cost || sa.component_cost || sa.bom_cost || sa.rate || 0);
@@ -382,7 +382,7 @@ const QuotationFormPage = () => {
         }
         return item;
       });
-      
+
       const currentJson = JSON.stringify(items);
       const updatedJson = JSON.stringify(updatedItems);
 
@@ -393,10 +393,10 @@ const QuotationFormPage = () => {
       setItems(updatedItems);
     }
   }, [
-    drawings, 
-    isLocked, 
-    mode, 
-    version, 
+    drawings,
+    isLocked,
+    mode,
+    version,
     selectedVersionId,
     isBOMUpdateRequest
   ]);
@@ -433,7 +433,7 @@ const QuotationFormPage = () => {
     try {
       setRefreshingDrawings(true);
       const token = localStorage.getItem('authToken');
-      const url = clientName 
+      const url = clientName
         ? `${API_BASE}/drawings?clientName=${encodeURIComponent(clientName)}`
         : `${API_BASE}/drawings`;
       const response = await fetch(url, {
@@ -462,16 +462,16 @@ const QuotationFormPage = () => {
         // Sort history ASC (V1 at top) as per standard ERP audit trail
         const sortedHistory = [...data].sort((a, b) => a.version - b.version);
         setVersionHistory(sortedHistory);
-        
+
         // Default to loading the latest version if we're not in a fresh creation mode
         const currentMode = initialData?.mode || mode;
         if (sortedHistory.length > 0 && currentMode !== 'create') {
           // If we have selectedVersionId, load that specific version.
           // Otherwise load the latest.
-          const target = selectedVersionId 
+          const target = selectedVersionId
             ? (sortedHistory.find(vh => vh.id === selectedVersionId) || sortedHistory[sortedHistory.length - 1])
             : sortedHistory[sortedHistory.length - 1];
-          
+
           // We only force next version if we are initially in revise mode AND we have NOT selected a saved version yet
           const shouldForce = currentMode === 'revise' && !selectedVersionId;
           await loadVersionData(target, shouldForce);
@@ -488,7 +488,7 @@ const QuotationFormPage = () => {
     try {
       setLoading(true);
       let versionData = v;
-      
+
       // If we're loading an existing version (not preparing a new revision), 
       // fetch full details from the new API to ensure sub-assemblies are correct
       if (!forceNextVersion && v.id) {
@@ -512,26 +512,26 @@ const QuotationFormPage = () => {
       setQuotationDate(versionData.created_at.split('T')[0]);
       setProjectName(versionData.project_name || '');
       setNotes(versionData.notes || '');
-      
-      const maxHistoryVersion = versionHistory.length > 0 
-        ? Math.max(...versionHistory.map(vh => vh.version)) 
+
+      const maxHistoryVersion = versionHistory.length > 0
+        ? Math.max(...versionHistory.map(vh => vh.version))
         : version;
-      
+
       // RULE: Any existing saved version with these statuses is considered "historical" (frozen)
       const s = (versionData.status || '').toUpperCase();
       const isSnapshot = versionData.version < maxHistoryVersion || ['APPROVED', 'REVISED', 'SENT', 'COMPLETED', 'REJECTED'].includes(s);
-      
+
       // If we are preparing a NEW version (forceNextVersion), the items are NOT historical (they are editable templates)
       const isHistorical = isSnapshot && !forceNextVersion;
-      
+
       // Map items from the version
       if (versionData.items && versionData.items.length > 0) {
         // Deep clone to ensure no shared references with historical state
         const itemsSnapshot = JSON.parse(JSON.stringify(versionData.items));
-        
+
         setItems(itemsSnapshot.map(item => {
           // Apply overrides ONLY if we are preparing a NEW version (forceNextVersion)
-          const override = forceNextVersion ? initialData?.items?.find(oi => 
+          const override = forceNextVersion ? initialData?.items?.find(oi =>
             (oi.salesOrderItemId && String(oi.salesOrderItemId) === String(item.sales_order_item_id)) ||
             (oi.item_code && oi.item_code === item.item_code && oi.drawing_no === item.drawing_no)
           ) : null;
@@ -541,7 +541,7 @@ const QuotationFormPage = () => {
           const savedSubAssemblies = ((override?.sub_assemblies || item.sub_assemblies) || []).map(sa => {
             let actualPartCost =
               parseFloat(sa.component_bom_cost || sa.child_bom_cost || sa.part_bom_cost || sa.component_cost || sa.bom_cost || sa.rate || 0);
-            
+
             // COMPLETELY BLOCK parent/assembly bom_cost inheritance!
             const parentBOMCost = parseFloat(item.bom_cost || item.rate || 0);
             if (Math.abs(actualPartCost - parentBOMCost) < 0.01) {
@@ -650,9 +650,9 @@ const QuotationFormPage = () => {
         const token = localStorage.getItem('authToken');
         const response = await fetch(`${API_BASE}/quotation-requests/${v.id}/reject`, {
           method: 'POST',
-          headers: { 
+          headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}` 
+            'Authorization': `Bearer ${token}`
           },
           body: JSON.stringify({ reason })
         });
@@ -804,6 +804,43 @@ const QuotationFormPage = () => {
     }
   };
 
+  const handleSendExistingEmail = async () => {
+    const idToSend = selectedVersionId || initialData?.id;
+    if (!idToSend) {
+      errorToast('No quotation ID found to send');
+      return;
+    }
+
+    if (!selectedClient?.email) {
+      errorToast('Client email is required to send quotation');
+      return;
+    }
+
+    try {
+      setSaving(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/quotation-requests/${idToSend}/send-email`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || errorData.message || 'Failed to send email');
+      }
+
+      successToast('Quotation sent to client successfully');
+      navigate('/sales/client-quotations');
+    } catch (error) {
+      console.error(error);
+      errorToast(error.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const calculateSummary = () => {
     // Include all items in summary if they have a rate
     const billableItems = sortedItems.filter(item => {
@@ -836,7 +873,7 @@ const QuotationFormPage = () => {
       errorToast('Please select a client');
       return;
     }
-    
+
     // Determine if email should be sent
     // If sendEmail is provided (true/false), use it. 
     // Otherwise fallback to legacy logic: status 'Sent' or 'Revised' usually implied email
@@ -854,16 +891,16 @@ const QuotationFormPage = () => {
     try {
       setSaving(true);
       const token = localStorage.getItem('authToken');
-      
+
       const isNewCreation = mode === 'create' && !initialData?.id && !initialData?.parentId;
-      
+
       // If it's a revision or update to an existing quote, we always increment version
-      const maxHistoryVersion = versionHistory.length > 0 
-        ? Math.max(...versionHistory.map(vh => vh.version)) 
+      const maxHistoryVersion = versionHistory.length > 0
+        ? Math.max(...versionHistory.map(vh => vh.version))
         : (initialData?.mode === 'revise' ? Math.max(1, (initialData.version || 2) - 1) : (initialData?.version || 0));
-        
+
       const finalVersion = isNewCreation ? 1 : (maxHistoryVersion + 1);
-      
+
       // Root parent ID should be the first version's ID
       const finalParentId = isNewCreation ? null : (initialData?.parentId || initialData?.id || parentId);
 
@@ -936,10 +973,10 @@ const QuotationFormPage = () => {
       const responseData = await response.json();
       const newQuotationId = responseData.quotationIds?.[0];
 
-      const message = status === 'Draft' 
-        ? 'Quotation saved as draft' 
-        : finalSendEmail 
-          ? 'Quotation sent to client successfully' 
+      const message = status === 'Draft'
+        ? 'Quotation saved as draft'
+        : finalSendEmail
+          ? 'Quotation sent to client successfully'
           : 'Quotation created successfully';
       successToast(message);
 
@@ -949,10 +986,10 @@ const QuotationFormPage = () => {
         // If we stay on the page, update to reflect the newly created quotation
         setQuotationNo(`QRT-${String(newQuotationId).padStart(4, '0')}`);
         setSelectedVersionId(newQuotationId);
-        
+
         // Refresh history to lock the view if it was Sent/Approved
         fetchVersionHistory(finalParentId || newQuotationId);
-        
+
         // If it was a create mode, switch to "revision view" or similar state if needed
         // but fetchVersionHistory will update versionHistory which handles isLocked
       }
@@ -969,7 +1006,7 @@ const QuotationFormPage = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 ">
         <div>
           <div className="flex items-center gap-2 text-slate-500 mb-0.5">
-            <button 
+            <button
               onClick={() => navigate('/sales/client-quotations')}
               className="p-1 hover:bg-slate-100 rounded transition-colors"
             >
@@ -987,7 +1024,7 @@ const QuotationFormPage = () => {
             {mode === 'received' ? 'Review and manage incoming customer response' : (version > 1 ? `Revising from previous version history` : 'Professional Quotation Management')}
           </p>
         </div>
-        
+
         <div className="flex items-center gap-2">
           <button
             onClick={() => navigate('/sales/client-quotations')}
@@ -1102,6 +1139,17 @@ const QuotationFormPage = () => {
               Download PDF
             </button>
           )}
+
+          {(selectedVersionId || initialData?.id) && isLocked && (
+            <button
+              onClick={handleSendExistingEmail}
+              disabled={saving}
+              className="px-4 py-1.5 text-xs  text-white bg-indigo-600 rounded hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100 flex items-center gap-2 disabled:opacity-50"
+            >
+              {saving ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+              Send to Client
+            </button>
+          )}
         </div>
       </div>
 
@@ -1115,26 +1163,26 @@ const QuotationFormPage = () => {
               </div>
               <h2 className="text-sm  text-slate-900">Quotation Details</h2>
             </div>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1">
                 <label className="text-xs  text-slate-400   flex items-center gap-1.5">
                   <Hash size={12} /> Quotation No
                 </label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   value={quotationNo}
                   readOnly
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded text-xs font-mono text-slate-600 focus:outline-none"
                 />
               </div>
-              
+
               <div className="space-y-1">
                 <label className="text-xs  text-slate-400   flex items-center gap-1.5">
                   <Calendar size={12} /> Quotation Date
                 </label>
-                <input 
-                  type="date" 
+                <input
+                  type="date"
                   value={quotationDate}
                   onChange={(e) => setQuotationDate(e.target.value)}
                   readOnly={isLocked}
@@ -1173,8 +1221,8 @@ const QuotationFormPage = () => {
                 <label className="text-xs  text-slate-400   flex items-center gap-1.5">
                   <FileText size={12} /> Project Name
                 </label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   value={projectName}
                   onChange={(e) => setProjectName(e.target.value)}
                   readOnly={isLocked}
@@ -1234,7 +1282,7 @@ const QuotationFormPage = () => {
                   <Calculator size={16} />
                 </div>
                 <h2 className="text-sm  text-slate-900">Quotation Items</h2>
-                <button 
+                <button
                   onClick={() => fetchDrawings(selectedClient?.company_name)}
                   disabled={refreshingDrawings || !selectedClient}
                   className="p-1 text-slate-400 hover:text-indigo-600 transition-colors disabled:opacity-30"
@@ -1277,7 +1325,7 @@ const QuotationFormPage = () => {
                   ) : (
                     sortedItems.flatMap((item, index) => {
                       const rows = [];
-                      
+
                       // Parent Item Row
                       rows.push(
                         <tr key={item.id} className="hover:bg-slate-50/30 transition-colors">
@@ -1294,10 +1342,9 @@ const QuotationFormPage = () => {
                                           const g = (item.item_group || '').toUpperCase();
                                           const isPart = g.includes('PART');
                                           return (
-                                            <span className={`px-1.5 py-0.5 rounded text-xs border ${
-                                              isPart 
+                                            <span className={`px-1.5 py-0.5 rounded text-xs border ${isPart
                                                 ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-blue-100 text-blue-700 border-blue-200'
-                                            }`}>
+                                              }`}>
                                               {isPart ? 'PART' : 'ASSEMBLY'}
                                             </span>
                                           );
@@ -1309,7 +1356,7 @@ const QuotationFormPage = () => {
                                     </div>
                                   ) : (item.isManual || mode === 'revise') ? (
                                     <div className="flex flex-col">
-                                      <textarea 
+                                      <textarea
                                         placeholder="Add item description..."
                                         value={item.description}
                                         onChange={(e) => handleItemChange(item.id, 'description', e.target.value)}
@@ -1317,7 +1364,7 @@ const QuotationFormPage = () => {
                                         className="w-full px-0 py-0 text-xs  text-slate-900 border-none focus:ring-0 resize-none bg-transparent placeholder:text-slate-300 "
                                       />
                                       <div className="flex items-center gap-2 mt-0.5">
-                                        <input 
+                                        <input
                                           type="text"
                                           placeholder="Drawing No..."
                                           value={item.drawing_no?.toUpperCase() || ''}
@@ -1328,10 +1375,9 @@ const QuotationFormPage = () => {
                                           const g = (item.item_group || '').toUpperCase();
                                           const isPart = g.includes('PART');
                                           return (
-                                            <span className={`px-1.5 py-0.5 rounded text-xs border ${
-                                              isPart 
+                                            <span className={`px-1.5 py-0.5 rounded text-xs border ${isPart
                                                 ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-blue-100 text-blue-700 border-blue-200'
-                                            }`}>
+                                              }`}>
                                               {isPart ? 'PART' : 'ASSEMBLY'}
                                             </span>
                                           );
@@ -1340,7 +1386,7 @@ const QuotationFormPage = () => {
                                     </div>
                                   ) : (
                                     <div className="flex flex-col">
-                                      <textarea 
+                                      <textarea
                                         placeholder="Add item description..."
                                         value={item.description}
                                         onChange={(e) => handleItemChange(item.id, 'description', e.target.value)}
@@ -1359,9 +1405,9 @@ const QuotationFormPage = () => {
                                                 if (it.id === item.id) {
                                                   const g = (drw?.item_group || it.item_group || '').toUpperCase();
                                                   const isPart = g.includes('PART');
-                                            
+
                                                   const drwRate = parseFloat(drw?.rate || drw?.quotedPrice || drw?.bom_cost || it.rate || 0);
-                                                  
+
                                                   return {
                                                     ...it,
                                                     drawing_id: val,
@@ -1372,21 +1418,21 @@ const QuotationFormPage = () => {
                                                     item_group: drw?.item_group || it.item_group,
                                                     total: (parseFloat(it.quantity) || 0) * drwRate,
                                                     sub_assemblies: g.includes('ASSEMBLY')
-                                                    ? ((drw?.sub_assemblies && drw.sub_assemblies.length > 0)
+                                                      ? ((drw?.sub_assemblies && drw.sub_assemblies.length > 0)
                                                         ? drw.sub_assemblies.filter(sa => (sa.item_group || '').toUpperCase().includes('PART'))
                                                         : (it.sub_assemblies || []).filter(sa => (sa.item_group || '').toUpperCase().includes('PART'))).map(sa => {
-                                                        let actualPartCost = parseFloat(sa.component_bom_cost || sa.child_bom_cost || sa.part_bom_cost || sa.component_cost || sa.bom_cost || sa.rate || 0);
-                                                        const parentBOMCost = parseFloat(drwRate || it.bom_cost || 0);
-                                                        if (Math.abs(actualPartCost - parentBOMCost) < 0.01) {
-                                                          actualPartCost = parseFloat(sa.component_bom_cost || sa.child_bom_cost || sa.part_bom_cost || sa.component_cost || 0);
-                                                        }
-                                                        return {
-                                                          ...sa,
-                                                          bom_cost: actualPartCost,
-                                                          rate: actualPartCost
-                                                        };
-                                                      })
-                                                    : []
+                                                          let actualPartCost = parseFloat(sa.component_bom_cost || sa.child_bom_cost || sa.part_bom_cost || sa.component_cost || sa.bom_cost || sa.rate || 0);
+                                                          const parentBOMCost = parseFloat(drwRate || it.bom_cost || 0);
+                                                          if (Math.abs(actualPartCost - parentBOMCost) < 0.01) {
+                                                            actualPartCost = parseFloat(sa.component_bom_cost || sa.child_bom_cost || sa.part_bom_cost || sa.component_cost || 0);
+                                                          }
+                                                          return {
+                                                            ...sa,
+                                                            bom_cost: actualPartCost,
+                                                            rate: actualPartCost
+                                                          };
+                                                        })
+                                                      : []
                                                   };
                                                 }
                                                 return it;
@@ -1404,10 +1450,9 @@ const QuotationFormPage = () => {
                                           const g = (item.item_group || '').toUpperCase();
                                           const isPart = g.includes('PART');
                                           return (
-                                            <span className={`px-1.5 py-0.5 rounded text-xs border ${
-                                              isPart 
+                                            <span className={`px-1.5 py-0.5 rounded text-xs border ${isPart
                                                 ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-blue-100 text-blue-700 border-blue-200'
-                                            }`}>
+                                              }`}>
                                               {isPart ? 'PART' : 'ASSEMBLY'}
                                             </span>
                                           );
@@ -1421,7 +1466,7 @@ const QuotationFormPage = () => {
                           </td>
                           <td className="p-2">
                             <div className="flex items-center gap-1.5">
-                              <input 
+                              <input
                                 type="number"
                                 value={item.quantity}
                                 readOnly={isLocked}
@@ -1437,7 +1482,7 @@ const QuotationFormPage = () => {
                             </div>
                           </td>
                           <td className="p-2">
-                            <input 
+                            <input
                               type="number"
                               value={item.rate}
                               readOnly={isLocked}
@@ -1482,11 +1527,10 @@ const QuotationFormPage = () => {
                                     <span className="text-[11px] text-slate-700 font-semibold">{sa.description}</span>
                                     <div className="flex items-center gap-2 mt-0.5">
                                       <span className="text-[9px] text-slate-500 font-mono ">{(sa.drawing_no || '').toUpperCase()}</span>
-                                      <span className={`px-1 py-0.5 rounded-[3px] text-[8px] border ${
-                                        (sa.item_group || '').toUpperCase().includes('ASSEMBLY')
+                                      <span className={`px-1 py-0.5 rounded-[3px] text-[8px] border ${(sa.item_group || '').toUpperCase().includes('ASSEMBLY')
                                           ? 'bg-blue-50 text-blue-600 border-blue-100/50'
                                           : 'bg-emerald-50 text-emerald-600 border-emerald-100/50'
-                                      }`}>
+                                        }`}>
                                         {(sa.item_group || 'PART').toUpperCase()}
                                       </span>
                                     </div>
@@ -1562,7 +1606,7 @@ const QuotationFormPage = () => {
                     return (
                       <div className="space-y-1">
                         <div className="flex justify-between text-xs">
-                          <span className="text-slate-500">Previous (V{version-1})</span>
+                          <span className="text-slate-500">Previous (V{version - 1})</span>
                           <span className="text-slate-700 ">{formatCurrency(parseFloat(prevVersion.received_amount) || parseFloat(prevVersion.total_amount) * 1.18)}</span>
                         </div>
                         <div className="flex justify-between text-xs">
@@ -1585,7 +1629,7 @@ const QuotationFormPage = () => {
                 <span className="text-slate-500 ">GST (18%)</span>
                 <span className="text-slate-900 ">{formatCurrency(summary.gstAmount)}</span>
               </div>
-              
+
               <div className="pt-3 mt-3 border-t border-slate-100">
                 <div className="flex justify-between items-end">
                   <div>
@@ -1607,18 +1651,16 @@ const QuotationFormPage = () => {
                     const isSnapshot = ['APPROVED', 'REVISED', 'SENT', 'COMPLETED', 'REJECTED'].includes(v.status?.toUpperCase());
                     const isViewable = isSnapshot || v.version < (currentVersionData?.version || version);
                     return (
-                      <div 
-                        key={v.id} 
+                      <div
+                        key={v.id}
                         onClick={async () => {
                           if (isViewable) {
                             await loadVersionData(v, false);
                           }
                         }}
-                        className={`w-full p-2 rounded border transition-all group ${
-                          isViewable ? 'cursor-pointer hover:shadow-md hover:border-indigo-300 active:scale-[0.98]' : 'cursor-default opacity-80'
-                        } ${
-                          v.id === selectedVersionId ? 'bg-indigo-50 border-indigo-200 ring-1 ring-indigo-100' : 'bg-white border-slate-100'
-                        }`}
+                        className={`w-full p-2 rounded border transition-all group ${isViewable ? 'cursor-pointer hover:shadow-md hover:border-indigo-300 active:scale-[0.98]' : 'cursor-default opacity-80'
+                          } ${v.id === selectedVersionId ? 'bg-indigo-50 border-indigo-200 ring-1 ring-indigo-100' : 'bg-white border-slate-100'
+                          }`}
                       >
                         <div className="flex items-center justify-between mb-1.5">
                           <div className="flex items-center gap-2">
@@ -1637,7 +1679,7 @@ const QuotationFormPage = () => {
                           </div>
                           {isViewable && (
                             <div className="flex items-center gap-2 transition-opacity">
-                              <button 
+                              <button
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleViewPDF(v.id);
@@ -1661,7 +1703,7 @@ const QuotationFormPage = () => {
                   const sStatus = selectedV?.status?.toUpperCase();
                   // Hide actions if selected is approved/rejected, OR if the latest version is already approved
                   if (!selectedV || sStatus === 'APPROVED' || sStatus === 'REJECTED' || isLatestApproved) return null;
-                  
+
                   return (
                     <div className="grid grid-cols-2 gap-2 mt-4 pt-4 border-t border-slate-100">
                       <button
@@ -1687,7 +1729,7 @@ const QuotationFormPage = () => {
             <div className="mt-6 space-y-4">
               <div className="space-y-1.5">
                 <label className="text-[9px]  text-slate-400   block">Notes</label>
-                <textarea 
+                <textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   readOnly={isLocked}
