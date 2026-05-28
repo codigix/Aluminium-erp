@@ -244,9 +244,9 @@
         {{/logoBase64}}
       </td>
       <td width="55%">
-        <div class="title">SP TECHPIONEER PVT. LTD.</div>
+        <div class="title">{{hostCompanyName}}</div>
         <div class="company-info">
-          Industrial Area, Sector 5, Pune, Maharashtra - 411026
+          {{hostCompanyAddress}}
         </div>
       </td>
       <td width="35%">
@@ -273,9 +273,10 @@
     <div class="po-info-card">
       <div class="po-info-label" style="margin-bottom: 8px;">Project Reference</div>
       <div class="party-info">
-        <strong>SP TECHPIONEER PVT.LTD.</strong><br />
-        PLOT NO. 97, SECT 7, PCNTDA,<br />
-        Bhosari, Pune - 411 026.
+        <strong>{{hostCompanyName}}</strong><br />
+        {{#hostCompanyAddressLines}}
+        {{.}}<br />
+        {{/hostCompanyAddressLines}}
       </div>
     </div>
   </div>

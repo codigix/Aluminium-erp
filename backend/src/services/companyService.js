@@ -239,6 +239,36 @@ const createCompany = async payload => {
   }
 };
 
+const getFallbackDrawingMap = async () => {
+  try {
+    const [drawings] = await pool.query(`
+      SELECT client_name, 
+             MAX(billing_address) as billing_address, 
+             MAX(shipping_address) as shipping_address, 
+             MAX(city) as city, 
+             MAX(state) as state, 
+             MAX(contact_person) as contact_person, 
+             MAX(email) as email, 
+             MAX(phone) as phone,
+             MAX(customer_type) as customer_type,
+             MAX(gstin) as gstin
+      FROM customer_drawings 
+      WHERE client_name IS NOT NULL AND client_name != ''
+      GROUP BY client_name
+    `);
+    const drawingMap = new Map();
+    drawings.forEach(d => {
+      if (d.client_name) {
+        drawingMap.set(d.client_name.toLowerCase().trim(), d);
+      }
+    });
+    return drawingMap;
+  } catch (error) {
+    console.error('Error fetching fallback drawings:', error);
+    return new Map();
+  }
+};
+
 const getCompanies = async () => {
   const [companies] = await pool.query('SELECT * FROM companies ORDER BY created_at DESC');
   const companyIds = companies.map(c => c.id);
@@ -249,12 +279,67 @@ const getCompanies = async () => {
 
   const [addresses] = await pool.query('SELECT * FROM company_addresses');
   const [contacts] = await pool.query('SELECT * FROM contacts');
+  const fallbackMap = await getFallbackDrawingMap();
 
-  return companies.map(company => ({
-    ...company,
-    addresses: addresses.filter(address => address.company_id === company.id),
-    contacts: contacts.filter(contact => contact.company_id === company.id)
-  }));
+  return companies.map(company => {
+    const companyAddresses = addresses.filter(address => address.company_id === company.id);
+    const companyContacts = contacts.filter(contact => contact.company_id === company.id);
+
+    const drawingFallback = fallbackMap.get(company.company_name.toLowerCase().trim());
+    if (drawingFallback) {
+      if (!company.gstin) company.gstin = drawingFallback.gstin;
+      if (!company.customer_type) company.customer_type = drawingFallback.customer_type;
+
+      const hasBilling = companyAddresses.some(a => a.address_type === 'BILLING');
+      if (!hasBilling && (drawingFallback.billing_address || drawingFallback.city || drawingFallback.state)) {
+        companyAddresses.push({
+          id: `fb-b-${company.id}`,
+          company_id: company.id,
+          address_type: 'BILLING',
+          line1: drawingFallback.billing_address || '',
+          line2: '',
+          city: drawingFallback.city || '',
+          state: drawingFallback.state || '',
+          pincode: '',
+          country: 'India'
+        });
+      }
+
+      const hasShipping = companyAddresses.some(a => a.address_type === 'SHIPPING');
+      if (!hasShipping && (drawingFallback.shipping_address || drawingFallback.city || drawingFallback.state)) {
+        companyAddresses.push({
+          id: `fb-s-${company.id}`,
+          company_id: company.id,
+          address_type: 'SHIPPING',
+          line1: drawingFallback.shipping_address || '',
+          line2: '',
+          city: drawingFallback.city || '',
+          state: drawingFallback.state || '',
+          pincode: '',
+          country: 'India'
+        });
+      }
+
+      const hasPrimary = companyContacts.some(c => c.contact_type === 'PRIMARY');
+      if (!hasPrimary && (drawingFallback.contact_person || drawingFallback.email || drawingFallback.phone)) {
+        companyContacts.push({
+          id: `fb-c-${company.id}`,
+          company_id: company.id,
+          name: drawingFallback.contact_person || '',
+          email: drawingFallback.email || '',
+          phone: drawingFallback.phone || '',
+          contact_type: 'PRIMARY',
+          status: 'ACTIVE'
+        });
+      }
+    }
+
+    return {
+      ...company,
+      addresses: companyAddresses,
+      contacts: companyContacts
+    };
+  });
 };
 
 const updateCompany = async (companyId, payload) => {
@@ -448,6 +533,71 @@ const getCompanyById = async (companyId) => {
 
   const [addresses] = await pool.query('SELECT * FROM company_addresses WHERE company_id = ?', [companyId]);
   const [contacts] = await pool.query('SELECT * FROM contacts WHERE company_id = ?', [companyId]);
+
+  const [drawings] = await pool.query(`
+    SELECT client_name, 
+           MAX(billing_address) as billing_address, 
+           MAX(shipping_address) as shipping_address, 
+           MAX(city) as city, 
+           MAX(state) as state, 
+           MAX(contact_person) as contact_person, 
+           MAX(email) as email, 
+           MAX(phone) as phone,
+           MAX(customer_type) as customer_type,
+           MAX(gstin) as gstin
+    FROM customer_drawings 
+    WHERE client_name = ?
+    GROUP BY client_name
+  `, [company.company_name]);
+
+  const drawingFallback = drawings[0];
+  if (drawingFallback) {
+    if (!company.gstin) company.gstin = drawingFallback.gstin;
+    if (!company.customer_type) company.customer_type = drawingFallback.customer_type;
+
+    const hasBilling = addresses.some(a => a.address_type === 'BILLING');
+    if (!hasBilling && (drawingFallback.billing_address || drawingFallback.city || drawingFallback.state)) {
+      addresses.push({
+        id: `fb-b-${company.id}`,
+        company_id: company.id,
+        address_type: 'BILLING',
+        line1: drawingFallback.billing_address || '',
+        line2: '',
+        city: drawingFallback.city || '',
+        state: drawingFallback.state || '',
+        pincode: '',
+        country: 'India'
+      });
+    }
+
+    const hasShipping = addresses.some(a => a.address_type === 'SHIPPING');
+    if (!hasShipping && (drawingFallback.shipping_address || drawingFallback.city || drawingFallback.state)) {
+      addresses.push({
+        id: `fb-s-${company.id}`,
+        company_id: company.id,
+        address_type: 'SHIPPING',
+        line1: drawingFallback.shipping_address || '',
+        line2: '',
+        city: drawingFallback.city || '',
+        state: drawingFallback.state || '',
+        pincode: '',
+        country: 'India'
+      });
+    }
+
+    const hasPrimary = contacts.some(c => c.contact_type === 'PRIMARY');
+    if (!hasPrimary && (drawingFallback.contact_person || drawingFallback.email || drawingFallback.phone)) {
+      contacts.push({
+        id: `fb-c-${company.id}`,
+        company_id: company.id,
+        name: drawingFallback.contact_person || '',
+        email: drawingFallback.email || '',
+        phone: drawingFallback.phone || '',
+        contact_type: 'PRIMARY',
+        status: 'ACTIVE'
+      });
+    }
+  }
 
   return {
     ...company,

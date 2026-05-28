@@ -199,7 +199,8 @@ const ensureCustomerPoColumns = async () => {
       { name: 'terms_and_conditions', definition: 'TEXT NULL' },
       { name: 'special_notes', definition: 'TEXT NULL' },
       { name: 'inspection_clause', definition: 'VARCHAR(50) NULL' },
-      { name: 'test_certificate', definition: 'VARCHAR(50) NULL' }
+      { name: 'test_certificate', definition: 'VARCHAR(50) NULL' },
+      { name: 'host_company_id', definition: 'INT NULL' }
     ];
 
     const missing = requiredColumns.filter(column => !existing.has(column.name));
@@ -397,7 +398,8 @@ const ensureQuotationRequestColumns = async () => {
     const [columns] = await connection.query('SHOW COLUMNS FROM quotation_requests');
     const existing = new Set(columns.map(column => column.Field));
     const requiredColumns = [
-      { name: 'item_group', definition: 'VARCHAR(50) NULL' }
+      { name: 'item_group', definition: 'VARCHAR(50) NULL' },
+      { name: 'host_company_id', definition: 'INT NULL' }
     ];
 
     const missing = requiredColumns.filter(column => !existing.has(column.name));
@@ -2697,8 +2699,39 @@ const ensureGrnStatus = async () => {
   }
 };
 
+const ensureCompanyMasterColumns = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    const [columns] = await connection.query('SHOW COLUMNS FROM company_master');
+    const existing = new Set(columns.map(column => column.Field));
+    const requiredColumns = [
+      { name: 'email', definition: 'VARCHAR(255) NULL' },
+      { name: 'phone', definition: 'VARCHAR(50) NULL' },
+      { name: 'contact_person', definition: 'VARCHAR(255) NULL' }
+    ];
+
+    const missing = requiredColumns.filter(column => !existing.has(column.name));
+    if (!missing.length) return;
+
+    const alterSql = `ALTER TABLE company_master ${missing
+      .map(column => `ADD COLUMN \`${column.name}\` ${column.definition}`)
+      .join(', ')};`;
+
+    await connection.query(alterSql);
+    console.log('Company Master columns synchronized');
+  } catch (error) {
+    if (error.code !== 'ER_NO_SUCH_TABLE') {
+      console.error('Company Master column sync failed', error.message);
+    }
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
 const bootstrapDatabase = async () => {
   await ensureDatabase();
+  await ensureCompanyMasterColumns();
   await ensureMaterialColumns();
   await ensureGrnStatus();
   await ensureSchema();

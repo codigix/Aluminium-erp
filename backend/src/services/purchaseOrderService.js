@@ -977,184 +977,639 @@ const generatePurchaseOrderPDF = async (poId) => {
     }
   }
 
-  const htmlTemplate = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <style>
-        @page { size: A4; margin: 10mm; }
-        body { font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #000; line-height: 1.3; margin: 0; font-size: 10px; }
-        .invoice-container { border: 1px solid #000; min-height: 270mm; position: relative; }
-        
-        .header-section { display: flex; border-bottom: 1px solid #000; }
-        .header-left { flex: 1.5; padding: 10px; border-right: 1px solid #000; }
-        .header-right { flex: 1; padding: 10px; }
-        
-        .tax-invoice-label { text-align: center; border-bottom: 1px solid #000; font-weight: bold; font-size: 14px; padding: 5px; text-transform: uppercase; }
-        
-        .company-name { font-size: 16px; font-weight: bold; margin-bottom: 5px; }
-        .address-text { font-size: 9px; margin-bottom: 2px; }
-        
-        .info-grid { display: grid; grid-template-columns: 1fr 1fr; width: 100%; border-bottom: 1px solid #000; }
-        .info-box { padding: 8px; border-right: 1px solid #000; min-height: 80px; }
-        .info-box:last-child { border-right: none; }
-        .label { font-weight: bold; text-decoration: underline; margin-bottom: 5px; display: block; font-size: 11px; }
-        
-        .meta-table { width: 100%; border-collapse: collapse; }
-        .meta-table td { padding: 4px; border: 1px solid #000; }
-        .meta-label { font-weight: bold; width: 40%; }
-        
-        .items-table { width: 100%; border-collapse: collapse; border-bottom: 1px solid #000; }
-        .items-table th { border: 1px solid #000; padding: 6px; background: #f0f0f0; font-weight: bold; text-align: center; font-size: 9px; }
-        .items-table td { border-left: 1px solid #000; border-right: 1px solid #000; padding: 6px; vertical-align: top; }
-        .items-table tr.item-row { min-height: 30px; }
-        
-        .total-section { display: flex; border-bottom: 1px solid #000; }
-        .words-section { flex: 1.5; padding: 10px; border-right: 1px solid #000; }
-        .calc-section { flex: 1; }
-        
-        .calc-table { width: 100%; border-collapse: collapse; }
-        .calc-table td { padding: 5px; border-bottom: 1px solid #000; text-align: right; }
-        .calc-table td:first-child { text-align: left; font-weight: bold; border-right: 1px solid #000; }
-        .calc-table tr:last-child td { border-bottom: none; font-size: 12px; font-weight: bold; }
-        
-        .footer-section { display: flex; padding: 20px 10px; border-top: 1px solid #000; position: absolute; bottom: 0; width: 100%; box-sizing: border-box; }
-        .footer-col { flex: 1; text-align: center; }
-        .signature-box { margin-top: 40px; border-top: 1px dashed #000; display: inline-block; min-width: 150px; padding-top: 5px; }
-      </style>
-    </head>
-    <body>
-      <div class="invoice-container">
-        <div class="tax-invoice-label">PURCHASE ORDER</div>
-        
-        <div class="header-section">
-          <div class="header-left">
-            <div class="company-name">SP TECHPIONEER PVT LTD</div>
-            <div class="address-text">PLOT NO.97, SECTOR NO 07, PCNDTA</div>
-            <div class="address-text">BHOSARI, PUNE-411026</div>
-            <div class="address-text">GSTIN/UIN: 27AAPCS1193L1ZQ</div>
-            <div class="address-text">State Name: Maharashtra, Code: 27</div>
-          </div>
-          <div class="header-right">
-            <table class="meta-table">
-              <tr>
-                <td class="meta-label">PO No.</td>
-                <td>{{po_number}}</td>
-              </tr>
-              <tr>
-                <td class="meta-label">Dated</td>
-                <td>{{created_at}}</td>
-              </tr>
-              <tr>
-                <td class="meta-label">Reference</td>
-                <td>{{project_ref}}</td>
-              </tr>
-            </table>
-          </div>
-        </div>
-        
-        <div class="info-grid">
-          <div class="info-box">
-            <span class="label">Vendor Information</span>
-            <div style="font-weight: bold; font-size: 11px;">{{vendor_name}}</div>
-            <div class="address-text">{{location}}</div>
-            <div class="address-text">Email: {{vendor_email}}</div>
-            <div class="address-text">Phone: {{phone}}</div>
-          </div>
-          <div class="info-box">
-            <span class="label">Ship To</span>
-            <div style="font-weight: bold; font-size: 11px;">SP TECHPIONEER PVT LTD</div>
-            <div class="address-text">PLOT NO.97, SECTOR NO 07, PCNDTA</div>
-            <div class="address-text">BHOSARI, PUNE-411026</div>
-            <div class="address-text">Project: {{project_name}}</div>
-          </div>
-        </div>
+  const adminCompanyMasterService = require('./adminCompanyMasterService');
+  let activeCompany = null;
+  
+  // If the PO is linked to a sales order, we can check if it has a host_company_id
+  if (po.sales_order_id) {
+    try {
+      const [soRow] = await pool.query('SELECT host_company_id FROM sales_orders WHERE id = ?', [po.sales_order_id]);
+      if (soRow.length > 0 && soRow[0].host_company_id) {
+        activeCompany = await adminCompanyMasterService.getCompanyById(soRow[0].host_company_id);
+      }
+    } catch (err) {
+      console.error('Error fetching sales order host_company_id:', err);
+    }
+  }
+  
+  // Fallback to MR-linked sales order host_company_id
+  if (!activeCompany && po.mr_id) {
+    try {
+      const [mrRow] = await pool.query(
+        `SELECT so.host_company_id 
+         FROM material_requests mr 
+         JOIN production_plans pp ON mr.plan_id = pp.id 
+         JOIN sales_orders so ON pp.sales_order_id = so.id 
+         WHERE mr.id = ? LIMIT 1`, 
+        [po.mr_id]
+      );
+      if (mrRow.length > 0 && mrRow[0].host_company_id) {
+        activeCompany = await adminCompanyMasterService.getCompanyById(mrRow[0].host_company_id);
+      }
+    } catch (err) {
+      console.error('Error fetching MR host_company_id:', err);
+    }
+  }
 
-        <table class="items-table">
-          <thead>
-            <tr>
-              <th style="width: 30px;">Sl No.</th>
-              <th>Description of Goods</th>
-              <th style="width: 70px;">Item Code</th>
-              <th style="width: 60px;">Quantity</th>
-              <th style="width: 80px;">Rate</th>
-              <th style="width: 40px;">per</th>
-              <th style="width: 90px;">Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            {{#items}}
-            <tr class="item-row">
-              <td style="text-align: center;">{{sr}}</td>
-              <td>
-                <div style="font-weight: bold;">{{material_name}}</div>
-                <div style="font-size: 8px; color: #444;">{{description}}</div>
-              </td>
-              <td style="text-align: center;">{{drawing_no}}</td>
-              <td style="text-align: center;">{{quantity}} {{unit}}</td>
-              <td style="text-align: right;">{{unit_rate}}</td>
-              <td style="text-align: center;">{{unit}}</td>
-              <td style="text-align: right; font-weight: bold;">{{amount}}</td>
-            </tr>
-            {{/items}}
-            {{#empty_rows}}
-            <tr style="height: 25px;">
-              <td></td><td></td><td></td><td></td><td></td><td></td><td></td>
-            </tr>
-            {{/empty_rows}}
-          </tbody>
+  // Final fallback to active company
+  if (!activeCompany) {
+    try {
+      activeCompany = await adminCompanyMasterService.getActiveCompany();
+    } catch (err) {
+      console.error('Error fetching active company:', err);
+    }
+  }
+
+  const hostCompanyName = activeCompany?.company_name || 'SP TECHPIONEER PRIVATE LIMITED';
+  const hostCompanyAddress = activeCompany?.company_address || 'Plot No. 97, Sector 7, PCNTDA,\nBhosari, Pune - 411026, Maharashtra, India';
+  const hostCompanyAddressHtml = hostCompanyAddress ? hostCompanyAddress.replace(/\n/g, '<br/>') : 'Plot No. 97, Sector 7, PCNTDA,<br/>Bhosari, Pune - 411026, Maharashtra, India';
+  const hostGSTIN = activeCompany?.gstin || '27AAPCS1193L1ZQ';
+  const hostCIN = activeCompany?.cin || 'U29309PN2021PTC201234';
+  const hostPAN = activeCompany?.pan || 'N/A';
+  
+  const fs = require('fs');
+  const path = require('path');
+  let logoBase64 = null;
+  let signatureBase64 = null;
+
+  if (activeCompany && activeCompany.company_logo) {
+    const logoPath = path.join(__dirname, '../../', activeCompany.company_logo);
+    if (fs.existsSync(logoPath)) {
+      logoBase64 = `data:image/png;base64,${fs.readFileSync(logoPath).toString('base64')}`;
+    }
+  }
+  if (activeCompany && activeCompany.authorized_signature) {
+    const signaturePath = path.join(__dirname, '../../', activeCompany.authorized_signature);
+    if (fs.existsSync(signaturePath)) {
+      signatureBase64 = `data:image/png;base64,${fs.readFileSync(signaturePath).toString('base64')}`;
+    }
+  }
+
+  const htmlTemplate = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Purchase Order - {{hostCompanyName}}</title>
+
+<style>
+  *{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family: Arial, sans-serif;
+  }
+
+  body{
+    background:#f4f4f4;
+    padding:20px;
+  }
+
+  .po-container{
+    width:1400px;
+    margin:auto;
+    background:#fff;
+    border:2px solid #000;
+  }
+
+  .header{
+    display:flex;
+    justify-content:space-between;
+    border-bottom:2px solid #000;
+  }
+
+  .company-section{
+    width:70%;
+    padding:18px;
+    display:flex;
+    gap:20px;
+  }
+
+  .logo{
+    width:100px;
+    height:120px;
+    border:1px solid #000;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:#f4dca3;
+    font-size:28px;
+    font-weight:bold;
+    flex-direction:column;
+    overflow:hidden;
+  }
+
+  .company-details h1{
+    font-size:24px;
+    margin-bottom:10px;
+  }
+
+  .company-details p{
+    margin-bottom:8px;
+    font-size:15px;
+  }
+
+  .po-info{
+    width:30%;
+    border-left:2px solid #000;
+  }
+
+  .po-title{
+    text-align:center;
+    font-size:20px;
+    font-weight:bold;
+    padding:10px;
+    border-bottom:2px solid #000;
+  }
+
+  .info-table{
+    width:100%;
+    border-collapse:collapse;
+  }
+
+  .info-table td{
+    border-bottom:1px solid #000;
+    border-right:1px solid #000;
+    padding:8px;
+    font-size:14px;
+  }
+
+  .middle-section{
+    display:flex;
+    border-bottom:2px solid #000;
+  }
+
+  .box{
+    width:33.33%;
+    border-right:2px solid #000;
+    padding:14px;
+    min-height:240px;
+  }
+
+  .box:last-child{
+    border-right:none;
+  }
+
+  .box-title{
+    font-size:22px;
+    font-weight:bold;
+    margin-bottom:15px;
+  }
+
+  .box p{
+    margin-bottom:10px;
+    line-height:1.6;
+    font-size:14px;
+  }
+
+  .items-table{
+    width:100%;
+    border-collapse:collapse;
+  }
+
+  .items-table th,
+  .items-table td{
+    border:1px solid #000;
+    padding:10px;
+    font-size:13px;
+    vertical-align:top;
+  }
+
+  .items-table th{
+    background:#f0f0f0;
+    text-align:center;
+  }
+
+  .summary{
+    display:flex;
+    border-top:2px solid #000;
+  }
+
+  .amount-words{
+    width:65%;
+    padding:15px;
+    border-right:2px solid #000;
+  }
+
+  .amount-words h3{
+    margin-bottom:10px;
+  }
+
+  .totals{
+    width:35%;
+  }
+
+  .totals table{
+    width:100%;
+    border-collapse:collapse;
+  }
+
+  .totals td{
+    border-bottom:1px solid #000;
+    padding:12px;
+    font-size:15px;
+    font-weight:bold;
+  }
+
+  .bottom-section{
+    display:flex;
+    border-top:2px solid #000;
+  }
+
+  .bottom-box{
+    width:33.33%;
+    padding:15px;
+    border-right:2px solid #000;
+    min-height:240px;
+  }
+
+  .bottom-box:last-child{
+    border-right:none;
+  }
+
+  .bottom-box h3{
+    margin-bottom:12px;
+  }
+
+  .bottom-box p,
+  .bottom-box li{
+    font-size:14px;
+    line-height:1.8;
+  }
+
+  ul{
+    padding-left:20px;
+  }
+
+  .signature{
+    margin-top:40px;
+    text-align:center;
+  }
+
+  .footer{
+    border-top:2px solid #000;
+    text-align:center;
+    padding:12px;
+    font-weight:bold;
+    font-size:14px;
+  }
+
+  .page{
+    text-align:center;
+    padding:10px;
+    font-size:14px;
+  }
+
+  @media print {
+    body {
+      background: #fff !important;
+      padding: 0 !important;
+      -webkit-print-color-adjust: exact !important;
+    }
+    .po-container {
+      width: 100% !important;
+      margin: 0 !important;
+      border: 2px solid #000 !important;
+      box-shadow: none !important;
+    }
+  }
+</style>
+</head>
+
+<body>
+
+<div class="po-container">
+
+  <!-- HEADER -->
+  <div class="header">
+
+    <div class="company-section">
+
+      <div class="logo">
+        {{#logoBase64}}
+        <img src="{{logoBase64}}" style="max-width: 100%; max-height: 100%; object-fit: contain;" />
+        {{/logoBase64}}
+        {{^logoBase64}}
+        <div>S P</div>
+        <div>⚙</div>
+        <div>T P</div>
+        {{/logoBase64}}
+      </div>
+
+      <div class="company-details">
+        <h1>{{hostCompanyName}}</h1>
+
+        <p>{{{hostCompanyAddressHtml}}}</p>
+
+        <br>
+
+        <p><strong>GSTIN NO.</strong> : {{hostGSTIN}}</p>
+        {{#hostCIN}}
+        <p><strong>CIN NO.</strong> : {{hostCIN}}</p>
+        {{/hostCIN}}
+
+        <br>
+
+        <table style="width:100%; font-size: 14px;">
+          <tr>
+            <td style="font-weight: bold; width: 30%; border: none; padding: 2px 0;">Created By</td>
+            <td style="border: none; padding: 2px 0;">: {{created_by_name}}</td>
+          </tr>
+
+          <tr>
+            <td style="font-weight: bold; border: none; padding: 2px 0;">Mobile</td>
+            <td style="border: none; padding: 2px 0;">: {{created_by_mobile}}</td>
+          </tr>
+
+          <tr>
+            <td style="font-weight: bold; border: none; padding: 2px 0;">Email</td>
+            <td style="border: none; padding: 2px 0; word-break: break-all;">: {{created_by_email}}</td>
+          </tr>
         </table>
 
-        <div class="total-section">
-          <div class="words-section">
-            <div style="font-style: italic; margin-bottom: 10px;">Amount Chargeable (in words)</div>
-            <div style="font-weight: bold; font-size: 11px;">INR {{total_amount_words}} Only</div>
-          </div>
-          <div class="calc-section">
-            <table class="calc-table">
-              <tr>
-                <td>Subtotal</td>
-                <td>{{subtotal}}</td>
-              </tr>
-              {{#cgst_total}}
-              <tr>
-                <td>CGST (9%)</td>
-                <td>{{cgst_total}}</td>
-              </tr>
-              {{/cgst_total}}
-              {{#sgst_total}}
-              <tr>
-                <td>SGST (9%)</td>
-                <td>{{sgst_total}}</td>
-              </tr>
-              {{/sgst_total}}
-              <tr>
-                <td>Grand Total</td>
-                <td>₹ {{total_amount}}</td>
-              </tr>
-            </table>
-          </div>
-        </div>
-
-        <div style="padding: 10px; font-size: 9px;">
-          <div style="font-weight: bold; text-decoration: underline; margin-bottom: 5px;">Declaration:</div>
-          This is a computer-generated document. No signature is required.
-        </div>
-
-        <div class="footer-section">
-          <div class="footer-col">
-            <div style="margin-bottom: 50px;">Vendor's Acknowledgement</div>
-            <div class="signature-box">Seal and Signature</div>
-          </div>
-          <div class="footer-col" style="text-align: right;">
-            <div style="font-weight: bold;">for SP TECHPIONEER PVT LTD</div>
-            <div class="signature-box">Authorized Signatory</div>
-          </div>
-        </div>
       </div>
-    </body>
-    </html>
-  `;
+    </div>
+
+    <div class="po-info">
+
+      <div class="po-title">
+        PURCHASE ORDER
+      </div>
+
+      <table class="info-table">
+        <tr>
+          <td><strong>Purchase Order No.</strong></td>
+          <td>{{po_number}}</td>
+        </tr>
+
+        <tr>
+          <td><strong>PO Date</strong></td>
+          <td>{{created_at}}</td>
+        </tr>
+
+        <tr>
+          <td><strong>Vendor Code</strong></td>
+          <td>{{vendor_code}}</td>
+        </tr>
+
+        <tr>
+          <td><strong>Plant</strong></td>
+          <td>{{plant}}</td>
+        </tr>
+
+        <tr>
+          <td><strong>Your Reference No.</strong></td>
+          <td style="word-break: break-all;">{{project_ref}}</td>
+        </tr>
+
+        <tr>
+          <td><strong>Order Type</strong></td>
+          <td>{{order_type}}</td>
+        </tr>
+
+        <tr>
+          <td><strong>Version No.</strong></td>
+          <td>{{version_no}}</td>
+        </tr>
+
+        <tr>
+          <td><strong>Version Date</strong></td>
+          <td>{{created_at}}</td>
+        </tr>
+      </table>
+
+    </div>
+
+  </div>
+
+  <!-- MIDDLE SECTION -->
+  <div class="middle-section">
+
+    <div class="box">
+      <div class="box-title">SUPPLIER (VENDOR) DETAILS</div>
+
+      <p><strong>{{vendor_name}}</strong></p>
+
+      <p>
+        {{{vendor_address_html}}}
+      </p>
+
+      <br>
+
+      <p><strong>Telephone</strong> : {{phone}}</p>
+      <p><strong>GSTIN NO.</strong> : {{vendor_gstin}}</p>
+      <p><strong>Contact Person</strong> : {{contact_person}}</p>
+      <p><strong>Email</strong> : {{vendor_email}}</p>
+    </div>
+
+    <div class="box">
+
+      <div class="box-title">DISPATCH / SHIP TO ADDRESS</div>
+
+      <p><strong>{{hostCompanyName}}</strong></p>
+
+      <p>
+        {{{hostCompanyAddressHtml}}}
+      </p>
+
+      <br><br>
+
+      <p><strong>GSTIN NO.</strong> : {{hostGSTIN}}</p>
+      <p><strong>State</strong> : {{hostState}}</p>
+
+    </div>
+
+    <div class="box">
+
+      <div class="box-title">TERMS & CONDITIONS</div>
+
+      <p><strong>Payment Terms</strong> : {{payment_terms}}</p>
+      <p><strong>Freight</strong> : {{freight}}</p>
+      <p><strong>P & F</strong> : {{p_and_f}}</p>
+      <p><strong>Insurance</strong> : {{insurance}}</p>
+      <p><strong>Purchase Term</strong> : {{purchase_term}}</p>
+      <p><strong>Delivery Terms</strong> : {{delivery_terms}}</p>
+      <p><strong>Delivery Date</strong> : {{expected_delivery_date}}</p>
+      <p><strong>Your Ref No.</strong> : {{project_ref}}</p>
+      <p><strong>Our Ref No.</strong> : {{our_ref_no}}</p>
+
+    </div>
+
+  </div>
+
+  <!-- ITEMS TABLE -->
+  <table class="items-table">
+
+    <thead>
+      <tr>
+        <th>SL No.</th>
+        <th>Item No.</th>
+        <th style="text-align: left; width: 25%;">Item Description</th>
+        <th>HSN Code</th>
+        <th>Item Dlv. Dt.</th>
+        <th>Pur. Req. No.</th>
+        <th style="text-align: right;">Rate</th>
+        <th style="text-align: right;">Qty</th>
+        <th>Unit</th>
+        <th style="text-align: right;">Amount</th>
+        <th style="text-align: right;">CGST %</th>
+        <th style="text-align: right;">CGST Amt</th>
+        <th style="text-align: right;">SGST %</th>
+        <th style="text-align: right;">SGST Amt</th>
+      </tr>
+    </thead>
+
+    <tbody>
+      {{#items}}
+      <tr>
+        <td style="text-align: center;">{{sl_no}}</td>
+        <td style="text-align: center; font-family: monospace;">{{item_no}}</td>
+        <td style="text-align: left; line-height: 1.3;">
+          <strong>{{material_name}}</strong><br><br>
+          {{description}}
+        </td>
+        <td style="text-align: center;">{{hsn_code}}</td>
+        <td style="text-align: center;">{{expected_delivery_date}}</td>
+        <td style="text-align: center;">{{pur_req_no}}</td>
+        <td style="text-align: right;">{{unit_rate}}</td>
+        <td style="text-align: right;">{{quantity}}</td>
+        <td style="text-align: center;">{{unit}}</td>
+        <td style="text-align: right;">{{amount}}</td>
+        <td style="text-align: right;">{{cgst_rate}}%</td>
+        <td style="text-align: right;">{{cgst_amount}}</td>
+        <td style="text-align: right;">{{sgst_rate}}%</td>
+        <td style="text-align: right;">{{sgst_amount}}</td>
+      </tr>
+      {{/items}}
+      {{#empty_rows}}
+      <tr style="height: 35px;">
+        <td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>
+      </tr>
+      {{/empty_rows}}
+    </tbody>
+
+  </table>
+
+  <!-- SUMMARY -->
+  <div class="summary">
+
+    <div class="amount-words">
+      <h3>Amount Chargeable (in words)</h3>
+
+      <h2>
+        INR {{total_amount_words}} ONLY
+      </h2>
+    </div>
+
+    <div class="totals">
+
+      <table>
+        <tr>
+          <td>Sub Total</td>
+          <td style="text-align: right;">{{subtotal}}</td>
+        </tr>
+
+        {{#cgst_total}}
+        <tr>
+          <td>CGST @ {{cgst_rate_summary}}%</td>
+          <td style="text-align: right;">{{cgst_total}}</td>
+        </tr>
+        {{/cgst_total}}
+
+        {{#sgst_total}}
+        <tr>
+          <td>SGST @ {{sgst_rate_summary}}%</td>
+          <td style="text-align: right;">{{sgst_total}}</td>
+        </tr>
+        {{/sgst_total}}
+
+        <tr>
+          <td style="font-size:24px;"><strong>Grand Total</strong></td>
+          <td style="font-size:24px; text-align: right;">
+            <strong>₹ {{total_amount}}</strong>
+          </td>
+        </tr>
+      </table>
+
+    </div>
+
+  </div>
+
+  <!-- BOTTOM -->
+  <div class="bottom-section">
+
+    <div class="bottom-box">
+
+      <h3>BANK DETAILS (For Remittance)</h3>
+
+      <p><strong>Bank Name</strong> : {{hostBankName}}</p>
+      <p><strong>Account Name</strong> : {{hostAccountName}}</p>
+      <p><strong>Account Number</strong> : {{hostAccountNumber}}</p>
+      <p><strong>IFSC Code</strong> : {{hostIFSCCode}}</p>
+      <p><strong>Branch</strong> : {{hostBranchName}}</p>
+      <p><strong>Beneficiary GSTIN</strong> : {{hostGSTIN}}</p>
+
+    </div>
+
+    <div class="bottom-box">
+
+      <h3>IMPORTANT NOTES</h3>
+
+      <ul>
+        <li>Please ensure all supplied material meets PO requirements.</li>
+        <li>All test certificates and datasheets to be provided.</li>
+        <li>Mention PO No. & Item Code on Challan and Invoice.</li>
+        <li>General Terms & Conditions enclosed.</li>
+        <li>Subject to Pune jurisdiction only.</li>
+        <li>Goods once sold will not be taken back.</li>
+      </ul>
+
+    </div>
+
+    <div class="bottom-box">
+
+      <h3>DECLARATION</h3>
+
+      <p>
+        We declare that this Purchase Order is issued for the goods/services
+        as per the terms and conditions mentioned herein.
+      </p>
+
+      <br><br>
+
+      <h3>FOR {{hostCompanyName}}</h3>
+
+      <div class="signature">
+        {{#signatureBase64}}
+        <img src="{{signatureBase64}}" style="max-height: 80px; max-width: 200px; object-fit: contain;" />
+        {{/signatureBase64}}
+        {{^signatureBase64}}
+        <div style="font-family: 'Courier New', Courier, monospace; font-style: italic; font-size: 20px; font-weight: bold; border-bottom: 1px dashed #000; display: inline-block; padding: 5px 20px; margin-bottom: 10px;">
+          {{hostCompanyName}}
+        </div>
+        {{/signatureBase64}}
+
+        <h3 style="margin-top: 10px;">Authorized Signatory</h3>
+      </div>
+
+    </div>
+
+  </div>
+
+  <div class="footer">
+    THIS IS ELECTRONICALLY GENERATED PURCHASE ORDER AND DOES NOT REQUIRE SIGNATURE.
+  </div>
+
+  <div class="page">
+    Page 1 of 1
+  </div>
+
+</div>
+
+</body>
+</html>
+`;
 
   const formatDate = (date) => date ? new Date(date).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-') : '—';
 
@@ -1162,6 +1617,10 @@ const generatePurchaseOrderPDF = async (poId) => {
   const cgst_total = po.items.reduce((sum, item) => sum + (parseFloat(item.cgst_amount) || 0), 0);
   const sgst_total = po.items.reduce((sum, item) => sum + (parseFloat(item.sgst_amount) || 0), 0);
   const grand_total = parseFloat(po.total_amount || (subtotal + cgst_total + sgst_total));
+
+  const firstItem = po.items[0] || {};
+  const cgst_rate_summary = parseFloat(firstItem.cgst_percent || 0).toFixed(0);
+  const sgst_rate_summary = parseFloat(firstItem.sgst_percent || 0).toFixed(0);
 
   // Basic number to words for the words section
   const numberToWords = (num) => {
@@ -1187,15 +1646,47 @@ const generatePurchaseOrderPDF = async (poId) => {
     expected_delivery_date: formatDate(po.expected_delivery_date),
     vendor_name: vendor?.vendor_name || 'N/A',
     vendor_email: email || 'N/A',
-    location: location || 'N/A',
+    vendor_address_html: location ? location.split(', ').join('<br/>') : 'N/A',
     phone: phone || 'N/A',
+    vendor_gstin: vendor?.gstin || 'N/A',
+    contact_person: po.contact_person || 'N/A',
     project_name: po.project_name || 'General Procurement',
-    project_ref: po.mr_number ? `MR: ${po.mr_number}` : (po.sales_order_id ? `SO: ${po.so_number || po.sales_order_id}` : 'Direct Procurement'),
+    project_ref: po.mr_number ? `MR-${po.mr_number}` : (po.sales_order_id ? `SO-${po.so_number || po.sales_order_id}` : 'Direct Procurement'),
     subtotal: subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
     cgst_total: cgst_total > 0 ? cgst_total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : null,
     sgst_total: sgst_total > 0 ? sgst_total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : null,
+    cgst_rate_summary,
+    sgst_rate_summary,
     total_amount: grand_total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
     total_amount_words: numberToWords(grand_total),
+    hostCompanyName,
+    hostCompanyAddressHtml,
+    hostGSTIN,
+    hostCIN,
+    hostPAN,
+    logoBase64,
+    signatureBase64,
+    created_by_name: po.updated_by || 'Rohit Kuchekar',
+    created_by_mobile: activeCompany?.phone || '9822012345',
+    created_by_phone: activeCompany?.telephone || '-',
+    created_by_email: activeCompany?.email || 'rohit.kuchekar.external@sptech.com',
+    vendor_code: vendor?.vendor_code || ('VEND-' + String(po.vendor_id).padStart(6, '0')),
+    plant: activeCompany?.plant_code || 'STPTPL-01',
+    version_no: '1.0',
+    order_type: 'Standard Purchase Order',
+    payment_terms: po.payment_terms || vendor?.payment_terms || '45 days from invoice date',
+    freight: po.freight || 'Included',
+    p_and_f: po.p_and_f || 'Included',
+    insurance: po.insurance || 'Included',
+    purchase_term: po.purchase_term || 'Standard Purchase Order',
+    delivery_terms: po.delivery_terms || 'As Per Item Wise Delivery Date',
+    our_ref_no: po.our_ref_no || '—',
+    hostBankName: activeCompany?.bank_name || 'HDFC BANK LTD.',
+    hostAccountName: activeCompany?.company_name || 'SP TECHPIONEER PRIVATE LIMITED',
+    hostAccountNumber: activeCompany?.account_number || '123456789999',
+    hostIFSCCode: activeCompany?.ifsc_code ? activeCompany.ifsc_code.toUpperCase() : 'HDFC0001234',
+    hostBranchName: activeCompany?.branch_name || 'Bhosari, Pune - 411026, Maharashtra',
+    hostState: activeCompany?.state || 'Maharashtra',
     items: (po.items || []).map((i, idx) => {
       const dQty = parseFloat(i.design_qty);
       const qty = parseFloat(i.quantity);
@@ -1203,17 +1694,29 @@ const generatePurchaseOrderPDF = async (poId) => {
       
       return {
         ...i,
-        sr: idx + 1,
+        sl_no: (idx + 1) * 10,
+        item_code: i.item_code || '—',
+        item_no: i.item_code || '—',
         drawing_no: i.drawing_no || i.item_code || '—',
         material_name: i.material_name || i.description || '—',
+        description: i.description || '—',
         material_type: i.material_type || '—',
+        hsn_code: '73089090', // realistic fallback
+        expected_delivery_date: formatDate(po.expected_delivery_date),
+        pur_req_no: po.mr_number || '—',
         quantity: displayQty.toFixed(3),
-        unit: i.unit || 'NOS',
+        unit: (i.unit || 'NOS').toUpperCase(),
         unit_rate: parseFloat(i.unit_rate || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-        amount: parseFloat(i.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+        amount: parseFloat(i.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+        discount: (0).toFixed(2),
+        transaction_amount: parseFloat(i.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+        cgst_rate: parseFloat(i.cgst_percent || 0).toFixed(2),
+        cgst_amount: parseFloat(i.cgst_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+        sgst_rate: parseFloat(i.sgst_percent || 0).toFixed(2),
+        sgst_amount: parseFloat(i.sgst_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
       };
     }),
-    empty_rows: Array.from({ length: Math.max(0, 10 - (po.items || []).length) })
+    empty_rows: Array.from({ length: Math.max(0, 4 - (po.items || []).length) })
   };
 
   const html = mustache.render(htmlTemplate, viewData);
@@ -1223,11 +1726,11 @@ const generatePurchaseOrderPDF = async (poId) => {
     args: ['--no-sandbox', '--disable-setuid-sandbox']
   });
   const page = await browser.newPage();
-  await page.setContent(html, { waitUntil: 'networkidle0' });
+  await page.setContent(html, { waitUntil: 'load' });
   const pdf = await page.pdf({ 
     format: 'A4', 
     printBackground: true,
-    margin: { top: '20px', right: '20px', bottom: '20px', left: '20px' }
+    margin: { top: '0px', right: '0px', bottom: '0px', left: '0px' }
   });
   await browser.close();
 

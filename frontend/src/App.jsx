@@ -12,6 +12,7 @@ import {
   Menu, Monitor
 } from 'lucide-react'
 import CompanyMaster from './pages/CompanyMaster'
+import AdminCompanyMaster from './pages/AdminCompanyMaster'
 import ClientContacts from './pages/ClientContacts'
 import CustomerPO from './pages/CustomerPO'
 import SalesOrders from './pages/SalesOrders'
@@ -100,7 +101,7 @@ import './index.css'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 const API_HOST = API_BASE
-const MODULE_IDS = ['dashboard', 'admin-dashboard', 'project-analysis', 'sales-report', 'approved-quotations', 'active-clients', 'sales-report-details', 'procurement-report', 'production-report', 'inventory-report', 'accounts-report', 'oee-analysis', 'machine-analysis', 'material-consumption', 'sales-dashboard', 'design-dashboard', 'production-dashboard', 'procurement-dashboard', 'item-master', 'company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'quotation-form', 'vendor-management', 'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'po-receipt-details', 'inventory-dashboard', 'quality-dashboard', 'accounts-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance', 'incoming-qc', 'quality-rejections', 'quality-reports', 'quality-rejection-entry', 'warehouses', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval', 'bom-form', 'workstation-master', 'operation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card', 'sub-contract-challans', 'stock-entries', 'incoming-orders', 'vendor-inward-challans', 'invoice-received', 'payment-processing', 'payment-received', 'payment-history', 'customer-payment-history', 'shipment-dashboard', 'shipment-orders', 'shipment-planning', 'dispatch-management', 'delivery-challan', 'shipment-tracking', 'shipment-returns', 'shipment-reports', 'work-order-details', 'grn-po-details', 'qc-grn-details', 'shipment-details', 'transaction-details', 'stock-details']
+const MODULE_IDS = ['dashboard', 'admin-dashboard', 'project-analysis', 'sales-report', 'approved-quotations', 'active-clients', 'sales-report-details', 'procurement-report', 'production-report', 'inventory-report', 'accounts-report', 'oee-analysis', 'machine-analysis', 'material-consumption', 'sales-dashboard', 'design-dashboard', 'production-dashboard', 'procurement-dashboard', 'item-master', 'company-master', 'client-contacts', 'customer-po', 'sales-order', 'customer-drawing', 'client-quotations', 'quotation-form', 'vendor-management', 'suppliers', 'quotations', 'purchase-orders', 'po-receipts', 'po-receipt-details', 'inventory-dashboard', 'quality-dashboard', 'accounts-dashboard', 'po-material-request', 'grn', 'qc-inspections', 'stock-ledger', 'stock-balance', 'incoming-qc', 'quality-rejections', 'quality-reports', 'quality-rejection-entry', 'warehouses', 'design-orders', 'drawing-master', 'bom-creation', 'routing-operations', 'process-sheet', 'bom-approval', 'bom-form', 'workstation-master', 'operation-master', 'project-requests', 'material-requirements', 'production-plan', 'work-order', 'work-order-form', 'job-card', 'sub-contract-challans', 'stock-entries', 'incoming-orders', 'vendor-inward-challans', 'invoice-received', 'payment-processing', 'payment-received', 'payment-history', 'customer-payment-history', 'shipment-dashboard', 'shipment-orders', 'shipment-planning', 'dispatch-management', 'delivery-challan', 'shipment-tracking', 'shipment-returns', 'shipment-reports', 'work-order-details', 'grn-po-details', 'qc-grn-details', 'shipment-details', 'transaction-details', 'stock-details', 'admin-company-master']
 const DEFAULT_MODULE = 'dashboard'
 const HOME_PLANT_STATE = (import.meta.env.VITE_PLANT_STATE || 'maharashtra').toLowerCase()
 const currencyFormatter = new Intl.NumberFormat('en-IN', {
@@ -204,7 +205,7 @@ const DEPARTMENT_MODULES = {
     'dashboard', 'admin-dashboard', 'project-analysis', 'sales-report', 'approved-quotations', 'sales-report-details', 'procurement-report', 'production-report', 'inventory-report', 'accounts-report', 'oee-analysis', 'machine-analysis', 'material-consumption',
     'quality-reports',
     'payment-history', 'customer-payment-history',
-    'shipment-tracking', 'shipment-reports', 'work-order-details', 'grn-po-details', 'stock-details', 'active-clients', 'suppliers'
+    'shipment-tracking', 'shipment-reports', 'work-order-details', 'grn-po-details', 'stock-details', 'active-clients', 'suppliers', 'admin-company-master'
   ]
 }
 
@@ -1212,6 +1213,7 @@ function App() {
     { label: 'OEE Analysis', moduleId: 'oee-analysis', icon: 'activity', indent: true, prefix: '/admin' },
     { label: 'Active Clients', moduleId: 'active-clients', icon: 'users', indent: true, deptCode: 'ADMIN', prefix: '/admin' },
     { label: 'Suppliers', moduleId: 'suppliers', icon: 'truck', indent: true, deptCode: 'ADMIN', prefix: '/admin' },
+    { label: 'Company Master', moduleId: 'admin-company-master', icon: 'building', indent: true, deptCode: 'ADMIN', prefix: '/admin' },
     { label: 'Company Master', moduleId: 'company-master', icon: 'building', indent: true, prefix: sidebarDept ? `/${DEPARTMENT_PREFIXES[sidebarDept]}` : '' },
     { label: 'Client Contacts', moduleId: 'client-contacts', icon: 'users', indent: true, prefix: sidebarDept ? `/${DEPARTMENT_PREFIXES[sidebarDept]}` : '' },
 
@@ -1873,6 +1875,10 @@ function App() {
                     onEditCompany={handleEditCompany}
                     onDeleteCompany={handleDeleteCompany}
                   />
+                )}
+
+                {activeModule === 'admin-company-master' && (
+                  <AdminCompanyMaster />
                 )}
 
                 {activeModule === 'client-contacts' && (

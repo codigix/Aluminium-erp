@@ -222,7 +222,6 @@ const getIncomingOrders = async (departmentCode, includeAccepted = false) => {
 
   return rows;
 };
-
 const createSalesOrder = async (orderData) => {
   const {
     customerPoId,
@@ -241,7 +240,8 @@ const createSalesOrder = async (orderData) => {
     status = 'CREATED',
     quotation_id = null,
     source_type = 'DIRECT',
-    parent_id = null
+    parent_id = null,
+    host_company_id = null
   } = orderData;
 
   // Use either targetDispatchDate or delivery_date
@@ -269,9 +269,9 @@ const createSalesOrder = async (orderData) => {
         production_priority, target_dispatch_date, status, 
         current_department, request_accepted, cgst_rate, 
         sgst_rate, profit_margin, bom_id, warehouse,
-        quotation_id, source_type, parent_id, public_id
+        quotation_id, source_type, parent_id, public_id, host_company_id
       )
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'DESIGN_ENG', 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'DESIGN_ENG', 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         validatedPoId,
         companyId || null,
@@ -288,7 +288,8 @@ const createSalesOrder = async (orderData) => {
         finalQuotationId,
         source_type,
         parent_id,
-        publicId
+        publicId,
+        host_company_id || null
       ]
     );
 
@@ -451,7 +452,8 @@ const updateSalesOrder = async (id, orderData) => {
     warehouse,
     status,
     quotation_id = null,
-    source_type = 'DIRECT'
+    source_type = 'DIRECT',
+    host_company_id = null
   } = orderData;
 
   const finalTargetDispatchDate = targetDispatchDate || delivery_date;
@@ -486,6 +488,7 @@ const updateSalesOrder = async (id, orderData) => {
         warehouse = ?,
         quotation_id = ?,
         source_type = ?,
+        host_company_id = ?,
         updated_at = NOW()
        WHERE id = ?`,
       [
@@ -503,6 +506,7 @@ const updateSalesOrder = async (id, orderData) => {
         warehouse || null,
         finalQuotationId,
         source_type,
+        host_company_id || null,
         id
       ]
     );
@@ -1251,15 +1255,95 @@ const generateSalesOrderPDF = async (salesOrderId) => {
   if (!orderRows.length) throw new Error('Sales Order not found');
   const order = orderRows[0];
 
+  const adminCompanyMasterService = require('./adminCompanyMasterService');
+  let activeCompany = null;
+  if (order.host_company_id) {
+    try {
+      activeCompany = await adminCompanyMasterService.getCompanyById(order.host_company_id);
+    } catch (err) {
+      console.error('Error fetching host company by id:', err);
+    }
+  }
+  if (!activeCompany) {
+    activeCompany = await adminCompanyMasterService.getActiveCompany();
+  }
+
+  const hostCompanyName = activeCompany?.company_name || 'SP TECHPIONEER PVT LTD';
+  const hostCompanyAddress = activeCompany?.company_address || 'PLOT NO.97, SECTOR NO 07, PCNDTA\nBHOSARI, PUNE-411026';
+  const hostCompanyAddressLines = hostCompanyAddress ? hostCompanyAddress.split('\n') : ['PLOT NO.97, SECTOR NO 07, PCNDTA', 'BHOSARI, PUNE-411026'];
+  const hostGSTIN = activeCompany?.gstin || '27AAPCS1193L1ZQ';
+  const hostPAN = activeCompany?.pan || 'N/A';
+  const invoiceFooterNotes = activeCompany?.invoice_footer_notes || '';
+
+  const fs = require('fs');
+  const path = require('path');
+  let logoBase64 = null;
+  let signatureBase64 = null;
+
+  if (activeCompany && activeCompany.company_logo) {
+    const logoPath = path.join(__dirname, '../../', activeCompany.company_logo);
+    if (fs.existsSync(logoPath)) {
+      logoBase64 = `data:image/png;base64,${fs.readFileSync(logoPath).toString('base64')}`;
+    }
+  }
+  if (activeCompany && activeCompany.authorized_signature) {
+    const signaturePath = path.join(__dirname, '../../', activeCompany.authorized_signature);
+    if (fs.existsSync(signaturePath)) {
+      signatureBase64 = `data:image/png;base64,${fs.readFileSync(signaturePath).toString('base64')}`;
+    }
+  }
+
+  const companyService = require('./companyService');
+  let companyDetails = null;
+  try {
+    const companyId = order.client_id || order.company_id;
+    if (companyId) {
+      companyDetails = await companyService.getCompanyById(companyId);
+    }
+  } catch (err) {
+    console.error('Error fetching company details for PDF:', err);
+  }
+
+  const billing = companyDetails?.addresses?.find(a => a.address_type === 'BILLING') || {};
+  const shipping = companyDetails?.addresses?.find(a => a.address_type === 'SHIPPING') || {};
+  const billingContact = companyDetails?.contacts?.find(c => c.contact_type === 'ACCOUNTS') ||
+                         companyDetails?.contacts?.find(c => c.contact_type === 'PRIMARY') ||
+                         companyDetails?.contacts?.[0] || {};
+  const shippingContact = companyDetails?.contacts?.find(c => c.contact_type === 'PURCHASE') ||
+                          companyDetails?.contacts?.find(c => c.contact_type === 'TECHNICAL') ||
+                          companyDetails?.contacts?.find(c => c.contact_type === 'PRIMARY') ||
+                          companyDetails?.contacts?.[0] || {};
+
   // Format billing address
   const addrParts = [
-    order.billing_line1,
-    order.billing_line2,
-    order.billing_city,
-    order.billing_state,
-    order.billing_pincode ? `Pincode: ${order.billing_pincode}` : null
+    billing.line1 || order.billing_line1,
+    billing.line2 || order.billing_line2,
+    billing.city || order.billing_city,
+    billing.state || order.billing_state,
+    (billing.pincode || order.billing_pincode) ? `Pincode: ${billing.pincode || order.billing_pincode}` : null
   ].filter(Boolean);
   order.billing_address = addrParts.join(', ');
+  order.billing_state = billing.state || order.billing_state || '';
+
+  // Format shipping address
+  const shippingAddrParts = [
+    shipping.line1,
+    shipping.line2,
+    shipping.city,
+    shipping.state,
+    shipping.pincode ? `Pincode: ${shipping.pincode}` : null
+  ].filter(Boolean);
+  order.shipping_address = shippingAddrParts.length > 0 ? shippingAddrParts.join(', ') : order.billing_address;
+  order.shipping_state = shipping.state || order.billing_state || '';
+
+  // Format contacts
+  order.billing_contact_name = billingContact.name || '';
+  order.billing_contact_phone = billingContact.phone || '';
+  order.shipping_contact_name = shippingContact.name || '';
+  order.shipping_contact_phone = shippingContact.phone || '';
+
+  // GSTIN
+  order.gstin = companyDetails?.gstin || order.gstin || '';
 
   const [items] = await pool.query(
     `SELECT soi.*, cpi.hsn_code
@@ -1329,11 +1413,14 @@ const generateSalesOrderPDF = async (salesOrderId) => {
         
         <div class="header-section">
           <div class="header-left">
-            <div class="company-name">SP TECHPIONEER PVT LTD</div>
-            <div class="address-text">PLOT NO.97, SECTOR NO 07, PCNDTA</div>
-            <div class="address-text">BHOSARI, PUNE-411026</div>
-            <div class="address-text">GSTIN/UIN: 27AAPCS1193L1ZQ</div>
-            <div class="address-text">State Name: Maharashtra, Code: 27</div>
+            {{#logoBase64}}
+            <img src="{{logoBase64}}" style="max-height: 45px; margin-bottom: 5px; display: block;" />
+            {{/logoBase64}}
+            <div class="company-name">{{hostCompanyName}}</div>
+            {{#hostCompanyAddressLines}}
+            <div class="address-text">{{.}}</div>
+            {{/hostCompanyAddressLines}}
+            {{#hostGSTIN}}<div class="address-text">GSTIN/UIN: {{hostGSTIN}}</div>{{/hostGSTIN}}
           </div>
           <div class="header-right">
             <table class="meta-table">
@@ -1361,9 +1448,14 @@ const generateSalesOrderPDF = async (salesOrderId) => {
           <div class="info-box">
             <span class="label">Consignee (Ship to)</span>
             <div style="font-weight: bold; font-size: 11px;">{{company_name}}</div>
-            <div class="address-text">{{billing_address}}</div>
+            <div class="address-text">{{shipping_address}}</div>
             <div class="address-text">GSTIN/UIN: {{gstin}}</div>
-            <div class="address-text">State Name: {{billing_state}}</div>
+            <div class="address-text">State Name: {{shipping_state}}</div>
+            {{#shipping_contact_name}}
+            <div class="address-text" style="margin-top: 3px; font-weight: bold; color: #444;">
+              Contact: {{shipping_contact_name}} {{#shipping_contact_phone}}({{shipping_contact_phone}}){{/shipping_contact_phone}}
+            </div>
+            {{/shipping_contact_name}}
           </div>
           <div class="info-box">
             <span class="label">Buyer (Bill to)</span>
@@ -1371,6 +1463,11 @@ const generateSalesOrderPDF = async (salesOrderId) => {
             <div class="address-text">{{billing_address}}</div>
             <div class="address-text">GSTIN/UIN: {{gstin}}</div>
             <div class="address-text">State Name: {{billing_state}}</div>
+            {{#billing_contact_name}}
+            <div class="address-text" style="margin-top: 3px; font-weight: bold; color: #444;">
+              Contact: {{billing_contact_name}} {{#billing_contact_phone}}({{billing_contact_phone}}){{/billing_contact_phone}}
+            </div>
+            {{/billing_contact_name}}
           </div>
         </div>
 
@@ -1480,10 +1577,45 @@ const generateSalesOrderPDF = async (salesOrderId) => {
           </tbody>
         </table>
 
-        <div style="padding: 10px; font-size: 9px;">
-          <div style="font-weight: bold; text-decoration: underline; margin-bottom: 5px;">Declaration:</div>
-          We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.
+        <div class="bank-declaration-section" style="display: flex; border-bottom: 1px solid #000; font-size: 9px;">
+          <div class="bank-details-box" style="flex: 1.5; padding: 10px; border-right: 1px solid #000;">
+            <div style="font-weight: bold; text-decoration: underline; margin-bottom: 5px; font-size: 10px;">Company's Bank Details:</div>
+            <table style="width: 100%; border-collapse: collapse; font-size: 9px;">
+              <tr>
+                <td style="font-weight: bold; width: 100px; padding: 2px 0;">Bank Name:</td>
+                <td>{{hostBankName}}</td>
+              </tr>
+              <tr>
+                <td style="font-weight: bold; padding: 2px 0;">Account Name:</td>
+                <td>{{hostAccountName}}</td>
+              </tr>
+              <tr>
+                <td style="font-weight: bold; padding: 2px 0;">Account Number:</td>
+                <td>{{hostAccountNumber}}</td>
+              </tr>
+              <tr>
+                <td style="font-weight: bold; padding: 2px 0;">IFSC Code:</td>
+                <td style="font-family: monospace; font-weight: bold;">{{hostIFSCCode}}</td>
+              </tr>
+              <tr>
+                <td style="font-weight: bold; padding: 2px 0;">Branch:</td>
+                <td>{{hostBranchName}}</td>
+              </tr>
+            </table>
+          </div>
+          <div class="declaration-box" style="flex: 1; padding: 10px;">
+            <div style="font-weight: bold; text-decoration: underline; margin-bottom: 5px;">Declaration:</div>
+            <div style="line-height: 1.4; color: #333;">
+              We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.
+            </div>
+          </div>
         </div>
+
+        {{#invoiceFooterNotes}}
+        <div style="padding: 10px; font-size: 8px; color: #444; border-top: 1px solid #000; margin-bottom: 120px;">
+          <strong>Notes:</strong> {{invoiceFooterNotes}}
+        </div>
+        {{/invoiceFooterNotes}}
 
         <div class="footer-section">
           <div class="footer-col">
@@ -1491,8 +1623,14 @@ const generateSalesOrderPDF = async (salesOrderId) => {
             <div class="signature-box">Authorized Signatory</div>
           </div>
           <div class="footer-col" style="text-align: right;">
-            <div style="font-weight: bold;">for SP TECHPIONEER PVT LTD</div>
-            <div class="signature-box">Authorized Signatory</div>
+            <div style="font-weight: bold;">for {{hostCompanyName}}</div>
+            {{#signatureBase64}}
+            <div style="margin-top: 5px; margin-bottom: 5px; display: flex; justify-content: flex-end;"><img src="{{signatureBase64}}" style="max-height: 40px;" /></div>
+            {{/signatureBase64}}
+            {{^signatureBase64}}
+            <div style="margin-top: 40px;"></div>
+            {{/signatureBase64}}
+            <div class="signature-box" style="margin-top: 5px;">Authorized Signatory</div>
           </div>
         </div>
       </div>
@@ -1572,7 +1710,20 @@ const generateSalesOrderPDF = async (salesOrderId) => {
     items: formattedItems,
     empty_rows: Array.from({ length: Math.max(0, 10 - items.length) }),
     cgst_rate: Number(order.cgst_rate || 0).toFixed(1),
-    sgst_rate: Number(order.sgst_rate || 0).toFixed(1)
+    sgst_rate: Number(order.sgst_rate || 0).toFixed(1),
+    hostCompanyName,
+    hostCompanyAddress,
+    hostCompanyAddressLines,
+    hostGSTIN,
+    hostPAN,
+    invoiceFooterNotes,
+    logoBase64,
+    signatureBase64,
+    hostBankName: activeCompany?.bank_name || 'HDFC BANK',
+    hostAccountName: activeCompany?.company_name || 'SP TECHPIONEER PRIVATE LIMITED',
+    hostAccountNumber: activeCompany?.account_number || '123456789999',
+    hostIFSCCode: activeCompany?.ifsc_code ? activeCompany.ifsc_code.toUpperCase() : 'HDFC0001234',
+    hostBranchName: activeCompany?.branch_name || 'Bhosari Branch'
   };
 
   const html = mustache.render(htmlTemplate, viewData);

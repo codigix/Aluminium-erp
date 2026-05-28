@@ -676,6 +676,24 @@ const sendQuotationEmail = async (quotationId, emailData) => {
 };
 
 const generateQuotationPDF = async (quotationId) => {
+  const adminCompanyMasterService = require('./adminCompanyMasterService');
+  const activeCompany = await adminCompanyMasterService.getActiveCompany();
+
+  const hostCompanyName = activeCompany?.company_name || 'SPTECHPIONEER PVT LTD';
+  const hostCompanyAddress = activeCompany?.company_address || 'Industrial Area, Sector 5, Pune, Maharashtra - 411026';
+  const hostGSTIN = activeCompany?.gstin || '';
+  const invoiceFooterNotes = activeCompany?.invoice_footer_notes || '';
+
+  const fs = require('fs');
+  const path = require('path');
+  let logoBase64 = null;
+  if (activeCompany && activeCompany.company_logo) {
+    const logoPath = path.join(__dirname, '../../', activeCompany.company_logo);
+    if (fs.existsSync(logoPath)) {
+      logoBase64 = `data:image/png;base64,${fs.readFileSync(logoPath).toString('base64')}`;
+    }
+  }
+
   const quotation = await getQuotationById(quotationId);
   const [vendorRows] = await pool.query('SELECT * FROM vendors WHERE id = ?', [quotation.vendor_id]);
   const vendor = vendorRows[0];
@@ -957,8 +975,14 @@ const generateQuotationPDF = async (quotationId) => {
     <body>
       <div class="page">
         <div class="header-top">
-          <h1 class="company-name">SPTECHPIONEER PVT LTD</h1>
-          <p class="company-address">Industrial Area, Sector 5, Pune, Maharashtra - 411026</p>
+          {{#logoBase64}}
+          <img src="{{logoBase64}}" style="max-height: 45px; margin-bottom: 10px;" />
+          {{/logoBase64}}
+          <h1 class="company-name">{{hostCompanyName}}</h1>
+          <p class="company-address">{{hostCompanyAddress}}</p>
+          {{#hostGSTIN}}
+          <p class="company-address">GSTIN/UIN: {{hostGSTIN}}</p>
+          {{/hostGSTIN}}
         </div>
 
         <div class="divider"></div>
@@ -1084,9 +1108,16 @@ const generateQuotationPDF = async (quotationId) => {
         </div>
         {{/notes}}
 
+        {{#invoiceFooterNotes}}
+        <div class="notes-card" style="margin-top: 20px;">
+          <div class="notes-header">Declaration & Terms</div>
+          <div class="notes-content">{{invoiceFooterNotes}}</div>
+        </div>
+        {{/invoiceFooterNotes}}
+
         <div class="footer">
           <div class="footer-left">This is a computer-generated document. No signature is required.</div>
-          <div class="footer-right">SPTECHPIONEER PVT LTD | Confidential</div>
+          <div class="footer-right">{{hostCompanyName}} | Confidential</div>
         </div>
       </div>
     </body>
@@ -1127,7 +1158,12 @@ const generateQuotationPDF = async (quotationId) => {
         unit_rate: rate.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
         amount: amt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
       };
-    })
+    }),
+    hostCompanyName,
+    hostCompanyAddress,
+    hostGSTIN,
+    invoiceFooterNotes,
+    logoBase64
   };
 
   const html = mustache.render(htmlTemplate, viewData);

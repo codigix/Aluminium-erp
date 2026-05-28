@@ -279,6 +279,7 @@ model customer_pos {
   special_notes            String?              @db.Text
   inspection_clause        String?              @db.VarChar(50)
   test_certificate         String?              @db.VarChar(50)
+  host_company_id          Int?
   requesting_department_id Int?
   created_at               DateTime?            @default(now()) @db.Timestamp(0)
   customer_po_items        customer_po_items[]
@@ -1426,6 +1427,7 @@ model quotation_requests {
   drawing_id               Int?
   item_code                String?                    @db.VarChar(255)
   pending_bom_cost         Decimal?                   @db.Decimal(15, 2)
+  host_company_id          Int?
   quotation_requests       quotation_requests?        @relation("quotation_requestsToquotation_requests", fields: [parent_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_quotation_parent")
   other_quotation_requests quotation_requests[]       @relation("quotation_requestsToquotation_requests")
   sales_orders             sales_orders?              @relation(fields: [sales_order_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "quotation_requests_ibfk_1")
@@ -2525,3 +2527,25 @@ enum purchase_orders_status {
   CLOSED
   COMPLETED
 }
+
+model company_master {
+  id                   Int       @id @default(autoincrement())
+  company_name         String    @db.VarChar(255)
+  company_address      String?   @db.Text
+  gstin                String?   @db.VarChar(50)
+  pan                  String?   @db.VarChar(50)
+  bank_name            String?   @db.VarChar(255)
+  account_number       String?   @db.VarChar(100)
+  ifsc_code            String?   @db.VarChar(50)
+  branch_name          String?   @db.VarChar(255)
+  authorized_signature String?   @db.VarChar(500)
+  company_logo         String?   @db.VarChar(500)
+  invoice_footer_notes String?   @db.Text
+  status               String?   @default("ACTIVE") @db.VarChar(50)
+  created_at           DateTime? @default(now()) @db.Timestamp(0)
+  updated_at           DateTime? @default(now()) @db.Timestamp(0)
+  email                String?   @db.VarChar(255)
+  phone                String?   @db.VarChar(50)
+  contact_person       String?   @db.VarChar(255)
+}
+

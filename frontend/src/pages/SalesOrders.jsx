@@ -19,11 +19,13 @@ import {
   Calendar,
   DollarSign,
   Check,
-  GitBranch
+  GitBranch,
+  MapPin
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
 import { cleanProjectName } from '../utils/formatters';
+import { getFileUrl } from '../utils/url';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -46,6 +48,16 @@ const SalesOrders = () => {
   const [quotations, setQuotations] = useState([]);
   const [user, setUser] = useState(null);
   const [previewDrawing, setPreviewDrawing] = useState(null);
+  const [hostCompanies, setHostCompanies] = useState([]);
+  const [selectedHostId, setSelectedHostId] = useState('');
+  const [selectedHostCompany, setSelectedHostCompany] = useState(null);
+
+  useEffect(() => {
+    if (selectedHostId && hostCompanies.length > 0) {
+      const matched = hostCompanies.find(h => String(h.id) === String(selectedHostId));
+      setSelectedHostCompany(matched || null);
+    }
+  }, [selectedHostId, hostCompanies]);
 
   const initialFormState = {
     series: 'Auto-generated',
@@ -56,6 +68,13 @@ const SalesOrders = () => {
     customerId: '',
     customerEmail: '',
     customerPhone: '',
+    customerContactPerson: '',
+    customerType: '',
+    customerGstin: '',
+    customerCity: '',
+    customerState: '',
+    customerBillingAddress: '',
+    customerShippingAddress: '',
     customerPoId: '',
     orderQuantity: 1,
     warehouse: '',
@@ -77,6 +96,7 @@ const SalesOrders = () => {
       setUser(parsedUser);
       fetchOrders();
       fetchCompanies();
+      fetchHostCompanies();
       if (parsedUser.department_code === 'ADMIN' || parsedUser.department_code === 'DESIGN_ENG' || parsedUser.department_code === 'SALES') {
         fetchBoms();
       }
@@ -105,6 +125,57 @@ const SalesOrders = () => {
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, [location.pathname]);
+
+  // Dynamic customer fields fetcher to avoid race condition on company load
+  useEffect(() => {
+    if (formData.customerId && companies.length > 0) {
+      const company = companies.find(c => String(c.id) === String(formData.customerId));
+      if (company) {
+        const primaryContact = company.contacts?.find(ct => ct.contact_type === 'PRIMARY') || company.contacts?.[0];
+        const billing = company.addresses?.find(address => address.address_type === 'BILLING') || {};
+        const shipping = company.addresses?.find(address => address.address_type === 'SHIPPING') || {};
+        
+        const billingAddressStr = [billing.line1, billing.line2, billing.city, billing.state, billing.pincode].filter(Boolean).join(', ');
+        const shippingAddressStr = [shipping.line1, shipping.line2, shipping.city, shipping.state, shipping.pincode].filter(Boolean).join(', ');
+
+        const nextEmail = primaryContact?.email || company.contact_email || '';
+        const nextPhone = primaryContact?.phone || company.contact_mobile || '';
+        const nextContactPerson = primaryContact?.name || company.contact_person || '';
+        const nextType = company.customer_type || 'REGULAR';
+        const nextGstin = company.gstin || '';
+        const nextCity = billing.city || '';
+        const nextState = billing.state || '';
+        const nextBilling = billingAddressStr || '';
+        const nextShipping = shippingAddressStr || '';
+
+        // Prevent infinite loops by comparing current state values with next values
+        if (
+          formData.customerEmail !== nextEmail ||
+          formData.customerPhone !== nextPhone ||
+          formData.customerContactPerson !== nextContactPerson ||
+          formData.customerType !== nextType ||
+          formData.customerGstin !== nextGstin ||
+          formData.customerCity !== nextCity ||
+          formData.customerState !== nextState ||
+          formData.customerBillingAddress !== nextBilling ||
+          formData.customerShippingAddress !== nextShipping
+        ) {
+          setFormData(prev => ({
+            ...prev,
+            customerEmail: nextEmail,
+            customerPhone: nextPhone,
+            customerContactPerson: nextContactPerson,
+            customerType: nextType,
+            customerGstin: nextGstin,
+            customerCity: nextCity,
+            customerState: nextState,
+            customerBillingAddress: nextBilling,
+            customerShippingAddress: nextShipping
+          }));
+        }
+      }
+    }
+  }, [companies, formData.customerId]);
 
   useEffect(() => {
     // Attempt to match customerPoId with uniqueKey from quotations if it's a simple ID
@@ -166,6 +237,33 @@ const SalesOrders = () => {
       }
     } catch (err) {
       console.error('Error fetching companies:', err);
+    }
+  };
+
+  const fetchHostCompanies = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/admin-company-master`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setHostCompanies(data);
+        
+        // ONLY set default selected host company if it hasn't been set yet (e.g. not in edit/view mode)
+        if (!selectedHostId) {
+          const active = data.find(c => c.status === 'ACTIVE');
+          if (active) {
+            setSelectedHostId(String(active.id));
+            setSelectedHostCompany(active);
+          } else if (data.length > 0) {
+            setSelectedHostId(String(data[0].id));
+            setSelectedHostCompany(data[0]);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching host companies:', err);
     }
   };
 
@@ -415,6 +513,19 @@ const SalesOrders = () => {
     setFormMode('create');
     setViewMode('form');
 
+    // Reset host company to globally active company
+    const active = hostCompanies.find(c => c.status === 'ACTIVE');
+    if (active) {
+      setSelectedHostId(String(active.id));
+      setSelectedHostCompany(active);
+    } else if (hostCompanies.length > 0) {
+      setSelectedHostId(String(hostCompanies[0].id));
+      setSelectedHostCompany(hostCompanies[0]);
+    } else {
+      setSelectedHostId('');
+      setSelectedHostCompany(null);
+    }
+
     // Update URL behavior
     if (window.location.pathname !== '/sales/sales-order/new-sales') {
       window.history.pushState({}, '', '/sales/sales-order/new-sales');
@@ -516,6 +627,21 @@ const SalesOrders = () => {
           grand_total: Number(data.grand_total) || 0,
           items: formattedItems
         });
+        if (data.host_company_id) {
+          setSelectedHostId(String(data.host_company_id));
+          const matchedHost = hostCompanies.find(h => String(h.id) === String(data.host_company_id));
+          setSelectedHostCompany(matchedHost || null);
+        } else {
+          // Fallback to active host company
+          const active = hostCompanies.find(c => c.status === 'ACTIVE');
+          if (active) {
+            setSelectedHostId(String(active.id));
+            setSelectedHostCompany(active);
+          } else if (hostCompanies.length > 0) {
+            setSelectedHostId(String(hostCompanies[0].id));
+            setSelectedHostCompany(hostCompanies[0]);
+          }
+        }
         const companyId = data.client_id || data.company_id;
         if (companyId) {
           fetchApprovedQuotations(companyId);
@@ -660,7 +786,8 @@ const SalesOrders = () => {
           subtotal: costWithProfit,
           gst: gstAmount,
           grand_total: grandTotal,
-          items: formData.items
+          items: formData.items,
+          host_company_id: selectedHostId || null
         })
       });
 
@@ -1020,6 +1147,135 @@ const SalesOrders = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-2">
+          {/* Host Company Profile Details */}
+          <Card title="Host Billing Entity Details" className="bg-white border border-slate-200 rounded-xl" subtitle="Select issuing host company profile for this sales document">
+            <div className="p-3 space-y-4">
+              <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between border-b border-slate-100 pb-3">
+                <div className="w-full md:max-w-md">
+                  <FormControl label="Select Issuing Billing Profile *">
+                    <select
+                      className="w-full p-2 border border-slate-200 rounded text-xs focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none bg-white text-slate-900 font-medium"
+                      value={selectedHostId}
+                      onChange={(e) => {
+                        const host = hostCompanies.find(h => String(h.id) === String(e.target.value));
+                        setSelectedHostId(e.target.value);
+                        setSelectedHostCompany(host || null);
+                      }}
+                      disabled={formMode === 'view'}
+                    >
+                      <option value="">Select billing profile...</option>
+                      {hostCompanies.map(h => (
+                        <option key={h.id} value={h.id}>
+                          {h.company_name} {h.status === 'ACTIVE' ? '(ACTIVE)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </FormControl>
+                </div>
+                {selectedHostCompany && selectedHostCompany.status !== 'ACTIVE' && formMode !== 'view' && (
+                  <Button
+                    variant="light"
+                    size="sm"
+                    className="border-rose-200 text-rose-600 hover:bg-rose-50"
+                    onClick={async () => {
+                      const confirm = await Swal.fire({
+                        title: 'Set as Active Host Company?',
+                        text: `Do you want to make "${selectedHostCompany.company_name}" the active host company globally?`,
+                        icon: 'question',
+                        showCancelButton: true,
+                        confirmButtonText: 'Yes, Set Active'
+                      });
+                      if (confirm.isConfirmed) {
+                        try {
+                          const token = localStorage.getItem('authToken');
+                          const response = await fetch(`${API_BASE}/admin-company-master/${selectedHostCompany.id}`, {
+                            method: 'PUT',
+                            headers: {
+                              'Authorization': `Bearer ${token}`,
+                              'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ status: 'ACTIVE' })
+                          });
+                          if (response.ok) {
+                            successToast('Billing profile activated globally');
+                            fetchHostCompanies();
+                          } else {
+                            throw new Error('Failed to activate profile');
+                          }
+                        } catch (err) {
+                          errorToast(err.message);
+                        }
+                      }
+                    }}
+                  >
+                    Activate Globally
+                  </Button>
+                )}
+              </div>
+
+              {selectedHostCompany ? (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 animate-in fade-in duration-300">
+                  <div className="flex flex-col items-center justify-center p-3 bg-slate-50 rounded-lg border border-slate-100 text-center">
+                    {selectedHostCompany.company_logo ? (
+                      <img
+                        src={getFileUrl(selectedHostCompany.company_logo)}
+                        alt="Logo"
+                        className="h-16 max-w-full object-contain mb-2 bg-white border border-slate-200 p-1.5 rounded shadow-sm"
+                      />
+                    ) : (
+                      <div className="h-14 w-14 rounded-full bg-slate-200 border border-slate-300 flex items-center justify-center text-slate-500 font-bold text-lg mb-2">
+                        {selectedHostCompany.company_name.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <span className="text-xs font-bold text-slate-800 leading-tight truncate w-full">{selectedHostCompany.company_name}</span>
+                    <span className={`text-[9px] mt-1.5 px-2 py-0.5 rounded-full font-semibold border ${
+                      selectedHostCompany.status === 'ACTIVE'
+                        ? 'bg-emerald-50 border-emerald-100 text-emerald-600'
+                        : 'bg-slate-100 border-slate-200 text-slate-500'
+                    }`}>
+                      {selectedHostCompany.status === 'ACTIVE' ? 'Active Global Billing' : 'Inactive'}
+                    </span>
+                  </div>
+
+                  <div className="space-y-2 p-1">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Office Details</p>
+                    <div className="space-y-1 text-slate-600 text-xs">
+                      <div className="flex gap-1.5 items-start">
+                        <MapPin className="w-3.5 h-3.5 text-slate-400 mt-0.5 flex-shrink-0" />
+                        <span className="leading-relaxed">{selectedHostCompany.company_address || '—'}</span>
+                      </div>
+                      <div className="pt-1 flex flex-col gap-1">
+                        <p className="font-mono text-[10px]">GSTIN: <span className="font-bold text-slate-700">{selectedHostCompany.gstin || '—'}</span></p>
+                        <p className="font-mono text-[10px]">PAN: <span className="font-bold text-slate-700">{selectedHostCompany.pan || '—'}</span></p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 p-1">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Bank Credentials</p>
+                    <div className="space-y-1.5 text-slate-600 text-xs font-mono">
+                      <div>
+                        <p className="text-[10px] text-slate-400 uppercase font-sans">Bank Name</p>
+                        <p className="font-bold text-slate-700 font-sans text-xs truncate">{selectedHostCompany.bank_name || '—'}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-slate-400 uppercase font-sans">Account & IFSC</p>
+                        <p className="font-semibold text-slate-800 text-xs">{selectedHostCompany.account_number || '—'}</p>
+                        {selectedHostCompany.ifsc_code && (
+                          <p className="text-[10px] text-slate-400">IFSC: {selectedHostCompany.ifsc_code.toUpperCase()}</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-6 text-center border border-dashed border-slate-200 rounded-lg text-xs text-slate-500">
+                  Select a host company profile above to preview its billing and banking credentials
+                </div>
+              )}
+            </div>
+          </Card>
+
           {/* Order Information */}
           <Card title="Order Information" className='bg-white' subtitle="Basic details about the order">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 p-2">
@@ -1063,8 +1319,8 @@ const SalesOrders = () => {
           </Card>
 
           {/* Customer Details */}
-          <Card title="Customer Details" className='bg-white' subtitle="Customer contact information">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 p-2">
+          <Card title="Customer Details" className='bg-white border border-slate-200 rounded-xl' subtitle="Customer contact information">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 p-2">
               <FormControl label="Customer *">
                 <SearchableSelect
                   options={companies.map(c => ({ value: c.id, label: c.company_name }))}
@@ -1072,11 +1328,24 @@ const SalesOrders = () => {
                   onChange={(e) => {
                     const company = companies.find(c => String(c.id) === String(e.target.value));
                     const primaryContact = company?.contacts?.find(ct => ct.contact_type === 'PRIMARY') || company?.contacts?.[0];
+                    const billing = company?.addresses?.find(address => address.address_type === 'BILLING') || {};
+                    const shipping = company?.addresses?.find(address => address.address_type === 'SHIPPING') || {};
+                    
+                    const billingAddressStr = [billing.line1, billing.line2, billing.city, billing.state, billing.pincode].filter(Boolean).join(', ');
+                    const shippingAddressStr = [shipping.line1, shipping.line2, shipping.city, shipping.state, shipping.pincode].filter(Boolean).join(', ');
+
                     setFormData({
                       ...formData,
                       customerId: e.target.value,
                       customerEmail: primaryContact?.email || company?.contact_email || '',
                       customerPhone: primaryContact?.phone || company?.contact_mobile || '',
+                      customerContactPerson: primaryContact?.name || company?.contact_person || '',
+                      customerType: company?.customer_type || 'REGULAR',
+                      customerGstin: company?.gstin || '',
+                      customerCity: billing?.city || '',
+                      customerState: billing?.state || '',
+                      customerBillingAddress: billingAddressStr || '',
+                      customerShippingAddress: shippingAddressStr || '',
                       customerPoId: ''
                     });
                     if (e.target.value) {
@@ -1087,20 +1356,78 @@ const SalesOrders = () => {
                   disabled={formMode === 'view'}
                 />
               </FormControl>
-              <FormControl label="Email">
+
+              <FormControl label="Contact Person">
                 <input
-                  className="w-full p-2 border border-slate-200 rounded  text-xs"
-                  value={formData.customerEmail}
-                  onChange={(e) => setFormData({ ...formData, customerEmail: e.target.value })}
-                  disabled={formMode === 'view'}
+                  className="w-full p-2 border border-slate-200 rounded text-xs bg-slate-50 text-slate-500"
+                  value={formData.customerContactPerson}
+                  disabled
                 />
               </FormControl>
+
               <FormControl label="Phone">
                 <input
-                  className="w-full p-2 border border-slate-200 rounded  text-xs"
+                  className="w-full p-2 border border-slate-200 rounded text-xs bg-slate-50 text-slate-500"
                   value={formData.customerPhone}
-                  onChange={(e) => setFormData({ ...formData, customerPhone: e.target.value })}
-                  disabled={formMode === 'view'}
+                  disabled
+                />
+              </FormControl>
+
+              <FormControl label="Email">
+                <input
+                  className="w-full p-2 border border-slate-200 rounded text-xs bg-slate-50 text-slate-500"
+                  value={formData.customerEmail}
+                  disabled
+                />
+              </FormControl>
+
+              <FormControl label="Type">
+                <input
+                  className="w-full p-2 border border-slate-200 rounded text-xs bg-slate-50 text-slate-500"
+                  value={formData.customerType}
+                  disabled
+                />
+              </FormControl>
+
+              <FormControl label="GSTIN">
+                <input
+                  className="w-full p-2 border border-slate-200 rounded text-xs bg-slate-50 text-slate-500"
+                  value={formData.customerGstin}
+                  disabled
+                />
+              </FormControl>
+
+              <FormControl label="City">
+                <input
+                  className="w-full p-2 border border-slate-200 rounded text-xs bg-slate-50 text-slate-500"
+                  value={formData.customerCity}
+                  disabled
+                />
+              </FormControl>
+
+              <FormControl label="State">
+                <input
+                  className="w-full p-2 border border-slate-200 rounded text-xs bg-slate-50 text-slate-500"
+                  value={formData.customerState}
+                  disabled
+                />
+              </FormControl>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-2">
+              <FormControl label="Billing Address">
+                <textarea
+                  className="w-full p-2 border border-slate-200 rounded text-xs bg-slate-50 text-slate-500 min-h-[50px]"
+                  value={formData.customerBillingAddress}
+                  disabled
+                />
+              </FormControl>
+
+              <FormControl label="Shipping Address">
+                <textarea
+                  className="w-full p-2 border border-slate-200 rounded text-xs bg-slate-50 text-slate-500 min-h-[50px]"
+                  value={formData.customerShippingAddress}
+                  disabled
                 />
               </FormControl>
             </div>

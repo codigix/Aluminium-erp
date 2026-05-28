@@ -53,6 +53,7 @@ const projectAnalysisRoutes = require('./routes/projectAnalysisRoutes');
 const secureIdRoutes = require('./routes/secureIdRoutes');
 const oeeAnalysisRoutes = require('./routes/oeeAnalysisRoutes');
 const machineAnalysisRoutes = require('./routes/machineAnalysisRoutes');
+const adminCompanyMasterRoutes = require('./routes/adminCompanyMasterRoutes');
 const emailReceiver = require('./utils/realEmailReceiver');
 const grnService = require('./services/grnService');
 const qcService = require('./services/qcInspectionsService');
@@ -167,6 +168,7 @@ privateRouter.use('/dashboard', dashboardRoutes);
 privateRouter.use('/project-analysis', projectAnalysisRoutes);
 privateRouter.use('/oee-analysis', oeeAnalysisRoutes);
 privateRouter.use('/machine-analysis', machineAnalysisRoutes);
+privateRouter.use('/admin-company-master', adminCompanyMasterRoutes);
 
 const apiRouter = express.Router();
 apiRouter.use(publicRouter);
