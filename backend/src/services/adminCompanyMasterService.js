@@ -45,6 +45,9 @@ const createCompany = async (payload) => {
     authorizedSignature,
     companyLogo,
     invoiceFooterNotes,
+    email,
+    phone,
+    contactPerson,
     status = 'ACTIVE'
   } = payload;
 
@@ -71,8 +74,11 @@ const createCompany = async (payload) => {
         authorized_signature,
         company_logo,
         invoice_footer_notes,
+        email,
+        phone,
+        contact_person,
         status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         companyName,
         companyAddress || null,
@@ -85,6 +91,9 @@ const createCompany = async (payload) => {
         authorizedSignature || null,
         companyLogo || null,
         invoiceFooterNotes || null,
+        email || null,
+        phone || null,
+        contactPerson || null,
         status
       ]
     );
@@ -117,6 +126,9 @@ const updateCompany = async (id, payload) => {
     authorizedSignature,
     companyLogo,
     invoiceFooterNotes,
+    email,
+    phone,
+    contactPerson,
     status
   } = payload;
 
@@ -177,6 +189,18 @@ const updateCompany = async (id, payload) => {
     if (invoiceFooterNotes !== undefined) {
       updates.push('invoice_footer_notes = ?');
       params.push(invoiceFooterNotes);
+    }
+    if (email !== undefined) {
+      updates.push('email = ?');
+      params.push(email);
+    }
+    if (phone !== undefined) {
+      updates.push('phone = ?');
+      params.push(phone);
+    }
+    if (contactPerson !== undefined) {
+      updates.push('contact_person = ?');
+      params.push(contactPerson);
     }
     if (status !== undefined) {
       updates.push('status = ?');

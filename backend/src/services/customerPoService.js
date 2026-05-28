@@ -1426,7 +1426,7 @@ const generateCustomerPoPDF = async (poId, currentUser = null) => {
       const has_sub_assemblies = i.sub_assemblies && i.sub_assemblies.length > 0;
       return {
         ...i,
-        sl_no: (idx + 1) * 10,
+        sl_no: idx + 1,
         item_code: i.item_code || '—',
         item_no: i.item_code || '—',
         drawing_no: i.drawing_no || i.item_code || '—',

@@ -45,6 +45,9 @@ const AdminCompanyMaster = () => {
     ifscCode: '',
     branchName: '',
     invoiceFooterNotes: '',
+    email: '',
+    phone: '',
+    contactPerson: '',
     status: 'ACTIVE'
   });
 
@@ -116,6 +119,9 @@ const AdminCompanyMaster = () => {
       ifscCode: '',
       branchName: '',
       invoiceFooterNotes: '',
+      email: '',
+      phone: '',
+      contactPerson: '',
       status: 'ACTIVE'
     });
     setCompanyLogoFile(null);
@@ -149,6 +155,9 @@ const AdminCompanyMaster = () => {
       apiFormData.append('ifscCode', formData.ifscCode.trim());
       apiFormData.append('branchName', formData.branchName.trim());
       apiFormData.append('invoiceFooterNotes', formData.invoiceFooterNotes.trim());
+      apiFormData.append('email', formData.email.trim());
+      apiFormData.append('phone', formData.phone.trim());
+      apiFormData.append('contactPerson', formData.contactPerson.trim());
       apiFormData.append('status', formData.status);
 
       if (companyLogoFile) {
@@ -200,6 +209,9 @@ const AdminCompanyMaster = () => {
       ifscCode: company.ifsc_code || '',
       branchName: company.branch_name || '',
       invoiceFooterNotes: company.invoice_footer_notes || '',
+      email: company.email || '',
+      phone: company.phone || '',
+      contactPerson: company.contact_person || '',
       status: company.status || 'ACTIVE'
     });
     setLogoPreview(company.company_logo ? getFileUrl(company.company_logo) : '');
@@ -221,6 +233,9 @@ const AdminCompanyMaster = () => {
       ifscCode: company.ifsc_code || '',
       branchName: company.branch_name || '',
       invoiceFooterNotes: company.invoice_footer_notes || '',
+      email: company.email || '',
+      phone: company.phone || '',
+      contactPerson: company.contact_person || '',
       status: company.status || 'ACTIVE'
     });
     setLogoPreview(company.company_logo ? getFileUrl(company.company_logo) : '');
@@ -615,6 +630,39 @@ const AdminCompanyMaster = () => {
                       <option value="ACTIVE">Active (Primary Host Profile)</option>
                       <option value="INACTIVE">Inactive</option>
                     </select>
+                  </FormControl>
+
+                  <FormControl label="Contact Person">
+                    <input
+                      type="text"
+                      value={formData.contactPerson}
+                      onChange={(e) => setFormData({...formData, contactPerson: e.target.value})}
+                      className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none transition disabled:bg-slate-50 disabled:text-slate-400"
+                      placeholder="Enter contact person"
+                      disabled={viewOnly}
+                    />
+                  </FormControl>
+
+                  <FormControl label="Email Address">
+                    <input
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) => setFormData({...formData, email: e.target.value})}
+                      className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none transition disabled:bg-slate-50 disabled:text-slate-400"
+                      placeholder="Enter email address"
+                      disabled={viewOnly}
+                    />
+                  </FormControl>
+
+                  <FormControl label="Mobile No / Phone">
+                    <input
+                      type="text"
+                      value={formData.phone}
+                      onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                      className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none transition disabled:bg-slate-50 disabled:text-slate-400"
+                      placeholder="Enter mobile no / phone"
+                      disabled={viewOnly}
+                    />
                   </FormControl>
                 </div>
 

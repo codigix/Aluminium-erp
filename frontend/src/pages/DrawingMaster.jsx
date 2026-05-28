@@ -752,7 +752,7 @@ const DrawingMaster = () => {
               columns={columns}
               data={drawings}
               loading={loading}
-              pageSize={5}
+              pageSize={10}
               rowId="drawing_master_id"
               hideHeader={true}
               hideExpander={true}

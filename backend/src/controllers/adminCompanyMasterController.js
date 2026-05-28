@@ -39,6 +39,9 @@ const createCompany = async (req, res, next) => {
       ifscCode,
       branchName,
       invoiceFooterNotes,
+      email,
+      phone,
+      contactPerson,
       status
     } = req.body;
 
@@ -66,6 +69,9 @@ const createCompany = async (req, res, next) => {
       authorizedSignature,
       companyLogo,
       invoiceFooterNotes,
+      email,
+      phone,
+      contactPerson,
       status
     });
 
@@ -91,6 +97,9 @@ const updateCompany = async (req, res, next) => {
       ifscCode,
       branchName,
       invoiceFooterNotes,
+      email,
+      phone,
+      contactPerson,
       status
     } = req.body;
 
@@ -104,6 +113,9 @@ const updateCompany = async (req, res, next) => {
       ifscCode,
       branchName,
       invoiceFooterNotes,
+      email,
+      phone,
+      contactPerson,
       status
     };
 

@@ -491,8 +491,8 @@ const sendQuotationViaEmail = async (req, res, next) => {
              status, total_amount, received_amount, rejection_reason, 
              notes, created_at, profit_percentage, gst_percentage,
              version, parent_id, drawing_no, description, item_unit,
-             project_name, batch_id, item_group, bom_cost, item_code
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             project_name, batch_id, item_group, bom_cost, item_code, host_company_id
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             salesOrderId,
             salesOrderItemId,
@@ -514,7 +514,8 @@ const sendQuotationViaEmail = async (req, res, next) => {
             batchId,
             item.item_group || item.item_group_calc || null,
             item.bom_cost || 0,
-            item.item_code || null
+            item.item_code || null,
+            req.body.hostCompanyId ? Number(req.body.hostCompanyId) : null
           ]
         );
 
@@ -596,7 +597,8 @@ const sendQuotationViaEmail = async (req, res, next) => {
           totalAmountNum,
           notes,
           clientId,
-          quoteNumber
+          quoteNumber,
+          req.body.hostCompanyId
         );
         emailSent = true;
         emailMessageId = emailResult.messageId;
@@ -812,7 +814,8 @@ const downloadQuotationPDF = async (req, res, next) => {
       totalAmount,
       representative.notes,
       representative.client_id,
-      quoteNumber
+      quoteNumber,
+      representative.host_company_id
     );
 
     res.setHeader('Content-Type', 'application/pdf');
@@ -1177,7 +1180,8 @@ const sendExistingQuotationEmail = async (req, res, next) => {
       totalAmountNum,
       representative.notes,
       representative.client_id,
-      quoteNumber
+      quoteNumber,
+      representative.host_company_id
     );
 
     const emailMessageId = emailResult?.messageId || null;

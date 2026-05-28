@@ -11,6 +11,7 @@ import {
 import { Card, StatusBadge, SearchableSelect } from '../components/ui.jsx';
 import { successToast, errorToast } from '../utils/toast';
 import Swal from 'sweetalert2';
+import { getFileUrl } from '../utils/url';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -50,6 +51,9 @@ const QuotationFormPage = () => {
   const [notes, setNotes] = useState('');
   const [clients, setClients] = useState([]);
   const [drawings, setDrawings] = useState([]);
+  const [hostCompanies, setHostCompanies] = useState([]);
+  const [selectedHostId, setSelectedHostId] = useState('');
+  const [selectedHostCompany, setSelectedHostCompany] = useState(null);
   const [version, setVersion] = useState(1);
   const [parentId, setParentId] = useState(null);
   const [batchId, setBatchId] = useState(null);
@@ -92,8 +96,73 @@ const QuotationFormPage = () => {
     }
   }, [selectedClient?.company_name]);
 
+  // Resolve client contact and address details dynamically when clients array or selectedClient.id/company_name changes
+  useEffect(() => {
+    if ((selectedClient?.id || selectedClient?.company_name) && clients.length > 0) {
+      const client = clients.find(c => 
+        (selectedClient.id && String(c.id) === String(selectedClient.id)) ||
+        (c.company_name && selectedClient.company_name && 
+         c.company_name.toLowerCase().trim() === selectedClient.company_name.toLowerCase().trim())
+      );
+      if (client) {
+        const primaryContact = client.contacts?.find(c => c.contact_type === 'PRIMARY') || client.contacts?.[0] || {};
+        const billing = client.addresses?.find(address => address.address_type === 'BILLING') || client.addresses?.[0] || {};
+        const addressStr = [billing.line1, billing.line2, billing.city, billing.state, billing.pincode].filter(Boolean).join(', ');
+
+        const nextEmail = primaryContact.email || '';
+        const nextPhone = primaryContact.phone || '';
+        const nextName = primaryContact.name || '';
+        const nextAddr = addressStr || 'N/A';
+
+        const emailNeedsUpdate = !selectedClient.email || selectedClient.email === 'N/A' || selectedClient.email !== nextEmail;
+        const phoneNeedsUpdate = !selectedClient.phone || selectedClient.phone === 'N/A' || selectedClient.phone !== nextPhone;
+        const contactNeedsUpdate = !selectedClient.contact_person || selectedClient.contact_person === 'N/A' || selectedClient.contact_person !== nextName;
+        const addressNeedsUpdate = !selectedClient.address || selectedClient.address === 'N/A' || selectedClient.address !== nextAddr;
+        const nameNeedsUpdate = !selectedClient.company_name || selectedClient.company_name !== client.company_name;
+
+        if (emailNeedsUpdate || phoneNeedsUpdate || contactNeedsUpdate || addressNeedsUpdate || nameNeedsUpdate) {
+          setSelectedClient(prev => ({
+            ...prev,
+            id: client.id,
+            company_name: client.company_name,
+            email: nextEmail,
+            phone: nextPhone,
+            contact_person: nextName,
+            address: nextAddr
+          }));
+        }
+      }
+    }
+  }, [
+    selectedClient?.id,
+    selectedClient?.company_name,
+    selectedClient?.email,
+    selectedClient?.phone,
+    selectedClient?.address,
+    selectedClient?.contact_person,
+    clients
+  ]);
+
+  // Sync selected host company details when ID changes or when hostCompanies is loaded
+  useEffect(() => {
+    if (selectedHostId && hostCompanies.length > 0) {
+      const matched = hostCompanies.find(h => String(h.id) === String(selectedHostId));
+      setSelectedHostCompany(matched || null);
+    } else if (!selectedHostId && hostCompanies.length > 0) {
+      const active = hostCompanies.find(c => c.status === 'ACTIVE');
+      if (active) {
+        setSelectedHostId(String(active.id));
+        setSelectedHostCompany(active);
+      } else {
+        setSelectedHostId(String(hostCompanies[0].id));
+        setSelectedHostCompany(hostCompanies[0]);
+      }
+    }
+  }, [selectedHostId, hostCompanies]);
+
   useEffect(() => {
     fetchClients();
+    fetchHostCompanies();
 
     if (initialData && !hasInitialized.current) {
       hasInitialized.current = true;
@@ -107,6 +176,9 @@ const QuotationFormPage = () => {
       }
       if (initialData.parentId || initialData.id) {
         fetchVersionHistory(initialData.parentId || initialData.id);
+      }
+      if (initialData.host_company_id || initialData.hostCompanyId) {
+        setSelectedHostId(String(initialData.host_company_id || initialData.hostCompanyId));
       }
       setSelectedClient({
         id: initialData.clientId,
@@ -429,6 +501,57 @@ const QuotationFormPage = () => {
     }
   };
 
+  const fetchHostCompanies = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/admin-company-master`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setHostCompanies(data);
+      }
+    } catch (err) {
+      console.error('Error fetching host companies:', err);
+    }
+  };
+
+  const handleActivateHostGlobally = async () => {
+    if (!selectedHostCompany) return;
+    
+    const result = await Swal.fire({
+      title: 'Activate Billing Profile?',
+      text: `Do you want to make "${selectedHostCompany.company_name}" the active host company globally?`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonColor: '#10b981',
+      confirmButtonText: 'Yes, Activate'
+    });
+
+    if (result.isConfirmed) {
+      try {
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE}/admin-company-master/${selectedHostCompany.id}`, {
+          method: 'PUT',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}` 
+          },
+          body: JSON.stringify({ status: 'ACTIVE' })
+        });
+        if (response.ok) {
+          successToast('Billing profile activated globally');
+          fetchHostCompanies();
+        } else {
+          errorToast('Failed to activate profile');
+        }
+      } catch (err) {
+        console.error('Error activating host globally:', err);
+        errorToast(err.message || 'Failed to activate profile');
+      }
+    }
+  };
+
   const fetchDrawings = async (clientName = null) => {
     try {
       setRefreshingDrawings(true);
@@ -512,6 +635,28 @@ const QuotationFormPage = () => {
       setQuotationDate(versionData.created_at.split('T')[0]);
       setProjectName(versionData.project_name || '');
       setNotes(versionData.notes || '');
+
+      setSelectedClient({
+        id: versionData.company_id || versionData.clientId,
+        company_name: versionData.company_name || versionData.clientName,
+        email: versionData.client_email || versionData.clientEmail || '',
+        contact_person: versionData.contact_person || '',
+        phone: versionData.phone || '',
+        address: versionData.address || ''
+      });
+
+      if (versionData.host_company_id) {
+        setSelectedHostId(String(versionData.host_company_id));
+      } else {
+        if (forceNextVersion || !versionData.id) {
+          const active = hostCompanies.find(c => c.status === 'ACTIVE');
+          if (active) {
+            setSelectedHostId(String(active.id));
+          }
+        } else {
+          setSelectedHostId('');
+        }
+      }
 
       const maxHistoryVersion = versionHistory.length > 0
         ? Math.max(...versionHistory.map(vh => vh.version))
@@ -913,6 +1058,7 @@ const QuotationFormPage = () => {
         clientName: selectedClient.company_name,
         clientEmail: selectedClient.email,
         projectName: projectName,
+        hostCompanyId: selectedHostId ? Number(selectedHostId) : null,
         items: sortedItems.map(item => ({
           salesOrderItemId: item.salesOrderItemId || null,
           bom_id: item.bom_id || null,
@@ -1156,6 +1302,122 @@ const QuotationFormPage = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-2">
         {/* Section 1: Quotation Details */}
         <div className="lg:col-span-2 space-y-4 bg-white ">
+          {/* Host Company Profile Details */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
+              <div className="p-1.5 bg-rose-50 text-rose-600 rounded ">
+                <Building2 className="w-4 h-4" />
+              </div>
+              <h3 className="text-xs font-semibold text-slate-800">Host Billing Entity Details</h3>
+            </div>
+
+            <div className="bg-white border border-slate-200 rounded p-4 space-y-4">
+              <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between border-b border-slate-100 pb-3">
+                <div className="w-full md:max-w-md space-y-2">
+                  <label className="text-xs text-slate-400 ml-1">Select Issuing Billing Profile *</label>
+                  <select
+                    className="w-full bg-slate-50 border border-slate-200 rounded p-2 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-700 appearance-none font-medium"
+                    value={selectedHostId}
+                    onChange={(e) => {
+                      const host = hostCompanies.find(h => String(h.id) === String(e.target.value));
+                      setSelectedHostId(e.target.value);
+                      setSelectedHostCompany(host || null);
+                    }}
+                    disabled={isLocked}
+                  >
+                    <option value="">Select billing profile...</option>
+                    {hostCompanies.map(h => (
+                      <option key={h.id} value={h.id}>
+                        {h.company_name} {h.status === 'ACTIVE' ? '(ACTIVE)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {selectedHostCompany && selectedHostCompany.status !== 'ACTIVE' && !isLocked && (
+                  <button
+                    type="button"
+                    className="border border-rose-200 text-rose-600 hover:bg-rose-50 px-3 py-1.5 rounded text-xs transition-all font-medium"
+                    onClick={handleActivateHostGlobally}
+                  >
+                    Activate Globally
+                  </button>
+                )}
+              </div>
+
+              {selectedHostCompany ? (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 animate-in fade-in duration-300">
+                  <div className="flex flex-col items-center justify-center p-3 bg-slate-50 rounded border border-slate-100 text-center">
+                    {selectedHostCompany.company_logo ? (
+                      <img
+                        src={getFileUrl(selectedHostCompany.company_logo)}
+                        alt="Logo"
+                        className="h-16 max-w-full object-contain mb-2 bg-white border border-slate-200 p-1.5 rounded shadow-sm"
+                      />
+                    ) : (
+                      <div className="h-14 w-14 rounded-full bg-slate-200 border border-slate-300 flex items-center justify-center text-slate-500 font-bold text-lg mb-2">
+                        {selectedHostCompany.company_name.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <span className="text-xs font-bold text-slate-800 leading-tight truncate w-full">{selectedHostCompany.company_name}</span>
+                    <span className={`text-[9px] mt-1.5 px-2 py-0.5 rounded-full font-semibold border ${
+                      selectedHostCompany.status === 'ACTIVE'
+                        ? 'bg-emerald-50 border-emerald-100 text-emerald-600'
+                        : 'bg-slate-100 border-slate-200 text-slate-500'
+                    }`}>
+                      {selectedHostCompany.status === 'ACTIVE' ? 'Active Global Billing' : 'Inactive'}
+                    </span>
+                  </div>
+
+                  <div className="space-y-2 p-1">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Office & Contact Details</p>
+                    <div className="space-y-1.5 text-slate-600 text-xs">
+                      <div className="flex gap-1.5 items-start">
+                        <MapPin className="w-3.5 h-3.5 text-slate-400 mt-0.5 flex-shrink-0" />
+                        <span className="leading-relaxed whitespace-pre-line">{selectedHostCompany.company_address || '—'}</span>
+                      </div>
+                      {selectedHostCompany.contact_person && (
+                        <div className="text-[11px] text-slate-500">
+                          Contact Person: <span className="font-semibold text-slate-700">{selectedHostCompany.contact_person}</span>
+                        </div>
+                      )}
+                      {(selectedHostCompany.email || selectedHostCompany.phone) && (
+                        <div className="text-[10px] text-slate-500 space-y-0.5">
+                          {selectedHostCompany.email && <p>Email: <span className="text-slate-700">{selectedHostCompany.email}</span></p>}
+                          {selectedHostCompany.phone && <p>Mobile: <span className="text-slate-700">{selectedHostCompany.phone}</span></p>}
+                        </div>
+                      )}
+                      <div className="pt-1 flex flex-col gap-1 border-t border-slate-100/60 mt-1">
+                        <p className="font-mono text-[10px]">GSTIN: <span className="font-bold text-slate-700">{selectedHostCompany.gstin || '—'}</span></p>
+                        <p className="font-mono text-[10px]">PAN: <span className="font-bold text-slate-700">{selectedHostCompany.pan || '—'}</span></p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 p-1">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Bank Credentials</p>
+                    <div className="space-y-1.5 text-slate-600 text-xs font-mono">
+                      <div>
+                        <p className="text-[10px] text-slate-400 uppercase font-sans">Bank Name</p>
+                        <p className="font-bold text-slate-700 font-sans text-xs truncate">{selectedHostCompany.bank_name || '—'}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-slate-400 uppercase font-sans">Account & IFSC</p>
+                        <p className="font-semibold text-slate-800 text-xs">{selectedHostCompany.account_number || '—'}</p>
+                        {selectedHostCompany.ifsc_code && (
+                          <p className="text-[10px] text-slate-400">IFSC: {selectedHostCompany.ifsc_code.toUpperCase()}</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-6 text-center border border-dashed border-slate-200 rounded text-xs text-slate-500">
+                  Select a host company profile above to preview its billing and banking credentials
+                </div>
+              )}
+            </div>
+          </div>
+
           <Card className="p-2">
             <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
               <div className="p-1.5 bg-blue-50 text-blue-600 rounded">
@@ -1199,15 +1461,24 @@ const QuotationFormPage = () => {
                   value={selectedClient?.id || ''}
                   disabled={isLocked}
                   onChange={(val) => {
-                    const client = clients.find(c => String(c.id) === String(val));
-                    setSelectedClient(client ? {
-                      id: client.id,
-                      company_name: client.company_name,
-                      email: client.email,
-                      contact_person: client.contact_person,
-                      phone: client.phone,
-                      address: client.address
-                    } : null);
+                    const actualVal = val && typeof val === 'object' && val.target ? val.target.value : val;
+                    const client = clients.find(c => String(c.id) === String(actualVal));
+                    if (client) {
+                      const primaryContact = client.contacts?.find(c => c.contact_type === 'PRIMARY') || client.contacts?.[0] || {};
+                      const billing = client.addresses?.find(address => address.address_type === 'BILLING') || client.addresses?.[0] || {};
+                      const addressStr = [billing.line1, billing.line2, billing.city, billing.state, billing.pincode].filter(Boolean).join(', ');
+
+                      setSelectedClient({
+                        id: client.id,
+                        company_name: client.company_name,
+                        email: primaryContact.email || '',
+                        contact_person: primaryContact.name || '',
+                        phone: primaryContact.phone || '',
+                        address: addressStr || 'N/A'
+                      });
+                    } else {
+                      setSelectedClient(null);
+                    }
                   }}
                   placeholder="Select Client"
                   labelField="company_name"

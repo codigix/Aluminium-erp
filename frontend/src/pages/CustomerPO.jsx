@@ -1104,13 +1104,24 @@ const CustomerPO = ({
                         </div>
 
                         <div className="space-y-2 p-1">
-                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Office Details</p>
-                          <div className="space-y-1 text-slate-600 text-xs">
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Office & Contact Details</p>
+                          <div className="space-y-1.5 text-slate-600 text-xs">
                             <div className="flex gap-1.5 items-start">
                               <MapPin className="w-3.5 h-3.5 text-slate-400 mt-0.5 flex-shrink-0" />
                               <span className="leading-relaxed whitespace-pre-line">{selectedHostCompany.company_address || '—'}</span>
                             </div>
-                            <div className="pt-1 flex flex-col gap-1">
+                            {selectedHostCompany.contact_person && (
+                              <div className="text-[11px] text-slate-500">
+                                Contact Person: <span className="font-semibold text-slate-700">{selectedHostCompany.contact_person}</span>
+                              </div>
+                            )}
+                            {(selectedHostCompany.email || selectedHostCompany.phone) && (
+                              <div className="text-[10px] text-slate-500 space-y-0.5">
+                                {selectedHostCompany.email && <p>Email: <span className="text-slate-700">{selectedHostCompany.email}</span></p>}
+                                {selectedHostCompany.phone && <p>Mobile: <span className="text-slate-700">{selectedHostCompany.phone}</span></p>}
+                              </div>
+                            )}
+                            <div className="pt-1 flex flex-col gap-1 border-t border-slate-100/60 mt-1">
                               <p className="font-mono text-[10px]">GSTIN: <span className="font-bold text-slate-700">{selectedHostCompany.gstin || '—'}</span></p>
                               <p className="font-mono text-[10px]">PAN: <span className="font-bold text-slate-700">{selectedHostCompany.pan || '—'}</span></p>
                             </div>
