@@ -78,7 +78,7 @@ const createCompany = async (payload) => {
         phone,
         contact_person,
         status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         companyName,
         companyAddress || null,

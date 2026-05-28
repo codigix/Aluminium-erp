@@ -2699,6 +2699,37 @@ const ensureGrnStatus = async () => {
   }
 };
 
+const ensureCompanyMasterTable = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS company_master (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        company_name VARCHAR(255) NOT NULL,
+        company_address TEXT,
+        gstin VARCHAR(50),
+        pan VARCHAR(50),
+        bank_name VARCHAR(255),
+        account_number VARCHAR(100),
+        ifsc_code VARCHAR(50),
+        branch_name VARCHAR(255),
+        authorized_signature VARCHAR(500),
+        company_logo VARCHAR(500),
+        invoice_footer_notes TEXT,
+        status VARCHAR(50) DEFAULT 'ACTIVE',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      );
+    `);
+    console.log('Company Master table synchronized');
+  } catch (error) {
+    console.error('Company Master table synchronization failed:', error.message);
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
 const ensureCompanyMasterColumns = async () => {
   let connection;
   try {
@@ -2731,6 +2762,7 @@ const ensureCompanyMasterColumns = async () => {
 
 const bootstrapDatabase = async () => {
   await ensureDatabase();
+  await ensureCompanyMasterTable();
   await ensureCompanyMasterColumns();
   await ensureMaterialColumns();
   await ensureGrnStatus();

@@ -1161,7 +1161,7 @@ const BOMCreation = () => {
           columns={columns}
           data={filteredOrders}
           loading={loading}
-          pageSize={5}
+          pageSize={10}
           renderExpanded={renderClientExpanded}
           searchPlaceholder="Search by client, drawing, or code..."
           emptyMessage="No active clients found."
