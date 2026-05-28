@@ -180,6 +180,8 @@ app.use('/', apiRouter);
 // Also serve at the root level just in case
 app.use('/uploads', cors(), express.static(uploadsPath));
 app.use('/uploads', cors(), express.static(path.join(process.cwd(), 'uploads')));
+app.use('/api/uploads', cors(), express.static(uploadsPath));
+app.use('/api/uploads', cors(), express.static(path.join(process.cwd(), 'uploads')));
 
 app.use(notFound);
 app.use(errorHandler);
