@@ -2525,3 +2525,22 @@ enum purchase_orders_status {
   CLOSED
   COMPLETED
 }
+
+model company_master {
+  id                   Int       @id @default(autoincrement())
+  company_name         String    @db.VarChar(255)
+  company_address      String?   @db.Text
+  gstin                String?   @db.VarChar(50)
+  pan                  String?   @db.VarChar(50)
+  bank_name            String?   @db.VarChar(255)
+  account_number       String?   @db.VarChar(100)
+  ifsc_code            String?   @db.VarChar(50)
+  branch_name          String?   @db.VarChar(255)
+  authorized_signature String?   @db.VarChar(500)
+  company_logo         String?   @db.VarChar(500)
+  invoice_footer_notes String?   @db.Text
+  status               String?   @default("ACTIVE") @db.VarChar(50)
+  created_at           DateTime? @default(now()) @db.Timestamp(0)
+  updated_at           DateTime? @default(now()) @db.Timestamp(0)
+}
+

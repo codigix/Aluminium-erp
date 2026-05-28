@@ -84,7 +84,8 @@ const createCustomerPo = async (req, res, next) => {
       projectName: req.body.projectName,
       drawingRequired: req.body.drawingRequired === 'true' || req.body.drawingRequired === true,
       productionPriority: req.body.productionPriority,
-      targetDispatchDate: req.body.targetDispatchDate
+      targetDispatchDate: req.body.targetDispatchDate,
+      hostCompanyId: req.body.hostCompanyId || null
     };
 
     const result = await customerPoService.createCustomerPo(payload);
@@ -180,7 +181,7 @@ const getCustomerPo = async (req, res, next) => {
 
 const generateCustomerPoPdf = async (req, res, next) => {
   try {
-    const pdfBuffer = await customerPoService.generateCustomerPoPDF(req.params.id);
+    const pdfBuffer = await customerPoService.generateCustomerPoPDF(req.params.id, req.user);
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename=CustomerPO-${req.params.id}.pdf`);
     res.send(pdfBuffer);
@@ -238,7 +239,8 @@ const updateCustomerPo = async (req, res, next) => {
       termsAndConditions: req.body.termsAndConditions,
       specialNotes: req.body.specialNotes,
       inspectionClause: req.body.inspectionClause,
-      testCertificate: req.body.testCertificate
+      testCertificate: req.body.testCertificate,
+      hostCompanyId: req.body.hostCompanyId || null
     };
 
     const result = await customerPoService.updateCustomerPo(req.params.id, payload);
@@ -267,7 +269,7 @@ const sendCustomerPoEmail = async (req, res, next) => {
 
     let attachments = [];
     if (attachPDF) {
-      const pdfBuffer = await customerPoService.generateCustomerPoPDF(id);
+      const pdfBuffer = await customerPoService.generateCustomerPoPDF(id, req.user);
       attachments.push({
         filename: `CustomerPO-${id}.pdf`,
         content: pdfBuffer

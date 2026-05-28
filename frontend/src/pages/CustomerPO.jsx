@@ -2,10 +2,11 @@ import React, { useState, useMemo } from 'react'
 import {
   Loader2, ChevronRight, Eye, Plus, Trash2, X, Download, Pencil, Send,
   Search, RefreshCw, Filter, FileText, Calendar, Building2,
-  DollarSign, Package, CheckCircle2, Clock, AlertCircle, GitBranch, Upload
+  DollarSign, Package, CheckCircle2, Clock, AlertCircle, GitBranch, Upload, MapPin
 } from 'lucide-react'
 import { Card, DataTable } from '../components/ui.jsx'
 import SendEmailModal from '../components/SendEmailModal'
+import { getFileUrl } from '../utils/url'
 
 const poStatusColors = {
   DRAFT: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200', icon: Clock },
@@ -29,6 +30,9 @@ const CustomerPO = ({
   const [showPoForm, setShowPoForm] = useState(false)
   const [formMode, setFormMode] = useState('CREATE') // CREATE, VIEW, EDIT
   const [editingPoId, setEditingPoId] = useState(null)
+  const [hostCompanies, setHostCompanies] = useState([])
+  const [selectedHostId, setSelectedHostId] = useState('')
+  const [selectedHostCompany, setSelectedHostCompany] = useState(null)
   const [poFormLoading, setPoFormLoading] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('ALL')
@@ -126,6 +130,57 @@ const CustomerPO = ({
       }
     ]
   })
+
+  // Sync selected host company details when ID changes
+  React.useEffect(() => {
+    if (selectedHostId && hostCompanies.length > 0) {
+      const matched = hostCompanies.find(h => String(h.id) === String(selectedHostId));
+      setSelectedHostCompany(matched || null);
+    }
+  }, [selectedHostId, hostCompanies]);
+
+  const fetchHostCompanies = async () => {
+    try {
+      const data = await apiRequest('/admin-company-master');
+      if (data) {
+        setHostCompanies(data);
+        if (!selectedHostId) {
+          const active = data.find(c => c.status === 'ACTIVE');
+          if (active) {
+            setSelectedHostId(String(active.id));
+            setSelectedHostCompany(active);
+          } else if (data.length > 0) {
+            setSelectedHostId(String(data[0].id));
+            setSelectedHostCompany(data[0]);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching host companies:', err);
+    }
+  };
+
+  React.useEffect(() => {
+    if (showPoForm) {
+      fetchHostCompanies();
+    }
+  }, [showPoForm]);
+
+  const handleActivateHostGlobally = async () => {
+    if (!selectedHostCompany) return;
+    if (window.confirm(`Do you want to make "${selectedHostCompany.company_name}" the active host company globally?`)) {
+      try {
+        await apiRequest(`/admin-company-master/${selectedHostCompany.id}`, {
+          method: 'PUT',
+          body: { status: 'ACTIVE' }
+        });
+        showToast('Billing profile activated globally');
+        fetchHostCompanies();
+      } catch (err) {
+        showToast(err.message || 'Failed to activate profile');
+      }
+    }
+  };
 
   // Fetch drawings for lookup when company changes
   React.useEffect(() => {
@@ -407,6 +462,8 @@ const CustomerPO = ({
       window.history.pushState({}, '', '/sales/customer-po');
     }
     setSelectedQuoteId('')
+    setSelectedHostId('')
+    setSelectedHostCompany(null)
     setPoForm({
       companyId: '',
       projectName: '',
@@ -443,6 +500,18 @@ const CustomerPO = ({
       setShowPoForm(true);
       try {
         const data = await apiRequest(`/customer-pos/${poId}`);
+        if (data.host_company_id) {
+          setSelectedHostId(String(data.host_company_id));
+        } else {
+          const active = hostCompanies.find(c => c.status === 'ACTIVE');
+          if (active) {
+            setSelectedHostId(String(active.id));
+            setSelectedHostCompany(active);
+          } else if (hostCompanies.length > 0) {
+            setSelectedHostId(String(hostCompanies[0].id));
+            setSelectedHostCompany(hostCompanies[0]);
+          }
+        }
         // Map data to poForm structure
         setPoForm({
           companyId: data.company_id,
@@ -535,7 +604,8 @@ const CustomerPO = ({
             rate: sa.rate
           }))
         })),
-        remarks: poForm.remarks
+        remarks: poForm.remarks,
+        hostCompanyId: selectedHostId || null
       }
 
       const url = formMode === 'EDIT' ? `/customer-pos/${editingPoId}` : '/customer-pos';
@@ -698,6 +768,13 @@ const CustomerPO = ({
             title="View Details"
           >
             <Eye className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => handleDownloadPdf(row.id, row.po_number)}
+            className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-all border border-transparent hover:border-emerald-100"
+            title="Download/View PDF"
+          >
+            <Download className="w-4 h-4" />
           </button>
           <button
             onClick={() => openPoInMode('EDIT', row.id)}
@@ -960,6 +1037,111 @@ const CustomerPO = ({
 
             <div className="flex-1 overflow-y-auto p-2 space-y-2 custom-scrollbar">
               <form onSubmit={handlePoSubmit} id="po-manual-form" className="space-y-10">
+                {/* Host Company Profile Details */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 border-b border-slate-100 pb-4">
+                    <div className="p-2 bg-rose-50 text-rose-600 rounded ">
+                      <Building2 className="w-5 h-5" />
+                    </div>
+                    <h3 className="text-sm text-slate-800">Host Billing Entity Details</h3>
+                  </div>
+
+                  <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-4">
+                    <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between border-b border-slate-100 pb-3">
+                      <div className="w-full md:max-w-md space-y-2">
+                        <label className="text-xs text-slate-400 ml-1">Select Issuing Billing Profile *</label>
+                        <select
+                          className="w-full bg-slate-50 border border-slate-200 rounded p-2 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-700 appearance-none font-medium"
+                          value={selectedHostId}
+                          onChange={(e) => {
+                            const host = hostCompanies.find(h => String(h.id) === String(e.target.value));
+                            setSelectedHostId(e.target.value);
+                            setSelectedHostCompany(host || null);
+                          }}
+                          disabled={formMode === 'VIEW'}
+                        >
+                          <option value="">Select billing profile...</option>
+                          {hostCompanies.map(h => (
+                            <option key={h.id} value={h.id}>
+                              {h.company_name} {h.status === 'ACTIVE' ? '(ACTIVE)' : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      {selectedHostCompany && selectedHostCompany.status !== 'ACTIVE' && formMode !== 'VIEW' && (
+                        <button
+                          type="button"
+                          className="border border-rose-200 text-rose-600 hover:bg-rose-50 px-3 py-1.5 rounded text-xs transition-all font-medium"
+                          onClick={handleActivateHostGlobally}
+                        >
+                          Activate Globally
+                        </button>
+                      )}
+                    </div>
+
+                    {selectedHostCompany ? (
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 animate-in fade-in duration-300">
+                        <div className="flex flex-col items-center justify-center p-3 bg-slate-50 rounded-lg border border-slate-100 text-center">
+                          {selectedHostCompany.company_logo ? (
+                            <img
+                              src={getFileUrl(selectedHostCompany.company_logo)}
+                              alt="Logo"
+                              className="h-16 max-w-full object-contain mb-2 bg-white border border-slate-200 p-1.5 rounded shadow-sm"
+                            />
+                          ) : (
+                            <div className="h-14 w-14 rounded-full bg-slate-200 border border-slate-300 flex items-center justify-center text-slate-500 font-bold text-lg mb-2">
+                              {selectedHostCompany.company_name.charAt(0).toUpperCase()}
+                            </div>
+                          )}
+                          <span className="text-xs font-bold text-slate-800 leading-tight truncate w-full">{selectedHostCompany.company_name}</span>
+                          <span className={`text-[9px] mt-1.5 px-2 py-0.5 rounded-full font-semibold border ${
+                            selectedHostCompany.status === 'ACTIVE'
+                              ? 'bg-emerald-50 border-emerald-100 text-emerald-600'
+                              : 'bg-slate-100 border-slate-200 text-slate-500'
+                          }`}>
+                            {selectedHostCompany.status === 'ACTIVE' ? 'Active Global Billing' : 'Inactive'}
+                          </span>
+                        </div>
+
+                        <div className="space-y-2 p-1">
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Office Details</p>
+                          <div className="space-y-1 text-slate-600 text-xs">
+                            <div className="flex gap-1.5 items-start">
+                              <MapPin className="w-3.5 h-3.5 text-slate-400 mt-0.5 flex-shrink-0" />
+                              <span className="leading-relaxed whitespace-pre-line">{selectedHostCompany.company_address || '—'}</span>
+                            </div>
+                            <div className="pt-1 flex flex-col gap-1">
+                              <p className="font-mono text-[10px]">GSTIN: <span className="font-bold text-slate-700">{selectedHostCompany.gstin || '—'}</span></p>
+                              <p className="font-mono text-[10px]">PAN: <span className="font-bold text-slate-700">{selectedHostCompany.pan || '—'}</span></p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="space-y-2 p-1">
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Bank Credentials</p>
+                          <div className="space-y-1.5 text-slate-600 text-xs font-mono">
+                            <div>
+                              <p className="text-[10px] text-slate-400 uppercase font-sans">Bank Name</p>
+                              <p className="font-bold text-slate-700 font-sans text-xs truncate">{selectedHostCompany.bank_name || '—'}</p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] text-slate-400 uppercase font-sans">Account & IFSC</p>
+                              <p className="font-semibold text-slate-800 text-xs">{selectedHostCompany.account_number || '—'}</p>
+                              {selectedHostCompany.ifsc_code && (
+                                <p className="text-[10px] text-slate-400">IFSC: {selectedHostCompany.ifsc_code.toUpperCase()}</p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="p-6 text-center border border-dashed border-slate-200 rounded-lg text-xs text-slate-500">
+                        Select a host company profile above to preview its billing and banking credentials
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 {/* Header Information Section */}
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 border-b border-slate-100 pb-4">

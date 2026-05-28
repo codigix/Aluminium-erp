@@ -31,13 +31,33 @@ const generatePoPdf = async (data) => {
       }
     };
 
-    const logoPath = path.join(__dirname, '../../../frontend/src/assets/sptechpioneer logo.png');
-    const logoBase64 = fs.existsSync(logoPath) 
-      ? `data:image/png;base64,${fs.readFileSync(logoPath).toString('base64')}`
-      : null;
+    const adminCompanyMasterService = require('../services/adminCompanyMasterService');
+    const activeCompany = await adminCompanyMasterService.getActiveCompany();
+
+    let logoBase64 = null;
+    if (activeCompany && activeCompany.company_logo) {
+      const uploadedLogoPath = path.join(__dirname, '../../', activeCompany.company_logo);
+      if (fs.existsSync(uploadedLogoPath)) {
+        logoBase64 = `data:image/png;base64,${fs.readFileSync(uploadedLogoPath).toString('base64')}`;
+      }
+    }
+
+    if (!logoBase64) {
+      const logoPath = path.join(__dirname, '../../../frontend/src/assets/sptechpioneer logo.png');
+      logoBase64 = fs.existsSync(logoPath) 
+        ? `data:image/png;base64,${fs.readFileSync(logoPath).toString('base64')}`
+        : null;
+    }
+
+    const hostCompanyName = activeCompany?.company_name || 'SP TECHPIONEER PVT. LTD.';
+    const hostCompanyAddress = activeCompany?.company_address || 'Industrial Area, Sector 5, Pune, Maharashtra - 411026';
+    const hostCompanyAddressLines = hostCompanyAddress ? hostCompanyAddress.split('\n') : ['Industrial Area, Sector 5,', 'Pune, Maharashtra - 411026'];
 
     let renderData = {
       logoBase64,
+      hostCompanyName,
+      hostCompanyAddress,
+      hostCompanyAddressLines,
       isReceipt: type === 'receipt',
       isPO: type === 'po',
       isGRN: type === 'grn',

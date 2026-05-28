@@ -77,7 +77,8 @@ const createCustomerPo = async payload => {
       termsAndConditions,
       specialNotes,
       inspectionClause,
-      testCertificate
+      testCertificate,
+      hostCompanyId
     } = payload;
 
     const totals = calculateAmounts(items);
@@ -87,8 +88,8 @@ const createCustomerPo = async payload => {
         (company_id, project_name, po_number, po_date, po_version, order_type, plant, currency, payment_terms,
          credit_days, freight_terms, packing_forwarding, insurance_terms, delivery_terms, status,
          pdf_path, subtotal, tax_total, net_total, remarks, terms_and_conditions, special_notes,
-         inspection_clause, test_certificate)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         inspection_clause, test_certificate, host_company_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ,
       [
         companyId,
@@ -114,7 +115,8 @@ const createCustomerPo = async payload => {
         termsAndConditions || null,
         specialNotes || null,
         inspectionClause || null,
-        testCertificate || null
+        testCertificate || null,
+        hostCompanyId ? Number(hostCompanyId) : null
       ]
     );
 
@@ -212,50 +214,69 @@ const listCustomerPos = async (filters = {}) => {
 
 const getCustomerPoById = async id => {
   const [rows] = await pool.query(
-    `SELECT cp.*, c.company_name, c.customer_type, c.gstin, c.cin, c.pan,
-            ba.line1 as billing_address_line1, ba.line2 as billing_address_line2, 
-            ba.city as billing_city, ba.state as billing_state, ba.pincode as billing_pincode,
+    `SELECT cp.*, c.company_name, c.company_code, c.customer_type, c.gstin, c.cin, c.pan,
             (SELECT email FROM contacts WHERE company_id = c.id ORDER BY contact_type = 'PRIMARY' DESC, id ASC LIMIT 1) as company_email
      FROM customer_pos cp
      JOIN companies c ON c.id = cp.company_id
-     LEFT JOIN company_addresses ba ON ba.company_id = c.id AND ba.address_type = 'BILLING'
      WHERE cp.id = ?`,
     [id]
   );
   if (!rows.length) {
     return null;
   }
-  
-  // Format billing address string
   const po = rows[0];
-  let addrParts = [
-    po.billing_address_line1,
-    po.billing_address_line2,
-    po.billing_city,
-    po.billing_state,
-    po.billing_pincode ? `Pincode: ${po.billing_pincode}` : null
-  ].filter(part => part && String(part).trim() !== '' && String(part).toUpperCase() !== 'N/A');
 
-  if (addrParts.length === 0) {
-    // Fallback: try to get any address for this company if billing address is missing
-    const [anyAddress] = await pool.query(
-      'SELECT line1, line2, city, state, pincode FROM company_addresses WHERE company_id = ? LIMIT 1',
-      [po.company_id]
-    );
-    if (anyAddress.length > 0) {
-      const addr = anyAddress[0];
-      addrParts = [
-        addr.line1,
-        addr.line2,
-        addr.city,
-        addr.state,
-        addr.pincode ? `Pincode: ${addr.pincode}` : null
-      ].filter(part => part && String(part).trim() !== '' && String(part).toUpperCase() !== 'N/A');
-    }
+  const companyService = require('./companyService');
+  let companyDetails = null;
+  try {
+    companyDetails = await companyService.getCompanyById(po.company_id);
+  } catch (err) {
+    console.error('Error fetching company details for PO:', err);
   }
-  
-  po.billing_address = addrParts.join(', ') || 'N/A';
+
+  const billing = companyDetails?.addresses?.find(a => a.address_type === 'BILLING') || {};
+  const shipping = companyDetails?.addresses?.find(a => a.address_type === 'SHIPPING') || {};
+  const billingContact = companyDetails?.contacts?.find(c => c.contact_type === 'ACCOUNTS') ||
+                         companyDetails?.contacts?.find(c => c.contact_type === 'PRIMARY') ||
+                         companyDetails?.contacts?.[0] || {};
+  const shippingContact = companyDetails?.contacts?.find(c => c.contact_type === 'PURCHASE') ||
+                          companyDetails?.contacts?.find(c => c.contact_type === 'TECHNICAL') ||
+                          companyDetails?.contacts?.find(c => c.contact_type === 'PRIMARY') ||
+                          companyDetails?.contacts?.[0] || {};
+
+  // Format billing address
+  let billingAddrParts = [
+    billing.line1,
+    billing.line2,
+    billing.city,
+    billing.state,
+    billing.pincode ? `Pincode: ${billing.pincode}` : null
+  ].filter(part => part && String(part).trim() !== '' && String(part).toUpperCase() !== 'N/A');
+  po.billing_address = billingAddrParts.join(', ') || 'N/A';
+  po.billing_state = billing.state || 'N/A';
   po.billing_state_code = ''; // Fallback since state_code is missing in schema
+
+  // Format shipping address
+  let shippingAddrParts = [
+    shipping.line1,
+    shipping.line2,
+    shipping.city,
+    shipping.state,
+    shipping.pincode ? `Pincode: ${shipping.pincode}` : null
+  ].filter(part => part && String(part).trim() !== '' && String(part).toUpperCase() !== 'N/A');
+  po.shipping_address = shippingAddrParts.join(', ') || po.billing_address;
+  po.shipping_state = shipping.state || po.billing_state;
+
+  // Contacts
+  po.billing_contact_name = billingContact.name || '';
+  po.billing_contact_phone = billingContact.phone || '';
+  po.shipping_contact_name = shippingContact.name || '';
+  po.shipping_contact_phone = shippingContact.phone || '';
+
+  // GSTIN / PAN / CIN
+  po.gstin = companyDetails?.gstin || po.gstin || '';
+  po.pan = companyDetails?.pan || po.pan || '';
+  po.cin = companyDetails?.cin || po.cin || '';
 
   const [items] = await pool.query(
     `SELECT id, item_code, drawing_no, description, quantity, unit, rate, basic_amount, discount, 
@@ -327,7 +348,8 @@ const updateCustomerPo = async (id, payload) => {
       termsAndConditions,
       specialNotes,
       inspectionClause,
-      testCertificate
+      testCertificate,
+      hostCompanyId
     } = payload;
 
     const totals = calculateAmounts(items);
@@ -338,7 +360,7 @@ const updateCustomerPo = async (id, payload) => {
            payment_terms = ?, credit_days = ?, freight_terms = ?, packing_forwarding = ?, 
            insurance_terms = ?, delivery_terms = ?, subtotal = ?, tax_total = ?, net_total = ?, 
            remarks = ?, terms_and_conditions = ?, special_notes = ?, inspection_clause = ?, 
-           test_certificate = ?
+           test_certificate = ?, host_company_id = ?
        WHERE id = ?`
       ,
       [
@@ -363,6 +385,7 @@ const updateCustomerPo = async (id, payload) => {
         specialNotes || null,
         inspectionClause || null,
         testCertificate || null,
+        hostCompanyId ? Number(hostCompanyId) : null,
         id
       ]
     );
@@ -515,330 +538,931 @@ const deleteCustomerPo = async id => {
   }
 };
 
-const generateCustomerPoPDF = async poId => {
+const generateCustomerPoPDF = async (poId, currentUser = null) => {
   const po = await getCustomerPoById(poId);
   if (!po) throw new Error('Customer PO not found');
 
+  let creator = null;
+  if (currentUser && currentUser.id) {
+    try {
+      const [userRows] = await pool.query('SELECT first_name, last_name, phone, email FROM users WHERE id = ?', [currentUser.id]);
+      if (userRows.length > 0) {
+        creator = userRows[0];
+      }
+    } catch (err) {
+      console.error('Error fetching current user for PO PDF:', err);
+    }
+  }
+
+  if (!creator) {
+    try {
+      const [userRows] = await pool.query('SELECT first_name, last_name, phone, email FROM users WHERE status = ? LIMIT 1', ['ACTIVE']);
+      if (userRows.length > 0) {
+        creator = userRows[0];
+      }
+    } catch (err) {
+      console.error('Error fetching fallback user for PO PDF:', err);
+    }
+  }
+
+  const adminCompanyMasterService = require('./adminCompanyMasterService');
+  let activeCompany = null;
+
+  // Try to find the host_company_id directly from the customer PO
+  if (po && po.host_company_id) {
+    try {
+      activeCompany = await adminCompanyMasterService.getCompanyById(po.host_company_id);
+    } catch (err) {
+      console.error('Error fetching host company directly from customer PO:', err);
+    }
+  }
+
+  // Try to find the host_company_id from a linked sales order
+  if (!activeCompany) {
+    try {
+      const [soRow] = await pool.query('SELECT host_company_id FROM sales_orders WHERE customer_po_id = ? LIMIT 1', [poId]);
+      if (soRow.length > 0 && soRow[0].host_company_id) {
+        activeCompany = await adminCompanyMasterService.getCompanyById(soRow[0].host_company_id);
+      }
+    } catch (err) {
+      console.error('Error fetching sales order host_company_id for customer PO:', err);
+    }
+  }
+
+  // Fallback to active company
+  if (!activeCompany) {
+    try {
+      activeCompany = await adminCompanyMasterService.getActiveCompany();
+    } catch (err) {
+      console.error('Error fetching active company:', err);
+    }
+  }
+
+  const hostCompanyName = activeCompany?.company_name || 'SP TECHPIONEER PRIVATE LIMITED';
+  const hostCompanyAddress = activeCompany?.company_address || 'Plot No. 97, Sector 7, PCNTDA,\nBhosari, Pune - 411026, Maharashtra, India';
+  const hostCompanyAddressHtml = hostCompanyAddress ? hostCompanyAddress.replace(/\n/g, '<br/>') : 'Plot No. 97, Sector 7, PCNTDA,<br/>Bhosari, Pune - 411026, Maharashtra, India';
+  const hostGSTIN = activeCompany?.gstin || '27AAPCS1193L1ZQ';
+  const hostCIN = activeCompany?.cin || 'U29309PN2021PTC201234';
+  const hostPAN = activeCompany?.pan || 'N/A';
+
+  const fs = require('fs');
+  const path = require('path');
+  let logoBase64 = null;
+  let signatureBase64 = null;
+
+  if (activeCompany && activeCompany.company_logo) {
+    const logoPath = path.join(__dirname, '../../', activeCompany.company_logo);
+    if (fs.existsSync(logoPath)) {
+      logoBase64 = `data:image/png;base64,${fs.readFileSync(logoPath).toString('base64')}`;
+    }
+  }
+  if (activeCompany && activeCompany.authorized_signature) {
+    const signaturePath = path.join(__dirname, '../../', activeCompany.authorized_signature);
+    if (fs.existsSync(signaturePath)) {
+      signatureBase64 = `data:image/png;base64,${fs.readFileSync(signaturePath).toString('base64')}`;
+    }
+  }
+
   const htmlTemplate = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <style>
-        @page { size: A4; margin: 10mm; }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #000; line-height: 1.3; margin: 0; font-size: 10px; }
-        .invoice-container { border: 1px solid #000; min-height: 270mm; position: relative; }
-        
-        .header-section { display: flex; border-bottom: 1px solid #000; }
-        .header-left { flex: 1.5; padding: 10px; border-right: 1px solid #000; }
-        .header-right { flex: 1; padding: 10px; }
-        
-        .tax-invoice-label { text-align: center; border-bottom: 1px solid #000; font-weight: bold; font-size: 14px; padding: 5px; }
-        
-        .company-name { font-size: 16px; font-weight: bold; margin-bottom: 5px; }
-        .address-text { font-size: 9px; margin-bottom: 2px; }
-        
-        .info-grid { display: grid; grid-template-columns: 1fr 1fr; width: 100%; border-bottom: 1px solid #000; }
-        .info-box { padding: 8px; border-right: 1px solid #000; min-height: 80px; }
-        .info-box:last-child { border-right: none; }
-        .label { font-weight: bold; text-decoration: underline; margin-bottom: 5px; display: block; font-size: 11px; }
-        
-        .meta-table { width: 100%; border-collapse: collapse; }
-        .meta-table td { padding: 4px; border: 1px solid #000; }
-        .meta-label { font-weight: bold; width: 40%; }
-        
-        .items-table { width: 100%; border-collapse: collapse; border-bottom: 1px solid #000; }
-        .items-table th { border: 1px solid #000; padding: 6px; background: #f0f0f0; font-weight: bold; text-align: center; font-size: 9px; }
-        .items-table td { border-left: 1px solid #000; border-right: 1px solid #000; padding: 6px; vertical-align: top; }
-        .items-table tr.item-row { min-height: 30px; }
-        .items-table tr.sub-assembly-row td { background: #fafafa; padding-top: 2px; padding-bottom: 2px; border-top: none; border-bottom: none; }
-        
-        .total-section { display: flex; border-bottom: 1px solid #000; }
-        .words-section { flex: 1.5; padding: 10px; border-right: 1px solid #000; }
-        .calc-section { flex: 1; }
-        
-        .calc-table { width: 100%; border-collapse: collapse; }
-        .calc-table td { padding: 5px; border-bottom: 1px solid #000; text-align: right; }
-        .calc-table td:first-child { text-align: left; font-weight: bold; border-right: 1px solid #000; }
-        .calc-table tr:last-child td { border-bottom: none; font-size: 12px; font-weight: bold; }
-        
-        .tax-summary-table { width: 100%; border-collapse: collapse; border-bottom: 1px solid #000; margin-top: 0; }
-        .tax-summary-table th, .tax-summary-table td { border: 1px solid #000; padding: 4px; text-align: center; }
-        .tax-summary-table th { font-size: 8px; background: #f0f0f0; }
-        
-        .footer-section { display: flex; padding: 20px 10px; border-top: 1px solid #000; position: absolute; bottom: 0; width: 100%; box-sizing: border-box; }
-        .footer-col { flex: 1; text-align: center; }
-        .signature-box { margin-top: 40px; border-top: 1px dashed #000; display: inline-block; min-width: 150px; padding-top: 5px; }
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Purchase Order - {{hostCompanyName}}</title>
+<style>
+  @page {
+    size: A4 landscape;
+    margin: 8mm;
+  }
 
-        .sa-branch { color: #666; margin-right: 5px; font-family: monospace; }
-        .sa-tag { font-size: 7px; background: #eee; padding: 1px 3px; border-radius: 2px; color: #444; border: 0.5px solid #ccc; font-weight: bold; }
-      </style>
-    </head>
-    <body>
-      <div class="invoice-container">
-        <div class="tax-invoice-label">TAX INVOICE</div>
-        
-        <div class="header-section">
-          <div class="header-left">
-            <div class="company-name">SP TECHPIONEER PVT LTD</div>
-            <div class="address-text">PLOT NO.97, SECTOR NO 07, PCNDTA</div>
-            <div class="address-text">BHOSARI, PUNE-411026</div>
-            <div class="address-text">GSTIN/UIN: 27AAPCS1193L1ZQ</div>
-            <div class="address-text">State Name: Maharashtra, Code: 27</div>
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: Arial, Helvetica, sans-serif;
+  }
+
+  body {
+    background: #fff;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .po-container {
+    width: 100%;
+    border: 1.5px solid #000;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .header-table {
+    width: 100%;
+    border-collapse: collapse;
+    border-bottom: 1.5px solid #000;
+  }
+  
+  .header-table td {
+    vertical-align: top;
+    padding: 6px;
+  }
+
+  .logo-box {
+    width: 60px;
+    height: 70px;
+    border: 1px solid #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f4dca3;
+    font-weight: bold;
+    flex-direction: column;
+    overflow: hidden;
+    margin-right: 12px;
+  }
+
+  .company-title {
+    font-size: 11px;
+    font-weight: bold;
+    margin-bottom: 4px;
+    color: #000;
+    text-transform: uppercase;
+  }
+
+  .company-address {
+    font-size: 7.5px;
+    line-height: 1.3;
+    color: #333;
+    margin-bottom: 4px;
+  }
+
+  .company-meta {
+    font-size: 7.5px;
+    margin-bottom: 1px;
+    color: #000;
+  }
+
+  .created-by-table {
+    width: 100%;
+    font-size: 7.5px;
+    border-collapse: collapse;
+  }
+
+  .created-by-table td {
+    padding: 1px 0;
+    vertical-align: top;
+  }
+
+  .po-title-block {
+    text-align: center;
+    font-weight: bold;
+    font-size: 11px;
+    padding: 4px;
+    border-bottom: 1.5px solid #000;
+    letter-spacing: 0.5px;
+    background: #fff;
+  }
+
+  .po-details-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 7.5px;
+  }
+
+  .po-details-table td {
+    border-bottom: 0.5px solid #000;
+    border-right: 0.5px solid #000;
+    padding: 2.5px 4px;
+    vertical-align: middle;
+  }
+
+  .po-details-table tr:last-child td {
+    border-bottom: none;
+  }
+
+  .po-details-table td:last-child {
+    border-right: none;
+  }
+
+  .middle-table {
+    width: 100%;
+    border-collapse: collapse;
+    border-bottom: 1.5px solid #000;
+  }
+
+  .middle-table td {
+    vertical-align: top;
+    padding: 6px;
+  }
+
+  .section-title {
+    font-size: 8px;
+    font-weight: bold;
+    color: #000;
+    margin-bottom: 5px;
+    border-bottom: 0.5px solid #000;
+    padding-bottom: 2px;
+    text-transform: uppercase;
+  }
+
+  .vendor-name {
+    font-size: 8px;
+    font-weight: bold;
+    margin-bottom: 4px;
+    color: #000;
+  }
+
+  .address-text {
+    font-size: 7.5px;
+    line-height: 1.3;
+    color: #333;
+  }
+
+  .details-subtable {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 7.5px;
+  }
+
+  .details-subtable td {
+    padding: 1.5px 0 !important;
+    border: none !important;
+    vertical-align: top;
+  }
+
+  .items-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: -0.5px;
+  }
+
+  .items-table th {
+    border: 0.5px solid #000;
+    padding: 3.5px 4px;
+    font-size: 7.5px;
+    vertical-align: middle;
+    background: #f2f2f2;
+    font-weight: bold;
+    text-align: center;
+    text-transform: uppercase;
+  }
+
+  .items-table td {
+    border: none;
+    border-bottom: 0.5px solid #000;
+    padding: 3.5px 4px;
+    font-size: 7.5px;
+    vertical-align: top;
+  }
+
+  .items-table tr.sub-assembly-row td {
+    border-bottom: none;
+  }
+
+  .items-table tr.parent-with-subs td {
+    border-bottom: none;
+  }
+
+  .items-table tr.last-sub-assembly td {
+    border-bottom: 0.5px solid #000;
+  }
+
+  .summary-table {
+    width: 100%;
+    border-collapse: collapse;
+    border-top: 1.5px solid #000;
+    border-bottom: 1.5px solid #000;
+    margin-top: -0.5px;
+  }
+
+  .summary-table td {
+    vertical-align: top;
+    padding: 6px;
+  }
+
+  .totals-subtable {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 7.5px;
+  }
+
+  .totals-subtable td {
+    padding: 2.5px 4px;
+    border: none;
+  }
+
+  .totals-subtable tr.grand-total-row td {
+    border-top: 1px solid #000;
+    font-size: 9px;
+    font-weight: bold;
+  }
+
+  .bottom-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .bottom-table td {
+    vertical-align: top;
+    padding: 6px;
+  }
+
+  .declaration-text {
+    font-size: 7.5px;
+    line-height: 1.3;
+    color: #333;
+    margin-bottom: 8px;
+  }
+
+  .signature-section {
+    text-align: right;
+    font-size: 7.5px;
+  }
+
+  .signature-box {
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+  }
+
+  .signature-img {
+    max-height: 40px;
+    max-width: 100px;
+    object-fit: contain;
+  }
+
+  .footer-row {
+    border-top: 1.5px solid #000;
+    text-align: center;
+    padding: 5px;
+    font-size: 7.5px;
+    font-weight: bold;
+    letter-spacing: 0.5px;
+    background: #fff;
+  }
+
+  .page-number-row {
+    text-align: center;
+    padding: 1px 0 3px 0;
+    font-size: 7.5px;
+    color: #555;
+  }
+
+  @media print {
+    body {
+      background: #fff !important;
+      -webkit-print-color-adjust: exact !important;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div class="po-container">
+
+  <!-- HEADER -->
+  <table class="header-table">
+    <tr>
+      <td style="width: 70%; padding: 6px;">
+        <div style="display: flex; align-items: flex-start; justify-content: space-between;">
+          <div style="display: flex; align-items: flex-start;">
+            <div class="logo-box">
+              {{#logoBase64}}
+              <img src="{{logoBase64}}" style="max-width: 100%; max-height: 100%; object-fit: contain;" />
+              {{/logoBase64}}
+              {{^logoBase64}}
+              <div style="font-size: 9px;">S P</div>
+              <div style="font-size: 12px; margin: 1px 0;">⚙</div>
+              <div style="font-size: 9px;">T P</div>
+              {{/logoBase64}}
+            </div>
+            <div>
+              <div class="company-title">{{hostCompanyName}}</div>
+              <div class="company-address">{{{hostCompanyAddressHtml}}}</div>
+              <div class="company-meta"><strong>GSTIN NO.</strong> : {{hostGSTIN}}</div>
+              {{#hostCIN}}
+              <div class="company-meta"><strong>CIN NO.</strong> : {{hostCIN}}</div>
+              {{/hostCIN}}
+            </div>
           </div>
-          <div class="header-right">
-            <table class="meta-table">
+          
+          <div style="width: 220px; margin-left: 10px;">
+            <table class="created-by-table">
               <tr>
-                <td class="meta-label">Invoice No.</td>
-                <td>{{po_number}}</td>
+                <td style="width: 38%; font-weight: bold;">Created By</td>
+                <td style="width: 5%;">:</td>
+                <td>{{created_by_name}}</td>
               </tr>
               <tr>
-                <td class="meta-label">Dated</td>
-                <td>{{po_date}}</td>
+                <td style="font-weight: bold;">Mobile</td>
+                <td>:</td>
+                <td>{{created_by_mobile}}</td>
               </tr>
               <tr>
-                <td class="meta-label">Reference No.</td>
-                <td>{{quotation_ref}}</td>
+                <td style="font-weight: bold;">Telephone</td>
+                <td>:</td>
+                <td>{{created_by_phone}}</td>
+              </tr>
+              <tr>
+                <td style="font-weight: bold;">Email</td>
+                <td>:</td>
+                <td style="word-break: break-all;">{{created_by_email}}</td>
               </tr>
             </table>
           </div>
         </div>
+      </td>
+      
+      <td style="width: 30%; border-left: 1.5px solid #000; padding: 0;">
+        <div class="po-title-block">PURCHASE ORDER</div>
+        <table class="po-details-table">
+          <tr>
+            <td style="width: 45%; font-weight: bold;">Purchase Order No.</td>
+            <td style="width: 5%;">:</td>
+            <td>{{po_number}}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold;">PO Date</td>
+            <td>:</td>
+            <td>{{po_date}}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold;">Customer Code</td>
+            <td>:</td>
+            <td>{{customer_code}}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold;">Plant</td>
+            <td>:</td>
+            <td>{{plant}}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold;">Version No.</td>
+            <td>:</td>
+            <td>{{version_no}}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold;">Version Date</td>
+            <td>:</td>
+            <td>{{po_date}}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold;">Your Reference No.</td>
+            <td>:</td>
+            <td style="word-break: break-all;">{{project_ref}}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold;">Order Type</td>
+            <td>:</td>
+            <td>{{order_type}}</td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+
+  <!-- MIDDLE SECTION -->
+  <table class="middle-table">
+    <tr>
+      <td style="width: 35%; border-right: 1.5px solid #000;">
+        <div class="section-title">CUSTOMER DETAILS</div>
+        <div class="vendor-name">{{vendor_name}}</div>
+        <div class="address-text">{{{vendor_address_html}}}</div>
+        <table class="details-subtable" style="margin-top: 6px;">
+          <tr>
+            <td style="width: 32%; font-weight: bold;">Telephone</td>
+            <td style="width: 5%;">:</td>
+            <td>{{phone}}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold;">GSTIN NO.</td>
+            <td>:</td>
+            <td>{{vendor_gstin}}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold;">Contact Person</td>
+            <td>:</td>
+            <td>{{contact_person}}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold;">Email</td>
+            <td>:</td>
+            <td style="word-break: break-all;">{{vendor_email}}</td>
+          </tr>
+        </table>
+      </td>
+      
+      <td style="width: 35%; border-right: 1.5px solid #000;">
+        <div class="section-title">DISPATCH / SHIP TO ADDRESS</div>
+        <div class="vendor-name">{{vendor_name}}</div>
+        <div class="address-text">{{{shipping_address_html}}}</div>
+        <table class="details-subtable" style="margin-top: 6px;">
+          <tr>
+            <td style="width: 32%; font-weight: bold;">GSTIN NO.</td>
+            <td style="width: 5%;">:</td>
+            <td>{{vendor_gstin}}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold;">State</td>
+            <td>:</td>
+            <td>{{shipping_state}}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold;">Contact Person</td>
+            <td>:</td>
+            <td>{{shipping_contact_person}}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold;">Telephone</td>
+            <td>:</td>
+            <td>{{shipping_phone}}</td>
+          </tr>
+        </table>
+      </td>
+      
+      <td style="width: 30%;">
+        <div class="section-title">TERMS & CONDITIONS</div>
+        <table class="details-subtable">
+          <tr>
+            <td style="width: 40%; font-weight: bold;">Payment Terms</td>
+            <td style="width: 5%;">:</td>
+            <td>{{payment_terms}}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold;">Freight</td>
+            <td>:</td>
+            <td>{{freight}}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold;">P & F</td>
+            <td>:</td>
+            <td>{{p_and_f}}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold;">Insurance</td>
+            <td>:</td>
+            <td>{{insurance}}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold;">Purchase Term</td>
+            <td>:</td>
+            <td>{{purchase_term}}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold;">Delivery Terms</td>
+            <td>:</td>
+            <td>{{delivery_terms}}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold;">Delivery Date</td>
+            <td>:</td>
+            <td>{{expected_delivery_date}}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold;">Your Ref No.</td>
+            <td>:</td>
+            <td style="word-break: break-all;">{{project_ref}}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold;">Our Ref No.</td>
+            <td>:</td>
+            <td>{{our_ref_no}}</td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+
+  <!-- ITEMS TABLE -->
+  <table class="items-table">
+    <thead>
+      <tr>
+        <th style="width: 3%;">SL No.</th>
+        <th style="width: 25%; text-align: left; vertical-align: top; line-height: 1.3;">Item No.<br/>Item Description</th>
+        <th style="width: 5%;">HSN Code</th>
+        <th style="width: 7%;">Item Dlv. Dt.</th>
+        <th style="width: 7%;">Pur. Req. No.</th>
+        <th style="width: 6%; text-align: right;">Rate</th>
+        <th style="width: 6%; text-align: right;">Qty</th>
+        <th style="width: 4%;">Unit</th>
+        <th style="width: 6%; text-align: right;">Amount</th>
+        <th style="width: 5%; text-align: right;">Discount</th>
+        <th style="width: 6%; text-align: right;">Transaction Amount</th>
+        <th style="width: 3%; text-align: right; line-height: 1.2;">CGST<br/>%</th>
+        <th style="width: 6%; text-align: right;">CGST Amt</th>
+        <th style="width: 3%; text-align: right; line-height: 1.2;">SGST<br/>%</th>
+        <th style="width: 6%; text-align: right;">SGST Amt</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{#items}}
+      <tr {{#has_sub_assemblies}}class="parent-with-subs"{{/has_sub_assemblies}}>
+        <td style="text-align: center;">{{sl_no}}</td>
+        <td style="text-align: left; line-height: 1.35; padding-left: 5px;">
+          {{item_no}}<br/>
+          <div style="padding-left: 10px;">
+            <strong>{{material_name}}</strong><br/>
+            {{#description}}
+            <span style="font-size: 7px; color: #555;">{{description}}</span>
+            {{/description}}
+          </div>
+        </td>
+        <td style="text-align: center;">{{hsn_code}}</td>
+        <td style="text-align: center;">{{expected_delivery_date}}</td>
+        <td style="text-align: center;">{{pur_req_no}}</td>
+        <td style="text-align: right;">{{unit_rate}}</td>
+        <td style="text-align: right;">{{quantity}}</td>
+        <td style="text-align: center;">{{unit}}</td>
+        <td style="text-align: right;">{{amount}}</td>
+        <td style="text-align: right;">{{discount}}</td>
+        <td style="text-align: right;">{{transaction_amount}}</td>
+        <td style="text-align: right;">{{cgst_rate}}%</td>
+        <td style="text-align: right;">{{cgst_amount}}</td>
+        <td style="text-align: right;">{{sgst_rate}}%</td>
+        <td style="text-align: right;">{{sgst_amount}}</td>
+      </tr>
+      {{#sub_assemblies}}
+      <tr class="sub-assembly-row {{#is_last}}last-sub-assembly{{/is_last}}" style="background: #fafafa; font-size: 6.5px;">
+        <td></td>
+        <td style="text-align: left; padding-left: 15px;">{{description}} ({{drawingNo}})</td>
+        <td style="text-align: center;">{{hsn_code}}</td>
+        <td style="text-align: center;">{{formatted_delivery_date}}</td>
+        <td></td>
+        <td style="text-align: right;">{{displayRate}}</td>
+        <td style="text-align: right;">{{displayQuantity}}</td>
+        <td style="text-align: center;">{{unit}}</td>
+        <td style="text-align: right; font-weight: bold;">{{displayTotal}}</td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+      </tr>
+      {{/sub_assemblies}}
+      {{/items}}
+      {{#empty_rows}}
+      <tr style="height: 22px;">
+        <td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>
+      </tr>
+      {{/empty_rows}}
+    </tbody>
+  </table>
+
+  <!-- SUMMARY -->
+  <table class="summary-table">
+    <tr>
+      <td style="width: 60%; padding: 8px; border-right: 1.5px solid #000;">
+        <div style="font-size: 7.5px; font-weight: bold; margin-bottom: 4px;">Amount Chargeable (in words)</div>
+        <div style="font-size: 8.5px; font-weight: bold; text-transform: uppercase; line-height: 1.35; color: #000;">
+          INR {{total_amount_words}} ONLY
+        </div>
+      </td>
+      <td style="width: 40%; padding: 0;">
+        <table class="totals-subtable">
+          <tr>
+            <td style="width: 55%; padding: 3px 5px; font-weight: bold;">Sub Total</td>
+            <td style="width: 5%; text-align: center; padding: 3px 0;">:</td>
+            <td style="text-align: right; padding: 3px 5px;">{{subtotal}}</td>
+          </tr>
+          {{#cgst_total}}
+          <tr>
+            <td style="padding: 3px 5px; font-weight: bold;">CGST @ {{cgst_rate_summary}}%</td>
+            <td style="text-align: center; padding: 3px 0;">:</td>
+            <td style="text-align: right; padding: 3px 5px;">{{cgst_total}}</td>
+          </tr>
+          {{/cgst_total}}
+          {{#sgst_total}}
+          <tr>
+            <td style="padding: 3px 5px; font-weight: bold;">SGST @ {{sgst_rate_summary}}%</td>
+            <td style="text-align: center; padding: 3px 0;">:</td>
+            <td style="text-align: right; padding: 3px 5px;">{{sgst_total}}</td>
+          </tr>
+          {{/sgst_total}}
+          <tr class="grand-total-row">
+            <td style="padding: 5px; font-size: 9px; font-weight: bold;">Grand Total</td>
+            <td style="text-align: center; padding: 5px 0; font-size: 9px; font-weight: bold;">:</td>
+            <td style="text-align: right; padding: 5px; font-size: 10px; font-weight: bold;">
+              ₹ {{total_amount}}
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+
+  <!-- BOTTOM SECTION -->
+  <table class="bottom-table">
+    <tr>
+      <td style="width: 35%; border-right: 1.5px solid #000;">
+        <div class="section-title">BANK DETAILS (For Remittance)</div>
+        <table class="details-subtable">
+          <tr>
+            <td style="width: 35%; font-weight: bold;">Bank Name</td>
+            <td style="width: 5%;">:</td>
+            <td>{{hostBankName}}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold;">Account Name</td>
+            <td>:</td>
+            <td>{{hostAccountName}}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold;">Account Number</td>
+            <td>:</td>
+            <td>{{hostAccountNumber}}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold;">IFSC Code</td>
+            <td>:</td>
+            <td>{{hostIFSCCode}}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold;">Branch</td>
+            <td>:</td>
+            <td>{{hostBranchName}}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold;">Beneficiary GSTIN</td>
+            <td>:</td>
+            <td>{{hostGSTIN}}</td>
+          </tr>
+        </table>
+      </td>
+      
+      <td style="width: 35%; border-right: 1.5px solid #000;">
+        <div class="section-title">IMPORTANT NOTES</div>
+        <ol style="margin: 0; padding-left: 12px; font-size: 7.5px; line-height: 1.35; color: #333;">
+          <li>Please ensure all supplied material meet the requirements specified in PO.</li>
+          <li>All the necessary test certificates, data sheets to be provided along with the material.</li>
+          <li>Please mention our PO No. & Item Code in your Challan and Invoice.</li>
+          <li>General Terms and Conditions as enclosed.</li>
+          <li>Subject to Pune jurisdiction only.</li>
+          <li>Goods once sold will not be taken back.</li>
+        </ol>
+      </td>
+      
+      <td style="width: 30%;">
+        <div class="section-title">DECLARATION</div>
+        <div class="declaration-text">
+          We declare that this Purchase Order is issued for the goods / services as per the terms and conditions mentioned herein.
+        </div>
         
-        <div class="info-grid">
-          <div class="info-box">
-            <span class="label">Consignee (Ship to)</span>
-            <div style="font-weight: bold; font-size: 11px;">{{company_name}}</div>
-            <div class="address-text">{{billing_address}}</div>
-            <div class="address-text">GSTIN/UIN: {{gstin}}</div>
-            <div class="address-text">State Name: {{billing_state}}, Code: {{billing_state_code}}</div>
+        <div class="signature-section">
+          <div style="font-weight: bold; margin-bottom: 20px;">For {{hostCompanyName}}</div>
+          <div class="signature-box">
+            {{#signatureBase64}}
+            <img src="{{signatureBase64}}" class="signature-img" />
+            {{/signatureBase64}}
+            {{^signatureBase64}}
+            <div style="font-family: 'Courier New', Courier, monospace; font-style: italic; font-size: 11px; font-weight: bold; border-bottom: 1px dashed #000; display: inline-block; padding: 2px 10px; margin-bottom: 5px;">
+              {{hostCompanyName}}
+            </div>
+            {{/signatureBase64}}
           </div>
-          <div class="info-box">
-            <span class="label">Buyer (Bill to)</span>
-            <div style="font-weight: bold; font-size: 11px;">{{company_name}}</div>
-            <div class="address-text">{{billing_address}}</div>
-            <div class="address-text">GSTIN/UIN: {{gstin}}</div>
-            <div class="address-text">State Name: {{billing_state}}, Code: {{billing_state_code}}</div>
-          </div>
+          <div style="font-weight: bold; margin-top: 5px;">Authorized Signatory</div>
         </div>
+      </td>
+    </tr>
+  </table>
 
-        <table class="items-table">
-          <thead>
-            <tr>
-              <th style="width: 25px;">Sl No.</th>
-              <th>Description of Goods</th>
-              <th style="width: 65px;">HSN Code</th>
-              <th style="width: 75px;">Delivery Date</th>
-              <th style="width: 55px;">Quantity</th>
-              <th style="width: 75px;">Rate</th>
-              <th style="width: 35px;">per</th>
-              <th style="width: 85px;">Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            {{#items}}
-            <tr class="item-row">
-              <td style="text-align: center;">{{index}}</td>
-              <td>
-                <div style="font-weight: bold;">{{description}}</div>
-                {{#drawing_no}}<div style="font-size: 8px; color: #444;">DRW: {{drawing_no}}</div>{{/drawing_no}}
-              </td>
-              <td style="text-align: center;">{{hsn_code}}</td>
-              <td style="text-align: center;">{{formatted_delivery_date}}</td>
-              <td style="text-align: center;">{{quantity}} {{unit}}</td>
-              <td style="text-align: right;">{{rate}}</td>
-              <td style="text-align: center;">{{unit}}</td>
-              <td style="text-align: right; font-weight: bold;">{{basic_amount}}</td>
-            </tr>
-            {{#sub_assemblies}}
-            <tr class="sub-assembly-row">
-              <td></td>
-              <td>
-                <div style="font-weight: bold;">{{description}} ({{drawingNo}})</div>
-              </td>
-              <td style="text-align: center;">{{hsn_code}}</td>
-              <td style="text-align: center;">{{formatted_delivery_date}}</td>
-              <td style="text-align: center;">{{displayQuantity}}</td>
-              <td style="text-align: right;">{{displayRate}}</td>
-              <td style="text-align: center;">{{unit}}</td>
-              <td style="text-align: right; font-weight: bold;">{{displayTotal}}</td>
-            </tr>
-            {{/sub_assemblies}}
-            {{/items}}
-            {{#empty_rows}}
-            <tr style="height: 25px;">
-              <td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>
-            </tr>
-            {{/empty_rows}}
-          </tbody>
-        </table>
+  <!-- FOOTER -->
+  <div class="footer-row">
+    THIS IS ELECTRONICALLY GENERATED PURCHASE ORDER AND DOES NOT REQUIRE SIGNATURE.
+  </div>
 
-        <div class="total-section">
-          <div class="words-section">
-            <div style="font-style: italic; margin-bottom: 10px;">Amount Chargeable (in words)</div>
-            <div style="font-weight: bold; font-size: 11px;">{{net_total_words}}</div>
-          </div>
-          <div class="calc-section">
-            <table class="calc-table">
-              <tr>
-                <td>Total Taxable Value</td>
-                <td>{{subtotal}}</td>
-              </tr>
-              {{#cgst_total}}
-              <tr>
-                <td>Output CGST @ 9%</td>
-                <td>{{cgst_total}}</td>
-              </tr>
-              {{/cgst_total}}
-              {{#sgst_total}}
-              <tr>
-                <td>Output SGST @ 9%</td>
-                <td>{{sgst_total}}</td>
-              </tr>
-              {{/sgst_total}}
-              {{#igst_total}}
-              <tr>
-                <td>Output IGST @ 18%</td>
-                <td>{{igst_total}}</td>
-              </tr>
-              {{/igst_total}}
-              <tr>
-                <td>Total</td>
-                <td>₹ {{net_total}}</td>
-              </tr>
-            </table>
-          </div>
-        </div>
+  <div class="page-number-row">
+    Page 1 of 1
+  </div>
 
-        <table class="tax-summary-table">
-          <thead>
-            <tr>
-              <th rowspan="2">HSN/SAC</th>
-              <th rowspan="2">Taxable Value</th>
-              <th colspan="2">Central Tax</th>
-              <th colspan="2">State Tax</th>
-              <th rowspan="2">Total Tax Amount</th>
-            </tr>
-            <tr>
-              <th>Rate</th>
-              <th>Amount</th>
-              <th>Rate</th>
-              <th>Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            {{#tax_summary}}
-            <tr>
-              <td>{{hsn_code}}</td>
-              <td>{{taxable_value}}</td>
-              <td>{{central_rate}}</td>
-              <td>{{central_amount}}</td>
-              <td>{{state_rate}}</td>
-              <td>{{state_amount}}</td>
-              <td>{{total_tax}}</td>
-            </tr>
-            {{/tax_summary}}
-            <tr style="font-weight: bold; background: #f9f9f9;">
-              <td>Total</td>
-              <td>{{subtotal}}</td>
-              <td></td>
-              <td>{{cgst_total}}</td>
-              <td></td>
-              <td>{{sgst_total}}</td>
-              <td>{{tax_total_summary}}</td>
-            </tr>
-          </tbody>
-        </table>
+</div>
 
-        <div style="padding: 10px; font-size: 9px;">
-          <div style="font-weight: bold; text-decoration: underline; margin-bottom: 5px;">Declaration:</div>
-          We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.
-        </div>
-
-        <div class="footer-section">
-          <div class="footer-col">
-            <div style="margin-bottom: 50px;">Customer's Seal and Signature</div>
-            <div class="signature-box">Authorized Signatory</div>
-          </div>
-          <div class="footer-col" style="text-align: right;">
-            <div style="font-weight: bold;">for SP TECHPIONEER PVT LTD</div>
-            <div class="signature-box">Authorized Signatory</div>
-          </div>
-        </div>
-      </div>
-    </body>
-    </html>
-  `;
+</body>
+</html>
+`;
 
   const formatDate = (date) => date ? new Date(date).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-') : '—';
   const formatCurrency = (val) => Number(val || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-  // Group items by HSN for tax summary
-  const taxMap = new Map();
-  po.items.forEach(item => {
-    const hsn = item.hsn_code || 'N/A';
-    if (!taxMap.has(hsn)) {
-      const cgstRate = Number(item.cgst_percent || 0);
-      const sgstRate = Number(item.sgst_percent || 0);
-      const igstRate = Number(item.igst_percent || 0);
-      
-      taxMap.set(hsn, {
-        hsn_code: hsn,
-        taxable_value: 0,
-        central_rate: (cgstRate || igstRate / 2 || 0).toFixed(1) + '%',
-        central_amount: 0,
-        state_rate: (sgstRate || igstRate / 2 || 0).toFixed(1) + '%',
-        state_amount: 0,
-        total_tax: 0
-      });
-    }
-    const entry = taxMap.get(hsn);
-    entry.taxable_value += Number(item.basic_amount);
-    entry.central_amount += Number(item.cgst_amount || item.igst_amount / 2 || 0);
-    entry.state_amount += Number(item.sgst_amount || item.igst_amount / 2 || 0);
-    entry.total_tax += Number(item.cgst_amount || 0) + Number(item.sgst_amount || 0) + Number(item.igst_amount || 0);
-  });
+  const subtotal = po.items.reduce((sum, item) => sum + (parseFloat(item.basic_amount) || 0) - (parseFloat(item.discount) || 0), 0);
+  const cgst_total = po.items.reduce((sum, item) => sum + (parseFloat(item.cgst_amount) || 0), 0);
+  const sgst_total = po.items.reduce((sum, item) => sum + (parseFloat(item.sgst_amount) || 0), 0);
+  const grand_total = parseFloat(po.net_total || (subtotal + cgst_total + sgst_total));
 
-  const taxSummary = Array.from(taxMap.values()).map(t => ({
-    ...t,
-    taxable_value: formatCurrency(t.taxable_value),
-    central_amount: formatCurrency(t.central_amount),
-    state_amount: formatCurrency(t.state_amount),
-    total_tax: formatCurrency(t.total_tax)
-  }));
+  const firstItem = po.items[0] || {};
+  const cgst_rate_summary = parseFloat(firstItem.cgst_percent || 0).toFixed(0);
+  const sgst_rate_summary = parseFloat(firstItem.sgst_percent || 0).toFixed(0);
+
+  const numberToWords = (num) => {
+    const a = ['', 'one ', 'two ', 'three ', 'four ', 'five ', 'six ', 'seven ', 'eight ', 'nine ', 'ten ', 'eleven ', 'twelve ', 'thirteen ', 'fourteen ', 'fifteen ', 'sixteen ', 'seventeen ', 'eighteen ', 'nineteen '];
+    const b = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+    const inWords = (num) => {
+        if ((num = num.toString()).length > 9) return 'overflow';
+        let n = ('000000000' + num).substr(-9).match(/^(\d{2})(\d{2})(\d{2})(\d{1})(\d{2})$/);
+        if (!n) return; let str = '';
+        str += (Number(n[1]) != 0) ? (a[Number(n[1])] || b[n[1][0]] + ' ' + a[n[1][1]]) + 'crore ' : '';
+        str += (Number(n[2]) != 0) ? (a[Number(n[2])] || b[n[2][0]] + ' ' + a[n[2][1]]) + 'lakh ' : '';
+        str += (Number(n[3]) != 0) ? (a[Number(n[3])] || b[n[3][0]] + ' ' + a[n[3][1]]) + 'thousand ' : '';
+        str += (Number(n[4]) != 0) ? (a[Number(n[4])] || b[n[4][0]] + ' ' + a[n[4][1]]) + 'hundred ' : '';
+        str += (Number(n[5]) != 0) ? ((str != '') ? 'and ' : '') + (a[Number(n[5])] || b[n[5][0]] + ' ' + a[n[5][1]]) : '';
+        return str.toUpperCase();
+    };
+    return inWords(Math.floor(num));
+  };
 
   const viewData = {
     ...po,
     po_date: formatDate(po.po_date),
-    subtotal: formatCurrency(po.subtotal),
-    tax_total_summary: formatCurrency(po.tax_total),
-    cgst_total: formatCurrency(po.items.reduce((sum, i) => sum + Number(i.cgst_amount || 0), 0)),
-    sgst_total: formatCurrency(po.items.reduce((sum, i) => sum + Number(i.sgst_amount || 0), 0)),
-    igst_total: formatCurrency(po.items.reduce((sum, i) => sum + Number(i.igst_amount || 0), 0)),
-    net_total: formatCurrency(po.net_total),
-    net_total_words: numberToWords(po.net_total),
-    tax_summary: taxSummary,
-    items: (po.items || []).map((i, idx) => ({
-      ...i,
-      index: idx + 1,
-      quantity: Number(i.quantity).toFixed(0),
-      rate: formatCurrency(i.rate),
-      basic_amount: formatCurrency(i.basic_amount),
-      hsn_code: i.hsn_code || '—',
-      formatted_delivery_date: i.delivery_date ? formatDate(i.delivery_date) : '—',
-      sub_assemblies: (i.sub_assemblies || []).map(sa => {
-        const saQty = (parseFloat(sa.quantity || 0) * (parseFloat(i.quantity) || 0));
-        const saRate = parseFloat(sa.rate || 0);
-        return {
-          ...sa,
-          displayQuantity: saQty.toFixed(3),
-          displayRate: formatCurrency(saRate),
-          displayTotal: formatCurrency(saQty * saRate),
-          unit: sa.unit || 'NOS',
-          hsn_code: sa.hsn_code || i.hsn_code || '—',
-          formatted_delivery_date: sa.delivery_date ? formatDate(sa.delivery_date) : (i.delivery_date ? formatDate(i.delivery_date) : '—')
-        };
-      })
-    })),
-    empty_rows: Array.from({ length: Math.max(0, 10 - (po.items || []).length) })
+    expected_delivery_date: formatDate(po.expected_delivery_date),
+    vendor_name: po.company_name || 'N/A',
+    vendor_email: po.company_email || 'N/A',
+    vendor_address_html: po.billing_address ? po.billing_address.split(', ').join('<br/>') : 'N/A',
+    phone: po.billing_contact_phone || 'N/A',
+    vendor_gstin: po.gstin || 'N/A',
+    contact_person: po.billing_contact_name || 'N/A',
+    shipping_address_html: po.shipping_address ? po.shipping_address.split(', ').join('<br/>') : 'N/A',
+    shipping_state: po.shipping_state || 'N/A',
+    shipping_contact_person: po.shipping_contact_name || 'N/A',
+    shipping_phone: po.shipping_contact_phone || 'N/A',
+    project_name: po.project_name || 'General Procurement',
+    project_ref: po.po_number ? (po.po_number.startsWith('PO-') ? po.po_number : `PO-${po.po_number}`) : 'Direct Procurement',
+    subtotal: subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    cgst_total: cgst_total > 0 ? cgst_total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : null,
+    sgst_total: sgst_total > 0 ? sgst_total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : null,
+    cgst_rate_summary,
+    sgst_rate_summary,
+    total_amount: grand_total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    total_amount_words: numberToWords(grand_total),
+    hostCompanyName,
+    hostCompanyAddressHtml,
+    hostGSTIN,
+    hostCIN,
+    hostPAN,
+    logoBase64,
+    signatureBase64,
+    created_by_name: creator ? `${creator.first_name} ${creator.last_name}` : 'Admin User',
+    created_by_mobile: creator?.phone || activeCompany?.phone || '9822012345',
+    created_by_phone: activeCompany?.telephone || '-',
+    created_by_email: creator?.email || activeCompany?.email || 'rohit.kuchekar.external@sptech.com',
+    customer_code: po.company_code || po.customer_code || ('CUST-' + String(po.company_id).padStart(6, '0')),
+    plant: po.plant || activeCompany?.plant_code || 'STPTPL-01',
+    version_no: po.po_version || '1.0',
+    order_type: po.order_type || 'Standard Purchase Order',
+    payment_terms: po.payment_terms || '45 days from invoice date',
+    freight: po.freight_terms || 'Included',
+    p_and_f: po.packing_forwarding || 'Included',
+    insurance: po.insurance_terms || 'Included',
+    purchase_term: po.order_type || 'Standard Purchase Order',
+    delivery_terms: po.delivery_terms || 'As Per Item Wise Delivery Date',
+    our_ref_no: po.our_ref_no || '—',
+    hostBankName: activeCompany?.bank_name || 'HDFC BANK LTD.',
+    hostAccountName: activeCompany?.company_name || 'SP TECHPIONEER PRIVATE LIMITED',
+    hostAccountNumber: activeCompany?.account_number || '123456789999',
+    hostIFSCCode: activeCompany?.ifsc_code ? activeCompany.ifsc_code.toUpperCase() : 'HDFC0001234',
+    hostBranchName: activeCompany?.branch_name || 'Bhosari, Pune - 411026, Maharashtra',
+    hostState: activeCompany?.state || 'Maharashtra',
+    items: (po.items || []).map((i, idx) => {
+      const has_sub_assemblies = i.sub_assemblies && i.sub_assemblies.length > 0;
+      return {
+        ...i,
+        sl_no: (idx + 1) * 10,
+        item_code: i.item_code || '—',
+        item_no: i.item_code || '—',
+        drawing_no: i.drawing_no || i.item_code || '—',
+        material_name: i.description || '—',
+        description: i.drawing_no ? `DRW: ${i.drawing_no}` : '—',
+        hsn_code: i.hsn_code || '73089090',
+        expected_delivery_date: i.delivery_date ? formatDate(i.delivery_date) : '—',
+        pur_req_no: po.po_number || '—',
+        quantity: Number(i.quantity).toFixed(3),
+        unit: (i.unit || 'NOS').toUpperCase(),
+        unit_rate: parseFloat(i.rate || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+        amount: parseFloat(i.basic_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+        discount: parseFloat(i.discount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+        transaction_amount: (parseFloat(i.basic_amount || 0) - parseFloat(i.discount || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+        cgst_rate: parseFloat(i.cgst_percent || 0).toFixed(2),
+        cgst_amount: parseFloat(i.cgst_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+        sgst_rate: parseFloat(i.sgst_percent || 0).toFixed(2),
+        sgst_amount: parseFloat(i.sgst_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+        has_sub_assemblies,
+        sub_assemblies: (i.sub_assemblies || []).map((sa, saIdx) => {
+          const saQty = (parseFloat(sa.quantity || 0) * (parseFloat(i.quantity) || 0));
+          const saRate = parseFloat(sa.rate || 0);
+          return {
+            ...sa,
+            displayQuantity: saQty.toFixed(3),
+            displayRate: parseFloat(saRate).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+            displayTotal: parseFloat(saQty * saRate).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+            unit: sa.unit || 'NOS',
+            hsn_code: sa.hsn_code || i.hsn_code || '—',
+            formatted_delivery_date: sa.delivery_date ? formatDate(sa.delivery_date) : (i.delivery_date ? formatDate(i.delivery_date) : '—'),
+            is_last: saIdx === i.sub_assemblies.length - 1
+          };
+        })
+      };
+    }),
+    empty_rows: Array.from({ length: Math.max(0, 4 - (po.items || []).length) })
   };
 
   const html = mustache.render(htmlTemplate, viewData);
@@ -848,10 +1472,12 @@ const generateCustomerPoPDF = async poId => {
     args: ['--no-sandbox', '--disable-setuid-sandbox']
   });
   const page = await browser.newPage();
-  await page.setContent(html, { waitUntil: 'networkidle0' });
+  await page.setContent(html, { waitUntil: 'load' });
   const pdf = await page.pdf({ 
     format: 'A4', 
-    printBackground: true
+    landscape: true,
+    printBackground: true,
+    margin: { top: '8mm', right: '8mm', bottom: '8mm', left: '8mm' }
   });
   await browser.close();
 

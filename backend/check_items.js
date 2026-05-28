@@ -1,12 +1,17 @@
 const pool = require('./src/config/db');
 async function run() {
     try {
-        const [rows] = await pool.query(`
-            SELECT id, company_id, status, current_department 
-            FROM sales_orders 
-            ORDER BY id DESC LIMIT 10
-        `);
-        console.table(rows);
+        console.log('--- Fetch company 5 details ---');
+        const [company] = await pool.query(`SELECT * FROM companies WHERE id = 5`);
+        console.log(company);
+
+        console.log('--- Fetch contacts of company 5 ---');
+        const [contacts] = await pool.query(`SELECT * FROM contacts WHERE company_id = 5`);
+        console.log(contacts);
+
+        console.log('--- Fetch addresses of company 5 ---');
+        const [addresses] = await pool.query(`SELECT * FROM company_addresses WHERE company_id = 5`);
+        console.log(addresses);
     } catch (e) {
         console.error(e);
     } finally {
@@ -14,3 +19,7 @@ async function run() {
     }
 }
 run();
+
+
+
+
