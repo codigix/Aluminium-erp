@@ -56,10 +56,11 @@ const formatCurrency = (value) => {
 
 const getCorrectMaterialType = (itemCode, currentType) => {
   const code = (itemCode || '').toUpperCase().trim();
-  if (code.startsWith('RM-')) return 'RAW_MATERIAL';
-  if (code.startsWith('CON-')) return 'CONSUMABLE';
-  if (code.startsWith('MRO-')) return 'MRO';
-  if (code.startsWith('BOU-')) return 'BOUGHT_OUT';
+  if (code.startsWith('RM-') || code.startsWith('RM ') || code.startsWith('RM_')) return 'RAW_MATERIAL';
+  if (code.startsWith('PAC-') || code.startsWith('PAC ') || code.startsWith('PAC_')) return 'PACKING_MATERIAL';
+  if (code.startsWith('CON-') || code.startsWith('CON ') || code.startsWith('CON_')) return 'CONSUMABLE';
+  if (code.startsWith('MRO-') || code.startsWith('MRO ') || code.startsWith('MRO_')) return 'MRO';
+  if (code.startsWith('BOU-') || code.startsWith('BO-') || code.startsWith('BO ') || code.startsWith('BO_')) return 'BOUGHT_OUT';
   return currentType || 'RAW_MATERIAL';
 };
 
@@ -1287,8 +1288,8 @@ const Quotations = () => {
       } else {
         isSingle = true; // Isolated quotation record
       }
-      return { 
-        ...q, 
+      return {
+        ...q,
         is_single_vendor: isSingle,
         uniqueKey: `${q.isRFQOnly ? 'rfq' : 'quote'}_${q.id}_${q.status}_${q.vendor_id || 'none'}_${q.version || '1'}`
       };

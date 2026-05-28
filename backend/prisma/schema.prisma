@@ -918,6 +918,7 @@ model orders {
   created_at    DateTime?     @default(now()) @db.Timestamp(0)
   updated_at    DateTime?     @default(now()) @db.Timestamp(0)
   public_id     String?       @unique(map: "public_id") @db.VarChar(100)
+  host_company_id Int?
   order_items   order_items[]
 
   @@index([client_id], map: "idx_client")
@@ -1668,6 +1669,7 @@ model sales_orders {
   zip_path             String?                           @db.VarChar(255)
   parent_id            Int?
   public_id            String?                           @unique(map: "public_id") @db.VarChar(100)
+  host_company_id      Int?
   bom_approval_history bom_approval_history[]
   design_orders        design_orders[]
   design_rejections    design_rejections[]

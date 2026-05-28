@@ -1964,6 +1964,7 @@ const ensureOrdersTable = async () => {
         subtotal DECIMAL(12,2) DEFAULT 0,
         gst DECIMAL(12,2) DEFAULT 0,
         grand_total DECIMAL(12,2) DEFAULT 0,
+        host_company_id INT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         INDEX idx_client (client_id),
@@ -1996,6 +1997,7 @@ const ensureOrdersTable = async () => {
     if (!existing.has('sgst_rate')) await connection.query('ALTER TABLE orders ADD COLUMN sgst_rate DECIMAL(5,2) DEFAULT 0');
     if (!existing.has('profit_margin')) await connection.query('ALTER TABLE orders ADD COLUMN profit_margin DECIMAL(5,2) DEFAULT 0');
     if (!existing.has('public_id')) await connection.query('ALTER TABLE orders ADD COLUMN public_id VARCHAR(100) UNIQUE NULL');
+    if (!existing.has('host_company_id')) await connection.query('ALTER TABLE orders ADD COLUMN host_company_id INT NULL');
 
     console.log('Orders and Order Items tables synchronized');
   } catch (error) {
@@ -2184,7 +2186,8 @@ const ensureSalesOrderColumns = async () => {
       { name: 'excel_path', definition: 'VARCHAR(255) NULL' },
       { name: 'zip_path', definition: 'VARCHAR(255) NULL' },
       { name: 'parent_id', definition: 'INT NULL' },
-      { name: 'public_id', definition: 'VARCHAR(100) UNIQUE NULL' }
+      { name: 'public_id', definition: 'VARCHAR(100) UNIQUE NULL' },
+      { name: 'host_company_id', definition: 'INT NULL' }
     ];
 
     for (const col of requiredColumns) {
