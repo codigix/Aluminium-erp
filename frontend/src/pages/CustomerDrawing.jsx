@@ -415,6 +415,7 @@ const CustomerDrawing = () => {
   useEffect(() => {
     const clientName = searchParams.get('client_name');
     const projectName = searchParams.get('project_name');
+    const requirementId = searchParams.get('requirement_id');
     
     if (clientName && !loading && drawings.length > 0 && !viewingClient) {
       const lowerClient = normalize(clientName);
@@ -424,7 +425,26 @@ const CustomerDrawing = () => {
         let drawingsToShow = [];
         let finalProjectName = projectName;
 
-        if (lowerProject) {
+        if (requirementId) {
+          const rawDrawings = drawings.filter(d => 
+            normalize(d.client_name) === lowerClient && 
+            String(d.sales_order_id) === String(requirementId)
+          );
+          const seen = new Set();
+          drawingsToShow = [];
+          for (const d of rawDrawings) {
+            const dNo = d.drawing_no ? String(d.drawing_no).trim().toLowerCase() : null;
+            const dId = d.drawing_master_id || d.id;
+            const key = dNo || (dId ? `id_${dId}` : d.id);
+            if (key && !seen.has(key)) {
+              seen.add(key);
+              drawingsToShow.push(d);
+            }
+          }
+          if (drawingsToShow.length > 0) {
+            finalProjectName = drawingsToShow[0].project_name || drawingsToShow[0].projectName;
+          }
+        } else if (lowerProject) {
           drawingsToShow = groupedDrawings[lowerClient][lowerProject] || [];
           if (drawingsToShow.length > 0) {
             finalProjectName = drawingsToShow[0].project_name || drawingsToShow[0].projectName;
@@ -437,6 +457,7 @@ const CustomerDrawing = () => {
           setViewingClient({
             name: drawingsToShow[0].client_name || drawingsToShow[0].clientName,
             projectName: finalProjectName,
+            requirementId: requirementId,
             drawings: drawingsToShow
           });
           setShowClientDrawingsModal(true);
@@ -538,8 +559,23 @@ const CustomerDrawing = () => {
 
         // Count items that are actual drawings (not existing items)
         const items = so.items?.filter(item => !item.item_code) || [];
-        acc[key].drawing_count += items.length;
         acc[key].original_items = [...acc[key].original_items, ...items];
+
+        // Deduplicate original_items by drawing number to get correct unique drawing count
+        const uniqueItems = [];
+        const seenDrawings = new Set();
+        for (const item of acc[key].original_items) {
+          const dNo = item.drawing_no ? String(item.drawing_no).trim().toLowerCase() : null;
+          const dId = item.drawing_id || item.drawing_master_id;
+          const mapKey = dNo || (dId ? `id_${dId}` : item.id);
+          
+          if (mapKey && !seenDrawings.has(mapKey)) {
+            seenDrawings.add(mapKey);
+            uniqueItems.push(item);
+          }
+        }
+        acc[key].original_items = uniqueItems;
+        acc[key].drawing_count = uniqueItems.length;
 
         // Keep the most recent delivery date if multiple exist
         if (so.delivery_date && (!acc[key].delivery_date || new Date(so.delivery_date) > new Date(acc[key].delivery_date))) {
@@ -748,9 +784,26 @@ const CustomerDrawing = () => {
     if (viewingClient) {
       const clientKey = normalize(viewingClient.name);
       const projectKey = viewingClient.projectName ? normalize(viewingClient.projectName) : null;
+      const reqId = viewingClient.requirementId;
       
-      if (groupedDrawings[clientKey]) {
-        let updatedDrawings = null;
+      let updatedDrawings = null;
+      if (reqId) {
+        const rawDrawings = drawings.filter(d => 
+          normalize(d.client_name) === clientKey && 
+          String(d.sales_order_id) === String(reqId)
+        );
+        const seen = new Set();
+        updatedDrawings = [];
+        for (const d of rawDrawings) {
+          const dNo = d.drawing_no ? String(d.drawing_no).trim().toLowerCase() : null;
+          const dId = d.drawing_master_id || d.id;
+          const key = dNo || (dId ? `id_${dId}` : d.id);
+          if (key && !seen.has(key)) {
+            seen.add(key);
+            updatedDrawings.push(d);
+          }
+        }
+      } else if (groupedDrawings[clientKey]) {
         if (projectKey) {
           if (groupedDrawings[clientKey][projectKey]) {
             updatedDrawings = groupedDrawings[clientKey][projectKey];
@@ -758,17 +811,17 @@ const CustomerDrawing = () => {
         } else {
           updatedDrawings = Object.values(groupedDrawings[clientKey]).flat();
         }
-        
-        // Only update if data actually changed and it's a valid array to avoid infinite loops
-        if (Array.isArray(updatedDrawings) && JSON.stringify(updatedDrawings) !== JSON.stringify(viewingClient.drawings)) {
-          setViewingClient(prev => ({
-            ...prev,
-            drawings: updatedDrawings
-          }));
-        }
+      }
+      
+      // Only update if data actually changed and it's a valid array to avoid infinite loops
+      if (Array.isArray(updatedDrawings) && JSON.stringify(updatedDrawings) !== JSON.stringify(viewingClient.drawings)) {
+        setViewingClient(prev => ({
+          ...prev,
+          drawings: updatedDrawings
+        }));
       }
     }
-  }, [groupedDrawings, viewingClient?.name, viewingClient?.projectName]);
+  }, [drawings, groupedDrawings, viewingClient?.name, viewingClient?.projectName, viewingClient?.requirementId]);
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -1698,11 +1751,27 @@ const CustomerDrawing = () => {
     const isRowObject = typeof client === 'object' && client !== null;
     const name = isRowObject ? (client.client_name || client.company_name) : client;
     const projectName = isRowObject ? client.project_name : null;
+    const requirementId = isRowObject ? client.id : null;
 
     // If it's a row object from the requirements table, use its specific items
     let drawingsForClient = [];
     if (isRowObject && client.original_items) {
       drawingsForClient = client.original_items;
+    } else if (requirementId) {
+      const rawDrawings = drawings.filter(d => 
+        normalize(d.client_name) === normalize(name) && 
+        String(d.sales_order_id) === String(requirementId)
+      );
+      const seen = new Set();
+      for (const d of rawDrawings) {
+        const dNo = d.drawing_no ? String(d.drawing_no).trim().toLowerCase() : null;
+        const dId = d.drawing_master_id || d.id;
+        const key = dNo || (dId ? `id_${dId}` : d.id);
+        if (key && !seen.has(key)) {
+          seen.add(key);
+          drawingsForClient.push(d);
+        }
+      }
     } else {
       // Use a case-insensitive search if direct match fails
       const clientObj = groupedDrawings[name] || {};
@@ -1732,13 +1801,14 @@ const CustomerDrawing = () => {
     const viewData = {
       name: name,
       projectName: projectName,
+      requirementId: requirementId,
       drawings: drawingsForClient
     };
     setViewingClient(viewData);
     setShowClientDrawingsModal(true);
 
     // Update URL behavior
-    navigate(`${deptPrefix}/customer-drawing/view-draw?client_name=${encodeURIComponent(name)}${projectName ? `&project_name=${encodeURIComponent(projectName)}` : ''}`, {
+    navigate(`${deptPrefix}/customer-drawing/view-draw?client_name=${encodeURIComponent(name)}${projectName ? `&project_name=${encodeURIComponent(projectName)}` : ''}${requirementId ? `&requirement_id=${requirementId}` : ''}`, {
       state: { type: 'view-client-drawings', data: viewData }
     });
   };

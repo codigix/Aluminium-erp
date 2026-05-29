@@ -59,7 +59,10 @@ const listDrawings = async (search = '', onlyShared = false, clientName = null) 
         FROM sales_order_items
         GROUP BY dwg_id, dwg_no
       ) s2 ON (COALESCE(s1.drawing_id, 0) = s2.dwg_id AND s1.drawing_no = s2.dwg_no AND s1.id = s2.max_id)
-    ) soi ON (d.id = soi.drawing_id OR (soi.drawing_id IS NULL AND d.drawing_no = soi.drawing_no))
+    ) soi ON (
+      (d.id = soi.drawing_id OR (soi.drawing_id IS NULL AND d.drawing_no = soi.drawing_no))
+      AND (soi.drawing_no IS NULL OR soi.drawing_no = '' OR d.drawing_no = soi.drawing_no)
+    )
     WHERE 1=1
   `;
   const params = [];
@@ -173,7 +176,10 @@ const getDrawingById = async (id) => {
         GROUP BY dwg_id, dwg_no
       ) s2 ON (s1.drawing_id = s2.dwg_id AND s1.drawing_no = s2.dwg_no AND s1.id = s2.max_id)
          OR (s1.drawing_id IS NULL AND s1.drawing_no = s2.dwg_no AND s1.id = s2.max_id)
-    ) soi ON (d.id = soi.drawing_id OR (d.drawing_no = soi.drawing_no AND (soi.drawing_id IS NULL OR soi.drawing_id = d.id)))
+    ) soi ON (
+      (d.id = soi.drawing_id OR (d.drawing_no = soi.drawing_no AND (soi.drawing_id IS NULL OR soi.drawing_id = d.id)))
+      AND (soi.drawing_no IS NULL OR soi.drawing_no = '' OR d.drawing_no = soi.drawing_no)
+    )
     WHERE d.id = ? OR d.public_id = ?
     LIMIT 1`,
     [id, id]
