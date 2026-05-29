@@ -2,6 +2,42 @@ const puppeteer = require('puppeteer');
 const fs = require('fs');
 const path = require('path');
 const mustache = require('mustache');
+const pool = require('../config/db');
+
+async function getHostCompanyForPO(poIdentifier) {
+  if (!poIdentifier) return null;
+  try {
+    let poNum = String(poIdentifier).trim();
+    if (poNum.includes(' - ')) {
+      poNum = poNum.split(' - ')[0].trim();
+    }
+    
+    let query = '';
+    let params = [];
+    if (typeof poNum === 'number' || (!isNaN(Number(poNum)) && poNum !== '')) {
+      query = `
+        SELECT q.host_company_id 
+        FROM purchase_orders po
+        JOIN quotations q ON po.quotation_id = q.id
+        WHERE po.id = ?
+      `;
+      params = [Number(poNum)];
+    } else {
+      query = `
+        SELECT q.host_company_id 
+        FROM purchase_orders po
+        JOIN quotations q ON po.quotation_id = q.id
+        WHERE po.po_number = ?
+      `;
+      params = [poNum];
+    }
+    const [rows] = await pool.query(query, params);
+    return rows[0]?.host_company_id || null;
+  } catch (err) {
+    console.error('[getHostCompanyForPO] Error:', err.message);
+    return null;
+  }
+}
 
 const generatePoPdf = async (data) => {
   const { type = 'receipt', receipt, po, grn, items = [] } = data;
@@ -32,7 +68,28 @@ const generatePoPdf = async (data) => {
     };
 
     const adminCompanyMasterService = require('../services/adminCompanyMasterService');
-    const activeCompany = await adminCompanyMasterService.getActiveCompany();
+    
+    let hostCompanyId = null;
+    if (type === 'grn' && grn) {
+      hostCompanyId = await getHostCompanyForPO(grn.po_number || grn.poNumber);
+    } else if (type === 'receipt' && receipt) {
+      hostCompanyId = await getHostCompanyForPO(receipt.po_id || receipt.po_number);
+    } else if (type === 'po' && po) {
+      hostCompanyId = await getHostCompanyForPO(po.id || po.po_number);
+    }
+
+    let activeCompany = null;
+    if (hostCompanyId) {
+      try {
+        activeCompany = await adminCompanyMasterService.getCompanyById(hostCompanyId);
+      } catch (err) {
+        console.error(`[generatePoPdf] Error loading company profile for hostCompanyId ${hostCompanyId}:`, err.message);
+      }
+    }
+
+    if (!activeCompany) {
+      activeCompany = await adminCompanyMasterService.getActiveCompany();
+    }
 
     let logoBase64 = null;
     if (activeCompany && activeCompany.company_logo) {

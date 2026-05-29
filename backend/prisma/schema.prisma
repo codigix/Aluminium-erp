@@ -1283,7 +1283,7 @@ model purchase_orders {
   mr_id                   Int?
   approved_by             Int?
   approved_at             DateTime?                                @db.Timestamp(0)
-  invoice_url             String?                                  @db.VarChar(255)
+  invoice_url             String?                                  @db.Text
   public_id               String?                                  @unique(map: "public_id") @db.VarChar(100)
   payments                payments[]
   purchase_order_items    purchase_order_items[]
@@ -1449,7 +1449,7 @@ model quotations {
   valid_until       DateTime?          @db.Date
   total_amount      Decimal?           @default(0.00) @db.Decimal(14, 2)
   notes             String?            @db.Text
-  received_pdf_path String?            @db.VarChar(500)
+  received_pdf_path String?            @db.Text
   created_at        DateTime?          @default(now()) @db.Timestamp(0)
   updated_at        DateTime?          @default(now()) @db.Timestamp(0)
   tax_amount        Decimal?           @default(0.00) @db.Decimal(14, 2)
@@ -1458,6 +1458,7 @@ model quotations {
   rfq_group_id      String?            @db.VarChar(50)
   version           Int?               @default(1)
   base_quote_number String?            @db.VarChar(100)
+  host_company_id   Int?
   purchase_orders   purchase_orders[]
   quotation_items   quotation_items[]
   material_requests material_requests? @relation(fields: [mr_id], references: [id], onUpdate: NoAction, map: "fk_quotations_mr")

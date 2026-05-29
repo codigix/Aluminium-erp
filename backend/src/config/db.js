@@ -289,7 +289,8 @@ const ensureQuotationItemColumns = async () => {
     const existingQCols = new Set(qCols.map(c => c.Field));
     const requiredQCols = [
       { name: 'tax_amount', definition: 'DECIMAL(14, 2) DEFAULT 0' },
-      { name: 'grand_total', definition: 'DECIMAL(14, 2) DEFAULT 0' }
+      { name: 'grand_total', definition: 'DECIMAL(14, 2) DEFAULT 0' },
+      { name: 'host_company_id', definition: 'INT DEFAULT NULL' }
     ];
 
     const missingQCols = requiredQCols.filter(c => !existingQCols.has(c.name));
@@ -298,7 +299,7 @@ const ensureQuotationItemColumns = async () => {
         .map(c => `ADD COLUMN \`${c.name}\` ${c.definition}`)
         .join(', ')};`;
       await connection.query(alterQSql);
-      console.log('Quotation tax columns synchronized');
+      console.log('Quotation tax/host_company_id columns synchronized');
     }
 
     const [columns] = await connection.query('SHOW COLUMNS FROM quotation_items');

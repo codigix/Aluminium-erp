@@ -346,7 +346,12 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
       });
       if (response.ok) {
         const data = await response.json();
-        setMrItems(data.items || []);
+        const items = data.items || [];
+        const filtered = items.filter(item => {
+          const code = (item.item_code || '').toUpperCase().trim();
+          return !code.startsWith('ASSEMBLY');
+        });
+        setMrItems(filtered);
         setMrPlanDetails({
           id: planId,
           planCode: data.plan_code,

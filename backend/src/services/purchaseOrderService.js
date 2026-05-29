@@ -540,6 +540,7 @@ const getPurchaseOrderById = async (poId) => {
      (SELECT phone FROM contacts WHERE company_id = po.vendor_id AND contact_type = 'PRIMARY' LIMIT 1) as contact_phone,
      mr.mr_number, so.so_number,
      po.invoice_url,
+     (SELECT q.host_company_id FROM quotations q WHERE q.id = po.quotation_id LIMIT 1) as host_company_id,
      (SELECT p.payment_mode FROM payments p WHERE p.po_id = po.id AND p.status = 'CONFIRMED' LIMIT 1) as payment_mode,
      (SELECT p.transaction_ref_no FROM payments p WHERE p.po_id = po.id AND p.status = 'CONFIRMED' LIMIT 1) as transaction_ref_no,
      (SELECT p.upi_transaction_id FROM payments p WHERE p.po_id = po.id AND p.status = 'CONFIRMED' LIMIT 1) as upi_transaction_id,
@@ -980,8 +981,20 @@ const generatePurchaseOrderPDF = async (poId) => {
   const adminCompanyMasterService = require('./adminCompanyMasterService');
   let activeCompany = null;
   
-  // If the PO is linked to a sales order, we can check if it has a host_company_id
-  if (po.sales_order_id) {
+  // 1. If PO is linked to a quotation, check its host_company_id
+  if (po.quotation_id) {
+    try {
+      const [quoteRow] = await pool.query('SELECT host_company_id FROM quotations WHERE id = ?', [po.quotation_id]);
+      if (quoteRow.length > 0 && quoteRow[0].host_company_id) {
+        activeCompany = await adminCompanyMasterService.getCompanyById(quoteRow[0].host_company_id);
+      }
+    } catch (err) {
+      console.error('Error fetching quotation host_company_id:', err);
+    }
+  }
+
+  // 2. If the PO is linked to a sales order, we can check if it has a host_company_id
+  if (!activeCompany && po.sales_order_id) {
     try {
       const [soRow] = await pool.query('SELECT host_company_id FROM sales_orders WHERE id = ?', [po.sales_order_id]);
       if (soRow.length > 0 && soRow[0].host_company_id) {
@@ -992,7 +1005,7 @@ const generatePurchaseOrderPDF = async (poId) => {
     }
   }
   
-  // Fallback to MR-linked sales order host_company_id
+  // 3. Fallback to MR-linked sales order host_company_id
   if (!activeCompany && po.mr_id) {
     try {
       const [mrRow] = await pool.query(

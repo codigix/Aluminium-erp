@@ -93,13 +93,23 @@ const getQuotationPDF = async (req, res, next) => {
 
 const uploadVendorResponse = async (req, res, next) => {
   try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'No file uploaded' });
+    const files = req.files || (req.file ? [req.file] : []);
+    if (files.length === 0) {
+      return res.status(400).json({ error: 'No files uploaded' });
     }
     
-    const filePath = req.file.path;
-    await quotationService.updateQuotation(req.params.quotationId, {
-      received_pdf_path: filePath
+    let filePaths = files.map(f => f.path.replace(/\\/g, '/')).join(',');
+    
+    // Merge with existing attachments if provided
+    if (req.body.existing_attachments) {
+      const existing = req.body.existing_attachments.split(',').map(p => p.trim()).filter(Boolean);
+      const newPaths = filePaths.split(',').map(p => p.trim()).filter(Boolean);
+      filePaths = [...existing, ...newPaths].join(',');
+    }
+    
+    const result = await quotationService.updateQuotation(req.params.quotationId, {
+      received_pdf_path: filePaths,
+      status: 'RECEIVED'
     });
     
     // Auto-mark as RECEIVED if status is currently SENT or DRAFT
@@ -108,7 +118,11 @@ const uploadVendorResponse = async (req, res, next) => {
       await quotationService.updateQuotationStatus(req.params.quotationId, 'RECEIVED');
     }
     
-    res.json({ message: 'Vendor response uploaded successfully', path: filePath });
+    res.json({ 
+      message: 'Vendor response uploaded successfully', 
+      paths: filePaths.split(','),
+      data: result
+    });
   } catch (error) {
     next(error);
   }
@@ -136,9 +150,26 @@ const getReceivedQuotationPDF = async (req, res, next) => {
     
     const fs = require('fs');
     const path = require('path');
-    const absolutePath = path.isAbsolute(quotation.received_pdf_path) 
-      ? quotation.received_pdf_path 
-      : path.join(process.cwd(), quotation.received_pdf_path);
+    
+    const filePaths = quotation.received_pdf_path.split(',').map(p => p.trim());
+    if (filePaths.length === 0 || !filePaths[0]) {
+      return res.status(404).json({ error: 'No files found' });
+    }
+
+    let targetPath = filePaths[0];
+    if (req.query.file) {
+      const requestedFile = req.query.file.trim().replace(/\\/g, '/');
+      const matched = filePaths.find(p => p.replace(/\\/g, '/').endsWith(requestedFile) || p.replace(/\\/g, '/') === requestedFile);
+      if (matched) {
+        targetPath = matched;
+      } else {
+        return res.status(400).json({ error: 'File is not associated with this quotation' });
+      }
+    }
+
+    const absolutePath = path.isAbsolute(targetPath) 
+      ? targetPath 
+      : path.join(process.cwd(), targetPath);
       
     if (!fs.existsSync(absolutePath)) {
       return res.status(404).json({ error: 'PDF file not found on disk' });

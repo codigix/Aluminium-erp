@@ -86,8 +86,12 @@ const createQuotation = async (payload) => {
     validUntil,
     notes,
     items = [],
-    status = 'DRAFT'
+    status = 'DRAFT',
+    hostCompanyId,
+    host_company_id
   } = payload;
+
+  const hostCompanyIdVal = hostCompanyId || host_company_id || null;
 
   if (!vendorId) {
     const error = new Error('Vendor is required');
@@ -102,10 +106,10 @@ const createQuotation = async (payload) => {
     const quoteNumber = await generateQuoteNumber();
 
     const [result] = await connection.execute(
-      `INSERT INTO quotations (quote_number, base_quote_number, version, vendor_id, sales_order_id, mr_id, rfq_id, rfq_group_id, status, valid_until, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO quotations (quote_number, base_quote_number, version, vendor_id, sales_order_id, mr_id, rfq_id, rfq_group_id, status, valid_until, notes, host_company_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ,
-      [quoteNumber, quoteNumber, 1, vendorId, salesOrderId || null, mrId || null, rfq_id || null, rfq_group_id || null, status, validUntil || null, notes || null]
+      [quoteNumber, quoteNumber, 1, vendorId, salesOrderId || null, mrId || null, rfq_id || null, rfq_group_id || null, status, validUntil || null, notes || null, hostCompanyIdVal]
     );
 
     const quotationId = result.insertId;
@@ -422,7 +426,9 @@ const updateQuotationStatus = async (quotationId, status) => {
 };
 
 const updateQuotation = async (quotationId, payload) => {
-  const { validUntil, notes, items, received_pdf_path, status } = payload;
+  const { validUntil, notes, items, received_pdf_path, status, hostCompanyId, host_company_id } = payload;
+
+  const hostCompanyIdVal = hostCompanyId || host_company_id;
 
   const connection = await pool.getConnection();
   try {
@@ -449,8 +455,8 @@ const updateQuotation = async (quotationId, payload) => {
     const [result] = await connection.execute(
       `INSERT INTO quotations (
         quote_number, base_quote_number, version, vendor_id, sales_order_id, 
-        mr_id, rfq_id, rfq_group_id, status, valid_until, notes, received_pdf_path
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        mr_id, rfq_id, rfq_group_id, status, valid_until, notes, received_pdf_path, host_company_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         newQuoteNumber,
         baseQuoteNumber,
@@ -460,10 +466,11 @@ const updateQuotation = async (quotationId, payload) => {
         oldQuote.mr_id,
         oldQuote.rfq_id,
         oldQuote.rfq_group_id,
-        status || 'RECEIVED',
-        validUntil !== undefined ? validUntil : oldQuote.valid_until,
+        status !== undefined ? status : (oldQuote.status || 'RECEIVED'),
+        validUntil !== undefined ? (validUntil === '' ? null : validUntil) : oldQuote.valid_until,
         notes !== undefined ? notes : oldQuote.notes,
-        received_pdf_path !== undefined ? received_pdf_path : oldQuote.received_pdf_path
+        received_pdf_path !== undefined ? received_pdf_path : oldQuote.received_pdf_path,
+        hostCompanyIdVal !== undefined ? (hostCompanyIdVal === '' ? null : hostCompanyIdVal) : oldQuote.host_company_id
       ]
     );
 
@@ -677,7 +684,20 @@ const sendQuotationEmail = async (quotationId, emailData) => {
 
 const generateQuotationPDF = async (quotationId) => {
   const adminCompanyMasterService = require('./adminCompanyMasterService');
-  const activeCompany = await adminCompanyMasterService.getActiveCompany();
+  const quotation = await getQuotationById(quotationId);
+
+  let activeCompany = null;
+  if (quotation.host_company_id) {
+    try {
+      activeCompany = await adminCompanyMasterService.getCompanyById(quotation.host_company_id);
+    } catch (err) {
+      console.error(`[generateQuotationPDF] Error loading company profile for host_company_id ${quotation.host_company_id}:`, err.message);
+    }
+  }
+
+  if (!activeCompany) {
+    activeCompany = await adminCompanyMasterService.getActiveCompany();
+  }
 
   const hostCompanyName = activeCompany?.company_name || 'SPTECHPIONEER PVT LTD';
   const hostCompanyAddress = activeCompany?.company_address || 'Industrial Area, Sector 5, Pune, Maharashtra - 411026';
@@ -694,7 +714,6 @@ const generateQuotationPDF = async (quotationId) => {
     }
   }
 
-  const quotation = await getQuotationById(quotationId);
   const [vendorRows] = await pool.query('SELECT * FROM vendors WHERE id = ?', [quotation.vendor_id]);
   const vendor = vendorRows[0];
 
@@ -704,427 +723,376 @@ const generateQuotationPDF = async (quotationId) => {
     <head>
       <meta charset="utf-8">
       <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
         
         body { 
           font-family: 'Inter', sans-serif; 
           color: #1e293b; 
-          line-height: 1.5; 
+          line-height: 1.4; 
           margin: 0;
           padding: 0;
           background-color: #fff;
+          font-size: 11px;
         }
         
         .page {
-          padding: 40px;
+          padding: 20px;
+          border: 1px solid #1e293b;
+          min-height: 297mm;
+          box-sizing: border-box;
+          display: flex;
+          flex-direction: column;
         }
 
-        .header-top {
-          text-align: center;
-          margin-bottom: 30px;
+        .header-box {
+          border: 2px solid #1e293b;
+          display: flex;
+          align-items: center;
+          padding: 10px 15px;
+          margin-bottom: 15px;
         }
 
-        .company-name {
-          color: #1d4ed8;
-          font-size: 32px;
-          font-weight: 700;
-          margin: 0;
-          text-transform: uppercase;
-          letter-spacing: 1px;
-        }
-
-        .company-address {
-          color: #64748b;
-          font-size: 14px;
-          margin: 5px 0;
-        }
-
-        .divider {
-          height: 2px;
-          background: linear-gradient(to right, transparent, #1d4ed8, transparent);
-          margin: 20px 0;
-        }
-
-        .rfq-header {
+        .logo-container {
+          width: 80px;
+          height: 80px;
           display: flex;
           align-items: center;
           justify-content: center;
-          gap: 20px;
-          margin-bottom: 30px;
+          border-right: 2px solid #1e293b;
+          padding-right: 15px;
+          flex-shrink: 0;
+        }
+
+        .logo-placeholder {
+          font-size: 24px;
+          font-weight: 800;
+          color: #64748b;
+          border: 2px solid #64748b;
+          padding: 5px;
+          text-align: center;
+          border-radius: 4px;
+          line-height: 1;
+        }
+
+        .header-content {
+          flex-grow: 1;
+          text-align: center;
+          padding-left: 15px;
         }
 
         .rfq-title {
-          font-size: 24px;
-          font-weight: 700;
-          color: #1e3a8a;
+          color: #ff6b00;
+          font-size: 22px;
+          font-weight: 800;
+          letter-spacing: 1px;
           text-transform: uppercase;
-          letter-spacing: 2px;
-          margin: 0;
+          margin: 0 0 5px 0;
         }
 
-        .dot {
-          width: 8px;
-          height: 8px;
-          background-color: #1d4ed8;
-          border-radius: 50%;
+        .company-name {
+          color: #1e293b;
+          font-size: 18px;
+          font-weight: 700;
+          margin: 0 0 5px 0;
+          text-transform: uppercase;
+        }
+
+        .company-address {
+          color: #475569;
+          font-size: 10px;
+          margin: 2px 0;
+        }
+
+        .company-contact {
+          color: #475569;
+          font-size: 10px;
+          margin: 2px 0;
+          font-weight: 500;
         }
 
         .info-grid {
           display: grid;
-          grid-template-columns: 1fr 1fr 1fr;
+          grid-template-columns: 1fr 1fr;
           gap: 15px;
-          margin-bottom: 30px;
+          margin-bottom: 15px;
         }
 
         .info-card {
-          background: #f8fafc;
-          border: 1px solid #e2e8f0;
-          border-radius: 8px;
-          padding: 10px 12px;
-          display: flex;
-          align-items: center;
-          gap: 10px;
-        }
-
-        .icon-box {
-          width: 32px;
-          height: 32px;
+          border: 2px solid #1e293b;
+          padding: 10px;
           background: #fff;
-          border: 1px solid #e2e8f0;
-          border-radius: 6px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: #1d4ed8;
-          flex-shrink: 0;
+          min-height: 95px;
         }
 
-        .info-label {
-          font-size: 9px;
-          font-weight: 600;
-          color: #1d4ed8;
-          text-transform: uppercase;
-          margin-bottom: 1px;
-          letter-spacing: 0.5px;
-        }
-
-        .info-value {
-          font-size: 12px;
-          font-weight: 700;
+        .info-header {
+          font-size: 10px;
+          font-weight: 800;
           color: #1e293b;
-          word-break: break-all;
-        }
-
-        .details-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 20px;
-          margin-bottom: 30px;
-        }
-
-        .section-card {
-          border: 1px solid #e2e8f0;
-          border-radius: 8px;
-          overflow: hidden;
-        }
-
-        .section-header {
-          background: #1e40af;
-          color: #fff;
-          padding: 8px 15px;
-          font-size: 12px;
-          font-weight: 600;
-          display: flex;
-          align-items: center;
-          gap: 8px;
           text-transform: uppercase;
+          border-bottom: 1px solid #cbd5e1;
+          padding-bottom: 5px;
+          margin-bottom: 8px;
         }
 
-        .section-content {
-          padding: 15px;
-          font-size: 13px;
+        .info-body p {
+          margin: 3px 0;
+          line-height: 1.4;
         }
 
-        .section-content p {
-          margin: 0;
-          line-height: 1.6;
-        }
-
-        table {
+        .details-table {
           width: 100%;
           border-collapse: collapse;
-          margin-bottom: 20px;
-          border-radius: 8px;
-          overflow: hidden;
-          border: 1px solid #e2e8f0;
+          margin-bottom: 15px;
         }
 
-        th {
-          background: #eff6ff;
-          color: #1e40af;
+        .details-table th, .details-table td {
+          border: 1px solid #1e293b;
+          padding: 6px 8px;
+          font-size: 10px;
           text-align: left;
-          padding: 12px 15px;
-          font-size: 11px;
+        }
+
+        .details-table th {
+          background: #f8fafc;
           font-weight: 700;
           text-transform: uppercase;
-          border-bottom: 2px solid #dbeafe;
-        }
-
-        td {
-          padding: 10px 15px;
-          border-bottom: 1px solid #f1f5f9;
-          font-size: 12px;
-          color: #334155;
-        }
-
-        tr:nth-child(even) {
-          background-color: #fcfcfc;
+          color: #1e293b;
+          border-bottom: 2px solid #1e293b;
         }
 
         .amount-col {
-          text-align: right;
-          font-weight: 500;
+          text-align: right !important;
         }
 
-        .summary-container {
-          display: flex;
-          justify-content: flex-end;
-          margin-bottom: 30px;
+        .center-col {
+          text-align: center !important;
+        }
+
+        .summary-block {
+          display: grid;
+          grid-template-columns: 3fr 2fr;
+          border: 2px solid #1e293b;
+          margin-bottom: 15px;
+          background: #fff;
+        }
+
+        .remarks-container {
+          padding: 10px;
+          border-right: 2px solid #1e293b;
         }
 
         .summary-table {
-          width: 300px;
-          border: 1px solid #e2e8f0;
-          margin-bottom: 0;
+          width: 100%;
+          border-collapse: collapse;
         }
 
         .summary-table td {
-          padding: 8px 15px;
+          padding: 6px 10px;
+          font-size: 10px;
+          border-bottom: 1px solid #e2e8f0;
+        }
+
+        .summary-table tr:last-child td {
+          border-bottom: none;
         }
 
         .summary-label {
-          color: #64748b;
+          color: #475569;
           font-weight: 500;
         }
 
         .summary-value {
           text-align: right;
           font-weight: 600;
+          color: #1e293b;
         }
 
         .grand-total-row {
-          background: #eff6ff;
-          color: #1d4ed8;
-          font-size: 14px !important;
-          font-weight: 700 !important;
-        }
-
-        .notes-card {
-          border: 1px solid #e2e8f0;
-          border-radius: 8px;
-          margin-bottom: 40px;
-        }
-
-        .notes-header {
-          padding: 10px 15px;
+          background: #f8fafc;
           font-size: 11px;
-          font-weight: 600;
-          color: #1d4ed8;
-          text-transform: uppercase;
-          border-bottom: 1px solid #f1f5f9;
+          font-weight: 800 !important;
         }
 
-        .notes-content {
-          padding: 15px;
+        .grand-total-value {
+          color: #10b981;
           font-size: 12px;
-          color: #475569;
-          background: #fbfbfb;
+          font-weight: 800;
+        }
+
+        .section-box {
+          border: 2px solid #1e293b;
+          margin-bottom: 15px;
+        }
+
+        .section-box-header {
+          background: #f8fafc;
+          border-bottom: 1px solid #1e293b;
+          padding: 6px 10px;
+          font-size: 9px;
+          font-weight: 800;
+          color: #1e293b;
+          text-transform: uppercase;
+        }
+
+        .section-box-content {
+          padding: 10px;
+          font-size: 10px;
+          color: #334155;
+          min-height: 25px;
         }
 
         .footer {
           margin-top: auto;
-          padding-top: 20px;
-          border-top: 1px solid #e2e8f0;
+          padding-top: 10px;
+          border-top: 1px solid #cbd5e1;
           display: flex;
           justify-content: space-between;
-          color: #94a3b8;
-          font-size: 10px;
-        }
-
-        .footer-left {
-          font-style: italic;
-        }
-
-        .badge {
-          display: inline-block;
-          padding: 2px 6px;
-          border-radius: 4px;
-          font-size: 10px;
-          font-weight: 600;
-          background: #f1f5f9;
           color: #64748b;
-          margin-top: 5px;
-        }
-
-        @media print {
-          body { margin: 0; }
-          .page { padding: 20px; }
+          font-size: 9px;
         }
       </style>
     </head>
     <body>
       <div class="page">
-        <div class="header-top">
-          {{#logoBase64}}
-          <img src="{{logoBase64}}" style="max-height: 45px; margin-bottom: 10px;" />
-          {{/logoBase64}}
-          <h1 class="company-name">{{hostCompanyName}}</h1>
-          <p class="company-address">{{hostCompanyAddress}}</p>
-          {{#hostGSTIN}}
-          <p class="company-address">GSTIN/UIN: {{hostGSTIN}}</p>
-          {{/hostGSTIN}}
-        </div>
-
-        <div class="divider"></div>
-
-        <div class="rfq-header">
-          <div class="dot"></div>
-          <h2 class="rfq-title">Request for Quotation</h2>
-          <div class="dot"></div>
+        <div class="header-box">
+          <div class="logo-container">
+            {{#logoBase64}}
+            <img src="{{logoBase64}}" style="max-height: 70px; max-width: 70px; object-fit: contain;" />
+            {{/logoBase64}}
+            {{^logoBase64}}
+            <div class="logo-placeholder">SP<br><span style="font-size: 10px;">TP</span></div>
+            {{/logoBase64}}
+          </div>
+          <div class="header-content">
+            <h1 class="rfq-title">Request For Quotation</h1>
+            <h2 class="company-name">{{hostCompanyName}}</h2>
+            <p class="company-address">{{hostCompanyAddress}}</p>
+            {{#hostGSTIN}}
+            <p class="company-address">GST No: {{hostGSTIN}}</p>
+            {{/hostGSTIN}}
+            <p class="company-contact">
+              {{#hostEmail}}Email: {{hostEmail}}{{/hostEmail}}
+              {{#hostPhone}} | Mobile: {{hostPhone}}{{/hostPhone}}
+            </p>
+          </div>
         </div>
 
         <div class="info-grid">
           <div class="info-card">
-            <div class="icon-box">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-            </div>
-            <div>
-              <div class="info-label">RFQ No:</div>
-              <div class="info-value">{{quote_number}}</div>
-            </div>
-          </div>
-          <div class="info-card">
-            <div class="icon-box">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-            </div>
-            <div>
-              <div class="info-label">Date:</div>
-              <div class="info-value">{{created_at}}</div>
-            </div>
-          </div>
-          <div class="info-card">
-            <div class="icon-box">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-            </div>
-            <div>
-              <div class="info-label">Valid Till:</div>
-              <div class="info-value">{{valid_until}}</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="details-grid">
-          <div class="section-card">
-            <div class="section-header">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-              Vendor Information
-            </div>
-            <div class="section-content">
+            <div class="info-header">RFQ TO:</div>
+            <div class="info-body">
               <p><strong>{{vendor_name}}</strong></p>
               <p>{{location}}</p>
-              <p style="margin-top: 5px; color: #64748b;">Email: {{vendor_email}}</p>
-              <p style="color: #64748b;">Phone: {{phone}}</p>
+              <p style="color: #475569; font-size: 9px; margin-top: 4px;">Email: {{vendor_email}}</p>
+              <p style="color: #475569; font-size: 9px;">Phone: {{phone}}</p>
+              {{#vendor_gstin}}
+              <p style="color: #475569; font-size: 9px; font-weight: 500;">GST No: {{vendor_gstin}}</p>
+              {{/vendor_gstin}}
             </div>
           </div>
-          <div class="section-card">
-            <div class="section-header">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
-              Project Reference
-            </div>
-            <div class="section-content">
-              <p><strong>{{project_ref}}</strong></p>
-              {{#project_name}}
-              <p style="margin-top: 5px; color: #64748b; font-size: 11px;">Project: {{project_name}}</p>
-              {{/project_name}}
-            </div>
+          <div class="info-card">
+            <div class="info-header">RFQ DETAILS:</div>
+            <table style="width: 100%; border: none; margin: 0; background: transparent;">
+              <tr style="background: transparent;">
+                <td style="width: 35%; border: none; padding: 2px 0; color: #475569;">Date</td>
+                <td style="width: 5%; border: none; padding: 2px 0; color: #475569;">:</td>
+                <td style="width: 60%; border: none; padding: 2px 0; font-weight: 600;">{{created_at}}</td>
+              </tr>
+              <tr style="background: transparent;">
+                <td style="border: none; padding: 2px 0; color: #475569;">RFQ No</td>
+                <td style="border: none; padding: 2px 0; color: #475569;">:</td>
+                <td style="border: none; padding: 2px 0; font-weight: 600; font-family: monospace;">{{quote_number}}</td>
+              </tr>
+              <tr style="background: transparent;">
+                <td style="border: none; padding: 2px 0; color: #475569;">Valid Till</td>
+                <td style="border: none; padding: 2px 0; color: #475569;">:</td>
+                <td style="border: none; padding: 2px 0; font-weight: 600;">{{valid_until}}</td>
+              </tr>
+            </table>
           </div>
         </div>
 
-        <table>
+        <table class="details-table">
           <thead>
             <tr>
-              <th style="width: 5%">#</th>
-              <th style="width: 20%">Drawing No</th>
-              <th style="width: 30%">Material Name</th>
-              <th style="width: 15%">Type</th>
-              <th style="width: 15%">Design Qty</th>
-              <th style="width: 15%" class="amount-col">Rate (₹)</th>
-              <th style="width: 15%" class="amount-col">Amount (₹)</th>
+              <th style="width: 5%; text-align: center;">Sr. No</th>
+              <th style="width: 25%">Drawing No / Item Code</th>
+              <th style="width: 30%">Description / Material Name</th>
+              <th style="width: 12%; text-align: center;">Qty</th>
+              <th style="width: 12%; text-align: right;">Unit Rate (₹)</th>
+              <th style="width: 8%; text-align: center;">GST %</th>
+              <th style="width: 13%; text-align: right;">Total (Incl. GST)</th>
             </tr>
           </thead>
           <tbody>
             {{#items}}
             <tr>
-              <td>{{sr}}</td>
+              <td class="center-col">{{sr}}</td>
               <td style="font-family: monospace; font-weight: 500;">{{drawing_no}}</td>
               <td>
-                {{material_name}}
-                {{#material_description}}<br><span style="font-size: 10px; color: #64748b;">{{material_description}}</span>{{/material_description}}
+                <strong>{{material_name}}</strong>
+                {{#material_description}}<br><span style="font-size: 8px; color: #64748b;">{{material_description}}</span>{{/material_description}}
               </td>
-              <td><span class="badge">{{material_type}}</span></td>
-              <td><strong>{{quantity}}</strong> {{unit}}</td>
+              <td class="center-col"><strong>{{quantity}}</strong> {{unit}}</td>
               <td class="amount-col">{{unit_rate}}</td>
+              <td class="center-col">{{gst_percent}}</td>
               <td class="amount-col">{{amount}}</td>
             </tr>
             {{/items}}
           </tbody>
         </table>
 
-        <div class="summary-container">
-          <table class="summary-table">
-            <tr>
-              <td class="summary-label">Subtotal:</td>
-              <td class="summary-value">₹{{total_amount}}</td>
-            </tr>
-            <tr>
-              <td class="summary-label">CGST (9%):</td>
-              <td class="summary-value">₹{{cgst_total}}</td>
-            </tr>
-            <tr>
-              <td class="summary-label">SGST (9%):</td>
-              <td class="summary-value">₹{{sgst_total}}</td>
-            </tr>
-            <tr class="grand-total-row">
-              <td style="border-bottom: none;">Grand Total:</td>
-              <td class="summary-value" style="border-bottom: none;">₹{{grand_total}}</td>
-            </tr>
-          </table>
+        <div class="summary-block">
+          <div class="remarks-container">
+            <p style="margin: 0 0 5px 0; font-weight: 700; font-size: 10px;">Remarks:</p>
+            <p style="margin: 0; color: #475569; font-size: 10px; line-height: 1.4;">{{notes}}{{^notes}}Request for quotation created from the procurement requirements.{{/notes}}</p>
+          </div>
+          <div>
+            <table class="summary-table">
+              <tr>
+                <td class="summary-label">Sub Total (Before Tax)</td>
+                <td class="summary-value">₹{{total_amount}}</td>
+              </tr>
+              <tr>
+                <td class="summary-label" style="color: #2563eb;">Total Profit</td>
+                <td class="summary-value" style="color: #2563eb;">₹0.00</td>
+              </tr>
+              <tr>
+                <td class="summary-label">Tax (GST 18%)</td>
+                <td class="summary-value">₹{{tax_amount}}</td>
+              </tr>
+              <tr class="grand-total-row">
+                <td style="font-weight: 800; border: none;">Grand Total</td>
+                <td class="grand-total-value" style="border: none;">₹{{grand_total}}</td>
+              </tr>
+            </table>
+          </div>
         </div>
 
-        {{#notes}}
-        <div class="notes-card">
-          <div class="notes-header">Special Instructions & Notes</div>
-          <div class="notes-content">{{notes}}</div>
+        <div class="section-box">
+          <div class="section-box-header">Special Instructions & Notes</div>
+          <div class="section-box-content">
+            RFQ Ref: {{rfq_ref}}
+          </div>
         </div>
-        {{/notes}}
 
-        {{#invoiceFooterNotes}}
-        <div class="notes-card" style="margin-top: 20px;">
-          <div class="notes-header">Declaration & Terms</div>
-          <div class="notes-content">{{invoiceFooterNotes}}</div>
+        <div class="section-box">
+          <div class="section-box-header">Declaration & Terms</div>
+          <div class="section-box-content">
+            {{invoiceFooterNotes}}{{^invoiceFooterNotes}}ASDFGHJHGFDS{{/invoiceFooterNotes}}
+          </div>
         </div>
-        {{/invoiceFooterNotes}}
 
         <div class="footer">
-          <div class="footer-left">This is a computer-generated document. No signature is required.</div>
-          <div class="footer-right">{{hostCompanyName}} | Confidential</div>
+          <div class="footer-left">This is a system generated document and does not require physical signature.</div>
+          <div class="footer-right">{{hostCompanyName}} | Page 1 of 1</div>
         </div>
       </div>
     </body>
     </html>
   `;
 
-  const formatDate = (date) => date ? new Date(date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+  const formatDate = (date) => date ? new Date(date).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
 
   const viewData = {
     ...quotation,
@@ -1135,16 +1103,20 @@ const generateQuotationPDF = async (quotationId) => {
     vendor_email: vendor?.email || 'N/A',
     location: vendor?.location || 'N/A',
     phone: vendor?.phone || 'N/A',
+    vendor_gstin: vendor?.gstin || '22ABCDE1234F1Z5',
     project_name: quotation.project_name,
     project_ref: quotation.mr_id ? `MR: ${quotation.mr_number}` : (quotation.sales_order_id ? `SO: ${quotation.so_number || quotation.sales_order_id}` : 'General Requirement'),
     total_amount: parseFloat(quotation.total_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-    cgst_total: (parseFloat(quotation.tax_amount || 0) / 2).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-    sgst_total: (parseFloat(quotation.tax_amount || 0) / 2).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    tax_amount: parseFloat(quotation.tax_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
     grand_total: parseFloat(quotation.grand_total || quotation.total_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    rfq_ref: quotation.rfq_group_id ? `RFQ-${quotation.rfq_group_id}` : `RFQ-${quotation.quote_number || '1780046352127'}`,
     items: (quotation.items || []).map((i, idx) => {
       const qty = parseFloat(i.quantity || 0);
       const rate = parseFloat(i.unit_rate || 0);
       const amt = parseFloat(i.amount || qty * rate);
+      const cgst = parseFloat(i.cgst_percent || 0);
+      const sgst = parseFloat(i.sgst_percent || 0);
+      const totalGst = cgst + sgst;
       
       return {
         ...i,
@@ -1155,6 +1127,7 @@ const generateQuotationPDF = async (quotationId) => {
         material_type: i.material_type || '—',
         quantity: qty.toFixed(3),
         unit: i.unit || 'NOS',
+        gst_percent: totalGst > 0 ? `${totalGst}%` : '18%',
         unit_rate: rate.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
         amount: amt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
       };
@@ -1162,6 +1135,14 @@ const generateQuotationPDF = async (quotationId) => {
     hostCompanyName,
     hostCompanyAddress,
     hostGSTIN,
+    hostPAN: activeCompany?.pan || '',
+    hostBankName: activeCompany?.bank_name || '',
+    hostAccountNumber: activeCompany?.account_number || '',
+    hostIFSCCode: activeCompany?.ifsc_code || '',
+    hostBranchName: activeCompany?.branch_name || '',
+    hostEmail: activeCompany?.email || '',
+    hostPhone: activeCompany?.phone || '',
+    hostContactPerson: activeCompany?.contact_person || '',
     invoiceFooterNotes,
     logoBase64
   };

@@ -162,6 +162,10 @@ const PurchaseOrders = () => {
   const [showManualCreateModal, setShowManualCreateModal] = useState(false);
   const invoiceInputRef = useRef(null);
   const [uploadingPoId, setUploadingPoId] = useState(null);
+  const [showAttachmentModal, setShowAttachmentModal] = useState(false);
+  const [selectedPoForAttachment, setSelectedPoForAttachment] = useState(null);
+  const [selectedAttachmentFiles, setSelectedAttachmentFiles] = useState([]);
+  const [isUploadingAttachments, setIsUploadingAttachments] = useState(false);
   const [manualFormData, setManualFormData] = useState({
     id: null,
     vendorId: '',
@@ -429,16 +433,39 @@ const PurchaseOrders = () => {
     }
   };
 
-  const handleFileChange = async (e) => {
-    const file = e.target.files[0];
-    if (!file || !uploadingPoId) return;
+  const handleAttachmentModalFileChange = (e) => {
+    const selected = Array.from(e.target.files);
+    setSelectedAttachmentFiles(prev => [...prev, ...selected]);
+    e.target.value = ''; // Reset input so same files can be re-selected
+  };
 
-    const formData = new FormData();
-    formData.append('invoice', file);
+  const handleRemoveStagedFile = (index) => {
+    setSelectedAttachmentFiles(prev => prev.filter((_, idx) => idx !== index));
+  };
 
+  const handleUploadPoAttachments = async () => {
+    if (!selectedPoForAttachment) return;
+    
+    setIsUploadingAttachments(true);
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/purchase-orders/${uploadingPoId}/invoice`, {
+      const formData = new FormData();
+      
+      // Append new files
+      selectedAttachmentFiles.forEach(file => {
+        formData.append('invoice', file);
+      });
+
+      // Keep existing files
+      const existing = (selectedPoForAttachment.invoice_url || '')
+        .split(',')
+        .map(p => p.trim())
+        .filter(Boolean)
+        .join(',');
+      
+      formData.append('existing_attachments', existing);
+
+      const response = await fetch(`${API_BASE}/purchase-orders/${selectedPoForAttachment.id}/invoice`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -447,18 +474,87 @@ const PurchaseOrders = () => {
       });
 
       if (response.ok) {
-        successToast('Invoice uploaded successfully');
+        const resData = await response.json();
+        successToast('Attachments uploaded successfully');
+        
+        // Update selected PO attachments state locally
+        const updatedPo = { ...selectedPoForAttachment, invoice_url: resData.paths.join(',') };
+        setSelectedPoForAttachment(updatedPo);
+        setSelectedAttachmentFiles([]);
+        
+        // Refresh PO lists
         fetchPOs();
+        fetchStats();
       } else {
-        const errorData = await response.json();
-        errorToast(errorData.message || 'Failed to upload invoice');
+        const err = await response.json();
+        errorToast(err.message || 'Failed to upload attachments');
       }
     } catch (error) {
-      console.error('Error uploading invoice:', error);
-      errorToast('Error uploading invoice');
+      console.error(error);
+      errorToast('Error uploading attachments');
     } finally {
-      setUploadingPoId(null);
-      e.target.value = ''; // Reset input
+      setIsUploadingAttachments(false);
+    }
+  };
+
+  const handleDeletePoAttachment = async (filePathToDelete) => {
+    if (!selectedPoForAttachment) return;
+
+    const result = await Swal.fire({
+      title: 'Remove attachment?',
+      text: 'This will permanently remove the attachment from the PO record.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Remove',
+      cancelButtonText: 'Cancel',
+      confirmButtonColor: '#dc2626'
+    });
+
+    if (!result.isConfirmed) return;
+
+    setIsUploadingAttachments(true);
+    try {
+      const token = localStorage.getItem('authToken');
+      
+      // Filter out the file path
+      const remaining = (selectedPoForAttachment.invoice_url || '')
+        .split(',')
+        .map(p => p.trim())
+        .filter(p => p !== filePathToDelete && p.length > 0)
+        .join(',');
+
+      const formData = new FormData();
+      formData.append('existing_attachments', remaining);
+
+      // Call the API with no new files, just remaining existing attachments
+      const response = await fetch(`${API_BASE}/purchase-orders/${selectedPoForAttachment.id}/invoice`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
+
+      if (response.ok) {
+        const resData = await response.json();
+        successToast('Attachment removed successfully');
+        
+        // Update selected PO attachments state locally
+        const updatedPo = { ...selectedPoForAttachment, invoice_url: resData.paths.join(',') };
+        setSelectedPoForAttachment(updatedPo);
+        
+        // Refresh PO lists
+        fetchPOs();
+        fetchStats();
+      } else {
+        const err = await response.json();
+        errorToast(err.message || 'Failed to remove attachment');
+      }
+    } catch (error) {
+      console.error(error);
+      errorToast('Error removing attachment');
+    } finally {
+      setIsUploadingAttachments(false);
     }
   };
 
@@ -1041,11 +1137,11 @@ const PurchaseOrders = () => {
           {(row.status === 'DRAFT' || row.status === 'PO_REQUEST') && (
             <button
               onClick={() => handleApprovePO(row.id)}
-              className=" text-emerald-500 hover:bg-emerald-50 rounded  transition-all border border-emerald-50  active:scale-90"
+              className="p-1 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 rounded transition-all border border-emerald-100 hover:border-emerald-200 active:scale-90 flex items-center justify-center"
               title="Approve PO"
             >
-              <svg className="w-2 h-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
               </svg>
             </button>
           )}
@@ -1060,19 +1156,25 @@ const PurchaseOrders = () => {
           </button>
           <button
             onClick={() => {
-              if (row.invoice_url) {
-                window.open(`${API_BASE}/${row.invoice_url}`, '_blank');
-              } else {
-                setUploadingPoId(row.id);
-                invoiceInputRef.current?.click();
-              }
+              setSelectedPoForAttachment(row);
+              setSelectedAttachmentFiles([]);
+              setShowAttachmentModal(true);
             }}
-            className={` rounded  transition-all   active:scale-90 ${row.invoice_url ? 'text-emerald-500' : 'text-slate-400  hover:text-slate-600 '}`}
-            title={row.invoice_url ? "View Invoice" : "Upload Invoice"}
+            className={`p-1.5 rounded transition-all active:scale-90 flex items-center justify-center gap-1 ${
+              row.invoice_url && row.invoice_url.trim().length > 0
+                ? 'text-emerald-600 bg-emerald-50 hover:bg-emerald-100/70 border border-emerald-100'
+                : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50 border border-transparent'
+            }`}
+            title="Manage Attachments"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
             </svg>
+            {row.invoice_url && row.invoice_url.trim().length > 0 && (
+              <span className="text-[10px] font-bold px-1 bg-emerald-600 text-white rounded-full leading-none min-w-[14px] h-[14px] flex items-center justify-center">
+                {row.invoice_url.split(',').filter(Boolean).length}
+              </span>
+            )}
           </button>
           {row.vendor_id && (
             <button
@@ -1998,13 +2100,202 @@ const PurchaseOrders = () => {
           </div>
         </div>
       )}
-      <input
-        type="file"
-        ref={invoiceInputRef}
-        className="hidden"
-        accept="application/pdf"
-        onChange={handleFileChange}
-      />
+      {showAttachmentModal && selectedPoForAttachment && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-xl border border-slate-100 shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in duration-300">
+            {/* Modal Header */}
+            <div className="bg-slate-50 px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-rose-50 text-rose-600 rounded-lg">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-800">PO Attachments & Documents</h3>
+                  <p className="text-xs text-slate-400 mt-0.5 font-mono">{selectedPoForAttachment.po_number}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setShowAttachmentModal(false);
+                  setSelectedPoForAttachment(null);
+                  setSelectedAttachmentFiles([]);
+                }}
+                className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors text-slate-400 hover:text-slate-600"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto space-y-6 flex-1 min-h-0 custom-scrollbar">
+              {/* Existing Documents Section */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider">Currently Attached Invoices/Receipts</h4>
+                <div className="border border-slate-100 rounded-xl overflow-hidden bg-slate-50/50">
+                  {selectedPoForAttachment.invoice_url && selectedPoForAttachment.invoice_url.trim().length > 0 ? (
+                    <div className="divide-y divide-slate-100 bg-white">
+                      {selectedPoForAttachment.invoice_url.split(',').filter(Boolean).map((filePath, idx) => {
+                        const fileName = filePath.split('/').pop() || `document_${idx + 1}.pdf`;
+                        return (
+                          <div key={idx} className="flex items-center justify-between p-3.5 hover:bg-slate-50/50 transition-all group">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg group-hover:scale-105 transition-all">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-xs font-semibold text-slate-700 truncate max-w-[340px]" title={fileName}>{fileName}</p>
+                                <p className="text-[10px] text-slate-400 font-mono mt-0.5">Ready for review</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => window.open(`${API_BASE}/${filePath}`, '_blank')}
+                                className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition-all"
+                                title="Download Document"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                </svg>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeletePoAttachment(filePath)}
+                                className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg transition-all"
+                                title="Delete Document"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="py-8 text-center bg-white">
+                      <div className="inline-flex p-3 bg-slate-50 text-slate-400 rounded-full mb-2">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 13h6m-3-3v6m-9 1V4a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+                        </svg>
+                      </div>
+                      <p className="text-xs text-slate-500 font-medium">No attachments uploaded yet</p>
+                      <p className="text-[10px] text-slate-400 mt-1">Upload vendor invoices below to attach them to this order</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Upload Dropzone Section */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider">Upload New Documents</h4>
+                <div 
+                  onClick={() => document.getElementById('poAttachmentsInput').click()}
+                  className="border-2 border-dashed border-slate-200 hover:border-rose-400 bg-slate-50/50 hover:bg-slate-50 rounded-xl p-6 text-center cursor-pointer transition-all group"
+                >
+                  <input
+                    type="file"
+                    id="poAttachmentsInput"
+                    multiple
+                    accept="application/pdf"
+                    onChange={handleAttachmentModalFileChange}
+                    className="hidden"
+                  />
+                  <div className="inline-flex p-3 bg-white text-slate-500 group-hover:text-rose-500 rounded-lg shadow-sm border border-slate-100 group-hover:scale-105 transition-all mb-3">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                    </svg>
+                  </div>
+                  <p className="text-xs font-semibold text-slate-700">Drag & drop or click to upload</p>
+                  <p className="text-[10px] text-slate-400 mt-1">Supports PDF invoices and receipts up to 10MB each</p>
+                </div>
+              </div>
+
+              {/* Staged New Files Section */}
+              {selectedAttachmentFiles.length > 0 && (
+                <div className="space-y-3 animate-in slide-in-from-bottom-2 duration-300">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider">Files Selected for Upload</h4>
+                    <span className="text-[10px] font-bold text-rose-500 bg-rose-50 px-2 py-0.5 rounded-full">{selectedAttachmentFiles.length} Staged</span>
+                  </div>
+                  <div className="border border-slate-100 rounded-xl overflow-hidden bg-white divide-y divide-slate-100">
+                    {selectedAttachmentFiles.map((file, idx) => (
+                      <div key={idx} className="flex items-center justify-between p-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="p-2 bg-rose-50 text-rose-600 rounded-lg">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                            </svg>
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-semibold text-slate-700 truncate max-w-[340px]">{file.name}</p>
+                            <p className="text-[10px] text-slate-400 mt-0.5">{(file.size / 1024).toFixed(1)} KB</p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveStagedFile(idx)}
+                          className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all"
+                          title="Remove File"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAttachmentModal(false);
+                  setSelectedPoForAttachment(null);
+                  setSelectedAttachmentFiles([]);
+                }}
+                className="px-5 py-2 border border-slate-200 text-slate-600 rounded-lg text-xs font-semibold hover:bg-slate-100 transition-all"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={handleUploadPoAttachments}
+                disabled={selectedAttachmentFiles.length === 0 || isUploadingAttachments}
+                className="flex items-center gap-2 px-6 py-2 bg-rose-600 text-white rounded-lg text-xs font-semibold hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md shadow-rose-200 active:scale-98"
+              >
+                {isUploadingAttachments ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span>Save Attachments</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

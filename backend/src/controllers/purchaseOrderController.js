@@ -121,12 +121,36 @@ const sendPurchaseOrderEmail = async (req, res, next) => {
 
 const uploadInvoice = async (req, res, next) => {
   try {
-    if (!req.file) {
-      return res.status(400).json({ message: 'No file uploaded' });
+    const files = req.files || [];
+    let filePaths = files.map(f => f.path.replace(/\\/g, '/')).join(',');
+    
+    // Merge with existing attachments if provided
+    if (req.body.existing_attachments) {
+      const existing = req.body.existing_attachments.split(',').map(p => p.trim()).filter(Boolean);
+      const newPaths = filePaths.split(',').map(p => p.trim()).filter(Boolean);
+      filePaths = [...existing, ...newPaths].join(',');
     }
-    const invoiceUrl = `uploads/${req.file.filename}`;
-    const result = await purchaseOrderService.updatePurchaseOrderInvoice(req.params.poId, invoiceUrl);
-    res.json({ message: 'Invoice uploaded successfully', data: result });
+
+    const result = await purchaseOrderService.updatePurchaseOrderInvoice(req.params.poId, filePaths || null);
+    
+    // Auto-approve the PO if it has at least one attachment, is currently DRAFT or PO_REQUEST, and has a vendor assigned
+    if (filePaths && filePaths.trim().length > 0) {
+      try {
+        const po = await purchaseOrderService.getPurchaseOrderById(req.params.poId);
+        if (['DRAFT', 'PO_REQUEST'].includes(po.status) && po.vendor_id) {
+          const userId = req.user ? req.user.id : null;
+          await purchaseOrderService.approvePurchaseOrder(req.params.poId, userId);
+        }
+      } catch (err) {
+        console.error('[AUTO-APPROVE ERROR]:', err.message);
+      }
+    }
+    
+    res.json({ 
+      message: 'Attachments saved successfully', 
+      paths: filePaths ? filePaths.split(',') : [],
+      data: result 
+    });
   } catch (error) {
     next(error);
   }

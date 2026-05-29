@@ -81,7 +81,8 @@ async function syncEmails() {
                 if (pdfSaved) {
                     // Update quotation status and PDF path
                     await quotationService.updateQuotation(quotation.id, {
-                        received_pdf_path: pdfPath
+                        received_pdf_path: pdfPath,
+                        status: 'RECEIVED'
                     });
                     
                     // Mark as RECEIVED

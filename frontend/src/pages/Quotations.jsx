@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useLocation, useNavigate } from 'react-router-dom';
 import { Card, DataTable, Modal, SearchableSelect, MultiSelect, Button, Tabs } from '../components/ui.jsx';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
+import { getFileUrl } from '../utils/url';
 import {
   Eye,
   Mail,
@@ -15,13 +16,15 @@ import {
   RefreshCw,
   Filter,
   Download,
+  Upload,
   Search,
   Loader2,
   Activity,
   Clock,
   CheckCircle2,
   Send,
-  History
+  History,
+  Building2
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
@@ -102,6 +105,10 @@ const Quotations = () => {
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedQuotation, setSelectedQuotation] = useState(null);
+  const [hostCompanies, setHostCompanies] = useState([]);
+  const [selectedHostId, setSelectedHostId] = useState('');
+  const [selectedHostCompany, setSelectedHostCompany] = useState(null);
+
   const [formData, setFormData] = useState({
     vendorId: '',
     vendorIds: [],
@@ -109,6 +116,7 @@ const Quotations = () => {
     rfq_id: null,
     validUntil: '',
     notes: '',
+    hostCompanyId: '',
     items: [{ drawing_no: '', material_name: '', material_type: '', quantity: 0, uom: 'NOS', unit_rate: 0 }]
   });
   const [recordData, setRecordData] = useState({
@@ -130,6 +138,7 @@ const Quotations = () => {
   const [editFormData, setEditFormData] = useState({
     vendorId: '',
     validUntil: '',
+    hostCompanyId: '',
     items: []
   });
 
@@ -137,6 +146,15 @@ const Quotations = () => {
   const [selectedMR, setSelectedMR] = useState('');
   const [showCompareModal, setShowCompareModal] = useState(false);
   const [compareData, setCompareData] = useState([]);
+
+  const [showUploadAttachmentsModal, setShowUploadAttachmentsModal] = useState(false);
+  const [uploadModalFiles, setUploadModalFiles] = useState([]);
+  const [existingAttachments, setExistingAttachments] = useState([]);
+  const [uploadingAttachments, setUploadingAttachments] = useState(false);
+  const [recordFiles, setRecordFiles] = useState([]);
+  const [openDownloadMenuId, setOpenDownloadMenuId] = useState(null);
+  const [editAttachments, setEditAttachments] = useState([]);
+  const [editUploadFiles, setEditUploadFiles] = useState([]);
 
   useEffect(() => {
     setSelectedQuotes([]);
@@ -181,7 +199,43 @@ const Quotations = () => {
     fetchVendors();
     fetchSalesOrders();
     fetchMaterialRequests();
+    fetchHostCompanies();
   }, []);
+
+  const fetchHostCompanies = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/admin-company-master`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setHostCompanies(data);
+        if (!selectedHostId) {
+          const active = data.find(c => c.status === 'ACTIVE');
+          if (active) {
+            setSelectedHostId(String(active.id));
+            setSelectedHostCompany(active);
+            setFormData(prev => ({ ...prev, hostCompanyId: active.id }));
+          } else if (data.length > 0) {
+            setSelectedHostId(String(data[0].id));
+            setSelectedHostCompany(data[0]);
+            setFormData(prev => ({ ...prev, hostCompanyId: data[0].id }));
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching host companies:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (selectedHostId && hostCompanies.length > 0) {
+      const matched = hostCompanies.find(h => String(h.id) === String(selectedHostId));
+      setSelectedHostCompany(matched || null);
+      setFormData(prev => ({ ...prev, hostCompanyId: selectedHostId }));
+    }
+  }, [selectedHostId, hostCompanies]);
 
   const fetchRawRfqs = async () => {
     try {
@@ -404,7 +458,8 @@ const Quotations = () => {
           const mrItems = (mrData.items || [])
             .filter(item => {
               const type = (item.material_type || '').toUpperCase();
-              return !['FG', 'FINISHED GOOD', 'SUB_ASSEMBLY', 'SUB ASSEMBLY'].includes(type);
+              const code = (item.item_code || item.drawing_no || '').toUpperCase().trim();
+              return !['FG', 'FINISHED GOOD', 'SUB_ASSEMBLY', 'SUB ASSEMBLY'].includes(type) && !code.startsWith('ASSEMBLY');
             })
             .map(item => ({
               drawing_no: item.item_code || '—',
@@ -463,7 +518,8 @@ const Quotations = () => {
         const materialItems = requirements
           .filter(req => {
             const type = (req.material_type || '').toUpperCase();
-            return !['FG', 'FINISHED GOOD', 'SUB_ASSEMBLY', 'SUB ASSEMBLY'].includes(type);
+            const code = (req.drawing_no || req.item_code || '').toUpperCase().trim();
+            return !['FG', 'FINISHED GOOD', 'SUB_ASSEMBLY', 'SUB ASSEMBLY'].includes(type) && !code.startsWith('ASSEMBLY');
           })
           .map(req => {
             const shortage = parseFloat(req.shortage) || 0;
@@ -559,7 +615,8 @@ const Quotations = () => {
           const detailedQuotation = await response.json();
           const filteredItems = (detailedQuotation.items || []).filter(item => {
             const type = (item.material_type || '').toUpperCase();
-            return !['FG', 'FINISHED GOOD', 'SUB_ASSEMBLY', 'SUB ASSEMBLY'].includes(type);
+            const code = (item.item_code || item.drawing_no || '').toUpperCase().trim();
+            return !['FG', 'FINISHED GOOD', 'SUB_ASSEMBLY', 'SUB ASSEMBLY'].includes(type) && !code.startsWith('ASSEMBLY');
           });
 
           setRecordData({
@@ -628,10 +685,11 @@ const Quotations = () => {
   };
 
   const handleRecordFileChange = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+    const selectedFiles = Array.from(e.target.files);
+    if (selectedFiles.length === 0) return;
 
-    setRecordData({ ...recordData, recordFile: file });
+    setRecordFiles(prev => [...prev, ...selectedFiles]);
+    const file = selectedFiles[0];
 
     // Auto-fetch rates from PDF
     try {
@@ -891,18 +949,24 @@ const Quotations = () => {
         body: JSON.stringify({
           validUntil: recordData.validUntil || null,
           items: recordData.items,
-          notes: recordData.notes
+          notes: recordData.notes,
+          status: 'RECEIVED'
         })
       });
 
-      if (!response.ok) throw new Error('Failed to record quote details');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || errorData.error || 'Failed to record quote details');
+      }
       const result = await response.json();
       const actualQuotationId = result.data?.id || recordData.quotationId;
 
-      // 2. Upload file if present
-      if (recordData.recordFile) {
+      // 2. Upload files if present
+      if (recordFiles.length > 0) {
         const fileFormData = new FormData();
-        fileFormData.append('pdf', recordData.recordFile);
+        recordFiles.forEach(file => {
+          fileFormData.append('pdf', file);
+        });
 
         const uploadRes = await fetch(`${API_BASE}/quotations/${actualQuotationId}/upload-response`, {
           method: 'POST',
@@ -912,7 +976,7 @@ const Quotations = () => {
           body: fileFormData
         });
 
-        if (!uploadRes.ok) throw new Error('Failed to upload vendor PDF');
+        if (!uploadRes.ok) throw new Error('Failed to upload vendor PDFs');
       } else {
         // If no file, manually update status to RECEIVED (upload endpoint does this automatically if file present)
         await fetch(`${API_BASE}/quotations/${actualQuotationId}/status`, {
@@ -928,6 +992,7 @@ const Quotations = () => {
       successToast('Quote details recorded successfully');
       navigate(`${deptPrefix}/quotations`);
       setRecordData({ projectId: '', vendorId: '', quotationId: '', amount: 0, validUntil: '', items: [], notes: '', recordFile: null });
+      setRecordFiles([]);
       fetchQuotations();
       fetchStats();
     } catch (error) {
@@ -1036,7 +1101,7 @@ const Quotations = () => {
 
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.error || 'Failed to delete quotation');
+        throw new Error(errData.message || errData.error || 'Failed to delete quotation');
       }
 
       successToast('Quotation deleted successfully');
@@ -1155,6 +1220,13 @@ const Quotations = () => {
 
   const openEditModal = (quotation) => {
     setSelectedQuotation(quotation);
+    
+    const paths = quotation.received_pdf_path 
+      ? quotation.received_pdf_path.split(',').map(p => p.trim()).filter(Boolean) 
+      : [];
+    setEditAttachments(paths);
+    setEditUploadFiles([]);
+
     // Map backend item fields to frontend BOM fields
     const mappedItems = (quotation.items || []).map(item => ({
       drawing_no: item.drawing_no || item.item_code || '',
@@ -1173,9 +1245,13 @@ const Quotations = () => {
       weight_per_unit: item.weight_per_unit || 0
     }));
 
+    const activeHost = hostCompanies.find(c => c.status === 'ACTIVE') || hostCompanies[0];
+    const defaultHostId = quotation.host_company_id || (activeHost ? activeHost.id : '');
+
     setEditFormData({
       vendorId: quotation.vendor_id,
       validUntil: quotation.valid_until ? new Date(quotation.valid_until).toISOString().split('T')[0] : '',
+      hostCompanyId: String(defaultHostId),
       items: mappedItems.length > 0 ? mappedItems : [{ drawing_no: '', material_name: '', material_type: '', quantity: 0, design_qty: 0, uom: 'NOS', unit_rate: 0 }]
     });
     setShowEditModal(true);
@@ -1186,6 +1262,36 @@ const Quotations = () => {
 
     try {
       const token = localStorage.getItem('authToken');
+      setLoading(true);
+      
+      let finalPaths = [...editAttachments];
+
+      // 1. Upload new attachments if selected inside edit modal
+      if (editUploadFiles.length > 0) {
+        const fileFormData = new FormData();
+        editUploadFiles.forEach(file => {
+          fileFormData.append('pdf', file);
+        });
+        fileFormData.append('existing_attachments', editAttachments.join(','));
+
+        const uploadRes = await fetch(`${API_BASE}/quotations/${selectedQuotation.id}/upload-response`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          },
+          body: fileFormData
+        });
+
+        if (!uploadRes.ok) {
+          const errData = await uploadRes.json().catch(() => ({}));
+          throw new Error(errData.message || errData.error || 'Failed to upload new attachments');
+        }
+
+        const uploadResult = await uploadRes.json();
+        finalPaths = uploadResult.paths || [];
+      }
+
+      // 2. Perform the PUT request to update quotation details and final attachments paths list
       const response = await fetch(`${API_BASE}/quotations/${selectedQuotation.id}`, {
         method: 'PUT',
         headers: {
@@ -1194,12 +1300,18 @@ const Quotations = () => {
         },
         body: JSON.stringify({
           vendorId: parseInt(editFormData.vendorId),
-          validUntil: editFormData.validUntil,
-          items: editFormData.items
+          validUntil: editFormData.validUntil || null,
+          hostCompanyId: editFormData.hostCompanyId ? parseInt(editFormData.hostCompanyId) : null,
+          items: editFormData.items,
+          received_pdf_path: finalPaths.join(','),
+          status: selectedQuotation.status
         })
       });
 
-      if (!response.ok) throw new Error('Failed to update quotation');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || errorData.error || 'Failed to update quotation');
+      }
 
       successToast('Quotation updated successfully');
       setShowEditModal(false);
@@ -1207,7 +1319,112 @@ const Quotations = () => {
       fetchStats();
     } catch (error) {
       errorToast(error.message || 'Failed to update quotation');
+    } finally {
+      setLoading(false);
     }
+  };
+
+  const openUploadAttachmentsModal = (quotation) => {
+    setSelectedQuotation(quotation);
+    const paths = quotation.received_pdf_path 
+      ? quotation.received_pdf_path.split(',').map(p => p.trim()).filter(Boolean) 
+      : [];
+    setExistingAttachments(paths);
+    setUploadModalFiles([]);
+    setShowUploadAttachmentsModal(true);
+  };
+
+  const handleUploadAttachmentsSave = async (e) => {
+    e.preventDefault();
+    if (!selectedQuotation) return;
+
+    try {
+      setUploadingAttachments(true);
+      const token = localStorage.getItem('authToken');
+      
+      let finalPaths = [...existingAttachments];
+
+      // 1. Upload new files if any, and merge them with remaining existing attachments
+      if (uploadModalFiles.length > 0) {
+        const fileFormData = new FormData();
+        uploadModalFiles.forEach(file => {
+          fileFormData.append('pdf', file);
+        });
+        fileFormData.append('existing_attachments', existingAttachments.join(','));
+
+        const uploadRes = await fetch(`${API_BASE}/quotations/${selectedQuotation.id}/upload-response`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          },
+          body: fileFormData
+        });
+
+        if (!uploadRes.ok) {
+          const errData = await uploadRes.json().catch(() => ({}));
+          throw new Error(errData.message || errData.error || 'Failed to upload new files');
+        }
+      } else {
+        // 2. If no new files, perform a single PUT request to update the remaining attachments
+        const response = await fetch(`${API_BASE}/quotations/${selectedQuotation.id}`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            vendorId: parseInt(selectedQuotation.vendor_id),
+            validUntil: selectedQuotation.valid_until,
+            hostCompanyId: selectedQuotation.host_company_id ? parseInt(selectedQuotation.host_company_id) : null,
+            items: (selectedQuotation.items || []).map(item => ({
+              drawing_no: item.drawing_no || item.item_code || '',
+              material_name: item.material_name || '',
+              material_type: getCorrectMaterialType(item.drawing_no || item.item_code, item.material_type),
+              design_qty: item.design_qty || item.quantity || 0,
+              quantity: item.quantity || 0,
+              uom: item.unit || item.uom || 'NOS',
+              unit_rate: item.unit_rate || 0,
+              length: item.length || 0,
+              width: item.width || 0,
+              thickness: item.thickness || 0,
+              diameter: item.diameter || 0,
+              outer_diameter: item.outer_diameter || 0,
+              density: item.density || 0,
+              weight_per_unit: item.weight_per_unit || 0
+            })),
+            received_pdf_path: finalPaths.join(','),
+            status: selectedQuotation.status
+          })
+        });
+
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(errData.message || errData.error || 'Failed to update quotation attachments');
+        }
+      }
+
+      successToast('Attachments updated successfully');
+      setShowUploadAttachmentsModal(false);
+      fetchQuotations();
+      fetchStats();
+    } catch (error) {
+      console.error(error);
+      errorToast(error.message || 'Failed to save attachments');
+    } finally {
+      setUploadingAttachments(false);
+    }
+  };
+
+  const handleRemoveExistingAttachment = (indexToRemove) => {
+    setExistingAttachments(prev => prev.filter((_, idx) => idx !== indexToRemove));
+  };
+
+  const handleRemoveNewUploadFile = (indexToRemove) => {
+    setUploadModalFiles(prev => prev.filter((_, idx) => idx !== indexToRemove));
+  };
+
+  const handleRemoveRecordFile = (indexToRemove) => {
+    setRecordFiles(prev => prev.filter((_, idx) => idx !== indexToRemove));
   };
 
   const openRFQSendModal = (rfq) => {
@@ -1408,9 +1625,9 @@ const Quotations = () => {
               <button
                 onClick={(e) => { e.stopPropagation(); handleViewPDF(q.id); }}
                 className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all border border-transparent hover:border-indigo-100"
-                title="View RFQ PDF"
+                title="Download RFQ PDF"
               >
-                <Eye className="w-4 h-4" />
+                <Download className="w-4 h-4" />
               </button>
             )}
             {q.isRFQOnly && (
@@ -1423,15 +1640,7 @@ const Quotations = () => {
                 Assign & Send
               </button>
             )}
-            {!q.isRFQOnly && q.received_pdf_path && (
-              <button
-                onClick={(e) => { e.stopPropagation(); handleViewReceivedPDF(q.id); }}
-                className="p-2 text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 rounded  transition-all border border-transparent hover:border-cyan-100"
-                title="View Vendor PDF"
-              >
-                <FileText className="w-4 h-4" />
-              </button>
-            )}
+
             {activeTab === 'sent' && (
               <>
                 {['DRAFT', 'SENT', 'EMAIL_RECEIVED'].includes(q.status) && (
@@ -1463,14 +1672,33 @@ const Quotations = () => {
                 )}
               </>
             )}
-            {activeTab === 'received' && q.status === 'RECEIVED' && (
-              <button
-                onClick={(e) => { e.stopPropagation(); handleApproveQuote(q.id); }}
-                className="p-2 text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded  transition-all border border-emerald-100"
-                title="Approve Quote"
-              >
-                <Check className="w-4 h-4" />
-              </button>
+            {activeTab === 'received' && (
+              <>
+                {q.status === 'RECEIVED' && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleApproveQuote(q.id); }}
+                    className="p-2 text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded  transition-all border border-emerald-100"
+                    title="Approve Quote"
+                  >
+                    <Check className="w-4 h-4" />
+                  </button>
+                )}
+                <button
+                  onClick={(e) => { e.stopPropagation(); openUploadAttachmentsModal(q); }}
+                  className="flex items-center gap-1 px-1.5 py-1 bg-cyan-50 text-cyan-700 border border-cyan-100 rounded text-[11px] hover:bg-cyan-100 transition-all font-medium whitespace-nowrap"
+                  title="Upload Attachments"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  Upload
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); openEditModal(q); }}
+                  className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded  transition-all border border-transparent hover:border-amber-100"
+                  title="Edit Recorded Quote"
+                >
+                  <Pencil className="w-4 h-4" />
+                </button>
+              </>
             )}
             <button
               onClick={(e) => { e.stopPropagation(); handleDeleteQuotation(q.id); }}
@@ -1699,6 +1927,93 @@ const Quotations = () => {
             <form onSubmit={activeTab === 'sent' ? handleCreateQuotation : handleRecordQuote} className="">
               {activeTab === 'sent' ? (
                 <>
+                  {/* Host Company Profile Details */}
+                  <div className="space-y-2 mb-6">
+                    <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
+                      <div className="p-1.5 bg-rose-50 text-rose-600 rounded">
+                        <Building2 className="w-4 h-4" />
+                      </div>
+                      <h3 className="text-xs font-semibold text-slate-800">Host Billing Entity Details</h3>
+                    </div>
+
+                    <div className="bg-white border border-slate-200 rounded-xl p-3 space-y-3">
+                      <div className="flex flex-col md:flex-row gap-3 items-start md:items-center justify-between border-b border-slate-100 pb-2">
+                        <div className="w-full md:max-w-md space-y-1">
+                          <label className="text-[10px] text-slate-400 ml-1">Select Issuing Billing Profile *</label>
+                          <select
+                            className="w-full bg-slate-50 border border-slate-200 rounded p-1.5 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-700 font-medium"
+                            value={selectedHostId}
+                            onChange={(e) => {
+                              setSelectedHostId(e.target.value);
+                            }}
+                          >
+                            <option value="">Select billing profile...</option>
+                            {hostCompanies.map(h => (
+                              <option key={h.id} value={h.id}>
+                                {h.company_name} {h.status === 'ACTIVE' ? '(ACTIVE)' : ''}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      {selectedHostCompany && (
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs animate-in fade-in duration-300">
+                          <div className="flex flex-col items-center justify-center p-2 bg-slate-50 rounded-lg border border-slate-100 text-center">
+                            {selectedHostCompany.company_logo ? (
+                              <img
+                                src={getFileUrl(selectedHostCompany.company_logo)}
+                                alt="Logo"
+                                className="h-12 max-w-full object-contain mb-1 bg-white border border-slate-200 p-1 rounded shadow-sm"
+                              />
+                            ) : (
+                              <div className="h-10 w-10 rounded-full bg-slate-200 border border-slate-300 flex items-center justify-center text-slate-500 font-bold text-sm mb-1">
+                                {selectedHostCompany.company_name.charAt(0).toUpperCase()}
+                              </div>
+                            )}
+                            <span className="text-[10px] font-bold text-slate-800 leading-tight truncate w-full">{selectedHostCompany.company_name}</span>
+                            <span className={`text-[8px] mt-1 px-1.5 py-0.5 rounded-full font-semibold border ${
+                              selectedHostCompany.status === 'ACTIVE'
+                                ? 'bg-emerald-50 border-emerald-100 text-emerald-600'
+                                : 'bg-slate-100 border-slate-200 text-slate-500'
+                            }`}>
+                              {selectedHostCompany.status === 'ACTIVE' ? 'Active Global Billing' : 'Inactive'}
+                            </span>
+                          </div>
+
+                          <div className="p-2 bg-slate-50 rounded-lg border border-slate-100 space-y-1">
+                            <span className="text-[9px] text-slate-400 block font-semibold uppercase">Office & Contact Details</span>
+                            <div className="text-[10px] text-slate-600 space-y-0.5 leading-normal">
+                              <p className="font-semibold text-slate-700 whitespace-pre-line">{selectedHostCompany.company_address || '—'}</p>
+                              {selectedHostCompany.contact_person && (
+                                <p className="text-[9px] text-slate-500">
+                                  Contact Person: <span className="font-semibold text-slate-700">{selectedHostCompany.contact_person}</span>
+                                </p>
+                              )}
+                              {selectedHostCompany.email && <p>Email: {selectedHostCompany.email}</p>}
+                              {selectedHostCompany.phone && <p>Mobile: {selectedHostCompany.phone}</p>}
+                              <div className="pt-1 flex flex-col gap-0.5 border-t border-slate-200 mt-1">
+                                <p className="text-[9px] font-mono">GSTIN: <span className="font-bold text-slate-700">{selectedHostCompany.gstin || '—'}</span></p>
+                                <p className="text-[9px] font-mono">PAN: <span className="font-bold text-slate-700">{selectedHostCompany.pan || '—'}</span></p>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="p-2 bg-slate-50 rounded-lg border border-slate-100 space-y-1">
+                            <span className="text-[9px] text-slate-400 block font-semibold uppercase">Bank Credentials</span>
+                            <div className="text-[10px] text-slate-600 space-y-0.5 leading-normal font-mono">
+                              <p className="font-semibold text-slate-700 font-sans">{selectedHostCompany.bank_name || '—'}</p>
+                              <p>A/C: {selectedHostCompany.account_number || '—'}</p>
+                              {selectedHostCompany.ifsc_code && (
+                                <p>IFSC: {selectedHostCompany.ifsc_code.toUpperCase()}</p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="block text-xs  text-slate-700 mb-1">Select Project (Optional)</label>
@@ -1946,13 +2261,34 @@ const Quotations = () => {
                         />
                       </div>
                       <div>
-                        <label className="block text-xs   text-slate-700 mb-1">Attach Vendor PDF</label>
+                        <label className="block text-xs font-semibold text-slate-700 mb-1">Attach Vendor PDF(s)</label>
                         <input
                           type="file"
                           accept="application/pdf"
+                          multiple
                           onChange={handleRecordFileChange}
                           className="w-full p-1 border border-slate-200 rounded text-xs  focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
+                        {recordFiles.length > 0 && (
+                          <div className="mt-2 max-h-[120px] overflow-y-auto space-y-1 p-1.5 border border-slate-100 rounded bg-slate-50">
+                            {recordFiles.map((file, idx) => (
+                              <div key={idx} className="flex items-center justify-between p-1 bg-white border border-slate-200 rounded text-[11px] font-mono">
+                                <span className="truncate max-w-[180px]" title={file.name}>{file.name}</span>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <span className="text-[9px] text-slate-400 font-sans">({(file.size / 1024).toFixed(1)} KB)</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveRecordFile(idx)}
+                                    className="text-red-500 hover:text-red-700 transition-colors p-0.5"
+                                    title="Remove attachment"
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -2257,6 +2593,97 @@ const Quotations = () => {
             </div>
 
             <form onSubmit={handleEditQuotation} className="">
+              {/* Host Company Profile Details */}
+              <div className="space-y-2 mb-6">
+                <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
+                  <div className="p-1.5 bg-rose-50 text-rose-600 rounded">
+                    <Building2 className="w-4 h-4" />
+                  </div>
+                  <h3 className="text-xs font-semibold text-slate-800">Host Billing Entity Details</h3>
+                </div>
+
+                <div className="bg-white border border-slate-200 rounded-xl p-3 space-y-3">
+                  <div className="flex flex-col md:flex-row gap-3 items-start md:items-center justify-between border-b border-slate-100 pb-2">
+                    <div className="w-full md:max-w-md space-y-1">
+                      <label className="text-[10px] text-slate-400 ml-1">Select Issuing Billing Profile *</label>
+                      <select
+                        className="w-full bg-slate-50 border border-slate-200 rounded p-1.5 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-700 font-medium"
+                        value={editFormData.hostCompanyId || ''}
+                        onChange={(e) => {
+                          setEditFormData({ ...editFormData, hostCompanyId: e.target.value });
+                        }}
+                      >
+                        <option value="">Select billing profile...</option>
+                        {hostCompanies.map(h => (
+                          <option key={h.id} value={h.id}>
+                            {h.company_name} {h.status === 'ACTIVE' ? '(ACTIVE)' : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {(() => {
+                    const selectedEditHostCompany = hostCompanies.find(h => String(h.id) === String(editFormData.hostCompanyId));
+                    if (!selectedEditHostCompany) return null;
+                    return (
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs animate-in fade-in duration-300">
+                        <div className="flex flex-col items-center justify-center p-2 bg-slate-50 rounded-lg border border-slate-100 text-center">
+                          {selectedEditHostCompany.company_logo ? (
+                            <img
+                              src={getFileUrl(selectedEditHostCompany.company_logo)}
+                              alt="Logo"
+                              className="h-12 max-w-full object-contain mb-1 bg-white border border-slate-200 p-1 rounded shadow-sm"
+                            />
+                          ) : (
+                            <div className="h-10 w-10 rounded-full bg-slate-200 border border-slate-300 flex items-center justify-center text-slate-500 font-bold text-sm mb-1">
+                              {selectedEditHostCompany.company_name.charAt(0).toUpperCase()}
+                            </div>
+                          )}
+                          <span className="text-[10px] font-bold text-slate-800 leading-tight truncate w-full">{selectedEditHostCompany.company_name}</span>
+                          <span className={`text-[8px] mt-1 px-1.5 py-0.5 rounded-full font-semibold border ${
+                            selectedEditHostCompany.status === 'ACTIVE'
+                              ? 'bg-emerald-50 border-emerald-100 text-emerald-600'
+                              : 'bg-slate-100 border-slate-200 text-slate-500'
+                          }`}>
+                            {selectedEditHostCompany.status === 'ACTIVE' ? 'Active Global Billing' : 'Inactive'}
+                          </span>
+                        </div>
+
+                        <div className="p-2 bg-slate-50 rounded-lg border border-slate-100 space-y-1">
+                          <span className="text-[9px] text-slate-400 block font-semibold uppercase">Office & Contact Details</span>
+                          <div className="text-[10px] text-slate-600 space-y-0.5 leading-normal">
+                            <p className="font-semibold text-slate-700 whitespace-pre-line">{selectedEditHostCompany.company_address || '—'}</p>
+                            {selectedEditHostCompany.contact_person && (
+                              <p className="text-[9px] text-slate-500">
+                                Contact Person: <span className="font-semibold text-slate-700">{selectedEditHostCompany.contact_person}</span>
+                              </p>
+                            )}
+                            {selectedEditHostCompany.email && <p>Email: {selectedEditHostCompany.email}</p>}
+                            {selectedEditHostCompany.phone && <p>Mobile: {selectedEditHostCompany.phone}</p>}
+                            <div className="pt-1 flex flex-col gap-0.5 border-t border-slate-200 mt-1">
+                              <p className="text-[9px] font-mono">GSTIN: <span className="font-bold text-slate-700">{selectedEditHostCompany.gstin || '—'}</span></p>
+                              <p className="text-[9px] font-mono">PAN: <span className="font-bold text-slate-700">{selectedEditHostCompany.pan || '—'}</span></p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="p-2 bg-slate-50 rounded-lg border border-slate-100 space-y-1">
+                          <span className="text-[9px] text-slate-400 block font-semibold uppercase">Bank Credentials</span>
+                          <div className="text-[10px] text-slate-600 space-y-0.5 leading-normal font-mono">
+                            <p className="font-semibold text-slate-700 font-sans">{selectedEditHostCompany.bank_name || '—'}</p>
+                            <p>A/C: {selectedEditHostCompany.account_number || '—'}</p>
+                            {selectedEditHostCompany.ifsc_code && (
+                              <p>IFSC: {selectedEditHostCompany.ifsc_code.toUpperCase()}</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block text-xs  text-slate-700 mb-1">Vendor</label>
@@ -2505,6 +2932,89 @@ const Quotations = () => {
                 )}
               </div>
 
+              {/* Attachments Section inside Edit Modal */}
+              {activeTab === 'received' && (
+                <div className="space-y-2 border-t border-slate-200 pt-4 mt-4">
+                  <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
+                    <div className="p-1.5 bg-cyan-50 text-cyan-600 rounded">
+                      <Upload className="w-4 h-4" />
+                    </div>
+                    <h3 className="text-xs font-semibold text-slate-800">Quotation Attachments</h3>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Existing Attachments */}
+                    <div>
+                      <span className="text-[11px] font-semibold text-slate-500 block mb-1">Existing Attachments ({editAttachments.length})</span>
+                      {editAttachments.length === 0 ? (
+                        <p className="text-xs text-slate-400 italic p-2 border border-dashed border-slate-200 rounded bg-slate-50">No files attached</p>
+                      ) : (
+                        <div className="max-h-[120px] overflow-y-auto space-y-1 p-1.5 border border-slate-200 rounded bg-slate-50">
+                          {editAttachments.map((file, idx) => {
+                            const cleanName = file.substring(file.lastIndexOf('/') + 1).substring(file.indexOf('-') + 1);
+                            return (
+                              <div key={idx} className="flex items-center justify-between p-1 bg-white border border-slate-200 rounded text-[11px]">
+                                <a
+                                  href={`${API_BASE}/quotations/${selectedQuotation.id}/received-pdf?file=${encodeURIComponent(file)}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-blue-600 hover:underline truncate max-w-[200px]"
+                                  title="Download/View file"
+                                >
+                                  {cleanName}
+                                </a>
+                                <button
+                                  type="button"
+                                  onClick={() => setEditAttachments(prev => prev.filter((_, i) => i !== idx))}
+                                  className="text-red-500 hover:text-red-700 transition-colors p-0.5"
+                                  title="Remove attachment"
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Upload New Attachments */}
+                    <div className="space-y-1">
+                      <span className="text-[11px] font-semibold text-slate-500 block">Upload New Files</span>
+                      <input
+                        type="file"
+                        accept=".pdf"
+                        multiple
+                        onChange={(e) => {
+                          const files = Array.from(e.target.files);
+                          setEditUploadFiles(prev => [...prev, ...files]);
+                        }}
+                        className="w-full p-1 border border-slate-200 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      {editUploadFiles.length > 0 && (
+                        <div className="max-h-[100px] overflow-y-auto space-y-1 p-1.5 border border-slate-100 rounded mt-1.5 bg-slate-50">
+                          {editUploadFiles.map((file, idx) => (
+                            <div key={idx} className="flex items-center justify-between p-1 bg-white border border-slate-200 rounded text-[10px] font-mono">
+                              <span className="truncate max-w-[180px]">{file.name}</span>
+                              <div className="flex items-center gap-1.5 font-sans">
+                                <span className="text-[9px] text-slate-400">({(file.size / 1024).toFixed(1)} KB)</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setEditUploadFiles(prev => prev.filter((_, i) => i !== idx))}
+                                  className="text-red-500 hover:text-red-700 transition-colors p-0.5"
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="flex gap-2 justify-end pt-4 border-t border-slate-200">
                 <button
                   type="button"
@@ -2518,6 +3028,122 @@ const Quotations = () => {
                   className="p-2  bg-blue-600 text-white rounded text-xs  hover:bg-blue-700"
                 >
                   Update Quotation
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {showUploadAttachmentsModal && selectedQuotation && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2">
+          <div className="bg-white rounded p-4 max-w-lg w-full">
+            <div className="flex justify-between items-center mb-4 border-b pb-2">
+              <h3 className="text-md font-semibold text-slate-800 text-xs">Upload Vendor Quotation Attachments</h3>
+              <button onClick={() => setShowUploadAttachmentsModal(false)} className="text-slate-500 text-xl">✕</button>
+            </div>
+
+            <form onSubmit={handleUploadAttachmentsSave} className="space-y-4">
+              <div className="text-xs text-slate-500 mb-2">
+                Manage and upload multiple attachment files for quotation <strong>{selectedQuotation.quote_number}</strong>.
+              </div>
+
+              {/* Existing Attachments */}
+              {existingAttachments.length > 0 && (
+                <div className="space-y-1.5">
+                  <span className="text-xs font-semibold text-slate-600 block">Existing Attachments ({existingAttachments.length})</span>
+                  <div className="max-h-[150px] overflow-y-auto space-y-1 border border-slate-100 p-2 rounded bg-slate-50">
+                    {existingAttachments.map((file, idx) => {
+                      const cleanName = file.substring(file.lastIndexOf('/') + 1).substring(file.indexOf('-') + 1);
+                      return (
+                        <div key={idx} className="flex items-center justify-between p-1.5 bg-white border border-slate-200 rounded text-xs">
+                          <a
+                            href={`${API_BASE}/quotations/${selectedQuotation.id}/received-pdf?file=${encodeURIComponent(file)}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-blue-600 hover:underline truncate max-w-[280px]"
+                            title="Download/View file"
+                          >
+                            {cleanName}
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveExistingAttachment(idx)}
+                            className="text-red-500 hover:text-red-700 transition-colors p-1"
+                            title="Remove file"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Upload New Files */}
+              <div className="space-y-1.5">
+                <span className="text-xs font-semibold text-slate-600 block">Upload New Files</span>
+                <div className="flex items-center justify-center border-2 border-dashed border-slate-200 rounded-lg p-4 bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer relative">
+                  <input
+                    type="file"
+                    accept=".pdf"
+                    multiple
+                    onChange={(e) => {
+                      const files = Array.from(e.target.files);
+                      setUploadModalFiles(prev => [...prev, ...files]);
+                    }}
+                    className="absolute inset-0 opacity-0 cursor-pointer"
+                  />
+                  <div className="text-center">
+                    <Upload className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+                    <span className="text-xs text-slate-500 block">Drag & drop or click to select files</span>
+                    <span className="text-[10px] text-slate-400 block">Multiple PDF files accepted</span>
+                  </div>
+                </div>
+
+                {uploadModalFiles.length > 0 && (
+                  <div className="max-h-[150px] overflow-y-auto space-y-1 border border-slate-100 p-2 rounded mt-2">
+                    {uploadModalFiles.map((file, idx) => (
+                      <div key={idx} className="flex items-center justify-between p-1.5 bg-slate-50 border border-slate-200 rounded text-xs font-mono">
+                        <span className="truncate max-w-[280px]">{file.name}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-slate-400 font-sans">({(file.size / 1024).toFixed(1)} KB)</span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveNewUploadFile(idx)}
+                            className="text-red-500 hover:text-red-700 transition-colors p-1"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t mt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowUploadAttachmentsModal(false)}
+                  className="px-3 py-1.5 border border-slate-200 rounded text-xs hover:bg-slate-50"
+                  disabled={uploadingAttachments}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-3 py-1.5 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 flex items-center gap-1.5"
+                  disabled={uploadingAttachments}
+                >
+                  {uploadingAttachments ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    'Save Attachments'
+                  )}
                 </button>
               </div>
             </form>

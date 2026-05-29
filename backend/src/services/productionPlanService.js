@@ -1350,7 +1350,7 @@ const getMaterialRequestItemsForPlan = async (planId) => {
     const c = code.toUpperCase();
     const cat = (category || '').toUpperCase();
     if (
-      c.startsWith('PART-') || c.startsWith('SA-') || c.startsWith('FG-') || c.startsWith('SFG-') ||
+      c.startsWith('PART-') || c.startsWith('SA-') || c.startsWith('FG-') || c.startsWith('SFG-') || c.startsWith('ASSEMBLY') ||
       cat.includes('PART') || cat.includes('ASSEMBLY') || cat.includes('SA') || cat.includes('SFG') || cat.includes('FG') || cat.includes('FINISHED')
     ) {
       return;
@@ -1472,7 +1472,7 @@ ON (ppm.item_code = issued.item_code OR ppm.material_name = issued.material_name
 
   for (const mat of materials) {
     const code = (mat.actual_item_code || mat.item_code || '').toUpperCase();
-    if (code.startsWith('PART-') || code.startsWith('SA-') || code.startsWith('FG-') || code.startsWith('SFG-')) continue;
+    if (code.startsWith('PART-') || code.startsWith('SA-') || code.startsWith('FG-') || code.startsWith('SFG-') || code.startsWith('ASSEMBLY')) continue;
 
     // If material request is fulfilled or completed, show full quantity as available
     const isFulfilled = (mat.status_rank || 0) >= 4;
@@ -1541,7 +1541,7 @@ const createMaterialRequestFromPlan = async (planId, userId, customItems = null)
       const c = code.toUpperCase();
       const cat = (category || '').toUpperCase();
       if (
-        c.startsWith('PART-') || c.startsWith('SA-') || c.startsWith('FG-') || c.startsWith('SFG-') ||
+        c.startsWith('PART-') || c.startsWith('SA-') || c.startsWith('FG-') || c.startsWith('SFG-') || c.startsWith('ASSEMBLY') ||
         cat.includes('PART') || cat.includes('ASSEMBLY') || cat.includes('SA') || cat.includes('SFG') || cat.includes('FG') || cat.includes('FINISHED')
       ) {
         return;
