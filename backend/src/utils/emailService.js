@@ -98,7 +98,7 @@ const generateQuotationHTML = (clientName, items, totalAmount, notes, clientId, 
             <div style="font-weight: normal; color: #333; font-size: 11px;">${sa.description || 'Sub-assembly'} (${sa.drawing_no || sa.item_code || '—'})</div>
           </td>
           <td style="padding: 8px; border: 1px solid #000; border-top: hidden; ${saBorderBottomStyle} text-align: center;">${saQty.toFixed(3)}</td>
-          <td style="padding: 8px; border: 1px solid #000; border-top: hidden; ${saBorderBottomStyle} text-align: right;">₹${saRate.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+          <td style="padding: 8px; border: 1px solid #000; border-top: hidden; ${saBorderBottomStyle} text-align: right;">₹${saTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
           <td style="padding: 8px; border: 1px solid #000; border-top: hidden; ${saBorderBottomStyle} text-align: center;"></td>
           <td style="padding: 8px; border: 1px solid #000; border-top: hidden; ${saBorderBottomStyle} text-align: center;"></td>
         </tr>

@@ -1788,6 +1788,31 @@ const QuotationFormPage = () => {
                           )
                         );
                         uniqueSubAssemblies.forEach((sa, saIdx) => {
+                          const saQty = parseFloat(sa.quantity || 0) * (parseFloat(item.quantity) || 0);
+                          const saBomCost = (() => {
+                            const parentCost = parseFloat(item.bom_cost || item.rate || 0);
+                            const candidates = [
+                              sa.component_bom_cost,
+                              sa.child_bom_cost,
+                              sa.part_bom_cost,
+                              sa.component_cost,
+                              sa.bom_cost,
+                              sa.rate
+                            ];
+                            for (const cost of candidates) {
+                              const val = parseFloat(cost || 0);
+                              if (val > 0 && Math.abs(val - parentCost) > 0.01) {
+                                return val;
+                              }
+                            }
+                            const fallback = parseFloat(sa.component_bom_cost || sa.child_bom_cost || sa.part_bom_cost || sa.component_cost || sa.bom_cost || sa.rate || 0);
+                            if (Math.abs(fallback - parentCost) < 0.01) {
+                              return sa.pending_bom_cost || 0;
+                            }
+                            return fallback;
+                          })();
+                          const saRate = saQty * saBomCost;
+
                           rows.push(
                             <tr key={`${item.id}-sa-${sa.id || saIdx}`} className="bg-slate-50/40">
                               <td className="p-2 border-b border-slate-100"></td>
@@ -1809,35 +1834,14 @@ const QuotationFormPage = () => {
                                 </div>
                               </td>
                               <td className="p-2 border-b border-slate-100 text-[11px] text-slate-600 ">
-                                {(parseFloat(sa.quantity || 0) * (parseFloat(item.quantity) || 0)).toFixed(3)} {sa.unit || 'Nos'}
+                                {saQty.toFixed(3)} {sa.unit || 'Nos'}
                               </td>
                               <td className="p-2 border-b border-slate-100 text-[11px] text-indigo-600  bg-indigo-50/30">
-                                {formatCurrency(
-                                  (() => {
-                                    const parentCost = parseFloat(item.bom_cost || item.rate || 0);
-                                    const candidates = [
-                                      sa.component_bom_cost,
-                                      sa.child_bom_cost,
-                                      sa.part_bom_cost,
-                                      sa.component_cost,
-                                      sa.bom_cost,
-                                      sa.rate
-                                    ];
-                                    for (const cost of candidates) {
-                                      const val = parseFloat(cost || 0);
-                                      if (val > 0 && Math.abs(val - parentCost) > 0.01) {
-                                        return val;
-                                      }
-                                    }
-                                    const fallback = parseFloat(sa.component_bom_cost || sa.child_bom_cost || sa.part_bom_cost || sa.component_cost || sa.bom_cost || sa.rate || 0);
-                                    if (Math.abs(fallback - parentCost) < 0.01) {
-                                      return sa.pending_bom_cost || 0;
-                                    }
-                                    return fallback;
-                                  })()
-                                )}
+                                {formatCurrency(saBomCost)}
                               </td>
-                              <td className="p-2 border-b border-slate-100"></td>
+                              <td className="p-2 border-b border-slate-100 text-[11px] text-slate-700 font-semibold">
+                                {formatCurrency(saRate)}
+                              </td>
                               <td className="p-2 border-b border-slate-100"></td>
                               {!isLocked && <td className="p-2 border-b border-slate-100"></td>}
                             </tr>
