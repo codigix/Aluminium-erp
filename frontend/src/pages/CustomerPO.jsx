@@ -398,6 +398,23 @@ const CustomerPO = ({
         items: items.length > 0 ? items : prev.items
       }));
 
+      // Pre-select host company from quotation if saved, or fall back to active global company
+      const hostId = quote.host_company_id || quote.hostCompanyId || null;
+      if (hostId) {
+        setSelectedHostId(String(hostId));
+        const matchedHost = hostCompanies.find(h => String(h.id) === String(hostId));
+        setSelectedHostCompany(matchedHost || null);
+      } else {
+        const active = hostCompanies.find(c => c.status === 'ACTIVE');
+        if (active) {
+          setSelectedHostId(String(active.id));
+          setSelectedHostCompany(active);
+        } else if (hostCompanies.length > 0) {
+          setSelectedHostId(String(hostCompanies[0].id));
+          setSelectedHostCompany(hostCompanies[0]);
+        }
+      }
+
       showToast(`Loaded ${items.length} items from quotation QRT-${String(quoteId).padStart(4, '0')}`);
     } catch (error) {
       console.error('Error fetching quotation details:', error);
@@ -1173,31 +1190,64 @@ const CustomerPO = ({
                         >
                           <option value="">Manual Entry (No Quotation)</option>
                           {(() => {
-                            const batches = [];
-                            const processedIds = new Set();
-                            const approvedItems = quotationRequests.filter(q => q.status?.trim().toUpperCase() === 'APPROVED');
+                            const grouped = {};
 
-                            approvedItems.forEach(q => {
-                              if (processedIds.has(q.id)) return;
-                              const batchItems = approvedItems.filter(t =>
-                                t.company_id === q.company_id &&
-                                t.sales_order_id === q.sales_order_id &&
-                                t.version === q.version
-                              );
-                              const representative = batchItems.reduce((min, cur) => cur.id < min.id ? cur : min, batchItems[0]);
-                              const isAlreadyAdded = batches.some(b =>
-                                b.sales_order_id === representative.sales_order_id &&
-                                b.version === representative.version
-                              );
-                              if (!isAlreadyAdded) {
-                                batches.push(representative);
+                            quotationRequests.forEach(q => {
+                              // Ignore component snapshots
+                              if (q.status?.trim().toUpperCase() === 'COMPONENT') return;
+
+                              const rootId = q.parent_id || q.id;
+                              const chainKey = `${q.company_id}_${rootId}`;
+
+                              if (!grouped[chainKey]) {
+                                grouped[chainKey] = {
+                                  id: q.id,
+                                  display_id: rootId,
+                                  company_id: q.company_id,
+                                  company_name: q.company_name,
+                                  project_name: q.project_name,
+                                  status: q.status,
+                                  version: q.version || 1,
+                                  batch_id: q.batch_id,
+                                  parent_id: q.parent_id,
+                                  po_number: q.po_number,
+                                  quotes: []
+                                };
                               }
-                              batchItems.forEach(item => processedIds.add(item.id));
+
+                              grouped[chainKey].quotes.push(q);
+
+                              // Track the latest version inside each chain
+                              const currentVersion = grouped[chainKey].version || 0;
+                              const qVersion = q.version || 1;
+                              const currentStatus = (grouped[chainKey].status || '').trim().toUpperCase();
+                              const qStatus = (q.status || '').trim().toUpperCase();
+
+                              if (qVersion > currentVersion || (qVersion === currentVersion && qStatus === 'APPROVED' && currentStatus !== 'APPROVED')) {
+                                grouped[chainKey].id = q.id;
+                                grouped[chainKey].status = q.status;
+                                grouped[chainKey].version = q.version;
+                                grouped[chainKey].project_name = q.project_name;
+                                grouped[chainKey].batch_id = q.batch_id;
+                                grouped[chainKey].parent_id = q.parent_id;
+                                grouped[chainKey].po_number = q.po_number;
+                              }
                             });
 
-                            return batches.map(q => (
-                              <option key={q.id} value={q.id}>
-                                QRT-{String(q.id).padStart(4, '0')} - {q.company_name} ({q.project_name || 'No Project'}) {q.version > 1 ? `(V${q.version})` : ''}
+                            // Filter to keep only chains where the latest version is APPROVED
+                            // and a PO has not already been created (po_number is null/empty)
+                            const approvedChains = Object.values(grouped).filter(group => {
+                              const isApproved = (group.status || '').trim().toUpperCase() === 'APPROVED';
+                              const hasNoPo = !group.po_number;
+                              return isApproved && hasNoPo;
+                            });
+
+                            // Sort descending by root ID
+                            approvedChains.sort((a, b) => b.display_id - a.display_id);
+
+                            return approvedChains.map(group => (
+                              <option key={group.id} value={group.id}>
+                                QRT-{String(group.display_id).padStart(4, '0')} - {group.company_name} ({group.project_name || 'No Project'}) {group.version > 1 ? `(V${group.version})` : ''}
                               </option>
                             ));
                           })()}

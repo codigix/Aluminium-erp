@@ -305,6 +305,7 @@ const SalesOrders = () => {
               created_at: quote.created_at,
               status: quote.status,
               po_number: quote.po_number,
+              host_company_id: quote.host_company_id || quote.hostCompanyId || null,
               items: []
             };
           }
@@ -327,6 +328,7 @@ const SalesOrders = () => {
             status: po.status,
             po_number: po.po_number,
             company_name: po.company_name,
+            host_company_id: po.host_company_id || po.hostCompanyId || null,
             isCustomerPo: true,
             items: [] // Items will be fetched when selected if needed, or we can fetch them here
           });
@@ -382,6 +384,7 @@ const SalesOrders = () => {
     let quotationId = group.dbId;
     let bomId = null;
     let projectName = '';
+    let finalHostId = null;
 
     if (group.isCustomerPo) {
       try {
@@ -394,6 +397,7 @@ const SalesOrders = () => {
           const poData = await response.json();
           sourceType = 'DIRECT';
           projectName = poData.project_name || poData.remarks || `Order for ${poData.company_name}`;
+          finalHostId = poData.host_company_id || null;
 
           const poItems = poData.items || [];
           items = poItems.map(item => {
@@ -441,6 +445,7 @@ const SalesOrders = () => {
       sourceType = group.isApprovedDrawing ? 'DRAWING' : 'QUOTATION';
       bomId = group.items[0]?.bom_id;
       projectName = group.items[0]?.project_name;
+      finalHostId = group.host_company_id || (group.items && group.items[0] && group.items[0].host_company_id) || null;
 
       items = group.items.map(item => {
         const qty = Number(item.item_qty) || 1;
@@ -491,6 +496,23 @@ const SalesOrders = () => {
       bomId: bomId || prev.bomId,
       projectName: projectName || prev.projectName
     }));
+
+    // Pre-select host company from quotation/PO if saved, or fall back to default active company
+    const hostId = finalHostId || null;
+    if (hostId) {
+      setSelectedHostId(String(hostId));
+      const matchedHost = hostCompanies.find(h => String(h.id) === String(hostId));
+      setSelectedHostCompany(matchedHost || null);
+    } else {
+      const active = hostCompanies.find(c => c.status === 'ACTIVE');
+      if (active) {
+        setSelectedHostId(String(active.id));
+        setSelectedHostCompany(active);
+      } else if (hostCompanies.length > 0) {
+        setSelectedHostId(String(hostCompanies[0].id));
+        setSelectedHostCompany(hostCompanies[0]);
+      }
+    }
   };
 
   const fetchBoms = async () => {

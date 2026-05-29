@@ -10,7 +10,7 @@ const getQuotationRequests = async (req, res, next) => {
       SELECT *, COALESCE(total_amount / NULLIF(item_qty, 0), 0) as unit_rate FROM (
         SELECT qr.id as qr_id, qr.sales_order_id, qr.company_id, qr.status, qr.total_amount, qr.received_amount, qr.notes, qr.created_at, qr.rejection_reason, qr.reply_pdf,
                qr.profit_percentage, qr.gst_percentage, qr.pending_bom_cost,
-               qr.version, qr.parent_id, qr.batch_id,
+               qr.version, qr.parent_id, qr.batch_id, qr.host_company_id,
                COALESCE(qr.project_name, so.project_name, 'Manual Quotation') as project_name, 
                so.bom_id, c.company_name, 
                (SELECT email FROM contacts WHERE company_id = c.id AND (contact_type = 'PRIMARY' OR contact_type = 'PURCHASE') LIMIT 1) as client_email,
@@ -172,6 +172,7 @@ const getQuotationVersionHistory = async (req, res, next) => {
           batch_id: row.batch_id,
           company_id: row.company_id,
           company_name: row.company_name,
+          host_company_id: row.host_company_id,
           items: []
         };
         versionGroups.push(versionMap[row.version]);
