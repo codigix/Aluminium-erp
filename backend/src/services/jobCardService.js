@@ -50,7 +50,7 @@ const listJobCards = async () => {
 };
 
 const createJobCard = async (data) => {
-  const { 
+  const {
     jobCardNo, workOrderId, operationId, workstationId, assignedTo, plannedQty, remarks,
     executionMode, vendorId, vendorRate, status, producedQty, acceptedQty, startDateTime, endDateTime
   } = data;
@@ -76,8 +76,8 @@ const createJobCard = async (data) => {
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       jobCardNo || null, workOrderId, operationId || null, workstationId || null, assignedTo || null, plannedQty, remarks,
-      status || 'PENDING', executionMode || 'In-house', vendorId || null, vendorRate || 0, producedQty || 0, acceptedQty || 0, 
-      startDateTime ? startDateTime.replace('T', ' ') : null, 
+      status || 'PENDING', executionMode || 'In-house', vendorId || null, vendorRate || 0, producedQty || 0, acceptedQty || 0,
+      startDateTime ? startDateTime.replace('T', ' ') : null,
       endDateTime ? endDateTime.replace('T', ' ') : null,
       publicId
     ]
@@ -88,7 +88,7 @@ const createJobCard = async (data) => {
 
 const updateJobCardProgress = async (id, data) => {
   const { producedQty, acceptedQty, rejectedQty, status, startTime, endTime, workstationId, assignedTo, targetWarehouseId, executionType } = data;
-  
+
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
@@ -114,24 +114,24 @@ const updateJobCardProgress = async (id, data) => {
         'SELECT status, inspected_qty FROM job_card_quality_logs WHERE job_card_id = ?',
         [id]
       );
-      
+
       if (qualityLogs.length === 0) {
         throw new Error('Cannot complete Job Card: No quality inspection records found.');
       }
-      
+
       if (qualityLogs.some(log => log.status !== 'APPROVED')) {
         throw new Error('Cannot complete Job Card: Some quality inspection records are still pending approval.');
       }
-      
+
       // 2. Check if total inspected matches total produced
       const [producedSum] = await connection.query(
         'SELECT SUM(produced_qty) as total FROM job_card_time_logs WHERE job_card_id = ?',
         [id]
       );
-      
+
       const totalProduced = parseFloat(producedSum[0]?.total || 0);
       const totalInspected = qualityLogs.reduce((sum, log) => sum + parseFloat(log.inspected_qty || 0), 0);
-      
+
       if (totalInspected < totalProduced) {
         throw new Error(`Cannot complete Job Card: Insufficient quality inspection. Produced: ${totalProduced}, Inspected: ${totalInspected}.`);
       }
@@ -151,22 +151,57 @@ const updateJobCardProgress = async (id, data) => {
       const checkAssignedTo = assignedTo || jcData[0].assigned_to;
 
       if (checkWorkstationId) {
-        const [busyWS] = await connection.query(
-          'SELECT job_card_no FROM job_cards WHERE workstation_id = ? AND status = "IN_PROGRESS" AND id != ?',
-          [checkWorkstationId, id]
-        );
-        if (busyWS.length > 0 && busyWS[0]) {
-          throw new Error(`Workstation is busy with Job Card ${busyWS[0].job_card_no}`);
+        const [wsRows] = await connection.query('SELECT IFNULL(capacity, 1) as capacity FROM workstations WHERE id = ?', [checkWorkstationId]);
+        const capacity = wsRows.length > 0 ? wsRows[0].capacity : 1;
+
+        if (startTime) {
+          const [overlappingWS] = await connection.query(
+            `SELECT jc.job_card_no 
+             FROM job_card_time_logs tl
+             JOIN job_cards jc ON tl.job_card_id = jc.id
+             WHERE tl.workstation_id = ? 
+               AND tl.start_time <= ? 
+               AND tl.end_time > ?
+               AND tl.job_card_id != ?`,
+            [checkWorkstationId, startTime, startTime, id]
+          );
+          if (overlappingWS.length >= capacity) {
+            throw new Error(`Workstation is busy with Job Card ${overlappingWS[0].job_card_no}`);
+          }
+        } else {
+          const [activeJobs] = await connection.query(
+            'SELECT job_card_no FROM job_cards WHERE workstation_id = ? AND status = "IN_PROGRESS" AND id != ?',
+            [checkWorkstationId, id]
+          );
+          if (activeJobs.length >= capacity) {
+            throw new Error(`Workstation is busy with Job Card ${activeJobs[0].job_card_no}`);
+          }
         }
       }
 
       if (checkAssignedTo) {
-        const [busyOp] = await connection.query(
-          'SELECT job_card_no FROM job_cards WHERE assigned_to = ? AND status = "IN_PROGRESS" AND id != ?',
-          [checkAssignedTo, id]
-        );
-        if (busyOp.length > 0 && busyOp[0]) {
-          throw new Error(`Operator is busy with Job Card ${busyOp[0].job_card_no}`);
+        if (startTime) {
+          const [overlapOp] = await connection.query(
+            `SELECT jc.job_card_no 
+             FROM job_card_time_logs tl
+             JOIN job_cards jc ON tl.job_card_id = jc.id
+             WHERE tl.operator_id = ? 
+               AND tl.start_time <= ? 
+               AND tl.end_time > ?
+               AND tl.job_card_id != ?`,
+            [checkAssignedTo, startTime, startTime, id]
+          );
+          if (overlapOp.length > 0) {
+            throw new Error(`Operator is busy with Job Card ${overlapOp[0].job_card_no}`);
+          }
+        } else {
+          const [busyOp] = await connection.query(
+            'SELECT job_card_no FROM job_cards WHERE assigned_to = ? AND status = "IN_PROGRESS" AND id != ?',
+            [checkAssignedTo, id]
+          );
+          if (busyOp.length > 0 && busyOp[0]) {
+            throw new Error(`Operator is busy with Job Card ${busyOp[0].job_card_no}`);
+          }
         }
       }
     }
@@ -194,7 +229,7 @@ const updateJobCardProgress = async (id, data) => {
     if (executionType) {
       updates.push('execution_mode = ?');
       params.push(executionType);
-      
+
       // Update execution_type if it exists in DB (sync both columns)
       try {
         updates.push('execution_type = ?');
@@ -214,9 +249,9 @@ const updateJobCardProgress = async (id, data) => {
     const [jcRows] = await connection.query('SELECT work_order_id FROM job_cards WHERE id = ?', [id]);
     if (jcRows.length > 0) {
       const workOrderId = jcRows[0].work_order_id;
-      
+
       const [allJcs] = await connection.query('SELECT status FROM job_cards WHERE work_order_id = ?', [workOrderId]);
-      
+
       let newWoStatus = 'RELEASED';
       if (allJcs.some(jc => jc.status === 'IN_PROGRESS')) {
         newWoStatus = 'IN_PROGRESS';
@@ -277,7 +312,7 @@ const getTimeLogs = async (jobCardId) => {
 
 const addTimeLog = async (data) => {
   const { jobCardId, logDate, operatorId, workstationId, shift, startTime, endTime, producedQty, day } = data;
-  
+
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
@@ -291,24 +326,60 @@ const addTimeLog = async (data) => {
       throw new Error(`A log for this shift (${shift}) on ${logDate} already exists for this Job Card.`);
     }
 
-    // 1b. Check Operator and Workstation availability
+    // 1b. Check Operator and Workstation availability with time overlap
+    const fullStartTime = (logDate && startTime) ? `${logDate} ${startTime}` : null;
+    const fullEndTime = (logDate && endTime) ? `${logDate} ${endTime}` : null;
+
     if (workstationId) {
-      const [busyWS] = await connection.query(
-        'SELECT job_card_no FROM job_cards WHERE workstation_id = ? AND status = "IN_PROGRESS" AND id != ?',
-        [workstationId, jobCardId]
-      );
-      if (busyWS.length > 0) {
-        throw new Error(`Workstation is busy with Job Card ${busyWS[0].job_card_no}`);
+      const [wsRows] = await connection.query('SELECT IFNULL(capacity, 1) as capacity FROM workstations WHERE id = ?', [workstationId]);
+      const capacity = wsRows.length > 0 ? wsRows[0].capacity : 1;
+
+      if (fullStartTime && fullEndTime) {
+        const [overlappingWS] = await connection.query(
+          `SELECT jc.job_card_no 
+           FROM job_card_time_logs tl
+           JOIN job_cards jc ON tl.job_card_id = jc.id
+           WHERE tl.workstation_id = ? 
+             AND tl.start_time < ? 
+             AND tl.end_time > ?`,
+          [workstationId, fullEndTime, fullStartTime]
+        );
+        if (overlappingWS.length >= capacity) {
+          throw new Error(`Workstation is busy with Job Card ${overlappingWS[0].job_card_no}`);
+        }
+      } else {
+        const [activeJobs] = await connection.query(
+          'SELECT job_card_no FROM job_cards WHERE workstation_id = ? AND status = "IN_PROGRESS" AND id != ?',
+          [workstationId, jobCardId]
+        );
+        if (activeJobs.length >= capacity) {
+          throw new Error(`Workstation is busy with Job Card ${activeJobs[0].job_card_no}`);
+        }
       }
     }
 
     if (operatorId) {
-      const [busyOp] = await connection.query(
-        'SELECT job_card_no FROM job_cards WHERE assigned_to = ? AND status = "IN_PROGRESS" AND id != ?',
-        [operatorId, jobCardId]
-      );
-      if (busyOp.length > 0) {
-        throw new Error(`Operator is busy with Job Card ${busyOp[0].job_card_no}`);
+      if (fullStartTime && fullEndTime) {
+        const [overlapOp] = await connection.query(
+          `SELECT jc.job_card_no 
+           FROM job_card_time_logs tl
+           JOIN job_cards jc ON tl.job_card_id = jc.id
+           WHERE tl.operator_id = ? 
+             AND tl.start_time < ? 
+             AND tl.end_time > ?`,
+          [operatorId, fullEndTime, fullStartTime]
+        );
+        if (overlapOp.length > 0) {
+          throw new Error(`Operator is busy with Job Card ${overlapOp[0].job_card_no}`);
+        }
+      } else {
+        const [busyOp] = await connection.query(
+          'SELECT job_card_no FROM job_cards WHERE assigned_to = ? AND status = "IN_PROGRESS" AND id != ?',
+          [operatorId, jobCardId]
+        );
+        if (busyOp.length > 0) {
+          throw new Error(`Operator is busy with Job Card ${busyOp[0].job_card_no}`);
+        }
       }
     }
 
@@ -344,7 +415,7 @@ const addTimeLog = async (data) => {
       // Future Entries
       const start = new Date(actualStartDate + 'T00:00:00');
       const current = new Date(logDate + 'T00:00:00');
-      
+
       if (current < start) {
         throw new Error(`Production date (${logDate}) cannot be earlier than actual start date (${actualStartDate})`);
       }
@@ -357,27 +428,25 @@ const addTimeLog = async (data) => {
     // Use manually provided day if present, otherwise use calculatedDay
     const finalDay = (day !== undefined && day !== null && day !== '') ? day : calculatedDay;
 
-    // Convert startTime and endTime to full DATETIME strings using logDate
-    const fullStartTime = (logDate && startTime) ? `${logDate} ${startTime}` : null;
-    const fullEndTime = (logDate && endTime) ? `${logDate} ${endTime}` : null;
+
 
     const [result] = await connection.execute(
       `INSERT INTO job_card_time_logs 
        (job_card_id, day, log_date, operator_id, workstation_id, shift, start_time, end_time, produced_qty)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        jobCardId || null, 
-        finalDay, 
-        logDate || null, 
-        operatorId || null, 
-        workstationId || null, 
-        shift || null, 
-        fullStartTime, 
-        fullEndTime, 
+        jobCardId || null,
+        finalDay,
+        logDate || null,
+        operatorId || null,
+        workstationId || null,
+        shift || null,
+        fullStartTime,
+        fullEndTime,
         producedQty || 0
       ]
     );
-    
+
     // Update total produced qty in job card
     await connection.execute(
       `UPDATE job_cards jc 
@@ -398,7 +467,7 @@ const addTimeLog = async (data) => {
 
 const updateTimeLog = async (id, data) => {
   const { day, logDate, operatorId, workstationId, shift, startTime, endTime, producedQty } = data;
-  
+
   // Get jobCardId from the log before updating if not provided
   let { jobCardId } = data;
   if (!jobCardId) {
@@ -447,7 +516,7 @@ const getQualityLogs = async (jobCardId) => {
     'SELECT * FROM job_card_quality_logs WHERE job_card_id = ? ORDER BY created_at DESC',
     [jobCardId]
   );
-  
+
   // Fetch inward items for each log if they exist
   for (const log of rows) {
     const [items] = await pool.query(
@@ -456,7 +525,7 @@ const getQualityLogs = async (jobCardId) => {
     );
     log.inwardItems = items;
   }
-  
+
   return rows;
 };
 
@@ -489,7 +558,7 @@ const addQualityLog = async (data) => {
       // Future Entries
       const start = new Date(actualStartDate + 'T00:00:00');
       const current = new Date(checkDate + 'T00:00:00');
-      
+
       const diffTime = current - start;
       const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
       calculatedDay = diffDays + 1;
@@ -503,7 +572,7 @@ const addQualityLog = async (data) => {
        (job_card_id, day, check_date, shift, inspected_qty, accepted_qty, rejected_qty, scrap_qty, rejection_reason, notes, status, vendor_invoice, sub_total, gst_amount, grand_total)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        jobCardId, finalDay, checkDate, shift, inspectedQty, acceptedQty, rejectedQty, scrapQty, rejectionReason || null, notes || null, status || 'PENDING', 
+        jobCardId, finalDay, checkDate, shift, inspectedQty, acceptedQty, rejectedQty, scrapQty, rejectionReason || null, notes || null, status || 'PENDING',
         vendorInvoice || null, subTotal || 0, gstAmount || 0, grandTotal || 0
       ]
     );
@@ -532,7 +601,7 @@ const addQualityLog = async (data) => {
         [jobCardId, jobCardId, jobCardId]
       );
     }
-    
+
     await connection.commit();
     return result.insertId;
   } catch (error) {
@@ -545,7 +614,7 @@ const addQualityLog = async (data) => {
 
 const updateQualityLog = async (id, data) => {
   const { day, checkDate, shift, inspectedQty, acceptedQty, rejectedQty, scrapQty, rejectionReason, notes, status } = data;
-  
+
   // Get jobCardId from the log before updating if not provided
   let { jobCardId } = data;
   const connection = await pool.getConnection();
@@ -569,10 +638,10 @@ const updateQualityLog = async (id, data) => {
     if (scrapQty !== undefined) { updates.push('scrap_qty = ?'); params.push(scrapQty); }
     if (rejectionReason !== undefined) { updates.push('rejection_reason = ?'); params.push(rejectionReason); }
     if (notes !== undefined) { updates.push('notes = ?'); params.push(notes); }
-    if (status) { 
+    if (status) {
       const trimmedStatus = status.trim();
-      updates.push('status = ?'); 
-      params.push(trimmedStatus); 
+      updates.push('status = ?');
+      params.push(trimmedStatus);
     }
 
     if (updates.length > 0) {
@@ -640,7 +709,7 @@ const addDowntimeLog = async (data) => {
       // Future Entries
       const start = new Date(actualStartDate + 'T00:00:00');
       const current = new Date(downtimeDate + 'T00:00:00');
-      
+
       const diffTime = current - start;
       const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
       calculatedDay = diffDays + 1;
@@ -671,7 +740,7 @@ const addDowntimeLog = async (data) => {
 };
 
 const updateJobCard = async (id, data) => {
-  const { 
+  const {
     workOrderId, operationId, workstationId, assignedTo, plannedQty, remarks,
     executionMode, vendorId, vendorRate, status, producedQty, acceptedQty, startDateTime, endDateTime
   } = data;
@@ -696,15 +765,15 @@ const deleteJobCard = async (id) => {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
-    
+
     // Delete associated logs first
     await connection.execute('DELETE FROM job_card_time_logs WHERE job_card_id = ?', [id]);
     await connection.execute('DELETE FROM job_card_quality_logs WHERE job_card_id = ?', [id]);
     await connection.execute('DELETE FROM job_card_downtime_logs WHERE job_card_id = ?', [id]);
-    
+
     // Delete the job card
     await connection.execute('DELETE FROM job_cards WHERE id = ?', [id]);
-    
+
     await connection.commit();
   } catch (error) {
     await connection.rollback();
@@ -716,7 +785,7 @@ const deleteJobCard = async (id) => {
 
 const deleteTimeLog = async (logId) => {
   const [log] = await pool.query('SELECT job_card_id FROM job_card_time_logs WHERE id = ?', [logId]);
-  
+
   await pool.execute('DELETE FROM job_card_time_logs WHERE id = ?', [logId]);
 
   if (log.length > 0) {
@@ -805,7 +874,7 @@ const getVendorReceipts = async () => {
     WHERE q.grand_total > 0
     ORDER BY q.created_at DESC
   `);
-  
+
   return rows;
 };
 
@@ -847,7 +916,7 @@ const getQualityLogFullDetails = async (logId) => {
 const downloadJobCardQcPdf = async (logId) => {
   const logDetails = await getQualityLogFullDetails(logId);
   if (!logDetails) throw new Error('Quality inspection record not found');
-  
+
   const pdfPath = await generateJobCardQcPdf({ log: logDetails });
   return pdfPath;
 };
@@ -873,11 +942,11 @@ const getJobCardDetailAnalysis = async (idOrNo) => {
      LEFT JOIN workstations w ON jc.workstation_id = w.id
      LEFT JOIN users u ON jc.assigned_to = u.id
      WHERE ${whereClause}`;
-    
-    const params = { 
-      id: isUuid ? idOrNo : (isNaN(idOrNo) ? 0 : Number(idOrNo)), 
-      no: String(idOrNo).trim(), 
-      likeNo: `%${idOrNo}%` 
+
+    const params = {
+      id: isUuid ? idOrNo : (isNaN(idOrNo) ? 0 : Number(idOrNo)),
+      no: String(idOrNo).trim(),
+      likeNo: `%${idOrNo}%`
     };
 
     const [jcRows] = await pool.query(query, params);
@@ -888,130 +957,130 @@ const getJobCardDetailAnalysis = async (idOrNo) => {
 
     const jc = jcRows[0];
 
-  // 2. Get Logs
-  const [timeLogs] = await pool.query(
-    `SELECT tl.*, u.username as operator_name, w.workstation_name 
+    // 2. Get Logs
+    const [timeLogs] = await pool.query(
+      `SELECT tl.*, u.username as operator_name, w.workstation_name 
      FROM job_card_time_logs tl
      LEFT JOIN users u ON tl.operator_id = u.id
      LEFT JOIN workstations w ON tl.workstation_id = w.id
      WHERE tl.job_card_id = ? ORDER BY tl.log_date ASC, tl.start_time ASC`,
-    [jc.id]
-  );
+      [jc.id]
+    );
 
-  const [qualityLogs] = await pool.query(
-    `SELECT ql.*, NULL as inspector_name
+    const [qualityLogs] = await pool.query(
+      `SELECT ql.*, NULL as inspector_name
      FROM job_card_quality_logs ql
      WHERE ql.job_card_id = ? ORDER BY ql.created_at ASC`,
-    [jc.id]
-  );
+      [jc.id]
+    );
 
-  const [downtimeLogs] = await pool.query(
-    `SELECT * FROM job_card_downtime_logs WHERE job_card_id = ? ORDER BY start_time ASC`,
-    [jc.id]
-  );
+    const [downtimeLogs] = await pool.query(
+      `SELECT * FROM job_card_downtime_logs WHERE job_card_id = ? ORDER BY start_time ASC`,
+      [jc.id]
+    );
 
-  // 3. Operational Timeline
-  const timeline = [];
-  
-  // Work Order Created
-  timeline.push({
-    title: 'Work Order Created',
-    desc: `${jc.wo_number} created for ${jc.item_name}`,
-    time: jc.created_at,
-    type: 'CREATED',
-    completed: true
-  });
+    // 3. Operational Timeline
+    const timeline = [];
 
-  // Operation Started
-  if (jc.actual_start_date || timeLogs.length > 0) {
+    // Work Order Created
     timeline.push({
-      title: 'Operation Started',
-      desc: `${jc.op_name} operation started at ${jc.workstation_name || 'Workstation'}`,
-      time: jc.actual_start_date || (timeLogs[0] ? timeLogs[0].log_date : null),
-      type: 'STARTED',
+      title: 'Work Order Created',
+      desc: `${jc.wo_number} created for ${jc.item_name}`,
+      time: jc.created_at,
+      type: 'CREATED',
       completed: true
     });
-  }
 
-  // Production Running
-  if (jc.status === 'IN_PROGRESS') {
-    timeline.push({
-      title: 'Production Running',
-      desc: 'Production execution in progress',
-      time: timeLogs.length > 0 ? timeLogs[timeLogs.length - 1].updated_at : new Date(),
-      type: 'RUNNING',
-      completed: false,
-      current: true
-    });
-  }
+    // Operation Started
+    if (jc.actual_start_date || timeLogs.length > 0) {
+      timeline.push({
+        title: 'Operation Started',
+        desc: `${jc.op_name} operation started at ${jc.workstation_name || 'Workstation'}`,
+        time: jc.actual_start_date || (timeLogs[0] ? timeLogs[0].log_date : null),
+        type: 'STARTED',
+        completed: true
+      });
+    }
 
-  // Production Completed
-  if (jc.status === 'COMPLETED' || jc.produced_qty >= jc.planned_qty) {
-    timeline.push({
-      title: 'Production Completed',
-      desc: 'Production completed for planned quantity',
-      time: jc.updated_at,
-      type: 'COMPLETED',
-      completed: true
-    });
-  }
+    // Production Running
+    if (jc.status === 'IN_PROGRESS') {
+      timeline.push({
+        title: 'Production Running',
+        desc: 'Production execution in progress',
+        time: timeLogs.length > 0 ? timeLogs[timeLogs.length - 1].updated_at : new Date(),
+        type: 'RUNNING',
+        completed: false,
+        current: true
+      });
+    }
 
-  // Awaiting Quality / Quality Inspection
-  if (qualityLogs.length > 0) {
-    const allApproved = qualityLogs.every(l => l.status === 'APPROVED');
-    timeline.push({
-      title: allApproved ? 'Quality Inspection Completed' : 'Awaiting Quality',
-      desc: allApproved ? 'Quality inspection & acceptance finished' : 'Pending quality inspection & acceptance',
-      time: qualityLogs[qualityLogs.length - 1].created_at,
-      type: 'QUALITY',
-      completed: allApproved,
-      current: !allApproved
-    });
-  }
+    // Production Completed
+    if (jc.status === 'COMPLETED' || jc.produced_qty >= jc.planned_qty) {
+      timeline.push({
+        title: 'Production Completed',
+        desc: 'Production completed for planned quantity',
+        time: jc.updated_at,
+        type: 'COMPLETED',
+        completed: true
+      });
+    }
 
-  // 4. Performance Metrics
-  const totalActualTimeMinutes = timeLogs.reduce((sum, log) => {
-    if (log.start_time && log.end_time) {
-      const start = new Date(String(log.start_time).replace(' ', 'T'));
-      const end = new Date(String(log.end_time).replace(' ', 'T'));
-      if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
-        return sum + (end - start) / 60000;
+    // Awaiting Quality / Quality Inspection
+    if (qualityLogs.length > 0) {
+      const allApproved = qualityLogs.every(l => l.status === 'APPROVED');
+      timeline.push({
+        title: allApproved ? 'Quality Inspection Completed' : 'Awaiting Quality',
+        desc: allApproved ? 'Quality inspection & acceptance finished' : 'Pending quality inspection & acceptance',
+        time: qualityLogs[qualityLogs.length - 1].created_at,
+        type: 'QUALITY',
+        completed: allApproved,
+        current: !allApproved
+      });
+    }
+
+    // 4. Performance Metrics
+    const totalActualTimeMinutes = timeLogs.reduce((sum, log) => {
+      if (log.start_time && log.end_time) {
+        const start = new Date(String(log.start_time).replace(' ', 'T'));
+        const end = new Date(String(log.end_time).replace(' ', 'T'));
+        if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+          return sum + (end - start) / 60000;
+        }
       }
-    }
-    return sum;
-  }, 0);
+      return sum;
+    }, 0);
 
-  const totalDowntimeMinutes = downtimeLogs.reduce((sum, log) => {
-    if (log.start_time && log.end_time) {
-      const start = new Date(String(log.start_time).replace(' ', 'T'));
-      const end = new Date(String(log.end_time).replace(' ', 'T'));
-      if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
-        return sum + (end - start) / 60000;
+    const totalDowntimeMinutes = downtimeLogs.reduce((sum, log) => {
+      if (log.start_time && log.end_time) {
+        const start = new Date(String(log.start_time).replace(' ', 'T'));
+        const end = new Date(String(log.end_time).replace(' ', 'T'));
+        if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+          return sum + (end - start) / 60000;
+        }
       }
-    }
-    return sum;
-  }, 0);
+      return sum;
+    }, 0);
 
-  const stdTimeTotal = (jc.cycle_time || 0) * (jc.planned_qty || 0);
-  const efficiency = totalActualTimeMinutes > 0 ? (stdTimeTotal / totalActualTimeMinutes) * 100 : 0;
+    const stdTimeTotal = (jc.cycle_time || 0) * (jc.planned_qty || 0);
+    const efficiency = totalActualTimeMinutes > 0 ? (stdTimeTotal / totalActualTimeMinutes) * 100 : 0;
 
-  return {
-    jobCard: jc,
-    logs: {
-      time: timeLogs,
-      quality: qualityLogs,
-      downtime: downtimeLogs
-    },
-    timeline,
-    metrics: {
-      standardTime: stdTimeTotal,
-      actualTime: totalActualTimeMinutes,
-      downtime: totalDowntimeMinutes,
-      efficiency: Math.round(efficiency),
-      variance: Math.max(0, totalActualTimeMinutes - stdTimeTotal),
-      performance: efficiency > 90 ? 'High' : efficiency > 70 ? 'Optimal' : 'Needs Attention'
-    }
-  };
+    return {
+      jobCard: jc,
+      logs: {
+        time: timeLogs,
+        quality: qualityLogs,
+        downtime: downtimeLogs
+      },
+      timeline,
+      metrics: {
+        standardTime: stdTimeTotal,
+        actualTime: totalActualTimeMinutes,
+        downtime: totalDowntimeMinutes,
+        efficiency: Math.round(efficiency),
+        variance: Math.max(0, totalActualTimeMinutes - stdTimeTotal),
+        performance: efficiency > 90 ? 'High' : efficiency > 70 ? 'Optimal' : 'Needs Attention'
+      }
+    };
   } catch (error) {
     throw error;
   }

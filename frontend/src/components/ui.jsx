@@ -16,18 +16,18 @@ export const Card = ({ id, title, subtitle, action, children, className = '' }) 
   </div>
 )
 
-export const SearchableSelect = ({ 
-  options, 
-  value, 
-  onChange, 
-  placeholder, 
-  labelField = 'label', 
-  valueField = 'value', 
-  subLabelField, 
+export const SearchableSelect = ({
+  options,
+  value,
+  onChange,
+  placeholder,
+  labelField = 'label',
+  valueField = 'value',
+  subLabelField,
   getOptionLabel,
   getOptionSublabel,
-  allowCustom = true, 
-  disabled = false, 
+  allowCustom = true,
+  disabled = false,
   openUpwards = false,
   className = ''
 }) => {
@@ -59,7 +59,7 @@ export const SearchableSelect = ({
   }, [value, selectedOption, isOpen]);
 
   const safeSearchTerm = String(searchTerm || '').toLowerCase();
-  const filteredOptions = options.filter(opt => 
+  const filteredOptions = options.filter(opt =>
     String(getLabel(opt) || '').toLowerCase().includes(safeSearchTerm) ||
     String(opt[valueField] || '').toLowerCase().includes(safeSearchTerm) ||
     String(getSublabel(opt) || '').toLowerCase().includes(safeSearchTerm)
@@ -100,7 +100,7 @@ export const SearchableSelect = ({
           </div>
         )}
       </div>
-      
+
       {isOpen && !disabled && (
         <div className={`absolute z-[100] w-full bg-white border border-slate-200 rounded shadow-xl max-h-60 flex flex-col overflow-hidden ${openUpwards ? 'bottom-full mb-1' : 'top-full mt-1'}`}>
           <div className="overflow-y-auto flex-1">
@@ -141,7 +141,7 @@ export const MultiSelect = ({ options, value = [], onChange, placeholder, labelF
   const containerRef = useRef(null);
 
   const selectedValues = Array.isArray(value) ? value.map(v => String(v)) : [];
-  
+
   const toggleOption = (val) => {
     const stringVal = String(val);
     let newValue;
@@ -154,7 +154,7 @@ export const MultiSelect = ({ options, value = [], onChange, placeholder, labelF
   };
 
   const safeSearchTerm = String(searchTerm || '').toLowerCase();
-  const filteredOptions = options.filter(opt => 
+  const filteredOptions = options.filter(opt =>
     String(opt[labelField] || '').toLowerCase().includes(safeSearchTerm) ||
     String(opt[valueField] || '').toLowerCase().includes(safeSearchTerm) ||
     (subLabelField && String(opt[subLabelField] || '').toLowerCase().includes(safeSearchTerm))
@@ -172,7 +172,7 @@ export const MultiSelect = ({ options, value = [], onChange, placeholder, labelF
 
   return (
     <div className="relative" ref={containerRef}>
-      <div 
+      <div
         className={`min-h-[38px] w-full p-1.5 border border-slate-200 rounded text-xs text-slate-900 flex flex-wrap gap-1 items-center cursor-pointer focus-within:ring-2 focus:ring-blue-500 ${disabled ? 'bg-slate-50 text-slate-500 cursor-not-allowed' : 'bg-white'}`}
         onClick={() => !disabled && setIsOpen(!isOpen)}
       >
@@ -182,8 +182,8 @@ export const MultiSelect = ({ options, value = [], onChange, placeholder, labelF
             return (
               <span key={val} className="bg-rose-50 text-rose-600 px-2 py-0.5 rounded-md flex items-center gap-1 ">
                 {opt ? opt[labelField] : val}
-                <X 
-                  className="w-3 h-3 cursor-pointer hover:text-indigo-800" 
+                <X
+                  className="w-3 h-3 cursor-pointer hover:text-indigo-800"
                   onClick={(e) => {
                     e.stopPropagation();
                     toggleOption(val);
@@ -199,7 +199,7 @@ export const MultiSelect = ({ options, value = [], onChange, placeholder, labelF
           {isOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
         </div>
       </div>
-      
+
       {isOpen && !disabled && (
         <div className="absolute z-[100] w-full mt-1 bg-white border border-slate-200 rounded shadow-xl max-h-60 flex flex-col overflow-hidden">
           <div className="p-2 border-b border-slate-50">
@@ -255,17 +255,17 @@ export const FormControl = ({ label, children }) => (
   </label>
 )
 
-export const Button = ({ 
-  children, 
-  variant = 'default', 
-  size = 'md', 
-  className = '', 
-  disabled = false, 
+export const Button = ({
+  children,
+  variant = 'default',
+  size = 'md',
+  className = '',
+  disabled = false,
   type = 'button',
   onClick,
   icon: Icon,
   loading = false,
-  ...props 
+  ...props
 }) => {
   const variants = {
     default: 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 shadow-sm',
@@ -327,14 +327,14 @@ export const Tabs = ({ tabs = [], activeTab, onTabChange, className = '' }) => {
             onClick={() => onTabChange?.(tab.value || tab.id || tab.label)}
             className={`
               flex items-center gap-2 py-4 px-1 border-b-2 transition-all duration-200 group
-              ${isActive 
-                ? 'border-rose-500 text-rose-500' 
+              ${isActive
+                ? 'border-rose-500 text-rose-500'
                 : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-200'}
             `}
           >
             {Icon && (
-              <Icon 
-                className={`w-4 h-4 transition-colors ${isActive ? 'text-rose-500' : 'text-slate-400 group-hover:text-slate-600'}`} 
+              <Icon
+                className={`w-4 h-4 transition-colors ${isActive ? 'text-rose-500' : 'text-slate-400 group-hover:text-slate-600'}`}
               />
             )}
             <span className={`text-sm  ${isActive ? '' : ''}`}>
@@ -349,14 +349,14 @@ export const Tabs = ({ tabs = [], activeTab, onTabChange, className = '' }) => {
 
 export const StatusBadge = ({ status }) => {
   const normalized = (status || 'ACTIVE').trim().toUpperCase()
-  
+
   const getStatusStyles = (s) => {
     switch (s) {
       case 'DRAFT':
       case 'CREATED':
         // Default style: White background, black text, border
         return 'bg-white border-slate-200 text-slate-700 shadow-sm'
-      
+
       case 'APPROVED':
       case 'DESIGN_APPROVED':
       case 'BOM_APPROVED':
@@ -366,7 +366,7 @@ export const StatusBadge = ({ status }) => {
       case 'SENT':
         // Primary style: Indigo/Blue-ish
         return 'bg-rose-600 border-rose-700 text-white shadow-sm'
-      
+
       case 'PROCESSING':
       case 'DESIGN_IN_REVIEW':
       case 'IN_DESIGN':
@@ -375,7 +375,7 @@ export const StatusBadge = ({ status }) => {
       case 'DISPATCHED':
         // Info style: Blue
         return 'text-blue-500 '
-      
+
       case 'FULFILLED':
       case 'ACTIVE':
       case 'COMPLETED':
@@ -388,7 +388,7 @@ export const StatusBadge = ({ status }) => {
       case 'READY_TO_DISPATCH':
         // Success style: Green
         return 'bg-emerald-50 border-emerald-100 text-emerald-600 shadow-sm border'
-      
+
       case 'DESIGN_QUERY':
       case 'INACTIVE':
       case 'REJECTED':
@@ -397,7 +397,7 @@ export const StatusBadge = ({ status }) => {
       case 'CANCELLED':
         // Danger style: Red
         return 'bg-rose-50 border-rose-100 text-rose-600 shadow-sm border'
-      
+
       case 'RFQ_REQUESTED':
       case 'ON_HOLD':
       case 'PARTIALLY_CONSUMED':
@@ -409,11 +409,11 @@ export const StatusBadge = ({ status }) => {
       case 'RETURN_IN_TRANSIT':
         // Warning style: Orange/Yellow
         return 'bg-amber-50 border-amber-100 text-amber-600 shadow-sm border'
-      
+
       case 'RETURN_RECEIVED':
         // Secondary style: Sky/Cyan
         return 'text-sky-500 '
-      
+
       default:
         // Dark style
         return 'text-slate-700 '
@@ -506,17 +506,17 @@ export const Pagination = ({ currentPage, totalPages, onPageChange, totalItems, 
   const getPageNumbers = () => {
     const pages = [];
     const maxVisible = 5;
-    
+
     if (totalPages <= maxVisible) {
       for (let i = 1; i <= totalPages; i++) pages.push(i);
     } else {
       let start = Math.max(1, currentPage - 2);
       let end = Math.min(totalPages, start + maxVisible - 1);
-      
+
       if (end === totalPages) {
         start = Math.max(1, end - maxVisible + 1);
       }
-      
+
       for (let i = start; i <= end; i++) pages.push(i);
     }
     return pages;
@@ -529,7 +529,7 @@ export const Pagination = ({ currentPage, totalPages, onPageChange, totalItems, 
       <div className="text-xs text-slate-500 ">
         Showing <span className="text-slate-900 ">{startItem}</span> to <span className="text-slate-900 ">{endItem}</span> of <span className="text-slate-900 ">{totalItems}</span> entries
       </div>
-      
+
       <div className="flex items-center gap-1">
         <Button
           variant="default"
@@ -587,23 +587,23 @@ export const Pagination = ({ currentPage, totalPages, onPageChange, totalItems, 
   );
 };
 
-export const DataTable = ({ 
-  columns, 
-  data, 
-  loading, 
-  loadingMessage = "Loading...", 
-  emptyMessage = "No data found", 
-  searchPlaceholder = "Search...", 
-  actions, 
-  onRowClick, 
-  renderExpanded, 
-  className = '', 
-  hideHeader = false, 
-  hideExpander = false, 
-  pageSize: initialPageSize = 25, 
-  disableRowClickExpansion = false, 
-  selectable = false, 
-  selectedRows = new Set(), 
+export const DataTable = ({
+  columns,
+  data,
+  loading,
+  loadingMessage = "Loading...",
+  emptyMessage = "No data found",
+  searchPlaceholder = "Search...",
+  actions,
+  onRowClick,
+  renderExpanded,
+  className = '',
+  hideHeader = false,
+  hideExpander = false,
+  pageSize: initialPageSize = 25,
+  disableRowClickExpansion = false,
+  selectable = false,
+  selectedRows = new Set(),
   onSelectionChange,
   rowId: rowIdProp = 'id',
   expandedRows: expandedRowsProp,
@@ -624,7 +624,7 @@ export const DataTable = ({
     } else {
       newExpandedRows.add(id);
     }
-    
+
     if (onExpandedChange) {
       onExpandedChange(newExpandedRows);
     } else {
@@ -706,8 +706,8 @@ export const DataTable = ({
         <div className="flex flex-wrap my-3 gap-4 items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="text-sm text-slate-500">Show</span>
-            <select 
-              value={pageSize} 
+            <select
+              value={pageSize}
               onChange={(e) => {
                 setPageSize(Number(e.target.value));
                 setCurrentPage(1);
@@ -723,8 +723,8 @@ export const DataTable = ({
 
           <div className="flex items-center gap-4">
             <div className="relative group min-w-[200px] md:min-w-[250px]">
-              <input 
-                type="text" 
+              <input
+                type="text"
                 placeholder={searchPlaceholder}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -753,8 +753,8 @@ export const DataTable = ({
               )}
               {renderExpanded && !hideExpander && <th className="p-4 border-b border-slate-200 w-10"></th>}
               {columns.map((col, idx) => (
-                <th 
-                  key={idx} 
+                <th
+                  key={idx}
                   className={`p-2 border-b border-slate-200 bg-slate-50 text-slate-600 text-xs    ${col.sortable ? 'cursor-pointer hover:bg-slate-100 transition-colors' : ''} ${col.className || ''}`}
                   onClick={() => col.sortable && handleSort(col.key)}
                   style={{ width: col.width }}
@@ -798,10 +798,10 @@ export const DataTable = ({
                 const rowId = row[rowIdProp] || row.id || (currentPage - 1) * pageSize + rowIdx;
                 const isExpanded = expandedRows.has(rowId);
                 const isSelected = selectedRows.has(rowId);
-                
+
                 return (
                   <React.Fragment key={rowId}>
-                    <tr 
+                    <tr
                       className={`group transition-all duration-150 ${onRowClick ? 'cursor-pointer hover:bg-slate-50/80' : 'hover:bg-slate-50/50'} ${isExpanded || isSelected ? 'bg-rose-50/30' : ''}`}
                       onClick={(e) => {
                         if (renderExpanded && !disableRowClickExpansion) toggleRow(rowId);
@@ -823,7 +823,7 @@ export const DataTable = ({
                         </td>
                       )}
                       {renderExpanded && !hideExpander && (
-                        <td 
+                        <td
                           className="p-4 text-slate-400 cursor-pointer hover:text-rose-500 transition-colors"
                           data-expander="true"
                           onClick={(e) => {
@@ -862,7 +862,7 @@ export const DataTable = ({
           <div className="text-sm text-slate-500">
             Showing <span className="font-semibold text-slate-700">{Math.min(filteredData.length, (currentPage - 1) * pageSize + 1)}</span> to <span className="font-semibold text-slate-700">{Math.min(filteredData.length, currentPage * pageSize)}</span> of <span className="font-semibold text-slate-700">{filteredData.length}</span> entries
           </div>
-          <Pagination 
+          <Pagination
             currentPage={currentPage}
             totalPages={totalPages}
             onPageChange={setCurrentPage}

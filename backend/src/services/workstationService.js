@@ -20,8 +20,8 @@ const createWorkstation = async (data) => {
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       data.workstation_code, data.workstation_name, data.workstation_type, data.department,
-      data.location, data.capacity_per_hour, data.target_utilization, data.hourly_rate || 0, 
-      data.equipment_code, data.maintenance_frequency, data.last_maintenance_date, 
+      data.location, data.capacity_per_hour, data.target_utilization, data.hourly_rate || 0,
+      data.equipment_code, data.maintenance_frequency, data.last_maintenance_date,
       data.assigned_operators, data.description, data.status || 'Active'
     ]
   );
@@ -49,7 +49,7 @@ const updateWorkstation = async (id, data) => {
     [
       data.workstation_code, data.workstation_name, data.workstation_type, data.department,
       data.location, data.capacity_per_hour, data.target_utilization, data.hourly_rate || 0,
-      data.equipment_code, data.maintenance_frequency, data.last_maintenance_date, 
+      data.equipment_code, data.maintenance_frequency, data.last_maintenance_date,
       data.assigned_operators, data.description, data.status, id
     ]
   );
@@ -65,7 +65,7 @@ const generateWorkstationCode = async () => {
   const [result] = await pool.query(
     'SELECT workstation_code FROM workstations WHERE workstation_code LIKE "WS-%" ORDER BY workstation_code DESC LIMIT 1'
   );
-  
+
   if (result.length === 0) {
     return 'WS-0001';
   }

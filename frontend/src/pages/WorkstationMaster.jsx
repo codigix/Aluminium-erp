@@ -109,7 +109,7 @@ const WorkstationMaster = ({ showForm: propShowForm, setShowForm: propSetShowFor
   useEffect(() => {
     fetchWorkstations();
     fetchNextCode();
-    
+
     const handleRefresh = () => fetchWorkstations();
     window.addEventListener('refreshWorkstations', handleRefresh);
     return () => window.removeEventListener('refreshWorkstations', handleRefresh);
@@ -235,15 +235,15 @@ const WorkstationMaster = ({ showForm: propShowForm, setShowForm: propSetShowFor
   };
 
   const columns = [
-    { 
-      label: 'ID Code', 
-      key: 'workstation_code', 
+    {
+      label: 'ID Code',
+      key: 'workstation_code',
       sortable: true,
       render: (val) => <span className=" text-indigo-600  ">{val}</span>
     },
-    { 
-      label: 'Workstation / Location', 
-      key: 'workstation_name', 
+    {
+      label: 'Workstation / Location',
+      key: 'workstation_name',
       sortable: true,
       render: (val, row) => (
         <div>
@@ -252,13 +252,13 @@ const WorkstationMaster = ({ showForm: propShowForm, setShowForm: propSetShowFor
         </div>
       )
     },
-    { 
-      label: 'Target', 
+    {
+      label: 'Target',
       key: 'target_utilization',
       render: (val) => <span className="text-amber-600 ">{val}%</span>
     },
-    { 
-      label: 'Status', 
+    {
+      label: 'Status',
       key: 'status',
       render: (val) => (
         <Badge variant={val === 'Active' ? 'success' : 'danger'}>
@@ -272,14 +272,14 @@ const WorkstationMaster = ({ showForm: propShowForm, setShowForm: propSetShowFor
       className: 'text-right',
       render: (_, row) => (
         <div className="flex justify-center gap-2">
-          <button 
+          <button
             onClick={() => handleEdit(row)}
             className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded  transition-colors"
             title="Edit Workstation"
           >
             <Edit2 className="w-4 h-4" />
           </button>
-          <button 
+          <button
             onClick={() => handleDelete(row.id, row.workstation_name)}
             className="p-1.5 text-rose-600 hover:bg-rose-50 rounded  transition-colors"
             title="Delete Workstation"
@@ -295,85 +295,85 @@ const WorkstationMaster = ({ showForm: propShowForm, setShowForm: propSetShowFor
     <div className="">
       <Modal isOpen={showForm} onClose={() => { navigate(`${deptPrefix}/workstation-master`); }} title={isEditing ? "Edit Workstation" : "Create Workstation"}>
         <form onSubmit={handleSubmit} className="space-y-3">
-            {/* Basic Information */}
-            <section className="space-y-2">
-              <div className="flex items-center gap-2  border-b border-slate-100 pb-3">
-                <span className="p-1.5 bg-blue-50 text-blue-600 rounded  text-xs">📋</span>
-                <h3 className="text-xs  text-slate-500">Basic Information</h3>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                <FormControl label="Workstation ID *">
-                  <input
-                    type="text"
-                    name="workstation_code"
-                    value={formData.workstation_code}
-                    onChange={handleInputChange}
-                    placeholder="e.g., WS-001"
-                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-sm text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white"
-                    required
-                  />
-                </FormControl>
-                <FormControl label="Workstation Name *">
-                  <SearchableSelect
-                    options={Array.from(new Set(workstations.map(ws => ws.workstation_name))).map(name => ({
-                      label: name,
-                      value: name
-                    }))}
-                    value={formData.workstation_name}
-                    onChange={(e) => setFormData(prev => ({ ...prev, workstation_name: e.target.value }))}
-                    placeholder="e.g., Assembly Line 1"
-                    allowCustom={true}
-                  />
-                </FormControl>
-                <FormControl label="Location">
-                  <input
-                    type="text"
-                    name="location"
-                    value={formData.location}
-                    onChange={handleInputChange}
-                    placeholder="e.g., Building A, Floor 2"
-                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-sm text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white"
-                  />
-                </FormControl>
-                <FormControl label="Department">
-                  <select
-                    name="department"
-                    value={formData.department}
-                    onChange={handleInputChange}
-                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-sm text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white"
-                  >
-                    {departments.map(d => <option key={d} value={d}>{d}</option>)}
-                  </select>
-                </FormControl>
-              </div>
-            </section>
-
-            {/* Action Buttons */}
-            <div className="flex justify-end gap-2 pt-8 border-t border-slate-100">
-              <button
-                type="button"
-                onClick={() => { navigate(`${deptPrefix}/workstation-master`); }}
-                className="p-2 rounded  border border-slate-200 text-sm  text-slate-600 hover:bg-slate-50 transition-all"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="px-8 py-2.5 rounded  bg-cyan-500 hover:bg-cyan-600 text-white text-sm  shadow-lg shadow-cyan-100 transition-all flex items-center gap-2 "
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
-                </svg>
-                {isEditing ? 'Update Workstation' : 'Save Workstation'}
-              </button>
+          {/* Basic Information */}
+          <section className="space-y-2">
+            <div className="flex items-center gap-2  border-b border-slate-100 pb-3">
+              <span className="p-1.5 bg-blue-50 text-blue-600 rounded  text-xs">📋</span>
+              <h3 className="text-xs  text-slate-500">Basic Information</h3>
             </div>
-          </form>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+              <FormControl label="Workstation ID *">
+                <input
+                  type="text"
+                  name="workstation_code"
+                  value={formData.workstation_code}
+                  onChange={handleInputChange}
+                  placeholder="e.g., WS-001"
+                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-sm text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white"
+                  required
+                />
+              </FormControl>
+              <FormControl label="Workstation Name *">
+                <SearchableSelect
+                  options={Array.from(new Set(workstations.map(ws => ws.workstation_name))).map(name => ({
+                    label: name,
+                    value: name
+                  }))}
+                  value={formData.workstation_name}
+                  onChange={(e) => setFormData(prev => ({ ...prev, workstation_name: e.target.value }))}
+                  placeholder="e.g., Assembly Line 1"
+                  allowCustom={true}
+                />
+              </FormControl>
+              <FormControl label="Location">
+                <input
+                  type="text"
+                  name="location"
+                  value={formData.location}
+                  onChange={handleInputChange}
+                  placeholder="e.g., Building A, Floor 2"
+                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-sm text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white"
+                />
+              </FormControl>
+              <FormControl label="Department">
+                <select
+                  name="department"
+                  value={formData.department}
+                  onChange={handleInputChange}
+                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-sm text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white"
+                >
+                  {departments.map(d => <option key={d} value={d}>{d}</option>)}
+                </select>
+              </FormControl>
+            </div>
+          </section>
+
+          {/* Action Buttons */}
+          <div className="flex justify-end gap-2 pt-8 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={() => { navigate(`${deptPrefix}/workstation-master`); }}
+              className="p-2 rounded  border border-slate-200 text-sm  text-slate-600 hover:bg-slate-50 transition-all"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-8 py-2.5 rounded  bg-cyan-500 hover:bg-cyan-600 text-white text-sm  shadow-lg shadow-cyan-100 transition-all flex items-center gap-2 "
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+              </svg>
+              {isEditing ? 'Update Workstation' : 'Save Workstation'}
+            </button>
+          </div>
+        </form>
       </Modal>
 
       {/* Header Section */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          
+
           <div>
             <h1 className="text-xl  text-slate-900">Workstation Master</h1>
             <p className="text-slate-500 text-xs">Manage production floor workstations and equipment</p>
@@ -389,14 +389,14 @@ const WorkstationMaster = ({ showForm: propShowForm, setShowForm: propSetShowFor
       </div>
 
       {/* List Section */}
-        <DataTable
-          columns={columns}
-          data={workstations}
-          loading={loading}
-          searchPlaceholder="Search workstations, locations, or types..."
-          searchKey="workstation_name"
-        />
-      
+      <DataTable
+        columns={columns}
+        data={workstations}
+        loading={loading}
+        searchPlaceholder="Search workstations, locations, or types..."
+        searchKey="workstation_name"
+      />
+
     </div>
   );
 };

@@ -1275,16 +1275,36 @@ const JobCard = () => {
 
   const handleUpdateStatus = async (jc, status) => {
     if (status === 'IN_PROGRESS' && jc.workstation_id) {
-      const busyJob = jobCards.find(other =>
-        other.id !== jc.id &&
-        other.workstation_id === jc.workstation_id &&
-        other.status === 'IN_PROGRESS'
-      );
+      const ws = workstations.find(w => w.id === jc.workstation_id);
+      const capacity = ws ? parseInt(ws.capacity || 1) : 1;
 
-      if (busyJob) {
+      const now = new Date();
+      const todayStr = now.toISOString().split('T')[0];
+      const nowMinutes = now.getHours() * 60 + now.getMinutes();
+
+      const overlappingJobs = jobCards.filter(other => {
+        if (other.id === jc.id || other.workstation_id !== jc.workstation_id || other.status !== 'IN_PROGRESS') {
+          return false;
+        }
+
+        const busyDate = (other.latest_log_start_time || other.start_time || '').split(/[ T]/)[0];
+        if (todayStr && busyDate && todayStr !== busyDate) {
+          return false; // Different dates, no overlap
+        }
+
+        const busyEndStr = getEstimatedEndTime(other);
+        const busyStartStr = formatLocalTime(other.latest_log_start_time || other.start_time);
+
+        const busyStart = parse12hMinutes(busyStartStr);
+        const busyEnd = parse12hMinutes(busyEndStr);
+
+        return nowMinutes < busyEnd && nowMinutes >= busyStart;
+      });
+
+      if (overlappingJobs.length >= capacity) {
         Swal.fire({
           title: 'Machine Busy',
-          text: `Workstation "${jc.workstation_name}" is currently occupied by Job Card ${busyJob.job_card_no}. Please wait until it's free.`,
+          text: `Workstation "${jc.workstation_name}" has reached its capacity (${capacity} jobs). Occupied by Job Card(s): ${overlappingJobs.map(o => o.job_card_no).join(', ')}. Please wait until it's free.`,
           icon: 'warning',
           confirmButtonColor: '#4f46e5'
         });
@@ -1293,11 +1313,28 @@ const JobCard = () => {
     }
 
     if (status === 'IN_PROGRESS' && jc.assigned_to) {
-      const busyOpJob = jobCards.find(other =>
-        other.id !== jc.id &&
-        other.assigned_to === jc.assigned_to &&
-        other.status === 'IN_PROGRESS'
-      );
+      const now = new Date();
+      const todayStr = now.toISOString().split('T')[0];
+      const nowMinutes = now.getHours() * 60 + now.getMinutes();
+
+      const busyOpJob = jobCards.find(other => {
+        if (other.id === jc.id || other.assigned_to !== jc.assigned_to || other.status !== 'IN_PROGRESS') {
+          return false;
+        }
+
+        const busyDate = (other.latest_log_start_time || other.start_time || '').split(/[ T]/)[0];
+        if (todayStr && busyDate && todayStr !== busyDate) {
+          return false; // Different dates, no overlap
+        }
+
+        const busyEndStr = getEstimatedEndTime(other);
+        const busyStartStr = formatLocalTime(other.latest_log_start_time || other.start_time);
+
+        const busyStart = parse12hMinutes(busyStartStr);
+        const busyEnd = parse12hMinutes(busyEndStr);
+
+        return nowMinutes < busyEnd && nowMinutes >= busyStart;
+      });
 
       if (busyOpJob) {
         const busyOp = users.find(u => u.id === jc.assigned_to);
@@ -1876,20 +1913,68 @@ const JobCard = () => {
                     <FormControl label="Operator" required>
                       <SearchableSelect
                         options={users.map(u => {
-                          const busyJob = jobCards.find(jc =>
-                            jc.id !== selectedJC?.id &&
-                            jc.assigned_to === u.id &&
-                            jc.status === 'IN_PROGRESS'
-                          );
+                          let isBusyNow = false;
+                          let busyRange = '';
 
-                          const busyRange = busyJob
-                            ? `${formatLocalTime(busyJob.latest_log_start_time || busyJob.start_time)} – ${getEstimatedEndTime(busyJob)}`
-                            : '';
+                          // 1. Check current job card's logged times
+                          logs.timeLogs?.forEach(log => {
+                            if (log.operator_id !== u.id) return;
+
+                            const logDateStr = log.log_date?.split('T')[0];
+                            if (timeLogForm.logDate && logDateStr && timeLogForm.logDate !== logDateStr) {
+                              return;
+                            }
+
+                            const busyStartStr = formatLocalTime(log.start_time);
+                            const busyEndStr = formatLocalTime(log.end_time);
+
+                            const busyStart = parse12hMinutes(busyStartStr);
+                            const busyEnd = parse12hMinutes(busyEndStr);
+
+                            const newStart = parseTimeToMinutes(timeLogForm.startTime || '08:00', timeLogForm.startAMPM || 'AM');
+                            const newEnd = parseTimeToMinutes(timeLogForm.endTime || '04:00', timeLogForm.endAMPM || 'PM');
+
+                            if (newStart < busyEnd && newEnd > busyStart) {
+                              isBusyNow = true;
+                              busyRange = `${busyStartStr} – ${busyEndStr} (${selectedJC?.job_card_no || 'Current Job'})`;
+                            }
+                          });
+
+                          // 2. Check other in-progress job cards
+                          if (!isBusyNow) {
+                            const busyJobs = jobCards.filter(jc =>
+                              jc.id !== selectedJC?.id &&
+                              jc.assigned_to === u.id &&
+                              jc.status === 'IN_PROGRESS'
+                            );
+
+                            for (const jc of busyJobs) {
+                              const busyDate = (jc.latest_log_start_time || jc.start_time || '').split(/[ T]/)[0];
+                              if (timeLogForm.logDate && busyDate && timeLogForm.logDate !== busyDate) {
+                                continue;
+                              }
+
+                              const busyEndStr = getEstimatedEndTime(jc);
+                              const busyStartStr = formatLocalTime(jc.latest_log_start_time || jc.start_time);
+
+                              const busyStart = parse12hMinutes(busyStartStr);
+                              const busyEnd = parse12hMinutes(busyEndStr);
+
+                              const newStart = parseTimeToMinutes(timeLogForm.startTime || '08:00', timeLogForm.startAMPM || 'AM');
+                              const newEnd = parseTimeToMinutes(timeLogForm.endTime || '04:00', timeLogForm.endAMPM || 'PM');
+
+                              if (newStart < busyEnd && newEnd > busyStart) {
+                                isBusyNow = true;
+                                busyRange = `${busyStartStr} – ${busyEndStr} (${jc.job_card_no})`;
+                                break;
+                              }
+                            }
+                          }
 
                           return {
                             value: u.id,
                             label: u.username,
-                            subLabel: busyJob
+                            subLabel: isBusyNow
                               ? `🔴 Busy (${busyRange})`
                               : '🟢 Available',
                           };
@@ -1905,18 +1990,68 @@ const JobCard = () => {
                     <FormControl label="Workstation" required>
                       <SearchableSelect
                         options={workstations.map(w => {
-                          const busyJob = jobCards.find(jc =>
+                          const capacity = parseInt(w.capacity || 1);
+                          let overlappingCount = 0;
+                          let busyDetails = '';
+
+                          // 1. Check current job card's logged times
+                          logs.timeLogs?.forEach(log => {
+                            if (Number(log.workstation_id) !== Number(w.id)) return;
+
+                            const logDateStr = log.log_date?.split('T')[0];
+                            if (timeLogForm.logDate && logDateStr && timeLogForm.logDate !== logDateStr) {
+                              return;
+                            }
+
+                            const busyStartStr = formatLocalTime(log.start_time);
+                            const busyEndStr = formatLocalTime(log.end_time);
+
+                            const busyStart = parse12hMinutes(busyStartStr);
+                            const busyEnd = parse12hMinutes(busyEndStr);
+
+                            const newStart = parseTimeToMinutes(timeLogForm.startTime || '08:00', timeLogForm.startAMPM || 'AM');
+                            const newEnd = parseTimeToMinutes(timeLogForm.endTime || '04:00', timeLogForm.endAMPM || 'PM');
+
+                            if (newStart < busyEnd && newEnd > busyStart) {
+                              overlappingCount++;
+                              busyDetails = `${busyStartStr} – ${busyEndStr} (${selectedJC?.job_card_no || 'Current Job'})`;
+                            }
+                          });
+
+                          // 2. Check other in-progress job cards
+                          const activeJobs = jobCards.filter(jc =>
                             jc.id !== selectedJC?.id &&
-                            jc.workstation_id === w.id &&
+                            Number(jc.workstation_id) === Number(w.id) &&
                             jc.status === 'IN_PROGRESS'
                           );
+
+                          activeJobs.forEach(jc => {
+                            const busyDate = (jc.latest_log_start_time || jc.start_time || '').split(/[ T]/)[0];
+                            if (timeLogForm.logDate && busyDate && timeLogForm.logDate !== busyDate) {
+                              return;
+                            }
+
+                            const busyEndStr = getEstimatedEndTime(jc);
+                            const busyStartStr = formatLocalTime(jc.latest_log_start_time || jc.start_time);
+
+                            const busyStart = parse12hMinutes(busyStartStr);
+                            const busyEnd = parse12hMinutes(busyEndStr);
+
+                            const newStart = parseTimeToMinutes(timeLogForm.startTime || '08:00', timeLogForm.startAMPM || 'AM');
+                            const newEnd = parseTimeToMinutes(timeLogForm.endTime || '04:00', timeLogForm.endAMPM || 'PM');
+
+                            if (newStart < busyEnd && newEnd > busyStart) {
+                              overlappingCount++;
+                              busyDetails = `${busyStartStr} – ${busyEndStr} (${jc.job_card_no})`;
+                            }
+                          });
 
                           return {
                             value: w.id,
                             label: w.workstation_name,
-                            subLabel: busyJob
-                              ? `Busy till ${getEstimatedEndTime(busyJob)} by ${busyJob.job_card_no}`
-                              : 'Available',
+                            subLabel: overlappingCount > 0
+                              ? `🔴 Busy (${busyDetails})`
+                              : '🟢 Available',
                           };
                         })}
                         subLabelField="subLabel"
@@ -1994,7 +2129,7 @@ const JobCard = () => {
                       </FormControl>
 
                     </div>
-                    
+
                   </div>
                   <div className='col-span-1'>
                     <FormControl label="Execution (P)">
@@ -2019,60 +2154,60 @@ const JobCard = () => {
                     </FormControl>
                   </div>
                   <div className='col-span-1'>
-                      <FormControl label="Actual Mins">
-                        <input
-                          type="text"
-                          placeholder="480"
-                          value={calculateTotalMins(timeLogForm.startTime, timeLogForm.startAMPM, timeLogForm.endTime, timeLogForm.endAMPM) || ''}
-                          readOnly
-                          className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs outline-none  text-slate-600 "
-                        />
-                      </FormControl>
+                    <FormControl label="Actual Mins">
+                      <input
+                        type="text"
+                        placeholder="480"
+                        value={calculateTotalMins(timeLogForm.startTime, timeLogForm.startAMPM, timeLogForm.endTime, timeLogForm.endAMPM) || ''}
+                        readOnly
+                        className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs outline-none  text-slate-600 "
+                      />
+                    </FormControl>
+                  </div>
+                  <div className='col-span-6'>
+                    <div className='flex gap-2'>
+                      <button
+                        onClick={handleStartMachine}
+                        className={`p-2 rounded transition-all text-xs flex items-center gap-2 h-[38px] ${machineStatus === 'RUNNING' ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-600 hover:bg-rose-50 hover:text-rose-600'
+                          }`}
+                        title="Start Machine"
+                      >
+                        <Play className="w-4 h-4 fill-current" />
+                        Start
+                      </button>
+                      <button
+                        onClick={() => setMachineStatus("STOPPED")}
+                        className={`p-2 rounded transition-all text-xs flex items-center gap-2 h-[38px] ${machineStatus === 'STOPPED' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600 hover:bg-amber-50 hover:text-amber-600'
+                          }`}
+                        title="Stop Machine"
+                      >
+                        <Pause className="w-4 h-4 fill-current" />
+                        Stop
+                      </button>
+                      <button
+                        onClick={() => setMachineStatus("AVAILABLE")}
+                        className={`p-2 rounded transition-all text-xs flex items-center gap-2 h-[38px] ${machineStatus === 'AVAILABLE' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600 hover:bg-emerald-50 hover:text-emerald-600'
+                          }`}
+                        title="Complete Production"
+                      >
+                        <Check className="w-4 h-4" />
+                        Complete
+                      </button>
+                      <button
+                        onClick={() => addTimeLog(timeLogForm)}
+                        className="px-10 py-2.5 bg-indigo-600 text-white rounded  hover:bg-indigo-700 transition-all text-xs    shadow-lg shadow-indigo-100 flex items-center gap-2 h-[38px]"
+                      >
+                        <Monitor className="w-4 h-4" />
+                        Record Time
+                      </button>
                     </div>
-                    <div className='col-span-6'>
-                     <div className='flex gap-2'>
-                       <button
-                      onClick={handleStartMachine}
-                      className={`p-2 rounded transition-all text-xs flex items-center gap-2 h-[38px] ${machineStatus === 'RUNNING' ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-600 hover:bg-rose-50 hover:text-rose-600'
-                        }`}
-                      title="Start Machine"
-                    >
-                      <Play className="w-4 h-4 fill-current" />
-                      Start
-                    </button>
-                    <button
-                      onClick={() => setMachineStatus("STOPPED")}
-                      className={`p-2 rounded transition-all text-xs flex items-center gap-2 h-[38px] ${machineStatus === 'STOPPED' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600 hover:bg-amber-50 hover:text-amber-600'
-                        }`}
-                      title="Stop Machine"
-                    >
-                      <Pause className="w-4 h-4 fill-current" />
-                      Stop
-                    </button>
-                    <button
-                      onClick={() => setMachineStatus("AVAILABLE")}
-                      className={`p-2 rounded transition-all text-xs flex items-center gap-2 h-[38px] ${machineStatus === 'AVAILABLE' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600 hover:bg-emerald-50 hover:text-emerald-600'
-                        }`}
-                      title="Complete Production"
-                    >
-                      <Check className="w-4 h-4" />
-                      Complete
-                    </button>
-                    <button
-                      onClick={() => addTimeLog(timeLogForm)}
-                      className="px-10 py-2.5 bg-indigo-600 text-white rounded  hover:bg-indigo-700 transition-all text-xs    shadow-lg shadow-indigo-100 flex items-center gap-2 h-[38px]"
-                    >
-                      <Monitor className="w-4 h-4" />
-                      Record Time
-                    </button>
-                     </div>
-                    </div>
+                  </div>
                 </div>
 
                 <div className="flex items-end gap-2">
 
                   <div className="flex items-center gap-2">
-                    
+
                   </div>
                 </div>
 
@@ -2610,15 +2745,50 @@ const JobCard = () => {
     successToast('Report downloaded successfully');
   };
 
-  const validateWorkstationAvailability = (workstationId, startTime, startAMPM, endTime, endAMPM) => {
+  const validateWorkstationAvailability = (workstationId, date, startTime, startAMPM, endTime, endAMPM) => {
     const ws = workstations.find(w => w.id === parseInt(workstationId));
-    const busyJob = jobCards.find(jc =>
+    const capacity = ws ? parseInt(ws.capacity || 1) : 1;
+
+    let overlappingCount = 0;
+    let overlappingJobNo = '';
+
+    // 1. Check current job logs
+    logs.timeLogs?.forEach(log => {
+      if (log.workstation_id !== parseInt(workstationId)) return;
+
+      const logDateStr = log.log_date?.split('T')[0];
+      if (date && logDateStr && date !== logDateStr) {
+        return;
+      }
+
+      const busyStartStr = formatLocalTime(log.start_time);
+      const busyEndStr = formatLocalTime(log.end_time);
+
+      const busyStart = parse12hMinutes(busyStartStr);
+      const busyEnd = parse12hMinutes(busyEndStr);
+
+      const newStart = parseTimeToMinutes(startTime, startAMPM);
+      const newEnd = parseTimeToMinutes(endTime, endAMPM);
+
+      if (newStart < busyEnd && newEnd > busyStart) {
+        overlappingCount++;
+        overlappingJobNo = selectedJC?.job_card_no || 'Current Job';
+      }
+    });
+
+    // 2. Check other active jobs
+    const activeJobs = jobCards.filter(jc =>
       jc.id !== selectedJC?.id &&
       jc.workstation_id === parseInt(workstationId) &&
       jc.status === 'IN_PROGRESS'
     );
 
-    if (busyJob && ws) {
+    activeJobs.forEach(busyJob => {
+      const busyDate = (busyJob.latest_log_start_time || busyJob.start_time || '').split(/[ T]/)[0];
+      if (date && busyDate && date !== busyDate) {
+        return;
+      }
+
       const busyEndStr = getEstimatedEndTime(busyJob);
       const busyStartStr = formatLocalTime(busyJob.latest_log_start_time || busyJob.start_time);
 
@@ -2629,71 +2799,129 @@ const JobCard = () => {
       const newEnd = parseTimeToMinutes(endTime, endAMPM);
 
       const isOverlap = newStart < busyEnd && newEnd > busyStart;
-
       if (isOverlap) {
-        Swal.fire({
-          icon: 'error',
-          title: 'Machine Already in Use',
-          html: `
-            <div class="text-left space-y-1">
-              <p class=" text-xs  text-rose-600">🔴 ${ws.workstation_name} busy to ${busyJob.job_card_no}</p>
-              <p class=" text-xs  text-slate-600">⏱ ${busyStartStr} – ${busyEndStr} • <span class="text-emerald-600">Available after ${busyEndStr}</span></p>
-            </div>
-          `,
-          toast: true,
-          position: 'bottom-end',
-          showConfirmButton: false,
-          timer: 5000,
-          timerProgressBar: true
-        });
-        return false;
+        overlappingCount++;
+        overlappingJobNo = busyJob.job_card_no;
       }
+    });
+
+    if (overlappingCount >= capacity && overlappingJobNo) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Machine Already in Use',
+        html: `
+          <div class="text-left space-y-1">
+            <p class=" text-xs  text-rose-600">🔴 ${ws.workstation_name} busy to capacity with ${overlappingJobNo}</p>
+          </div>
+        `,
+        toast: true,
+        position: 'bottom-end',
+        showConfirmButton: false,
+        timer: 5000,
+        timerProgressBar: true
+      });
+      return false;
     }
     return true;
   };
 
-  const validateOperatorAvailability = (operatorId, startTime, startAMPM, endTime, endAMPM) => {
+  const validateOperatorAvailability = (operatorId, date, startTime, startAMPM, endTime, endAMPM) => {
     const operator = users.find(u => u.id === parseInt(operatorId));
-    const busyJob = jobCards.find(jc =>
-      jc.id !== selectedJC?.id &&
-      jc.assigned_to === parseInt(operatorId) &&
-      jc.status === 'IN_PROGRESS'
-    );
+
+    // 1. Check current job logs
+    const localOverlap = logs.timeLogs?.find(log => {
+      if (log.operator_id !== parseInt(operatorId)) return false;
+
+      const logDateStr = log.log_date?.split('T')[0];
+      if (date && logDateStr && date !== logDateStr) {
+        return false;
+      }
+
+      const busyStartStr = formatLocalTime(log.start_time);
+      const busyEndStr = formatLocalTime(log.end_time);
+
+      const busyStart = parse12hMinutes(busyStartStr);
+      const busyEnd = parse12hMinutes(busyEndStr);
+
+      const newStart = parseTimeToMinutes(startTime, startAMPM);
+      const newEnd = parseTimeToMinutes(endTime, endAMPM);
+
+      return newStart < busyEnd && newEnd > busyStart;
+    });
+
+    if (localOverlap) {
+      const busyStartStr = formatLocalTime(localOverlap.start_time);
+      const busyEndStr = formatLocalTime(localOverlap.end_time);
+
+      Swal.fire({
+        icon: 'error',
+        title: 'Operator Not Available',
+        html: `
+          <div class="text-left space-y-2">
+            <p class="text-sm text-slate-600">Operator is already assigned to another job during this time.</p>
+            <div class="p-2 bg-rose-50 border border-rose-100 rounded">
+              <p class=" text-xs text-rose-600">🔴 Busy with ${selectedJC?.job_card_no || 'Current Job'}</p>
+              <p class="text-xs  text-rose-500 mt-1">⏱ ${busyStartStr} – ${busyEndStr}</p>
+            </div>
+            <p class="text-xs  text-emerald-600">✅ Available after ${busyEndStr}</p>
+          </div>
+        `,
+        toast: true,
+        position: 'bottom-end',
+        showConfirmButton: false,
+        timer: 6000,
+        timerProgressBar: true
+      });
+      return false;
+    }
+
+    // 2. Check other active jobs
+    const busyJob = jobCards.find(jc => {
+      if (jc.id === selectedJC?.id || jc.assigned_to !== parseInt(operatorId) || jc.status !== 'IN_PROGRESS') {
+        return false;
+      }
+
+      const busyDate = (jc.latest_log_start_time || jc.start_time || '').split(/[ T]/)[0];
+      if (date && busyDate && date !== busyDate) {
+        return false;
+      }
+
+      const busyEndStr = getEstimatedEndTime(jc);
+      const busyStartStr = formatLocalTime(jc.latest_log_start_time || jc.start_time);
+
+      const busyStart = parse12hMinutes(busyStartStr);
+      const busyEnd = parse12hMinutes(busyEndStr);
+
+      const newStart = parseTimeToMinutes(startTime, startAMPM);
+      const newEnd = parseTimeToMinutes(endTime, endAMPM);
+
+      return newStart < busyEnd && newEnd > busyStart;
+    });
 
     if (busyJob && operator) {
       const busyEndStr = getEstimatedEndTime(busyJob);
       const busyStartStr = formatLocalTime(busyJob.latest_log_start_time || busyJob.start_time);
 
-      const busyStart = parse12hMinutes(busyStartStr);
-      const busyEnd = parse12hMinutes(busyEndStr);
-
-      const newStart = parseTimeToMinutes(startTime, startAMPM);
-      const newEnd = parseTimeToMinutes(endTime, endAMPM);
-
-      const isOverlap = newStart < busyEnd && newEnd > busyStart;
-
-      if (isOverlap) {
-        Swal.fire({
-          icon: 'error',
-          title: 'Operator Not Available',
-          html: `
-            <div class="text-left space-y-2">
-              <p class="text-sm text-slate-600">Operator is already assigned to another job during this time.</p>
-              <div class="p-2 bg-rose-50 border border-rose-100 rounded">
-                <p class=" text-xs text-rose-600">🔴 Busy with ${busyJob.job_card_no}</p>
-                <p class="text-xs  text-rose-500 mt-1">⏱ ${busyStartStr} – ${busyEndStr}</p>
-              </div>
-              <p class="text-xs  text-emerald-600">✅ Available after ${busyEndStr}</p>
+      Swal.fire({
+        icon: 'error',
+        title: 'Operator Not Available',
+        html: `
+          <div class="text-left space-y-2">
+            <p class="text-sm text-slate-600">Operator is already assigned to another job during this time.</p>
+            <div class="p-2 bg-rose-50 border border-rose-100 rounded">
+              <p class=" text-xs text-rose-600">🔴 Busy with ${busyJob.job_card_no}</p>
+              <p class="text-xs  text-rose-500 mt-1">⏱ ${busyStartStr} – ${busyEndStr}</p>
             </div>
-          `,
-          toast: true,
-          position: 'bottom-end',
-          showConfirmButton: false,
-          timer: 6000,
-          timerProgressBar: true
-        });
-        return false;
-      }
+            <p class="text-xs  text-emerald-600">✅ Available after ${busyEndStr}</p>
+          </div>
+        `,
+        toast: true,
+        position: 'bottom-end',
+        showConfirmButton: false,
+        timer: 6000,
+        timerProgressBar: true
+      });
+      return false;
     }
     return true;
   };
@@ -2705,7 +2933,7 @@ const JobCard = () => {
 
     // For "Start", we check if currently busy (overlap with current time)
     // We can use a 1-min window for the check
-    const isAvailable = validateWorkstationAvailability(timeLogForm.workstationId, time, ampm, time, ampm);
+    const isAvailable = validateWorkstationAvailability(timeLogForm.workstationId, timeLogForm.logDate, time, ampm, time, ampm);
     if (isAvailable) {
       setMachineStatus("RUNNING");
     }
@@ -2726,12 +2954,12 @@ const JobCard = () => {
     }
 
     // Machine Busy Validation
-    if (!validateWorkstationAvailability(logData.workstationId, logData.startTime, logData.startAMPM, logData.endTime, logData.endAMPM)) {
+    if (!validateWorkstationAvailability(logData.workstationId, logData.logDate, logData.startTime, logData.startAMPM, logData.endTime, logData.endAMPM)) {
       return;
     }
 
     // Operator Busy Validation
-    if (!validateOperatorAvailability(logData.operatorId, logData.startTime, logData.startAMPM, logData.endTime, logData.endAMPM)) {
+    if (!validateOperatorAvailability(logData.operatorId, logData.logDate, logData.startTime, logData.startAMPM, logData.endTime, logData.endAMPM)) {
       return;
     }
 
@@ -3566,8 +3794,8 @@ const JobCard = () => {
       key: 'status',
       render: (val) => (
         <div className={`inline-flex items-center px-2 py-1 rounded text-xs   border   ${val?.trim() === 'APPROVED'
-            ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
-            : 'bg-amber-50 text-amber-600 border-amber-100'
+          ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
+          : 'bg-amber-50 text-amber-600 border-amber-100'
           }`}>
           <div className={`w-1.5 h-1.5 rounded mr-1.5 ${val?.trim() === 'APPROVED' ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'}`} />
           {val?.trim() === 'APPROVED' ? 'Verified' : 'Pending Verification'}
@@ -3593,8 +3821,8 @@ const JobCard = () => {
         return (
           <div className={`flex flex-col gap-1 max-w-[200px]`}>
             <div className={`inline-flex items-center  rounded text-xs   border w-fit  ${(row.rejected_qty > 0 || row.scrap_qty > 0)
-                ? 'bg-rose-50 text-rose-600 border-rose-100'
-                : 'bg-emerald-50 text-emerald-600 border-emerald-100'
+              ? 'bg-rose-50 text-rose-600 border-rose-100'
+              : 'bg-emerald-50 text-emerald-600 border-emerald-100'
               }`}>
               {(row.rejected_qty > 0 || row.scrap_qty > 0) ? 'QC REJECTED' : 'QC PASSED'}
             </div>
@@ -3945,21 +4173,21 @@ const JobCard = () => {
       sortable: true,
       render: (val, row) => {
         const displayProject = cleanProjectName(row.project_name, row.client_name);
-          
+
         return (
           <div className="flex flex-col">
             <span className=" text-slate-900 truncate max-w-[180px]" title={displayProject}>{displayProject}</span>
             <span className="text-[10px] text-slate-500">WO: {row.work_order_no || row.wo_number}</span>
-          <div className="flex items-center gap-1.5 mt-0.5">
-            <span className="flex items-center justify-center w-5 h-5 rounded bg-slate-100 text-[10px]  text-slate-700 border border-slate-200">
-              {row.sequence_no || row.operation_sequence || '-'}
-            </span>
-            <span className="text-xs font-semibold text-indigo-600">{val}</span>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span className="flex items-center justify-center w-5 h-5 rounded bg-slate-100 text-[10px]  text-slate-700 border border-slate-200">
+                {row.sequence_no || row.operation_sequence || '-'}
+              </span>
+              <span className="text-xs font-semibold text-indigo-600">{val}</span>
+            </div>
           </div>
-        </div>
-      );
-    }
-  },
+        );
+      }
+    },
     {
       label: 'Operation / Status',
       key: 'operation_name',
@@ -3967,8 +4195,8 @@ const JobCard = () => {
         <div className="flex flex-col gap-1.5">
           <span className="text-xs text-slate-900 ">{val}</span>
           <span className={`w-fit ${row.status === 'IN_PROGRESS' ? ' text-amber-600' :
-              row.status === 'COMPLETED' ? 'text-emerald-600' :
-                'text-slate-500'
+            row.status === 'COMPLETED' ? 'text-emerald-600' :
+              'text-slate-500'
             }`}>
             {row.status === 'IN_PROGRESS' ? 'In-Progress' : row.status?.charAt(0) + row.status?.slice(1).toLowerCase()}
           </span>
@@ -3982,7 +4210,7 @@ const JobCard = () => {
         const isSubcontract = row.execution_type === 'Outsource' || row.execution_type === 'Subcontract' || row.execution_type === 'Sub-Contract' || row.outward_challan_id;
         const sourceType = (row.source_type || '').toUpperCase();
         const isSA = sourceType === 'SA' || sourceType === 'SUB ASSEMBLY' || sourceType === 'SFG';
-        
+
         return (
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center gap-2">
@@ -3993,10 +4221,10 @@ const JobCard = () => {
                 ({isSubcontract ? 'Outsource' : 'In-house'})
               </span>
             </div>
-            
+
             <div className="flex flex-col">
               <span className="text-[11px]  text-slate-900 leading-tight" title={val}>{val}</span>
-              
+
               {isSA && row.source_fg && (
                 <div className="flex items-center gap-1 mt-0.5">
                   <span className="text-[9px] text-indigo-600  leading-tight">{row.source_fg}</span>
@@ -4032,7 +4260,7 @@ const JobCard = () => {
         const cycleTime = parseFloat(row.cycle_time || row.std_time || 0);
         const hourlyRate = parseFloat(row.hourly_rate || 0);
         const totalCost = (cycleTime / 60) * (row.wo_quantity || row.planned_qty || 1) * hourlyRate;
-        
+
         return (
           <div className="flex flex-col gap-0.5">
             <div className="flex items-center gap-1 text-[10px] text-slate-500">
@@ -4572,15 +4800,17 @@ const JobCard = () => {
                       options={workstations.map(ws => {
                         const busyJob = jobCards.find(jc =>
                           jc.id !== formData.id &&
-                          jc.workstation_id === ws.id &&
+                          Number(jc.workstation_id) === Number(ws.id) &&
                           jc.status === 'IN_PROGRESS'
                         );
+                        const busyStartStr = busyJob ? formatLocalTime(busyJob.latest_log_start_time || busyJob.start_time) : '';
+                        const busyEndStr = busyJob ? getEstimatedEndTime(busyJob) : '';
                         return {
                           value: ws.id,
                           label: ws.workstation_name,
                           subLabel: busyJob
-                            ? `Busy till ${getEstimatedEndTime(busyJob)} by ${busyJob.job_card_no}`
-                            : 'Available'
+                            ? `🔴 Busy (${busyStartStr} – ${busyEndStr} (${busyJob.job_card_no}))`
+                            : '🟢 Available'
                         };
                       })}
                       subLabelField="subLabel"
@@ -4604,37 +4834,37 @@ const JobCard = () => {
                       </select>
                     </FormControl>
                   )}
-                   {formData.executionMode === 'In-house' ? (
-                  <FormControl label="Primary Operator">
-                    <select
-                      value={formData.assignedTo}
-                      onChange={(e) => setFormData(prev => ({ ...prev, assignedTo: e.target.value }))}
-                      className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none appearance-none"
-                    >
-                      <option value="">Select Operator</option>
-                      {users.map(user => (
-                        <option key={user.id} value={user.id}>
-                          {user.first_name} {user.last_name} ({user.username})
-                        </option>
-                      ))}
-                    </select>
-                  </FormControl>
-                ) : (
-                  <div className="grid grid-cols-1 gap-3">
-                    <div />
-                    <FormControl label="Vendor Rate per Unit">
-                      <input
-                        type="number"
-                        value={formData.vendorRate}
-                        onChange={(e) => setFormData(prev => ({ ...prev, vendorRate: e.target.value }))}
-                        className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
-                      />
+                  {formData.executionMode === 'In-house' ? (
+                    <FormControl label="Primary Operator">
+                      <select
+                        value={formData.assignedTo}
+                        onChange={(e) => setFormData(prev => ({ ...prev, assignedTo: e.target.value }))}
+                        className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none appearance-none"
+                      >
+                        <option value="">Select Operator</option>
+                        {users.map(user => (
+                          <option key={user.id} value={user.id}>
+                            {user.first_name} {user.last_name} ({user.username})
+                          </option>
+                        ))}
+                      </select>
                     </FormControl>
-                  </div>
-                )}
+                  ) : (
+                    <div className="grid grid-cols-1 gap-3">
+                      <div />
+                      <FormControl label="Vendor Rate per Unit">
+                        <input
+                          type="number"
+                          value={formData.vendorRate}
+                          onChange={(e) => setFormData(prev => ({ ...prev, vendorRate: e.target.value }))}
+                          className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                        />
+                      </FormControl>
+                    </div>
+                  )}
                 </div>
 
-               
+
               </div>
 
               {/* Execution & Metrics Section */}

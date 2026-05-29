@@ -2763,8 +2763,29 @@ const ensureCompanyMasterColumns = async () => {
   }
 };
 
+const ensureWorkstationColumns = async () => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    const [columns] = await connection.query('SHOW COLUMNS FROM workstations');
+    const existing = new Set(columns.map(c => c.Field));
+    
+    if (!existing.has('capacity')) {
+      console.log('[ensureWorkstationColumns] Adding capacity column...');
+      await connection.query('ALTER TABLE workstations ADD COLUMN capacity INT DEFAULT 1');
+    }
+  } catch (error) {
+    if (error.code !== 'ER_NO_SUCH_TABLE') {
+      console.error('Workstation column sync failed', error.message);
+    }
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
 const bootstrapDatabase = async () => {
   await ensureDatabase();
+  await ensureWorkstationColumns();
   await ensureCompanyMasterTable();
   await ensureCompanyMasterColumns();
   await ensureMaterialColumns();
