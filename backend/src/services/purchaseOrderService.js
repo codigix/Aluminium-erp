@@ -535,7 +535,7 @@ const getPurchaseOrders = async (filters = {}) => {
 
 const getPurchaseOrderById = async (poId) => {
   const [rows] = await pool.query(
-    `SELECT po.*, v.vendor_name, v.email as vendor_email, v.phone as vendor_phone, v.location as vendor_location, v.location as vendor_address, 
+    `SELECT po.*, v.vendor_name, v.email as vendor_email, v.phone as vendor_phone, v.location as vendor_location, v.location as vendor_address, v.gstin as vendor_gstin, 
      (SELECT name FROM contacts WHERE company_id = po.vendor_id AND contact_type = 'PRIMARY' LIMIT 1) as contact_person,
      (SELECT phone FROM contacts WHERE company_id = po.vendor_id AND contact_type = 'PRIMARY' LIMIT 1) as contact_phone,
      mr.mr_number, so.so_number,

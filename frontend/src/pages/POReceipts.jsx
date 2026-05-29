@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
+import { getFileUrl } from '../utils/url';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -78,12 +79,16 @@ const POReceipts = () => {
   const [stockBalances, setStockBalances] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [hostCompanies, setHostCompanies] = useState([]);
+  const [selectedHostCompany, setSelectedHostCompany] = useState(null);
+  const [isHostCompanyLocked, setIsHostCompanyLocked] = useState(false);
 
   useEffect(() => {
     const path = location.pathname;
     
     if (path === `${deptPrefix}/po-receipts/add`) {
       if (!showCreateModal) {
+        const activeCompany = hostCompanies.find(c => c.status === 'ACTIVE') || hostCompanies[0];
         setFormData({
           poId: '',
           vendorName: '',
@@ -92,8 +97,10 @@ const POReceipts = () => {
           receivedQuantity: 0,
           totalValuation: 0,
           notes: '',
-          items: []
+          items: [],
+          host_company_id: activeCompany ? String(activeCompany.id) : ''
         });
+        setIsHostCompanyLocked(false);
         setShowCreateModal(true);
         setShowEditModal(false);
         setShowViewModal(false);
@@ -128,7 +135,7 @@ const POReceipts = () => {
       }
       if (activeTab !== 'grn') setActiveTab('grn');
     }
-  }, [location.pathname, receipts, deptPrefix]);
+  }, [location.pathname, receipts, deptPrefix, hostCompanies]);
 
   const handleViewReceiptDetail = async (receiptId) => {
     try {
@@ -154,7 +161,8 @@ const POReceipts = () => {
     receivedQuantity: 0,
     totalValuation: 0,
     notes: '',
-    items: []
+    items: [],
+    host_company_id: ''
   });
 
   const handleAddLineItem = () => {
@@ -250,6 +258,30 @@ const POReceipts = () => {
     }
   };
 
+  const fetchHostCompanies = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/admin-company-master`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setHostCompanies(data);
+        const active = data.find(c => c.status === 'ACTIVE') || data[0];
+        if (active) {
+          setFormData(prev => {
+            if (!prev.host_company_id) {
+              return { ...prev, host_company_id: String(active.id) };
+            }
+            return prev;
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching host companies:', err);
+    }
+  };
+
   useEffect(() => {
     const storedUser = localStorage.getItem('authUser');
     if (storedUser) {
@@ -262,6 +294,7 @@ const POReceipts = () => {
         fetchStockItems();
         fetchWarehouses();
         fetchStockBalance();
+        fetchHostCompanies();
       }
     } else {
       fetchReceipts();
@@ -270,8 +303,18 @@ const POReceipts = () => {
       fetchStockItems();
       fetchWarehouses();
       fetchStockBalance();
+      fetchHostCompanies();
     }
   }, []);
+
+  useEffect(() => {
+    if (formData.host_company_id && hostCompanies.length > 0) {
+      const matched = hostCompanies.find(h => String(h.id) === String(formData.host_company_id));
+      setSelectedHostCompany(matched || null);
+    } else {
+      setSelectedHostCompany(null);
+    }
+  }, [formData.host_company_id, hostCompanies]);
 
   const fetchStockBalance = async () => {
     try {
@@ -395,6 +438,12 @@ const POReceipts = () => {
             };
           });
 
+          const poHostCompanyId = detailedPO.host_company_id;
+          const activeCompany = hostCompanies.find(c => c.status === 'ACTIVE') || hostCompanies[0];
+          const resolvedHostCompanyId = poHostCompanyId || (activeCompany ? String(activeCompany.id) : '');
+          
+          setIsHostCompanyLocked(!!poHostCompanyId);
+
           setFormData({
             ...formData,
             poId,
@@ -402,6 +451,7 @@ const POReceipts = () => {
             vendorId: selectedPO.vendor_id,
             project_name: detailedPO.project_name,
             company_name: detailedPO.company_name,
+            host_company_id: resolvedHostCompanyId,
             items,
             receivedQuantity: items.reduce((sum, item) => sum + parseFloat(item.received_qty || 0), 0),
             totalValuation: items.reduce((sum, item) => sum + parseFloat(item.amount || 0), 0)
@@ -409,6 +459,8 @@ const POReceipts = () => {
         }
       } catch (error) {
         console.error('Error fetching PO details:', error);
+        const activeCompany = hostCompanies.find(c => c.status === 'ACTIVE') || hostCompanies[0];
+        setIsHostCompanyLocked(false);
         setFormData({
           ...formData,
           poId,
@@ -416,10 +468,13 @@ const POReceipts = () => {
           vendorId: selectedPO.vendor_id,
           receivedQuantity: selectedPO.total_quantity || selectedPO.items_count || 0,
           totalValuation: selectedPO.total_amount || 0,
-          items: []
+          items: [],
+          host_company_id: activeCompany ? String(activeCompany.id) : ''
         });
       }
     } else {
+      const activeCompany = hostCompanies.find(c => c.status === 'ACTIVE') || hostCompanies[0];
+      setIsHostCompanyLocked(false);
       setFormData({
         ...formData,
         poId: '',
@@ -427,7 +482,8 @@ const POReceipts = () => {
         vendorId: '',
         receivedQuantity: 0,
         totalValuation: 0,
-        items: []
+        items: [],
+        host_company_id: activeCompany ? String(activeCompany.id) : ''
       });
     }
   };
@@ -453,7 +509,8 @@ const POReceipts = () => {
           receiptDate: formData.receiptDate,
           receivedQuantity: formData.receivedQuantity,
           notes: formData.notes || null,
-          items: formData.items
+          items: formData.items,
+          host_company_id: formData.host_company_id ? parseInt(formData.host_company_id) : null
         })
       });
 
@@ -461,7 +518,7 @@ const POReceipts = () => {
 
       successToast('PO Receipt created successfully');
       setShowCreateModal(false);
-      setFormData({ poId: '', receiptDate: new Date().toISOString().split('T')[0], receivedQuantity: '', notes: '', items: [] });
+      setFormData({ poId: '', receiptDate: new Date().toISOString().split('T')[0], receivedQuantity: '', notes: '', items: [], host_company_id: '' });
       fetchReceipts();
       fetchStats();
     } catch (error) {
@@ -1010,6 +1067,37 @@ const POReceipts = () => {
                   </div>
                 </div>
               )}
+
+              {(() => {
+                const receiptHostCompany = selectedReceiptForView.host_company_id 
+                  ? hostCompanies.find(h => String(h.id) === String(selectedReceiptForView.host_company_id)) 
+                  : null;
+                return receiptHostCompany ? (
+                  <div className="p-2 bg-white border border-slate-200 rounded   space-y-3 hover:border-rose-100 transition-colors">
+                    <div className="flex items-center gap-2  text-rose-500">
+                      <Building2 className="w-4 h-4" />
+                      <span className="text-xs  text-slate-400  ">Host Billing Profile</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="p-2 bg-rose-50 rounded ">
+                        {receiptHostCompany.company_logo ? (
+                          <img
+                            src={getFileUrl(receiptHostCompany.company_logo)}
+                            alt="Logo"
+                            className="h-8 w-8 object-contain bg-white rounded border border-slate-100"
+                          />
+                        ) : (
+                          <Building2 className="w-5 h-5 text-rose-600" />
+                        )}
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-xs font-semibold text-slate-900">{receiptHostCompany.company_name}</span>
+                        <span className="text-[10px] text-slate-400">Issuing Billing Entity</span>
+                      </div>
+                    </div>
+                  </div>
+                ) : null;
+              })()}
             </div>
 
             {/* Received Items Table */}
@@ -1188,6 +1276,65 @@ const POReceipts = () => {
                     <div className="text-center py-2">
                       <p className="text-sm  text-slate-400 italic">No Supplier Linked</p>
                       <p className="text-xs text-slate-400 mt-1   ">Link a PO above</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Host Billing Entity Details */}
+              <div className="pt-6 border-t border-slate-100 space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 bg-rose-50 rounded flex items-center justify-center text-rose-600 animate-pulse">
+                    <Building2 className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-semibold text-slate-800">Host Billing Entity Details</h4>
+                    <p className="text-[8px] text-slate-400">Issuing profile for this request</p>
+                  </div>
+                </div>
+
+                <div className="bg-slate-50 rounded border border-slate-100 p-2.5 space-y-2">
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-slate-400 font-medium ml-1">Select Issuing Billing Profile *</label>
+                    <select
+                      value={formData.host_company_id || ''}
+                      onChange={(e) => setFormData(prev => ({ ...prev, host_company_id: e.target.value }))}
+                      className="w-full p-2 bg-white border border-slate-200 rounded text-xs text-slate-900 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all cursor-pointer font-medium text-slate-700"
+                      disabled={isHostCompanyLocked}
+                    >
+                      <option value="">Select billing profile...</option>
+                      {hostCompanies.map(h => (
+                        <option key={h.id} value={h.id}>
+                          {h.company_name} {h.status === 'ACTIVE' ? '(ACTIVE)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                    {isHostCompanyLocked && (
+                      <p className="text-[8px] text-indigo-500 italic mt-0.5 ml-1">Autofetched and locked from linked Purchase Order</p>
+                    )}
+                  </div>
+
+                  {selectedHostCompany && (
+                    <div className="pt-2 border-t border-slate-200/60 flex flex-col items-center text-center animate-in fade-in duration-300">
+                      {selectedHostCompany.company_logo ? (
+                        <img
+                          src={getFileUrl(selectedHostCompany.company_logo)}
+                          alt="Logo"
+                          className="h-10 max-w-full object-contain mb-1.5 bg-white border border-slate-100 p-0.5 rounded shadow-sm"
+                        />
+                      ) : (
+                        <div className="h-8 w-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 font-bold text-xs mb-1">
+                          {selectedHostCompany.company_name.charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <span className="text-[10px] font-bold text-slate-800 truncate w-full">{selectedHostCompany.company_name}</span>
+                      <span className={`text-[8px] mt-1 px-2 py-0.5 rounded-full font-semibold border ${
+                        selectedHostCompany.status === 'ACTIVE'
+                          ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                          : 'bg-slate-100 text-slate-500 border-slate-200'
+                      }`}>
+                        {selectedHostCompany.status === 'ACTIVE' ? 'Active Global Billing' : 'Inactive'}
+                      </span>
                     </div>
                   )}
                 </div>

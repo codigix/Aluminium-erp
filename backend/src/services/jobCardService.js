@@ -279,7 +279,8 @@ const getJobCardById = async (id) => {
   const isUuid = typeof id === 'string' && id.length === 36;
   const whereClause = isUuid ? 'jc.public_id = ?' : 'jc.id = ?';
   const [rows] = await pool.query(
-    `SELECT jc.*, wo.wo_number, wo.item_name, wo.drawing_no,
+    `SELECT jc.*, wo.wo_number, wo.item_name,
+            COALESCE(soi.drawing_no, oi.drawing_no, wo.bom_no, wo.item_code) as drawing_no,
             COALESCE(o.operation_name, jc.operation_name) as operation_name, 
             COALESCE(NULLIF(jc.std_time, 0), o.std_time, 0) as std_time, 
             COALESCE(NULLIF(jc.cycle_time, 0), CASE WHEN o.time_uom = 'Min' THEN o.std_time ELSE 0 END, 0) as cycle_time,
@@ -292,6 +293,8 @@ const getJobCardById = async (id) => {
      LEFT JOIN operations o ON jc.operation_id = o.id
      LEFT JOIN workstations w ON jc.workstation_id = w.id
      LEFT JOIN users u ON jc.assigned_to = u.id
+     LEFT JOIN sales_order_items soi ON wo.sales_order_item_id = soi.id
+     LEFT JOIN order_items oi ON wo.sales_order_item_id = oi.id AND wo.sales_order_id = oi.order_id
      WHERE ${whereClause}`,
     [id]
   );
@@ -898,7 +901,8 @@ const getQualityLogFullDetails = async (logId) => {
   const [rows] = await pool.query(
     `SELECT ql.*, 
             jc.job_card_no, jc.planned_qty,
-            wo.wo_number, wo.item_name, wo.item_code, wo.drawing_no,
+            wo.wo_number, wo.item_name, wo.item_code,
+            COALESCE(soi.drawing_no, oi.drawing_no, wo.bom_no, wo.item_code) as drawing_no,
             so.project_name, c.company_name as client_name,
             o.operation_name
      FROM job_card_quality_logs ql
@@ -907,6 +911,8 @@ const getQualityLogFullDetails = async (logId) => {
      LEFT JOIN sales_orders so ON wo.sales_order_id = so.id
      LEFT JOIN companies c ON so.company_id = c.id
      LEFT JOIN operations o ON jc.operation_id = o.id
+     LEFT JOIN sales_order_items soi ON wo.sales_order_item_id = soi.id
+     LEFT JOIN order_items oi ON wo.sales_order_item_id = oi.id AND wo.sales_order_id = oi.order_id
      WHERE ql.id = ?`,
     [logId]
   );

@@ -2,6 +2,7 @@ const puppeteer = require('puppeteer');
 const fs = require('fs');
 const path = require('path');
 const mustache = require('mustache');
+const pool = require('../config/db');
 
 const generateQcPdf = async (data) => {
   const { qc, items = [] } = data;
@@ -23,8 +24,64 @@ const generateQcPdf = async (data) => {
       }
     };
 
+    const adminCompanyMasterService = require('../services/adminCompanyMasterService');
+    let hostCompanyId = qc.host_company_id;
+
+    if (!hostCompanyId && qc.grn_id) {
+      try {
+        const [rows] = await pool.query(
+          `SELECT 
+            COALESCE(
+              (SELECT pr.host_company_id FROM po_receipts pr WHERE pr.id = g.po_receipt_id LIMIT 1),
+              (SELECT q.host_company_id FROM purchase_orders po_inner JOIN quotations q ON po_inner.quotation_id = q.id WHERE po_inner.po_number = g.po_number LIMIT 1)
+            ) as host_company_id
+           FROM grns g
+           WHERE g.id = ?`,
+          [qc.grn_id]
+        );
+        if (rows.length > 0 && rows[0].host_company_id) {
+          hostCompanyId = rows[0].host_company_id;
+        }
+      } catch (err) {
+        console.error('[generateQcPdf] Error checking fallback hostCompanyId:', err.message);
+      }
+    }
+
+    let activeCompany = null;
+    if (hostCompanyId) {
+      try {
+        activeCompany = await adminCompanyMasterService.getCompanyById(hostCompanyId);
+      } catch (err) {
+        console.error(`[generateQcPdf] Error loading company profile:`, err.message);
+      }
+    }
+
+    if (!activeCompany) {
+      activeCompany = await adminCompanyMasterService.getActiveCompany();
+    }
+
+    let logoBase64 = null;
+    if (activeCompany && activeCompany.company_logo) {
+      const uploadedLogoPath = path.join(__dirname, '../../', activeCompany.company_logo);
+      if (fs.existsSync(uploadedLogoPath)) {
+        logoBase64 = `data:image/png;base64,${fs.readFileSync(uploadedLogoPath).toString('base64')}`;
+      }
+    }
+
+    if (!logoBase64) {
+      const logoPath = path.join(__dirname, '../../../frontend/src/assets/sptechpioneer logo.png');
+      logoBase64 = fs.existsSync(logoPath) 
+        ? `data:image/png;base64,${fs.readFileSync(logoPath).toString('base64')}`
+        : null;
+    }
+
+    const hostCompanyName = activeCompany?.company_name || 'SP TECHPIONEER PVT. LTD.';
+    const hostCompanyAddress = activeCompany?.company_address || 'Plot No. 97, Sector 7, PCNTDA, Bhosari, Pune – 411026';
+
     const renderData = {
-      logoPath: 'file://' + path.join(__dirname, '../../../frontend/src/assets/sptechpioneer logo.png'),
+      logoBase64,
+      hostCompanyName,
+      hostCompanyAddress,
       reportNo: `QC-${new Date(qc.inspection_date || Date.now()).getFullYear()}-${String(qc.id).padStart(4, '0')}`,
       reportDate: formatDate(qc.inspection_date),
       grnNo: `GRN-${String(qc.grn_id).padStart(4, '0')}`,

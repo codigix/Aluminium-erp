@@ -3,14 +3,15 @@ const generatePoPdf = require('../utils/generatePoPdf');
 
 const createPOReceipt = async (req, res, next) => {
   try {
-    const { poId, receiptDate, receivedQuantity, notes, items } = req.body;
+    const { poId, receiptDate, receivedQuantity, notes, items, hostCompanyId, host_company_id } = req.body;
     const result = await poReceiptService.createPOReceipt(
       poId,
       receiptDate,
       receivedQuantity,
       notes,
       items,
-      req.user?.id || 1
+      req.user?.id || 1,
+      hostCompanyId || host_company_id
     );
     res.status(201).json({ message: 'PO Receipt created', data: result });
   } catch (error) {
@@ -75,16 +76,17 @@ const generatePOReceiptPdf = async (req, res, next) => {
     const { receiptId } = req.params;
     const receipt = await poReceiptService.getPOReceiptById(receiptId);
     
-    let items = [];
+    let items = receipt.items || [];
+    let po = null;
     if (receipt.po_id) {
       const purchaseOrderService = require('../services/purchaseOrderService');
-      const po = await purchaseOrderService.getPurchaseOrderById(receipt.po_id);
-      items = po.items || [];
+      po = await purchaseOrderService.getPurchaseOrderById(receipt.po_id);
     }
     
     const pdfPath = await generatePoPdf({
       type: 'receipt',
       receipt,
+      po,
       items
     });
 

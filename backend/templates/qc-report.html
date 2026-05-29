@@ -198,12 +198,17 @@
 <body>
   <div class="report-container">
     <!-- Header -->
-    <table>
-      <tr>
-        <td class="company-header" style="width: 100%;">
-          <div class="company-name">SP TECHPIONEER PVT. LTD.</div>
-          <div class="report-title">QUALITY CONTROL REPORT</div>
-          <div class="company-address">Plot No. 97, Sector 7, PCNTDA, Bhosari, Pune – 411026</div>
+    <table style="border: none; border-bottom: 2px solid #000;">
+      <tr style="border: none;">
+        <td style="width: 15%; text-align: center; border: none; padding: 5px;">
+          {{#logoBase64}}
+          <img src="{{logoBase64}}" class="logo-img" style="max-height: 50px; max-width: 100px; object-fit: contain; display: block; margin: 0 auto;" />
+          {{/logoBase64}}
+        </td>
+        <td class="company-header" style="width: 85%; border: none; text-align: left; padding: 10px 15px;">
+          <div class="company-name" style="text-align: left; font-size: 20px; color: #1e293b;">{{hostCompanyName}}</div>
+          <div class="report-title" style="text-align: left; font-size: 13px; font-weight: bold; margin-top: 3px; color: #475569;">QUALITY CONTROL REPORT</div>
+          <div class="company-address" style="text-align: left; font-size: 9px; color: #64748b; margin-top: 2px;">{{hostCompanyAddress}}</div>
         </td>
       </tr>
     </table>

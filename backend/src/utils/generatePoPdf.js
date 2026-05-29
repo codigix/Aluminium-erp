@@ -43,7 +43,9 @@ const generatePoPdf = async (data) => {
   const { type = 'receipt', receipt, po, grn, items = [] } = data;
   
   try {
-    const templatePath = path.join(__dirname, '../../templates/po-receipt.html');
+    const isGRNOrReceipt = type === 'grn' || type === 'receipt';
+    const templateFileName = isGRNOrReceipt ? 'po-receipt-grn.html' : 'po-receipt.html';
+    const templatePath = path.join(__dirname, '../../templates/', templateFileName);
     const template = fs.readFileSync(templatePath, 'utf8');
 
     const formatCurrency = (value) => {
@@ -71,9 +73,24 @@ const generatePoPdf = async (data) => {
     
     let hostCompanyId = null;
     if (type === 'grn' && grn) {
-      hostCompanyId = await getHostCompanyForPO(grn.po_number || grn.poNumber);
+      if (grn.po_receipt_id || grn.poReceiptId) {
+        try {
+          const [receiptRows] = await pool.query('SELECT host_company_id FROM po_receipts WHERE id = ?', [grn.po_receipt_id || grn.poReceiptId]);
+          if (receiptRows.length > 0 && receiptRows[0].host_company_id) {
+            hostCompanyId = receiptRows[0].host_company_id;
+          }
+        } catch (err) {
+          console.error('[generatePoPdf] Error checking po_receipts host_company_id:', err.message);
+        }
+      }
+      if (!hostCompanyId) {
+        hostCompanyId = await getHostCompanyForPO(grn.po_number || grn.poNumber);
+      }
     } else if (type === 'receipt' && receipt) {
-      hostCompanyId = await getHostCompanyForPO(receipt.po_id || receipt.po_number);
+      hostCompanyId = receipt.host_company_id;
+      if (!hostCompanyId) {
+        hostCompanyId = await getHostCompanyForPO(receipt.po_id || receipt.po_number);
+      }
     } else if (type === 'po' && po) {
       hostCompanyId = await getHostCompanyForPO(po.id || po.po_number);
     }
@@ -109,111 +126,176 @@ const generatePoPdf = async (data) => {
     const hostCompanyName = activeCompany?.company_name || 'SP TECHPIONEER PVT. LTD.';
     const hostCompanyAddress = activeCompany?.company_address || 'Industrial Area, Sector 5, Pune, Maharashtra - 411026';
     const hostCompanyAddressLines = hostCompanyAddress ? hostCompanyAddress.split('\n') : ['Industrial Area, Sector 5,', 'Pune, Maharashtra - 411026'];
+    const hasGSTInAddress = hostCompanyAddress.toLowerCase().includes('gstin');
+    const hostCompanyGST = hasGSTInAddress ? null : (activeCompany?.gstin || '27AAPCS1193L1ZQ');
+
+    // Resolve PO details dynamically if not provided
+    let poDetail = po;
+    if (!poDetail) {
+      let poIdOrNum = null;
+      if (type === 'receipt' && receipt) {
+        poIdOrNum = receipt.po_id || receipt.po_number;
+      } else if (type === 'grn' && grn) {
+        poIdOrNum = grn.po_number || grn.poNumber;
+      }
+      
+      if (poIdOrNum) {
+        try {
+          const [poRows] = await pool.query(
+            `SELECT po.*, v.vendor_name, v.email as vendor_email, v.phone as vendor_phone, v.location as vendor_address, v.gstin as vendor_gstin
+             FROM purchase_orders po
+             LEFT JOIN vendors v ON v.id = po.vendor_id
+             WHERE po.id = ? OR po.po_number = ?`,
+            [poIdOrNum, poIdOrNum]
+          );
+          if (poRows.length > 0) {
+            poDetail = poRows[0];
+          }
+        } catch (dbErr) {
+          console.error('[generatePoPdf] Error querying PO fallback:', dbErr.message);
+        }
+      }
+    }
+
+    // Resolve vendor details
+    let vendorName = '—';
+    let vendorEmail = '—';
+    let vendorPhone = '—';
+    let vendorGST = '—';
+    
+    if (poDetail) {
+      vendorName = poDetail.vendor_name || '—';
+      vendorEmail = poDetail.vendor_email || '—';
+      vendorPhone = poDetail.vendor_phone || '—';
+      vendorGST = poDetail.vendor_gstin || '—';
+    } else {
+      if (type === 'grn' && grn) {
+        vendorName = grn.vendorName || grn.vendor_name || '—';
+      } else if (type === 'receipt' && receipt) {
+        vendorName = receipt.vendor_name || '—';
+      }
+    }
+
+    // Map items and calculate totals dynamically
+    let subTotalVal = 0;
+    let cgstAmountVal = 0;
+    let sgstAmountVal = 0;
+    let cgstPercentVal = 9;
+    let sgstPercentVal = 9;
+
+    const mappedItems = items.map((item, idx) => {
+      const isReceiptOrGrn = type === 'receipt' || type === 'grn';
+      const receivedQtyVal = parseFloat(item.received_quantity || item.received_qty || item.accepted_qty || 0);
+      const displayQty = isReceiptOrGrn ? receivedQtyVal : (parseFloat(item.design_qty) || parseFloat(item.quantity || item.po_qty || 0));
+
+      const itemCode = item.item_code || item.itemCode || '';
+      const rawDrawingNo = item.drawing_no || item.drawingNo || '';
+      const isItemCodePattern = /^(RM-|OTH-|SFG-|FG-|GEN-|CAT-)/i.test(rawDrawingNo);
+      const cleanDrawingNo = (rawDrawingNo && rawDrawingNo !== itemCode && !isItemCodePattern && rawDrawingNo !== '—') ? rawDrawingNo : null;
+
+      const rate = parseFloat(item.unit_rate || item.rate || 0);
+      const amountVal = displayQty * rate;
+      subTotalVal += amountVal;
+
+      const cgstPercent = parseFloat(item.cgst_percent || item.cgstPercent || 9);
+      const sgstPercent = parseFloat(item.sgst_percent || item.sgstPercent || 9);
+      
+      if (idx === 0) {
+        cgstPercentVal = cgstPercent;
+        sgstPercentVal = sgstPercent;
+      }
+
+      cgstAmountVal += amountVal * (cgstPercent / 100);
+      sgstAmountVal += amountVal * (sgstPercent / 100);
+
+      const uom = item.unit || item.uom || 'Nos';
+
+      return {
+        sr: idx + 1,
+        itemCode: itemCode || '—',
+        drawingNoOrCode: cleanDrawingNo || itemCode || '—',
+        description: item.description || '—',
+        materialName: item.material_name || item.materialName || '',
+        drawingNo: cleanDrawingNo,
+        qty: isReceiptOrGrn ? displayQty.toFixed(3) : `${displayQty.toFixed(3)} ${uom}`.trim(),
+        unit: uom,
+        rate: formatCurrency(rate),
+        amount: formatCurrency(amountVal)
+      };
+    });
+
+    const gstAmountVal = cgstAmountVal + sgstAmountVal;
+    const grandTotalVal = subTotalVal + gstAmountVal;
 
     let renderData = {
       logoBase64,
       hostCompanyName,
       hostCompanyAddress,
       hostCompanyAddressLines,
+      hostCompanyGST,
       isReceipt: type === 'receipt',
       isPO: type === 'po',
       isGRN: type === 'grn',
-      items: items.map((item, idx) => {
-        const dQty = parseFloat(item.design_qty);
-        const qty = parseFloat(item.quantity || item.po_qty || 0);
-        const displayQty = (dQty && dQty !== 0) ? dQty : qty;
-
-        const itemCode = item.item_code || item.itemCode || '';
-        const rawDrawingNo = item.drawing_no || item.drawingNo || '';
-        
-        // Hide drawing no if it matches item code OR if it's a technical item code pattern (RM-, OTH-, etc.)
-        const isItemCodePattern = /^(RM-|OTH-|SFG-|FG-|GEN-|CAT-)/i.test(rawDrawingNo);
-        const cleanDrawingNo = (rawDrawingNo && rawDrawingNo !== itemCode && !isItemCodePattern && rawDrawingNo !== '—') ? rawDrawingNo : null;
-
-        return {
-          sr: idx + 1,
-          itemCode: itemCode || '—',
-          description: item.description || '—',
-          materialName: item.material_name || item.materialName || '',
-          drawingNo: cleanDrawingNo,
-          qty: `${displayQty.toFixed(3)} ${item.unit || item.uom || ''}`.trim(),
-          receivedQty: parseFloat(item.received_quantity || item.accepted_qty || 0).toFixed(3),
-          rate: formatCurrency(item.unit_rate || item.rate || 0),
-          amount: formatCurrency(item.amount || (displayQty * parseFloat(item.unit_rate || item.rate || 0)))
-        };
-      })
+      items: mappedItems,
+      subTotal: formatCurrency(subTotalVal),
+      cgstPercent: cgstPercentVal,
+      sgstPercent: sgstPercentVal,
+      cgstAmount: formatCurrency(cgstAmountVal),
+      sgstAmount: formatCurrency(sgstAmountVal),
+      gstPercent: cgstPercentVal + sgstPercentVal,
+      gstAmount: formatCurrency(gstAmountVal),
+      grandTotal: formatCurrency(grandTotalVal)
     };
 
-    if (type === 'grn' && grn) {
-      const totalAmount = items.reduce((sum, item) => {
-        const qty = parseFloat(item.accepted_qty || 0);
-        const rate = parseFloat(item.unit_rate || item.rate || 0);
-        return sum + (qty * rate);
-      }, 0);
+    if (isGRNOrReceipt) {
+      let rawDate = Date.now();
+      let rawId = 0;
+      let notes = '';
+      if (type === 'receipt' && receipt) {
+        rawDate = receipt.receipt_date || receipt.created_at || Date.now();
+        rawId = receipt.id;
+        notes = receipt.notes || '';
+      } else if (type === 'grn' && grn) {
+        rawDate = grn.grn_date || grn.created_at || Date.now();
+        rawId = grn.id;
+        notes = grn.notes || '';
+      }
+      
+      const year = new Date(rawDate).getFullYear();
+      const receiptId = `GRN-${year}-${String(rawId).padStart(4, '0')}`;
 
       renderData = {
         ...renderData,
-        poNumber: grn.poNumber || grn.po_number || '—',
-        poDate: formatDate(grn.createdAt || grn.created_at),
-        receiptId: `GRN-${String(grn.id).padStart(4, '0')}`,
-        receiptDate: formatDate(grn.grnDate || grn.grn_date),
-        refNo: grn.poNumber || grn.po_number || '—',
-        vendorName: grn.vendorName || grn.vendor_name || '—',
-        notes: grn.notes || '',
-        subTotal: formatCurrency(totalAmount),
-        grandTotal: formatCurrency(totalAmount)
-      };
-    } else if (type === 'receipt' && receipt) {
-      renderData = {
-        ...renderData,
-        poNumber: receipt.po_number || '—',
-        poDate: formatDate(receipt.created_at),
-        receiptId: `REC-${receipt.id}`,
-        receiptDate: formatDate(receipt.receipt_date),
-        refNo: receipt.po_number || '—',
-        vendorName: receipt.vendor_name || '—',
-        vendorAddress: '',
-        vendorGST: '',
-        vendorPhone: '',
-        supplierCode: '',
-        quotationRef: receipt.po_number || '—',
-        paymentTerms: '',
-        deliveryDate: '—',
-        transport: 'inclusive',
-        notes: receipt.notes || '',
-        subTotal: formatCurrency(receipt.total_amount || 0),
-        cgstAmount: '',
-        cgstPercent: 0,
-        sgstAmount: '',
-        sgstPercent: 0,
-        igstAmount: '',
-        igstPercent: 0,
-        grandTotal: formatCurrency(receipt.total_amount || 0)
+        poNumber: poDetail?.po_number || grn?.po_number || grn?.poNumber || receipt?.po_number || '—',
+        poDate: poDetail?.created_at ? formatDate(poDetail.created_at) : '—',
+        receiptId,
+        receiptDate: formatDate(rawDate),
+        refNo: poDetail?.po_number || grn?.po_number || grn?.poNumber || receipt?.po_number || '—',
+        vendorName,
+        vendorEmail,
+        vendorPhone,
+        vendorGST,
+        deliveryDate: poDetail?.expected_delivery_date ? formatDate(poDetail.expected_delivery_date) : '—',
+        paymentTerms: poDetail?.notes || '50% Advance Without taxes\n50% after delivery with taxes',
+        transport: poDetail?.transport || 'inclusive',
+        notes: notes
       };
     } else if (type === 'po' && po) {
-      const subTotal = po.total_amount || 0;
       renderData = {
         ...renderData,
         poNumber: po.po_number || '—',
         poDate: formatDate(po.created_at),
-        vendorName: po.vendor_name || '—',
-        vendorAddress: '',
-        vendorGST: '',
-        vendorPhone: '',
+        vendorName,
+        vendorAddress: po.vendor_address || '',
+        vendorGST,
+        vendorPhone,
+        vendorEmail,
         supplierCode: '',
         quotationRef: po.po_number || '—',
         paymentTerms: po.notes || '',
         deliveryDate: formatDate(po.expected_delivery_date),
         transport: 'inclusive',
-        notes: po.notes || '',
-        subTotal: formatCurrency(subTotal),
-        cgstAmount: formatCurrency(0),
-        cgstPercent: 9,
-        sgstAmount: formatCurrency(0),
-        sgstPercent: 9,
-        igstAmount: '',
-        igstPercent: 0,
-        grandTotal: formatCurrency(subTotal)
+        notes: po.notes || ''
       };
     }
 

@@ -9,6 +9,7 @@ const getPOReceipts = async (filters = {}) => {
       po.po_number,
       v.vendor_name,
       po.total_amount,
+      COALESCE(pr.host_company_id, (SELECT q.host_company_id FROM quotations q WHERE q.id = po.quotation_id LIMIT 1)) as host_company_id,
       COALESCE(
         (SELECT project_name FROM sales_orders WHERE id = po.sales_order_id),
         (SELECT so.project_name 
@@ -49,6 +50,7 @@ const getPOReceipts = async (filters = {}) => {
 const getPOReceiptById = async (receiptId) => {
   const [rows] = await pool.query(
     `SELECT pr.*, po.po_number, v.vendor_name, po.total_amount,
+     COALESCE(pr.host_company_id, (SELECT q.host_company_id FROM quotations q WHERE q.id = po.quotation_id LIMIT 1)) as host_company_id,
      COALESCE(
        (SELECT project_name FROM sales_orders WHERE id = po.sales_order_id),
        (SELECT so.project_name 
@@ -80,6 +82,7 @@ const getPOReceiptById = async (receiptId) => {
 
   const [items] = await pool.query(
     `SELECT pri.*, poi.item_code, poi.description, poi.material_name, poi.material_type, poi.unit, 
+            poi.drawing_no, poi.cgst_percent, poi.sgst_percent,
             poi.design_qty, poi.planned_qty, poi.quantity as expected_quantity,
             poi.unit_rate, poi.cgst_amount, poi.sgst_amount, poi.total_amount as po_item_total,
             COALESCE(NULLIF(pri.length, 0), poi.length, 0) as length,
@@ -98,7 +101,7 @@ const getPOReceiptById = async (receiptId) => {
   return { ...receipt, items };
 };
 
-const createPOReceipt = async (poId, receiptDate, receivedQuantity, notes, items = [], userId = 1) => {
+const createPOReceipt = async (poId, receiptDate, receivedQuantity, notes, items = [], userId = 1, hostCompanyId = null) => {
   if (!poId) {
     const error = new Error('Purchase Order ID is required');
     error.statusCode = 400;
@@ -126,14 +129,15 @@ const createPOReceipt = async (poId, receiptDate, receivedQuantity, notes, items
     const dateValue = receiptDate ? new Date(receiptDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
     
     const [result] = await connection.execute(
-      `INSERT INTO po_receipts (po_id, receipt_date, received_quantity, status, notes)
-       VALUES (?, ?, ?, ?, ?)`,
+      `INSERT INTO po_receipts (po_id, receipt_date, received_quantity, status, notes, host_company_id)
+       VALUES (?, ?, ?, ?, ?, ?)`,
       [
         poId,
         dateValue,
         receivedQuantity || 0,
         'DRAFT',
-        notes || null
+        notes || null,
+        hostCompanyId ? Number(hostCompanyId) : null
       ]
     );
 

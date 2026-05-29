@@ -1202,7 +1202,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       >
         {selectedQC && (
           <div className="space-y-2 p-2">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
               <div className="p-2 bg-white rounded  border border-slate-100 ">
                 <p className="text-xs  text-slate-400   mb-1.5">Status</p>
                 <span className={`inline-flex items-center p-2  rounded text-xs    border ${qcStatusColors[selectedQC.status]?.badge}`}>
@@ -1210,18 +1210,22 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
                 </span>
               </div>
               <div className="p-2 bg-white rounded  border border-slate-100 ">
+                <p className="text-xs  text-slate-400   mb-1.5">Host Company</p>
+                <p className="text-xs font-semibold text-slate-800 truncate mt-1" title={selectedQC.host_company_name}>{selectedQC.host_company_name || '—'}</p>
+              </div>
+              <div className="p-2 bg-white rounded  border border-slate-100 ">
                 <p className="text-xs  text-slate-400   mb-1.5">PO Number</p>
-                <p className="text-xs  text-slate-900">{selectedQC.po_number || '—'}</p>
+                <p className="text-xs  text-slate-900 mt-1">{selectedQC.po_number || '—'}</p>
               </div>
               <div className="p-2 bg-white rounded  border border-slate-100 ">
                 <p className="text-xs  text-emerald-500   mb-1.5">Pass Quantity</p>
-                <p className="text-sm  text-emerald-600">
+                <p className="text-sm  text-emerald-600 mt-1">
                   {selectedQC.status === 'PENDING' ? 'Pending' : parseFloat(selectedQC.pass_quantity || selectedQC.accepted_quantity || 0).toFixed(3)}
                 </p>
               </div>
               <div className="p-2 bg-white rounded  border border-slate-100 ">
-                <p className="text-xs  text-red-500   mb-1.5">Fail Quantity</p>
-                <p className="text-sm  text-red-600">{parseFloat(selectedQC.fail_quantity || 0).toFixed(3)}</p>
+                <p className="text-xs  text-rose-500   mb-1.5">Fail Quantity</p>
+                <p className="text-sm  text-rose-600 mt-1">{parseFloat(selectedQC.fail_quantity || 0).toFixed(3)}</p>
               </div>
             </div>
 
@@ -1333,6 +1337,15 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
                   <span className="text-xs  text-slate-400  ">PO Number</span>
                   <span className="text-xs  text-slate-700">{selectedQC?.po_number || '—'}</span>
                </div>
+               {selectedQC?.host_company_name && (
+                 <>
+                   <div className="h-8 w-px bg-slate-200"></div>
+                   <div className="flex flex-col">
+                      <span className="text-xs  text-slate-400  ">Host Company</span>
+                      <span className="text-xs font-semibold text-slate-800">{selectedQC.host_company_name}</span>
+                   </div>
+                 </>
+               )}
             </div>
             <div className="flex items-center gap-2">
                <div className="w-5 h-5 bg-white rounded  flex items-center justify-center text-slate-400 border border-slate-100 ">

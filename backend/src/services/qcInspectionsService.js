@@ -99,7 +99,17 @@ const getQCWithDetails = async (qcId) => {
         (SELECT c.company_name FROM companies c JOIN sales_orders so ON c.id = so.company_id WHERE so.id = po.sales_order_id),
         (SELECT c.company_name FROM companies c JOIN sales_orders so ON c.id = so.company_id JOIN production_plans pp ON so.id = pp.sales_order_id JOIN material_requests mr_inner ON pp.id = mr_inner.plan_id WHERE mr_inner.id = po.mr_id LIMIT 1),
         'Internal'
-      ) as company_name
+      ) as company_name,
+      COALESCE(
+        (SELECT pr.host_company_id FROM po_receipts pr WHERE pr.id = g.po_receipt_id LIMIT 1),
+        (SELECT q.host_company_id FROM purchase_orders po_inner JOIN quotations q ON po_inner.quotation_id = q.id WHERE po_inner.po_number = g.po_number LIMIT 1)
+      ) as host_company_id,
+      (SELECT cm.company_name FROM company_master cm WHERE cm.id = 
+        COALESCE(
+          (SELECT pr.host_company_id FROM po_receipts pr WHERE pr.id = g.po_receipt_id LIMIT 1),
+          (SELECT q.host_company_id FROM purchase_orders po_inner JOIN quotations q ON po_inner.quotation_id = q.id WHERE po_inner.po_number = g.po_number LIMIT 1)
+        ) LIMIT 1
+      ) as host_company_name
     FROM qc_inspections qc
     LEFT JOIN grns g ON qc.grn_id = g.id
     LEFT JOIN purchase_orders po ON g.po_number = po.po_number
@@ -213,7 +223,17 @@ const getAllQCs = async () => {
         (SELECT c.company_name FROM companies c JOIN sales_orders so ON c.id = so.company_id WHERE so.id = po.sales_order_id),
         (SELECT c.company_name FROM companies c JOIN sales_orders so ON c.id = so.company_id JOIN production_plans pp ON so.id = pp.sales_order_id JOIN material_requests mr_inner ON pp.id = mr_inner.plan_id WHERE mr_inner.id = po.mr_id LIMIT 1),
         'Internal'
-      ) as company_name
+      ) as company_name,
+      COALESCE(
+        (SELECT pr.host_company_id FROM po_receipts pr WHERE pr.id = g.po_receipt_id LIMIT 1),
+        (SELECT q.host_company_id FROM purchase_orders po_inner JOIN quotations q ON po_inner.quotation_id = q.id WHERE po_inner.po_number = g.po_number LIMIT 1)
+      ) as host_company_id,
+      (SELECT cm.company_name FROM company_master cm WHERE cm.id = 
+        COALESCE(
+          (SELECT pr.host_company_id FROM po_receipts pr WHERE pr.id = g.po_receipt_id LIMIT 1),
+          (SELECT q.host_company_id FROM purchase_orders po_inner JOIN quotations q ON po_inner.quotation_id = q.id WHERE po_inner.po_number = g.po_number LIMIT 1)
+        ) LIMIT 1
+      ) as host_company_name
     FROM qc_inspections qc
     LEFT JOIN grns g ON qc.grn_id = g.id
     LEFT JOIN purchase_orders po ON g.po_number = po.po_number
