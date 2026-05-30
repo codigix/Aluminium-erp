@@ -569,7 +569,8 @@ const ensurePoReceiptColumns = async () => {
     const requiredColumns = [
       { name: 'po_id', definition: 'INT NOT NULL' },
       { name: 'received_quantity', definition: 'DECIMAL(12, 3) DEFAULT 0' },
-      { name: 'notes', definition: 'TEXT NULL' }
+      { name: 'notes', definition: 'TEXT NULL' },
+      { name: 'host_company_id', definition: 'INT NULL' }
     ];
 
     const missing = requiredColumns.filter(column => !existing.has(column.name));
