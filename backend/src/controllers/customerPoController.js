@@ -11,7 +11,8 @@ const deriveCreditDays = value => {
 
 const createCustomerPo = async (req, res, next) => {
   try {
-    const fileBuffer = req.file ? fs.readFileSync(req.file.path) : null;
+    const parseFile = req.file || (req.files && req.files.find(f => f.fieldname === 'poPdf')) || (req.files && req.files[0]);
+    const fileBuffer = parseFile ? fs.readFileSync(parseFile.path) : null;
     const pdfInsights = await parsePoPdf(fileBuffer);
 
     const parseItems = value => {
@@ -58,6 +59,14 @@ const createCustomerPo = async (req, res, next) => {
 
     const paymentTerms = req.body.paymentTerms || pdfInsights.paymentTerms || '';
 
+    let pdfFilePaths = [];
+    if (req.files && req.files.length > 0) {
+      pdfFilePaths = req.files.map(f => path.relative(process.cwd(), f.path));
+    } else if (req.file) {
+      pdfFilePaths = [path.relative(process.cwd(), req.file.path)];
+    }
+    const pdfFileString = pdfFilePaths.length > 0 ? pdfFilePaths.join(',') : null;
+
     const payload = {
       companyId: req.body.companyId,
       header: {
@@ -75,7 +84,7 @@ const createCustomerPo = async (req, res, next) => {
         deliveryTerms: req.body.deliveryTerms || pdfInsights.deliveryTerms || null
       },
       items: sanitizedItems,
-      pdfFile: req.file ? req.file.path : null,
+      pdfFile: pdfFileString,
       remarks: req.body.remarks || pdfInsights.remarks || null,
       termsAndConditions: req.body.termsAndConditions,
       specialNotes: req.body.specialNotes,
@@ -218,6 +227,19 @@ const updateCustomerPo = async (req, res, next) => {
       sub_assemblies: item.sub_assemblies || []
     }));
 
+    let filePaths = [];
+    if (req.body.existingAttachments) {
+      filePaths = req.body.existingAttachments.split(',').map(f => f.trim()).filter(Boolean);
+    }
+    if (req.files && req.files.length > 0) {
+      req.files.forEach(f => {
+        filePaths.push(path.relative(process.cwd(), f.path));
+      });
+    } else if (req.file) {
+      filePaths.push(path.relative(process.cwd(), req.file.path));
+    }
+    const pdfFileString = filePaths.length > 0 ? filePaths.join(',') : null;
+
     const payload = {
       projectName: req.body.projectName,
       header: {
@@ -235,6 +257,7 @@ const updateCustomerPo = async (req, res, next) => {
         deliveryTerms: req.body.deliveryTerms || null
       },
       items: sanitizedItems,
+      pdfFile: pdfFileString,
       remarks: req.body.remarks || null,
       termsAndConditions: req.body.termsAndConditions,
       specialNotes: req.body.specialNotes,

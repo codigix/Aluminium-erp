@@ -1073,6 +1073,7 @@ model po_receipts {
   notes             String?            @db.Text
   public_id         String?            @unique(map: "public_id") @db.VarChar(100)
   host_company_id   Int?
+  pdf_path          String?            @db.VarChar(1000)
   po_receipt_items  po_receipt_items[]
 }
 
@@ -2302,6 +2303,7 @@ enum quotations_status {
   PENDING
   EMAIL_RECEIVED
   SUPERSEDED
+  REJECTED
 }
 
 enum roles_status {

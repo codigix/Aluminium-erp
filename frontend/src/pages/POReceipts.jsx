@@ -25,7 +25,8 @@ import {
   Printer,
   History,
   AlertCircle,
-  Building2
+  Building2,
+  Upload
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
@@ -82,6 +83,8 @@ const POReceipts = () => {
   const [hostCompanies, setHostCompanies] = useState([]);
   const [selectedHostCompany, setSelectedHostCompany] = useState(null);
   const [isHostCompanyLocked, setIsHostCompanyLocked] = useState(false);
+  const [attachments, setAttachments] = useState([]);
+  const [existingAttachments, setExistingAttachments] = useState([]);
 
   useEffect(() => {
     const path = location.pathname;
@@ -101,6 +104,8 @@ const POReceipts = () => {
           host_company_id: activeCompany ? String(activeCompany.id) : ''
         });
         setIsHostCompanyLocked(false);
+        setAttachments([]);
+        setExistingAttachments([]);
         setShowCreateModal(true);
         setShowEditModal(false);
         setShowViewModal(false);
@@ -146,6 +151,7 @@ const POReceipts = () => {
       if (response.ok) {
         const data = await response.json();
         setSelectedReceiptForView(data);
+        setExistingAttachments(data.pdf_path ? data.pdf_path.split(',').map(f => f.trim()).filter(Boolean) : []);
         setShowViewModal(true);
       }
     } catch (error) {
@@ -498,27 +504,38 @@ const POReceipts = () => {
 
     try {
       const token = localStorage.getItem('authToken');
+      const formDataPayload = new FormData();
+      formDataPayload.append('poId', formData.poId);
+      formDataPayload.append('receiptDate', formData.receiptDate);
+      formDataPayload.append('receivedQuantity', formData.receivedQuantity);
+      formDataPayload.append('notes', formData.notes || '');
+      formDataPayload.append('items', JSON.stringify(formData.items));
+      if (formData.host_company_id) {
+        formDataPayload.append('host_company_id', formData.host_company_id);
+      }
+      attachments.forEach(file => {
+        formDataPayload.append('attachments', file);
+      });
+
       const response = await fetch(`${API_BASE}/po-receipts`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
+          'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({
-          poId: parseInt(formData.poId),
-          receiptDate: formData.receiptDate,
-          receivedQuantity: formData.receivedQuantity,
-          notes: formData.notes || null,
-          items: formData.items,
-          host_company_id: formData.host_company_id ? parseInt(formData.host_company_id) : null
-        })
+        body: formDataPayload
       });
 
-      if (!response.ok) throw new Error('Failed to create receipt');
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.message || errData.error || 'Failed to create receipt');
+      }
 
       successToast('PO Receipt created successfully');
       setShowCreateModal(false);
       setFormData({ poId: '', receiptDate: new Date().toISOString().split('T')[0], receivedQuantity: '', notes: '', items: [], host_company_id: '' });
+      setAttachments([]);
+      setExistingAttachments([]);
+      navigate(`${deptPrefix}/po-receipts`);
       fetchReceipts();
       fetchStats();
     } catch (error) {
@@ -545,6 +562,8 @@ const POReceipts = () => {
         notes: data.notes || '',
         status: data.status || ''
       });
+      setExistingAttachments(data.pdf_path ? data.pdf_path.split(',').map(f => f.trim()).filter(Boolean) : []);
+      setAttachments([]);
       setShowEditModal(true);
     } catch (error) {
       errorToast(error.message || 'Failed to load receipt details');
@@ -556,24 +575,34 @@ const POReceipts = () => {
 
     try {
       const token = localStorage.getItem('authToken');
+      const formDataPayload = new FormData();
+      formDataPayload.append('receiptDate', editFormData.receiptDate);
+      formDataPayload.append('receivedQuantity', editFormData.receivedQuantity);
+      formDataPayload.append('notes', editFormData.notes || '');
+      formDataPayload.append('status', editFormData.status);
+      formDataPayload.append('existingAttachments', existingAttachments.join(','));
+      attachments.forEach(file => {
+        formDataPayload.append('attachments', file);
+      });
+
       const response = await fetch(`${API_BASE}/po-receipts/${selectedReceipt.id}`, {
         method: 'PATCH',
         headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
+          'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({
-          receiptDate: editFormData.receiptDate,
-          receivedQuantity: editFormData.receivedQuantity,
-          notes: editFormData.notes,
-          status: editFormData.status
-        })
+        body: formDataPayload
       });
 
-      if (!response.ok) throw new Error('Failed to update receipt');
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.message || errData.error || 'Failed to update receipt');
+      }
 
       successToast('PO Receipt updated successfully');
       setShowEditModal(false);
+      setAttachments([]);
+      setExistingAttachments([]);
+      navigate(`${deptPrefix}/po-receipts`);
       fetchReceipts();
       fetchStats();
     } catch (error) {
@@ -634,6 +663,10 @@ const POReceipts = () => {
       console.error('Error opening PDF:', error);
       errorToast('Failed to open PDF');
     }
+  };
+
+  const handleOpenPdf = (pdfPath) => {
+    window.open(`${API_BASE}/${pdfPath.replace(/\\/g, '/')}`, '_blank');
   };
 
   const columns = [
@@ -1160,6 +1193,41 @@ const POReceipts = () => {
               </div>
             </div>
 
+            {/* Attachments Section in View Modal */}
+            {existingAttachments && existingAttachments.length > 0 && (
+              <div className="space-y-2 mt-4 pt-4 border-t border-slate-100">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 bg-indigo-50 rounded flex items-center justify-center text-indigo-600">
+                    <FileText className="w-4 h-4" />
+                  </div>
+                  <h4 className="text-xs font-semibold text-slate-905">Attachments & Documents</h4>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-white p-3 border border-slate-200/60 rounded">
+                  {existingAttachments.map((file, idx) => {
+                    const rawName = file.split('/').pop() || file.split('\\').pop() || '';
+                    const parts = rawName.split('-');
+                    const fileName = parts.length > 1 ? parts.slice(1).join('-') : rawName;
+                    return (
+                      <div key={idx} className="flex items-center justify-between p-2.5 bg-slate-50 border border-slate-200/60 rounded hover:bg-slate-100/70 transition-all">
+                        <div className="flex items-center gap-2 overflow-hidden mr-2">
+                          <FileText className="w-4 h-4 text-indigo-500 shrink-0" />
+                          <span className="text-xs text-slate-700 truncate font-semibold" title={fileName}>{fileName}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenPdf(file)}
+                          className="p-1 bg-white border border-slate-200 rounded text-slate-500 hover:text-indigo-600 hover:border-indigo-100 transition-all hover:bg-indigo-50 active:scale-95 shrink-0"
+                          title="View Document"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Footer Actions */}
             <div className="flex items-center justify-between pt-6 border-t border-slate-100">
               <button 
@@ -1502,6 +1570,62 @@ const POReceipts = () => {
                   </div>
                 )}
               </div>
+
+              {/* Attachments & Documents Upload Section */}
+              <div className="space-y-2 pt-4 border-t border-slate-100">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-indigo-50 text-indigo-600 rounded">
+                    <Upload className="w-5 h-5" />
+                  </div>
+                  <h3 className="text-sm font-semibold text-slate-800">Attachments & Documents</h3>
+                </div>
+
+                <div className="border-2 border-dashed border-slate-200 rounded p-4 text-center hover:border-indigo-300 transition-all cursor-pointer bg-slate-50/50 group relative">
+                  <input
+                    type="file"
+                    multiple
+                    onChange={(e) => {
+                      const files = Array.from(e.target.files || []);
+                      setAttachments(prev => [...prev, ...files]);
+                    }}
+                    className="absolute inset-0 opacity-0 cursor-pointer"
+                    accept=".pdf,.png,.jpg,.jpeg"
+                  />
+                  <div className="flex flex-col items-center justify-center gap-1.5">
+                    <div className="p-2 bg-indigo-50 rounded text-indigo-600 group-hover:bg-indigo-100 transition-all">
+                      <Upload className="w-5 h-5" />
+                    </div>
+                    <p className="text-xs font-semibold text-slate-700">Click or drag files here to upload GRN / Challan Documents</p>
+                    <p className="text-[10px] text-slate-400">PDF, PNG, JPG, JPEG (Multiple files allowed)</p>
+                  </div>
+                </div>
+
+                {attachments.length > 0 && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                    {attachments.map((file, idx) => (
+                      <div key={idx} className="flex items-center justify-between p-2.5 bg-indigo-50/20 border border-indigo-100/60 rounded hover:bg-indigo-50/40 transition-all animate-in fade-in duration-200">
+                        <div className="flex items-center gap-2 overflow-hidden mr-2">
+                          <FileText className="w-4 h-4 text-indigo-600 shrink-0" />
+                          <div className="flex flex-col overflow-hidden">
+                            <span className="text-xs text-indigo-950 truncate font-semibold" title={file.name}>{file.name}</span>
+                            <span className="text-[9px] text-indigo-600 font-medium">{(file.size / 1024).toFixed(1)} KB</span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAttachments(prev => prev.filter((_, i) => i !== idx));
+                          }}
+                          className="p-1 bg-white border border-indigo-100/40 rounded text-indigo-400 hover:text-rose-600 hover:border-rose-100 transition-all hover:bg-rose-50 active:scale-95 shrink-0"
+                          title="Remove Document"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -1588,6 +1712,101 @@ const POReceipts = () => {
                 rows="3"
               />
             </FormControl>
+
+            {/* Attachments Section in Edit Modal */}
+            <div className="space-y-2 pt-4 border-t border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-indigo-50 text-indigo-600 rounded">
+                  <Upload className="w-5 h-5" />
+                </div>
+                <h3 className="text-sm font-semibold text-slate-800">Attachments & Documents</h3>
+              </div>
+
+              <div className="border-2 border-dashed border-slate-200 rounded p-4 text-center hover:border-indigo-300 transition-all cursor-pointer bg-slate-50/50 group relative">
+                <input
+                  type="file"
+                  multiple
+                  onChange={(e) => {
+                    const files = Array.from(e.target.files || []);
+                    setAttachments(prev => [...prev, ...files]);
+                  }}
+                  className="absolute inset-0 opacity-0 cursor-pointer"
+                  accept=".pdf,.png,.jpg,.jpeg"
+                />
+                <div className="flex flex-col items-center justify-center gap-1.5">
+                  <div className="p-2 bg-indigo-50 rounded text-indigo-600 group-hover:bg-indigo-100 transition-all">
+                    <Upload className="w-5 h-5" />
+                  </div>
+                  <p className="text-xs font-semibold text-slate-700">Click or drag files here to upload GRN / Challan Documents</p>
+                  <p className="text-[10px] text-slate-400">PDF, PNG, JPG, JPEG (Multiple files allowed)</p>
+                </div>
+              </div>
+
+              {((existingAttachments && existingAttachments.length > 0) || (attachments && attachments.length > 0)) && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3 font-sans">
+                  {/* Existing Attachments */}
+                  {existingAttachments.map((file, idx) => {
+                    const rawName = file.split('/').pop() || file.split('\\').pop() || '';
+                    const parts = rawName.split('-');
+                    const fileName = parts.length > 1 ? parts.slice(1).join('-') : rawName;
+                    return (
+                      <div key={`existing-${idx}`} className="flex items-center justify-between p-2.5 bg-slate-50 border border-slate-200/60 rounded hover:bg-slate-100/70 transition-all">
+                        <div className="flex items-center gap-2 overflow-hidden mr-2">
+                          <FileText className="w-4 h-4 text-indigo-500 shrink-0" />
+                          <div className="flex flex-col overflow-hidden">
+                            <span className="text-xs text-slate-700 truncate font-semibold" title={fileName}>{fileName}</span>
+                            <span className="text-[9px] text-slate-400 font-medium">Existing Document</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenPdf(file)}
+                            className="p-1 bg-white border border-slate-200 rounded text-slate-500 hover:text-indigo-600 hover:border-indigo-100 transition-all hover:bg-indigo-50 active:scale-95"
+                            title="View Document"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setExistingAttachments(prev => prev.filter((_, i) => i !== idx));
+                            }}
+                            className="p-1 bg-white border border-slate-200 rounded text-slate-400 hover:text-rose-600 hover:border-rose-100 transition-all hover:bg-rose-50 active:scale-95"
+                            title="Delete Document"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {/* Staged New Attachments */}
+                  {attachments.map((file, idx) => (
+                    <div key={`staged-${idx}`} className="flex items-center justify-between p-2.5 bg-indigo-50/20 border border-indigo-100/60 rounded hover:bg-indigo-50/40 transition-all">
+                      <div className="flex items-center gap-2 overflow-hidden mr-2">
+                        <FileText className="w-4 h-4 text-indigo-600 shrink-0" />
+                        <div className="flex flex-col overflow-hidden">
+                          <span className="text-xs text-indigo-950 truncate font-semibold" title={file.name}>{file.name}</span>
+                          <span className="text-[9px] text-indigo-600 font-medium">Staged - {(file.size / 1024).toFixed(1)} KB</span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAttachments(prev => prev.filter((_, i) => i !== idx));
+                        }}
+                        className="p-1 bg-white border border-indigo-100/40 rounded text-indigo-400 hover:text-rose-600 hover:border-rose-100 transition-all hover:bg-rose-50 active:scale-95 shrink-0"
+                        title="Remove Document"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
             <div className="flex gap-2 justify-end pt-4 border-t border-slate-100">
               <button

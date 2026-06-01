@@ -2183,7 +2183,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
 
   const mrColumns = [
     {
-      label: 'Material Name',
+      label: 'Material',
       key: 'material_name',
       render: (val, row) => (
         <div className="flex flex-col">
@@ -2194,7 +2194,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
       )
     },
     {
-      label: 'Inventory',
+      label: 'Issued Qty',
       key: 'inventory',
       className: 'text-center',
       render: (val, row) => (
@@ -2207,7 +2207,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
       )
     },
     {
-      label: 'Req. Qty',
+      label: 'Req Qty',
       key: 'quantity',
       className: 'text-center',
       render: (val, row) => (
@@ -2223,17 +2223,33 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
       label: 'Status',
       key: 'request_exists',
       render: (val, row) => {
-        if (val) {
-          return (
-            <div className="flex items-center gap-1 text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded text-[10px]  border border-emerald-100">
-              <CheckCircle2 className="w-3 h-3" />
-              REQUESTED
-            </div>
-          );
-        }
-        
         const inv = parseFloat(row.inventory || 0);
         const req = parseFloat(row.quantity || 0);
+
+        if (val) {
+          if (inv >= req) {
+            return (
+              <div className="flex items-center gap-1 text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded text-[10px]  border border-emerald-100 font-medium">
+                <CheckCircle2 className="w-3 h-3" />
+                FULFILLED
+              </div>
+            );
+          } else if (inv > 0) {
+            return (
+              <div className="flex items-center gap-1 text-amber-600 bg-amber-50 px-2 py-0.5 rounded text-[10px]  border border-amber-100 font-medium">
+                <Clock className="w-3 h-3" />
+                PARTIALLY FULFILLED
+              </div>
+            );
+          } else {
+            return (
+              <div className="flex items-center gap-1 text-blue-600 bg-blue-50 px-2 py-0.5 rounded text-[10px]  border border-blue-100 font-medium">
+                <Clock className="w-3 h-3" />
+                REQUESTED
+              </div>
+            );
+          }
+        }
         
         if (inv >= req) {
           return (
