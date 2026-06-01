@@ -1086,7 +1086,7 @@ const CustomerDrawing = () => {
 
               // If it has a file, it might be a new drawing added during edit OR an update with new file
               // If it has id and no file, it's just updating metadata
-              if (drawing.id && !String(drawing.id).includes('.')) {
+              if (drawing.id && !String(drawing.id).includes('-')) {
                 // Update existing drawing metadata
                 const token = localStorage.getItem('authToken');
                 const formData = new FormData();
@@ -1284,7 +1284,7 @@ const CustomerDrawing = () => {
     const drawingToRemove = formik.values.manualDrawings.find(d => d.id === id);
 
     // Track for deletion if it's an existing drawing (not a temp one)
-    if (drawingToRemove && drawingToRemove.id && !String(drawingToRemove.id).includes('.')) {
+    if (drawingToRemove && drawingToRemove.id && !String(drawingToRemove.id).includes('-')) {
       setDeletedDrawingIds(prev => [...prev, drawingToRemove.drawing_id || drawingToRemove.id]);
     }
 
