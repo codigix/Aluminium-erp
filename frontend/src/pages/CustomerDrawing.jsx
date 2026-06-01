@@ -159,10 +159,8 @@ const CustomerDrawing = () => {
           >
             <Edit2 size={15} />
           </button>
-          {/* Unify Send to Design buttons: Show if there are unshared drawings AND the requirement isn't already in review */}
-          {row.status?.toUpperCase() !== 'DESIGN_IN_REVIEW' && 
-           row.status?.toUpperCase() !== 'DESIGN_APPROVED' && 
-           (row.original_items?.some(d => !['SHARED', 'DESIGN_IN_REVIEW', 'APPROVED'].includes(d.status?.toUpperCase())) ||
+          {/* Unify Send to Design buttons: Show if there are unshared drawings */}
+          {(row.original_items?.some(d => !['SHARED', 'DESIGN_IN_REVIEW', 'APPROVED'].includes(d.status?.toUpperCase())) ||
             row.status?.toUpperCase() === 'CREATED') && (
               <button
                 onClick={() => handleShareClientGroupWithDesign(row.client_name || row.company_name, row)}
@@ -574,7 +572,7 @@ const CustomerDrawing = () => {
             uniqueItems.push(item);
           }
         }
-        acc[key].original_items = uniqueItems;
+        // Do NOT overwrite acc[key].original_items with uniqueItems so all drawing rows are preserved!
         acc[key].drawing_count = uniqueItems.length;
 
         // Keep the most recent delivery date if multiple exist
@@ -670,7 +668,7 @@ const CustomerDrawing = () => {
         setEditingRequirementId(null);
         setEditingRequirementData(null);
         fetchDrawings(searchTerm);
-        setTimeout(() => fetchRequirements(), 1000);
+        fetchRequirements();
       } else if (currentPath.includes(`${deptPrefix}/customer-drawing/addclient`)) {
         setFormMode('add');
         setEditingRequirementId(null);
@@ -1201,7 +1199,7 @@ const CustomerDrawing = () => {
         }
 
         fetchDrawings(searchTerm);
-        setTimeout(() => fetchRequirements(), 1000);
+        fetchRequirements();
       } catch (error) {
         errorToast(error.message);
       } finally {
@@ -1459,7 +1457,7 @@ const CustomerDrawing = () => {
           window.history.pushState({}, '', `${deptPrefix}/customer-drawing`);
         }
         fetchDrawings(searchTerm);
-        setTimeout(() => fetchRequirements(), 1000);
+        fetchRequirements();
       }
     } catch (error) {
       console.error(error);
@@ -1731,7 +1729,7 @@ const CustomerDrawing = () => {
         }
         successToast('Drawing has been deleted.');
         fetchDrawings(searchTerm);
-        setTimeout(() => fetchRequirements(), 1000);
+        fetchRequirements();
 
         // Update local state if viewing in modal
         if (viewingClient) {
