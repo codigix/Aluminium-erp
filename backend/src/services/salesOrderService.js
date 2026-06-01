@@ -861,7 +861,7 @@ const bulkApproveDesigns = async (orderIds) => {
 
     // Mark non-rejected items as APPROVED
     await connection.execute(
-      `UPDATE sales_order_items SET status = 'Approved ' WHERE sales_order_id IN (${placeholders}) AND (status IS NULL OR status = 'PENDING')`,
+      `UPDATE sales_order_items SET status = 'Approved' WHERE sales_order_id IN (${placeholders}) AND (status IS NULL OR status = 'PENDING')`,
       orderIds
     );
 
@@ -1307,12 +1307,12 @@ const generateSalesOrderPDF = async (salesOrderId) => {
   const billing = companyDetails?.addresses?.find(a => a.address_type === 'BILLING') || {};
   const shipping = companyDetails?.addresses?.find(a => a.address_type === 'SHIPPING') || {};
   const billingContact = companyDetails?.contacts?.find(c => c.contact_type === 'ACCOUNTS') ||
-                         companyDetails?.contacts?.find(c => c.contact_type === 'PRIMARY') ||
-                         companyDetails?.contacts?.[0] || {};
+    companyDetails?.contacts?.find(c => c.contact_type === 'PRIMARY') ||
+    companyDetails?.contacts?.[0] || {};
   const shippingContact = companyDetails?.contacts?.find(c => c.contact_type === 'PURCHASE') ||
-                          companyDetails?.contacts?.find(c => c.contact_type === 'TECHNICAL') ||
-                          companyDetails?.contacts?.find(c => c.contact_type === 'PRIMARY') ||
-                          companyDetails?.contacts?.[0] || {};
+    companyDetails?.contacts?.find(c => c.contact_type === 'TECHNICAL') ||
+    companyDetails?.contacts?.find(c => c.contact_type === 'PRIMARY') ||
+    companyDetails?.contacts?.[0] || {};
 
   // Format billing address
   const addrParts = [
@@ -1774,7 +1774,7 @@ const deleteSalesOrder = async (salesOrderId) => {
 
     // 3. Delete sales order items and linked drawings
     const [drawings] = await connection.execute('SELECT drawing_id FROM sales_order_items WHERE sales_order_id = ? AND drawing_id IS NOT NULL', [salesOrderId]);
-    
+
     await connection.execute('DELETE FROM sales_order_items WHERE sales_order_id = ?', [salesOrderId]);
 
     if (drawings.length > 0) {

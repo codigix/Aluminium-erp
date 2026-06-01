@@ -160,8 +160,8 @@ const CustomerDrawing = () => {
             <Edit2 size={15} />
           </button>
           {/* Unify Send to Design buttons: Show if there are unshared drawings */}
-          {(row.original_items?.some(d => !['SHARED', 'DESIGN_IN_REVIEW', 'APPROVED'].includes(d.status?.toUpperCase())) ||
-            row.status?.toUpperCase() === 'CREATED') && (
+          {(row.original_items?.some(d => !['SHARED', 'DESIGN_IN_REVIEW', 'APPROVED', 'REJECTED'].includes(d.status?.trim().toUpperCase())) ||
+            row.status?.trim().toUpperCase() === 'CREATED') && (
               <button
                 onClick={() => handleShareClientGroupWithDesign(row.client_name || row.company_name, row)}
                 className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded transition-all"
@@ -392,7 +392,7 @@ const CustomerDrawing = () => {
     return drawings.reduce((acc, drawing) => {
       const client = normalize(drawing.client_name || 'Unassigned');
       const project = normalize(drawing.project_name || 'No Project');
-      
+
       if (!acc[client]) acc[client] = {};
       if (!acc[client][project]) acc[client][project] = [];
 
@@ -414,7 +414,7 @@ const CustomerDrawing = () => {
     const clientName = searchParams.get('client_name');
     const projectName = searchParams.get('project_name');
     const requirementId = searchParams.get('requirement_id');
-    
+
     if (clientName && !loading && drawings.length > 0 && !viewingClient) {
       const lowerClient = normalize(clientName);
       const lowerProject = projectName ? normalize(projectName) : null;
@@ -424,8 +424,8 @@ const CustomerDrawing = () => {
         let finalProjectName = projectName;
 
         if (requirementId) {
-          const rawDrawings = drawings.filter(d => 
-            normalize(d.client_name) === lowerClient && 
+          const rawDrawings = drawings.filter(d =>
+            normalize(d.client_name) === lowerClient &&
             String(d.sales_order_id) === String(requirementId)
           );
           const seen = new Set();
@@ -507,7 +507,7 @@ const CustomerDrawing = () => {
 
   const fetchRequirements = async (initial = false) => {
     try {
-      if (initial) setRequirements([]); 
+      if (initial) setRequirements([]);
       setReqLoading(true);
       const token = localStorage.getItem('authToken');
       const response = await fetch(`${API_BASE}/sales-orders?includeWithoutPo=true`, {
@@ -518,12 +518,12 @@ const CustomerDrawing = () => {
       const filtered = data.filter(so => {
         const dept = (so.current_department || '').toUpperCase().trim();
         const status = (so.status || '').toUpperCase().trim();
-        
+
         // Show if it's a "Design Review" project OR if it's in relevant departments
         // Sales should see things in SALES, DESIGN_ENG (shared), or initial departments
-        return so.project_name?.includes('Design Review') || 
-               ['SALES', 'DESIGN_ENG', 'PRODUCTION', 'SHIPMENT', 'QUALITY', 'QC', 'ACCOUNTS'].includes(dept) || 
-               dept === '';
+        return so.project_name?.includes('Design Review') ||
+          ['SALES', 'DESIGN_ENG', 'PRODUCTION', 'SHIPMENT', 'QUALITY', 'QC', 'ACCOUNTS'].includes(dept) ||
+          dept === '';
       });
 
       // Group by Sales Order Public ID (Project ID) to keep projects separate
@@ -531,7 +531,7 @@ const CustomerDrawing = () => {
         const clientName = so.client_name || so.company_name || 'Unassigned';
         // Use public_id for grouping as requested, fallback to id
         const key = so.public_id || so.id;
-        
+
         if (!acc[key]) {
           // Find first item with contact info if available
           const firstDrawingWithContact = so.items?.find(item => item.contact_person || item.phone || item.email);
@@ -566,7 +566,7 @@ const CustomerDrawing = () => {
           const dNo = item.drawing_no ? String(item.drawing_no).trim().toLowerCase() : null;
           const dId = item.drawing_id || item.drawing_master_id;
           const mapKey = dNo || (dId ? `id_${dId}` : item.id);
-          
+
           if (mapKey && !seenDrawings.has(mapKey)) {
             seenDrawings.add(mapKey);
             uniqueItems.push(item);
@@ -783,11 +783,11 @@ const CustomerDrawing = () => {
       const clientKey = normalize(viewingClient.name);
       const projectKey = viewingClient.projectName ? normalize(viewingClient.projectName) : null;
       const reqId = viewingClient.requirementId;
-      
+
       let updatedDrawings = null;
       if (reqId) {
-        const rawDrawings = drawings.filter(d => 
-          normalize(d.client_name) === clientKey && 
+        const rawDrawings = drawings.filter(d =>
+          normalize(d.client_name) === clientKey &&
           String(d.sales_order_id) === String(reqId)
         );
         const seen = new Set();
@@ -810,7 +810,7 @@ const CustomerDrawing = () => {
           updatedDrawings = Object.values(groupedDrawings[clientKey]).flat();
         }
       }
-      
+
       // Only update if data actually changed and it's a valid array to avoid infinite loops
       if (Array.isArray(updatedDrawings) && JSON.stringify(updatedDrawings) !== JSON.stringify(viewingClient.drawings)) {
         setViewingClient(prev => ({
@@ -1125,10 +1125,10 @@ const CustomerDrawing = () => {
                 }
               } else {
                 // Add new drawing to existing requirement
-                await saveSingleDrawing({ 
-                  ...values, 
-                  ...drawing, 
-                  salesOrderId: editingRequirementId 
+                await saveSingleDrawing({
+                  ...values,
+                  ...drawing,
+                  salesOrderId: editingRequirementId
                 }, false);
               }
               successCount++;
@@ -1142,12 +1142,12 @@ const CustomerDrawing = () => {
             let sharedSalesOrderId = null;
             for (const drawing of values.manualDrawings) {
               if (!drawing.drawing_no) continue;
-              const result = await saveSingleDrawing({ 
-                ...values, 
-                ...drawing, 
-                salesOrderId: sharedSalesOrderId 
+              const result = await saveSingleDrawing({
+                ...values,
+                ...drawing,
+                salesOrderId: sharedSalesOrderId
               }, false);
-              
+
               if (result && result.salesOrderId && !sharedSalesOrderId) {
                 sharedSalesOrderId = result.salesOrderId;
               }
@@ -1617,11 +1617,11 @@ const CustomerDrawing = () => {
       drawingsToConsider = groupedDrawings[clientName] || [];
     }
 
-    const unsharedDrawings = drawingsToConsider.filter(d => 
-      !['SHARED', 'DESIGN_IN_REVIEW', 'APPROVED'].includes(d.status?.toUpperCase())
+    const unsharedDrawings = drawingsToConsider.filter(d =>
+      !['SHARED', 'DESIGN_IN_REVIEW', 'APPROVED'].includes(d.status?.trim().toUpperCase())
     ) || [];
 
-    const isCreatedStatus = requirement?.status?.toUpperCase() === 'CREATED';
+    const isCreatedStatus = requirement?.status?.trim().toUpperCase() === 'CREATED';
 
     if (unsharedDrawings.length === 0 && !isCreatedStatus) {
       infoToast('All drawings for this project are already shared and requirement is in progress.');
@@ -1756,8 +1756,8 @@ const CustomerDrawing = () => {
     if (isRowObject && client.original_items) {
       drawingsForClient = client.original_items;
     } else if (requirementId) {
-      const rawDrawings = drawings.filter(d => 
-        normalize(d.client_name) === normalize(name) && 
+      const rawDrawings = drawings.filter(d =>
+        normalize(d.client_name) === normalize(name) &&
         String(d.sales_order_id) === String(requirementId)
       );
       const seen = new Set();
@@ -2760,7 +2760,7 @@ const CustomerDrawing = () => {
                         <td className="px-2 py-2">
                           <select
                             name={`manualDrawings[${index}].drawing_type`}
-                            className={`w-full px-2 py-1 border rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500 ${formik.touched.manualDrawings?.[index]?.drawing_type && formik.errors.manualDrawings?.[index]?.drawing_type ? 'border-red-500' : 'border-slate-300'}`}
+                            className={`w-full px-2 py-1 border rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500 ${(formik.touched.manualDrawings?.[index]?.drawing_type || formik.submitCount > 0) && formik.errors.manualDrawings?.[index]?.drawing_type ? 'border-red-500' : 'border-slate-300'}`}
                             value={drawing.drawing_type || 'Part'}
                             onChange={formik.handleChange}
                             onBlur={formik.handleBlur}
@@ -2800,7 +2800,7 @@ const CustomerDrawing = () => {
             <div className="mt-4 grid grid-cols-2 gap-2">
               <div>
                 <label className="block text-xs  text-slate-700 mb-2">Excel File <span className="text-red-500">*</span></label>
-                <div className={`flex items-center justify-center border-2 border-dashed rounded  p-2 hover:border-indigo-400 transition-colors bg-slate-50 cursor-pointer ${formik.touched.file && formik.errors.file ? 'border-red-500 bg-red-50' : 'border-slate-300'}`}>
+                <div className={`flex items-center justify-center border-2 border-dashed rounded  p-2 hover:border-indigo-400 transition-colors bg-slate-50 cursor-pointer ${(formik.touched.file || formik.submitCount > 0) && formik.errors.file ? 'border-red-500 bg-red-50' : 'border-slate-300'}`}>
                   <input
                     type="file"
                     name="file"
@@ -2815,7 +2815,7 @@ const CustomerDrawing = () => {
                     <p className="text-[8px] text-slate-400">Format: Drawing No, Revision, Description, Type, Qty, Drawing_File</p>
                   </div>
                 </div>
-                {formik.touched.file && formik.errors.file && (
+                {(formik.touched.file || formik.submitCount > 0) && formik.errors.file && (
                   <div className="text-red-500 text-xs  mt-1">{formik.errors.file}</div>
                 )}
               </div>

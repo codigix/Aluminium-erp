@@ -68,7 +68,7 @@ const listDrawings = async (search = '', onlyShared = false, clientName = null) 
   const params = [];
 
   if (onlyShared) {
-    query += ` AND (d.status IN ('SHARED', 'APPROVED', 'DESIGN_IN_REVIEW') OR soi.status IN ('SHARED', 'APPROVED', 'DESIGN_IN_REVIEW'))`;
+    query += ` AND (TRIM(d.status) IN ('SHARED', 'APPROVED', 'DESIGN_IN_REVIEW', 'REJECTED') OR TRIM(soi.status) IN ('SHARED', 'APPROVED', 'DESIGN_IN_REVIEW', 'REJECTED'))`;
   }
 
   if (clientName) {
@@ -95,9 +95,9 @@ const listDrawings = async (search = '', onlyShared = false, clientName = null) 
         const isAssembly = g.includes('ASSEMBLY');
         const sub_assemblies = isAssembly
           ? components.filter(c => {
-              const group = (c.item_group || '').toUpperCase();
-              return group.includes('PART');
-            })
+            const group = (c.item_group || '').toUpperCase();
+            return group.includes('PART');
+          })
           : [];
         return { ...row, sub_assemblies };
       } catch (err) {

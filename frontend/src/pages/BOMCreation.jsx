@@ -251,9 +251,14 @@ const BOMCreation = () => {
       }, {});
 
       const groupedArray = Object.values(projectGroups).sort((a, b) => {
-        const clientComp = (a.client_name || '').localeCompare(b.client_name || '');
-        if (clientComp !== 0) return clientComp;
-        return (a.project_name || '').localeCompare(b.project_name || '');
+        const dateA = a.items[0]?.created_at ? new Date(a.items[0].created_at).getTime() : 0;
+        const dateB = b.items[0]?.created_at ? new Date(b.items[0].created_at).getTime() : 0;
+        if (dateB !== dateA) {
+          return dateB - dateA;
+        }
+        const idA = a.items[0]?.id || 0;
+        const idB = b.items[0]?.id || 0;
+        return idB - idA;
       });
       setOrders(groupedArray);
 

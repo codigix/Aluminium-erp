@@ -29,7 +29,7 @@ const DrawingMaster = () => {
   const [revisionsLoading, setRevisionsLoading] = useState({});
   const [drawingExpandedRows, setDrawingExpandedRows] = useState(new Set());
   const [singleLoading, setSingleLoading] = useState(false);
-  
+
   // Edit Modal State
   const [showEditForm, setShowEditForm] = useState(false);
   const [editData, setEditData] = useState({
@@ -57,7 +57,7 @@ const DrawingMaster = () => {
   });
   const [saveLoading, setSaveLoading] = useState(false);
   const [bulkOperationLoading, setBulkOperationLoading] = useState(false);
-  
+
   // Preview State
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [previewDrawing, setPreviewDrawing] = useState(null);
@@ -76,9 +76,9 @@ const DrawingMaster = () => {
       const params = new URLSearchParams();
       params.append('onlyShared', 'true');
       if (search) params.append('search', search);
-      
+
       const url = `${API_BASE}/drawings?${params.toString()}`;
-        
+
       const response = await fetch(url, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -221,20 +221,20 @@ const DrawingMaster = () => {
     }
 
     const result = await Swal.fire({
-        title: '<span class="text-base  text-slate-800">Approve Selected Drawings?</span>',
-        html: `<p class="text-xs text-slate-500">You are about to approve <b>${itemsToApprove.length}</b> drawings. They will be sent to BOM creation.</p>`,
-        icon: 'question',
-        showCancelButton: true,
-        confirmButtonColor: '#10b981',
-        confirmButtonText: 'Yes, Approve All',
-        cancelButtonText: 'Cancel',
-        width: '350px',
-        padding: '1.25rem',
-        customClass: {
-          confirmButton: 'text-xs   p-2 rounded shadow-lg shadow-emerald-100  ',
-          cancelButton: 'text-xs   p-2 rounded  ',
-          title: 'mt-2'
-        }
+      title: '<span class="text-base  text-slate-800">Approve Selected Drawings?</span>',
+      html: `<p class="text-xs text-slate-500">You are about to approve <b>${itemsToApprove.length}</b> drawings. They will be sent to BOM creation.</p>`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonColor: '#10b981',
+      confirmButtonText: 'Yes, Approve All',
+      cancelButtonText: 'Cancel',
+      width: '350px',
+      padding: '1.25rem',
+      customClass: {
+        confirmButton: 'text-xs   p-2 rounded shadow-lg shadow-emerald-100  ',
+        cancelButton: 'text-xs   p-2 rounded  ',
+        title: 'mt-2'
+      }
     });
 
     if (!result.isConfirmed) return;
@@ -334,15 +334,15 @@ const DrawingMaster = () => {
   };
 
   const columns = [
-    { 
-      label: 'Drawing No', 
+    {
+      label: 'Drawing No',
       key: 'drawing_no',
       sortable: true,
       className: ' text-indigo-600',
       render: (val) => <span className="uppercase font-mono">{String(val || '').toUpperCase()}</span>
     },
-    { 
-      label: 'Description', 
+    {
+      label: 'Description',
       key: 'drawing_description',
       sortable: true,
       render: (val, row) => <div className="max-w-xs truncate text-slate-600 ">{val || row.item_description || '—'}</div>
@@ -359,8 +359,8 @@ const DrawingMaster = () => {
       sortable: true,
       render: (val) => <span className="text-xs text-slate-600 ">{val || 'Part'}</span>
     },
-    { 
-      label: 'Client / Ref', 
+    {
+      label: 'Client / Ref',
       key: 'client_name',
       render: (val, row) => (
         <div className="flex flex-col">
@@ -369,8 +369,8 @@ const DrawingMaster = () => {
         </div>
       )
     },
-    { 
-      label: 'Last Updated', 
+    {
+      label: 'Last Updated',
       key: 'updated_at',
       render: (val) => (
         <span className="text-slate-500 text-xs ">
@@ -384,7 +384,7 @@ const DrawingMaster = () => {
       render: (val, row) => {
         const itemStatus = (row.item_status || '').trim().toUpperCase();
         const drawingStatus = (row.drawing_status || '').trim().toUpperCase();
-        
+
         if (itemStatus === 'APPROVED' || drawingStatus === 'APPROVED') {
           return <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-xs   border border-emerald-200 ">Approved</span>;
         } else if (itemStatus === 'REJECTED' || drawingStatus === 'REJECTED') {
@@ -400,7 +400,7 @@ const DrawingMaster = () => {
       key: 'drawing_pdf',
       className: 'text-center',
       render: (val, row) => (val || row.file_path) ? (
-        <button 
+        <button
           onClick={(e) => {
             e.stopPropagation();
             handlePreview(row);
@@ -419,12 +419,12 @@ const DrawingMaster = () => {
       render: (_, row) => {
         const status = (row.item_status || '').trim().toUpperCase();
         const isPending = row.sales_order_item_id && status !== 'APPROVED' && status !== 'REJECTED';
-        
+
         return (
           <div className="flex justify-end gap-2">
             {isPending && (
               <>
-                <button 
+                <button
                   onClick={(e) => {
                     e.stopPropagation();
                     handleApproveItem(row.sales_order_item_id);
@@ -435,7 +435,7 @@ const DrawingMaster = () => {
                 >
                   <Check size={15} />
                 </button>
-                <button 
+                <button
                   onClick={(e) => {
                     e.stopPropagation();
                     handleRejectItem(row.sales_order_item_id);
@@ -448,49 +448,17 @@ const DrawingMaster = () => {
                 </button>
               </>
             )}
-            <button 
+            <button
               onClick={(e) => {
                 e.stopPropagation();
-                const drawingNo = row.drawing_no;
-                const rowId = row.drawing_master_id;
-                
-                // Toggle expansion state
-                const newExpanded = new Set(drawingExpandedRows);
-                if (newExpanded.has(rowId)) {
-                  newExpanded.delete(rowId);
-                } else {
-                  newExpanded.add(rowId);
-                  fetchRevisionsIfNeeded(drawingNo);
-                }
-                setDrawingExpandedRows(newExpanded);
+                handleDelete(row);
               }}
-              className={`flex items-center gap-1 p-1.5 px-2 rounded transition-all ${drawingExpandedRows.has(row.drawing_master_id) ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'text-slate-500 hover:bg-slate-50 border border-transparent hover:border-slate-200'}`}
-              title="Revision History"
+              className="p-2 text-rose-500 hover:bg-rose-50 rounded  transition-all border border-transparent hover:border-rose-100"
+              title="Delete Drawing"
             >
-              <History size={14} />
-              {drawingExpandedRows.has(row.drawing_master_id) ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+              <Trash2 size={15} />
             </button>
-          <button 
-            onClick={(e) => {
-              e.stopPropagation();
-              navigate(`${deptPrefix}/drawing-master/edit?id=${row.public_id || row.drawing_master_id}`);
-            }}
-            className="p-2 text-amber-500 hover:bg-amber-50 rounded  transition-all border border-transparent hover:border-amber-100"
-            title="Edit Drawing"
-          >
-            <Edit2 size={15} />
-          </button>
-          <button 
-            onClick={(e) => {
-              e.stopPropagation();
-              handleDelete(row);
-            }}
-            className="p-2 text-rose-500 hover:bg-rose-50 rounded  transition-all border border-transparent hover:border-rose-100"
-            title="Delete Drawing"
-          >
-            <Trash2 size={15} />
-          </button>
-        </div>
+          </div>
         );
       }
     }
@@ -498,10 +466,10 @@ const DrawingMaster = () => {
 
   const handleEdit = (drawing) => {
     const company = companies.find(c => c.company_name === drawing.client_name);
-    
+
     let billingAddressLine = '';
     let shippingAddressLine = '';
-    
+
     if (company) {
       const billingAddress = company.addresses?.find(a => a.address_type === 'BILLING');
       const shippingAddress = company.addresses?.find(a => a.address_type === 'SHIPPING');
@@ -629,7 +597,7 @@ const DrawingMaster = () => {
       });
 
       if (!response.ok) throw new Error('Failed to update drawing');
-      
+
       successToast('Drawing updated successfully');
       navigate(`${deptPrefix}/drawing-master`);
       fetchDrawings();
@@ -691,15 +659,15 @@ const DrawingMaster = () => {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          
+
           <div>
             <h1 className="text-xl  text-slate-900 ">Drawing Master</h1>
             <p className="text-xs text-slate-500 ">Central repository for all engineering drawings and revisions</p>
           </div>
         </div>
-        
+
         <div className="flex items-center gap-2">
-           <button 
+          <button
             onClick={() => fetchDrawings()}
             className="p-2 text-slate-500 hover:bg-slate-50 rounded  transition-all border border-slate-200"
             title="Refresh"
@@ -714,14 +682,14 @@ const DrawingMaster = () => {
           <div className="p-2 border-b border-slate-50 flex items-center justify-between">
             <div className="relative flex-1 max-w-md group">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" size={15} />
-              <input 
+              <input
                 type="text"
                 placeholder="Search by Drawing No, Client or Description..."
                 className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
                 value={searchTerm}
                 onChange={(e) => {
-                    setSearchTerm(e.target.value);
-                    if (e.target.value === '') fetchDrawings();
+                  setSearchTerm(e.target.value);
+                  if (e.target.value === '') fetchDrawings();
                 }}
                 onKeyDown={(e) => e.key === 'Enter' && fetchDrawings(searchTerm)}
               />
@@ -745,10 +713,10 @@ const DrawingMaster = () => {
                   Reject Selective ({drawings.filter(d => selectedRows.has(d.drawing_master_id) && (d.item_status || '').trim().toUpperCase() !== 'APPROVED' && (d.item_status || '').trim().toUpperCase() !== 'REJECTED').length})
                 </button>
               </div>
-           )}
+            )}
           </div>
           <div className="p-2">
-            <DataTable 
+            <DataTable
               columns={columns}
               data={drawings}
               loading={loading}
@@ -765,7 +733,7 @@ const DrawingMaster = () => {
               renderExpanded={(row) => {
                 const revisions = expandedRevisions[row.drawing_no] || [];
                 const isRevLoading = revisionsLoading[row.drawing_no];
-                
+
                 return (
                   <div className="bg-slate-200 p-2 rounded border border-slate-100 animate-in slide-in-from-top-2 duration-300">
                     <div className="flex items-center justify-between mb-4">
@@ -813,7 +781,7 @@ const DrawingMaster = () => {
                                 </td>
                                 <td className="px-4 p-2 text-right">
                                   {rev.drawing_pdf ? (
-                                    <button 
+                                    <button
                                       onClick={() => handlePreview({ ...rev, drawing_no: row.drawing_no })}
                                       className="p-1.5 text-indigo-500 hover:bg-indigo-50 rounded  transition-all  group-hover:opacity-100"
                                       title="Preview Revision"
@@ -841,199 +809,199 @@ const DrawingMaster = () => {
         </Card>
       ) : (
         <Card className=" animate-in slide-in-from-bottom-4 duration-500">
-            <div className="p-2 border-b border-slate-50 flex items-center justify-between bg-slate-50/50">
-                <div className="flex items-center gap-2">
-                    <div className="p-2 bg-amber-100 text-amber-600 rounded ">
-                        <Edit2 size={20} />
-                    </div>
-                    <div>
-                        <h2 className="text-md  text-slate-900">Edit Drawing Details</h2>
-                         <p className="text-xs text-slate-500 ">Update metadata for {String(editData.drawing_no || '').toUpperCase()}</p>
-                    </div>
-                </div>
-                <button 
-                    onClick={() => navigate(`${deptPrefix}/drawing-master`)}
-                    className="p-2 text-slate-400 hover:bg-white hover:text-slate-600 rounded  transition-all border border-transparent hover:border-slate-200"
-                >
-                    <X size={20} />
-                </button>
+          <div className="p-2 border-b border-slate-50 flex items-center justify-between bg-slate-50/50">
+            <div className="flex items-center gap-2">
+              <div className="p-2 bg-amber-100 text-amber-600 rounded ">
+                <Edit2 size={20} />
+              </div>
+              <div>
+                <h2 className="text-md  text-slate-900">Edit Drawing Details</h2>
+                <p className="text-xs text-slate-500 ">Update metadata for {String(editData.drawing_no || '').toUpperCase()}</p>
+              </div>
             </div>
-            <form onSubmit={handleSave} className="p-2 space-y-2">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                    <div className="space-y-2">
-                        <label className="text-xs  text-slate-500  ">Drawing No</label>
-                        <input 
-                            type="text"
-                            className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                            value={editData.drawing_no}
-                            onChange={(e) => setEditData({...editData, drawing_no: e.target.value})}
-                        />
-                    </div>
-                    <div className="space-y-2">
-                        <label className="text-xs  text-slate-500  ">Current Revision</label>
-                        <input 
-                            type="text"
-                            className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                            value={editData.revision_no}
-                            onChange={(e) => setEditData({...editData, revision_no: e.target.value})}
-                        />
-                    </div>
-                    <div className="space-y-2">
-                        <label className="text-xs  text-slate-500  ">Description</label>
-                        <input 
-                            type="text"
-                            className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                            placeholder="Enter description"
-                            value={editData.description}
-                            onChange={(e) => setEditData({...editData, description: e.target.value})}
-                        />
-                    </div>
-                    <div className="space-y-2">
-                        <label className="text-xs  text-slate-500  ">HSN Code</label>
-                        <input 
-                            type="text"
-                            className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                            placeholder="Enter HSN code"
-                            value={editData.hsn_code}
-                            onChange={(e) => setEditData({...editData, hsn_code: e.target.value})}
-                        />
-                    </div>
-                    <div className="space-y-2">
-                        <label className="text-xs  text-slate-500  ">Type</label>
-                        <select 
-                            className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                            value={editData.drawing_type || 'Part'}
-                            onChange={(e) => setEditData({...editData, drawing_type: e.target.value})}
-                        >
-                            <option value="Part">Part</option>
-                            <option value="Assembly">Assembly</option>
-                        </select>
-                    </div>
-                    <div className="space-y-2">
-                        <label className="text-xs  text-slate-500  ">Client Name</label>
-                        <input 
-                            type="text"
-                            className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                            value={editData.client_name}
-                            onChange={(e) => setEditData({...editData, client_name: e.target.value})}
-                        />
-                    </div>
-                    <div className="space-y-2">
-                        <label className="text-xs  text-slate-500  ">Contact Person</label>
-                        <input 
-                            type="text"
-                            className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                            value={editData.contact_person}
-                            onChange={(e) => setEditData({...editData, contact_person: e.target.value})}
-                        />
-                    </div>
-                    <div className="space-y-2">
-                        <label className="text-xs  text-slate-500  ">Phone</label>
-                        <input 
-                            type="text"
-                            className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                            value={editData.phone}
-                            onChange={(e) => setEditData({...editData, phone: e.target.value})}
-                        />
-                    </div>
-                    <div className="space-y-2">
-                        <label className="text-xs  text-slate-500  ">Email</label>
-                        <input 
-                            type="email"
-                            className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                            value={editData.email}
-                            onChange={(e) => setEditData({...editData, email: e.target.value})}
-                        />
-                    </div>
-                    <div className="space-y-2">
-                        <label className="text-xs  text-slate-500  ">GSTIN</label>
-                        <input 
-                            type="text"
-                            className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                            value={editData.gstin}
-                            onChange={(e) => setEditData({...editData, gstin: e.target.value})}
-                        />
-                    </div>
-                    <div className="space-y-2">
-                        <label className="text-xs  text-slate-500  ">City</label>
-                        <input 
-                            type="text"
-                            className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                            value={editData.city}
-                            onChange={(e) => setEditData({...editData, city: e.target.value})}
-                        />
-                    </div>
-                    <div className="space-y-2">
-                        <label className="text-xs  text-slate-500  ">State</label>
-                        <input 
-                            type="text"
-                            className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                            value={editData.state}
-                            onChange={(e) => setEditData({...editData, state: e.target.value})}
-                        />
-                    </div>
-                    <div className="space-y-2">
-                        <label className="text-xs  text-slate-500  ">Drawing File (Optional Update)</label>
-                        <input 
-                            type="file"
-                            className="w-full p-2 bg-white border border-slate-200 rounded text-xs file:mr-4 file:py-1 file:px-3 file:rounded  file:border-0 file:text-xs file: file:bg-indigo-50 file:text-indigo-600 hover:file:bg-indigo-100 transition-all cursor-pointer"
-                            onChange={(e) => setEditData({...editData, drawing_pdf: e.target.files[0]})}
-                            accept=".pdf"
-                        />
-                        {editData.file_path && (
-                            <div className="flex items-center gap-2 mt-1">
-                                <p className="text-[10px] text-slate-400 truncate flex-1">
-                                    Current file: {editData.file_path.split('/').pop()}
-                                </p>
-                                <button
-                                    type="button"
-                                    onClick={() => handlePreview({ file_path: editData.file_path, drawing_no: editData.drawing_no })}
-                                    className="text-[10px] text-indigo-600 hover:text-indigo-700 flex items-center gap-1 font-medium"
-                                >
-                                    <Eye size={12} />
-                                    View Current
-                                </button>
-                            </div>
-                        )}
-                    </div>
-                    <div className="space-y-2">
-                        <label className="text-xs  text-slate-500  ">Quantity</label>
-                        <input 
-                            type="number"
-                            className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                            value={editData.qty}
-                            onChange={(e) => setEditData({...editData, qty: parseInt(e.target.value) || 0})}
-                        />
-                    </div>
-                </div>
+            <button
+              onClick={() => navigate(`${deptPrefix}/drawing-master`)}
+              className="p-2 text-slate-400 hover:bg-white hover:text-slate-600 rounded  transition-all border border-transparent hover:border-slate-200"
+            >
+              <X size={20} />
+            </button>
+          </div>
+          <form onSubmit={handleSave} className="p-2 space-y-2">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+              <div className="space-y-2">
+                <label className="text-xs  text-slate-500  ">Drawing No</label>
+                <input
+                  type="text"
+                  className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                  value={editData.drawing_no}
+                  onChange={(e) => setEditData({ ...editData, drawing_no: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs  text-slate-500  ">Current Revision</label>
+                <input
+                  type="text"
+                  className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                  value={editData.revision_no}
+                  onChange={(e) => setEditData({ ...editData, revision_no: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs  text-slate-500  ">Description</label>
+                <input
+                  type="text"
+                  className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                  placeholder="Enter description"
+                  value={editData.description}
+                  onChange={(e) => setEditData({ ...editData, description: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs  text-slate-500  ">HSN Code</label>
+                <input
+                  type="text"
+                  className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                  placeholder="Enter HSN code"
+                  value={editData.hsn_code}
+                  onChange={(e) => setEditData({ ...editData, hsn_code: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs  text-slate-500  ">Type</label>
+                <select
+                  className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                  value={editData.drawing_type || 'Part'}
+                  onChange={(e) => setEditData({ ...editData, drawing_type: e.target.value })}
+                >
+                  <option value="Part">Part</option>
+                  <option value="Assembly">Assembly</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs  text-slate-500  ">Client Name</label>
+                <input
+                  type="text"
+                  className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                  value={editData.client_name}
+                  onChange={(e) => setEditData({ ...editData, client_name: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs  text-slate-500  ">Contact Person</label>
+                <input
+                  type="text"
+                  className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                  value={editData.contact_person}
+                  onChange={(e) => setEditData({ ...editData, contact_person: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs  text-slate-500  ">Phone</label>
+                <input
+                  type="text"
+                  className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                  value={editData.phone}
+                  onChange={(e) => setEditData({ ...editData, phone: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs  text-slate-500  ">Email</label>
+                <input
+                  type="email"
+                  className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                  value={editData.email}
+                  onChange={(e) => setEditData({ ...editData, email: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs  text-slate-500  ">GSTIN</label>
+                <input
+                  type="text"
+                  className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                  value={editData.gstin}
+                  onChange={(e) => setEditData({ ...editData, gstin: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs  text-slate-500  ">City</label>
+                <input
+                  type="text"
+                  className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                  value={editData.city}
+                  onChange={(e) => setEditData({ ...editData, city: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs  text-slate-500  ">State</label>
+                <input
+                  type="text"
+                  className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                  value={editData.state}
+                  onChange={(e) => setEditData({ ...editData, state: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs  text-slate-500  ">Drawing File (Optional Update)</label>
+                <input
+                  type="file"
+                  className="w-full p-2 bg-white border border-slate-200 rounded text-xs file:mr-4 file:py-1 file:px-3 file:rounded  file:border-0 file:text-xs file: file:bg-indigo-50 file:text-indigo-600 hover:file:bg-indigo-100 transition-all cursor-pointer"
+                  onChange={(e) => setEditData({ ...editData, drawing_pdf: e.target.files[0] })}
+                  accept=".pdf"
+                />
+                {editData.file_path && (
+                  <div className="flex items-center gap-2 mt-1">
+                    <p className="text-[10px] text-slate-400 truncate flex-1">
+                      Current file: {editData.file_path.split('/').pop()}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => handlePreview({ file_path: editData.file_path, drawing_no: editData.drawing_no })}
+                      className="text-[10px] text-indigo-600 hover:text-indigo-700 flex items-center gap-1 font-medium"
+                    >
+                      <Eye size={12} />
+                      View Current
+                    </button>
+                  </div>
+                )}
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs  text-slate-500  ">Quantity</label>
+                <input
+                  type="number"
+                  className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                  value={editData.qty}
+                  onChange={(e) => setEditData({ ...editData, qty: parseInt(e.target.value) || 0 })}
+                />
+              </div>
+            </div>
 
-                <div className="space-y-2">
-                    <label className="text-xs  text-slate-500  ">Remarks</label>
-                    <textarea 
-                        className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all h-24"
-                        placeholder="Add internal remarks here..."
-                        value={editData.remarks}
-                        onChange={(e) => setEditData({...editData, remarks: e.target.value})}
-                    ></textarea>
-                </div>
-                
-                <div className="pt-6 border-t border-slate-50 flex justify-end gap-2">
-                    <button 
-                        type="button" 
-                        onClick={() => navigate(`${deptPrefix}/drawing-master`)}
-                        className="p-2 bg-white border border-slate-200 text-slate-600 rounded text-xs  hover:bg-slate-50 transition-all"
-                    >
-                        Discard Changes
-                    </button>
-                    <button 
-                        type="submit" 
-                        disabled={saveLoading}
-                        className="p-2 bg-indigo-600 text-white rounded text-xs  hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 disabled:opacity-50 active:scale-95"
-                    >
-                        {saveLoading ? 'Saving...' : 'Update Master Record'}
-                    </button>
-                </div>
-            </form>
+            <div className="space-y-2">
+              <label className="text-xs  text-slate-500  ">Remarks</label>
+              <textarea
+                className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all h-24"
+                placeholder="Add internal remarks here..."
+                value={editData.remarks}
+                onChange={(e) => setEditData({ ...editData, remarks: e.target.value })}
+              ></textarea>
+            </div>
+
+            <div className="pt-6 border-t border-slate-50 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => navigate(`${deptPrefix}/drawing-master`)}
+                className="p-2 bg-white border border-slate-200 text-slate-600 rounded text-xs  hover:bg-slate-50 transition-all"
+              >
+                Discard Changes
+              </button>
+              <button
+                type="submit"
+                disabled={saveLoading}
+                className="p-2 bg-indigo-600 text-white rounded text-xs  hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 disabled:opacity-50 active:scale-95"
+              >
+                {saveLoading ? 'Saving...' : 'Update Master Record'}
+              </button>
+            </div>
+          </form>
         </Card>
       )}
 
