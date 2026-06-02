@@ -361,8 +361,6 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       setShowEditModal(false);
       fetchQCInspections();
       fetchStats();
-      const tabPath = activeTab === 'incoming' ? `${deptPrefix}/incoming-qc` : `${deptPrefix}/incoming-qc/${activeTab}`;
-      navigate(tabPath);
     } catch (error) {
       errorToast(error.message);
     }
@@ -468,8 +466,6 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
         successToast('Notification sent to vendor');
         setShowEmailModal(false);
         fetchQCInspections();
-        const tabPath = activeTab === 'incoming' ? `${deptPrefix}/incoming-qc` : `${deptPrefix}/incoming-qc/${activeTab}`;
-        navigate(tabPath);
       } else {
         const error = await response.json();
         errorToast(error.message || 'Failed to send email');

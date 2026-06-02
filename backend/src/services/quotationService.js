@@ -367,7 +367,7 @@ const handleAutoApproval = async (quotationId, connection) => {
 };
 
 const updateQuotationStatus = async (quotationId, status) => {
-  const validStatuses = ['DRAFT', 'SENT', 'EMAIL_RECEIVED', 'RECEIVED', 'REVIEWED', 'CLOSED', 'PENDING', 'SUPERSEDED', 'REJECTED'];
+  const validStatuses = ['DRAFT', 'SENT', 'EMAIL_RECEIVED', 'RECEIVED', 'REVIEWED', 'CLOSED', 'PENDING'];
   if (!validStatuses.includes(status)) {
     const error = new Error('Invalid status');
     error.statusCode = 400;
@@ -382,37 +382,6 @@ const updateQuotationStatus = async (quotationId, status) => {
       'UPDATE quotations SET status = ? WHERE id = ?',
       [status, quotationId]
     );
-
-    // If status is REVIEWED (Approved), reject all other active quotations for the same MR / RFQ
-    if (status === 'REVIEWED') {
-      const [currentQ] = await connection.query(
-        'SELECT rfq_group_id, rfq_id, mr_id, sales_order_id FROM quotations WHERE id = ?',
-        [quotationId]
-      );
-      if (currentQ.length > 0) {
-        const { rfq_group_id, rfq_id, mr_id, sales_order_id } = currentQ[0];
-        let rejectQuery = '';
-        let rejectParams = [];
-
-        if (rfq_group_id) {
-          rejectQuery = 'UPDATE quotations SET status = ? WHERE rfq_group_id = ? AND id != ? AND status != ?';
-          rejectParams = ['REJECTED', rfq_group_id, quotationId, 'SUPERSEDED'];
-        } else if (rfq_id) {
-          rejectQuery = 'UPDATE quotations SET status = ? WHERE rfq_id = ? AND id != ? AND status != ?';
-          rejectParams = ['REJECTED', rfq_id, quotationId, 'SUPERSEDED'];
-        } else if (mr_id) {
-          rejectQuery = 'UPDATE quotations SET status = ? WHERE mr_id = ? AND id != ? AND status != ?';
-          rejectParams = ['REJECTED', mr_id, quotationId, 'SUPERSEDED'];
-        } else if (sales_order_id) {
-          rejectQuery = 'UPDATE quotations SET status = ? WHERE sales_order_id = ? AND id != ? AND status != ?';
-          rejectParams = ['REJECTED', sales_order_id, quotationId, 'SUPERSEDED'];
-        }
-
-        if (rejectQuery) {
-          await connection.execute(rejectQuery, rejectParams);
-        }
-      }
-    }
 
     // If status is RECEIVED, check for auto-approval
     if (status === 'RECEIVED') {
@@ -995,7 +964,7 @@ const generateQuotationPDF = async (quotationId) => {
             {{/logoBase64}}
           </div>
           <div class="header-content">
-            <h1 class="rfq-title">{{#isRFQ}}Request For Quotation{{/isRFQ}}{{^isRFQ}}Vendor Quotation{{/isRFQ}}</h1>
+            <h1 class="rfq-title">Request For Quotation</h1>
             <h2 class="company-name">{{hostCompanyName}}</h2>
             <p class="company-address">{{hostCompanyAddress}}</p>
             {{#hostGSTIN}}
@@ -1045,17 +1014,6 @@ const generateQuotationPDF = async (quotationId) => {
 
         <table class="details-table">
           <thead>
-            {{#isRFQ}}
-            <tr>
-              <th style="width: 5%; text-align: center;">Sr. No</th>
-              <th style="width: 25%">Item Code</th>
-              <th style="width: 30%">Material Name</th>
-              <th style="width: 25%">Specification</th>
-              <th style="width: 7%; text-align: center;">Qty</th>
-              <th style="width: 8%; text-align: center;">Unit</th>
-            </tr>
-            {{/isRFQ}}
-            {{^isRFQ}}
             <tr>
               <th style="width: 5%; text-align: center;">Sr. No</th>
               <th style="width: 25%">Drawing No / Item Code</th>
@@ -1065,20 +1023,12 @@ const generateQuotationPDF = async (quotationId) => {
               <th style="width: 8%; text-align: center;">GST %</th>
               <th style="width: 13%; text-align: right;">Total (Incl. GST)</th>
             </tr>
-            {{/isRFQ}}
           </thead>
           <tbody>
             {{#items}}
             <tr>
               <td class="center-col">{{sr}}</td>
               <td style="font-family: monospace; font-weight: 500;">{{drawing_no}}</td>
-              {{#isRFQ}}
-              <td><strong>{{material_name}}</strong></td>
-              <td>{{specification}}</td>
-              <td class="center-col"><strong>{{quantity}}</strong></td>
-              <td class="center-col">{{unit}}</td>
-              {{/isRFQ}}
-              {{^isRFQ}}
               <td>
                 <strong>{{material_name}}</strong>
                 {{#material_description}}<br><span style="font-size: 8px; color: #64748b;">{{material_description}}</span>{{/material_description}}
@@ -1087,21 +1037,11 @@ const generateQuotationPDF = async (quotationId) => {
               <td class="amount-col">{{unit_rate}}</td>
               <td class="center-col">{{gst_percent}}</td>
               <td class="amount-col">{{amount}}</td>
-              {{/isRFQ}}
             </tr>
             {{/items}}
           </tbody>
         </table>
 
-        {{#isRFQ}}
-        <div class="section-box">
-          <div class="section-box-header">Remarks / Delivery Requirements</div>
-          <div class="section-box-content">
-            {{notes}}{{^notes}}Request for quotation created from the procurement requirements.{{/notes}}
-          </div>
-        </div>
-        {{/isRFQ}}
-        {{^isRFQ}}
         <div class="summary-block">
           <div class="remarks-container">
             <p style="margin: 0 0 5px 0; font-weight: 700; font-size: 10px;">Remarks:</p>
@@ -1128,7 +1068,6 @@ const generateQuotationPDF = async (quotationId) => {
             </table>
           </div>
         </div>
-        {{/isRFQ}}
 
         <div class="section-box">
           <div class="section-box-header">Special Instructions & Notes</div>
@@ -1155,11 +1094,9 @@ const generateQuotationPDF = async (quotationId) => {
 
   const formatDate = (date) => date ? new Date(date).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
 
-  const isRFQVal = ['DRAFT', 'SENT', 'EMAIL_RECEIVED', 'PENDING'].includes(quotation.status);
-
   const viewData = {
     ...quotation,
-    isRFQ: isRFQVal,
+    isRFQ: ['DRAFT', 'SENT', 'EMAIL_RECEIVED', 'PENDING'].includes(quotation.status),
     created_at: formatDate(quotation.created_at),
     valid_until: formatDate(quotation.valid_until),
     vendor_name: vendor?.vendor_name || 'N/A',
@@ -1183,12 +1120,10 @@ const generateQuotationPDF = async (quotationId) => {
       
       return {
         ...i,
-        isRFQ: isRFQVal,
         sr: idx + 1,
         drawing_no: i.drawing_no || i.item_code || '—',
         material_name: i.material_name || i.description || '—',
         material_description: i.material_name ? i.description : null,
-        specification: i.material_name ? i.description : '—',
         material_type: i.material_type || '—',
         quantity: qty.toFixed(3),
         unit: i.unit || 'NOS',
