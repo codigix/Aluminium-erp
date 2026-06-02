@@ -43,9 +43,6 @@ const CustomerPO = ({
   const [uploadLoading, setUploadLoading] = useState(false)
   const [showUploadModal, setShowUploadModal] = useState(false)
   const [selectedPoForModal, setSelectedPoForModal] = useState(null)
-  const [attachments, setAttachments] = useState([])
-  const [existingAttachments, setExistingAttachments] = useState([])
-  const [localError, setLocalError] = useState('')
 
   const handleOpenPdf = (pdfPath) => {
     if (!pdfPath) return;
@@ -478,9 +475,6 @@ const CustomerPO = ({
     setShowPoForm(false)
     setFormMode('CREATE')
     setEditingPoId(null)
-    setAttachments([])
-    setExistingAttachments([])
-    setLocalError('')
     if (window.location.pathname !== '/sales/customer-po') {
       window.history.pushState({}, '', '/sales/customer-po');
     }
@@ -517,15 +511,12 @@ const CustomerPO = ({
 
   const openPoInMode = async (mode, poId = null) => {
     setFormMode(mode);
-    setLocalError('');
     if (poId) {
       setEditingPoId(poId);
       setPoFormLoading(true);
       setShowPoForm(true);
       try {
         const data = await apiRequest(`/customer-pos/${poId}`);
-        setExistingAttachments(data.pdf_path ? data.pdf_path.split(',').map(f => f.trim()).filter(Boolean) : []);
-        setAttachments([]);
         if (data.host_company_id) {
           setSelectedHostId(String(data.host_company_id));
         } else {
@@ -590,8 +581,6 @@ const CustomerPO = ({
       }
     } else {
       setShowPoForm(true);
-      setExistingAttachments([]);
-      setAttachments([]);
       if (window.location.pathname !== '/sales/customer-po/new-po') {
         window.history.pushState({}, '', '/sales/customer-po/new-po');
       }
@@ -600,128 +589,49 @@ const CustomerPO = ({
 
   const handlePoSubmit = async (e) => {
     e.preventDefault()
-    setLocalError('')
     if (!poForm.companyId) {
-      const msg = 'Please select a company';
-      showToast(msg)
-      setLocalError(msg)
-      return
-    }
-    if (!poForm.poNumber || !poForm.poNumber.trim()) {
-      const msg = 'Please enter a PO Number';
-      showToast(msg)
-      setLocalError(msg)
-      return
-    }
-    if (!poForm.poDate) {
-      const msg = 'Please select a PO Date';
-      showToast(msg)
-      setLocalError(msg)
-      return
-    }
-
-    // Validate Items
-    for (let i = 0; i < poForm.items.length; i++) {
-      const item = poForm.items[i];
-      const itemLabel = `Line Item ${i + 1}`;
-      if (!item.drawingNo || !item.drawingNo.trim()) {
-        const msg = `Drawing No is required for ${itemLabel}`;
-        showToast(msg)
-        setLocalError(msg)
-        return;
-      }
-      if (!item.description || !item.description.trim()) {
-        const msg = `Description is required for ${itemLabel}`;
-        showToast(msg)
-        setLocalError(msg)
-        return;
-      }
-      if (!item.quantity || Number(item.quantity) <= 0) {
-        const msg = `Valid Quantity is required for ${itemLabel}`;
-        showToast(msg)
-        setLocalError(msg)
-        return;
-      }
-      if (!item.unit || !item.unit.trim()) {
-        const msg = `Unit is required for ${itemLabel}`;
-        showToast(msg)
-        setLocalError(msg)
-        return;
-      }
-      if (!item.rate || Number(item.rate) <= 0) {
-        const msg = `Valid Rate is required for ${itemLabel}`;
-        showToast(msg)
-        setLocalError(msg)
-        return;
-      }
-    }
-
-    if (attachments.length === 0 && existingAttachments.length === 0) {
-      const msg = 'Please upload at least one PO / Document attachment';
-      showToast(msg)
-      setLocalError(msg)
+      showToast('Please select a company')
       return
     }
 
     setPoFormLoading(true)
     try {
+      const payload = {
+        companyId: poForm.companyId,
+        projectName: poForm.projectName,
+        poNumber: poForm.poNumber,
+        poDate: poForm.poDate,
+        poVersion: poForm.poVersion,
+        orderType: poForm.orderType,
+        currency: poForm.currency,
+        paymentTerms: poForm.paymentTerms,
+        creditDays: poForm.creditDays,
+        items: poForm.items.map(item => ({
+          ...item,
+          drawingNo: (item.drawingNo || '').toUpperCase(),
+          hsn_code: item.hsnCode,
+          delivery_date: item.deliveryDate,
+          sub_assemblies: (item.sub_assemblies || []).map(sa => ({
+            drawingNo: (sa.drawingNo || '').toUpperCase(),
+            description: sa.description,
+            hsn_code: sa.hsnCode,
+            delivery_date: sa.deliveryDate,
+            quantity: sa.quantity,
+            unit: sa.unit,
+            rate: sa.rate
+          }))
+        })),
+        remarks: poForm.remarks,
+        hostCompanyId: selectedHostId || null
+      }
+
       const url = formMode === 'EDIT' ? `/customer-pos/${editingPoId}` : '/customer-pos';
       const method = formMode === 'EDIT' ? 'PUT' : 'POST';
 
-      const baseUrl = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
-      const token = localStorage.getItem('authToken');
-
-      const formData = new FormData();
-      formData.append('companyId', poForm.companyId);
-      formData.append('projectName', poForm.projectName || '');
-      formData.append('poNumber', poForm.poNumber || '');
-      formData.append('poDate', poForm.poDate || '');
-      formData.append('poVersion', poForm.poVersion || '1.0');
-      formData.append('orderType', poForm.orderType || 'STANDARD');
-      formData.append('currency', poForm.currency || 'INR');
-      formData.append('paymentTerms', poForm.paymentTerms || '');
-      formData.append('creditDays', poForm.creditDays || '');
-      formData.append('remarks', poForm.remarks || '');
-      formData.append('hostCompanyId', selectedHostId || '');
-
-      const mappedItems = poForm.items.map(item => ({
-        ...item,
-        drawingNo: (item.drawingNo || '').toUpperCase(),
-        hsn_code: item.hsnCode,
-        delivery_date: item.deliveryDate,
-        sub_assemblies: (item.sub_assemblies || []).map(sa => ({
-          drawingNo: (sa.drawingNo || '').toUpperCase(),
-          description: sa.description,
-          hsn_code: sa.hsnCode,
-          delivery_date: sa.deliveryDate,
-          quantity: sa.quantity,
-          unit: sa.unit,
-          rate: sa.rate
-        }))
-      }));
-      formData.append('items', JSON.stringify(mappedItems));
-
-      if (formMode === 'EDIT') {
-        formData.append('existingAttachments', existingAttachments.join(','));
-      }
-
-      attachments.forEach(file => {
-        formData.append('attachments', file);
-      });
-
-      const response = await fetch(`${baseUrl}${url}`, {
+      await apiRequest(url, {
         method: method,
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
-        body: formData
-      });
-
-      const resData = await response.json();
-      if (!response.ok) {
-        throw new Error(resData.message || resData.error || `Failed to ${formMode === 'EDIT' ? 'update' : 'create'} PO`);
-      }
-
+        body: payload
+      })
       showToast(`Customer PO ${formMode === 'EDIT' ? 'updated' : 'created'} successfully`)
       closePoForm()
       if (onRefresh) onRefresh()
@@ -850,7 +760,25 @@ const CustomerPO = ({
       className: 'text-right',
       render: (_, row) => (
         <div className="flex items-center justify-end gap-2">
-
+          {row.pdf_path ? (
+            <button
+              onClick={() => handleOpenUploadModal(row)}
+              className="px-2.5 py-1.5 bg-indigo-50 text-indigo-600 rounded text-xs hover:bg-indigo-100 transition-all border border-indigo-100 flex items-center gap-1.5"
+              title="View or Manage PO Documents"
+            >
+              <Eye className="w-3.5 h-3.5" />
+              View/Manage PO
+            </button>
+          ) : (
+            <button
+              onClick={() => handleOpenUploadModal(row)}
+              className="px-2.5 py-1.5 bg-emerald-50 text-emerald-600 rounded text-xs hover:bg-emerald-100 transition-all border border-emerald-100 flex items-center gap-1.5 shadow-sm active:scale-95"
+              title="Upload PO document"
+            >
+              <Upload className="w-3.5 h-3.5" />
+              Upload PO
+            </button>
+          )}
           <button
             onClick={() => openPoInMode('VIEW', row.id)}
             className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all border border-transparent hover:border-indigo-100"
@@ -1340,6 +1268,7 @@ const CustomerPO = ({
                     <div className="space-y-2">
                       <label className="text-xs  text-slate-400   ml-1">Company / Client *</label>
                       <select
+                        required
                         disabled={formMode === 'VIEW'}
                         value={poForm.companyId}
                         onChange={(e) => setPoForm(prev => ({ ...prev, companyId: e.target.value }))}
@@ -1357,6 +1286,7 @@ const CustomerPO = ({
                     <div className="space-y-2">
                       <label className="text-xs  text-slate-400   ml-1">PO Number *</label>
                       <input
+                        required
                         type="text"
                         disabled={formMode === 'VIEW'}
                         value={poForm.poNumber}
@@ -1367,6 +1297,7 @@ const CustomerPO = ({
                     <div className="space-y-2">
                       <label className="text-xs  text-slate-400   ml-1">PO Date *</label>
                       <input
+                        required
                         type="date"
                         disabled={formMode === 'VIEW'}
                         value={poForm.poDate}
@@ -1449,6 +1380,7 @@ const CustomerPO = ({
                             <tr key={`item-${index}`} className="group hover:bg-indigo-50/30 transition-all">
                               <td className="p-2">
                                 <input
+                                  required
                                   type="text"
                                   disabled={formMode === 'VIEW'}
                                   value={item.drawingNo?.toUpperCase() || ''}
@@ -1459,6 +1391,7 @@ const CustomerPO = ({
                               </td>
                               <td className="p-2">
                                 <input
+                                  required
                                   type="text"
                                   disabled={formMode === 'VIEW'}
                                   value={item.description}
@@ -1488,6 +1421,7 @@ const CustomerPO = ({
                               </td>
                               <td className="p-2">
                                 <input
+                                  required
                                   type="number"
                                   disabled={formMode === 'VIEW'}
                                   value={item.quantity}
@@ -1497,6 +1431,7 @@ const CustomerPO = ({
                               </td>
                               <td className="p-2">
                                 <input
+                                  required
                                   type="text"
                                   disabled={formMode === 'VIEW'}
                                   value={item.unit}
@@ -1506,6 +1441,7 @@ const CustomerPO = ({
                               </td>
                               <td className="p-2">
                                 <input
+                                  required
                                   type="number"
                                   disabled={formMode === 'VIEW'}
                                   value={item.rate}
@@ -1640,10 +1576,10 @@ const CustomerPO = ({
 
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 border-b border-slate-100 pb-4">
-                     <div className="p-2 bg-slate-50 text-slate-600 rounded ">
-                       <AlertCircle className="w-5 h-5" />
-                     </div>
-                     <h3 className="text-sm  text-slate-800  ">Additional Notes</h3>
+                    <div className="p-2 bg-slate-50 text-slate-600 rounded ">
+                      <AlertCircle className="w-5 h-5" />
+                    </div>
+                    <h3 className="text-sm  text-slate-800  ">Additional Notes</h3>
                   </div>
                   <textarea
                     value={poForm.remarks}
@@ -1654,154 +1590,39 @@ const CustomerPO = ({
                     placeholder="Enter any additional remarks, special instructions, or terms..."
                   />
                 </div>
-
-                {/* Attachment PO & Documents Section */}
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 border-b border-slate-100 pb-4">
-                    <div className="p-2 bg-indigo-50 text-indigo-600 rounded">
-                      <Upload className="w-5 h-5" />
-                    </div>
-                    <h3 className="text-sm text-slate-800">Attachment PO & Documents *</h3>
-                  </div>
-
-                  {/* Drop/Select Zone (only visible if not VIEW mode) */}
-                  {formMode !== 'VIEW' && (
-                    <div className="border-2 border-dashed border-slate-200 rounded-lg p-4 text-center hover:border-indigo-300 transition-all cursor-pointer bg-slate-50/50 group relative">
-                      <input
-                        type="file"
-                        multiple
-                        onChange={(e) => {
-                          const files = Array.from(e.target.files || []);
-                          setAttachments(prev => [...prev, ...files]);
-                        }}
-                        className="absolute inset-0 opacity-0 cursor-pointer"
-                        accept=".pdf,.png,.jpg,.jpeg"
-                      />
-                      <div className="flex flex-col items-center justify-center gap-1.5">
-                        <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600 group-hover:bg-indigo-100 transition-all">
-                          <Upload className="w-5.5 h-5.5" />
-                         </div>
-                        <p className="text-xs font-semibold text-slate-700">Click or drag files here to upload PO / Documents</p>
-                        <p className="text-[10px] text-slate-400">PDF, PNG, JPG, JPEG (Multiple files allowed)</p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* List of Attachments */}
-                  {((existingAttachments && existingAttachments.length > 0) || (attachments && attachments.length > 0)) ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
-                      {/* Existing Attachments */}
-                      {existingAttachments.map((file, idx) => {
-                        const rawName = file.split('/').pop() || file.split('\\').pop() || '';
-                        const parts = rawName.split('-');
-                        const fileName = parts.length > 1 ? parts.slice(1).join('-') : rawName;
-                        return (
-                          <div key={`existing-${idx}`} className="flex items-center justify-between p-2.5 bg-slate-50 border border-slate-200/60 rounded-lg hover:bg-slate-100/70 transition-all">
-                            <div className="flex items-center gap-2 overflow-hidden mr-2">
-                              <FileText className="w-4 h-4 text-indigo-500 shrink-0" />
-                              <div className="flex flex-col overflow-hidden">
-                                <span className="text-xs text-slate-700 truncate font-semibold" title={fileName}>{fileName}</span>
-                                <span className="text-[9px] text-slate-400 font-medium">Existing Document</span>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              <button
-                                type="button"
-                                onClick={() => handleOpenPdf(file)}
-                                className="p-1 bg-white border border-slate-200 rounded text-slate-500 hover:text-indigo-600 hover:border-indigo-100 transition-all hover:bg-indigo-50 active:scale-95"
-                                title="View Document"
-                              >
-                                <Eye className="w-3.5 h-3.5" />
-                              </button>
-                              {formMode !== 'VIEW' && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setExistingAttachments(prev => prev.filter((_, i) => i !== idx));
-                                  }}
-                                  className="p-1 bg-white border border-slate-200 rounded text-slate-400 hover:text-rose-600 hover:border-rose-100 transition-all hover:bg-rose-50 active:scale-95"
-                                  title="Delete Document"
-                                >
-                                  <X className="w-3.5 h-3.5" />
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-
-                      {/* Staged New Attachments */}
-                      {attachments.map((file, idx) => (
-                        <div key={`staged-${idx}`} className="flex items-center justify-between p-2.5 bg-indigo-50/20 border border-indigo-100/60 rounded-lg hover:bg-indigo-50/40 transition-all">
-                          <div className="flex items-center gap-2 overflow-hidden mr-2">
-                            <FileText className="w-4 h-4 text-indigo-600 shrink-0" />
-                            <div className="flex flex-col overflow-hidden">
-                              <span className="text-xs text-indigo-950 truncate font-semibold" title={file.name}>{file.name}</span>
-                              <span className="text-[9px] text-indigo-600 font-medium">Staged - {(file.size / 1024).toFixed(1)} KB</span>
-                            </div>
-                          </div>
-                          {formMode !== 'VIEW' && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setAttachments(prev => prev.filter((_, i) => i !== idx));
-                              }}
-                              className="p-1 bg-white border border-indigo-100/40 rounded text-indigo-400 hover:text-rose-600 hover:border-rose-100 transition-all hover:bg-rose-50 active:scale-95 shrink-0"
-                              title="Remove Document"
-                            >
-                              <X className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-center py-4 bg-slate-50 border border-dashed border-slate-200/60 rounded-lg text-slate-400 text-xs mt-2">
-                      No documents attached.
-                    </div>
-                  )}
-                </div>
               </form>
             </div>
 
-            <div className="p-2 border-t border-slate-100 bg-slate-50/80 backdrop-blur-md flex flex-col sticky bottom-0 z-10">
-              {localError && (
-                <div className="p-2.5 mb-2 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
-                  <span className="font-semibold">{localError}</span>
-                </div>
-              )}
-              <div className="flex items-center justify-between w-full">
-                <div className="hidden md:block">
-                  <p className="text-xs  text-slate-400  ">Mandatory Fields *</p>
-                  <p className="text-xs  text-slate-500  mt-1">Check all line items before submitting</p>
-                </div>
-                <div className="flex items-center gap-2 w-full md:w-auto">
+            <div className="p-2  border-t border-slate-100 bg-slate-50/80 backdrop-blur-md flex items-center justify-between sticky bottom-0 z-10">
+              <div className="hidden md:block">
+                <p className="text-xs  text-slate-400  ">Mandatory Fields *</p>
+                <p className="text-xs  text-slate-500  mt-1">Check all line items before submitting</p>
+              </div>
+              <div className="flex items-center gap-2 w-full md:w-auto">
+                <button
+                  type="button"
+                  onClick={closePoForm}
+                  className="flex-1 md:flex-none p-2  rounded text-xs    text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-all active:scale-95"
+                >
+                  {formMode === 'VIEW' ? 'Close' : 'Cancel'}
+                </button>
+                {formMode !== 'VIEW' && (
                   <button
-                    type="button"
-                    onClick={closePoForm}
-                    className="flex-1 md:flex-none p-2  rounded text-xs    text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-all active:scale-95"
+                    form="po-manual-form"
+                    type="submit"
+                    disabled={poFormLoading}
+                    className="flex-1 md:flex-none bg-indigo-600 text-white p-2  rounded text-xs    hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-200 active:scale-95 disabled:opacity-50 disabled:active:scale-100 flex items-center justify-center gap-2"
                   >
-                    {formMode === 'VIEW' ? 'Close' : 'Cancel'}
+                    {poFormLoading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin stroke-[3]" />
+                        Processing...
+                      </>
+                    ) : (
+                      formMode === 'EDIT' ? 'Update Purchase Order' : 'Confirm & Create PO'
+                    )}
                   </button>
-                  {formMode !== 'VIEW' && (
-                    <button
-                      form="po-manual-form"
-                      type="submit"
-                      disabled={poFormLoading}
-                      className="flex-1 md:flex-none bg-indigo-600 text-white p-2  rounded text-xs    hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-200 active:scale-95 disabled:opacity-50 disabled:active:scale-100 flex items-center justify-center gap-2"
-                    >
-                      {poFormLoading ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin stroke-[3]" />
-                          Processing...
-                        </>
-                      ) : (
-                        formMode === 'EDIT' ? 'Update Purchase Order' : 'Confirm & Create PO'
-                      )}
-                    </button>
-                  )}
-                </div>
+                )}
               </div>
             </div>
           </div>

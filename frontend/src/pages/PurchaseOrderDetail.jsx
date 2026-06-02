@@ -119,36 +119,6 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
     }
   };
 
-  const handlePrint = () => {
-    window.print();
-  };
-
-  const handleDownloadPDF = async () => {
-    try {
-      const token = localStorage.getItem('authToken');
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'}/purchase-orders/${po.id}/pdf`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (!response.ok) throw new Error('Failed to generate PDF');
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `PurchaseOrder_${po.po_number || po.id}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error('Error downloading PDF:', error);
-      Swal.fire('Error', 'Failed to download PDF', 'error');
-    }
-  };
-
   const activeStepIndex = getStepIndex(currentStatus);
   const filteredItems = (po.items || []).filter(item => {
     const type = (item.material_type || '').toUpperCase();
@@ -215,18 +185,10 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
               Receive Material
             </button>
           )}
-          <button 
-            onClick={handlePrint}
-            className="p-2 text-slate-400 hover:text-blue-600 bg-white border border-slate-200 rounded  transition-all  active:scale-95"
-            title="Print PO"
-          >
+          <button className="p-2 text-slate-400 hover:text-blue-600 bg-white border border-slate-200 rounded  transition-all  active:scale-95">
             <Printer className="w-4 h-4" />
           </button>
-          <button 
-            onClick={handleDownloadPDF}
-            className="p-2 text-slate-400 hover:text-blue-600 bg-white border border-slate-200 rounded  transition-all  active:scale-95"
-            title="Download PDF"
-          >
+          <button className="p-2 text-slate-400 hover:text-blue-600 bg-white border border-slate-200 rounded  transition-all  active:scale-95">
             <Download className="w-4 h-4" />
           </button>
         </div>
