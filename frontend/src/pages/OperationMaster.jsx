@@ -49,6 +49,7 @@ const OperationMaster = ({ showForm: propShowForm, setShowForm: propSetShowForm 
   const [formData, setFormData] = useState({
     operation_code: '',
     operation_name: '',
+    operation_type: 'In-House',
     workstation_ids: [],
     std_time: 0,
     time_uom: 'Hr',
@@ -151,6 +152,7 @@ const OperationMaster = ({ showForm: propShowForm, setShowForm: propSetShowForm 
       successToast(`Operation ${isEditing ? 'updated' : 'created'} successfully`);
       setShowForm(false);
       resetForm();
+      navigate('/production/operation-master');
       fetchOperations();
     } catch (error) {
       errorToast(error.message);
@@ -163,6 +165,7 @@ const OperationMaster = ({ showForm: propShowForm, setShowForm: propSetShowForm 
     setFormData({
       operation_code: '',
       operation_name: '',
+      operation_type: 'In-House',
       workstation_ids: [],
       std_time: 0,
       time_uom: 'Hr',
@@ -175,6 +178,7 @@ const OperationMaster = ({ showForm: propShowForm, setShowForm: propSetShowForm 
     setFormData({
       operation_code: op.operation_code,
       operation_name: op.operation_name,
+      operation_type: op.operation_type || 'In-House',
       workstation_ids: op.workstation_ids || [],
       std_time: op.std_time,
       time_uom: op.time_uom,
@@ -265,6 +269,18 @@ const OperationMaster = ({ showForm: propShowForm, setShowForm: propSetShowForm 
       key: 'operation_name', 
       sortable: true,
       render: (val) => <span className=" text-slate-900">{val}</span>
+    },
+    { 
+      label: 'Operation Type', 
+      key: 'operation_type', 
+      sortable: true,
+      render: (val) => {
+        const type = val || 'In-House';
+        let variant = 'info';
+        if (type === 'Outsourced') variant = 'warning';
+        if (type === 'Dispatch') variant = 'success';
+        return <Badge variant={variant} className="capitalize font-semibold">{type}</Badge>;
+      }
     },
     { 
       label: 'Workstations', 
@@ -424,6 +440,20 @@ const OperationMaster = ({ showForm: propShowForm, setShowForm: propSetShowForm 
                 }}
                 allowCustom={true}
               />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs text-slate-500">Operation Type *</label>
+              <select 
+                name="operation_type"
+                className="w-full p-2 bg-slate-50 border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all focus:bg-white text-xs"
+                value={formData.operation_type}
+                onChange={handleInputChange}
+                required
+              >
+                <option value="In-House">In-House</option>
+                <option value="Outsourced">Outsourced</option>
+                <option value="Dispatch">Dispatch</option>
+              </select>
             </div>
             <div className="space-y-1.5">
               <label className="text-xs  text-slate-500">Workstations *</label>

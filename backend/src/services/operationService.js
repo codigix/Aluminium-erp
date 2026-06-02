@@ -38,11 +38,12 @@ const createOperation = async (data) => {
 
     const [result] = await connection.query(
       `INSERT INTO operations (
-        operation_code, operation_name, std_time, time_uom, hourly_rate, is_active
-      ) VALUES (?, ?, ?, ?, ?, ?)`,
+        operation_code, operation_name, std_time, time_uom, hourly_rate, operation_type, is_active
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
         data.operation_code, data.operation_name, 
         data.std_time, data.time_uom || 'Hr', data.hourly_rate || 0,
+        data.operation_type || 'In-House',
         data.is_active !== undefined ? data.is_active : 1
       ]
     );
@@ -85,11 +86,14 @@ const updateOperation = async (id, data) => {
         std_time = ?, 
         time_uom = ?, 
         hourly_rate = ?,
+        operation_type = ?,
         is_active = ?
        WHERE id = ?`,
       [
         data.operation_code, data.operation_name, 
-        data.std_time, data.time_uom, data.hourly_rate || 0, data.is_active, id
+        data.std_time, data.time_uom, data.hourly_rate || 0,
+        data.operation_type || 'In-House',
+        data.is_active, id
       ]
     );
 

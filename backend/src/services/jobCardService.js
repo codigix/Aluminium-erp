@@ -5,6 +5,7 @@ const generateJobCardQcPdf = require('../utils/generateJobCardQcPdf');
 const listJobCards = async () => {
   const [rows] = await pool.query(
     `SELECT jc.id, jc.job_card_no, jc.work_order_id, jc.operation_id, jc.workstation_id, jc.assigned_to, jc.planned_qty, jc.status, jc.execution_mode, jc.public_id,
+            jc.start_time, jc.end_time, jc.produced_qty, jc.accepted_qty, jc.rejected_qty, jc.remarks, jc.vendor_id, jc.vendor_rate,
             wo.wo_number, wo.item_name, wo.priority, wo.quantity as wo_quantity, wo.status as wo_status, wo.end_date as wo_end_date, wo.source_type,
             wo.plan_id, wo.sales_order_id, wo.parent_wo_id,
             COALESCE(soi_parent.description, oi_parent.description, soi_source.description, soi_fallback.description, oi_fallback.description, wo_parent.item_name, wo.source_fg) as source_fg,
@@ -87,7 +88,8 @@ const createJobCard = async (data) => {
 };
 
 const updateJobCardProgress = async (id, data) => {
-  const { producedQty, acceptedQty, rejectedQty, status, startTime, endTime, workstationId, assignedTo, targetWarehouseId, executionType } = data;
+  const { producedQty, acceptedQty, rejectedQty, status, startTime, endTime, workstationId, assignedTo, targetWarehouseId, executionType,
+    carrierName, trackingNumber, shippingNotes, dispatchDate, dispatchMode, dispatchQty } = data;
 
   const connection = await pool.getConnection();
   try {
@@ -109,31 +111,44 @@ const updateJobCardProgress = async (id, data) => {
       params.push(rejectedQty);
     }
     if (status === 'COMPLETED') {
-      // 1. Check if all quality logs are approved
-      const [qualityLogs] = await connection.query(
-        'SELECT status, inspected_qty FROM job_card_quality_logs WHERE job_card_id = ?',
+      // Get operation details to see if it is a shipment operation
+      const [opRow] = await connection.query(
+        'SELECT COALESCE(o.operation_name, jc.operation_name) as operation_name, jc.operation_type FROM job_cards jc LEFT JOIN operations o ON jc.operation_id = o.id WHERE jc.id = ?',
         [id]
       );
-
-      if (qualityLogs.length === 0) {
-        throw new Error('Cannot complete Job Card: No quality inspection records found.');
-      }
-
-      if (qualityLogs.some(log => log.status !== 'APPROVED')) {
-        throw new Error('Cannot complete Job Card: Some quality inspection records are still pending approval.');
-      }
-
-      // 2. Check if total inspected matches total produced
-      const [producedSum] = await connection.query(
-        'SELECT SUM(produced_qty) as total FROM job_card_time_logs WHERE job_card_id = ?',
-        [id]
+      const isShipment = opRow.length > 0 && (
+        String(opRow[0].operation_name || '').toLowerCase() === 'shipment' ||
+        String(opRow[0].operation_name || '').toLowerCase() === 'dispatch' ||
+        String(opRow[0].operation_type || '').toLowerCase() === 'dispatch'
       );
 
-      const totalProduced = parseFloat(producedSum[0]?.total || 0);
-      const totalInspected = qualityLogs.reduce((sum, log) => sum + parseFloat(log.inspected_qty || 0), 0);
+      if (!isShipment) {
+        // 1. Check if all quality logs are approved
+        const [qualityLogs] = await connection.query(
+          'SELECT status, inspected_qty FROM job_card_quality_logs WHERE job_card_id = ?',
+          [id]
+        );
 
-      if (totalInspected < totalProduced) {
-        throw new Error(`Cannot complete Job Card: Insufficient quality inspection. Produced: ${totalProduced}, Inspected: ${totalInspected}.`);
+        if (qualityLogs.length === 0) {
+          throw new Error('Cannot complete Job Card: No quality inspection records found.');
+        }
+
+        if (qualityLogs.some(log => log.status !== 'APPROVED')) {
+          throw new Error('Cannot complete Job Card: Some quality inspection records are still pending approval.');
+        }
+
+        // 2. Check if total inspected matches total produced
+        const [producedSum] = await connection.query(
+          'SELECT SUM(produced_qty) as total FROM job_card_time_logs WHERE job_card_id = ?',
+          [id]
+        );
+
+        const totalProduced = parseFloat(producedSum[0]?.total || 0);
+        const totalInspected = qualityLogs.reduce((sum, log) => sum + parseFloat(log.inspected_qty || 0), 0);
+
+        if (totalInspected < totalProduced) {
+          throw new Error(`Cannot complete Job Card: Insufficient quality inspection. Produced: ${totalProduced}, Inspected: ${totalInspected}.`);
+        }
       }
 
       updates.push('status = ?');
@@ -141,6 +156,31 @@ const updateJobCardProgress = async (id, data) => {
     } else if (status) {
       updates.push('status = ?');
       params.push(status);
+    }
+
+    if (carrierName !== undefined) {
+      updates.push('carrier_name = ?');
+      params.push(carrierName);
+    }
+    if (trackingNumber !== undefined) {
+      updates.push('tracking_number = ?');
+      params.push(trackingNumber);
+    }
+    if (shippingNotes !== undefined) {
+      updates.push('shipping_notes = ?');
+      params.push(shippingNotes);
+    }
+    if (dispatchDate !== undefined) {
+      updates.push('dispatch_date = ?');
+      params.push(dispatchDate);
+    }
+    if (dispatchMode !== undefined) {
+      updates.push('dispatch_mode = ?');
+      params.push(dispatchMode);
+    }
+    if (dispatchQty !== undefined) {
+      updates.push('dispatch_qty = ?');
+      params.push(dispatchQty);
     }
 
     if (status === 'IN_PROGRESS') {
@@ -287,9 +327,12 @@ const getJobCardById = async (id) => {
             COALESCE(NULLIF(jc.setup_time, 0), 0) as setup_time,
             COALESCE(jc.time_uom, o.time_uom, 'Min') as time_uom, 
             COALESCE(NULLIF(jc.hourly_rate, 0), o.hourly_rate, 0) as hourly_rate, 
-            w.workstation_name, u.username as operator_name
+            w.workstation_name, u.username as operator_name,
+            so.project_name, c.company_name as client_name, so.shipping_address
      FROM job_cards jc
      JOIN work_orders wo ON jc.work_order_id = wo.id
+     LEFT JOIN sales_orders so ON wo.sales_order_id = so.id
+     LEFT JOIN companies c ON so.company_id = c.id
      LEFT JOIN operations o ON jc.operation_id = o.id
      LEFT JOIN workstations w ON jc.workstation_id = w.id
      LEFT JOIN users u ON jc.assigned_to = u.id
@@ -935,7 +978,7 @@ const getJobCardDetailAnalysis = async (idOrNo) => {
     const query = `SELECT jc.*, wo.wo_number, wo.item_name, wo.item_code, wo.priority, wo.quantity as wo_total_qty,
             COALESCE(o.operation_name, jc.operation_name) as op_name,
             w.workstation_name, u.username as operator_name,
-            so.project_name, c.company_name as client_name,
+            so.project_name, c.company_name as client_name, so.shipping_address,
             so.target_dispatch_date,
             (SELECT SUM(produced_qty) FROM job_card_time_logs WHERE job_card_id = jc.id) as actual_produced,
             (SELECT SUM(inspected_qty) FROM job_card_quality_logs WHERE job_card_id = jc.id AND status = 'APPROVED') as actual_accepted,

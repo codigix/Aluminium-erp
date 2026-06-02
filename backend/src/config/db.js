@@ -62,7 +62,12 @@ const ensureJobCardColumns = async () => {
       { name: 'dispatch_qty', definition: 'DECIMAL(12, 3) DEFAULT 0' },
       { name: 'cycle_time', definition: 'DECIMAL(12, 3) DEFAULT 0' },
       { name: 'setup_time', definition: 'DECIMAL(12, 3) DEFAULT 0' },
-      { name: 'public_id', definition: 'VARCHAR(100) UNIQUE NULL' }
+      { name: 'public_id', definition: 'VARCHAR(100) UNIQUE NULL' },
+      { name: 'carrier_name', definition: 'VARCHAR(255) NULL' },
+      { name: 'tracking_number', definition: 'VARCHAR(255) NULL' },
+      { name: 'shipping_notes', definition: 'TEXT NULL' },
+      { name: 'dispatch_date', definition: 'DATE NULL' },
+      { name: 'dispatch_mode', definition: "VARCHAR(100) DEFAULT 'Partial'" }
     ];
 
     const missing = requiredColumns.filter(column => !existing.has(column.name));
@@ -1431,6 +1436,7 @@ const ensureOperationsTable = async () => {
         std_time DECIMAL(10, 2) DEFAULT 0.00,
         time_uom ENUM('Hr', 'Min', 'Sec') DEFAULT 'Hr',
         hourly_rate DECIMAL(10, 2) DEFAULT 0.00,
+        operation_type VARCHAR(100) DEFAULT 'In-House',
         is_active TINYINT(1) DEFAULT 1,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -1444,6 +1450,12 @@ const ensureOperationsTable = async () => {
     if (!hasHourlyRate) {
       await connection.query('ALTER TABLE operations ADD COLUMN hourly_rate DECIMAL(10, 2) DEFAULT 0.00 AFTER time_uom');
       console.log('Added hourly_rate column to operations table');
+    }
+
+    const hasOperationType = columns.some(col => col.Field === 'operation_type');
+    if (!hasOperationType) {
+      await connection.query("ALTER TABLE operations ADD COLUMN operation_type VARCHAR(100) DEFAULT 'In-House' AFTER hourly_rate");
+      console.log('Added operation_type column to operations table');
     }
 
     console.log('Operations table synchronized');

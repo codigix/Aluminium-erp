@@ -10,7 +10,7 @@ import {
   AlertTriangle, Download, BarChart2, ShieldCheck, Info, Save, Upload
 } from 'lucide-react';
 import Swal from 'sweetalert2';
-import { successToast, errorToast } from '../utils/toast';
+import { successToast, errorToast, warningToast } from '../utils/toast';
 import { cleanProjectName } from '../utils/formatters';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
@@ -148,6 +148,23 @@ const JobCard = () => {
   const [warehouses, setWarehouses] = useState([]);
   const [previewDrawing, setPreviewDrawing] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const isShipmentOp = (jc) => {
+    if (!jc) return false;
+    const opName = (jc.operation_name || '').toLowerCase();
+    const opType = (jc.operation_type || '').toLowerCase();
+    return opName === 'shipment' || opName === 'dispatch' || opType === 'dispatch';
+  };
+  const [shipmentForm, setShipmentForm] = useState({
+    dispatchMode: 'Partial',
+    dispatchDate: new Date().toISOString().split('T')[0],
+    sourceWarehouseId: '',
+    targetWarehouseId: '',
+    dispatchQty: 0,
+    carrierName: '',
+    trackingNumber: '',
+    shippingNotes: '',
+    enableAutoTransfer: false
+  });
   const [expandedWOs, setExpandedWOs] = useState(new Set());
   const [isOutwardModalOpen, setIsOutwardModalOpen] = useState(false);
   const [isInwardModalOpen, setIsInwardModalOpen] = useState(false);
@@ -326,6 +343,77 @@ const JobCard = () => {
     const parts = time12h.split(' ');
     if (parts.length < 2) return 0;
     return parseTimeToMinutes(parts[0], parts[1]);
+  };
+
+  const calculateModalStdTimeSuggestion = () => {
+    const selectedOp = operations.find(op => String(op.id) === String(formData.operationId));
+    if (!selectedOp) return 0;
+    const cycleTime = parseFloat(selectedOp.cycle_time || selectedOp.std_time || 0);
+    const setupTime = parseFloat(selectedOp.setup_time || 0);
+    const qty = parseFloat(formData.plannedQty || 0);
+    return Math.round((cycleTime * qty) + setupTime);
+  };
+
+  const calculateModalOverlapAlert = () => {
+    if (!formData.startDate || !formData.startTime || !formData.endTime || !formData.workstationId) return null;
+
+    const ws = workstations.find(w => String(w.id) === String(formData.workstationId));
+    if (!ws) return null;
+    const capacity = parseInt(ws.capacity || 1);
+
+    const newStart = parseTimeToMinutes(formData.startTime, formData.startAMPM || 'AM');
+    const newEnd = parseTimeToMinutes(formData.endTime, formData.endAMPM || 'PM');
+
+    // Filter other active/planned job cards on the same workstation and same date
+    const overlappingWSActions = jobCards.filter(jc => {
+      if (String(jc.id) === String(formData.id)) return false; // Skip current
+      if (String(jc.workstation_id) !== String(formData.workstationId)) return false;
+      if (jc.status === 'COMPLETED' || jc.status === 'CANCELLED') return false;
+
+      // Check dates
+      const jcDate = jc.start_time ? jc.start_time.split('T')[0] : (jc.actual_start_date ? jc.actual_start_date.split('T')[0] : '');
+      if (formData.startDate !== jcDate) return false;
+
+      const jcStartStr = jc.start_time ? to12h(jc.start_time.split('T')[1]?.slice(0, 5)) : null;
+      const jcEndStr = jc.end_time ? to12h(jc.end_time.split('T')[1]?.slice(0, 5)) : null;
+      if (!jcStartStr || !jcEndStr) return false;
+
+      const busyStart = parseTimeToMinutes(jcStartStr.time, jcStartStr.ampm);
+      const busyEnd = parseTimeToMinutes(jcEndStr.time, jcEndStr.ampm);
+
+      return newStart < busyEnd && newEnd > busyStart;
+    });
+
+    if (overlappingWSActions.length >= capacity) {
+      return `Workstation "${ws.workstation_name}" is already fully scheduled during this period with Job Card(s): ${overlappingWSActions.map(o => o.job_card_no).join(', ')}`;
+    }
+
+    if (formData.assignedTo) {
+      const op = users.find(u => String(u.id) === String(formData.assignedTo));
+      const overlappingOpActions = jobCards.filter(jc => {
+        if (String(jc.id) === String(formData.id)) return false;
+        if (String(jc.assigned_to) !== String(formData.assignedTo)) return false;
+        if (jc.status === 'COMPLETED' || jc.status === 'CANCELLED') return false;
+
+        const jcDate = jc.start_time ? jc.start_time.split('T')[0] : (jc.actual_start_date ? jc.actual_start_date.split('T')[0] : '');
+        if (formData.startDate !== jcDate) return false;
+
+        const jcStartStr = jc.start_time ? to12h(jc.start_time.split('T')[1]?.slice(0, 5)) : null;
+        const jcEndStr = jc.end_time ? to12h(jc.end_time.split('T')[1]?.slice(0, 5)) : null;
+        if (!jcStartStr || !jcEndStr) return false;
+
+        const busyStart = parseTimeToMinutes(jcStartStr.time, jcStartStr.ampm);
+        const busyEnd = parseTimeToMinutes(jcEndStr.time, jcEndStr.ampm);
+
+        return newStart < busyEnd && newEnd > busyStart;
+      });
+
+      if (overlappingOpActions.length > 0) {
+        return `Operator "${op?.username || 'Selected User'}" is already scheduled on another job (${overlappingOpActions.map(o => o.job_card_no).join(', ')}) during this period`;
+      }
+    }
+
+    return null;
   };
 
   const calculateTotalMins = (start, startAMPM, end, endAMPM) => {
@@ -1394,6 +1482,26 @@ const JobCard = () => {
       remarks: jc.remarks || ''
     });
 
+    // Compute preceding sequence availability for shipment operations
+    const woJCs = jobCards
+      .filter(j => j.work_order_id === jc.work_order_id)
+      .sort((a, b) => a.id - b.id);
+    const currentIndex = woJCs.findIndex(j => j.id === jc.id);
+    const precedingJC = currentIndex > 0 ? woJCs[currentIndex - 1] : null;
+    const availableQty = precedingJC ? parseFloat(precedingJC.accepted_qty || precedingJC.produced_qty || 0) : parseFloat(jc.planned_qty || 0);
+
+    setShipmentForm({
+      dispatchMode: 'Partial',
+      dispatchDate: new Date().toISOString().split('T')[0],
+      sourceWarehouseId: precedingJC ? (precedingJC.target_warehouse_id || '') : '',
+      targetWarehouseId: jc.target_warehouse_id || '',
+      dispatchQty: availableQty,
+      carrierName: jc.carrier_name || '',
+      trackingNumber: jc.tracking_number || '',
+      shippingNotes: jc.shipping_notes || '',
+      enableAutoTransfer: false
+    });
+
     // Pre-fill forms
     const today = new Date().toISOString().split('T')[0];
     let diffDays = 1;
@@ -1409,6 +1517,9 @@ const JobCard = () => {
 
     const balanceWip = parseFloat(jc.planned_qty || 0) - parseFloat(jc.accepted_qty || 0);
 
+    const startInfo = jc.start_time ? to12h(jc.start_time.split('T')[1]?.slice(0, 5) || jc.start_time.split(' ')[1]?.slice(0, 5)) : { time: '08:00', ampm: 'AM' };
+    const endInfo = jc.end_time ? to12h(jc.end_time.split('T')[1]?.slice(0, 5) || jc.end_time.split(' ')[1]?.slice(0, 5)) : { time: '04:00', ampm: 'PM' };
+
     setTimeLogForm(prev => ({
       ...prev,
       logDate: today,
@@ -1416,10 +1527,10 @@ const JobCard = () => {
       operatorId: jc.assigned_to || '',
       workstationId: jc.workstation_id || '',
       producedQty: balanceWip > 0 ? balanceWip : 0,
-      startTime: '',
-      startAMPM: '',
-      endTime: '',
-      endAMPM: ''
+      startTime: startInfo.time,
+      startAMPM: startInfo.ampm,
+      endTime: endInfo.time,
+      endAMPM: endInfo.ampm
     }));
     setQualityLogForm(prev => ({ ...prev, checkDate: today, day: diffDays, shift: 'SHIFT_A', inspectedQty: 0, acceptedQty: 0, rejectedQty: 0, scrapQty: 0 }));
     setDowntimeLogForm(prev => ({ ...prev, downtimeDate: today, day: diffDays, shift: 'SHIFT_A', startTime: '', startAMPM: '', endTime: '', endAMPM: '', downtimeType: '', remarks: '' }));
@@ -1435,11 +1546,6 @@ const JobCard = () => {
     }
 
     // Auto-fetch next operation in sequence
-    const woJCs = jobCards
-      .filter(j => j.work_order_id === jc.work_order_id)
-      .sort((a, b) => a.id - b.id);
-
-    const currentIndex = woJCs.findIndex(j => j.id === jc.id);
     const nextJC = currentIndex !== -1 ? woJCs[currentIndex + 1] : null;
 
     const mode = nextJC?.execution_type || 'In-house';
@@ -1717,6 +1823,28 @@ const JobCard = () => {
       return acc + calculateISODuration(log.start_time, log.end_time);
     }, 0);
 
+    // Sequence & Handover Metrics (real database-driven)
+    const woJCs = jobCards
+      .filter(j => j.work_order_id === selectedJC.work_order_id)
+      .sort((a, b) => a.id - b.id);
+    const currentIndex = woJCs.findIndex(j => j.id === selectedJC.id);
+    const precedingJC = currentIndex > 0 ? woJCs[currentIndex - 1] : null;
+
+    const precedingStageName = precedingJC ? precedingJC.operation_name : 'Raw Materials Store';
+    const precedingSeq = precedingJC ? (precedingJC.sequence_no || precedingJC.operation_sequence || currentIndex) : 0;
+    
+    // Handover limits
+    const availableQty = precedingJC ? parseFloat(precedingJC.accepted_qty || precedingJC.produced_qty || 0) : parseFloat(selectedJC.planned_qty || 0);
+    const dispatchedQty = parseFloat(selectedJC.dispatch_qty || selectedJC.accepted_qty || 0);
+    const remainingQty = Math.max(0, parseFloat(selectedJC.planned_qty || 0) - dispatchedQty);
+    const isConstrained = availableQty < parseFloat(selectedJC.planned_qty || 0);
+
+    // Handover percentage
+    const handoverPercentage = selectedJC.planned_qty > 0 ? ((availableQty / selectedJC.planned_qty) * 100).toFixed(1) : '0.0';
+
+    // Check if other stages in the work order are completed
+    const isPlanFullyFulfilled = woJCs.filter(j => j.id !== selectedJC.id).every(j => j.status === 'COMPLETED');
+
     return (
       <div className="space-y-2 pb-12">
         {/* New Header UI */}
@@ -1744,752 +1872,1145 @@ const JobCard = () => {
             <span className="text-xs   ">Back</span>
           </button>
         </div>
+        {/* Warning Banners - ONLY for Shipment Operations */}
+        {isShipmentOp(selectedJC) && isConstrained && (
+          <div className="space-y-2 mt-2">
+            {/* Orange Banner: Operation Dependency Active */}
+            <div className="flex items-center justify-between p-3.5 bg-amber-50 text-amber-800 border border-amber-200/60 rounded-lg shadow-sm">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                <div className="text-xs">
+                  <span className="font-bold">Operation Dependency Active:</span>
+                  <span className="ml-1">Only {availableQty} units have been transferred from {precedingStageName}. Production is capped at this amount until more units are transferred.</span>
+                </div>
+              </div>
+              <span className="px-2 py-0.5 bg-amber-100 text-amber-800 text-[10px] font-bold rounded uppercase tracking-wider border border-amber-200">
+                Constrained
+              </span>
+            </div>
+
+            {/* Blue Banner: Production Constraints Active */}
+            <div className="flex items-center justify-between p-3.5 bg-indigo-50 text-indigo-800 border border-indigo-200/60 rounded-lg shadow-sm">
+              <div className="flex items-center gap-2">
+                <Info className="w-4 h-4 text-indigo-600 shrink-0" />
+                <div className="text-xs">
+                  <span className="font-bold">Production Constraints Active:</span>
+                  <span className="ml-1">You can only produce {availableQty} units because of preceding stage constraints. See the preceding stage handover section below for details.</span>
+                </div>
+              </div>
+              <span className="px-2 py-0.5 bg-indigo-100 text-indigo-800 text-[10px] font-bold rounded uppercase tracking-wider border border-indigo-200">
+                Limited by {precedingStageName}
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* Target Item Summary */}
-        <div className="bg-white p-2 rounded  border border-slate-100 shadow-sm">
-
-
-          <div className="flex gap-2 justify-between">
-            <div className="flex gap-2">
-
-              <div>
-                <p className="text-xs  text-slate-400   mb-0.5">Target Item</p>
-                <h3 className="text-xs  text-slate-900">{selectedJC.item_name}</h3>
-                <p className="text-xs  text-slate-500 mt-0.5">{selectedJC.drawing_no || 'S-BASEFRAMEASSEMBLY'}</p>
-              </div>
-            </div>
-
-            <div className="text-center">
-              <p className="text-xs  text-slate-400   mb-1.5">Planned</p>
-              <p className="text-xs  text-slate-900">
-                {selectedJC.planned_qty} <span className="text-xs text-slate-400">Units</span>
-              </p>
-            </div>
-            <div className="text-center">
-              <p className="text-xs  text-slate-400   mb-1.5">Produced</p>
-              <p className="text-xs  text-slate-900">
-                {selectedJC.produced_qty || 0} <span className="text-xs text-slate-400">Units</span>
-              </p>
-            </div>
-            <div className="text-center">
-              <p className="text-xs  text-slate-400   mb-1.5">Accepted</p>
-              <p className="text-sm  text-emerald-600">
-                {selectedJC.accepted_qty || 0} <span className="text-xs text-emerald-400">Units</span>
-              </p>
-            </div>
-            <div className="text-center">
-              <p className="text-xs  text-slate-400   mb-1.5 text-indigo-400">Transferred</p>
-              <p className="text-sm  text-indigo-600">
-                {selectedJC.transferred_qty || 0} <span className="text-xs text-indigo-400">Units</span>
-              </p>
-            </div>
-            <div className="text-center">
-              <p className="text-xs  text-amber-500   mb-1.5">Balance WIP</p>
-              <p className="text-sm  text-amber-600">
-                {balanceWip.toFixed(2)} <span className="text-xs text-amber-400">Units</span>
-              </p>
-            </div>
-            <div className="text-center border-l border-slate-100">
-              <p className="text-xs text-indigo-500 mb-1.5 ">Total Execution Time</p>
-              <p className="text-xs  text-slate-400 mb-1  italic">(For all units)</p>
-              <div className="flex flex-col items-center">
-                <p className="text-sm  text-indigo-600 ">
-                  {((parseFloat(selectedJC.cycle_time || selectedJC.std_time || 0) * parseFloat(selectedJC.planned_qty || 0)) + parseFloat(selectedJC.setup_time || 0)).toFixed(0)} <span className="text-xs  text-indigo-400 lowercase">Min</span>
-                </p>
-                <div className="text-[9px] text-slate-400 mt-1 flex gap-1">
-                  <span>C: {(selectedJC.cycle_time || selectedJC.std_time || 0)}m</span>
-                  <span>•</span>
-                  <span>S: {(selectedJC.setup_time || 0)}m</span>
-                </div>
-              </div>
-            </div>
-            <div className="text-center border-l border-slate-100">
-              <p className="text-xs text-slate-400 mb-1.5 ">Net Time (Per Unit)</p>
-              <p className="text-sm  text-slate-600">
-                {parseFloat(selectedJC.cycle_time || selectedJC.std_time || 0).toFixed(0)} <span className="text-xs  text-slate-400 lowercase">{(selectedJC.time_uom || 'Min').toLowerCase()}</span>
-                <span className="text-[9px] text-slate-400 ml-1">/ unit</span>
-              </p>
-            </div>
-            <div className="text-right border-l border-slate-100 pl-8 min-w-[120px]">
-              <p className="text-xs  text-slate-400   mb-1">Current Status</p>
-              <div className="flex items-center justify-end gap-1.5">
-                <span className={`w-2 h-2 rounded animate-pulse shrink-0 ${selectedJC.status === 'IN_PROGRESS' ? 'bg-amber-500' :
-                  selectedJC.status === 'COMPLETED' ? 'bg-emerald-500' :
-                    'bg-slate-400'
-                  }`}></span>
-                <p className={`text-sm   ${selectedJC.status === 'IN_PROGRESS' ? 'text-amber-600' :
-                  selectedJC.status === 'COMPLETED' ? 'text-emerald-600' :
-                    'text-slate-600'
-                  }`}>
-                  {selectedJC.status === 'IN_PROGRESS' ? 'Running' : selectedJC.status === 'COMPLETED' ? 'Completed' : selectedJC.status}
-                </p>
-              </div>
-              <p className="text-xs   text-slate-400 mt-1  ">{selectedJC.operation_name}</p>
-            </div>
-          </div>
-        </div>
-
-
-        {/* Efficiency, Quality Yield, Productivity Row */}
-        {/* <div className="grid grid-cols-3 gap-6">
-          <div className="bg-white p-5 rounded  border border-slate-100 shadow-sm flex items-center gap-2">
-            <div className="w-5 h-5 bg-rose-50 rounded  flex items-center justify-center text-rose-500">
-              <Zap className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-baseline gap-2">
-                <span className="text-xl  text-slate-900">
-                  {totalActualMins > 0 ? Math.round((totalStdMins / totalActualMins) * 100) : 0}%
-                </span>
-                <span className="text-xs text-slate-400  ">{totalStdMins} / {totalActualMins} MIN</span>
-              </div>
-              <p className="text-xs  text-slate-400   mt-0.5">Efficiency</p>
-            </div>
-          </div>
-
-          <div className="bg-white p-5 rounded  border border-slate-100 shadow-sm flex items-center gap-2">
-            <div className="w-5 h-5 bg-amber-50 rounded  flex items-center justify-center text-amber-500">
-              <Target className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-baseline gap-2">
-                <span className="text-xl  text-slate-900">
-                  {selectedJC.planned_qty > 0 ? Math.round(((selectedJC.accepted_qty || 0) / selectedJC.planned_qty) * 100) : 0}%
-                </span>
-                <span className="text-xs text-slate-400  ">Acceptance Rate</span>
-              </div>
-              <p className="text-xs  text-slate-400   mt-0.5">Quality Yield</p>
-            </div>
-          </div>
-
-          <div className="bg-white p-5 rounded  border border-slate-100 shadow-sm flex items-center gap-2">
-            <div className="w-5 h-5 bg-indigo-50 rounded  flex items-center justify-center text-indigo-500">
-              <BarChart2 className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-baseline gap-2">
-                <span className="text-xl  text-slate-900">
-                  {totalActualMins > 0 ? (parseFloat(selectedJC.produced_qty || 0) / (totalActualMins / 60)).toFixed(1) : 0}
-                </span>
-                <span className="text-xs text-slate-400  ">Units Per Hour</span>
-              </div>
-              <p className="text-xs  text-slate-400   mt-0.5">Productivity</p>
-            </div>
-          </div>
-        </div> */}
-
-        {/* Sections */}
-        <div className="space-y-12 mt-12">
-          {/* 1. Add Time Log Section */}
-          <section className="space-y-2">
-            <div className="flex items-center gap-2 px-1">
-
-              <h2 className="text-sm  text-slate-800  ">Add Time Log</h2>
-            </div>
-
-            <div className="bg-white rounded  border border-slate-100 shadow-sm">
-              <div className="p-2">
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-2 items-end">
-                  <div className='col-span-3'>
-                    <FormControl label="Day & Date" required>
-                      <div className="flex items-center  gap-1">
-                        <input
-                          type="number"
-                          value={timeLogForm.day}
-                          onChange={e => setTimeLogForm({ ...timeLogForm, day: e.target.value })}
-                          className="p-2 w-10 bg-white border border-slate-200 rounded text-xs outline-none focus:border-indigo-500 "
-                        />
-                        <input
-                          type="date"
-                          value={timeLogForm.logDate}
-                          onChange={e => handleDateChange('time', e.target.value)}
-                          className="flex-1 p-2 bg-white border  border-slate-200 rounded text-xs outline-none focus:border-indigo-500"
-                        />
-                      </div>
-                    </FormControl>
-                  </div>
-
-                  <div className='col-span-3'>
-                    <FormControl label="Operator" required>
-                      <SearchableSelect
-                        options={users.map(u => {
-                          let isBusyNow = false;
-                          let busyRange = '';
-
-                          // 1. Check current job card's logged times
-                          logs.timeLogs?.forEach(log => {
-                            if (log.operator_id !== u.id) return;
-
-                            const logDateStr = log.log_date?.split('T')[0];
-                            if (timeLogForm.logDate && logDateStr && timeLogForm.logDate !== logDateStr) {
-                              return;
-                            }
-
-                            const busyStartStr = formatLocalTime(log.start_time);
-                            const busyEndStr = formatLocalTime(log.end_time);
-
-                            const busyStart = parse12hMinutes(busyStartStr);
-                            const busyEnd = parse12hMinutes(busyEndStr);
-
-                            const newStart = parseTimeToMinutes(timeLogForm.startTime || '08:00', timeLogForm.startAMPM || 'AM');
-                            const newEnd = parseTimeToMinutes(timeLogForm.endTime || '04:00', timeLogForm.endAMPM || 'PM');
-
-                            if (newStart < busyEnd && newEnd > busyStart) {
-                              isBusyNow = true;
-                              busyRange = `${busyStartStr} – ${busyEndStr} (${selectedJC?.job_card_no || 'Current Job'})`;
-                            }
-                          });
-
-                          // 2. Check other in-progress job cards
-                          if (!isBusyNow) {
-                            const busyJobs = jobCards.filter(jc =>
-                              jc.id !== selectedJC?.id &&
-                              jc.assigned_to === u.id &&
-                              jc.status === 'IN_PROGRESS'
-                            );
-
-                            for (const jc of busyJobs) {
-                              const busyDate = (jc.latest_log_start_time || jc.start_time || '').split(/[ T]/)[0];
-                              if (timeLogForm.logDate && busyDate && timeLogForm.logDate !== busyDate) {
-                                continue;
-                              }
-
-                              const busyEndStr = getEstimatedEndTime(jc);
-                              const busyStartStr = formatLocalTime(jc.latest_log_start_time || jc.start_time);
-
-                              const busyStart = parse12hMinutes(busyStartStr);
-                              const busyEnd = parse12hMinutes(busyEndStr);
-
-                              const newStart = parseTimeToMinutes(timeLogForm.startTime || '08:00', timeLogForm.startAMPM || 'AM');
-                              const newEnd = parseTimeToMinutes(timeLogForm.endTime || '04:00', timeLogForm.endAMPM || 'PM');
-
-                              if (newStart < busyEnd && newEnd > busyStart) {
-                                isBusyNow = true;
-                                busyRange = `${busyStartStr} – ${busyEndStr} (${jc.job_card_no})`;
-                                break;
-                              }
-                            }
-                          }
-
-                          return {
-                            value: u.id,
-                            label: u.username,
-                            subLabel: isBusyNow
-                              ? `🔴 Busy (${busyRange})`
-                              : '🟢 Available',
-                          };
-                        })}
-                        subLabelField="subLabel"
-                        value={timeLogForm.operatorId}
-                        onChange={(e) => setTimeLogForm({ ...timeLogForm, operatorId: e.target.value })}
-                        placeholder="Select Operator..."
-                      />
-                    </FormControl>
-                  </div>
-                  <div className='col-span-2'>
-                    <FormControl label="Workstation" required>
-                      <SearchableSelect
-                        options={workstations.map(w => {
-                          const capacity = parseInt(w.capacity || 1);
-                          let overlappingCount = 0;
-                          let busyDetails = '';
-
-                          // 1. Check current job card's logged times
-                          logs.timeLogs?.forEach(log => {
-                            if (Number(log.workstation_id) !== Number(w.id)) return;
-
-                            const logDateStr = log.log_date?.split('T')[0];
-                            if (timeLogForm.logDate && logDateStr && timeLogForm.logDate !== logDateStr) {
-                              return;
-                            }
-
-                            const busyStartStr = formatLocalTime(log.start_time);
-                            const busyEndStr = formatLocalTime(log.end_time);
-
-                            const busyStart = parse12hMinutes(busyStartStr);
-                            const busyEnd = parse12hMinutes(busyEndStr);
-
-                            const newStart = parseTimeToMinutes(timeLogForm.startTime || '08:00', timeLogForm.startAMPM || 'AM');
-                            const newEnd = parseTimeToMinutes(timeLogForm.endTime || '04:00', timeLogForm.endAMPM || 'PM');
-
-                            if (newStart < busyEnd && newEnd > busyStart) {
-                              overlappingCount++;
-                              busyDetails = `${busyStartStr} – ${busyEndStr} (${selectedJC?.job_card_no || 'Current Job'})`;
-                            }
-                          });
-
-                          // 2. Check other in-progress job cards
-                          const activeJobs = jobCards.filter(jc =>
-                            jc.id !== selectedJC?.id &&
-                            Number(jc.workstation_id) === Number(w.id) &&
-                            jc.status === 'IN_PROGRESS'
-                          );
-
-                          activeJobs.forEach(jc => {
-                            const busyDate = (jc.latest_log_start_time || jc.start_time || '').split(/[ T]/)[0];
-                            if (timeLogForm.logDate && busyDate && timeLogForm.logDate !== busyDate) {
-                              return;
-                            }
-
-                            const busyEndStr = getEstimatedEndTime(jc);
-                            const busyStartStr = formatLocalTime(jc.latest_log_start_time || jc.start_time);
-
-                            const busyStart = parse12hMinutes(busyStartStr);
-                            const busyEnd = parse12hMinutes(busyEndStr);
-
-                            const newStart = parseTimeToMinutes(timeLogForm.startTime || '08:00', timeLogForm.startAMPM || 'AM');
-                            const newEnd = parseTimeToMinutes(timeLogForm.endTime || '04:00', timeLogForm.endAMPM || 'PM');
-
-                            if (newStart < busyEnd && newEnd > busyStart) {
-                              overlappingCount++;
-                              busyDetails = `${busyStartStr} – ${busyEndStr} (${jc.job_card_no})`;
-                            }
-                          });
-
-                          return {
-                            value: w.id,
-                            label: w.workstation_name,
-                            subLabel: overlappingCount > 0
-                              ? `🔴 Busy (${busyDetails})`
-                              : '🟢 Available',
-                          };
-                        })}
-                        subLabelField="subLabel"
-                        value={timeLogForm.workstationId}
-                        onChange={(e) => handleWorkstationChange(e.target.value)}
-                        placeholder="Select Machine..."
-                      />
-                    </FormControl>
-                  </div>
-                  <div className='col-span-2'>
-                    <FormControl label="Shift" required>
-                      <div className="flex items-center gap-1">
-                        <select value={timeLogForm.shift} onChange={e => setTimeLogForm({ ...timeLogForm, shift: e.target.value })} className="flex-1 p-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-indigo-500 appearance-none">
-                          <option value="SHIFT_A">A</option>
-                          <option value="SHIFT_B">B</option>
-                          <option value="SHIFT_C">C</option>
-                        </select>
-                        <button className="p-2 bg-indigo-50 text-indigo-600 rounded border border-indigo-100">
-                          <ChevronRight className="w-3 h-3" />
-                        </button>
-                      </div>
-                    </FormControl>
-                  </div>
-                  <div className='col-span-2'>
-                    <FormControl label="Produce Qty" required>
-                      <div className="relative">
-                        <input
-                          type="number"
-                          value={timeLogForm.producedQty}
-                          onChange={e => {
-                            const newQty = e.target.value;
-                            setTimeLogForm({ ...timeLogForm, producedQty: newQty });
-                            if (timeLogForm.startTime) {
-                              calculateAutoEndTime(timeLogForm.startTime, timeLogForm.startAMPM || 'AM', newQty);
-                            }
-                          }}
-                          className="w-full p-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-indigo-500"
-                        />
-                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs  text-slate-400 ">Units</span>
-                      </div>
-                    </FormControl>
-                  </div>
-                  <div className='col-span-4'>
-                    <div className="flex justify-between">
-                      <FormControl label="Production Period" required>
-                        <div className="flex items-center gap-2">
-                          <div className="flex-1">
-                            <TimePicker
-                              value={timeLogForm.startTime}
-                              ampmValue={timeLogForm.startAMPM}
-                              placeholder="08:00"
-                              placeholderAMPM="AM"
-                              onTimeChange={(newTime) => {
-                                setTimeLogForm({ ...timeLogForm, startTime: newTime, startAMPM: timeLogForm.startAMPM || 'AM' });
-                                calculateAutoEndTime(newTime, timeLogForm.startAMPM || 'AM', timeLogForm.producedQty);
-                              }}
-                              onAMPMChange={(newAMPM) => {
-                                setTimeLogForm({ ...timeLogForm, startAMPM: newAMPM });
-                                calculateAutoEndTime(timeLogForm.startTime, newAMPM, timeLogForm.producedQty);
-                              }}
-                            />
-                          </div>
-                          <ChevronRight className="w-3 h-3 text-slate-300" />
-                          <div className="flex-1">
-                            <TimePicker
-                              value={timeLogForm.endTime}
-                              ampmValue={timeLogForm.endAMPM}
-                              placeholder="04:00"
-                              placeholderAMPM="PM"
-                              onTimeChange={(newTime) => setTimeLogForm({ ...timeLogForm, endTime: newTime, endAMPM: timeLogForm.endAMPM || 'PM' })}
-                              onAMPMChange={(newAMPM) => setTimeLogForm({ ...timeLogForm, endAMPM: newAMPM })}
-                            />
-                          </div>
-                        </div>
-                      </FormControl>
-
-                    </div>
-
-                  </div>
-                  <div className='col-span-1'>
-                    <FormControl label="Execution (P)">
-                      <div className="p-2 bg-indigo-50 border border-indigo-100 rounded text-xs text-indigo-700 ">
-                        {(() => {
-                          const cycleTime = parseFloat(selectedJC.cycle_time || selectedJC.std_time || 0);
-                          const setupTime = parseFloat(selectedJC.setup_time || 0);
-                          const qty = parseFloat(timeLogForm.producedQty || 0);
-                          const total = (cycleTime * qty) + setupTime;
-                          return (
-                            <div className="flex flex-col">
-                              <span>{Math.round(total)}m</span>
-                              {qty > 0 && (
-                                <span className="text-[10px] text-indigo-400 font-normal">
-                                  ({cycleTime}m × {qty}) + {setupTime}m
-                                </span>
-                              )}
-                            </div>
-                          );
-                        })()}
-                      </div>
-                    </FormControl>
-                  </div>
-                  <div className='col-span-1'>
-                    <FormControl label="Actual Mins">
-                      <input
-                        type="text"
-                        placeholder="480"
-                        value={calculateTotalMins(timeLogForm.startTime, timeLogForm.startAMPM, timeLogForm.endTime, timeLogForm.endAMPM) || ''}
-                        readOnly
-                        className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs outline-none  text-slate-600 "
-                      />
-                    </FormControl>
-                  </div>
-                  <div className='col-span-6'>
-                    <div className='flex gap-2'>
-                      <button
-                        onClick={handleStartMachine}
-                        className={`p-2 rounded transition-all text-xs flex items-center gap-2 h-[38px] ${machineStatus === 'RUNNING' ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-600 hover:bg-rose-50 hover:text-rose-600'
-                          }`}
-                        title="Start Machine"
-                      >
-                        <Play className="w-4 h-4 fill-current" />
-                        Start
-                      </button>
-                      <button
-                        onClick={() => setMachineStatus("STOPPED")}
-                        className={`p-2 rounded transition-all text-xs flex items-center gap-2 h-[38px] ${machineStatus === 'STOPPED' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600 hover:bg-amber-50 hover:text-amber-600'
-                          }`}
-                        title="Stop Machine"
-                      >
-                        <Pause className="w-4 h-4 fill-current" />
-                        Stop
-                      </button>
-                      <button
-                        onClick={() => setMachineStatus("AVAILABLE")}
-                        className={`p-2 rounded transition-all text-xs flex items-center gap-2 h-[38px] ${machineStatus === 'AVAILABLE' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600 hover:bg-emerald-50 hover:text-emerald-600'
-                          }`}
-                        title="Complete Production"
-                      >
-                        <Check className="w-4 h-4" />
-                        Complete
-                      </button>
-                      <button
-                        onClick={() => addTimeLog(timeLogForm)}
-                        className="px-10 py-2.5 bg-indigo-600 text-white rounded  hover:bg-indigo-700 transition-all text-xs    shadow-lg shadow-indigo-100 flex items-center gap-2 h-[38px]"
-                      >
-                        <Monitor className="w-4 h-4" />
-                        Record Time
-                      </button>
-                    </div>
+        <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm mt-3">
+          {isShipmentOp(selectedJC) ? (
+            <div className="space-y-4">
+              {/* Target Item Header row */}
+              <div className="flex justify-between items-center flex-wrap gap-2">
+                <div>
+                  <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">Target Item (Shipment Operation)</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <h3 className="text-base text-slate-900 font-bold">{selectedJC.item_name}</h3>
+                    <span className="px-2 py-0.5 bg-slate-100 text-slate-700 text-[10px] font-semibold rounded border border-slate-200">
+                      {selectedJC.drawing_no || 'S-BASEFRAMEASSEMBLY'}
+                    </span>
+                    <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 text-[10px] font-bold rounded border border-indigo-100 uppercase">
+                      {(selectedJC.execution_type || selectedJC.execution_mode || 'In-House')}
+                    </span>
                   </div>
                 </div>
 
-                <div className="flex items-end gap-2">
-
-                  <div className="flex items-center gap-2">
-
-                  </div>
-                </div>
-
-                <div className=" overflow-hidden rounded-xl border border-slate-100 shadow-sm bg-white">
-                  <DataTable
-                    columns={timeLogColumns}
-                    data={logs.timeLogs}
-                    loading={loading}
-                    pageSize={10}
-                    emptyMessage="No time logs recorded for this operation"
-                  />
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* 2. Quality & Rejection Entry Section */}
-          <section className="space-y-2">
-            <div className="flex items-center justify-between gap-6 p-4 bg-white rounded border border-slate-100 shadow-sm">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 bg-emerald-50 rounded flex items-center justify-center text-emerald-600">
-                  <ShieldCheck className="w-4 h-4" />
-                </div>
-                <h2 className="text-sm text-slate-800">Quality & Rejection Entry</h2>
-              </div>
-
-              <div className="flex items-center gap-4">
-                {qcSuccessMessage && (
-                  <span className="text-emerald-600 text-xs  animate-pulse">
-                    ✅ {qcSuccessMessage}
-                  </span>
-                )}
-                <button
-                  onClick={sendToQuality}
-                  className="px-6 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 transition-all text-xs shadow-lg shadow-emerald-100 flex items-center gap-2"
-                >
-                  <Save className="w-4 h-4" />
-                  Send to Quality
-                </button>
-              </div>
-            </div>
-          </section>
-
-          <section className="mt-8 overflow-hidden rounded-xl border border-slate-100 shadow-sm bg-white">
-            <DataTable
-              columns={qualityLogColumns}
-              data={logs.qualityLogs}
-              loading={loading}
-              pageSize={10}
-              emptyMessage="No quality inspection logs found"
-            />
-          </section>
-
-          {/* 3. Operational Downtime Section */}
-          <section className="space-y-2">
-            <div className="flex items-center gap-2 px-1">
-              <div className="w-8 h-8 bg-amber-50 rounded  flex items-center justify-center text-amber-600">
-                <AlertTriangle className="w-4 h-4" />
-              </div>
-              <h2 className="text-sm  text-slate-800  ">Operational Downtime</h2>
-            </div>
-
-            <div className="bg-white rounded  border border-slate-100 shadow-sm">
-              <div className="p-6">
-                <div className="grid grid-cols-1 md:grid-cols-6 gap-2 mb-6 border-b border-slate-50 pb-6">
-                  <FormControl label="Day & Date" required>
-                    <div className="flex items-center gap-1">
-                      <input
-                        type="number"
-                        value={downtimeLogForm.day}
-                        onChange={e => setDowntimeLogForm({ ...downtimeLogForm, day: e.target.value })}
-                        className="w-14 px-2 py-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-amber-500 "
-                      />
-                      <input
-                        type="date"
-                        value={downtimeLogForm.downtimeDate}
-                        onChange={e => handleDateChange('downtime', e.target.value)}
-                        className="flex-1 p-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-amber-500"
-                      />
-                    </div>
-                  </FormControl>
-                  <FormControl label="Shift" required>
-                    <div className="flex items-center gap-1">
-                      <select value={downtimeLogForm.shift} onChange={e => setDowntimeLogForm({ ...downtimeLogForm, shift: e.target.value })} className="flex-1 p-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-amber-500 appearance-none">
-                        <option value="SHIFT_A">A</option>
-                        <option value="SHIFT_B">B</option>
-                        <option value="SHIFT_C">C</option>
-                      </select>
-                      <button className="p-2 bg-indigo-50 text-indigo-600 rounded border border-indigo-100">
-                        <ChevronRight className="w-3 h-3" />
-                      </button>
-                    </div>
-                  </FormControl>
-                  <FormControl label="Downtime Type" required>
-                    <select value={downtimeLogForm.downtimeType} onChange={e => setDowntimeLogForm({ ...downtimeLogForm, downtimeType: e.target.value })} className="w-full p-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-amber-500">
-                      <option value="">Select Type</option>
-                      <option value="Planned Downtime">Planned Downtime</option>
-                      <option value="Unplanned Downtime">Unplanned Downtime</option>
-                      <option value="Breakdown">Breakdown</option>
-                    </select>
-                  </FormControl>
-                  <FormControl label="Start Time" required>
-                    <TimePicker
-                      value={downtimeLogForm.startTime}
-                      ampmValue={downtimeLogForm.startAMPM}
-                      placeholder="08:00"
-                      placeholderAMPM="AM"
-                      onTimeChange={(newTime) => setDowntimeLogForm({ ...downtimeLogForm, startTime: newTime, startAMPM: downtimeLogForm.startAMPM || 'AM' })}
-                      onAMPMChange={(newAMPM) => setDowntimeLogForm({ ...downtimeLogForm, startAMPM: newAMPM })}
-                    />
-                  </FormControl>
-                  <FormControl label="End Time" required>
-                    <TimePicker
-                      value={downtimeLogForm.endTime}
-                      ampmValue={downtimeLogForm.endAMPM}
-                      placeholder="04:00"
-                      placeholderAMPM="PM"
-                      onTimeChange={(newTime) => setDowntimeLogForm({ ...downtimeLogForm, endTime: newTime, endAMPM: downtimeLogForm.endAMPM || 'PM' })}
-                      onAMPMChange={(newAMPM) => setDowntimeLogForm({ ...downtimeLogForm, endAMPM: newAMPM })}
-                    />
-                  </FormControl>
-                  <FormControl label="Total Mins">
-                    <input
-                      type="text"
-                      placeholder="480"
-                      readOnly
-                      value={calculateTotalMins(downtimeLogForm.startTime, downtimeLogForm.startAMPM, downtimeLogForm.endTime, downtimeLogForm.endAMPM) || ''}
-                      className="w-full p-2 bg-slate-50 border border-slate-100 rounded text-xs outline-none  text-slate-400"
-                    />
-                  </FormControl>
-                </div>
-
-                <div className="flex items-center justify-between gap-6">
-                  <div className="flex-1">
-                    {logs.qualityLogs?.some(log => log.status?.trim() !== 'APPROVED') && (
-                      <div className="flex items-start gap-2 p-2 bg-amber-50 rounded  border border-amber-100">
-                        <div className="w-5 h-5 bg-amber-100 rounded flex items-center justify-center shrink-0 mt-0.5">
-                          <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
-                        </div>
-                        <div>
-                          <p className="text-xs   text-amber-800   ">QC Verification Pending</p>
-                          <p className="text-xs text-amber-700 leading-relaxed mt-0.5 ">
-                            Cannot record downtime while quality logs are pending approval. Please verify quality entries first.
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                <div className="flex gap-2">
                   <button
-                    onClick={() => addDowntimeLog(downtimeLogForm)}
-                    disabled={logs.qualityLogs?.some(log => log.status?.trim() !== 'APPROVED')}
-                    className={`px-10 py-2.5 rounded  transition-all text-xs    shadow-lg flex items-center gap-2 h-[38px] ${logs.qualityLogs?.some(log => log.status?.trim() !== 'APPROVED')
-                      ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
-                      : 'bg-orange-600 text-white hover:bg-orange-700 shadow-orange-100'
-                      }`}
+                    type="button"
+                    onClick={() => {
+                      successToast("Ready to update progress!");
+                    }}
+                    className="px-3.5 py-2 bg-slate-900 text-white hover:bg-slate-800 rounded-lg text-xs font-bold transition-all shadow-sm active:scale-95"
                   >
-                    <Clock className="w-4 h-4" />
-                    Record Downtime
+                    Update Progress
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShipmentForm(prev => ({ ...prev, dispatchQty: availableQty }));
+                      successToast(`Transferred ${availableQty} Units to Dispatch Qty!`);
+                    }}
+                    className="px-3.5 py-2 bg-emerald-600 text-white hover:bg-emerald-700 rounded-lg text-xs font-bold transition-all shadow-sm active:scale-95 flex items-center gap-1.5"
+                  >
+                    <svg className="w-3.5 h-3.5 text-emerald-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                    </svg>
+                    Transfer {availableQty} Units
                   </button>
                 </div>
-
-                <div className="mt-8 overflow-hidden rounded-xl border border-slate-100 shadow-sm bg-white">
-                  <DataTable
-                    columns={downtimeLogColumns}
-                    data={logs.downtimeLogs}
-                    loading={loading}
-                    pageSize={10}
-                    emptyMessage="No downtime recorded for this session"
-                  />
-                </div>
               </div>
-            </div>
-          </section>
 
-          {/* 4. Next Stage Configuration Section */}
-          <section className="space-y-2">
-            <div className="flex items-center justify-between px-1">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 bg-indigo-50 rounded  flex items-center justify-center text-indigo-600">
-                  <Play className="w-4 h-4" />
+              {/* Thin divider line */}
+              <div className="border-t border-slate-100 my-2"></div>
+
+              {/* Stats Columns row */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-1">
+                <div>
+                  <p className="text-[11px] text-slate-400 font-medium">Ready for Dispatch</p>
+                  <p className="text-lg font-bold text-slate-900 mt-0.5">
+                    <span className="text-amber-500 font-extrabold">{availableQty}</span>
+                    <span className="text-slate-400 text-sm font-normal"> / {selectedJC.planned_qty} Units</span>
+                  </p>
                 </div>
-                <h2 className="text-sm  text-slate-800  ">Next Stage Configuration</h2>
-                <span className=" bg-emerald-50 text-emerald-600 rounded text-xs   border border-emerald-100">Active</span>
-              </div>
-              <div className="flex items-center gap-6">
-                <button
-                  onClick={handleReadyForDispatch}
-                  disabled={logs.qualityLogs.some(log => log.status !== 'APPROVED')}
-                  className={`flex items-center gap-2 p-1.5 border rounded  transition-all ${logs.qualityLogs.some(log => log.status !== 'APPROVED')
-                    ? 'bg-slate-50 border-slate-100 text-slate-300 cursor-not-allowed'
-                    : 'bg-white border-emerald-100 text-emerald-600 shadow-sm hover:bg-emerald-50'
-                    }`}
-                  title={logs.qualityLogs.some(log => log.status !== 'APPROVED') ? 'Approve all quality records to proceed' : 'Mark Ready'}
-                >
-                  <Zap className={`w-3.5 h-3.5 ${logs.qualityLogs.some(log => log.status !== 'APPROVED') ? 'text-slate-200' : 'text-emerald-500 animate-pulse'}`} />
-                  <span className="text-xs   ">Ready for Dispatch</span>
-                </button>
-                <div className="text-right">
-                  <p className="flex items-center gap-1.5 text-xs  text-slate-400  ">
-                    <Box className="w-3 h-3" />
-                    Transferred so far: <span className="text-slate-700">{(selectedJC.transferred_qty || 0).toFixed(2)}</span>
+
+                <div>
+                  <p className="text-[11px] text-slate-400 font-medium">Remaining</p>
+                  <p className="text-lg font-bold text-rose-600 mt-0.5">
+                    {remainingQty} <span className="text-xs text-rose-400 font-normal">Units</span>
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-[11px] text-slate-400 font-medium">Ready for Dispatch</p>
+                  <p className="text-lg font-bold text-blue-600 mt-0.5">
+                    {availableQty} <span className="text-xs text-blue-400 font-normal">Units</span>
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-[11px] text-slate-400 font-medium">Dispatched</p>
+                  <p className="text-lg font-bold text-indigo-600 mt-0.5">
+                    {dispatchedQty} <span className="text-xs text-indigo-400 font-normal">Units</span>
                   </p>
                 </div>
               </div>
             </div>
-
-            <p className="text-xs  text-slate-400 italic px-1">Specify destination and operational parameters for the next manufacturing phase</p>
-
-            <div className="bg-white rounded  border border-slate-100 shadow-sm p-2">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                <FormControl label="Next Operation" required>
-                  <SearchableSelect
-                    options={operations.map(o => ({ value: o.id, label: o.operation_name }))}
-                    value={nextStageForm.nextOperationId}
-                    onChange={(e) => setNextStageForm({ ...nextStageForm, nextOperationId: e.target.value })}
-                    placeholder="Select Next Op"
-                  />
-                </FormControl>
-                <FormControl label="Assign Operator">
-                  <SearchableSelect
-                    options={users.map(u => ({ value: u.id, label: u.username }))}
-                    value={nextStageForm.assignOperatorId}
-                    onChange={(e) => setNextStageForm({ ...nextStageForm, assignOperatorId: e.target.value })}
-                    placeholder="Search Operator..."
-                  />
-                </FormControl>
-                <FormControl label="Target Warehouse" required>
-                  <SearchableSelect
-                    options={warehouses.map(w => ({ value: w.id, label: w.warehouse_name }))}
-                    value={nextStageForm.targetWarehouseId}
-                    onChange={(e) => setNextStageForm({ ...nextStageForm, targetWarehouseId: e.target.value })}
-                    placeholder="Select Destination"
-                  />
-                </FormControl>
-                <div className="space-y-2">
-                  <label className="text-xs  text-slate-400  ">Execution Mode:</label>
-                  <div className="flex items-center gap-2 p-1 bg-slate-50 rounded  w-fit">
-                    <button
-                      onClick={() => setNextStageForm({ ...nextStageForm, executionMode: 'In-house' })}
-                      className={`flex items-center gap-2 p-1.5 rounded-md text-xs    transition-all ${nextStageForm.executionMode === 'In-house' ? 'bg-white border border-indigo-100 text-indigo-600 shadow-sm' : 'text-slate-500'}`}
-                    >
-                      <span className={`w-2.5 h-2.5 rounded ${nextStageForm.executionMode === 'In-house' ? 'bg-indigo-500' : 'border-2 border-slate-300'}`}></span>
-                      In-house
-                    </button>
-                    <button
-                      onClick={() => setNextStageForm({ ...nextStageForm, executionMode: 'Outsource' })}
-                      className={`flex items-center gap-2 p-1.5 rounded-md text-xs    transition-all ${nextStageForm.executionMode === 'Outsource' ? 'bg-white border border-indigo-100 text-indigo-600 shadow-sm' : 'text-slate-500'}`}
-                    >
-                      <span className={`w-2.5 h-2.5 rounded ${nextStageForm.executionMode === 'Outsource' ? 'bg-indigo-500' : 'border-2 border-slate-300'}`}></span>
-                      Outsource
-                    </button>
-                  </div>
+          ) : (
+            <div className="flex gap-2 justify-between">
+              <div className="flex gap-2">
+                <div>
+                  <p className="text-xs  text-slate-400   mb-0.5">Target Item</p>
+                  <h3 className="text-xs  text-slate-900">{selectedJC.item_name}</h3>
+                  <p className="text-xs  text-slate-500 mt-0.5">{selectedJC.drawing_no || 'S-BASEFRAMEASSEMBLY'}</p>
                 </div>
               </div>
 
-              <div className="flex items-center justify-start border-t border-slate-50 pt-6">
-                <button
-                  onClick={handleReadyForDispatch}
-                  disabled={!qcStats.isApproved || !qcStats.isComplete}
-                  className={`group relative flex items-center gap-2 p-2  rounded  transition-all ${!qcStats.isApproved || !qcStats.isComplete
-                    ? 'bg-slate-50 text-slate-300 cursor-not-allowed border border-slate-100'
-                    : 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-200'
-                    }`}
-                >
-                  <div className={`w-8 h-8 rounded  flex items-center justify-center transition-colors ${!qcStats.isApproved || !qcStats.isComplete
-                    ? 'bg-slate-100 text-slate-200'
-                    : 'bg-white/20 text-white'
+              <div className="text-center">
+                <p className="text-xs  text-slate-400   mb-1.5">Planned</p>
+                <p className="text-xs  text-slate-900">
+                  {selectedJC.planned_qty} <span className="text-xs text-slate-400">Units</span>
+                </p>
+              </div>
+              <div className="text-center">
+                <p className="text-xs  text-slate-400   mb-1.5">Produced</p>
+                <p className="text-xs  text-slate-900">
+                  {selectedJC.produced_qty || 0} <span className="text-xs text-slate-400">Units</span>
+                </p>
+              </div>
+              <div className="text-center">
+                <p className="text-xs  text-slate-400   mb-1.5">Accepted</p>
+                <p className="text-sm  text-emerald-600">
+                  {selectedJC.accepted_qty || 0} <span className="text-xs text-emerald-400">Units</span>
+                </p>
+              </div>
+              <div className="text-center">
+                <p className="text-xs  text-slate-400   mb-1.5 text-indigo-400">Transferred</p>
+                <p className="text-sm  text-indigo-600">
+                  {selectedJC.transferred_qty || 0} <span className="text-xs text-indigo-400">Units</span>
+                </p>
+              </div>
+              <div className="text-center">
+                <p className="text-xs  text-slate-400   mb-1.5">Balance WIP</p>
+                <p className="text-sm  text-amber-600">
+                  {balanceWip.toFixed(2)} <span className="text-xs text-amber-400">Units</span>
+                </p>
+              </div>
+              <div className="text-center border-l border-slate-100">
+                <p className="text-xs text-indigo-500 mb-1.5 ">Total Execution Time</p>
+                <p className="text-xs  text-slate-400 mb-1  italic">(For all units)</p>
+                <div className="flex flex-col items-center">
+                  <p className="text-sm  text-indigo-600 ">
+                    {((parseFloat(selectedJC.cycle_time || selectedJC.std_time || 0) * parseFloat(selectedJC.planned_qty || 0)) + parseFloat(selectedJC.setup_time || 0)).toFixed(0)} <span className="text-xs  text-indigo-400 lowercase">Min</span>
+                  </p>
+                  <div className="text-[9px] text-slate-400 mt-1 flex gap-1">
+                    <span>C: {(selectedJC.cycle_time || selectedJC.std_time || 0)}m</span>
+                    <span>•</span>
+                    <span>S: {(selectedJC.setup_time || 0)}m</span>
+                  </div>
+                </div>
+              </div>
+              <div className="text-center border-l border-slate-100">
+                <p className="text-xs text-slate-400 mb-1.5 ">Net Time (Per Unit)</p>
+                <p className="text-sm  text-slate-600">
+                  {parseFloat(selectedJC.cycle_time || selectedJC.std_time || 0).toFixed(0)} <span className="text-xs  text-slate-400 lowercase">{(selectedJC.time_uom || 'Min').toLowerCase()}</span>
+                  <span className="text-[9px] text-slate-400 ml-1">/ unit</span>
+                </p>
+              </div>
+              <div className="text-right border-l border-slate-100 pl-8 min-w-[120px]">
+                <p className="text-xs  text-slate-400   mb-1">Current Status</p>
+                <div className="flex items-center justify-end gap-1.5">
+                  <span className={`w-2 h-2 rounded animate-pulse shrink-0 ${selectedJC.status === 'IN_PROGRESS' ? 'bg-amber-500' :
+                    selectedJC.status === 'COMPLETED' ? 'bg-emerald-500' :
+                      'bg-slate-400'
+                    }`}></span>
+                  <p className={`text-sm   ${selectedJC.status === 'IN_PROGRESS' ? 'text-amber-600' :
+                    selectedJC.status === 'COMPLETED' ? 'text-emerald-600' :
+                      'text-slate-600'
                     }`}>
-                    <CheckCircle className="w-4 h-4" />
-                  </div>
-                  <div className="text-left">
-                    <p className="text-xs    opacity-80">Finalize & Dispatch</p>
-                    <p className="text-sm ">Complete Production</p>
-                  </div>
-                  <ChevronRight className={`w-4 h-4 ml-4 transition-transform group-hover:translate-x-1 ${!qcStats.isApproved || !qcStats.isComplete ? 'opacity-20' : 'opacity-100'
-                    }`} />
-                </button>
+                    {selectedJC.status === 'IN_PROGRESS' ? 'Running' : selectedJC.status === 'COMPLETED' ? 'Completed' : selectedJC.status}
+                  </p>
+                </div>
+                <p className="text-xs   text-slate-400 mt-1  ">{selectedJC.operation_name}</p>
               </div>
             </div>
-          </section>
+          )}
+        </div>
 
-          {/* 5. Daily Production Report Section */}
+        {/* Sections */}
+        <div className="space-y-12 mt-12">
+          {isShipmentOp(selectedJC) ? (
+            <>
+              {/* 1. Preceding Operation Handover Card */}
+              <section className="space-y-3">
+                <div className="flex items-center gap-2 px-1">
+                  <div className="w-8 h-8 bg-indigo-50 rounded flex items-center justify-center text-indigo-600 border border-indigo-100 shadow-sm">
+                    <Layers className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h2 className="text-sm font-semibold text-slate-800">Preceding Operation Handover</h2>
+                    <p className="text-[11px] text-slate-400">Progress of material transfer from previous stage</p>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+                    {/* Left: Progress details */}
+                    <div className="lg:col-span-8 space-y-3">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <p className="text-xs font-semibold text-slate-700">Source Stage</p>
+                          <p className="text-xs text-slate-500 font-medium">Sequence {precedingSeq}: {precedingStageName}</p>
+                        </div>
+                        <span className={`px-2 py-0.5 text-[9px] font-bold rounded-full border ${
+                          parseFloat(handoverPercentage) >= 100 
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
+                            : 'bg-amber-50 text-amber-700 border-amber-100'
+                        }`}>
+                          {parseFloat(handoverPercentage) >= 100 ? 'Full Handover' : 'Partial Handover'} ({handoverPercentage}%)
+                        </span>
+                      </div>
+
+                      {/* Horizontal progress bar */}
+                      <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                        <div 
+                          className="bg-amber-500 h-full rounded-full transition-all duration-500" 
+                          style={{ width: `${Math.min(100, parseFloat(handoverPercentage))}%` }}
+                        ></div>
+                      </div>
+
+                      <p className="text-[10px] text-slate-400 italic font-medium">
+                        * This operation is constrained by the quantity transferred from the previous stage.
+                      </p>
+                    </div>
+
+                    {/* Right: Mini-stats grid */}
+                    <div className="lg:col-span-4 grid grid-cols-4 gap-2 border-l border-slate-100 pl-6 min-w-[250px]">
+                      <div className="text-center">
+                        <p className="text-[10px] text-slate-400 font-semibold uppercase">Produced</p>
+                        <p className="text-sm font-bold text-slate-800 mt-1">{precedingJC ? (precedingJC.produced_qty || 0) : selectedJC.planned_qty}</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-[10px] text-slate-400 font-semibold uppercase">Accepted</p>
+                        <p className="text-sm font-bold text-slate-800 mt-1">{precedingJC ? (precedingJC.accepted_qty || 0) : selectedJC.planned_qty}</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-[10px] text-slate-400 font-semibold uppercase text-amber-600">Transferred</p>
+                        <p className="text-sm font-extrabold text-amber-600 mt-1">{precedingJC ? (precedingJC.transferred_qty || precedingJC.accepted_qty || 0) : selectedJC.planned_qty}</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-[10px] text-slate-400 font-semibold uppercase text-blue-600">Received</p>
+                        <p className="text-sm font-extrabold text-blue-600 mt-1">{precedingJC ? (precedingJC.received_qty || precedingJC.accepted_qty || 0) : selectedJC.planned_qty}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              {/* 2. Overall Production Plan Status & Component Cards */}
+              <section className="space-y-3">
+                <div className="flex items-center justify-between px-1">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 bg-indigo-50 rounded flex items-center justify-center text-indigo-600 border border-indigo-100 shadow-sm">
+                      <Target className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h2 className="text-sm font-semibold text-slate-800">Overall Production Plan Status</h2>
+                      <p className="text-[11px] text-slate-400">Validation across all work orders in plan: {selectedJC.work_order_no || selectedJC.wo_number}</p>
+                    </div>
+                  </div>
+                  <span className={`px-2 py-0.5 text-[10px] font-bold rounded border ${
+                    isPlanFullyFulfilled 
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
+                      : 'bg-amber-50 text-amber-700 border-amber-100'
+                  }`}>
+                    {isPlanFullyFulfilled ? 'Production Complete' : 'Production Incomplete'}
+                  </span>
+                </div>
+
+                <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5 space-y-4">
+                  {/* Grid of Work Order Stage Cards */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {woJCs.map((jc, index) => {
+                      const isCompleted = jc.status === 'COMPLETED';
+                      const isActive = jc.id === selectedJC.id;
+                      return (
+                        <div 
+                          key={jc.id}
+                          className={`p-4 rounded-xl border transition-all flex flex-col justify-between h-[110px] ${
+                            isActive
+                              ? 'bg-indigo-50/20 border-indigo-200 ring-2 ring-indigo-500/5'
+                              : isCompleted
+                                ? 'bg-emerald-50/10 border-emerald-100'
+                                : 'bg-slate-50/40 border-slate-100'
+                          }`}
+                        >
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <p className="text-[9px] text-slate-400 font-semibold tracking-wider truncate uppercase max-w-[120px]">
+                                {jc.drawing_no || selectedJC.drawing_no || 'SA-COMPONENT'}
+                              </p>
+                              <h4 className="text-xs font-bold text-slate-800 mt-0.5 truncate max-w-[140px]">
+                                {jc.operation_name}
+                              </h4>
+                            </div>
+                            <span className="p-1 rounded bg-white border border-slate-100 text-slate-400">
+                              {isCompleted ? (
+                                <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
+                              ) : (
+                                <Clock className="w-3.5 h-3.5 text-slate-400" />
+                              )}
+                            </span>
+                          </div>
+                          
+                          <div className="pt-2 border-t border-slate-100/60 flex justify-between items-center mt-2">
+                            <span className="text-[10px] text-slate-400 font-medium">Ready Qty</span>
+                            <span className="text-xs font-bold text-slate-700">
+                              {jc.accepted_qty || jc.produced_qty || 0} / {jc.planned_qty || 0}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Warning banner if not fully completed */}
+                  {!isPlanFullyFulfilled && (
+                    <div className="p-3 bg-amber-50/50 rounded-lg border border-amber-100/60 text-amber-800 text-[11px] font-semibold flex items-center gap-1.5">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                      <span>Production plan is not fully fulfilled. Full dispatch is disabled to prevent shipping errors.</span>
+                    </div>
+                  )}
+                </div>
+              </section>
+
+              {/* 3. Shipment/Dispatch Parameters Form */}
+              <section className="space-y-3">
+                <div className="flex items-center gap-2 px-1">
+                  <div className="w-8 h-8 bg-emerald-50 rounded flex items-center justify-center text-emerald-600 border border-emerald-100 shadow-sm">
+                    <Truck className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h2 className="text-sm font-semibold text-slate-800">Shipment & Courier Parameters Form</h2>
+                    <p className="text-[11px] text-slate-400">Specify courier details, dispatch quantities, and target warehouse movement parameters</p>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 space-y-6">
+                  {/* Read-Only Shipping Address Banner */}
+                  {selectedJC.shipping_address && (
+                    <div className="p-4 bg-indigo-50/50 rounded-xl border border-indigo-100 flex gap-3">
+                      <Info className="w-4 h-4 text-indigo-600 mt-0.5 shrink-0" />
+                      <div>
+                        <p className="text-xs font-bold text-indigo-800">Customer Delivery Destination Address</p>
+                        <p className="text-xs text-indigo-900 mt-1 leading-relaxed">{selectedJC.shipping_address}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+                    {/* Final Stage */}
+                    <div className="col-span-12 md:col-span-4">
+                      <FormControl label="Final Stage">
+                        <div className="flex items-center gap-2 p-2.5 bg-emerald-50/40 border border-emerald-100 text-emerald-800 rounded-md text-xs font-semibold">
+                          <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          <span>Shipment / Dispatch</span>
+                        </div>
+                      </FormControl>
+                    </div>
+
+                    {/* Dispatch Mode */}
+                    <div className="col-span-12 md:col-span-4 space-y-1">
+                      <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Dispatch Mode *</label>
+                      <div className="flex items-center gap-4 py-2">
+                        <label className="flex items-center gap-1.5 text-xs text-slate-700 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="dispatchMode"
+                            checked={shipmentForm.dispatchMode === 'Complete'}
+                            onChange={() => setShipmentForm(prev => ({ ...prev, dispatchMode: 'Complete' }))}
+                            className="w-4 h-4 text-indigo-600 border-slate-300 focus:ring-indigo-500"
+                          />
+                          <span>Full Dispatch</span>
+                        </label>
+                        <label className="flex items-center gap-1.5 text-xs text-slate-700 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="dispatchMode"
+                            checked={shipmentForm.dispatchMode === 'Partial'}
+                            onChange={() => setShipmentForm(prev => ({ ...prev, dispatchMode: 'Partial' }))}
+                            className="w-4 h-4 text-indigo-600 border-slate-300 focus:ring-indigo-500"
+                          />
+                          <span>Partial Dispatch <span className="text-[10px] text-amber-600 font-semibold">(Recommended)</span></span>
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Dispatch Date */}
+                    <div className="col-span-12 md:col-span-4">
+                      <FormControl label="Dispatch Date *" required>
+                        <input
+                          type="date"
+                          value={shipmentForm.dispatchDate}
+                          onChange={e => setShipmentForm(prev => ({ ...prev, dispatchDate: e.target.value }))}
+                          className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs outline-none focus:border-indigo-500 transition-all"
+                        />
+                      </FormControl>
+                    </div>
+
+                    {/* Source Warehouse */}
+                    <div className="col-span-12 md:col-span-4">
+                      <FormControl label="Source Warehouse *" required>
+                        <SearchableSelect
+                          options={warehouses.map(w => ({ value: w.id, label: w.warehouse_name }))}
+                          value={shipmentForm.sourceWarehouseId}
+                          onChange={(e) => setShipmentForm(prev => ({ ...prev, sourceWarehouseId: e.target.value }))}
+                          placeholder="Select Source Warehouse"
+                        />
+                      </FormControl>
+                    </div>
+
+                    {/* Target Warehouse */}
+                    <div className="col-span-12 md:col-span-4">
+                      <FormControl label="Target Warehouse *" required>
+                        <SearchableSelect
+                          options={warehouses.map(w => ({ value: w.id, label: w.warehouse_name }))}
+                          value={shipmentForm.targetWarehouseId}
+                          onChange={(e) => setShipmentForm(prev => ({ ...prev, targetWarehouseId: e.target.value }))}
+                          placeholder="Finished Goods Store"
+                        />
+                      </FormControl>
+                    </div>
+
+                    {/* Dispatch Quantity */}
+                    <div className="col-span-12 md:col-span-4">
+                      <FormControl label="Dispatch Quantity *" required>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            min="0.001"
+                            max={availableQty}
+                            step="any"
+                            value={shipmentForm.dispatchQty}
+                            onChange={e => {
+                              const val = parseFloat(e.target.value) || 0;
+                              if (val > availableQty) {
+                                warningToast(`Cannot exceed available predecessor qty (${availableQty} Units)`);
+                              }
+                              setShipmentForm(prev => ({ ...prev, dispatchQty: e.target.value }));
+                            }}
+                            className="w-full p-2.5 pr-20 bg-white border border-slate-200 rounded text-xs outline-none focus:border-indigo-500 font-semibold text-slate-800 transition-all"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShipmentForm(prev => ({ ...prev, dispatchQty: availableQty }))}
+                            className="absolute right-1.5 top-1.5 px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded text-[10px] font-bold transition-all"
+                          >
+                            Ready: {availableQty}
+                          </button>
+                        </div>
+                        <p className="text-[10px] text-slate-400 mt-1.5">
+                          Recommended: Only dispatch <span className="font-semibold text-amber-600">{availableQty} units</span> which have passed quality check.
+                        </p>
+                      </FormControl>
+                    </div>
+
+                    {/* Carrier/Courier Name */}
+                    <div className="col-span-12 md:col-span-6">
+                      <FormControl label="Carrier / Courier Name">
+                        <input
+                          type="text"
+                          placeholder="e.g. FedEx, BlueDart, Self-Delivery"
+                          value={shipmentForm.carrierName}
+                          onChange={e => setShipmentForm(prev => ({ ...prev, carrierName: e.target.value }))}
+                          className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs outline-none focus:border-indigo-500 transition-all"
+                        />
+                      </FormControl>
+                    </div>
+
+                    {/* Tracking Number / Docket No */}
+                    <div className="col-span-12 md:col-span-6">
+                      <FormControl label="Tracking Number / Docket No">
+                        <input
+                          type="text"
+                          placeholder="Enter tracking ID"
+                          value={shipmentForm.trackingNumber}
+                          onChange={e => setShipmentForm(prev => ({ ...prev, trackingNumber: e.target.value }))}
+                          className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs outline-none focus:border-indigo-500 transition-all"
+                        />
+                      </FormControl>
+                    </div>
+
+                    {/* Shipping Notes */}
+                    <div className="col-span-12">
+                      <FormControl label="Shipping Notes">
+                        <textarea
+                          placeholder="Any additional details"
+                          value={shipmentForm.shippingNotes}
+                          onChange={e => setShipmentForm(prev => ({ ...prev, shippingNotes: e.target.value }))}
+                          rows={3}
+                          className="w-full p-2.5 bg-white border border-slate-200 rounded text-xs outline-none focus:border-indigo-500 resize-none transition-all"
+                        />
+                      </FormControl>
+                    </div>
+                  </div>
+
+                  {/* Enable Auto-transfer */}
+                  <div className="flex items-center gap-2 py-2">
+                    <input
+                      type="checkbox"
+                      id="enableAutoTransfer"
+                      checked={shipmentForm.enableAutoTransfer}
+                      onChange={e => setShipmentForm(prev => ({ ...prev, enableAutoTransfer: e.target.checked }))}
+                      className="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500 cursor-pointer"
+                    />
+                    <label htmlFor="enableAutoTransfer" className="text-xs text-slate-600 cursor-pointer font-medium">
+                      Enable Auto-transfer on Production Log
+                    </label>
+                  </div>
+
+                  {/* Form Footer */}
+                  <div className="pt-6 border-t border-slate-100 flex flex-wrap justify-between items-center gap-4 mt-6">
+                    <div className="flex items-center gap-4 text-xs font-semibold">
+                      <span className="text-emerald-600">● Accepted: {availableQty}</span>
+                      <span className="text-slate-300">|</span>
+                      <span className="text-indigo-600">● Transferred: {dispatchedQty}</span>
+                      <span className="text-slate-300">|</span>
+                      <span className="text-blue-600">● Available: {Math.max(0, availableQty - dispatchedQty)}</span>
+                    </div>
+                    
+                    <button
+                      onClick={handleShipmentDispatchSubmit}
+                      disabled={!shipmentForm.dispatchQty}
+                      className={`flex items-center gap-2 px-6 py-3 rounded-lg text-xs font-bold transition-all shadow-md active:scale-95 ${
+                        !shipmentForm.dispatchQty
+                          ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200 shadow-none'
+                          : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-200'
+                      }`}
+                    >
+                      <CheckCircle className="w-4 h-4 shrink-0" />
+                      <span>Dispatch {shipmentForm.dispatchQty || 0} Units ({shipmentForm.dispatchMode === 'Complete' ? 'Full' : 'Partial'})</span>
+                    </button>
+                  </div>
+                </div>
+              </section>
+            </>
+          ) : (
+            <>
+              {/* 1. Add Time Log Section */}
+              <section className="space-y-2">
+                <div className="flex items-center gap-2 px-1">
+
+                  <h2 className="text-sm  text-slate-800  ">Add Time Log</h2>
+                </div>
+
+                <div className="bg-white rounded  border border-slate-100 shadow-sm">
+                  <div className="p-2">
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-2 items-end">
+                      <div className='col-span-3'>
+                        <FormControl label="Day & Date" required>
+                          <div className="flex items-center  gap-1">
+                            <input
+                              type="number"
+                              value={timeLogForm.day}
+                              onChange={e => setTimeLogForm({ ...timeLogForm, day: e.target.value })}
+                              className="p-2 w-10 bg-white border border-slate-200 rounded text-xs outline-none focus:border-indigo-500 "
+                            />
+                            <input
+                              type="date"
+                              value={timeLogForm.logDate}
+                              onChange={e => handleDateChange('time', e.target.value)}
+                              className="flex-1 p-2 bg-white border  border-slate-200 rounded text-xs outline-none focus:border-indigo-500"
+                            />
+                          </div>
+                        </FormControl>
+                      </div>
+
+                      <div className='col-span-3'>
+                        <FormControl label="Operator" required>
+                          <SearchableSelect
+                            options={users.map(u => {
+                              let isBusyNow = false;
+                              let busyRange = '';
+
+                              // 1. Check current job card's logged times
+                              logs.timeLogs?.forEach(log => {
+                                if (log.operator_id !== u.id) return;
+
+                                const logDateStr = log.log_date?.split('T')[0];
+                                if (timeLogForm.logDate && logDateStr && timeLogForm.logDate !== logDateStr) {
+                                  return;
+                                }
+
+                                const busyStartStr = formatLocalTime(log.start_time);
+                                const busyEndStr = formatLocalTime(log.end_time);
+
+                                const busyStart = parse12hMinutes(busyStartStr);
+                                const busyEnd = parse12hMinutes(busyEndStr);
+
+                                const newStart = parseTimeToMinutes(timeLogForm.startTime || '08:00', timeLogForm.startAMPM || 'AM');
+                                const newEnd = parseTimeToMinutes(timeLogForm.endTime || '04:00', timeLogForm.endAMPM || 'PM');
+
+                                if (newStart < busyEnd && newEnd > busyStart) {
+                                  isBusyNow = true;
+                                  busyRange = `${busyStartStr} – ${busyEndStr} (${selectedJC?.job_card_no || 'Current Job'})`;
+                                }
+                              });
+
+                              // 2. Check other in-progress job cards
+                              if (!isBusyNow) {
+                                const busyJobs = jobCards.filter(jc =>
+                                  jc.id !== selectedJC?.id &&
+                                  jc.assigned_to === u.id &&
+                                  jc.status === 'IN_PROGRESS'
+                                );
+
+                                for (const jc of busyJobs) {
+                                  const busyDate = (jc.latest_log_start_time || jc.start_time || '').split(/[ T]/)[0];
+                                  if (timeLogForm.logDate && busyDate && timeLogForm.logDate !== busyDate) {
+                                    continue;
+                                  }
+
+                                  const busyEndStr = getEstimatedEndTime(jc);
+                                  const busyStartStr = formatLocalTime(jc.latest_log_start_time || jc.start_time);
+
+                                  const busyStart = parse12hMinutes(busyStartStr);
+                                  const busyEnd = parse12hMinutes(busyEndStr);
+
+                                  const newStart = parseTimeToMinutes(timeLogForm.startTime || '08:00', timeLogForm.startAMPM || 'AM');
+                                  const newEnd = parseTimeToMinutes(timeLogForm.endTime || '04:00', timeLogForm.endAMPM || 'PM');
+
+                                  if (newStart < busyEnd && newEnd > busyStart) {
+                                    isBusyNow = true;
+                                    busyRange = `${busyStartStr} – ${busyEndStr} (${jc.job_card_no})`;
+                                    break;
+                                  }
+                                }
+                              }
+
+                              return {
+                                value: u.id,
+                                label: u.username,
+                                subLabel: isBusyNow
+                                  ? `🔴 Busy (${busyRange})`
+                                  : '🟢 Available',
+                              };
+                            })}
+                            subLabelField="subLabel"
+                            value={timeLogForm.operatorId}
+                            onChange={(e) => setTimeLogForm({ ...timeLogForm, operatorId: e.target.value })}
+                            placeholder="Select Operator..."
+                          />
+                        </FormControl>
+                      </div>
+                      <div className='col-span-2'>
+                        <FormControl label="Workstation" required>
+                          <SearchableSelect
+                            options={workstations.map(w => {
+                              const capacity = parseInt(w.capacity || 1);
+                              let overlappingCount = 0;
+                              let busyDetails = '';
+
+                              // 1. Check current job card's logged times
+                              logs.timeLogs?.forEach(log => {
+                                if (Number(log.workstation_id) !== Number(w.id)) return;
+
+                                const logDateStr = log.log_date?.split('T')[0];
+                                if (timeLogForm.logDate && logDateStr && timeLogForm.logDate !== logDateStr) {
+                                  return;
+                                }
+
+                                const busyStartStr = formatLocalTime(log.start_time);
+                                const busyEndStr = formatLocalTime(log.end_time);
+
+                                const busyStart = parse12hMinutes(busyStartStr);
+                                const busyEnd = parse12hMinutes(busyEndStr);
+
+                                const newStart = parseTimeToMinutes(timeLogForm.startTime || '08:00', timeLogForm.startAMPM || 'AM');
+                                const newEnd = parseTimeToMinutes(timeLogForm.endTime || '04:00', timeLogForm.endAMPM || 'PM');
+
+                                if (newStart < busyEnd && newEnd > busyStart) {
+                                  overlappingCount++;
+                                  busyDetails = `${busyStartStr} – ${busyEndStr} (${selectedJC?.job_card_no || 'Current Job'})`;
+                                }
+                              });
+
+                              // 2. Check other in-progress job cards
+                              const activeJobs = jobCards.filter(jc =>
+                                jc.id !== selectedJC?.id &&
+                                Number(jc.workstation_id) === Number(w.id) &&
+                                jc.status === 'IN_PROGRESS'
+                              );
+
+                              activeJobs.forEach(jc => {
+                                const busyDate = (jc.latest_log_start_time || jc.start_time || '').split(/[ T]/)[0];
+                                if (timeLogForm.logDate && busyDate && timeLogForm.logDate !== busyDate) {
+                                  return;
+                                }
+
+                                const busyEndStr = getEstimatedEndTime(jc);
+                                const busyStartStr = formatLocalTime(jc.latest_log_start_time || jc.start_time);
+
+                                const busyStart = parse12hMinutes(busyStartStr);
+                                const busyEnd = parse12hMinutes(busyEndStr);
+
+                                const newStart = parseTimeToMinutes(timeLogForm.startTime || '08:00', timeLogForm.startAMPM || 'AM');
+                                const newEnd = parseTimeToMinutes(timeLogForm.endTime || '04:00', timeLogForm.endAMPM || 'PM');
+
+                                if (newStart < busyEnd && newEnd > busyStart) {
+                                  overlappingCount++;
+                                  busyDetails = `${busyStartStr} – ${busyEndStr} (${jc.job_card_no})`;
+                                }
+                              });
+
+                              return {
+                                value: w.id,
+                                label: w.workstation_name,
+                                subLabel: overlappingCount > 0
+                                  ? `🔴 Busy (${busyDetails})`
+                                  : '🟢 Available',
+                              };
+                            })}
+                            subLabelField="subLabel"
+                            value={timeLogForm.workstationId}
+                            onChange={(e) => handleWorkstationChange(e.target.value)}
+                            placeholder="Select Machine..."
+                          />
+                        </FormControl>
+                      </div>
+                      <div className='col-span-2'>
+                        <FormControl label="Shift" required>
+                          <div className="flex items-center gap-1">
+                            <select value={timeLogForm.shift} onChange={e => setTimeLogForm({ ...timeLogForm, shift: e.target.value })} className="flex-1 p-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-indigo-500 appearance-none">
+                              <option value="SHIFT_A">A</option>
+                              <option value="SHIFT_B">B</option>
+                              <option value="SHIFT_C">C</option>
+                            </select>
+                            <button className="p-2 bg-indigo-50 text-indigo-600 rounded border border-indigo-100">
+                              <ChevronRight className="w-3 h-3" />
+                            </button>
+                          </div>
+                        </FormControl>
+                      </div>
+                      <div className='col-span-2'>
+                        <FormControl label="Produce Qty" required>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              value={timeLogForm.producedQty}
+                              onChange={e => {
+                                const newQty = e.target.value;
+                                setTimeLogForm({ ...timeLogForm, producedQty: newQty });
+                                if (timeLogForm.startTime) {
+                                  calculateAutoEndTime(timeLogForm.startTime, timeLogForm.startAMPM || 'AM', newQty);
+                                }
+                              }}
+                              className="w-full p-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-indigo-500"
+                            />
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs  text-slate-400 ">Units</span>
+                          </div>
+                        </FormControl>
+                      </div>
+                      <div className='col-span-4'>
+                        <div className="flex justify-between">
+                          <FormControl label="Production Period" required>
+                            <div className="flex items-center gap-2">
+                              <div className="flex-1">
+                                <TimePicker
+                                  value={timeLogForm.startTime}
+                                  ampmValue={timeLogForm.startAMPM}
+                                  placeholder="08:00"
+                                  placeholderAMPM="AM"
+                                  onTimeChange={(newTime) => {
+                                    setTimeLogForm({ ...timeLogForm, startTime: newTime, startAMPM: timeLogForm.startAMPM || 'AM' });
+                                    calculateAutoEndTime(newTime, timeLogForm.startAMPM || 'AM', timeLogForm.producedQty);
+                                  }}
+                                  onAMPMChange={(newAMPM) => {
+                                    setTimeLogForm({ ...timeLogForm, startAMPM: newAMPM });
+                                    calculateAutoEndTime(timeLogForm.startTime, newAMPM, timeLogForm.producedQty);
+                                  }}
+                                />
+                              </div>
+                              <ChevronRight className="w-3 h-3 text-slate-300" />
+                              <div className="flex-1">
+                                <TimePicker
+                                  value={timeLogForm.endTime}
+                                  ampmValue={timeLogForm.endAMPM}
+                                  placeholder="04:00"
+                                  placeholderAMPM="PM"
+                                  onTimeChange={(newTime) => setTimeLogForm({ ...timeLogForm, endTime: newTime, endAMPM: timeLogForm.endAMPM || 'PM' })}
+                                  onAMPMChange={(newAMPM) => setTimeLogForm({ ...timeLogForm, endAMPM: newAMPM })}
+                                />
+                              </div>
+                            </div>
+                          </FormControl>
+
+                        </div>
+
+                      </div>
+                      <div className='col-span-1'>
+                        <FormControl label="Execution (P)">
+                          <div className="p-2 bg-indigo-50 border border-indigo-100 rounded text-xs text-indigo-700 ">
+                            {(() => {
+                              const cycleTime = parseFloat(selectedJC.cycle_time || selectedJC.std_time || 0);
+                              const setupTime = parseFloat(selectedJC.setup_time || 0);
+                              const qty = parseFloat(timeLogForm.producedQty || 0);
+                              const total = (cycleTime * qty) + setupTime;
+                              return (
+                                <div className="flex flex-col">
+                                  <span>{Math.round(total)}m</span>
+                                  {qty > 0 && (
+                                    <span className="text-[10px] text-indigo-400 font-normal">
+                                      ({cycleTime}m × {qty}) + {setupTime}m
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        </FormControl>
+                      </div>
+                      <div className='col-span-1'>
+                        <FormControl label="Actual Mins">
+                          <input
+                            type="text"
+                            placeholder="480"
+                            value={calculateTotalMins(timeLogForm.startTime, timeLogForm.startAMPM, timeLogForm.endTime, timeLogForm.endAMPM) || ''}
+                            readOnly
+                            className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs outline-none  text-slate-600 "
+                          />
+                        </FormControl>
+                      </div>
+                      <div className='col-span-6'>
+                        <div className='flex gap-2'>
+                          <button
+                            onClick={() => addTimeLog(timeLogForm)}
+                            className="px-10 py-2.5 bg-indigo-600 text-white rounded  hover:bg-indigo-700 transition-all text-xs    shadow-lg shadow-indigo-100 flex items-center gap-2 h-[38px]"
+                          >
+                            <Monitor className="w-4 h-4" />
+                            Record Time
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-end gap-2">
+
+                      <div className="flex items-center gap-2">
+
+                      </div>
+                    </div>
+
+                    <div className=" overflow-hidden rounded-xl border border-slate-100 shadow-sm bg-white">
+                      <DataTable
+                        columns={timeLogColumns}
+                        data={logs.timeLogs}
+                        loading={loading}
+                        pageSize={10}
+                        emptyMessage="No time logs recorded for this operation"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              {/* 2. Quality & Rejection Entry Section */}
+              <section className="space-y-2">
+                <div className="flex items-center justify-between gap-6 p-4 bg-white rounded border border-slate-100 shadow-sm">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 bg-emerald-50 rounded flex items-center justify-center text-emerald-600">
+                      <ShieldCheck className="w-4 h-4" />
+                    </div>
+                    <h2 className="text-sm text-slate-800">Quality & Rejection Entry</h2>
+                  </div>
+
+                  <div className="flex items-center gap-4">
+                    {qcSuccessMessage && (
+                      <span className="text-emerald-600 text-xs  animate-pulse">
+                        ✅ {qcSuccessMessage}
+                      </span>
+                    )}
+                    <button
+                      onClick={sendToQuality}
+                      className="px-6 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 transition-all text-xs shadow-lg shadow-emerald-100 flex items-center gap-2"
+                    >
+                      <Save className="w-4 h-4" />
+                      Send to Quality
+                    </button>
+                  </div>
+                </div>
+              </section>
+
+              <section className="mt-8 overflow-hidden rounded-xl border border-slate-100 shadow-sm bg-white">
+                <DataTable
+                  columns={qualityLogColumns}
+                  data={logs.qualityLogs}
+                  loading={loading}
+                  pageSize={10}
+                  emptyMessage="No quality inspection logs found"
+                />
+              </section>
+
+              {/* 3. Operational Downtime Section */}
+              <section className="space-y-2">
+                <div className="flex items-center gap-2 px-1">
+                  <div className="w-8 h-8 bg-amber-50 rounded  flex items-center justify-center text-amber-600">
+                    <AlertTriangle className="w-4 h-4" />
+                  </div>
+                  <h2 className="text-sm  text-slate-800  ">Operational Downtime</h2>
+                </div>
+
+                <div className="bg-white rounded  border border-slate-100 shadow-sm">
+                  <div className="p-6">
+                    <div className="grid grid-cols-1 md:grid-cols-6 gap-2 mb-6 border-b border-slate-50 pb-6">
+                      <FormControl label="Day & Date" required>
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            value={downtimeLogForm.day}
+                            onChange={e => setDowntimeLogForm({ ...downtimeLogForm, day: e.target.value })}
+                            className="w-14 px-2 py-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-amber-500 "
+                          />
+                          <input
+                            type="date"
+                            value={downtimeLogForm.downtimeDate}
+                            onChange={e => handleDateChange('downtime', e.target.value)}
+                            className="flex-1 p-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-amber-500"
+                          />
+                        </div>
+                      </FormControl>
+                      <FormControl label="Shift" required>
+                        <div className="flex items-center gap-1">
+                          <select value={downtimeLogForm.shift} onChange={e => setDowntimeLogForm({ ...downtimeLogForm, shift: e.target.value })} className="flex-1 p-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-amber-500 appearance-none">
+                            <option value="SHIFT_A">A</option>
+                            <option value="SHIFT_B">B</option>
+                            <option value="SHIFT_C">C</option>
+                          </select>
+                          <button className="p-2 bg-indigo-50 text-indigo-600 rounded border border-indigo-100">
+                            <ChevronRight className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </FormControl>
+                      <FormControl label="Downtime Type" required>
+                        <select value={downtimeLogForm.downtimeType} onChange={e => setDowntimeLogForm({ ...downtimeLogForm, downtimeType: e.target.value })} className="w-full p-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-amber-500">
+                          <option value="">Select Type</option>
+                          <option value="Planned Downtime">Planned Downtime</option>
+                          <option value="Unplanned Downtime">Unplanned Downtime</option>
+                          <option value="Breakdown">Breakdown</option>
+                        </select>
+                      </FormControl>
+                      <FormControl label="Start Time" required>
+                        <TimePicker
+                          value={downtimeLogForm.startTime}
+                          ampmValue={downtimeLogForm.startAMPM}
+                          placeholder="08:00"
+                          placeholderAMPM="AM"
+                          onTimeChange={(newTime) => setDowntimeLogForm({ ...downtimeLogForm, startTime: newTime, startAMPM: downtimeLogForm.startAMPM || 'AM' })}
+                          onAMPMChange={(newAMPM) => setDowntimeLogForm({ ...downtimeLogForm, startAMPM: newAMPM })}
+                        />
+                      </FormControl>
+                      <FormControl label="End Time" required>
+                        <TimePicker
+                          value={downtimeLogForm.endTime}
+                          ampmValue={downtimeLogForm.endAMPM}
+                          placeholder="04:00"
+                          placeholderAMPM="PM"
+                          onTimeChange={(newTime) => setDowntimeLogForm({ ...downtimeLogForm, endTime: newTime, endAMPM: downtimeLogForm.endAMPM || 'PM' })}
+                          onAMPMChange={(newAMPM) => setDowntimeLogForm({ ...downtimeLogForm, endAMPM: newAMPM })}
+                        />
+                      </FormControl>
+                      <FormControl label="Total Mins">
+                        <input
+                          type="text"
+                          placeholder="480"
+                          readOnly
+                          value={calculateTotalMins(downtimeLogForm.startTime, downtimeLogForm.startAMPM, downtimeLogForm.endTime, downtimeLogForm.endAMPM) || ''}
+                          className="w-full p-2 bg-slate-50 border border-slate-100 rounded text-xs outline-none  text-slate-400"
+                        />
+                      </FormControl>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-6">
+                      <div className="flex-1">
+                        {logs.qualityLogs?.some(log => log.status?.trim() !== 'APPROVED') && (
+                          <div className="flex items-start gap-2 p-2 bg-amber-50 rounded  border border-amber-100">
+                            <div className="w-5 h-5 bg-amber-100 rounded flex items-center justify-center shrink-0 mt-0.5">
+                              <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
+                            </div>
+                            <div>
+                              <p className="text-xs   text-amber-800   ">QC Verification Pending</p>
+                              <p className="text-xs text-amber-700 leading-relaxed mt-0.5 ">
+                                Cannot record downtime while quality logs are pending approval. Please verify quality entries first.
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => addDowntimeLog(downtimeLogForm)}
+                        disabled={logs.qualityLogs?.some(log => log.status?.trim() !== 'APPROVED')}
+                        className={`px-10 py-2.5 rounded  transition-all text-xs    shadow-lg flex items-center gap-2 h-[38px] ${logs.qualityLogs?.some(log => log.status?.trim() !== 'APPROVED')
+                          ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+                          : 'bg-orange-600 text-white hover:bg-orange-700 shadow-orange-100'
+                          }`}
+                      >
+                        <Clock className="w-4 h-4" />
+                        Record Downtime
+                      </button>
+                    </div>
+
+                    <div className="mt-8 overflow-hidden rounded-xl border border-slate-100 shadow-sm bg-white">
+                      <DataTable
+                        columns={downtimeLogColumns}
+                        data={logs.downtimeLogs}
+                        loading={loading}
+                        pageSize={10}
+                        emptyMessage="No downtime recorded for this session"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              {/* 4. Next Stage Configuration Section */}
+              <section className="space-y-2">
+                <div className="flex items-center justify-between px-1">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 bg-indigo-50 rounded  flex items-center justify-center text-indigo-600">
+                      <Play className="w-4 h-4" />
+                    </div>
+                    <h2 className="text-sm  text-slate-800  ">Next Stage Configuration</h2>
+                    <span className=" bg-emerald-50 text-emerald-600 rounded text-xs   border border-emerald-100">Active</span>
+                  </div>
+                  <div className="flex items-center gap-6">
+                    <button
+                      onClick={handleReadyForDispatch}
+                      disabled={logs.qualityLogs.some(log => log.status !== 'APPROVED')}
+                      className={`flex items-center gap-2 p-1.5 border rounded  transition-all ${logs.qualityLogs.some(log => log.status !== 'APPROVED')
+                        ? 'bg-slate-50 border-slate-100 text-slate-300 cursor-not-allowed'
+                        : 'bg-white border-emerald-100 text-emerald-600 shadow-sm hover:bg-emerald-50'
+                        }`}
+                      title={logs.qualityLogs.some(log => log.status !== 'APPROVED') ? 'Approve all quality records to proceed' : 'Mark Ready'}
+                    >
+                      <Zap className={`w-3.5 h-3.5 ${logs.qualityLogs.some(log => log.status !== 'APPROVED') ? 'text-slate-200' : 'text-emerald-500 animate-pulse'}`} />
+                      <span className="text-xs   ">Ready for Dispatch</span>
+                    </button>
+                    <div className="text-right">
+                      <p className="flex items-center gap-1.5 text-xs  text-slate-400  ">
+                        <Box className="w-3 h-3" />
+                        Transferred so far: <span className="text-slate-700">{(selectedJC.transferred_qty || 0).toFixed(2)}</span>
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <p className="text-xs  text-slate-400 italic px-1">Specify destination and operational parameters for the next manufacturing phase</p>
+
+                <div className="bg-white rounded  border border-slate-100 shadow-sm p-2">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                    <FormControl label="Next Operation" required>
+                      <SearchableSelect
+                        options={operations.map(o => ({ value: o.id, label: o.operation_name }))}
+                        value={nextStageForm.nextOperationId}
+                        onChange={(e) => setNextStageForm({ ...nextStageForm, nextOperationId: e.target.value })}
+                        placeholder="Select Next Op"
+                      />
+                    </FormControl>
+                    <FormControl label="Assign Operator">
+                      <SearchableSelect
+                        options={users.map(u => ({ value: u.id, label: u.username }))}
+                        value={nextStageForm.assignOperatorId}
+                        onChange={(e) => setNextStageForm({ ...nextStageForm, assignOperatorId: e.target.value })}
+                        placeholder="Search Operator..."
+                      />
+                    </FormControl>
+                    <FormControl label="Target Warehouse" required>
+                      <SearchableSelect
+                        options={warehouses.map(w => ({ value: w.id, label: w.warehouse_name }))}
+                        value={nextStageForm.targetWarehouseId}
+                        onChange={(e) => setNextStageForm({ ...nextStageForm, targetWarehouseId: e.target.value })}
+                        placeholder="Select Destination"
+                      />
+                    </FormControl>
+                    <div className="space-y-2">
+                      <label className="text-xs  text-slate-400  ">Execution Mode:</label>
+                      <div className="flex items-center gap-2 p-1 bg-slate-50 rounded  w-fit">
+                        <button
+                          onClick={() => setNextStageForm({ ...nextStageForm, executionMode: 'In-house' })}
+                          className={`flex items-center gap-2 p-1.5 rounded-md text-xs    transition-all ${nextStageForm.executionMode === 'In-house' ? 'bg-white border border-indigo-100 text-indigo-600 shadow-sm' : 'text-slate-500'}`}
+                        >
+                          <span className={`w-2.5 h-2.5 rounded ${nextStageForm.executionMode === 'In-house' ? 'bg-indigo-500' : 'border-2 border-slate-300'}`}></span>
+                          In-house
+                        </button>
+                        <button
+                          onClick={() => setNextStageForm({ ...nextStageForm, executionMode: 'Outsource' })}
+                          className={`flex items-center gap-2 p-1.5 rounded-md text-xs    transition-all ${nextStageForm.executionMode === 'Outsource' ? 'bg-white border border-indigo-100 text-indigo-600 shadow-sm' : 'text-slate-500'}`}
+                        >
+                          <span className={`w-2.5 h-2.5 rounded ${nextStageForm.executionMode === 'Outsource' ? 'bg-indigo-500' : 'border-2 border-slate-300'}`}></span>
+                          Outsource
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-start border-t border-slate-50 pt-6">
+                    <button
+                      onClick={handleReadyForDispatch}
+                      disabled={!qcStats.isApproved || !qcStats.isComplete}
+                      className={`group relative flex items-center gap-2 p-2  rounded  transition-all ${!qcStats.isApproved || !qcStats.isComplete
+                        ? 'bg-slate-50 text-slate-300 cursor-not-allowed border border-slate-100'
+                        : 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-200'
+                        }`}
+                    >
+                      <div className={`w-8 h-8 rounded  flex items-center justify-center transition-colors ${!qcStats.isApproved || !qcStats.isComplete
+                        ? 'bg-slate-100 text-slate-200'
+                        : 'bg-white/20 text-white'
+                        }`}>
+                        <CheckCircle className="w-4 h-4" />
+                      </div>
+                      <div className="text-left">
+                        <p className="text-xs    opacity-80">Finalize & Dispatch</p>
+                        <p className="text-sm ">Complete Production</p>
+                      </div>
+                      <ChevronRight className={`w-4 h-4 ml-4 transition-transform group-hover:translate-x-1 ${!qcStats.isApproved || !qcStats.isComplete ? 'opacity-20' : 'opacity-100'
+                        }`} />
+                    </button>
+                  </div>
+                </div>
+              </section>
+            </>
+          )}
+
+        {/* 5. Daily Production Report Section */}
           <section className="space-y-2">
             <div className="flex items-center justify-between px-1">
               <div className="flex items-center gap-2">
@@ -2714,6 +3235,56 @@ const JobCard = () => {
       }
     } catch (error) {
       errorToast('Failed to mark ready for dispatch');
+    }
+  };
+
+  const handleShipmentDispatchSubmit = async (e) => {
+    if (e) e.preventDefault();
+    try {
+      const result = await Swal.fire({
+        title: 'Confirm Dispatch?',
+        text: `Are you sure you want to dispatch ${shipmentForm.dispatchQty} units? This will complete the shipment stage.`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#4f46e5',
+        cancelButtonColor: '#64748b',
+        confirmButtonText: 'Yes, Confirm Dispatch'
+      });
+
+      if (!result.isConfirmed) return;
+
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/job-cards/${selectedJC.id}/progress`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          status: 'COMPLETED',
+          producedQty: parseFloat(shipmentForm.dispatchQty) || 0,
+          acceptedQty: parseFloat(shipmentForm.dispatchQty) || 0,
+          dispatchQty: parseFloat(shipmentForm.dispatchQty) || 0,
+          carrierName: shipmentForm.carrierName,
+          trackingNumber: shipmentForm.trackingNumber,
+          shippingNotes: shipmentForm.shippingNotes,
+          dispatchDate: shipmentForm.dispatchDate,
+          dispatchMode: shipmentForm.dispatchMode,
+          targetWarehouseId: shipmentForm.targetWarehouseId || null
+        })
+      });
+
+      if (response.ok) {
+        successToast('Shipment dispatched successfully and stage completed!');
+        setShowProductionEntry(false);
+        fetchJobCards();
+      } else {
+        const error = await response.json();
+        errorToast(error.error || 'Failed to dispatch shipment');
+      }
+    } catch (error) {
+      console.error(error);
+      errorToast('Network error');
     }
   };
 
@@ -3623,6 +4194,28 @@ const JobCard = () => {
       }
     },
     {
+      label: 'Workstation',
+      key: 'workstation_name',
+      render: (val, row) => {
+        const isEditing = editingTimeLogId === row.id;
+        if (isEditing) {
+          return (
+            <select
+              value={editTimeLogForm.workstationId}
+              className="w-full px-1 py-1 border rounded text-xs"
+              onChange={e => setEditTimeLogForm({ ...editTimeLogForm, workstationId: e.target.value })}
+            >
+              <option value="">Select Workstation</option>
+              {workstations.map(w => <option key={w.id} value={w.id}>{w.workstation_name}</option>)}
+            </select>
+          );
+        }
+        return (
+          <span className="text-slate-600">{val || 'N/A'}</span>
+        );
+      }
+    },
+    {
       label: 'Time Interval',
       key: 'time_interval',
       className: 'text-center',
@@ -4415,7 +5008,21 @@ const JobCard = () => {
       key: 'actions',
       className: 'text-right',
       render: (_, jc) => {
+        const isShipment = isShipmentOp(jc);
         const isSubcontract = jc.execution_type === 'Outsource' || jc.execution_type === 'Subcontract' || jc.execution_type === 'Sub-Contract' || jc.outward_challan_id;
+
+        const isWorkstationAssigned = isShipment || (jc.workstation_id !== null && jc.workstation_id !== undefined && jc.workstation_id !== '');
+        
+        let isOperatorAssigned = false;
+        const mode = (jc.execution_mode || jc.execution_type || 'In-house').toLowerCase();
+        const isOutsource = mode.includes('outsource') || mode.includes('sub');
+        if (isOutsource) {
+          isOperatorAssigned = jc.vendor_id !== null && jc.vendor_id !== undefined && jc.vendor_id !== '';
+        } else {
+          isOperatorAssigned = jc.assigned_to !== null && jc.assigned_to !== undefined && jc.assigned_to !== '';
+        }
+
+        const isAssigned = isWorkstationAssigned && isOperatorAssigned;
 
         return (
           <div className="flex items-center justify-end gap-1">
@@ -4428,66 +5035,90 @@ const JobCard = () => {
               <Eye className="w-3.5 h-3.5" />
             </button>
 
-            {/* Log / Record Time - ONLY for In-house */}
-            {!isSubcontract && (
+            {isAssigned && (
               <>
-                {jc.status !== 'IN_PROGRESS' && jc.status !== 'COMPLETED' && (
-                  <button
-                    onClick={() => handleUpdateStatus(jc, 'IN_PROGRESS')}
-                    className="p-1 text-emerald-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-all"
-                    title="Start"
-                  >
-                    <Zap className="w-3.5 h-3.5" />
-                  </button>
+                {/* Log / Record Time - ONLY for In-house */}
+                {!isSubcontract && (
+                  <>
+                    {jc.status !== 'IN_PROGRESS' && jc.status !== 'COMPLETED' && (
+                      isShipment ? (
+                        <button
+                          onClick={() => handleUpdateStatus(jc, 'IN_PROGRESS')}
+                          className="p-1 text-emerald-500 hover:text-emerald-700 hover:bg-emerald-50 rounded transition-all"
+                          title="⚡ Start Operation"
+                        >
+                          <Zap className="w-3.5 h-3.5" />
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleUpdateStatus(jc, 'IN_PROGRESS')}
+                          className="p-1 text-emerald-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-all"
+                          title="Start"
+                        >
+                          <Zap className="w-3.5 h-3.5" />
+                        </button>
+                      )
+                    )}
+                    {jc.status === 'IN_PROGRESS' && (
+                      isShipment ? (
+                        <button
+                          onClick={() => handleLogProgress(jc)}
+                          className="p-1 text-indigo-600 hover:bg-indigo-50 rounded transition-all animate-pulse"
+                          title="📈 Live Tracking / Production Entry"
+                        >
+                          <Zap className="w-3.5 h-3.5 fill-indigo-600" />
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleLogProgress(jc)}
+                          className="p-1 text-indigo-600 hover:bg-indigo-50 rounded transition-all animate-pulse"
+                          title="Log Progress"
+                        >
+                          <Zap className="w-3.5 h-3.5 fill-indigo-600" />
+                        </button>
+                      )
+                    )}
+                  </>
                 )}
-                {jc.status === 'IN_PROGRESS' && (
-                  <button
-                    onClick={() => handleLogProgress(jc)}
-                    className="p-1 text-indigo-600 hover:bg-indigo-50 rounded transition-all animate-pulse"
-                    title="Log Progress"
-                  >
-                    <Zap className="w-3.5 h-3.5 fill-indigo-600" />
-                  </button>
-                )}
-              </>
-            )}
 
-            {/* Outward / Inward Flow - ONLY for Subcontract */}
-            {isSubcontract && (
-              <>
+                {/* Outward / Inward Flow - ONLY for Subcontract */}
+                {isSubcontract && (
+                  <>
+                    <button
+                      onClick={() => navigate(`${deptPrefix}/job-card/outward?id=${jc.id}`)}
+                      className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-all"
+                      title="Outward Challan"
+                    >
+                      <Truck className="w-3.5 h-3.5" />
+                    </button>
+
+                    <button
+                      onClick={() => navigate(`${deptPrefix}/job-card/inward?id=${jc.id}`)}
+                      className="p-1 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-all"
+                      title="Inward Entry"
+                    >
+                      <Package className="w-3.5 h-3.5" />
+                    </button>
+                  </>
+                )}
+
+                {/* Quick Record - Manage Production Modal */}
                 <button
-                  onClick={() => navigate(`${deptPrefix}/job-card/outward?id=${jc.id}`)}
+                  onClick={() => {
+                    setSelectedJC(jc);
+                    setShowProductionEntry(true);
+                    fetchLogs(jc.id);
+                  }}
                   className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-all"
-                  title="Outward Challan"
+                  title={isShipment ? "📈 Live Tracking / Production Entry" : "Manage Production"}
                 >
-                  <Truck className="w-3.5 h-3.5" />
-                </button>
-
-                <button
-                  onClick={() => navigate(`${deptPrefix}/job-card/inward?id=${jc.id}`)}
-                  className="p-1 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-all"
-                  title="Inward Entry"
-                >
-                  <Package className="w-3.5 h-3.5" />
+                  <Activity className="w-3.5 h-3.5" />
                 </button>
               </>
             )}
 
-            {/* Quick Record - Manage Production Modal */}
             <button
-              onClick={() => {
-                setSelectedJC(jc);
-                setShowProductionEntry(true);
-                fetchLogs(jc.id);
-              }}
-              className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-all"
-              title="Manage Production"
-            >
-              <Activity className="w-3.5 h-3.5" />
-            </button>
-
-            <button
-              onClick={() => handleEdit(jc)}
+              onClick={() => navigate(`${deptPrefix}/job-card/edit?id=${jc.id}`)}
               className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded transition-all"
               title="Edit"
             >
@@ -4737,326 +5368,402 @@ const JobCard = () => {
       {/* Edit Job Card Modal */}
       <Modal
         isOpen={isModalOpen}
-        onClose={() => navigate(`${deptPrefix}/job-card`)}
-        title={`${formData.id ? "Edit Job Card" : "Create Job Card"}${formData.jcNumber ? `: ${formData.jcNumber}` : ''}${selectedWO ? ` - ${selectedWO.wo_number}` : ''}`}
+        onClose={() => { setIsModalOpen(false); navigate(`${deptPrefix}/job-card`); }}
+        title={(() => {
+          const selectedOp = operations.find(op => String(op.id) === String(formData.operationId));
+          const activeJC = jobCards.find(j => String(j.id) === String(formData.id));
+          const isShipment = (activeJC && isShipmentOp(activeJC)) || (selectedOp && (
+            String(selectedOp.operation_name || '').toLowerCase() === 'shipment' ||
+            String(selectedOp.operation_name || '').toLowerCase() === 'dispatch' ||
+            String(selectedOp.operation_type || '').toLowerCase() === 'dispatch'
+          ));
+          return isShipment 
+            ? `Shipment Assignment: ${formData.jcNumber || 'New Job Card'}` 
+            : `${formData.id ? "Edit Job Card" : "Create Job Card"}${formData.jcNumber ? `: ${formData.jcNumber}` : ''}${selectedWO ? ` - ${selectedWO.wo_number}` : ''}`;
+        })()}
         size="4xl"
       >
-        <form onSubmit={handleSubmit} className="space-y-4 p-1">
-          {/* Header Info */}
-          <div className="flex justify-between items-start border-b border-slate-100 pb-4">
-            <div>
-              <h2 className="text-xl  text-slate-800">
-                {operations.find(op => String(op.id) === String(formData.operationId))?.operation_name || 'Select Operation'}
-              </h2>
-              <p className="text-sm text-slate-500">
-                {selectedWO?.project_name || selectedWO?.item_name || 'No Project Selected'}
-              </p>
-            </div>
-            <div className="flex flex-col items-end gap-1">
-              <StatusBadge status={formData.status} />
-              <span className="text-xs  text-slate-400 ">Job Card Status</span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Left Column: Resource Assignment & Metrics */}
-            <div className="space-y-6">
-              {/* Resource Assignment Section */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 text-indigo-600  border-b border-indigo-50 pb-2">
-                  <User className="w-4 h-4" />
-                  <span className="text-sm">Resource Assignment</span>
-                </div>
-
-                <div className="flex items-center gap-4 py-2">
-                  <span className="text-xs text-slate-500 ">Execution Mode:</span>
-                  <div className="flex bg-slate-100 p-1 rounded">
-                    <button
-                      type="button"
-                      onClick={() => setFormData({ ...formData, executionMode: 'In-house' })}
-                      className={`px-4 py-1.5 text-xs  rounded-md transition-all ${formData.executionMode === 'In-house'
-                        ? 'bg-indigo-600 text-white shadow-sm'
-                        : 'text-slate-500 hover:text-slate-700'
-                        }`}
-                    >
-                      In-house
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setFormData({ ...formData, executionMode: 'Outsource' })}
-                      className={`px-4 py-1.5 text-xs  rounded-md transition-all ${formData.executionMode === 'Outsource'
-                        ? 'bg-orange-500 text-white shadow-sm'
-                        : 'text-slate-500 hover:text-slate-700'
-                        }`}
-                    >
-                      Outsource
-                    </button>
+        {(() => {
+          const selectedOp = operations.find(op => String(op.id) === String(formData.operationId));
+          const activeJC = jobCards.find(j => String(j.id) === String(formData.id));
+          const isShipment = (activeJC && isShipmentOp(activeJC)) || (selectedOp && (
+            String(selectedOp.operation_name || '').toLowerCase() === 'shipment' ||
+            String(selectedOp.operation_name || '').toLowerCase() === 'dispatch' ||
+            String(selectedOp.operation_type || '').toLowerCase() === 'dispatch'
+          ));
+          if (isShipment) {
+            return (
+              <form onSubmit={handleSubmit} className="space-y-4 p-1">
+                {/* ORDER CONTEXT Section */}
+                <div className="bg-slate-50/60 border border-slate-200/60 rounded-xl p-4 space-y-3 shadow-sm">
+                  <div className="flex items-center gap-2 text-indigo-600 font-medium">
+                    <Info className="w-4 h-4" />
+                    <span className="text-xs tracking-wider uppercase font-semibold">Order Context</span>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-1 font-semibold">Customer</p>
+                      <p className="text-sm text-slate-800 font-medium">{activeJC?.client_name || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-1 font-semibold">Planned Qty</p>
+                      <p className="text-sm text-slate-800 font-medium">{(activeJC?.planned_qty || formData.plannedQty || 0)} Nos</p>
+                    </div>
+                    <div className="col-span-1 md:col-span-2">
+                      <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-1 font-semibold">Shipping Address</p>
+                      <p className="text-sm text-slate-800 font-medium whitespace-pre-wrap leading-relaxed">{activeJC?.shipping_address || 'N/A'}</p>
+                    </div>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <FormControl label="Machine / Workstation">
+                {/* Inputs Section */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+                  <FormControl label="Assigned Operator (Dispatch)" required>
                     <SearchableSelect
-                      options={workstations.map(ws => {
-                        const busyJob = jobCards.find(jc =>
-                          jc.id !== formData.id &&
-                          Number(jc.workstation_id) === Number(ws.id) &&
-                          jc.status === 'IN_PROGRESS'
-                        );
-                        const busyStartStr = busyJob ? formatLocalTime(busyJob.latest_log_start_time || busyJob.start_time) : '';
-                        const busyEndStr = busyJob ? getEstimatedEndTime(busyJob) : '';
-                        return {
-                          value: ws.id,
-                          label: ws.workstation_name,
-                          subLabel: busyJob
-                            ? `🔴 Busy (${busyStartStr} – ${busyEndStr} (${busyJob.job_card_no}))`
-                            : '🟢 Available'
-                        };
-                      })}
-                      subLabelField="subLabel"
-                      value={formData.workstationId}
-                      onChange={(e) => handleModalWorkstationChange(e.target.value)}
-                      placeholder="Select Workstation"
+                      options={users.map(u => ({ value: u.id, label: `${u.first_name || ''} ${u.last_name || ''} (${u.username})` }))}
+                      value={formData.assignedTo}
+                      onChange={(e) => setFormData({ ...formData, assignedTo: e.target.value })}
+                      placeholder="Select Operator..."
                     />
                   </FormControl>
 
-                  {formData.executionMode === 'Outsource' && (
-                    <FormControl label="Subcontractor (Vendor)">
+                  <FormControl label="Dispatch Date" required>
+                    <input
+                      type="date"
+                      value={formData.startDate || new Date().toISOString().split('T')[0]}
+                      onChange={(e) => setFormData({ ...formData, startDate: e.target.value, endDate: e.target.value })}
+                      className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none hover:border-indigo-400 transition-colors"
+                    />
+                  </FormControl>
+                </div>
+
+                {/* Modal footer */}
+                <div className="flex justify-end gap-2 border-t border-slate-100 pt-4 mt-6">
+                  <button
+                    type="button"
+                    onClick={() => { setIsModalOpen(false); navigate(`${deptPrefix}/job-card`); }}
+                    className="px-5 py-2 border border-slate-200 text-slate-700 rounded text-xs hover:bg-slate-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700 shadow-md shadow-indigo-100 transition-colors font-medium"
+                  >
+                    Confirm Dispatch
+                  </button>
+                </div>
+              </form>
+            );
+          }
+
+          return (
+            <form onSubmit={handleSubmit} className="space-y-4 p-1">
+              {/* Header Info */}
+              <div className="flex justify-between items-start border-b border-slate-100 pb-4">
+                <div>
+                  <h2 className="text-xl  text-slate-800">
+                    {operations.find(op => String(op.id) === String(formData.operationId))?.operation_name || 'Select Operation'}
+                  </h2>
+                  <p className="text-sm text-slate-500">
+                    {selectedWO?.project_name || selectedWO?.item_name || 'No Project Selected'}
+                  </p>
+                </div>
+                <div className="flex flex-col items-end gap-1">
+                  <StatusBadge status={formData.status} />
+                  <span className="text-xs  text-slate-400 ">Job Card Status</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Left Column: Resource Assignment & Metrics */}
+                <div className="space-y-6">
+                  {/* Resource Assignment Section */}
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-indigo-600  border-b border-indigo-50 pb-2">
+                      <User className="w-4 h-4" />
+                      <span className="text-sm">Resource Assignment</span>
+                    </div>
+
+                    <div className="flex items-center gap-4 py-2">
+                      <span className="text-xs text-slate-500 ">Execution Mode:</span>
+                      <div className="flex bg-slate-100 p-1 rounded">
+                        <button
+                          type="button"
+                          onClick={() => setFormData({ ...formData, executionMode: 'In-house' })}
+                          className={`px-4 py-1.5 text-xs  rounded-md transition-all ${formData.executionMode === 'In-house'
+                            ? 'bg-indigo-600 text-white shadow-sm'
+                            : 'text-slate-500 hover:text-slate-700'
+                            }`}
+                        >
+                          In-house
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setFormData({ ...formData, executionMode: 'Outsource' })}
+                          className={`px-4 py-1.5 text-xs  rounded-md transition-all ${formData.executionMode === 'Outsource'
+                            ? 'bg-orange-500 text-white shadow-sm'
+                            : 'text-slate-500 hover:text-slate-700'
+                            }`}
+                        >
+                          Outsource
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <FormControl label="Machine / Workstation">
+                        <SearchableSelect
+                          options={workstations.map(ws => {
+                            const busyJob = jobCards.find(jc =>
+                              jc.id !== formData.id &&
+                              Number(jc.workstation_id) === Number(ws.id) &&
+                              jc.status === 'IN_PROGRESS'
+                            );
+                            const busyStartStr = busyJob ? formatLocalTime(busyJob.latest_log_start_time || busyJob.start_time) : '';
+                            const busyEndStr = busyJob ? getEstimatedEndTime(busyJob) : '';
+                            return {
+                              value: ws.id,
+                              label: ws.workstation_name,
+                              subLabel: busyJob
+                                ? `🔴 Busy (${busyStartStr} – ${busyEndStr} (${busyJob.job_card_no}))`
+                                : '🟢 Available'
+                            };
+                          })}
+                          subLabelField="subLabel"
+                          value={formData.workstationId}
+                          onChange={(e) => handleModalWorkstationChange(e.target.value)}
+                          placeholder="Select Workstation"
+                        />
+                      </FormControl>
+
+                      {formData.executionMode === 'Outsource' && (
+                        <FormControl label="Subcontractor (Vendor)">
+                          <select
+                            value={formData.vendorId}
+                            onChange={(e) => setFormData(prev => ({ ...prev, vendorId: e.target.value }))}
+                            className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none appearance-none"
+                          >
+                            <option value="">Select Vendor</option>
+                            {vendors.map(v => (
+                              <option key={v.id} value={v.id}>{v.vendor_name}</option>
+                            ))}
+                          </select>
+                        </FormControl>
+                      )}
+                      {formData.executionMode === 'In-house' ? (
+                        <FormControl label="Primary Operator">
+                          <select
+                            value={formData.assignedTo}
+                            onChange={(e) => setFormData(prev => ({ ...prev, assignedTo: e.target.value }))}
+                            className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none appearance-none"
+                          >
+                            <option value="">Select Operator</option>
+                            {users.map(user => (
+                              <option key={user.id} value={user.id}>
+                                {user.first_name} {user.last_name} ({user.username})
+                              </option>
+                            ))}
+                          </select>
+                        </FormControl>
+                      ) : (
+                        <div className="grid grid-cols-1 gap-3">
+                          <div />
+                          <FormControl label="Vendor Rate per Unit">
+                            <input
+                              type="number"
+                              value={formData.vendorRate}
+                              onChange={(e) => setFormData(prev => ({ ...prev, vendorRate: e.target.value }))}
+                              className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                            />
+                          </FormControl>
+                        </div>
+                      )}
+                    </div>
+
+
+                  </div>
+
+                  {/* Execution & Metrics Section */}
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-indigo-600  border-b border-indigo-50 pb-2">
+                      <Activity className="w-4 h-4" />
+                      <span className="text-sm">Execution & Metrics</span>
+                    </div>
+
+                    <FormControl label="Job Status">
                       <select
-                        value={formData.vendorId}
-                        onChange={(e) => setFormData(prev => ({ ...prev, vendorId: e.target.value }))}
+                        value={formData.status}
+                        onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value }))}
                         className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none appearance-none"
                       >
-                        <option value="">Select Vendor</option>
-                        {vendors.map(v => (
-                          <option key={v.id} value={v.id}>{v.vendor_name}</option>
-                        ))}
+                        <option value="PENDING">PENDING</option>
+                        <option value="IN_PROGRESS">IN PROGRESS</option>
+                        <option value="COMPLETED">COMPLETED</option>
+                        <option value="ON_HOLD">ON HOLD</option>
                       </select>
                     </FormControl>
-                  )}
-                  {formData.executionMode === 'In-house' ? (
-                    <FormControl label="Primary Operator">
-                      <select
-                        value={formData.assignedTo}
-                        onChange={(e) => setFormData(prev => ({ ...prev, assignedTo: e.target.value }))}
-                        className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none appearance-none"
-                      >
-                        <option value="">Select Operator</option>
-                        {users.map(user => (
-                          <option key={user.id} value={user.id}>
-                            {user.first_name} {user.last_name} ({user.username})
-                          </option>
-                        ))}
-                      </select>
-                    </FormControl>
-                  ) : (
-                    <div className="grid grid-cols-1 gap-3">
-                      <div />
-                      <FormControl label="Vendor Rate per Unit">
+
+                    <div className="grid grid-cols-3 gap-3">
+                      <FormControl label="Planned Qty">
                         <input
                           type="number"
-                          value={formData.vendorRate}
-                          onChange={(e) => setFormData(prev => ({ ...prev, vendorRate: e.target.value }))}
-                          className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                          value={formData.plannedQty}
+                          onChange={(e) => setFormData(prev => ({ ...prev, plannedQty: e.target.value }))}
+                          className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs outline-none"
+                        />
+                      </FormControl>
+                      <FormControl label="Produced Qty">
+                        <input
+                          type="number"
+                          value={formData.producedQty}
+                          onChange={(e) => setFormData(prev => ({ ...prev, producedQty: e.target.value }))}
+                          className="w-full p-2 bg-white border border-indigo-200 ring-1 ring-indigo-50 rounded text-xs text-indigo-700  outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                      </FormControl>
+                      <FormControl label="Accepted Qty">
+                        <input
+                          type="number"
+                          value={formData.acceptedQty}
+                          onChange={(e) => setFormData(prev => ({ ...prev, acceptedQty: e.target.value }))}
+                          className="w-full p-2 bg-white border border-emerald-200 ring-1 ring-emerald-50 rounded text-xs text-emerald-700  outline-none focus:ring-2 focus:ring-emerald-500"
                         />
                       </FormControl>
                     </div>
+                    <p className="text-xs  text-slate-400 italic">Note: Accepted quantity represents final yield after QC.</p>
+                  </div>
+                </div>
+
+                {/* Right Column: Time Planning & Remarks */}
+                <div className="space-y-2">
+                  {formData.executionMode === 'In-house' && (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 text-indigo-600  border-b border-indigo-50 pb-2">
+                        <Clock className="w-4 h-4" />
+                        <span className="text-sm">Time Planning</span>
+                      </div>
+
+                      <div className="grid grid-cols-1">
+                        <div className="space-y-1">
+                          <label className="text-xs   text-slate-500  ">Start DateTime</label>
+                          <div className="flex gap-1.5">
+                            <input
+                              type="date"
+                              value={formData.startDate}
+                              onChange={(e) => setFormData(prev => ({ ...prev, startDate: e.target.value }))}
+                              className="flex-1 p-2 text-xs bg-white border border-slate-200 rounded hover:border-indigo-400 transition-colors focus:ring-2 focus:ring-indigo-500/20 outline-none"
+                            />
+                            <div className="w-32">
+                              <TimePicker
+                                value={formData.startTime}
+                                ampmValue={formData.startAMPM}
+                                onTimeChange={(val) => setFormData(prev => ({ ...prev, startTime: val }))}
+                                onAMPMChange={(val) => setFormData(prev => ({ ...prev, startAMPM: val }))}
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1 relative">
+                          <label className="text-xs   text-slate-500  ">End DateTime</label>
+                          <span className="absolute right-0 top-0 text-xs  text-indigo-600   ">Auto Suggest</span>
+                          <div className="flex gap-1.5">
+                            <input
+                              type="date"
+                              value={formData.endDate}
+                              onChange={(e) => setFormData(prev => ({ ...prev, endDate: e.target.value }))}
+                              className="flex-1 p-2 text-xs bg-white border border-slate-200 rounded hover:border-indigo-400 transition-colors focus:ring-2 focus:ring-indigo-500/20 outline-none"
+                            />
+                            <div className="w-32">
+                              <TimePicker
+                                value={formData.endTime}
+                                ampmValue={formData.endAMPM}
+                                onTimeChange={(val) => setFormData(prev => ({ ...prev, endTime: val }))}
+                                onAMPMChange={(val) => setFormData(prev => ({ ...prev, endAMPM: val }))}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-3">
+                        <FormControl label="Standard Time (Min)">
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={formData.stdTime}
+                            onChange={(e) => setFormData(prev => ({ ...prev, stdTime: e.target.value, timeUom: 'Min' }))}
+                            className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                          />
+                        </FormControl>
+                      </div>
+
+                      {/* Machine Engagement Box */}
+                      <div className="bg-indigo-50/50 border border-indigo-100 rounded p-2 flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 text-xs text-indigo-700">
+                          <Monitor className="w-3.5 h-3.5" />
+                          <span>Standard Cycle Time Suggestion</span>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs text-slate-700 font-medium">{calculateModalStdTimeSuggestion()} mins</p>
+                        </div>
+                      </div>
+
+                      {/* Dynamic Alert block */}
+                      {calculateModalOverlapAlert() && (
+                        <div className="bg-amber-50 border border-amber-200 rounded p-2.5 flex items-start gap-2.5">
+                          <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                          <div className="space-y-0.5">
+                            <p className="text-xs text-amber-800 font-medium">Schedule Overlap Alert</p>
+                            <p className="text-[10px] text-amber-700 leading-relaxed">{calculateModalOverlapAlert()}</p>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="bg-blue-50 border border-blue-100 rounded p-2.5 flex items-start gap-2">
+                        <Info className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
+                        <p className="text-xs  text-blue-700 leading-relaxed">
+                          Scheduled end time is calculated based on standard cycle time. Adjust manually if resource availability differs.
+                        </p>
+                      </div>
+                    </div>
                   )}
+
+                  <FormControl label="Job Remarks">
+                    <textarea
+                      value={formData.remarks}
+                      onChange={(e) => setFormData(prev => ({ ...prev, remarks: e.target.value }))}
+                      className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none h-24"
+                      placeholder="Enter specific instructions for the operator..."
+                    />
+                  </FormControl>
                 </div>
-
-
               </div>
 
-              {/* Execution & Metrics Section */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 text-indigo-600  border-b border-indigo-50 pb-2">
-                  <Activity className="w-4 h-4" />
-                  <span className="text-sm">Execution & Metrics</span>
-                </div>
-
-                <FormControl label="Job Status">
-                  <select
-                    value={formData.status}
-                    onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value }))}
-                    className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none appearance-none"
-                  >
-                    <option value="PENDING">PENDING</option>
-                    <option value="IN_PROGRESS">IN PROGRESS</option>
-                    <option value="COMPLETED">COMPLETED</option>
-                    <option value="ON_HOLD">ON HOLD</option>
-                  </select>
-                </FormControl>
-
-                <div className="grid grid-cols-3 gap-3">
-                  <FormControl label="Planned Qty">
-                    <input
-                      type="number"
-                      value={formData.plannedQty}
-                      onChange={(e) => setFormData(prev => ({ ...prev, plannedQty: e.target.value }))}
-                      className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs outline-none"
-                    />
-                  </FormControl>
-                  <FormControl label="Produced Qty">
-                    <input
-                      type="number"
-                      value={formData.producedQty}
-                      onChange={(e) => setFormData(prev => ({ ...prev, producedQty: e.target.value }))}
-                      className="w-full p-2 bg-white border border-indigo-200 ring-1 ring-indigo-50 rounded text-xs text-indigo-700  outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                  </FormControl>
-                  <FormControl label="Accepted Qty">
-                    <input
-                      type="number"
-                      value={formData.acceptedQty}
-                      onChange={(e) => setFormData(prev => ({ ...prev, acceptedQty: e.target.value }))}
-                      className="w-full p-2 bg-white border border-emerald-200 ring-1 ring-emerald-50 rounded text-xs text-emerald-700  outline-none focus:ring-2 focus:ring-emerald-500"
-                    />
-                  </FormControl>
-                </div>
-                <p className="text-xs  text-slate-400 italic">Note: Accepted quantity represents final yield after QC.</p>
+              <div className="flex justify-end gap-3 pt-6 border-t border-slate-100 mt-4">
+                <button
+                  type="button"
+                  onClick={() => navigate(`${deptPrefix}/job-card`)}
+                  className="px-6 py-2 text-xs  text-slate-600 hover:bg-slate-50 border border-slate-200 rounded-md transition-all"
+                >
+                  Discard Changes
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2 bg-indigo-600 text-white  rounded-md hover:bg-indigo-700 transition-all text-xs shadow-lg shadow-indigo-100"
+                >
+                  Update Job Card
+                </button>
               </div>
-            </div>
-
-            {/* Right Column: Time Planning & Remarks */}
-            <div className="space-y-2">
-              {formData.executionMode === 'In-house' && (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2 text-indigo-600  border-b border-indigo-50 pb-2">
-                    <Clock className="w-4 h-4" />
-                    <span className="text-sm">Time Planning</span>
-                  </div>
-
-                  <div className="grid grid-cols-1">
-                    <div className="space-y-1">
-                      <label className="text-xs   text-slate-500  ">Start DateTime</label>
-                      <div className="flex gap-1.5">
-                        <input
-                          type="date"
-                          value={formData.startDate}
-                          onChange={(e) => setFormData(prev => ({ ...prev, startDate: e.target.value }))}
-                          className="flex-1 p-2 text-xs bg-white border border-slate-200 rounded hover:border-indigo-400 transition-colors focus:ring-2 focus:ring-indigo-500/20 outline-none"
-                        />
-                        <div className="w-32">
-                          <TimePicker
-                            value={formData.startTime}
-                            ampmValue={formData.startAMPM}
-                            onTimeChange={(val) => setFormData(prev => ({ ...prev, startTime: val }))}
-                            onAMPMChange={(val) => setFormData(prev => ({ ...prev, startAMPM: val }))}
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="space-y-1 relative">
-                      <label className="text-xs   text-slate-500  ">End DateTime</label>
-                      <span className="absolute right-0 top-0 text-xs  text-indigo-600   ">Auto Suggest</span>
-                      <div className="flex gap-1.5">
-                        <input
-                          type="date"
-                          value={formData.endDate}
-                          onChange={(e) => setFormData(prev => ({ ...prev, endDate: e.target.value }))}
-                          className="flex-1 p-2 text-xs bg-white border border-slate-200 rounded hover:border-indigo-400 transition-colors focus:ring-2 focus:ring-indigo-500/20 outline-none"
-                        />
-                        <div className="w-32">
-                          <TimePicker
-                            value={formData.endTime}
-                            ampmValue={formData.endAMPM}
-                            onTimeChange={(val) => setFormData(prev => ({ ...prev, endTime: val }))}
-                            onAMPMChange={(val) => setFormData(prev => ({ ...prev, endAMPM: val }))}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-3">
-                    <FormControl label="Standard Time (Min)">
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={formData.stdTime}
-                        onChange={(e) => setFormData(prev => ({ ...prev, stdTime: e.target.value, timeUom: 'Min' }))}
-                        className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
-                      />
-                    </FormControl>
-                  </div>
-
-                  {/* Machine Engagement Box */}
-                  <div className="bg-indigo-50/50 border border-indigo-100 rounded p-2 flex items-center justify-between">
-                    <div>
-                      <span className="text-xs text-slate-500 block mb-1">Machine Engagement:</span>
-                      <p className="text-xs  text-slate-700">
-                        {(() => {
-                          const operation = operations.find(o => String(o.id) === String(formData.operationId));
-                          let netTime = parseFloat(formData.stdTime || operation?.net_time || operation?.std_time || 0);
-                          let timeUom = formData.stdTime > 0 ? formData.timeUom : (operation?.time_uom || 'Min');
-                          if (timeUom === 'Hr') netTime *= 60;
-                          else if (timeUom === 'Sec') netTime /= 60;
-                          const qty = parseFloat(formData.producedQty || 0) > 0 ? parseFloat(formData.producedQty) : parseFloat(formData.plannedQty || 0);
-                          return `${netTime.toFixed(2)} min/unit × ${qty.toFixed(3)} units`;
-                        })()}
-                      </p>
-                    </div>
-                    <div className="bg-white p-2 rounded-md border border-indigo-100">
-                      <span className="text-xs  text-indigo-600">
-                        {(() => {
-                          const operation = operations.find(o => String(o.id) === String(formData.operationId));
-                          let netTime = parseFloat(formData.stdTime || operation?.net_time || operation?.std_time || 0);
-                          let timeUom = formData.stdTime > 0 ? formData.timeUom : (operation?.time_uom || 'Min');
-                          if (timeUom === 'Hr') netTime *= 60;
-                          else if (timeUom === 'Sec') netTime /= 60;
-                          const qty = parseFloat(formData.producedQty || 0) > 0 ? parseFloat(formData.producedQty) : parseFloat(formData.plannedQty || 0);
-                          const totalMins = Math.round(netTime * qty);
-                          const hrs = Math.floor(totalMins / 60);
-                          const mins = totalMins % 60;
-                          return `${hrs} Hrs ${mins} Min`;
-                        })()}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-2 p-2 bg-blue-50/50 rounded border border-blue-100 mt-4">
-                    <Info className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
-                    <p className="text-xs  text-blue-700 leading-relaxed">
-                      Scheduled end time is calculated based on standard cycle time. Adjust manually if resource availability differs.
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              <FormControl label="Job Remarks">
-                <textarea
-                  value={formData.remarks}
-                  onChange={(e) => setFormData(prev => ({ ...prev, remarks: e.target.value }))}
-                  className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none h-24"
-                  placeholder="Enter specific instructions for the operator..."
-                />
-              </FormControl>
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-3 pt-6 border-t border-slate-100 mt-4">
-            <button
-              type="button"
-              onClick={() => navigate(`${deptPrefix}/job-card`)}
-              className="px-6 py-2 text-xs  text-slate-600 hover:bg-slate-50 border border-slate-200 rounded-md transition-all"
-            >
-              Discard Changes
-            </button>
-            <button
-              type="submit"
-              className="px-6 py-2 bg-indigo-600 text-white  rounded-md hover:bg-indigo-700 transition-all text-xs shadow-lg shadow-indigo-100"
-            >
-              Update Job Card
-            </button>
-          </div>
-        </form>
+            </form>
+          );
+        })()}
       </Modal>
 
       {/* Existing Modals */}
       <Modal
         isOpen={isOutwardModalOpen}
-        onClose={() => navigate(`${deptPrefix}/job-card`)}
+        onClose={() => { setIsOutwardModalOpen(false); navigate(`${deptPrefix}/job-card`); }}
         title="Outward Challan"
         size="2xl"
       >
@@ -5254,7 +5961,7 @@ const JobCard = () => {
 
       <Modal
         isOpen={isInwardModalOpen}
-        onClose={() => navigate(`${deptPrefix}/job-card`)}
+        onClose={() => { setIsInwardModalOpen(false); navigate(`${deptPrefix}/job-card`); }}
         title="Vendor Receipt (Inward)"
         size="xl"
       >
