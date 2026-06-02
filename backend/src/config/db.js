@@ -307,6 +307,13 @@ const ensureQuotationItemColumns = async () => {
       console.log('Quotation tax/host_company_id columns synchronized');
     }
 
+    // Update status enum of quotations to include 'REJECTED' if not present
+    const statusCol = qCols.find(c => c.Field === 'status');
+    if (statusCol && !statusCol.Type.includes("'REJECTED'")) {
+      await connection.query("ALTER TABLE quotations MODIFY COLUMN status ENUM('DRAFT', 'SENT', 'RECEIVED', 'REVIEWED', 'CLOSED', 'PENDING', 'EMAIL_RECEIVED', 'SUPERSEDED', 'REJECTED') DEFAULT 'DRAFT'");
+      console.log('Updated quotations status ENUM to include REJECTED');
+    }
+
     const [columns] = await connection.query('SHOW COLUMNS FROM quotation_items');
     const existing = new Set(columns.map(column => column.Field));
 
@@ -575,7 +582,8 @@ const ensurePoReceiptColumns = async () => {
       { name: 'po_id', definition: 'INT NOT NULL' },
       { name: 'received_quantity', definition: 'DECIMAL(12, 3) DEFAULT 0' },
       { name: 'notes', definition: 'TEXT NULL' },
-      { name: 'host_company_id', definition: 'INT NULL' }
+      { name: 'host_company_id', definition: 'INT NULL' },
+      { name: 'pdf_path', definition: 'VARCHAR(1000) NULL' }
     ];
 
     const missing = requiredColumns.filter(column => !existing.has(column.name));

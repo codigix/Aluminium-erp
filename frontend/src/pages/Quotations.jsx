@@ -40,6 +40,7 @@ const rfqStatusColors = {
   REVIEWED: { bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-600', badge: 'bg-purple-100 text-purple-700', label: 'Approved' },
   CLOSED: { bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-600', badge: 'bg-slate-100 text-slate-700', label: 'Closed' },
   PENDING: { bg: 'bg-yellow-50', border: 'border-yellow-200', text: 'text-yellow-600', badge: 'bg-yellow-100 text-yellow-700', label: 'Pending' },
+  REJECTED: { bg: 'bg-rose-50', border: 'border-rose-200', text: 'text-rose-600', badge: 'bg-rose-100 text-rose-700', label: 'REJECTED (Another Vendor Selected)' },
 };
 
 const formatDate = (date) => {
@@ -1220,9 +1221,9 @@ const Quotations = () => {
 
   const openEditModal = (quotation) => {
     setSelectedQuotation(quotation);
-    
-    const paths = quotation.received_pdf_path 
-      ? quotation.received_pdf_path.split(',').map(p => p.trim()).filter(Boolean) 
+
+    const paths = quotation.received_pdf_path
+      ? quotation.received_pdf_path.split(',').map(p => p.trim()).filter(Boolean)
       : [];
     setEditAttachments(paths);
     setEditUploadFiles([]);
@@ -1263,7 +1264,7 @@ const Quotations = () => {
     try {
       const token = localStorage.getItem('authToken');
       setLoading(true);
-      
+
       let finalPaths = [...editAttachments];
 
       // 1. Upload new attachments if selected inside edit modal
@@ -1326,8 +1327,8 @@ const Quotations = () => {
 
   const openUploadAttachmentsModal = (quotation) => {
     setSelectedQuotation(quotation);
-    const paths = quotation.received_pdf_path 
-      ? quotation.received_pdf_path.split(',').map(p => p.trim()).filter(Boolean) 
+    const paths = quotation.received_pdf_path
+      ? quotation.received_pdf_path.split(',').map(p => p.trim()).filter(Boolean)
       : [];
     setExistingAttachments(paths);
     setUploadModalFiles([]);
@@ -1341,7 +1342,7 @@ const Quotations = () => {
     try {
       setUploadingAttachments(true);
       const token = localStorage.getItem('authToken');
-      
+
       let finalPaths = [...existingAttachments];
 
       // 1. Upload new files if any, and merge them with remaining existing attachments
@@ -1490,7 +1491,7 @@ const Quotations = () => {
     const mapped = combined.filter(q => {
       const isTabMatch = activeTab === 'sent'
         ? ['DRAFT', 'SENT', 'EMAIL_RECEIVED', 'PENDING', 'RFQ_REQUESTED'].includes(q.status)
-        : ['RECEIVED', 'REVIEWED'].includes(q.status);
+        : ['RECEIVED', 'REVIEWED', 'REJECTED'].includes(q.status);
       const matchesStatus = filterStatus === 'All Quotations' || q.status === filterStatus;
       return isTabMatch && matchesStatus;
     }).map(q => {
@@ -1607,7 +1608,7 @@ const Quotations = () => {
         render: (val, q) => (
           <div className="flex flex-col gap-1 items-start">
             <span className={`inline-flex px-2.5 py-1 rounded text-xs    border ${rfqStatusColors[val]?.badge}`}>
-              {rfqStatusColors[val]?.label?.toUpperCase() || val}
+              {val === 'REJECTED' ? rfqStatusColors[val]?.label : (rfqStatusColors[val]?.label?.toUpperCase() || val)}
             </span>
             {val === 'REVIEWED' && q.is_single_vendor && (
               <span className="text-xs  text-indigo-500  ml-1">Auto Approved</span>
@@ -1621,7 +1622,7 @@ const Quotations = () => {
         className: 'text-right',
         render: (_, q) => (
           <div className="flex justify-end gap-1.5">
-            {!q.isRFQOnly && (
+            {!q.isRFQOnly && q.status !== 'REJECTED' && (
               <button
                 onClick={(e) => { e.stopPropagation(); handleViewPDF(q.id); }}
                 className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded  transition-all border border-transparent hover:border-indigo-100"
@@ -1683,21 +1684,25 @@ const Quotations = () => {
                     <Check className="w-4 h-4" />
                   </button>
                 )}
-                <button
-                  onClick={(e) => { e.stopPropagation(); openUploadAttachmentsModal(q); }}
-                  className="flex items-center gap-1 px-1.5 py-1 bg-cyan-50 text-cyan-700 border border-cyan-100 rounded text-[11px] hover:bg-cyan-100 transition-all font-medium whitespace-nowrap"
-                  title="Upload Attachments"
-                >
-                  <Upload className="w-3.5 h-3.5" />
-                  Upload
-                </button>
-                <button
-                  onClick={(e) => { e.stopPropagation(); openEditModal(q); }}
-                  className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded  transition-all border border-transparent hover:border-amber-100"
-                  title="Edit Recorded Quote"
-                >
-                  <Pencil className="w-4 h-4" />
-                </button>
+                {q.status !== 'REJECTED' && (
+                  <>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); openUploadAttachmentsModal(q); }}
+                      className="flex items-center gap-1 px-1.5 py-1 bg-cyan-50 text-cyan-700 border border-cyan-100 rounded text-[11px] hover:bg-cyan-100 transition-all font-medium whitespace-nowrap"
+                      title="Upload Attachments"
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      Upload
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); openEditModal(q); }}
+                      className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded  transition-all border border-transparent hover:border-amber-100"
+                      title="Edit Recorded Quote"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                  </>
+                )}
               </>
             )}
             <button
@@ -1822,7 +1827,7 @@ const Quotations = () => {
                   const mrId = e.target.value;
                   setSelectedMR(mrId);
                   if (mrId) {
-                    const related = displayQuotations.filter(q => String(q.mr_id) === String(mrId) && q.status === 'RECEIVED');
+                    const related = displayQuotations.filter(q => String(q.mr_id) === String(mrId) && ['RECEIVED', 'REVIEWED', 'REJECTED'].includes(q.status));
                     setSelectedQuotes(related.map(q => q.id));
                   } else {
                     setSelectedQuotes([]);
@@ -1874,6 +1879,7 @@ const Quotations = () => {
                 <>
                   <option value="RECEIVED">Received</option>
                   <option value="REVIEWED">Approved</option>
+                  <option value="REJECTED">Rejected</option>
                 </>
               )}
             </select>
@@ -1972,11 +1978,10 @@ const Quotations = () => {
                               </div>
                             )}
                             <span className="text-[10px] font-bold text-slate-800 leading-tight truncate w-full">{selectedHostCompany.company_name}</span>
-                            <span className={`text-[8px] mt-1 px-1.5 py-0.5 rounded-full font-semibold border ${
-                              selectedHostCompany.status === 'ACTIVE'
+                            <span className={`text-[8px] mt-1 px-1.5 py-0.5 rounded-full font-semibold border ${selectedHostCompany.status === 'ACTIVE'
                                 ? 'bg-emerald-50 border-emerald-100 text-emerald-600'
                                 : 'bg-slate-100 border-slate-200 text-slate-500'
-                            }`}>
+                              }`}>
                               {selectedHostCompany.status === 'ACTIVE' ? 'Active Global Billing' : 'Inactive'}
                             </span>
                           </div>
@@ -2641,11 +2646,10 @@ const Quotations = () => {
                             </div>
                           )}
                           <span className="text-[10px] font-bold text-slate-800 leading-tight truncate w-full">{selectedEditHostCompany.company_name}</span>
-                          <span className={`text-[8px] mt-1 px-1.5 py-0.5 rounded-full font-semibold border ${
-                            selectedEditHostCompany.status === 'ACTIVE'
+                          <span className={`text-[8px] mt-1 px-1.5 py-0.5 rounded-full font-semibold border ${selectedEditHostCompany.status === 'ACTIVE'
                               ? 'bg-emerald-50 border-emerald-100 text-emerald-600'
                               : 'bg-slate-100 border-slate-200 text-slate-500'
-                          }`}>
+                            }`}>
                             {selectedEditHostCompany.status === 'ACTIVE' ? 'Active Global Billing' : 'Inactive'}
                           </span>
                         </div>
@@ -3232,16 +3236,23 @@ const Quotations = () => {
                   <td className="p-2 border text-right sticky left-0 bg-white z-10" colSpan="3">Actions</td>
                   {compareData.map((q, idx) => (
                     <td key={idx} className="p-2 border text-center" colSpan="2">
-                      <Button
-                        variant="success"
-                        size="sm"
-                        onClick={() => {
-                          handleApproveQuote(q.id);
-                          setShowCompareModal(false);
-                        }}
-                      >
-                        Approve this Quote
-                      </Button>
+                      {q.status === 'REVIEWED' ? (
+                        <span className="text-xs font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded">APPROVED</span>
+                      ) : q.status === 'REJECTED' ? (
+                        <span className="text-xs font-bold text-rose-600 bg-rose-50 border border-rose-200 px-2 py-1 rounded">REJECTED</span>
+                      ) : (
+                        <Button
+                          variant="success"
+                          size="sm"
+                          disabled={q.status !== 'RECEIVED' || compareData.some(item => item.status === 'REVIEWED')}
+                          onClick={() => {
+                            handleApproveQuote(q.id);
+                            setShowCompareModal(false);
+                          }}
+                        >
+                          Approve this Quote
+                        </Button>
+                      )}
                     </td>
                   ))}
                 </tr>

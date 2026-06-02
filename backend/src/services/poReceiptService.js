@@ -101,7 +101,7 @@ const getPOReceiptById = async (receiptId) => {
   return { ...receipt, items };
 };
 
-const createPOReceipt = async (poId, receiptDate, receivedQuantity, notes, items = [], userId = 1, hostCompanyId = null) => {
+const createPOReceipt = async (poId, receiptDate, receivedQuantity, notes, items = [], userId = 1, hostCompanyId = null, pdfPath = null) => {
   if (!poId) {
     const error = new Error('Purchase Order ID is required');
     error.statusCode = 400;
@@ -129,15 +129,16 @@ const createPOReceipt = async (poId, receiptDate, receivedQuantity, notes, items
     const dateValue = receiptDate ? new Date(receiptDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
     
     const [result] = await connection.execute(
-      `INSERT INTO po_receipts (po_id, receipt_date, received_quantity, status, notes, host_company_id)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO po_receipts (po_id, receipt_date, received_quantity, status, notes, host_company_id, pdf_path)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
         poId,
         dateValue,
         receivedQuantity || 0,
         'DRAFT',
         notes || null,
-        hostCompanyId ? Number(hostCompanyId) : null
+        hostCompanyId ? Number(hostCompanyId) : null,
+        pdfPath
       ]
     );
 
@@ -251,7 +252,7 @@ const createPOReceipt = async (poId, receiptDate, receivedQuantity, notes, items
   }
 };
 
-const updatePOReceipt = async (receiptId, receiptDate, receivedQuantity, notes, status) => {
+const updatePOReceipt = async (receiptId, receiptDate, receivedQuantity, notes, status, pdfPath) => {
   await getPOReceiptById(receiptId);
 
   const updateFields = [];
@@ -271,6 +272,11 @@ const updatePOReceipt = async (receiptId, receiptDate, receivedQuantity, notes, 
   if (notes !== undefined) {
     updateFields.push('notes = ?');
     updateValues.push(notes);
+  }
+
+  if (pdfPath !== undefined) {
+    updateFields.push('pdf_path = ?');
+    updateValues.push(pdfPath);
   }
 
   if (status !== undefined) {

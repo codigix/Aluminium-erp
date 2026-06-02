@@ -107,7 +107,7 @@ const createCustomerPo = async payload => {
         header.insuranceTerms || null,
         header.deliveryTerms || null,
         'DRAFT',
-        pdfFile ? path.relative(process.cwd(), pdfFile) : null,
+        pdfFile ? (pdfFile.includes(',') || pdfFile.startsWith('uploads') ? pdfFile : path.relative(process.cwd(), pdfFile)) : null,
         totals.subtotal,
         totals.taxTotal,
         totals.netTotal,
@@ -344,6 +344,7 @@ const updateCustomerPo = async (id, payload) => {
       projectName,
       header = {},
       items = [],
+      pdfFile,
       remarks,
       termsAndConditions,
       specialNotes,
@@ -360,7 +361,7 @@ const updateCustomerPo = async (id, payload) => {
            payment_terms = ?, credit_days = ?, freight_terms = ?, packing_forwarding = ?, 
            insurance_terms = ?, delivery_terms = ?, subtotal = ?, tax_total = ?, net_total = ?, 
            remarks = ?, terms_and_conditions = ?, special_notes = ?, inspection_clause = ?, 
-           test_certificate = ?, host_company_id = ?
+           test_certificate = ?, host_company_id = ?, pdf_path = ?
        WHERE id = ?`
       ,
       [
@@ -386,6 +387,7 @@ const updateCustomerPo = async (id, payload) => {
         inspectionClause || null,
         testCertificate || null,
         hostCompanyId ? Number(hostCompanyId) : null,
+        pdfFile || null,
         id
       ]
     );

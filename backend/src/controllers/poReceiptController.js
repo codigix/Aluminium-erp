@@ -4,14 +4,35 @@ const generatePoPdf = require('../utils/generatePoPdf');
 const createPOReceipt = async (req, res, next) => {
   try {
     const { poId, receiptDate, receivedQuantity, notes, items, hostCompanyId, host_company_id } = req.body;
+    
+    let parsedItems = items;
+    if (typeof items === 'string') {
+      try {
+        parsedItems = JSON.parse(items);
+      } catch (err) {
+        parsedItems = [];
+      }
+    }
+
+    let filePaths = [];
+    if (req.files && req.files.length > 0) {
+      const path = require('path');
+      filePaths = req.files.map(f => path.relative(process.cwd(), f.path).replace(/\\/g, '/'));
+    } else if (req.file) {
+      const path = require('path');
+      filePaths = [path.relative(process.cwd(), req.file.path).replace(/\\/g, '/')];
+    }
+    const pdfPath = filePaths.length > 0 ? filePaths.join(',') : null;
+
     const result = await poReceiptService.createPOReceipt(
       poId,
       receiptDate,
       receivedQuantity,
       notes,
-      items,
+      parsedItems,
       req.user?.id || 1,
-      hostCompanyId || host_company_id
+      hostCompanyId || host_company_id,
+      pdfPath
     );
     res.status(201).json({ message: 'PO Receipt created', data: result });
   } catch (error) {
@@ -39,13 +60,31 @@ const getPOReceiptById = async (req, res, next) => {
 
 const updatePOReceipt = async (req, res, next) => {
   try {
-    const { receiptDate, receivedQuantity, notes, status } = req.body;
+    const { receiptDate, receivedQuantity, notes, status, existingAttachments, existing_attachments } = req.body;
+
+    let filePaths = [];
+    if (req.files && req.files.length > 0) {
+      const path = require('path');
+      filePaths = req.files.map(f => path.relative(process.cwd(), f.path).replace(/\\/g, '/'));
+    } else if (req.file) {
+      const path = require('path');
+      filePaths = [path.relative(process.cwd(), req.file.path).replace(/\\/g, '/')];
+    }
+
+    let existingPaths = [];
+    const rawExisting = existing_attachments || existingAttachments;
+    if (rawExisting) {
+      existingPaths = rawExisting.split(',').map(p => p.trim()).filter(Boolean);
+    }
+    const finalPdfPath = [...existingPaths, ...filePaths].join(',') || null;
+
     const result = await poReceiptService.updatePOReceipt(
       req.params.receiptId,
       receiptDate,
       receivedQuantity,
       notes,
-      status
+      status,
+      finalPdfPath
     );
     res.json({ message: 'PO Receipt updated', data: result });
   } catch (error) {

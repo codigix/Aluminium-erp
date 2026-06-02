@@ -1065,422 +1065,543 @@ const generatePurchaseOrderPDF = async (poId) => {
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Purchase Order - {{hostCompanyName}}</title>
-
 <style>
-  *{
-    margin:0;
-    padding:0;
-    box-sizing:border-box;
-    font-family: Arial, sans-serif;
+  @page {
+    size: A4 landscape;
+    margin: 8mm;
   }
 
-  body{
-    background:#f4f4f4;
-    padding:20px;
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: Arial, Helvetica, sans-serif;
   }
 
-  .po-container{
-    width:1400px;
-    margin:auto;
-    background:#fff;
-    border:2px solid #000;
+  body {
+    background: #fff;
+    -webkit-print-color-adjust: exact;
   }
 
-  .header{
-    display:flex;
-    justify-content:space-between;
-    border-bottom:2px solid #000;
+  .po-container {
+    width: 100%;
+    border: 1.5px solid #000;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
   }
 
-  .company-section{
-    width:70%;
-    padding:18px;
-    display:flex;
-    gap:20px;
+  .header-table {
+    width: 100%;
+    border-collapse: collapse;
+    border-bottom: 1.5px solid #000;
+  }
+  
+  .header-table td {
+    vertical-align: top;
+    padding: 6px;
   }
 
-  .logo{
-    width:100px;
-    height:120px;
-    border:1px solid #000;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    background:#f4dca3;
-    font-size:28px;
-    font-weight:bold;
-    flex-direction:column;
-    overflow:hidden;
+  .logo-box {
+    width: 60px;
+    height: 70px;
+    border: 1px solid #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f4dca3;
+    font-weight: bold;
+    flex-direction: column;
+    overflow: hidden;
+    margin-right: 12px;
   }
 
-  .company-details h1{
-    font-size:24px;
-    margin-bottom:10px;
+  .company-title {
+    font-size: 11px;
+    font-weight: bold;
+    margin-bottom: 4px;
+    color: #000;
+    text-transform: uppercase;
   }
 
-  .company-details p{
-    margin-bottom:8px;
-    font-size:15px;
+  .company-address {
+    font-size: 7.5px;
+    line-height: 1.3;
+    color: #333;
+    margin-bottom: 4px;
   }
 
-  .po-info{
-    width:30%;
-    border-left:2px solid #000;
+  .company-meta {
+    font-size: 7.5px;
+    margin-bottom: 1px;
+    color: #000;
   }
 
-  .po-title{
-    text-align:center;
-    font-size:20px;
-    font-weight:bold;
-    padding:10px;
-    border-bottom:2px solid #000;
+  .created-by-table {
+    width: 100%;
+    font-size: 7.5px;
+    border-collapse: collapse;
   }
 
-  .info-table{
-    width:100%;
-    border-collapse:collapse;
+  .created-by-table td {
+    padding: 1px 0;
+    vertical-align: top;
   }
 
-  .info-table td{
-    border-bottom:1px solid #000;
-    border-right:1px solid #000;
-    padding:8px;
-    font-size:14px;
+  .po-title-block {
+    text-align: center;
+    font-weight: bold;
+    font-size: 11px;
+    padding: 4px;
+    border-bottom: 1.5px solid #000;
+    letter-spacing: 0.5px;
+    background: #fff;
   }
 
-  .middle-section{
-    display:flex;
-    border-bottom:2px solid #000;
+  .po-details-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 7.5px;
   }
 
-  .box{
-    width:33.33%;
-    border-right:2px solid #000;
-    padding:14px;
-    min-height:240px;
+  .po-details-table td {
+    border-bottom: 0.5px solid #000;
+    border-right: 0.5px solid #000;
+    padding: 2.5px 4px;
+    vertical-align: middle;
   }
 
-  .box:last-child{
-    border-right:none;
+  .po-details-table tr:last-child td {
+    border-bottom: none;
   }
 
-  .box-title{
-    font-size:22px;
-    font-weight:bold;
-    margin-bottom:15px;
+  .po-details-table td:last-child {
+    border-right: none;
   }
 
-  .box p{
-    margin-bottom:10px;
-    line-height:1.6;
-    font-size:14px;
+  .middle-table {
+    width: 100%;
+    border-collapse: collapse;
+    border-bottom: 1.5px solid #000;
   }
 
-  .items-table{
-    width:100%;
-    border-collapse:collapse;
+  .middle-table td {
+    vertical-align: top;
+    padding: 6px;
   }
 
-  .items-table th,
-  .items-table td{
-    border:1px solid #000;
-    padding:10px;
-    font-size:13px;
-    vertical-align:top;
+  .section-title {
+    font-size: 8px;
+    font-weight: bold;
+    color: #000;
+    margin-bottom: 5px;
+    border-bottom: 0.5px solid #000;
+    padding-bottom: 2px;
+    text-transform: uppercase;
   }
 
-  .items-table th{
-    background:#f0f0f0;
-    text-align:center;
+  .vendor-name {
+    font-size: 8px;
+    font-weight: bold;
+    margin-bottom: 4px;
+    color: #000;
   }
 
-  .summary{
-    display:flex;
-    border-top:2px solid #000;
+  .address-text {
+    font-size: 7.5px;
+    line-height: 1.3;
+    color: #333;
   }
 
-  .amount-words{
-    width:65%;
-    padding:15px;
-    border-right:2px solid #000;
+  .details-subtable {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 7.5px;
   }
 
-  .amount-words h3{
-    margin-bottom:10px;
+  .details-subtable td {
+    padding: 1.5px 0 !important;
+    border: none !important;
+    vertical-align: top;
   }
 
-  .totals{
-    width:35%;
+  .items-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: -0.5px;
   }
 
-  .totals table{
-    width:100%;
-    border-collapse:collapse;
+  .items-table th {
+    border: 0.5px solid #000;
+    padding: 3.5px 4px;
+    font-size: 7.5px;
+    vertical-align: middle;
+    background: #f2f2f2;
+    font-weight: bold;
+    text-align: center;
+    text-transform: uppercase;
   }
 
-  .totals td{
-    border-bottom:1px solid #000;
-    padding:12px;
-    font-size:15px;
-    font-weight:bold;
+  .items-table td {
+    border: none;
+    border-bottom: 0.5px solid #000;
+    padding: 3.5px 4px;
+    font-size: 7.5px;
+    vertical-align: top;
   }
 
-  .bottom-section{
-    display:flex;
-    border-top:2px solid #000;
+  .items-table tr.sub-assembly-row td {
+    border-bottom: none;
   }
 
-  .bottom-box{
-    width:33.33%;
-    padding:15px;
-    border-right:2px solid #000;
-    min-height:240px;
+  .items-table tr.parent-with-subs td {
+    border-bottom: none;
   }
 
-  .bottom-box:last-child{
-    border-right:none;
+  .items-table tr.last-sub-assembly td {
+    border-bottom: 0.5px solid #000;
   }
 
-  .bottom-box h3{
-    margin-bottom:12px;
+  .summary-table {
+    width: 100%;
+    border-collapse: collapse;
+    border-top: 1.5px solid #000;
+    border-bottom: 1.5px solid #000;
+    margin-top: -0.5px;
   }
 
-  .bottom-box p,
-  .bottom-box li{
-    font-size:14px;
-    line-height:1.8;
+  .summary-table td {
+    vertical-align: top;
+    padding: 6px;
   }
 
-  ul{
-    padding-left:20px;
+  .totals-subtable {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 7.5px;
   }
 
-  .signature{
-    margin-top:40px;
-    text-align:center;
+  .totals-subtable td {
+    padding: 2.5px 4px;
+    border: none;
   }
 
-  .footer{
-    border-top:2px solid #000;
-    text-align:center;
-    padding:12px;
-    font-weight:bold;
-    font-size:14px;
+  .totals-subtable tr.grand-total-row td {
+    border-top: 1px solid #000;
+    font-size: 9px;
+    font-weight: bold;
   }
 
-  .page{
-    text-align:center;
-    padding:10px;
-    font-size:14px;
+  .bottom-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .bottom-table td {
+    vertical-align: top;
+    padding: 6px;
+  }
+
+  .declaration-text {
+    font-size: 7.5px;
+    line-height: 1.3;
+    color: #333;
+    margin-bottom: 8px;
+  }
+
+  .signature-section {
+    text-align: right;
+    font-size: 7.5px;
+  }
+
+  .signature-box {
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+  }
+
+  .signature-img {
+    max-height: 40px;
+    max-width: 100px;
+    object-fit: contain;
+  }
+
+  .footer-row {
+    border-top: 1.5px solid #000;
+    text-align: center;
+    padding: 5px;
+    font-size: 7.5px;
+    font-weight: bold;
+    letter-spacing: 0.5px;
+    background: #fff;
+  }
+
+  .page-number-row {
+    text-align: center;
+    padding: 1px 0 3px 0;
+    font-size: 7.5px;
+    color: #555;
   }
 
   @media print {
     body {
       background: #fff !important;
-      padding: 0 !important;
       -webkit-print-color-adjust: exact !important;
-    }
-    .po-container {
-      width: 100% !important;
-      margin: 0 !important;
-      border: 2px solid #000 !important;
-      box-shadow: none !important;
     }
   }
 </style>
 </head>
-
 <body>
 
 <div class="po-container">
 
   <!-- HEADER -->
-  <div class="header">
-
-    <div class="company-section">
-
-      <div class="logo">
-        {{#logoBase64}}
-        <img src="{{logoBase64}}" style="max-width: 100%; max-height: 100%; object-fit: contain;" />
-        {{/logoBase64}}
-        {{^logoBase64}}
-        <div>S P</div>
-        <div>⚙</div>
-        <div>T P</div>
-        {{/logoBase64}}
-      </div>
-
-      <div class="company-details">
-        <h1>{{hostCompanyName}}</h1>
-
-        <p>{{{hostCompanyAddressHtml}}}</p>
-
-        <br>
-
-        <p><strong>GSTIN NO.</strong> : {{hostGSTIN}}</p>
-        {{#hostCIN}}
-        <p><strong>CIN NO.</strong> : {{hostCIN}}</p>
-        {{/hostCIN}}
-
-        <br>
-
-        <table style="width:100%; font-size: 14px;">
+  <table class="header-table">
+    <tr>
+      <td style="width: 70%; padding: 6px;">
+        <div style="display: flex; align-items: flex-start; justify-content: space-between;">
+          <div style="display: flex; align-items: flex-start;">
+            <div class="logo-box">
+              {{#logoBase64}}
+              <img src="{{logoBase64}}" style="max-width: 100%; max-height: 100%; object-fit: contain;" />
+              {{/logoBase64}}
+              {{^logoBase64}}
+              <div style="font-size: 9px;">S P</div>
+              <div style="font-size: 12px; margin: 1px 0;">⚙</div>
+              <div style="font-size: 9px;">T P</div>
+              {{/logoBase64}}
+            </div>
+            <div>
+              <div class="company-title">{{hostCompanyName}}</div>
+              <div class="company-address">{{{hostCompanyAddressHtml}}}</div>
+              <div class="company-meta"><strong>GSTIN NO.</strong> : {{hostGSTIN}}</div>
+              {{#hostCIN}}
+              <div class="company-meta"><strong>CIN NO.</strong> : {{hostCIN}}</div>
+              {{/hostCIN}}
+            </div>
+          </div>
+          
+          <div style="width: 220px; margin-left: 10px;">
+            <table class="created-by-table">
+              <tr>
+                <td style="width: 38%; font-weight: bold;">Created By</td>
+                <td style="width: 5%;">:</td>
+                <td>{{created_by_name}}</td>
+              </tr>
+              <tr>
+                <td style="font-weight: bold;">Mobile</td>
+                <td>:</td>
+                <td>{{created_by_mobile}}</td>
+              </tr>
+              <tr>
+                <td style="font-weight: bold;">Telephone</td>
+                <td>:</td>
+                <td>{{created_by_phone}}</td>
+              </tr>
+              <tr>
+                <td style="font-weight: bold;">Email</td>
+                <td>:</td>
+                <td style="word-break: break-all;">{{created_by_email}}</td>
+              </tr>
+            </table>
+          </div>
+        </div>
+      </td>
+      
+      <td style="width: 30%; border-left: 1.5px solid #000; padding: 0;">
+        <div class="po-title-block">PURCHASE ORDER</div>
+        <table class="po-details-table">
           <tr>
-            <td style="font-weight: bold; width: 30%; border: none; padding: 2px 0;">Created By</td>
-            <td style="border: none; padding: 2px 0;">: {{created_by_name}}</td>
+            <td style="width: 45%; font-weight: bold;">Purchase Order No.</td>
+            <td style="width: 5%;">:</td>
+            <td>{{po_number}}</td>
           </tr>
-
           <tr>
-            <td style="font-weight: bold; border: none; padding: 2px 0;">Mobile</td>
-            <td style="border: none; padding: 2px 0;">: {{created_by_mobile}}</td>
+            <td style="font-weight: bold;">PO Date</td>
+            <td>:</td>
+            <td>{{po_date}}</td>
           </tr>
-
           <tr>
-            <td style="font-weight: bold; border: none; padding: 2px 0;">Email</td>
-            <td style="border: none; padding: 2px 0; word-break: break-all;">: {{created_by_email}}</td>
+            <td style="font-weight: bold;">Customer Code</td>
+            <td>:</td>
+            <td>{{customer_code}}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold;">Plant</td>
+            <td>:</td>
+            <td>{{plant}}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold;">Version No.</td>
+            <td>:</td>
+            <td>{{version_no}}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold;">Version Date</td>
+            <td>:</td>
+            <td>{{po_date}}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold;">Your Reference No.</td>
+            <td>:</td>
+            <td style="word-break: break-all;">{{project_ref}}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold;">Order Type</td>
+            <td>:</td>
+            <td>{{order_type}}</td>
           </tr>
         </table>
-
-      </div>
-    </div>
-
-    <div class="po-info">
-
-      <div class="po-title">
-        PURCHASE ORDER
-      </div>
-
-      <table class="info-table">
-        <tr>
-          <td><strong>Purchase Order No.</strong></td>
-          <td>{{po_number}}</td>
-        </tr>
-
-        <tr>
-          <td><strong>PO Date</strong></td>
-          <td>{{created_at}}</td>
-        </tr>
-
-        <tr>
-          <td><strong>Vendor Code</strong></td>
-          <td>{{vendor_code}}</td>
-        </tr>
-
-        <tr>
-          <td><strong>Plant</strong></td>
-          <td>{{plant}}</td>
-        </tr>
-
-        <tr>
-          <td><strong>Your Reference No.</strong></td>
-          <td style="word-break: break-all;">{{project_ref}}</td>
-        </tr>
-
-        <tr>
-          <td><strong>Order Type</strong></td>
-          <td>{{order_type}}</td>
-        </tr>
-
-        <tr>
-          <td><strong>Version No.</strong></td>
-          <td>{{version_no}}</td>
-        </tr>
-
-        <tr>
-          <td><strong>Version Date</strong></td>
-          <td>{{created_at}}</td>
-        </tr>
-      </table>
-
-    </div>
-
-  </div>
+      </td>
+    </tr>
+  </table>
 
   <!-- MIDDLE SECTION -->
-  <div class="middle-section">
-
-    <div class="box">
-      <div class="box-title">SUPPLIER (VENDOR) DETAILS</div>
-
-      <p><strong>{{vendor_name}}</strong></p>
-
-      <p>
-        {{{vendor_address_html}}}
-      </p>
-
-      <br>
-
-      <p><strong>Telephone</strong> : {{phone}}</p>
-      <p><strong>GSTIN NO.</strong> : {{vendor_gstin}}</p>
-      <p><strong>Contact Person</strong> : {{contact_person}}</p>
-      <p><strong>Email</strong> : {{vendor_email}}</p>
-    </div>
-
-    <div class="box">
-
-      <div class="box-title">DISPATCH / SHIP TO ADDRESS</div>
-
-      <p><strong>{{hostCompanyName}}</strong></p>
-
-      <p>
-        {{{hostCompanyAddressHtml}}}
-      </p>
-
-      <br><br>
-
-      <p><strong>GSTIN NO.</strong> : {{hostGSTIN}}</p>
-      <p><strong>State</strong> : {{hostState}}</p>
-
-    </div>
-
-    <div class="box">
-
-      <div class="box-title">TERMS & CONDITIONS</div>
-
-      <p><strong>Payment Terms</strong> : {{payment_terms}}</p>
-      <p><strong>Freight</strong> : {{freight}}</p>
-      <p><strong>P & F</strong> : {{p_and_f}}</p>
-      <p><strong>Insurance</strong> : {{insurance}}</p>
-      <p><strong>Purchase Term</strong> : {{purchase_term}}</p>
-      <p><strong>Delivery Terms</strong> : {{delivery_terms}}</p>
-      <p><strong>Delivery Date</strong> : {{expected_delivery_date}}</p>
-      <p><strong>Your Ref No.</strong> : {{project_ref}}</p>
-      <p><strong>Our Ref No.</strong> : {{our_ref_no}}</p>
-
-    </div>
-
-  </div>
+  <table class="middle-table">
+    <tr>
+      <td style="width: 35%; border-right: 1.5px solid #000;">
+        <div class="section-title">VENDOR DETAILS</div>
+        <div class="vendor-name">{{vendor_name}}</div>
+        <div class="address-text">{{{vendor_address_html}}}</div>
+        <table class="details-subtable" style="margin-top: 6px;">
+          <tr>
+            <td style="width: 32%; font-weight: bold;">Telephone</td>
+            <td style="width: 5%;">:</td>
+            <td>{{phone}}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold;">GSTIN NO.</td>
+            <td>:</td>
+            <td>{{vendor_gstin}}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold;">Contact Person</td>
+            <td>:</td>
+            <td>{{contact_person}}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold;">Email</td>
+            <td>:</td>
+            <td style="word-break: break-all;">{{vendor_email}}</td>
+          </tr>
+        </table>
+      </td>
+      
+      <td style="width: 35%; border-right: 1.5px solid #000;">
+        <div class="section-title">DISPATCH / SHIP TO ADDRESS</div>
+        <div class="vendor-name">{{hostCompanyName}}</div>
+        <div class="address-text">{{{hostCompanyAddressHtml}}}</div>
+        <table class="details-subtable" style="margin-top: 6px;">
+          <tr>
+            <td style="width: 32%; font-weight: bold;">GSTIN NO.</td>
+            <td style="width: 5%;">:</td>
+            <td>{{hostGSTIN}}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold;">State</td>
+            <td>:</td>
+            <td>{{hostState}}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold;">Contact Person</td>
+            <td>:</td>
+            <td>{{created_by_name}}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold;">Telephone</td>
+            <td>:</td>
+            <td>{{created_by_mobile}}</td>
+          </tr>
+        </table>
+      </td>
+      
+      <td style="width: 30%;">
+        <div class="section-title">TERMS & CONDITIONS</div>
+        <table class="details-subtable">
+          <tr>
+            <td style="width: 40%; font-weight: bold;">Payment Terms</td>
+            <td style="width: 5%;">:</td>
+            <td>{{payment_terms}}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold;">Freight</td>
+            <td>:</td>
+            <td>{{freight}}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold;">P & F</td>
+            <td>:</td>
+            <td>{{p_and_f}}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold;">Insurance</td>
+            <td>:</td>
+            <td>{{insurance}}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold;">Purchase Term</td>
+            <td>:</td>
+            <td>{{purchase_term}}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold;">Delivery Terms</td>
+            <td>:</td>
+            <td>{{delivery_terms}}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold;">Delivery Date</td>
+            <td>:</td>
+            <td>{{expected_delivery_date}}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold;">Your Ref No.</td>
+            <td>:</td>
+            <td style="word-break: break-all;">{{project_ref}}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold;">Our Ref No.</td>
+            <td>:</td>
+            <td>{{our_ref_no}}</td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
 
   <!-- ITEMS TABLE -->
   <table class="items-table">
-
     <thead>
       <tr>
-        <th>SL No.</th>
-        <th>Item No.</th>
-        <th style="text-align: left; width: 25%;">Item Description</th>
-        <th>HSN Code</th>
-        <th>Item Dlv. Dt.</th>
-        <th>Pur. Req. No.</th>
-        <th style="text-align: right;">Rate</th>
-        <th style="text-align: right;">Qty</th>
-        <th>Unit</th>
-        <th style="text-align: right;">Amount</th>
-        <th style="text-align: right;">CGST %</th>
-        <th style="text-align: right;">CGST Amt</th>
-        <th style="text-align: right;">SGST %</th>
-        <th style="text-align: right;">SGST Amt</th>
+        <th style="width: 3%;">SL No.</th>
+        <th style="width: 25%; text-align: left; vertical-align: top; line-height: 1.3;">Item No.<br/>Item Description</th>
+        <th style="width: 5%;">HSN Code</th>
+        <th style="width: 7%;">Item Dlv. Dt.</th>
+        <th style="width: 7%;">Pur. Req. No.</th>
+        <th style="width: 6%; text-align: right;">Rate</th>
+        <th style="width: 6%; text-align: right;">Qty</th>
+        <th style="width: 4%;">Unit</th>
+        <th style="width: 6%; text-align: right;">Amount</th>
+        <th style="width: 5%; text-align: right;">Discount</th>
+        <th style="width: 6%; text-align: right;">Transaction Amount</th>
+        <th style="width: 3%; text-align: right; line-height: 1.2;">CGST<br/>%</th>
+        <th style="width: 6%; text-align: right;">CGST Amt</th>
+        <th style="width: 3%; text-align: right; line-height: 1.2;">SGST<br/>%</th>
+        <th style="width: 6%; text-align: right;">SGST Amt</th>
       </tr>
     </thead>
-
     <tbody>
       {{#items}}
-      <tr>
+      <tr {{#has_sub_assemblies}}class="parent-with-subs"{{/has_sub_assemblies}}>
         <td style="text-align: center;">{{sl_no}}</td>
-        <td style="text-align: center; font-family: monospace;">{{item_no}}</td>
-        <td style="text-align: left; line-height: 1.3;">
-          <strong>{{material_name}}</strong><br><br>
-          {{description}}
+        <td style="text-align: left; line-height: 1.35; padding-left: 5px;">
+          {{item_no}}<br/>
+          <div style="padding-left: 10px;">
+            <strong>{{material_name}}</strong><br/>
+            {{#description}}
+            <span style="font-size: 7px; color: #555;">{{description}}</span>
+            {{/description}}
+          </div>
         </td>
         <td style="text-align: center;">{{hsn_code}}</td>
         <td style="text-align: center;">{{expected_delivery_date}}</td>
@@ -1489,132 +1610,164 @@ const generatePurchaseOrderPDF = async (poId) => {
         <td style="text-align: right;">{{quantity}}</td>
         <td style="text-align: center;">{{unit}}</td>
         <td style="text-align: right;">{{amount}}</td>
+        <td style="text-align: right;">{{discount}}</td>
+        <td style="text-align: right;">{{transaction_amount}}</td>
         <td style="text-align: right;">{{cgst_rate}}%</td>
         <td style="text-align: right;">{{cgst_amount}}</td>
         <td style="text-align: right;">{{sgst_rate}}%</td>
         <td style="text-align: right;">{{sgst_amount}}</td>
       </tr>
+      {{#sub_assemblies}}
+      <tr class="sub-assembly-row {{#is_last}}last-sub-assembly{{/is_last}}" style="background: #fafafa; font-size: 6.5px;">
+        <td></td>
+        <td style="text-align: left; padding-left: 15px;">{{description}} ({{drawingNo}})</td>
+        <td style="text-align: center;">{{hsn_code}}</td>
+        <td style="text-align: center;">{{formatted_delivery_date}}</td>
+        <td></td>
+        <td style="text-align: right;">{{displayRate}}</td>
+        <td style="text-align: right;">{{displayQuantity}}</td>
+        <td style="text-align: center;">{{unit}}</td>
+        <td style="text-align: right; font-weight: bold;">{{displayTotal}}</td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+      </tr>
+      {{/sub_assemblies}}
       {{/items}}
       {{#empty_rows}}
-      <tr style="height: 35px;">
-        <td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>
+      <tr style="height: 22px;">
+        <td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>
       </tr>
       {{/empty_rows}}
     </tbody>
-
   </table>
 
   <!-- SUMMARY -->
-  <div class="summary">
-
-    <div class="amount-words">
-      <h3>Amount Chargeable (in words)</h3>
-
-      <h2>
-        INR {{total_amount_words}} ONLY
-      </h2>
-    </div>
-
-    <div class="totals">
-
-      <table>
-        <tr>
-          <td>Sub Total</td>
-          <td style="text-align: right;">{{subtotal}}</td>
-        </tr>
-
-        {{#cgst_total}}
-        <tr>
-          <td>CGST @ {{cgst_rate_summary}}%</td>
-          <td style="text-align: right;">{{cgst_total}}</td>
-        </tr>
-        {{/cgst_total}}
-
-        {{#sgst_total}}
-        <tr>
-          <td>SGST @ {{sgst_rate_summary}}%</td>
-          <td style="text-align: right;">{{sgst_total}}</td>
-        </tr>
-        {{/sgst_total}}
-
-        <tr>
-          <td style="font-size:24px;"><strong>Grand Total</strong></td>
-          <td style="font-size:24px; text-align: right;">
-            <strong>₹ {{total_amount}}</strong>
-          </td>
-        </tr>
-      </table>
-
-    </div>
-
-  </div>
-
-  <!-- BOTTOM -->
-  <div class="bottom-section">
-
-    <div class="bottom-box">
-
-      <h3>BANK DETAILS (For Remittance)</h3>
-
-      <p><strong>Bank Name</strong> : {{hostBankName}}</p>
-      <p><strong>Account Name</strong> : {{hostAccountName}}</p>
-      <p><strong>Account Number</strong> : {{hostAccountNumber}}</p>
-      <p><strong>IFSC Code</strong> : {{hostIFSCCode}}</p>
-      <p><strong>Branch</strong> : {{hostBranchName}}</p>
-      <p><strong>Beneficiary GSTIN</strong> : {{hostGSTIN}}</p>
-
-    </div>
-
-    <div class="bottom-box">
-
-      <h3>IMPORTANT NOTES</h3>
-
-      <ul>
-        <li>Please ensure all supplied material meets PO requirements.</li>
-        <li>All test certificates and datasheets to be provided.</li>
-        <li>Mention PO No. & Item Code on Challan and Invoice.</li>
-        <li>General Terms & Conditions enclosed.</li>
-        <li>Subject to Pune jurisdiction only.</li>
-        <li>Goods once sold will not be taken back.</li>
-      </ul>
-
-    </div>
-
-    <div class="bottom-box">
-
-      <h3>DECLARATION</h3>
-
-      <p>
-        We declare that this Purchase Order is issued for the goods/services
-        as per the terms and conditions mentioned herein.
-      </p>
-
-      <br><br>
-
-      <h3>FOR {{hostCompanyName}}</h3>
-
-      <div class="signature">
-        {{#signatureBase64}}
-        <img src="{{signatureBase64}}" style="max-height: 80px; max-width: 200px; object-fit: contain;" />
-        {{/signatureBase64}}
-        {{^signatureBase64}}
-        <div style="font-family: 'Courier New', Courier, monospace; font-style: italic; font-size: 20px; font-weight: bold; border-bottom: 1px dashed #000; display: inline-block; padding: 5px 20px; margin-bottom: 10px;">
-          {{hostCompanyName}}
+  <table class="summary-table">
+    <tr>
+      <td style="width: 60%; padding: 8px; border-right: 1.5px solid #000;">
+        <div style="font-size: 7.5px; font-weight: bold; margin-bottom: 4px;">Amount Chargeable (in words)</div>
+        <div style="font-size: 8.5px; font-weight: bold; text-transform: uppercase; line-height: 1.35; color: #000;">
+          INR {{total_amount_words}} ONLY
         </div>
-        {{/signatureBase64}}
+      </td>
+      <td style="width: 40%; padding: 0;">
+        <table class="totals-subtable">
+          <tr>
+            <td style="width: 55%; padding: 3px 5px; font-weight: bold;">Sub Total</td>
+            <td style="width: 5%; text-align: center; padding: 3px 0;">:</td>
+            <td style="text-align: right; padding: 3px 5px;">{{subtotal}}</td>
+          </tr>
+          {{#cgst_total}}
+          <tr>
+            <td style="padding: 3px 5px; font-weight: bold;">CGST @ {{cgst_rate_summary}}%</td>
+            <td style="text-align: center; padding: 3px 0;">:</td>
+            <td style="text-align: right; padding: 3px 5px;">{{cgst_total}}</td>
+          </tr>
+          {{/cgst_total}}
+          {{#sgst_total}}
+          <tr>
+            <td style="padding: 3px 5px; font-weight: bold;">SGST @ {{sgst_rate_summary}}%</td>
+            <td style="text-align: center; padding: 3px 0;">:</td>
+            <td style="text-align: right; padding: 3px 5px;">{{sgst_total}}</td>
+          </tr>
+          {{/sgst_total}}
+          <tr class="grand-total-row">
+            <td style="padding: 5px; font-size: 9px; font-weight: bold;">Grand Total</td>
+            <td style="text-align: center; padding: 5px 0; font-size: 9px; font-weight: bold;">:</td>
+            <td style="text-align: right; padding: 5px; font-size: 10px; font-weight: bold;">
+              ₹ {{total_amount}}
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
 
-        <h3 style="margin-top: 10px;">Authorized Signatory</h3>
-      </div>
+  <!-- BOTTOM SECTION -->
+  <table class="bottom-table">
+    <tr>
+      <td style="width: 35%; border-right: 1.5px solid #000;">
+        <div class="section-title">BANK DETAILS (For Remittance)</div>
+        <table class="details-subtable">
+          <tr>
+            <td style="width: 35%; font-weight: bold;">Bank Name</td>
+            <td style="width: 5%;">:</td>
+            <td>{{hostBankName}}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold;">Account Name</td>
+            <td>:</td>
+            <td>{{hostAccountName}}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold;">Account Number</td>
+            <td>:</td>
+            <td>{{hostAccountNumber}}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold;">IFSC Code</td>
+            <td>:</td>
+            <td>{{hostIFSCCode}}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold;">Branch</td>
+            <td>:</td>
+            <td>{{hostBranchName}}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold;">Beneficiary GSTIN</td>
+            <td>:</td>
+            <td>{{hostGSTIN}}</td>
+          </tr>
+        </table>
+      </td>
+      
+      <td style="width: 35%; border-right: 1.5px solid #000;">
+        <div class="section-title">IMPORTANT NOTES</div>
+        <ol style="margin: 0; padding-left: 12px; font-size: 7.5px; line-height: 1.35; color: #333;">
+          <li>Please ensure all supplied material meet the requirements specified in PO.</li>
+          <li>All the necessary test certificates, data sheets to be provided along with the material.</li>
+          <li>Please mention our PO No. & Item Code in your Challan and Invoice.</li>
+          <li>General Terms and Conditions as enclosed.</li>
+          <li>Subject to Pune jurisdiction only.</li>
+          <li>Goods once sold will not be taken back.</li>
+        </ol>
+      </td>
+      
+      <td style="width: 30%;">
+        <div class="section-title">DECLARATION</div>
+        <div class="declaration-text">
+          We declare that this Purchase Order is issued for the goods / services as per the terms and conditions mentioned herein.
+        </div>
+        
+        <div class="signature-section">
+          <div style="font-weight: bold; margin-bottom: 20px;">For {{hostCompanyName}}</div>
+          <div class="signature-box">
+            {{#signatureBase64}}
+            <img src="{{signatureBase64}}" class="signature-img" />
+            {{/signatureBase64}}
+            {{^signatureBase64}}
+            <div style="font-family: 'Courier New', Courier, monospace; font-style: italic; font-size: 11px; font-weight: bold; border-bottom: 1px dashed #000; display: inline-block; padding: 2px 10px; margin-bottom: 5px;">
+              {{hostCompanyName}}
+            </div>
+            {{/signatureBase64}}
+          </div>
+          <div style="font-weight: bold; margin-top: 5px;">Authorized Signatory</div>
+        </div>
+      </td>
+    </tr>
+  </table>
 
-    </div>
-
-  </div>
-
-  <div class="footer">
+  <!-- FOOTER -->
+  <div class="footer-row">
     THIS IS ELECTRONICALLY GENERATED PURCHASE ORDER AND DOES NOT REQUIRE SIGNATURE.
   </div>
 
-  <div class="page">
+  <div class="page-number-row">
     Page 1 of 1
   </div>
 
@@ -1622,7 +1775,7 @@ const generatePurchaseOrderPDF = async (poId) => {
 
 </body>
 </html>
-`;
+  `;
 
   const formatDate = (date) => date ? new Date(date).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-') : '—';
 
@@ -1655,6 +1808,8 @@ const generatePurchaseOrderPDF = async (poId) => {
 
   const viewData = {
     ...po,
+    po_date: formatDate(po.created_at),
+    customer_code: vendor?.vendor_code || ('VEND-' + String(po.vendor_id).padStart(6, '0')),
     created_at: formatDate(po.created_at),
     expected_delivery_date: formatDate(po.expected_delivery_date),
     vendor_name: vendor?.vendor_name || 'N/A',
@@ -1679,10 +1834,10 @@ const generatePurchaseOrderPDF = async (poId) => {
     hostPAN,
     logoBase64,
     signatureBase64,
-    created_by_name: po.updated_by || 'Rohit Kuchekar',
-    created_by_mobile: activeCompany?.phone || '9822012345',
+    created_by_name: activeCompany?.contact_person || po.updated_by || 'Rohit Kuchekar',
+    created_by_mobile: activeCompany?.phone || '09823714674',
     created_by_phone: activeCompany?.telephone || '-',
-    created_by_email: activeCompany?.email || 'rohit.kuchekar.external@sptech.com',
+    created_by_email: activeCompany?.email || 'milindpodar@gmail.com',
     vendor_code: vendor?.vendor_code || ('VEND-' + String(po.vendor_id).padStart(6, '0')),
     plant: activeCompany?.plant_code || 'STPTPL-01',
     version_no: '1.0',
@@ -1707,12 +1862,12 @@ const generatePurchaseOrderPDF = async (poId) => {
       
       return {
         ...i,
-        sl_no: (idx + 1) * 10,
+        sl_no: idx + 1,
         item_code: i.item_code || '—',
         item_no: i.item_code || '—',
         drawing_no: i.drawing_no || i.item_code || '—',
         material_name: i.material_name || i.description || '—',
-        description: i.description || '—',
+        description: i.drawing_no ? `DRW: ${i.drawing_no}` : '—',
         material_type: i.material_type || '—',
         hsn_code: '73089090', // realistic fallback
         expected_delivery_date: formatDate(po.expected_delivery_date),
@@ -1732,6 +1887,8 @@ const generatePurchaseOrderPDF = async (poId) => {
     empty_rows: Array.from({ length: Math.max(0, 4 - (po.items || []).length) })
   };
 
+  const mustache = require('mustache');
+  const puppeteer = require('puppeteer');
   const html = mustache.render(htmlTemplate, viewData);
 
   const browser = await puppeteer.launch({
@@ -1742,8 +1899,9 @@ const generatePurchaseOrderPDF = async (poId) => {
   await page.setContent(html, { waitUntil: 'load' });
   const pdf = await page.pdf({ 
     format: 'A4', 
+    landscape: true,
     printBackground: true,
-    margin: { top: '0px', right: '0px', bottom: '0px', left: '0px' }
+    margin: { top: '8mm', right: '8mm', bottom: '8mm', left: '8mm' }
   });
   await browser.close();
 
