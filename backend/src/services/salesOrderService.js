@@ -1049,7 +1049,6 @@ const getOrderTimeline = async salesOrderId => {
        ) d2 ON d1.id = d2.max_id
      ) cd ON cd.drawing_no = soi.drawing_no
      WHERE soi.sales_order_id = ?
-        AND LOWER(TRIM(soi.status)) = 'approved'
         AND (
           soi.parent_bom_id IS NOT NULL
           OR (so.customer_po_id IS NOT NULL AND EXISTS (
