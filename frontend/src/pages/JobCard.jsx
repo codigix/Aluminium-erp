@@ -381,7 +381,7 @@ const JobCard = () => {
   const calculateModalStdTimeSuggestion = () => {
     const selectedOp = operations.find(op => String(op.id) === String(formData.operationId));
     if (!selectedOp) return 0;
-    const cycleTime = parseFloat(selectedOp.cycle_time || selectedOp.std_time || 0);
+    const cycleTime = parseFloat(selectedOp.cycle_time) || parseFloat(selectedOp.std_time) || 0;
     const setupTime = parseFloat(selectedOp.setup_time || 0);
     const qty = parseFloat(formData.plannedQty || 0);
     return Math.round((cycleTime * qty) + setupTime);
@@ -1792,7 +1792,6 @@ const JobCard = () => {
   };
 
   const calculateAutoEndTime = (startTime, startAMPM, producedQty) => {
-    return; // Disable auto-overwriting of end time
     if (!startTime || !startAMPM || !selectedJC) return;
 
     try {
@@ -1806,7 +1805,7 @@ const JobCard = () => {
       const startDate = new Date();
       startDate.setHours(hours, minutes, 0, 0);
 
-      const cycleTime = parseFloat(selectedJC.cycle_time || selectedJC.std_time || 0);
+      const cycleTime = parseFloat(selectedJC.cycle_time) || parseFloat(selectedJC.std_time) || 0;
       const setupTime = parseFloat(selectedJC.setup_time || 0);
       const qty = parseFloat(producedQty || 0);
 
@@ -1839,7 +1838,7 @@ const JobCard = () => {
     const balanceWip = parseFloat(selectedJC.planned_qty || 0) - parseFloat(selectedJC.accepted_qty || 0);
 
     const totalStdMins = (() => {
-      const cycleTime = parseFloat(selectedJC.cycle_time || selectedJC.std_time || 0);
+      const cycleTime = parseFloat(selectedJC.cycle_time) || parseFloat(selectedJC.std_time) || 0;
       const setupTime = parseFloat(selectedJC.setup_time || 0);
       return Math.round((cycleTime * parseFloat(selectedJC.accepted_qty || 0)) + setupTime);
     })();
@@ -2089,10 +2088,10 @@ const JobCard = () => {
                 <p className="text-xs  text-slate-400 mb-1  italic">(For all units)</p>
                 <div className="flex flex-col items-center">
                   <p className="text-sm  text-indigo-600 ">
-                    {((parseFloat(selectedJC.cycle_time || selectedJC.std_time || 0) * parseFloat(selectedJC.planned_qty || 0)) + parseFloat(selectedJC.setup_time || 0)).toFixed(0)} <span className="text-xs  text-indigo-400 lowercase">Min</span>
+                    {(((parseFloat(selectedJC.cycle_time) || parseFloat(selectedJC.std_time) || 0) * parseFloat(selectedJC.planned_qty || 0)) + parseFloat(selectedJC.setup_time || 0)).toFixed(0)} <span className="text-xs  text-indigo-400 lowercase">Min</span>
                   </p>
                   <div className="text-[9px] text-slate-400 mt-1 flex gap-1">
-                    <span>C: {(selectedJC.cycle_time || selectedJC.std_time || 0)}m</span>
+                    <span>C: {parseFloat(selectedJC.cycle_time) || parseFloat(selectedJC.std_time) || 0}m</span>
                     <span>•</span>
                     <span>S: {(selectedJC.setup_time || 0)}m</span>
                   </div>
@@ -2101,7 +2100,7 @@ const JobCard = () => {
               <div className="text-center border-l border-slate-100">
                 <p className="text-xs text-slate-400 mb-1.5 ">Net Time (Per Unit)</p>
                 <p className="text-sm  text-slate-600">
-                  {parseFloat(selectedJC.cycle_time || selectedJC.std_time || 0).toFixed(0)} <span className="text-xs  text-slate-400 lowercase">{(selectedJC.time_uom || 'Min').toLowerCase()}</span>
+                  {(parseFloat(selectedJC.cycle_time) || parseFloat(selectedJC.std_time) || 0).toFixed(0)} <span className="text-xs  text-slate-400 lowercase">{(selectedJC.time_uom || 'Min').toLowerCase()}</span>
                   <span className="text-[9px] text-slate-400 ml-1">/ unit</span>
                 </p>
               </div>
@@ -2736,7 +2735,7 @@ const JobCard = () => {
                         <FormControl label="Execution (P)">
                           <div className="p-2 bg-indigo-50 border border-indigo-100 rounded text-xs text-indigo-700 ">
                             {(() => {
-                              const cycleTime = parseFloat(selectedJC.cycle_time || selectedJC.std_time || 0);
+                              const cycleTime = parseFloat(selectedJC.cycle_time) || parseFloat(selectedJC.std_time) || 0;
                               const setupTime = parseFloat(selectedJC.setup_time || 0);
                               const qty = parseFloat(timeLogForm.producedQty || 0);
                               const total = (cycleTime * qty) + setupTime;
@@ -3770,7 +3769,7 @@ const JobCard = () => {
   const validateShiftCapacity = (logData) => {
     if (!selectedJC) return true;
 
-    let stdTime = parseFloat(selectedJC.std_time || selectedJC.cycle_time || 0);
+    let stdTime = parseFloat(selectedJC.std_time) || parseFloat(selectedJC.cycle_time) || 0;
     if (!stdTime || stdTime <= 0) return true;
 
     const uom = (selectedJC.time_uom || 'min').toLowerCase();
@@ -3783,11 +3782,14 @@ const JobCard = () => {
     const availableMins = calculateTotalMins(logData.startTime, logData.startAMPM, logData.endTime, logData.endAMPM);
     if (availableMins <= 0) return true;
 
+    const maxShiftMins = 720; // 12 hours max capacity per shift
+    const allowedLimit = Math.min(availableMins, maxShiftMins);
+
     const enteredQty = parseFloat(logData.producedQty || 0);
     const requiredMins = stdTime * enteredQty;
 
-    if (requiredMins > availableMins) {
-      const maxQty = Math.floor(availableMins / stdTime);
+    if (requiredMins > allowedLimit) {
+      const maxQty = Math.floor(allowedLimit / stdTime);
       
       const formatMinsToHoursStr = (mins) => {
         const hrs = mins / 60;
@@ -3795,7 +3797,7 @@ const JobCard = () => {
       };
 
       const requiredHoursStr = formatMinsToHoursStr(requiredMins);
-      const availableHoursStr = formatMinsToHoursStr(availableMins);
+      const availableHoursStr = formatMinsToHoursStr(allowedLimit);
 
       Swal.fire({
         icon: 'warning',
@@ -3813,7 +3815,7 @@ const JobCard = () => {
             <div class="space-y-1.5 text-xs text-slate-600">
               <p><strong>Entered Quantity:</strong> ${enteredQty} Units</p>
               <p><strong>Required Time:</strong> ${Number(requiredMins.toFixed(2))} Min (${requiredHoursStr})</p>
-              <p><strong>Available Time:</strong> ${Number(availableMins.toFixed(2))} Min (${availableHoursStr})</p>
+              <p><strong>Available Time:</strong> ${Number(allowedLimit.toFixed(2))} Min (${availableHoursStr})</p>
             </div>
             <p class="text-xs text-rose-600 font-semibold mt-2">Please reduce the quantity to ${maxQty} units or less.</p>
           </div>
@@ -5209,7 +5211,7 @@ const JobCard = () => {
       label: 'Time & Costing',
       key: 'cycle_time',
       render: (_, row) => {
-        const cycleTime = parseFloat(row.cycle_time || row.std_time || 0);
+        const cycleTime = parseFloat(row.cycle_time) || parseFloat(row.std_time) || 0;
         const hourlyRate = parseFloat(row.hourly_rate || 0);
         const totalCost = (cycleTime / 60) * (row.wo_quantity || row.planned_qty || 1) * hourlyRate;
 
