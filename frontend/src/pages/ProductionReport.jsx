@@ -561,7 +561,11 @@ const ProductionReport = () => {
                 const displayProject = cleanProjectName(row.project, row.client);
                 const isSubcontract = row.execution_type === 'Outsource' || row.execution_type === 'Subcontract' || row.execution_type === 'Sub-Contract' || row.execution_mode === 'Outsource';
                 const sourceType = (row.source_type || '').toUpperCase();
-                const isSA = sourceType === 'SA' || sourceType === 'SUB ASSEMBLY' || sourceType === 'SFG';
+                const isSA = sourceType === 'SA' || sourceType === 'SUB ASSEMBLY' || sourceType === 'SFG' ||
+                             (row.itemName || '').toUpperCase().includes('PET PUSHER') ||
+                             (row.itemName || '').toUpperCase().includes('SLIDING PLATE') ||
+                             (row.itemCode || '').toUpperCase().startsWith('PART-') ||
+                             (row.itemCode || '').toUpperCase().includes('PART');
 
                 return (
                 <tr key={idx} className="hover:bg-slate-50/50 transition-colors group text-xs">

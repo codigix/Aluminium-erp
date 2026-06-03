@@ -29,7 +29,8 @@ export const SearchableSelect = ({
   allowCustom = true,
   disabled = false,
   openUpwards = false,
-  className = ''
+  className = '',
+  onFocus
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -91,7 +92,10 @@ export const SearchableSelect = ({
               onChange(e);
             }
           }}
-          onFocus={() => !disabled && setIsOpen(true)}
+          onFocus={() => {
+            if (onFocus) onFocus();
+            if (!disabled) setIsOpen(true);
+          }}
           disabled={disabled}
         />
         {!className.includes('hide-arrow') && (
@@ -118,7 +122,12 @@ export const SearchableSelect = ({
                   <div className="flex items-center gap-2">
                     <span className="">{getLabel(opt)}</span>
                     {getSublabel(opt) && (
-                      <span className="text-xs  text-slate-400 font-normal">({getSublabel(opt)})</span>
+                      <span className="text-xs text-slate-400 font-normal whitespace-pre-line">
+                        {getSublabel(opt).startsWith('🟢') || getSublabel(opt).startsWith('🔴')
+                          ? getSublabel(opt)
+                          : `(${getSublabel(opt)})`
+                        }
+                      </span>
                     )}
                   </div>
                 </div>

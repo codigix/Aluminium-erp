@@ -10,6 +10,7 @@ router.use(authenticate);
 router.get('/vendor-receipts', authorize(['PAYMENT_VIEW', 'PO_VIEW']), jobCardController.getVendorReceipts);
 router.get('/vendor-receipts/:logId/items', authorize(['PAYMENT_VIEW', 'PO_VIEW']), jobCardController.getVendorReceiptItems);
 router.patch('/vendor-receipts/:logId/send-to-payment', authorize(['PAYMENT_MANAGE', 'PAYMENT_PROCESS']), jobCardController.sendVendorReceiptToPayment);
+router.get('/active-allocations', authorize(['PROD_VIEW', 'QC_VIEW']), jobCardController.getActiveAllocations);
 
 router.get('/', authorize(['PROD_VIEW', 'QC_VIEW']), jobCardController.listJobCards);
 router.get('/:id/details', authorize(['PROD_VIEW', 'QC_VIEW']), jobCardController.getJobCardDetails);

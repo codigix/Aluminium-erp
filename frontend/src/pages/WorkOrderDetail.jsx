@@ -102,6 +102,7 @@ const WorkOrderDetail = () => {
   }
 
   const { jobCard, logs, timeline, metrics } = data;
+  const isShipment = (jobCard?.op_name || '').toLowerCase() === 'shipment' || (jobCard?.op_name || '').toLowerCase() === 'dispatch';
 
   return (
     <div className="space-y-4 pb-12 animate-in fade-in duration-500 min-h-[calc(100vh-100px)]">
@@ -140,7 +141,7 @@ const WorkOrderDetail = () => {
         <div className="bg-white p-4 border border-slate-100 rounded shadow-sm">
           <p className="text-[10px] text-slate-400 uppercase mb-1">Work Center</p>
           <h3 className="text-sm text-slate-900 font-semibold">{jobCard.workstation_name || 'N/A'}</h3>
-          <p className="text-[10px] text-slate-500 mt-1">In-house</p>
+          <p className="text-[10px] text-slate-500 mt-1">{isShipment ? 'Dispatch' : 'In-house'}</p>
         </div>
         <div className="bg-white p-4 border border-slate-100 rounded shadow-sm col-span-1">
           <p className="text-[10px] text-slate-400 uppercase mb-1">Primary Operator</p>
@@ -532,8 +533,8 @@ const WorkOrderDetail = () => {
                   { label: 'Job Card', value: jobCard.job_card_no, isLink: true, icon: Activity },
                   { label: 'Specification', value: jobCard.item_code, subValue: jobCard.item_name, icon: Package },
                   { label: 'Target Qty', value: `${parseFloat(jobCard.planned_qty).toFixed(3)} Units`, icon: Target },
-                  { label: 'Work Center', value: jobCard.workstation_name || 'N/A', subValue: '(In-house)', icon: Monitor },
-                  { label: 'Execution', value: jobCard.execution_mode || 'In-house', icon: Zap },
+                  { label: 'Work Center', value: jobCard.workstation_name || 'N/A', subValue: isShipment ? '(Dispatch)' : '(In-house)', icon: Monitor },
+                  { label: 'Execution', value: isShipment ? 'Dispatch' : (jobCard.execution_mode || 'In-house'), icon: Zap },
                   { label: 'Priority', value: jobCard.priority, isBadge: true, icon: AlertTriangle },
                   { label: 'Timeline', value: formatDate(jobCard.created_at), time: formatLocalTime(jobCard.created_at), icon: Calendar }
                 ].map((item, idx) => (

@@ -205,6 +205,15 @@ const getJobCardDetails = async (req, res) => {
   }
 };
 
+const getActiveAllocations = async (req, res) => {
+  try {
+    const allocations = await jobCardService.getActiveAllocations();
+    res.json(allocations);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 module.exports = {
   listJobCards,
   createJobCard,
@@ -225,5 +234,6 @@ module.exports = {
   getVendorReceiptItems,
   sendVendorReceiptToPayment,
   downloadQualityReport,
-  getJobCardDetails
+  getJobCardDetails,
+  getActiveAllocations
 };

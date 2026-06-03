@@ -15,7 +15,7 @@ import { cleanProjectName } from '../utils/formatters';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
-const TimePicker = ({ value, ampmValue, onTimeChange, onAMPMChange, label, small = false, placeholder = '08:00', placeholderAMPM = 'AM' }) => {
+const TimePicker = ({ value, ampmValue, onTimeChange, onAMPMChange, label, small = false, placeholder = '08:00', placeholderAMPM = 'AM', disabled = false }) => {
   const [isOpen, setIsOpen] = useState(false);
   const triggerRef = useRef(null);
   const [coords, setCoords] = useState({ top: 0, left: 0, width: 0 });
@@ -47,17 +47,23 @@ const TimePicker = ({ value, ampmValue, onTimeChange, onAMPMChange, label, small
     }
   }, [isOpen, small]);
 
-  const toggleOpen = () => setIsOpen(!isOpen);
+  const toggleOpen = () => {
+    if (disabled) return;
+    setIsOpen(!isOpen);
+  };
 
   return (
     <div className="relative w-full" ref={triggerRef}>
       <div
         onClick={toggleOpen}
-        className={`flex items-center gap-1.5 bg-white border border-slate-200 rounded cursor-pointer hover:border-indigo-400 transition-all focus-within:ring-2 focus-within:ring-indigo-500/20 ${small ? 'px-2 py-1' : 'px-3 py-2'
-          }`}
+        className={`flex items-center gap-1.5 border border-slate-200 rounded transition-all focus-within:ring-2 focus-within:ring-indigo-500/20 ${small ? 'px-2 py-1' : 'px-3 py-2'} ${
+          disabled
+            ? 'bg-slate-50 text-slate-400 cursor-not-allowed border-slate-100'
+            : 'bg-white cursor-pointer hover:border-indigo-400'
+        }`}
       >
         <Clock className={`${small ? 'w-3 h-3' : 'w-3.5 h-3.5'} text-slate-400`} />
-        <span className={`${small ? 'text-xs ' : 'text-xs'}  ${isPlaceholder ? 'text-slate-400' : 'text-slate-700'}`}>
+        <span className={`${small ? 'text-xs ' : 'text-xs'}  ${isPlaceholder ? 'text-slate-400' : disabled ? 'text-slate-400' : 'text-slate-700'}`}>
           {hour}:{minute} {displayAMPM}
         </span>
         <ChevronDown className={`${small ? 'w-2.5 h-2.5' : 'w-3 h-3'} text-slate-400 ml-auto transition-transform ${isOpen ? 'rotate-180' : ''}`} />
@@ -135,6 +141,7 @@ const JobCard = () => {
 
   const [searchParams] = useSearchParams();
   const [jobCards, setJobCards] = useState([]);
+  const [liveAllocations, setLiveAllocations] = useState([]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -153,6 +160,16 @@ const JobCard = () => {
     const opName = (jc.operation_name || '').toLowerCase();
     const opType = (jc.operation_type || '').toLowerCase();
     return opName === 'shipment' || opName === 'dispatch' || opType === 'dispatch';
+  };
+  const calculateDayOffset = (jc, targetDateStr) => {
+    if (!jc) return 1;
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const startDateStr = jc.actual_start_date || jc.created_at || jc.start_time || todayStr;
+    const d1 = new Date(startDateStr);
+    const d2 = new Date(targetDateStr);
+    const utc1 = Date.UTC(d1.getFullYear(), d1.getMonth(), d1.getDate());
+    const utc2 = Date.UTC(d2.getFullYear(), d2.getMonth(), d2.getDate());
+    return Math.floor((utc2 - utc1) / (1000 * 60 * 60 * 24)) + 1;
   };
   const [shipmentForm, setShipmentForm] = useState({
     dispatchMode: 'Partial',
@@ -355,27 +372,27 @@ const JobCard = () => {
   };
 
   const calculateModalOverlapAlert = () => {
+    if (formData.executionMode === 'Outsource') return null;
     if (!formData.startDate || !formData.startTime || !formData.endTime || !formData.workstationId) return null;
 
     const ws = workstations.find(w => String(w.id) === String(formData.workstationId));
     if (!ws) return null;
-    const capacity = parseInt(ws.capacity || 1);
+    const capacity = 1;
 
     const newStart = parseTimeToMinutes(formData.startTime, formData.startAMPM || 'AM');
     const newEnd = parseTimeToMinutes(formData.endTime, formData.endAMPM || 'PM');
 
-    // Filter other active/planned job cards on the same workstation and same date
-    const overlappingWSActions = jobCards.filter(jc => {
+    // Filter other active/planned job cards on the same workstation and same date using liveAllocations
+    const overlappingWSActions = liveAllocations.filter(jc => {
       if (String(jc.id) === String(formData.id)) return false; // Skip current
       if (String(jc.workstation_id) !== String(formData.workstationId)) return false;
-      if (jc.status === 'COMPLETED' || jc.status === 'CANCELLED') return false;
 
       // Check dates
-      const jcDate = jc.start_time ? jc.start_time.split('T')[0] : (jc.actual_start_date ? jc.actual_start_date.split('T')[0] : '');
+      const jcDate = jc.start_time ? jc.start_time.split(/[ T]/)[0] : '';
       if (formData.startDate !== jcDate) return false;
 
-      const jcStartStr = jc.start_time ? to12h(jc.start_time.split('T')[1]?.slice(0, 5)) : null;
-      const jcEndStr = jc.end_time ? to12h(jc.end_time.split('T')[1]?.slice(0, 5)) : null;
+      const jcStartStr = jc.start_time ? to12h(jc.start_time.split(/[ T]/)[1]?.slice(0, 5)) : null;
+      const jcEndStr = jc.end_time ? to12h(jc.end_time.split(/[ T]/)[1]?.slice(0, 5)) : null;
       if (!jcStartStr || !jcEndStr) return false;
 
       const busyStart = parseTimeToMinutes(jcStartStr.time, jcStartStr.ampm);
@@ -385,21 +402,23 @@ const JobCard = () => {
     });
 
     if (overlappingWSActions.length >= capacity) {
-      return `Workstation "${ws.workstation_name}" is already fully scheduled during this period with Job Card(s): ${overlappingWSActions.map(o => o.job_card_no).join(', ')}`;
+      const firstOverlap = overlappingWSActions[0];
+      const busyStartStr = firstOverlap ? formatLocalTime(firstOverlap.latest_log_start_time || firstOverlap.start_time) : '';
+      const busyEndStr = firstOverlap ? getEstimatedEndTime(firstOverlap) : '';
+      return `${ws.workstation_name} is already allocated to Job Card ${firstOverlap.job_card_no} from ${busyStartStr} to ${busyEndStr}. Please select another time slot.`;
     }
 
     if (formData.assignedTo) {
       const op = users.find(u => String(u.id) === String(formData.assignedTo));
-      const overlappingOpActions = jobCards.filter(jc => {
+      const overlappingOpActions = liveAllocations.filter(jc => {
         if (String(jc.id) === String(formData.id)) return false;
         if (String(jc.assigned_to) !== String(formData.assignedTo)) return false;
-        if (jc.status === 'COMPLETED' || jc.status === 'CANCELLED') return false;
 
-        const jcDate = jc.start_time ? jc.start_time.split('T')[0] : (jc.actual_start_date ? jc.actual_start_date.split('T')[0] : '');
+        const jcDate = jc.start_time ? jc.start_time.split(/[ T]/)[0] : '';
         if (formData.startDate !== jcDate) return false;
 
-        const jcStartStr = jc.start_time ? to12h(jc.start_time.split('T')[1]?.slice(0, 5)) : null;
-        const jcEndStr = jc.end_time ? to12h(jc.end_time.split('T')[1]?.slice(0, 5)) : null;
+        const jcStartStr = jc.start_time ? to12h(jc.start_time.split(/[ T]/)[1]?.slice(0, 5)) : null;
+        const jcEndStr = jc.end_time ? to12h(jc.end_time.split(/[ T]/)[1]?.slice(0, 5)) : null;
         if (!jcStartStr || !jcEndStr) return false;
 
         const busyStart = parseTimeToMinutes(jcStartStr.time, jcStartStr.ampm);
@@ -409,7 +428,10 @@ const JobCard = () => {
       });
 
       if (overlappingOpActions.length > 0) {
-        return `Operator "${op?.username || 'Selected User'}" is already scheduled on another job (${overlappingOpActions.map(o => o.job_card_no).join(', ')}) during this period`;
+        const firstOverlap = overlappingOpActions[0];
+        const busyStartStr = firstOverlap ? formatLocalTime(firstOverlap.latest_log_start_time || firstOverlap.start_time) : '';
+        const busyEndStr = firstOverlap ? getEstimatedEndTime(firstOverlap) : '';
+        return `${op?.username || 'Selected User'} is already allocated to Job Card ${firstOverlap.job_card_no} from ${busyStartStr} to ${busyEndStr}. Please select another time slot.`;
       }
     }
 
@@ -537,7 +559,7 @@ const JobCard = () => {
     }
   };
 
-  const fetchInwardItems = async (jobCardId) => {
+  const fetchInwardItems = async (jobCardId, jcFallback = null) => {
     try {
       const token = localStorage.getItem('authToken');
 
@@ -546,42 +568,43 @@ const JobCard = () => {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
-      // 2. Fetch existing quality logs to see if we already have a receipt
-      const logsRes = await fetch(`${API_BASE}/job-cards/${jobCardId}/logs`, {
+      // 2. Fetch existing inward challan from new endpoint
+      const inwardRes = await fetch(`${API_BASE}/outward-challans/inward/job-card/${jobCardId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
       if (response.ok) {
         const outwardItems = await response.json();
         let existingInwardItems = [];
-        let existingLog = null;
+        let existingInward = null;
 
-        if (logsRes.ok) {
-          const logsData = await logsRes.json();
-          // Find the latest approved quality log which has inward items
-          existingLog = (logsData.qualityLogs || []).find(log => log.status === 'APPROVED' && log.inwardItems?.length > 0);
-          if (existingLog) {
-            existingInwardItems = existingLog.inwardItems;
-          }
+        if (inwardRes.ok) {
+          existingInward = await inwardRes.json();
+          existingInwardItems = existingInward.items || [];
         }
 
-        // Map rates from existing record if found, otherwise default to 0
+        // Map rates and release_qty from existing record if found, otherwise default to 0
         const itemsWithRate = outwardItems.map(item => {
           const matched = existingInwardItems.find(ei => ei.item_code === item.item_code);
           return {
             ...item,
+            release_qty: matched ? matched.received_qty : (parseFloat(item.release_qty) || parseFloat(item.required_qty) || 0),
             rate: matched ? matched.rate : 0
           };
         });
 
+        // Get job card fallback if needed
+        const jc = jcFallback || jobCards.find(j => String(j.id) === String(jobCardId));
+
         setInwardFormData(prev => ({
           ...prev,
           inwardItems: itemsWithRate,
-          receivedDate: existingLog ? existingLog.check_date.split('T')[0] : prev.receivedDate,
-          remarks: existingLog ? existingLog.rejection_reason : prev.remarks,
-          acceptedQty: existingLog ? existingLog.accepted_qty : prev.acceptedQty,
-          receivedQty: existingLog ? existingLog.inspected_qty : prev.receivedQty,
-          scrapQty: existingLog ? existingLog.scrap_qty : prev.scrapQty
+          receivedDate: existingInward ? existingInward.received_date.split('T')[0] : prev.receivedDate,
+          remarks: existingInward ? (existingInward.notes || '') : prev.remarks,
+          acceptedQty: jc && jc.status === 'COMPLETED' ? jc.accepted_qty : (existingInward ? existingInward.total_received_qty : prev.acceptedQty),
+          receivedQty: existingInward ? existingInward.total_received_qty : prev.receivedQty,
+          rejectedQty: jc && jc.status === 'COMPLETED' ? jc.rejected_qty : (existingInward ? 0 : prev.rejectedQty),
+          scrapQty: existingInward ? 0 : prev.scrapQty
         }));
       }
     } catch (error) {
@@ -591,7 +614,9 @@ const JobCard = () => {
 
   useEffect(() => {
     // Auto Suggest End Time logic
-    if (formData.executionMode === 'In-house' && formData.startTime && formData.operationId && formData.plannedQty) {
+    const hasLogProcessStarted = formData.id && (formData.status !== 'PENDING' || parseFloat(formData.producedQty || 0) > 0);
+
+    if (!hasLogProcessStarted && formData.executionMode === 'In-house' && formData.startTime && formData.operationId && formData.plannedQty) {
       const operation = operations.find(o => String(o.id) === String(formData.operationId));
       let netTime = parseFloat(formData.stdTime || operation?.net_time || operation?.std_time || 0);
       let timeUom = formData.stdTime > 0 ? formData.timeUom : (operation?.time_uom || 'Min');
@@ -624,7 +649,36 @@ const JobCard = () => {
         }
       }
     }
-  }, [formData.startTime, formData.startAMPM, formData.startDate, formData.operationId, formData.plannedQty, formData.producedQty, formData.executionMode, operations]);
+  }, [formData.startTime, formData.startAMPM, formData.startDate, formData.operationId, formData.plannedQty, formData.producedQty, formData.executionMode, formData.id, formData.status, operations]);
+
+  useEffect(() => {
+    if (isModalOpen) {
+      fetchLiveAllocations();
+    }
+  }, [
+    isModalOpen,
+    formData.startDate,
+    formData.startTime,
+    formData.startAMPM,
+    formData.endDate,
+    formData.endTime,
+    formData.endAMPM
+  ]);
+
+  const fetchLiveAllocations = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/job-cards/active-allocations`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setLiveAllocations(data);
+      }
+    } catch (error) {
+      console.error('Error fetching active allocations:', error);
+    }
+  };
 
   const fetchJobCards = async () => {
     try {
@@ -635,6 +689,7 @@ const JobCard = () => {
       if (response.ok) {
         const data = await response.json();
         setJobCards(data);
+        fetchLiveAllocations();
 
         const filterWO = searchParams.get('filter_work_order');
         if (filterWO) {
@@ -770,31 +825,13 @@ const JobCard = () => {
   const combinedItems = useMemo(() => {
     const itemOptions = items.map(i => ({
       value: i.item_code,
-      label: i.item_code,
-      itemName: i.material_name || i.item_description,
+      label: `${i.item_code} | ${i.material_name || i.item_description || ''}`,
+      itemName: '',
       type: 'Stock'
     }));
 
-    const drawingOptions = drawings.map(d => ({
-      value: d.drawing_no,
-      label: d.drawing_no,
-      itemName: d.description || d.client_name,
-      type: 'Drawing'
-    }));
-
-    // Filter out duplicates (if any item_code matches drawing_no)
-    const seen = new Set();
-    const result = [];
-
-    [...itemOptions, ...drawingOptions].forEach(opt => {
-      if (!seen.has(opt.value)) {
-        seen.add(opt.value);
-        result.push(opt);
-      }
-    });
-
-    return result;
-  }, [items, drawings]);
+    return itemOptions;
+  }, [items]);
 
   const toggleWO = (woId) => {
     const id = String(woId);
@@ -1087,19 +1124,12 @@ const JobCard = () => {
   const sendToQuality = async () => {
     if (!selectedJC) return;
 
-    // Use form produced quantity if set, otherwise use total produced quantity of the job card, 
-    // or calculate from time logs if total is 0
-    const formProducedQty = parseFloat(timeLogForm.producedQty || 0);
-    let totalProducedQty = parseFloat(selectedJC.produced_qty || 0);
+    const totalProduced = (logs.timeLogs || []).reduce((sum, log) => sum + parseFloat(log.produced_qty || 0), 0);
+    const totalInspected = (logs.qualityLogs || []).reduce((sum, log) => sum + parseFloat(log.inspected_qty || 0), 0);
+    const unsentQty = Math.max(0, totalProduced - totalInspected);
 
-    if (totalProducedQty === 0 && logs.timeLogs.length > 0) {
-      totalProducedQty = logs.timeLogs.reduce((sum, log) => sum + parseFloat(log.produced_qty || 0), 0);
-    }
-
-    const producedQtyToSend = formProducedQty > 0 ? formProducedQty : totalProducedQty;
-
-    if (producedQtyToSend <= 0) {
-      errorToast('Please record produced quantity first');
+    if (unsentQty <= 0) {
+      errorToast('Please record new produced quantity first (no unsent quantity found)');
       return;
     }
 
@@ -1109,7 +1139,7 @@ const JobCard = () => {
         jcId: selectedJC.id,
         jobId: selectedJC.job_card_no,
         operation: selectedJC.operation_name,
-        inspectedQty: producedQtyToSend,
+        inspectedQty: unsentQty,
         date: timeLogForm.logDate || new Date().toISOString().slice(0, 10),
         shift: timeLogForm.shift === 'SHIFT_A' ? 'A' : timeLogForm.shift === 'SHIFT_B' ? 'B' : 'C',
         status: "PENDING"
@@ -1246,11 +1276,10 @@ const JobCard = () => {
 
   const handleDayChange = (type, val) => {
     if (!selectedJC) return;
-    const startDateStr = selectedJC.actual_start_date || selectedJC.created_at || new Date();
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const startDateStr = selectedJC.actual_start_date || selectedJC.created_at || selectedJC.start_time || todayStr;
     const startDate = new Date(startDateStr);
-    startDate.setHours(0, 0, 0, 0);
-    const newDate = new Date(startDate);
-    newDate.setDate(startDate.getDate() + (parseInt(val) - 1));
+    const newDate = new Date(Date.UTC(startDate.getFullYear(), startDate.getMonth(), startDate.getDate() + (parseInt(val || 1) - 1)));
     const formattedDate = newDate.toISOString().slice(0, 10);
 
     if (type === 'time') {
@@ -1265,17 +1294,7 @@ const JobCard = () => {
   const handleDateChange = (type, val) => {
     if (!selectedJC) return;
 
-    let diffDays = 1;
-    if (selectedJC.actual_start_date) {
-      const startDate = new Date(selectedJC.actual_start_date);
-      startDate.setHours(0, 0, 0, 0);
-      const logDate = new Date(val);
-      logDate.setHours(0, 0, 0, 0);
-      diffDays = Math.floor((logDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
-    } else {
-      // If no actual start date yet, this is Day 1
-      diffDays = 1;
-    }
+    const diffDays = calculateDayOffset(selectedJC, val);
 
     if (type === 'time') {
       setTimeLogForm(prev => ({ ...prev, logDate: val, day: diffDays }));
@@ -1364,7 +1383,7 @@ const JobCard = () => {
   const handleUpdateStatus = async (jc, status) => {
     if (status === 'IN_PROGRESS' && jc.workstation_id) {
       const ws = workstations.find(w => w.id === jc.workstation_id);
-      const capacity = ws ? parseInt(ws.capacity || 1) : 1;
+      const capacity = 1;
 
       const now = new Date();
       const todayStr = now.toISOString().split('T')[0];
@@ -1484,8 +1503,13 @@ const JobCard = () => {
 
     // Compute preceding sequence availability for shipment operations
     const woJCs = jobCards
-      .filter(j => j.work_order_id === jc.work_order_id)
-      .sort((a, b) => a.id - b.id);
+      .filter(j => String(j.work_order_id) === String(jc.work_order_id))
+      .sort((a, b) => {
+        const aSeq = parseInt(a.sequence_no || a.operation_sequence || 0);
+        const bSeq = parseInt(b.sequence_no || b.operation_sequence || 0);
+        if (aSeq !== bSeq) return aSeq - bSeq;
+        return a.id - b.id;
+      });
     const currentIndex = woJCs.findIndex(j => j.id === jc.id);
     const precedingJC = currentIndex > 0 ? woJCs[currentIndex - 1] : null;
     const availableQty = precedingJC ? parseFloat(precedingJC.accepted_qty || precedingJC.produced_qty || 0) : parseFloat(jc.planned_qty || 0);
@@ -1504,16 +1528,7 @@ const JobCard = () => {
 
     // Pre-fill forms
     const today = new Date().toISOString().split('T')[0];
-    let diffDays = 1;
-    if (jc.actual_start_date) {
-      const startDate = new Date(jc.actual_start_date);
-      startDate.setHours(0, 0, 0, 0);
-      const logDate = new Date(today);
-      logDate.setHours(0, 0, 0, 0);
-      diffDays = Math.floor((logDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
-    } else {
-      diffDays = 1;
-    }
+    const diffDays = calculateDayOffset(jc, today);
 
     const balanceWip = parseFloat(jc.planned_qty || 0) - parseFloat(jc.accepted_qty || 0);
 
@@ -1608,7 +1623,7 @@ const JobCard = () => {
             inwardItems: [],
             vendorInvoice: null
           }));
-          fetchInwardItems(jc.id);
+          fetchInwardItems(jc.id, jc);
           setIsInwardModalOpen(true);
         }
       }
@@ -1634,12 +1649,7 @@ const JobCard = () => {
     const [startTime, startAMPM] = startStr.split(' ');
     const [endTime, endAMPM] = endStr.split(' ');
 
-    const startDateStr = selectedJC.actual_start_date || selectedJC.created_at || new Date();
-    const startDate = new Date(startDateStr);
-    startDate.setHours(0, 0, 0, 0);
-    const logDate = new Date(log.log_date);
-    logDate.setHours(0, 0, 0, 0);
-    const diffDays = Math.floor((logDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
+    const diffDays = calculateDayOffset(selectedJC, log.log_date);
 
     setEditingTimeLogId(log.id);
     setEditTimeLogForm({
@@ -1657,12 +1667,7 @@ const JobCard = () => {
   };
 
   const handleEditQualityLog = (log) => {
-    const startDateStr = selectedJC.actual_start_date || selectedJC.created_at || new Date();
-    const startDate = new Date(startDateStr);
-    startDate.setHours(0, 0, 0, 0);
-    const checkDate = new Date(log.check_date);
-    checkDate.setHours(0, 0, 0, 0);
-    const diffDays = Math.floor((checkDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
+    const diffDays = calculateDayOffset(selectedJC, log.check_date);
 
     setEditingQualityLogId(log.id);
     setEditQualityLogForm({
@@ -1825,14 +1830,44 @@ const JobCard = () => {
 
     // Sequence & Handover Metrics (real database-driven)
     const woJCs = jobCards
-      .filter(j => j.work_order_id === selectedJC.work_order_id)
-      .sort((a, b) => a.id - b.id);
+      .filter(j => String(j.work_order_id) === String(selectedJC.work_order_id))
+      .sort((a, b) => {
+        const aSeq = parseInt(a.sequence_no || a.operation_sequence || 0);
+        const bSeq = parseInt(b.sequence_no || b.operation_sequence || 0);
+        if (aSeq !== bSeq) return aSeq - bSeq;
+        return a.id - b.id;
+      });
     const currentIndex = woJCs.findIndex(j => j.id === selectedJC.id);
     const precedingJC = currentIndex > 0 ? woJCs[currentIndex - 1] : null;
 
+    const currentSeq = parseInt(selectedJC.sequence_no || selectedJC.operation_sequence || 0);
+    const remainingJCs = woJCs.filter(j => {
+      const seq = parseInt(j.sequence_no || j.operation_sequence || 0);
+      return seq > currentSeq;
+    });
+    const nextOperationOptions = remainingJCs.map(j => ({
+      value: j.operation_id,
+      label: j.operation_name
+    }));
+
+    console.log("DEBUG nextOperationOptions:", {
+      selectedJC_id: selectedJC.id,
+      selectedJC_sequence_no: selectedJC.sequence_no,
+      selectedJC_operation_sequence: selectedJC.operation_sequence,
+      currentSeq,
+      woJCs: woJCs.map(j => ({ id: j.id, op: j.operation_name, seq: j.sequence_no })),
+      remainingJCs: remainingJCs.map(j => ({ id: j.id, op: j.operation_name, seq: j.sequence_no })),
+      nextOperationOptions
+    });
+
+    const isSelectedOperatorBusy = (() => {
+      if (!nextStageForm.assignOperatorId) return false;
+      return jobCards.some(jc => String(jc.assigned_to) === String(nextStageForm.assignOperatorId) && jc.status === 'IN_PROGRESS');
+    })();
+
     const precedingStageName = precedingJC ? precedingJC.operation_name : 'Raw Materials Store';
     const precedingSeq = precedingJC ? (precedingJC.sequence_no || precedingJC.operation_sequence || currentIndex) : 0;
-    
+
     // Handover limits
     const availableQty = precedingJC ? parseFloat(precedingJC.accepted_qty || precedingJC.produced_qty || 0) : parseFloat(selectedJC.planned_qty || 0);
     const dispatchedQty = parseFloat(selectedJC.dispatch_qty || selectedJC.accepted_qty || 0);
@@ -1865,7 +1900,11 @@ const JobCard = () => {
             </div>
           </div>
           <button
-            onClick={() => navigate(`${deptPrefix}/job-card`)}
+            onClick={() => {
+              setShowProductionEntry(false);
+              setSelectedJC(null);
+              navigate(`${deptPrefix}/job-card`);
+            }}
             className="flex items-center gap-2 p-1.5 text-slate-500 hover:text-slate-900 transition-colors"
           >
             <ChevronLeft className="w-4 h-4" />
@@ -1919,7 +1958,7 @@ const JobCard = () => {
                       {selectedJC.drawing_no || 'S-BASEFRAMEASSEMBLY'}
                     </span>
                     <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 text-[10px] font-bold rounded border border-indigo-100 uppercase">
-                      {(selectedJC.execution_type || selectedJC.execution_mode || 'In-House')}
+                      {isShipmentOp(selectedJC) ? 'DISPATCH' : (selectedJC.execution_type || selectedJC.execution_mode || 'In-House')}
                     </span>
                   </div>
                 </div>
@@ -2091,19 +2130,18 @@ const JobCard = () => {
                           <p className="text-xs font-semibold text-slate-700">Source Stage</p>
                           <p className="text-xs text-slate-500 font-medium">Sequence {precedingSeq}: {precedingStageName}</p>
                         </div>
-                        <span className={`px-2 py-0.5 text-[9px] font-bold rounded-full border ${
-                          parseFloat(handoverPercentage) >= 100 
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
+                        <span className={`px-2 py-0.5 text-[9px] font-bold rounded-full border ${parseFloat(handoverPercentage) >= 100
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
                             : 'bg-amber-50 text-amber-700 border-amber-100'
-                        }`}>
+                          }`}>
                           {parseFloat(handoverPercentage) >= 100 ? 'Full Handover' : 'Partial Handover'} ({handoverPercentage}%)
                         </span>
                       </div>
 
                       {/* Horizontal progress bar */}
                       <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                        <div 
-                          className="bg-amber-500 h-full rounded-full transition-all duration-500" 
+                        <div
+                          className="bg-amber-500 h-full rounded-full transition-all duration-500"
                           style={{ width: `${Math.min(100, parseFloat(handoverPercentage))}%` }}
                         ></div>
                       </div>
@@ -2148,11 +2186,10 @@ const JobCard = () => {
                       <p className="text-[11px] text-slate-400">Validation across all work orders in plan: {selectedJC.work_order_no || selectedJC.wo_number}</p>
                     </div>
                   </div>
-                  <span className={`px-2 py-0.5 text-[10px] font-bold rounded border ${
-                    isPlanFullyFulfilled 
-                      ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
+                  <span className={`px-2 py-0.5 text-[10px] font-bold rounded border ${isPlanFullyFulfilled
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
                       : 'bg-amber-50 text-amber-700 border-amber-100'
-                  }`}>
+                    }`}>
                     {isPlanFullyFulfilled ? 'Production Complete' : 'Production Incomplete'}
                   </span>
                 </div>
@@ -2164,15 +2201,14 @@ const JobCard = () => {
                       const isCompleted = jc.status === 'COMPLETED';
                       const isActive = jc.id === selectedJC.id;
                       return (
-                        <div 
+                        <div
                           key={jc.id}
-                          className={`p-4 rounded-xl border transition-all flex flex-col justify-between h-[110px] ${
-                            isActive
+                          className={`p-4 rounded-xl border transition-all flex flex-col justify-between h-[110px] ${isActive
                               ? 'bg-indigo-50/20 border-indigo-200 ring-2 ring-indigo-500/5'
                               : isCompleted
                                 ? 'bg-emerald-50/10 border-emerald-100'
                                 : 'bg-slate-50/40 border-slate-100'
-                          }`}
+                            }`}
                         >
                           <div className="flex justify-between items-start">
                             <div>
@@ -2191,7 +2227,7 @@ const JobCard = () => {
                               )}
                             </span>
                           </div>
-                          
+
                           <div className="pt-2 border-t border-slate-100/60 flex justify-between items-center mt-2">
                             <span className="text-[10px] text-slate-400 font-medium">Ready Qty</span>
                             <span className="text-xs font-bold text-slate-700">
@@ -2407,15 +2443,14 @@ const JobCard = () => {
                       <span className="text-slate-300">|</span>
                       <span className="text-blue-600">● Available: {Math.max(0, availableQty - dispatchedQty)}</span>
                     </div>
-                    
+
                     <button
                       onClick={handleShipmentDispatchSubmit}
                       disabled={!shipmentForm.dispatchQty}
-                      className={`flex items-center gap-2 px-6 py-3 rounded-lg text-xs font-bold transition-all shadow-md active:scale-95 ${
-                        !shipmentForm.dispatchQty
+                      className={`flex items-center gap-2 px-6 py-3 rounded-lg text-xs font-bold transition-all shadow-md active:scale-95 ${!shipmentForm.dispatchQty
                           ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200 shadow-none'
                           : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-200'
-                      }`}
+                        }`}
                     >
                       <CheckCircle className="w-4 h-4 shrink-0" />
                       <span>Dispatch {shipmentForm.dispatchQty || 0} Units ({shipmentForm.dispatchMode === 'Complete' ? 'Full' : 'Partial'})</span>
@@ -2466,7 +2501,7 @@ const JobCard = () => {
                               logs.timeLogs?.forEach(log => {
                                 if (log.operator_id !== u.id) return;
 
-                                const logDateStr = log.log_date?.split('T')[0];
+                                const logDateStr = log.log_date?.split(/[ T]/)[0];
                                 if (timeLogForm.logDate && logDateStr && timeLogForm.logDate !== logDateStr) {
                                   return;
                                 }
@@ -2544,7 +2579,7 @@ const JobCard = () => {
                               logs.timeLogs?.forEach(log => {
                                 if (Number(log.workstation_id) !== Number(w.id)) return;
 
-                                const logDateStr = log.log_date?.split('T')[0];
+                                const logDateStr = log.log_date?.split(/[ T]/)[0];
                                 if (timeLogForm.logDate && logDateStr && timeLogForm.logDate !== logDateStr) {
                                   return;
                                 }
@@ -2939,7 +2974,7 @@ const JobCard = () => {
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
                     <FormControl label="Next Operation" required>
                       <SearchableSelect
-                        options={operations.map(o => ({ value: o.id, label: o.operation_name }))}
+                        options={nextOperationOptions}
                         value={nextStageForm.nextOperationId}
                         onChange={(e) => setNextStageForm({ ...nextStageForm, nextOperationId: e.target.value })}
                         placeholder="Select Next Op"
@@ -2947,11 +2982,26 @@ const JobCard = () => {
                     </FormControl>
                     <FormControl label="Assign Operator">
                       <SearchableSelect
-                        options={users.map(u => ({ value: u.id, label: u.username }))}
+                        options={users.map(u => {
+                          const busyJc = jobCards.find(jc => String(jc.assigned_to) === String(u.id) && jc.status === 'IN_PROGRESS');
+                          return {
+                            value: u.id,
+                            label: u.username,
+                            availability: busyJc ? `🔴 Busy (${busyJc.job_card_no})` : `🟢 Available`
+                          };
+                        })}
+                        subLabelField="availability"
                         value={nextStageForm.assignOperatorId}
                         onChange={(e) => setNextStageForm({ ...nextStageForm, assignOperatorId: e.target.value })}
                         placeholder="Search Operator..."
+                        className={isSelectedOperatorBusy ? '!border-rose-500 !ring-rose-500/20' : ''}
                       />
+                      {isSelectedOperatorBusy && (
+                        <p className="text-[10px] text-rose-500 mt-1 flex items-center gap-1">
+                          <AlertCircle className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                          Selected operator is currently busy with another Job Card.
+                        </p>
+                      )}
                     </FormControl>
                     <FormControl label="Target Warehouse" required>
                       <SearchableSelect
@@ -2983,63 +3033,104 @@ const JobCard = () => {
                   </div>
 
                   <div className="flex items-center justify-start border-t border-slate-50 pt-6">
-                    <button
-                      onClick={handleReadyForDispatch}
-                      disabled={!qcStats.isApproved || !qcStats.isComplete}
-                      className={`group relative flex items-center gap-2 p-2  rounded  transition-all ${!qcStats.isApproved || !qcStats.isComplete
-                        ? 'bg-slate-50 text-slate-300 cursor-not-allowed border border-slate-100'
-                        : 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-200'
-                        }`}
-                    >
-                      <div className={`w-8 h-8 rounded  flex items-center justify-center transition-colors ${!qcStats.isApproved || !qcStats.isComplete
-                        ? 'bg-slate-100 text-slate-200'
-                        : 'bg-white/20 text-white'
-                        }`}>
-                        <CheckCircle className="w-4 h-4" />
+                    {selectedJC.status === 'COMPLETED' ? (
+                      <div className="flex items-center gap-2.5 p-3 px-5 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200/60 shadow-sm">
+                        <CheckCircle className="w-5 h-5 text-emerald-500 shrink-0" />
+                        <div className="text-left">
+                          <p className="text-xs opacity-90 font-medium">Finalize & Dispatch</p>
+                          <p className="text-sm font-bold">Production Completed</p>
+                        </div>
                       </div>
-                      <div className="text-left">
-                        <p className="text-xs    opacity-80">Finalize & Dispatch</p>
-                        <p className="text-sm ">Complete Production</p>
+                    ) : (
+                      <div className="flex items-center gap-4">
+                        <button
+                          onClick={handleTransferQty}
+                          disabled={!nextStageForm.nextOperationId}
+                          className={`group relative flex items-center gap-2 p-2 rounded transition-all ${
+                            !nextStageForm.nextOperationId
+                              ? 'bg-slate-50 text-slate-300 cursor-not-allowed border border-slate-100'
+                              : 'bg-indigo-500 hover:bg-indigo-600 text-white shadow-lg shadow-indigo-200'
+                          }`}
+                        >
+                          <div className={`w-8 h-8 rounded flex items-center justify-center transition-colors ${
+                            !nextStageForm.nextOperationId
+                              ? 'bg-slate-100 text-slate-200'
+                              : 'bg-white/20 text-white'
+                          }`}>
+                            <Layers className="w-4 h-4" />
+                          </div>
+                          <div className="text-left">
+                            <p className="text-xs opacity-80">Transfer Qty</p>
+                            <p className="text-sm font-semibold">
+                              Transfer {(qcStats.totalAccepted || qcStats.totalProduced || 0).toFixed(0)} Qty
+                            </p>
+                          </div>
+                        </button>
+
+                        <button
+                          onClick={handleReadyForDispatch}
+                          disabled={!qcStats.isApproved || !qcStats.isComplete}
+                          className={`group relative flex items-center gap-2 p-2 rounded transition-all ${
+                            !qcStats.isApproved || !qcStats.isComplete
+                              ? 'bg-slate-50 text-slate-300 cursor-not-allowed border border-slate-100'
+                              : 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-200'
+                          }`}
+                        >
+                          <div className={`w-8 h-8 rounded flex items-center justify-center transition-colors ${
+                            !qcStats.isApproved || !qcStats.isComplete
+                              ? 'bg-slate-100 text-slate-200'
+                              : 'bg-white/20 text-white'
+                          }`}>
+                            <CheckCircle className="w-4 h-4" />
+                          </div>
+                          <div className="text-left">
+                            <p className="text-xs opacity-80">Finalize & Dispatch</p>
+                            <p className="text-sm font-semibold">Complete Production</p>
+                          </div>
+                          <ChevronRight className={`w-4 h-4 ml-4 transition-transform group-hover:translate-x-1 ${
+                            !qcStats.isApproved || !qcStats.isComplete ? 'opacity-20' : 'opacity-100'
+                          }`} />
+                        </button>
                       </div>
-                      <ChevronRight className={`w-4 h-4 ml-4 transition-transform group-hover:translate-x-1 ${!qcStats.isApproved || !qcStats.isComplete ? 'opacity-20' : 'opacity-100'
-                        }`} />
-                    </button>
+                    )}
                   </div>
                 </div>
               </section>
             </>
           )}
 
-        {/* 5. Daily Production Report Section */}
-          <section className="space-y-2">
-            <div className="flex items-center justify-between px-1">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 bg-indigo-50 rounded  flex items-center justify-center text-indigo-600">
-                  <ClipboardList className="w-4 h-4" />
+          {/* 5. Daily Production Report Section */}
+          {selectedJC && !isShipmentOp(selectedJC) && (
+            <section className="space-y-2">
+              <div className="flex items-center justify-between px-1">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 bg-indigo-50 rounded  flex items-center justify-center text-indigo-600">
+                    <ClipboardList className="w-4 h-4" />
+                  </div>
+                  <h2 className="text-sm  text-slate-800  ">Daily Production Report</h2>
                 </div>
-                <h2 className="text-sm  text-slate-800  ">Daily Production Report</h2>
+                <button
+                  onClick={handleDownloadReport}
+                  className="flex items-center gap-2 p-2 bg-indigo-50 text-indigo-600 rounded  hover:bg-indigo-100 transition-colors border border-indigo-100"
+                >
+                  <Download className="w-4 h-4" />
+                  <span className="text-xs   ">Download CSV</span>
+                </button>
               </div>
-              <button
-                onClick={handleDownloadReport}
-                className="flex items-center gap-2 p-2 bg-indigo-50 text-indigo-600 rounded  hover:bg-indigo-100 transition-colors border border-indigo-100"
-              >
-                <Download className="w-4 h-4" />
-                <span className="text-xs   ">Download CSV</span>
-              </button>
-            </div>
 
-            <p className="text-xs  text-slate-400 italic px-1">Consolidated daily and shift-wise production metrics</p>
+              <p className="text-xs  text-slate-400 italic px-1">Consolidated daily and shift-wise production metrics</p>
 
-            <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
-              <DataTable
-                columns={consolidatedReportColumns}
-                data={consolidatedReport}
-                loading={loading}
-                pageSize={10}
-                emptyMessage="No consolidated report data available"
-              />
-            </div>
-          </section>
+              <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+                <DataTable
+                  columns={consolidatedReportColumns}
+                  data={consolidatedReport}
+                  loading={loading}
+                  pageSize={10}
+                  emptyMessage="No consolidated report data available"
+                />
+              </div>
+            </section>
+          )}
         </div>
 
         {/* View Time Log Modal */}
@@ -3148,8 +3239,40 @@ const JobCard = () => {
     );
   };
 
-  const handleOutwardChallan = (jc) => {
+  const handleOutwardChallan = async (jc) => {
     setSelectedJCOutward(jc);
+
+    if (jc.outward_challan_id) {
+      try {
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE}/outward-challans/job-card/${jc.id}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const challan = await response.json();
+          setOutwardFormData({
+            id: challan.id,
+            vendorId: challan.vendor_id || '',
+            operationName: challan.operation_name || jc.operation_name || '',
+            plannedQty: challan.planned_qty || jc.planned_qty || 0,
+            expectedReturnDate: challan.expected_return_date ? challan.expected_return_date.split('T')[0] : '',
+            dispatchDate: challan.dispatch_date ? challan.dispatch_date.split('T')[0] : new Date().toISOString().split('T')[0],
+            dispatchQty: challan.dispatch_qty || jc.planned_qty || 0,
+            dispatchNotes: challan.notes || '',
+            materialItems: (challan.items || []).map(item => ({
+              itemCode: item.item_code,
+              requiredQty: item.required_qty,
+              releaseQty: item.release_qty
+            }))
+          });
+          setIsOutwardModalOpen(true);
+          return;
+        }
+      } catch (error) {
+        console.error('Error fetching existing outward challan:', error);
+      }
+    }
+
     setOutwardFormData({
       vendorId: jc.vendor_id || '',
       operationName: jc.operation_name || '',
@@ -3163,6 +3286,92 @@ const JobCard = () => {
     setIsOutwardModalOpen(true);
   };
 
+  const handleTransferQty = async () => {
+    try {
+      if (!nextStageForm.nextOperationId) {
+        errorToast('Please select a Next Operation to transfer quantity.');
+        return;
+      }
+
+      // Check if selected next operator is busy
+      const isOperatorBusy = (() => {
+        if (!nextStageForm.assignOperatorId) return false;
+        return jobCards.some(jc => String(jc.assigned_to) === String(nextStageForm.assignOperatorId) && jc.status === 'IN_PROGRESS');
+      })();
+
+      if (isOperatorBusy) {
+        const confirmBusy = await Swal.fire({
+          title: 'Operator Busy',
+          text: 'The selected operator is currently busy with another Job Card. Do you want to assign them anyway?',
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonColor: '#e11d48', // rose-600
+          cancelButtonColor: '#64748b',
+          confirmButtonText: 'Yes, Assign anyway',
+          cancelButtonText: 'No, Cancel'
+        });
+        if (!confirmBusy.isConfirmed) {
+          return;
+        }
+      }
+
+      const carryQty = qcStats.totalAccepted || qcStats.totalProduced || 0;
+
+      const confirmTransfer = await Swal.fire({
+        title: `Transfer ${carryQty} Qty?`,
+        text: `Are you sure you want to transfer ${carryQty} Qty to the next stage?`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#4f46e5',
+        cancelButtonColor: '#64748b',
+        confirmButtonText: 'Yes, Transfer'
+      });
+
+      if (!confirmTransfer.isConfirmed) return;
+
+      const woJCs = jobCards
+        .filter(j => String(j.work_order_id) === String(selectedJC.work_order_id))
+        .sort((a, b) => {
+          const aSeq = parseInt(a.sequence_no || a.operation_sequence || 0);
+          const bSeq = parseInt(b.sequence_no || b.operation_sequence || 0);
+          if (aSeq !== bSeq) return aSeq - bSeq;
+          return a.id - b.id;
+        });
+
+      const nextJC = woJCs.find(j => String(j.operation_id) === String(nextStageForm.nextOperationId));
+
+      if (nextJC) {
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE}/job-cards/${nextJC.id}/progress`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            assignedTo: nextStageForm.assignOperatorId || null,
+            executionType: nextStageForm.executionMode,
+            targetWarehouseId: nextStageForm.targetWarehouseId || null,
+            plannedQty: carryQty
+          })
+        });
+
+        if (response.ok) {
+          successToast(`Successfully transferred ${carryQty} Qty to next operation.`);
+          fetchJobCards();
+        } else {
+          const errData = await response.json().catch(() => ({}));
+          errorToast(errData.error || 'Failed to transfer quantity.');
+        }
+      } else {
+        errorToast('Next Operation Job Card not found.');
+      }
+    } catch (error) {
+      console.error('Error transferring quantity:', error);
+      errorToast('Failed to transfer quantity.');
+    }
+  };
+
   const handleReadyForDispatch = async () => {
     try {
       if (!qcStats.isApproved) {
@@ -3173,6 +3382,28 @@ const JobCard = () => {
       if (!qcStats.isComplete) {
         errorToast(`Insufficient QC inspection! Produced: ${qcStats.totalProduced}, Inspected: ${qcStats.totalInspected}. All produced items must be inspected.`);
         return;
+      }
+
+      // Check if selected next operator is busy
+      const isOperatorBusy = (() => {
+        if (!nextStageForm.assignOperatorId) return false;
+        return jobCards.some(jc => String(jc.assigned_to) === String(nextStageForm.assignOperatorId) && jc.status === 'IN_PROGRESS');
+      })();
+
+      if (isOperatorBusy) {
+        const confirmBusy = await Swal.fire({
+          title: 'Operator Busy',
+          text: 'The selected operator is currently busy with another Job Card. Do you want to assign them anyway?',
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonColor: '#e11d48', // rose-600
+          cancelButtonColor: '#64748b',
+          confirmButtonText: 'Yes, Assign anyway',
+          cancelButtonText: 'No, Cancel'
+        });
+        if (!confirmBusy.isConfirmed) {
+          return;
+        }
       }
 
       const result = await Swal.fire({
@@ -3204,14 +3435,21 @@ const JobCard = () => {
           // If there's a next operation selected, we can optionally update its operator/status
           // Finding the next JC in sequence to auto-assign it
           const woJCs = jobCards
-            .filter(j => j.work_order_id === selectedJC.work_order_id)
-            .sort((a, b) => a.id - b.id);
+            .filter(j => String(j.work_order_id) === String(selectedJC.work_order_id))
+            .sort((a, b) => {
+              const aSeq = parseInt(a.sequence_no || a.operation_sequence || 0);
+              const bSeq = parseInt(b.sequence_no || b.operation_sequence || 0);
+              if (aSeq !== bSeq) return aSeq - bSeq;
+              return a.id - b.id;
+            });
 
           const currentIndex = woJCs.findIndex(j => j.id === selectedJC.id);
-          const nextJC = currentIndex !== -1 ? woJCs[currentIndex + 1] : null;
+          const nextJC = nextStageForm.nextOperationId
+            ? woJCs.find(j => String(j.operation_id) === String(nextStageForm.nextOperationId))
+            : (currentIndex !== -1 ? woJCs[currentIndex + 1] : null);
 
           if (nextJC && nextStageForm.nextOperationId) {
-            // Update next JC with selected operator and execution type
+            // Update next JC with selected operator, execution type, and carry-forward plannedQty
             await fetch(`${API_BASE}/job-cards/${nextJC.id}/progress`, {
               method: 'PATCH',
               headers: {
@@ -3221,7 +3459,8 @@ const JobCard = () => {
               body: JSON.stringify({
                 assignedTo: nextStageForm.assignOperatorId || null,
                 executionType: nextStageForm.executionMode,
-                targetWarehouseId: nextStageForm.targetWarehouseId || null
+                targetWarehouseId: nextStageForm.targetWarehouseId || null,
+                plannedQty: qcStats.totalAccepted || qcStats.totalProduced || 0
               })
             });
           }
@@ -3229,8 +3468,10 @@ const JobCard = () => {
           successToast('Job Card marked as COMPLETED');
           setShowProductionEntry(false);
           fetchJobCards();
+          navigate(`${deptPrefix}/job-card`);
         } else {
-          errorToast('Failed to update status');
+          const errData = await response.json().catch(() => ({}));
+          errorToast(errData.error || 'Failed to update status');
         }
       }
     } catch (error) {
@@ -3278,6 +3519,7 @@ const JobCard = () => {
         successToast('Shipment dispatched successfully and stage completed!');
         setShowProductionEntry(false);
         fetchJobCards();
+        navigate(`${deptPrefix}/job-card`);
       } else {
         const error = await response.json();
         errorToast(error.error || 'Failed to dispatch shipment');
@@ -3318,7 +3560,7 @@ const JobCard = () => {
 
   const validateWorkstationAvailability = (workstationId, date, startTime, startAMPM, endTime, endAMPM) => {
     const ws = workstations.find(w => w.id === parseInt(workstationId));
-    const capacity = ws ? parseInt(ws.capacity || 1) : 1;
+    const capacity = 1;
 
     let overlappingCount = 0;
     let overlappingJobNo = '';
@@ -3327,7 +3569,7 @@ const JobCard = () => {
     logs.timeLogs?.forEach(log => {
       if (log.workstation_id !== parseInt(workstationId)) return;
 
-      const logDateStr = log.log_date?.split('T')[0];
+      const logDateStr = log.log_date?.split(/[ T]/)[0];
       if (date && logDateStr && date !== logDateStr) {
         return;
       }
@@ -3403,7 +3645,7 @@ const JobCard = () => {
     const localOverlap = logs.timeLogs?.find(log => {
       if (log.operator_id !== parseInt(operatorId)) return false;
 
-      const logDateStr = log.log_date?.split('T')[0];
+      const logDateStr = log.log_date?.split(/[ T]/)[0];
       if (date && logDateStr && date !== logDateStr) {
         return false;
       }
@@ -3923,8 +4165,12 @@ const JobCard = () => {
   const handleCreateOutwardChallan = async () => {
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/outward-challans`, {
-        method: 'POST',
+      const isEdit = !!outwardFormData.id;
+      const url = isEdit ? `${API_BASE}/outward-challans/${outwardFormData.id}` : `${API_BASE}/outward-challans`;
+      const method = isEdit ? 'PUT' : 'POST';
+
+      const response = await fetch(url, {
+        method: method,
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
@@ -3937,15 +4183,15 @@ const JobCard = () => {
       });
 
       if (response.ok) {
-        successToast('Outward Challan created successfully');
+        successToast(isEdit ? 'Outward Challan updated successfully' : 'Outward Challan created successfully');
         navigate(`${deptPrefix}/job-card`);
         fetchJobCards();
       } else {
-        errorToast('Failed to create outward challan');
+        errorToast(isEdit ? 'Failed to update outward challan' : 'Failed to create outward challan');
       }
     } catch (error) {
-      console.error('Error creating outward challan:', error);
-      errorToast('Error creating outward challan');
+      console.error('Error saving outward challan:', error);
+      errorToast('Error saving outward challan');
     }
   };
 
@@ -3960,6 +4206,9 @@ const JobCard = () => {
         receivedDate: inwardFormData.receivedDate,
         vendorInvoiceNo: inwardFormData.remarks, // Using remarks for invoice no or vice versa if needed
         totalReceivedQty: inwardFormData.receivedQty,
+        acceptedQty: inwardFormData.acceptedQty,
+        rejectedQty: inwardFormData.rejectedQty,
+        scrapQty: inwardFormData.scrapQty,
         notes: inwardFormData.remarks,
         items: inwardFormData.inwardItems.map(item => ({
           itemCode: item.item_code,
@@ -3981,8 +4230,6 @@ const JobCard = () => {
       });
 
       if (response.ok) {
-        // Also update the job card status to completed if everything is received
-        await handleUpdateStatus(selectedJCOutward, 'COMPLETED');
         successToast('Vendor Receipt recorded successfully');
         navigate(`${deptPrefix}/job-card`);
         fetchJobCards();
@@ -4071,6 +4318,14 @@ const JobCard = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // 1. Validate resource schedule conflicts before submitting
+    const overlapAlert = calculateModalOverlapAlert();
+    if (overlapAlert) {
+      errorToast(overlapAlert);
+      return;
+    }
+
     try {
       const token = localStorage.getItem('authToken');
       const isEdit = formData.id;
@@ -4801,8 +5056,23 @@ const JobCard = () => {
       key: 'item_name',
       render: (val, row) => {
         const isSubcontract = row.execution_type === 'Outsource' || row.execution_type === 'Subcontract' || row.execution_type === 'Sub-Contract' || row.outward_challan_id;
+        const isShipment = isShipmentOp(row);
         const sourceType = (row.source_type || '').toUpperCase();
-        const isSA = sourceType === 'SA' || sourceType === 'SUB ASSEMBLY' || sourceType === 'SFG';
+        const itemName = (row.item_name || '').toUpperCase();
+        const itemCode = (row.item_code || '').toUpperCase();
+        const isSA = sourceType === 'SA' || sourceType === 'SUB ASSEMBLY' || sourceType === 'SFG' ||
+                     itemName.includes('PET PUSHER') || itemName.includes('SLIDING PLATE') ||
+                     itemCode.startsWith('PART-') || itemCode.includes('PART');
+
+        let modeText = 'In-house';
+        let modeClass = 'text-blue-600';
+        if (isShipment) {
+          modeText = 'Dispatch';
+          modeClass = 'text-emerald-600';
+        } else if (isSubcontract) {
+          modeText = 'Outsource';
+          modeClass = 'text-amber-600';
+        }
 
         return (
           <div className="flex flex-col gap-1.5">
@@ -4810,8 +5080,8 @@ const JobCard = () => {
               <span className={`text-[10px]  ${isSA ? 'text-amber-700' : 'text-indigo-700'}`}>
                 {isSA ? 'PART' : 'ASSEMBLY'}
               </span>
-              <span className={`text-[10px]  uppercase  ${isSubcontract ? 'text-amber-600' : 'text-blue-600'}`}>
-                ({isSubcontract ? 'Outsource' : 'In-house'})
+              <span className={`text-[10px]  uppercase  ${modeClass}`}>
+                ({modeText})
               </span>
             </div>
 
@@ -4945,11 +5215,26 @@ const JobCard = () => {
             <div className="w-5 h-5 rounded bg-slate-100 flex items-center justify-center text-slate-400 text-xs ">
               <User size={10} />
             </div>
-            <span className="text-xs text-slate-600 ">{val || 'Unassigned'}</span>
+            <span className="text-xs text-slate-600 font-medium">
+              {(() => {
+                const isSub = row.execution_type === 'Outsource' || row.execution_type === 'Subcontract' || row.execution_type === 'Sub-Contract' || row.outward_challan_id;
+                if (isSub) {
+                  const vendorMatch = vendors.find(v => String(v.id) === String(row.vendor_id));
+                  return vendorMatch ? vendorMatch.vendor_name : (row.vendor_name || 'Unassigned Vendor');
+                }
+                return val || 'Unassigned';
+              })()}
+            </span>
           </div>
+          {row.start_time && row.end_time && (row.outward_challan_id || row.operator_name) ? (
+            <span className="text-[11px] text-slate-500 mt-0.5 font-normal">
+              {formatLocalTime(row.start_time)} - {formatLocalTime(row.end_time)}
+            </span>
+          ) : null}
           {row.status === 'IN_PROGRESS' && row.latest_log_start_time && !row.latest_log_end_time ? (
             <div className="flex flex-col gap-0.5 mt-0.5">
-              <span className="text-xs  text-indigo-500  animate-pulse">
+              <span className="text-[10px] text-indigo-500 font-semibold animate-pulse flex items-center gap-1">
+                <span className="w-1 h-1 bg-indigo-500 rounded-full animate-ping"></span>
                 LIVE: {formatLocalTime(row.latest_log_start_time)} - NOW
               </span>
               {(() => {
@@ -4959,46 +5244,30 @@ const JobCard = () => {
                 const hrs = Math.floor(diff / 60);
                 const mins = diff % 60;
                 return (
-                  <span className="text-[9px] text-slate-500  flex items-center gap-1">
-                    <Clock className="w-2 h-2" /> ⏱ {hrs}h {mins}m
+                  <span className="text-[9px] text-slate-400 flex items-center gap-1">
+                    <Clock className="w-2 h-2" /> ⏱ {hrs}h {mins}m logged
                   </span>
                 );
               })()}
             </div>
           ) : (row.latest_log_start_time && row.latest_log_end_time && (row.outward_challan_id || row.operator_name)) ? (
-            <div className="flex flex-col gap-0.5 mt-0.5">
-              <span className="text-xs  text-slate-500 ">
-                {formatLocalTime(row.latest_log_start_time)} - {formatLocalTime(row.latest_log_end_time)}
+            <div className="flex flex-col gap-0.5 mt-0.5 border-t border-slate-100/50 pt-0.5">
+              <span className="text-[10px] text-slate-400 font-normal">
+                Actual: {formatLocalTime(row.latest_log_start_time)} - {formatLocalTime(row.latest_log_end_time)}
               </span>
               {(() => {
                 const diff = calculateISODuration(row.latest_log_start_time, row.latest_log_end_time);
                 const hrs = Math.floor(diff / 60);
                 const mins = diff % 60;
                 return (
-                  <span className="text-[9px] text-slate-500  flex items-center gap-1">
-                    <Clock className="w-2 h-2" /> ⏱ {hrs}h {mins}m
+                  <span className="text-[9px] text-slate-400 flex items-center gap-1">
+                    <Clock className="w-2 h-2" /> ⏱ {hrs}h {mins}m logged
                   </span>
                 );
               })()}
             </div>
-          ) : (row.start_time && row.end_time && (row.outward_challan_id || row.operator_name)) ? (
-            <div className="flex flex-col gap-0.5 mt-0.5">
-              <span className="text-xs  text-slate-500 ">
-                {formatLocalTime(row.start_time)} - {formatLocalTime(row.end_time)}
-              </span>
-              {(() => {
-                const diff = calculateISODuration(row.start_time, row.end_time);
-                const hrs = Math.floor(diff / 60);
-                const mins = diff % 60;
-                return (
-                  <span className="text-[9px] text-slate-500  flex items-center gap-1">
-                    <Clock className="w-2 h-2" /> ⏱ {hrs}h {mins}m
-                  </span>
-                );
-              })()}
-            </div>
-          ) : (
-            <span className="text-xs  text-slate-400 mt-0.5 italic ">No Time Logged</span>
+          ) : (!row.start_time || !row.end_time) && (
+            <span className="text-xs text-slate-400 mt-0.5 italic ">No Time Logged</span>
           )}
         </div>
       )
@@ -5012,7 +5281,7 @@ const JobCard = () => {
         const isSubcontract = jc.execution_type === 'Outsource' || jc.execution_type === 'Subcontract' || jc.execution_type === 'Sub-Contract' || jc.outward_challan_id;
 
         const isWorkstationAssigned = isShipment || (jc.workstation_id !== null && jc.workstation_id !== undefined && jc.workstation_id !== '');
-        
+
         let isOperatorAssigned = false;
         const mode = (jc.execution_mode || jc.execution_type || 'In-house').toLowerCase();
         const isOutsource = mode.includes('outsource') || mode.includes('sub');
@@ -5377,8 +5646,8 @@ const JobCard = () => {
             String(selectedOp.operation_name || '').toLowerCase() === 'dispatch' ||
             String(selectedOp.operation_type || '').toLowerCase() === 'dispatch'
           ));
-          return isShipment 
-            ? `Shipment Assignment: ${formData.jcNumber || 'New Job Card'}` 
+          return isShipment
+            ? `Shipment Assignment: ${formData.jcNumber || 'New Job Card'}`
             : `${formData.id ? "Edit Job Card" : "Create Job Card"}${formData.jcNumber ? `: ${formData.jcNumber}` : ''}${selectedWO ? ` - ${selectedWO.wo_number}` : ''}`;
         })()}
         size="4xl"
@@ -5457,6 +5726,8 @@ const JobCard = () => {
             );
           }
 
+          const hasLogProcessStarted = formData.id && (formData.status !== 'PENDING' || parseFloat(formData.producedQty || 0) > 0);
+
           return (
             <form onSubmit={handleSubmit} className="space-y-4 p-1">
               {/* Header Info */}
@@ -5490,21 +5761,23 @@ const JobCard = () => {
                       <div className="flex bg-slate-100 p-1 rounded">
                         <button
                           type="button"
+                          disabled={hasLogProcessStarted}
                           onClick={() => setFormData({ ...formData, executionMode: 'In-house' })}
                           className={`px-4 py-1.5 text-xs  rounded-md transition-all ${formData.executionMode === 'In-house'
                             ? 'bg-indigo-600 text-white shadow-sm'
                             : 'text-slate-500 hover:text-slate-700'
-                            }`}
+                            } ${hasLogProcessStarted ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
                           In-house
                         </button>
                         <button
                           type="button"
+                          disabled={hasLogProcessStarted}
                           onClick={() => setFormData({ ...formData, executionMode: 'Outsource' })}
                           className={`px-4 py-1.5 text-xs  rounded-md transition-all ${formData.executionMode === 'Outsource'
                             ? 'bg-orange-500 text-white shadow-sm'
                             : 'text-slate-500 hover:text-slate-700'
-                            }`}
+                            } ${hasLogProcessStarted ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
                           Outsource
                         </button>
@@ -5515,25 +5788,57 @@ const JobCard = () => {
                       <FormControl label="Machine / Workstation">
                         <SearchableSelect
                           options={workstations.map(ws => {
-                            const busyJob = jobCards.find(jc =>
-                              jc.id !== formData.id &&
-                              Number(jc.workstation_id) === Number(ws.id) &&
-                              jc.status === 'IN_PROGRESS'
-                            );
-                            const busyStartStr = busyJob ? formatLocalTime(busyJob.latest_log_start_time || busyJob.start_time) : '';
-                            const busyEndStr = busyJob ? getEstimatedEndTime(busyJob) : '';
+                            let isBusyNow = false;
+                            let busyRange = '';
+
+                            const wsOverlaps = liveAllocations.filter(jc => {
+                              if (String(jc.id) === String(formData.id)) return false;
+                              if (Number(jc.workstation_id) !== Number(ws.id)) return false;
+
+                              // Check dates
+                              const jcDate = jc.start_time ? jc.start_time.split(/[ T]/)[0] : '';
+                              if (formData.startDate && jcDate && formData.startDate !== jcDate) return false;
+
+                              // If times are set, check time overlap
+                              if (formData.startTime && formData.endTime) {
+                                const newStart = parseTimeToMinutes(formData.startTime, formData.startAMPM || 'AM');
+                                const newEnd = parseTimeToMinutes(formData.endTime, formData.endAMPM || 'PM');
+
+                                const jcStartStr = jc.start_time ? to12h(jc.start_time.split(/[ T]/)[1]?.slice(0, 5)) : null;
+                                const jcEndStr = jc.end_time ? to12h(jc.end_time.split(/[ T]/)[1]?.slice(0, 5)) : null;
+                                if (!jcStartStr || !jcEndStr) return false;
+
+                                const busyStart = parseTimeToMinutes(jcStartStr.time, jcStartStr.ampm);
+                                const busyEnd = parseTimeToMinutes(jcEndStr.time, jcEndStr.ampm);
+
+                                return newStart < busyEnd && newEnd > busyStart;
+                              }
+                              return false;
+                            });
+
+                            const capacity = 1;
+                            if (wsOverlaps.length >= capacity) {
+                              isBusyNow = true;
+                              const firstOverlap = wsOverlaps[0];
+                              const busyStartStr = firstOverlap ? formatLocalTime(firstOverlap.latest_log_start_time || firstOverlap.start_time) : '';
+                              const busyEndStr = firstOverlap ? getEstimatedEndTime(firstOverlap) : '';
+                              busyRange = `${busyStartStr} – ${busyEndStr} (${firstOverlap.job_card_no})`;
+                            }
+
                             return {
                               value: ws.id,
                               label: ws.workstation_name,
-                              subLabel: busyJob
-                                ? `🔴 Busy (${busyStartStr} – ${busyEndStr} (${busyJob.job_card_no}))`
+                              subLabel: isBusyNow
+                                ? `🔴 Busy\n${busyRange}`
                                 : '🟢 Available'
                             };
                           })}
                           subLabelField="subLabel"
                           value={formData.workstationId}
                           onChange={(e) => handleModalWorkstationChange(e.target.value)}
+                          onFocus={fetchLiveAllocations}
                           placeholder="Select Workstation"
+                          disabled={hasLogProcessStarted}
                         />
                       </FormControl>
 
@@ -5541,8 +5846,11 @@ const JobCard = () => {
                         <FormControl label="Subcontractor (Vendor)">
                           <select
                             value={formData.vendorId}
+                            disabled={hasLogProcessStarted}
                             onChange={(e) => setFormData(prev => ({ ...prev, vendorId: e.target.value }))}
-                            className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none appearance-none"
+                            className={`w-full p-2 border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none appearance-none ${
+                              hasLogProcessStarted ? 'bg-slate-50 text-slate-400 cursor-not-allowed' : 'bg-white'
+                            }`}
                           >
                             <option value="">Select Vendor</option>
                             {vendors.map(v => (
@@ -5553,18 +5861,59 @@ const JobCard = () => {
                       )}
                       {formData.executionMode === 'In-house' ? (
                         <FormControl label="Primary Operator">
-                          <select
+                          <SearchableSelect
+                            options={users.map(user => {
+                              let isBusyNow = false;
+                              let busyRange = '';
+
+                              const opOverlaps = liveAllocations.filter(jc => {
+                                if (String(jc.id) === String(formData.id)) return false;
+                                if (Number(jc.assigned_to) !== Number(user.id)) return false;
+
+                                // Check dates
+                                const jcDate = jc.start_time ? jc.start_time.split(/[ T]/)[0] : '';
+                                if (formData.startDate && jcDate && formData.startDate !== jcDate) return false;
+
+                                // If times are set, check time overlap
+                                if (formData.startTime && formData.endTime) {
+                                  const newStart = parseTimeToMinutes(formData.startTime, formData.startAMPM || 'AM');
+                                  const newEnd = parseTimeToMinutes(formData.endTime, formData.endAMPM || 'PM');
+
+                                  const jcStartStr = jc.start_time ? to12h(jc.start_time.split(/[ T]/)[1]?.slice(0, 5)) : null;
+                                  const jcEndStr = jc.end_time ? to12h(jc.end_time.split(/[ T]/)[1]?.slice(0, 5)) : null;
+                                  if (!jcStartStr || !jcEndStr) return false;
+
+                                  const busyStart = parseTimeToMinutes(jcStartStr.time, jcStartStr.ampm);
+                                  const busyEnd = parseTimeToMinutes(jcEndStr.time, jcEndStr.ampm);
+
+                                  return newStart < busyEnd && newEnd > busyStart;
+                                }
+                                return false;
+                              });
+
+                              if (opOverlaps.length > 0) {
+                                isBusyNow = true;
+                                const firstOverlap = opOverlaps[0];
+                                const busyStartStr = firstOverlap ? formatLocalTime(firstOverlap.latest_log_start_time || firstOverlap.start_time) : '';
+                                const busyEndStr = firstOverlap ? getEstimatedEndTime(firstOverlap) : '';
+                                busyRange = `${busyStartStr} – ${busyEndStr} (${firstOverlap.job_card_no})`;
+                              }
+
+                              return {
+                                value: user.id,
+                                label: `${user.first_name || ''} ${user.last_name || ''} (${user.username || ''})`,
+                                subLabel: isBusyNow
+                                  ? `🔴 Busy\n${busyRange}`
+                                  : '🟢 Available'
+                              };
+                            })}
+                            subLabelField="subLabel"
                             value={formData.assignedTo}
                             onChange={(e) => setFormData(prev => ({ ...prev, assignedTo: e.target.value }))}
-                            className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none appearance-none"
-                          >
-                            <option value="">Select Operator</option>
-                            {users.map(user => (
-                              <option key={user.id} value={user.id}>
-                                {user.first_name} {user.last_name} ({user.username})
-                              </option>
-                            ))}
-                          </select>
+                            onFocus={fetchLiveAllocations}
+                            placeholder="Select Operator"
+                            disabled={hasLogProcessStarted}
+                          />
                         </FormControl>
                       ) : (
                         <div className="grid grid-cols-1 gap-3">
@@ -5580,8 +5929,6 @@ const JobCard = () => {
                         </div>
                       )}
                     </div>
-
-
                   </div>
 
                   {/* Execution & Metrics Section */}
@@ -5649,12 +5996,16 @@ const JobCard = () => {
                           <div className="flex gap-1.5">
                             <input
                               type="date"
+                              disabled={hasLogProcessStarted}
                               value={formData.startDate}
                               onChange={(e) => setFormData(prev => ({ ...prev, startDate: e.target.value }))}
-                              className="flex-1 p-2 text-xs bg-white border border-slate-200 rounded hover:border-indigo-400 transition-colors focus:ring-2 focus:ring-indigo-500/20 outline-none"
+                              className={`flex-1 p-2 text-xs border border-slate-200 rounded hover:border-indigo-400 transition-colors focus:ring-2 focus:ring-indigo-500/20 outline-none ${
+                                hasLogProcessStarted ? 'bg-slate-50 text-slate-400 cursor-not-allowed border-slate-100' : 'bg-white'
+                              }`}
                             />
                             <div className="w-32">
                               <TimePicker
+                                disabled={hasLogProcessStarted}
                                 value={formData.startTime}
                                 ampmValue={formData.startAMPM}
                                 onTimeChange={(val) => setFormData(prev => ({ ...prev, startTime: val }))}
@@ -5670,12 +6021,16 @@ const JobCard = () => {
                           <div className="flex gap-1.5">
                             <input
                               type="date"
+                              disabled={hasLogProcessStarted}
                               value={formData.endDate}
                               onChange={(e) => setFormData(prev => ({ ...prev, endDate: e.target.value }))}
-                              className="flex-1 p-2 text-xs bg-white border border-slate-200 rounded hover:border-indigo-400 transition-colors focus:ring-2 focus:ring-indigo-500/20 outline-none"
+                              className={`flex-1 p-2 text-xs border border-slate-200 rounded hover:border-indigo-400 transition-colors focus:ring-2 focus:ring-indigo-500/20 outline-none ${
+                                hasLogProcessStarted ? 'bg-slate-50 text-slate-400 cursor-not-allowed border-slate-100' : 'bg-white'
+                              }`}
                             />
                             <div className="w-32">
                               <TimePicker
+                                disabled={hasLogProcessStarted}
                                 value={formData.endTime}
                                 ampmValue={formData.endAMPM}
                                 onTimeChange={(val) => setFormData(prev => ({ ...prev, endTime: val }))}
@@ -5953,7 +6308,7 @@ const JobCard = () => {
               className="flex items-center gap-2 px-6 py-2 bg-indigo-600 text-white rounded  hover:bg-indigo-700 transition-all text-xs    shadow-lg shadow-indigo-100"
             >
               <CheckCircle className="w-4 h-4" />
-              Create Outward Challan
+              {outwardFormData.id ? 'Update Outward Challan' : 'Create Outward Challan'}
             </button>
           </div>
         </div>
@@ -6040,8 +6395,26 @@ const JobCard = () => {
                   <tbody className="divide-y divide-slate-100">
                     {inwardFormData.inwardItems.map((item, idx) => (
                       <tr key={idx} className="bg-white">
-                        <td className="p-2 text-slate-700">{item.item_code}</td>
-                        <td className="p-2 text-center text-slate-600 ">{item.release_qty}</td>
+                        <td className="p-2 text-slate-700">
+                          {item.item_code}
+                          {(() => {
+                            const match = items.find(i => i.item_code === item.item_code);
+                            const name = match ? (match.material_name || match.item_description || '') : '';
+                            return name ? ` | ${name}` : '';
+                          })()}
+                        </td>
+                        <td className="p-2 text-center text-slate-600">
+                          <input
+                            type="number"
+                            className="w-24 px-2 py-1 border border-slate-200 rounded text-center outline-none focus:border-emerald-500"
+                            value={item.release_qty}
+                            onChange={(e) => {
+                              const newItems = [...inwardFormData.inwardItems];
+                              newItems[idx].release_qty = e.target.value;
+                              setInwardFormData({ ...inwardFormData, inwardItems: newItems });
+                            }}
+                          />
+                        </td>
                         <td className="p-2 text-right">
                           <div className="flex items-center justify-end gap-1">
                             <span className="text-xs text-slate-400">₹</span>
@@ -6136,10 +6509,14 @@ const JobCard = () => {
             </button>
             <button
               onClick={handleVendorInward}
-              className="flex items-center gap-2 px-6 py-2 bg-emerald-600 text-white rounded  hover:bg-emerald-700 transition-all text-xs    shadow-lg shadow-emerald-100"
+              disabled={selectedJCOutward?.status === 'COMPLETED'}
+              className={`flex items-center gap-2 px-6 py-2 rounded transition-all text-xs shadow-lg ${selectedJCOutward?.status === 'COMPLETED'
+                  ? 'bg-slate-300 text-slate-500 cursor-not-allowed shadow-none'
+                  : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-100'
+                }`}
             >
               <CheckCircle className="w-4 h-4" />
-              Complete Receipt
+              {selectedJCOutward?.status === 'COMPLETED' ? 'Receipt Completed' : 'Complete Receipt'}
             </button>
           </div>
         </div>

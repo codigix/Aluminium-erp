@@ -5,6 +5,7 @@ const generateJobCardQcPdf = require('../utils/generateJobCardQcPdf');
 const listJobCards = async () => {
   const [rows] = await pool.query(
     `SELECT jc.id, jc.job_card_no, jc.work_order_id, jc.operation_id, jc.workstation_id, jc.assigned_to, jc.planned_qty, jc.status, jc.execution_mode, jc.public_id,
+            jc.sequence_no, jc.actual_start_date, jc.created_at,
             jc.start_time, jc.end_time, jc.produced_qty, jc.accepted_qty, jc.rejected_qty, jc.remarks, jc.vendor_id, jc.vendor_rate,
             wo.wo_number, wo.item_name, wo.priority, wo.quantity as wo_quantity, wo.status as wo_status, wo.end_date as wo_end_date, wo.source_type,
             wo.plan_id, wo.sales_order_id, wo.parent_wo_id,
@@ -17,7 +18,7 @@ const listJobCards = async () => {
             COALESCE(NULLIF(jc.setup_time, 0), 0) as setup_time,
             COALESCE(jc.time_uom, o.time_uom, 'Min') as time_uom, 
             COALESCE(NULLIF(jc.hourly_rate, 0), o.hourly_rate, 0) as hourly_rate, 
-            w.workstation_name, u.username as operator_name, 
+            w.workstation_name, u.username as operator_name, v.vendor_name, 
             soi.status as item_status,
             (SELECT id FROM outward_challans WHERE job_card_id = jc.id ORDER BY created_at DESC LIMIT 1) as outward_challan_id,
             (SELECT challan_number FROM outward_challans WHERE job_card_id = jc.id ORDER BY created_at DESC LIMIT 1) as outward_challan_no,
@@ -45,9 +46,106 @@ const listJobCards = async () => {
      LEFT JOIN operations o ON jc.operation_id = o.id
      LEFT JOIN workstations w ON jc.workstation_id = w.id
      LEFT JOIN users u ON jc.assigned_to = u.id
+     LEFT JOIN vendors v ON jc.vendor_id = v.id
      ORDER BY batch_latest_id DESC, CASE WHEN wo.source_type = 'SA' THEN 0 ELSE 1 END ASC, wo.id ASC, jc.sequence_no ASC, jc.id ASC`
   );
   return rows;
+};
+
+const getActiveAllocations = async () => {
+  const [rows] = await pool.query(
+    `SELECT jc.id, jc.job_card_no, jc.workstation_id, jc.assigned_to, jc.start_time, jc.end_time, jc.status,
+            jc.planned_qty,
+            COALESCE(NULLIF(jc.std_time, 0), o.std_time, 0) as std_time,
+            COALESCE(jc.time_uom, o.time_uom, 'Min') as time_uom,
+            (SELECT start_time FROM job_card_time_logs WHERE job_card_id = jc.id ORDER BY log_date DESC, start_time DESC, id DESC LIMIT 1) as latest_log_start_time,
+            (SELECT end_time FROM job_card_time_logs WHERE job_card_id = jc.id ORDER BY log_date DESC, start_time DESC, id DESC LIMIT 1) as latest_log_end_time
+     FROM job_cards jc
+     LEFT JOIN operations o ON jc.operation_id = o.id
+     WHERE jc.status != 'COMPLETED' 
+       AND jc.status != 'CANCELLED'
+       AND jc.execution_mode != 'Outsource'`
+  );
+  return rows;
+};
+
+
+const checkOverlap = async (id, workstationId, assignedTo, startDateTime, endDateTime, executionMode) => {
+  if (executionMode === 'Outsource') return null;
+  if (!startDateTime || !endDateTime) return null;
+
+  const startStr = startDateTime.replace('T', ' ').slice(0, 19);
+  const endStr = endDateTime.replace('T', ' ').slice(0, 19);
+
+  // Helper to format Date objects to 12h time string
+  const formatTime12h = (dt) => {
+    if (!dt) return '';
+    const date = new Date(dt);
+    if (isNaN(date.getTime())) return String(dt);
+    let hours = date.getHours();
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12 || 12;
+    return `${hours.toString().padStart(2, '0')}:${minutes} ${ampm}`;
+  };
+
+  // 1. Validate Workstation overlap
+  if (workstationId) {
+    const [wsRows] = await pool.query('SELECT workstation_name FROM workstations WHERE id = ?', [workstationId]);
+    const workstationName = wsRows.length > 0 ? wsRows[0].workstation_name : 'Workstation';
+
+    const query = `
+      SELECT id, job_card_no, start_time, end_time 
+      FROM job_cards 
+      WHERE workstation_id = ? 
+        AND status != 'COMPLETED' 
+        AND status != 'CANCELLED'
+        AND execution_mode != 'Outsource'
+        AND (? < end_time AND ? > start_time)
+        ${id ? 'AND id != ?' : ''}
+    `;
+    const params = id 
+      ? [workstationId, startStr, endStr, id] 
+      : [workstationId, startStr, endStr];
+
+    const [wsOverlaps] = await pool.query(query, params);
+    if (wsOverlaps.length > 0) {
+      const first = wsOverlaps[0];
+      const busyStart = formatTime12h(first.start_time);
+      const busyEnd = formatTime12h(first.end_time);
+      return `${workstationName} is already allocated to Job Card ${first.job_card_no} from ${busyStart} to ${busyEnd}. Please select another time slot.`;
+    }
+  }
+
+  // 2. Validate Operator overlap
+  if (assignedTo) {
+    const [uRows] = await pool.query('SELECT username FROM users WHERE id = ?', [assignedTo]);
+    const username = uRows.length > 0 ? uRows[0].username : 'Operator';
+
+    const query = `
+      SELECT id, job_card_no, start_time, end_time 
+      FROM job_cards 
+      WHERE assigned_to = ? 
+        AND status != 'COMPLETED' 
+        AND status != 'CANCELLED'
+        AND execution_mode != 'Outsource'
+        AND (? < end_time AND ? > start_time)
+        ${id ? 'AND id != ?' : ''}
+    `;
+    const params = id 
+      ? [assignedTo, startStr, endStr, id] 
+      : [assignedTo, startStr, endStr];
+
+    const [opOverlaps] = await pool.query(query, params);
+    if (opOverlaps.length > 0) {
+      const first = opOverlaps[0];
+      const busyStart = formatTime12h(first.start_time);
+      const busyEnd = formatTime12h(first.end_time);
+      return `${username} is already allocated to Job Card ${first.job_card_no} from ${busyStart} to ${busyEnd}. Please select another time slot.`;
+    }
+  }
+
+  return null;
 };
 
 const createJobCard = async (data) => {
@@ -55,6 +153,12 @@ const createJobCard = async (data) => {
     jobCardNo, workOrderId, operationId, workstationId, assignedTo, plannedQty, remarks,
     executionMode, vendorId, vendorRate, status, producedQty, acceptedQty, startDateTime, endDateTime
   } = data;
+
+  // Check overlap first
+  const conflictMessage = await checkOverlap(null, workstationId, assignedTo, startDateTime, endDateTime, executionMode);
+  if (conflictMessage) {
+    throw new Error(conflictMessage);
+  }
 
   // Check if item is rejected
   const [itemRows] = await pool.query(
@@ -89,7 +193,7 @@ const createJobCard = async (data) => {
 
 const updateJobCardProgress = async (id, data) => {
   const { producedQty, acceptedQty, rejectedQty, status, startTime, endTime, workstationId, assignedTo, targetWarehouseId, executionType,
-    carrierName, trackingNumber, shippingNotes, dispatchDate, dispatchMode, dispatchQty } = data;
+    carrierName, trackingNumber, shippingNotes, dispatchDate, dispatchMode, dispatchQty, plannedQty } = data;
 
   const connection = await pool.getConnection();
   try {
@@ -106,14 +210,18 @@ const updateJobCardProgress = async (id, data) => {
       updates.push('accepted_qty = ?');
       params.push(acceptedQty);
     }
+    if (plannedQty !== undefined) {
+      updates.push('planned_qty = ?');
+      params.push(plannedQty);
+    }
     if (rejectedQty !== undefined) {
       updates.push('rejected_qty = ?');
       params.push(rejectedQty);
     }
     if (status === 'COMPLETED') {
-      // Get operation details to see if it is a shipment operation
+      // Get operation details to see if it is a shipment operation or subcontracted
       const [opRow] = await connection.query(
-        'SELECT COALESCE(o.operation_name, jc.operation_name) as operation_name, jc.operation_type FROM job_cards jc LEFT JOIN operations o ON jc.operation_id = o.id WHERE jc.id = ?',
+        'SELECT COALESCE(o.operation_name, jc.operation_name) as operation_name, o.operation_type, jc.execution_mode FROM job_cards jc LEFT JOIN operations o ON jc.operation_id = o.id WHERE jc.id = ?',
         [id]
       );
       const isShipment = opRow.length > 0 && (
@@ -121,8 +229,13 @@ const updateJobCardProgress = async (id, data) => {
         String(opRow[0].operation_name || '').toLowerCase() === 'dispatch' ||
         String(opRow[0].operation_type || '').toLowerCase() === 'dispatch'
       );
+      const isSubcontract = opRow.length > 0 && (
+        String(opRow[0].execution_mode || '').toLowerCase() === 'outsource' ||
+        String(opRow[0].execution_mode || '').toLowerCase() === 'subcontract' ||
+        String(opRow[0].execution_mode || '').toLowerCase() === 'sub-contract'
+      );
 
-      if (!isShipment) {
+      if (!isShipment && !isSubcontract) {
         // 1. Check if all quality logs are approved
         const [qualityLogs] = await connection.query(
           'SELECT status, inspected_qty FROM job_card_quality_logs WHERE job_card_id = ?',
@@ -148,6 +261,29 @@ const updateJobCardProgress = async (id, data) => {
 
         if (totalInspected < totalProduced) {
           throw new Error(`Cannot complete Job Card: Insufficient quality inspection. Produced: ${totalProduced}, Inspected: ${totalInspected}.`);
+        }
+      }
+
+      // Carry forward accepted_qty or produced_qty to the next stage planned_qty automatically
+      const [currentJc] = await connection.query(
+        'SELECT work_order_id, sequence_no, accepted_qty, produced_qty FROM job_cards WHERE id = ?',
+        [id]
+      );
+      if (currentJc.length > 0) {
+        const { work_order_id, sequence_no, accepted_qty, produced_qty } = currentJc[0];
+        const carryQty = parseFloat(accepted_qty || produced_qty || 0);
+
+        // Find the next job card in sequence for this work order
+        const [nextJcRows] = await connection.query(
+          'SELECT id FROM job_cards WHERE work_order_id = ? AND sequence_no > ? ORDER BY sequence_no ASC, id ASC LIMIT 1',
+          [work_order_id, sequence_no]
+        );
+        if (nextJcRows.length > 0) {
+          const nextJcId = nextJcRows[0].id;
+          await connection.execute(
+            'UPDATE job_cards SET planned_qty = ? WHERE id = ?',
+            [carryQty, nextJcId]
+          );
         }
       }
 
@@ -246,25 +382,17 @@ const updateJobCardProgress = async (id, data) => {
       }
     }
 
-    if (startTime) {
-      updates.push('start_time = ?');
-      params.push(startTime);
-    }
-    if (endTime) {
-      updates.push('end_time = ?');
-      params.push(endTime);
-    }
-    if (workstationId) {
+    if (workstationId !== undefined) {
       updates.push('workstation_id = ?');
-      params.push(workstationId);
+      params.push(workstationId || null);
     }
-    if (assignedTo) {
+    if (assignedTo !== undefined) {
       updates.push('assigned_to = ?');
-      params.push(assignedTo);
+      params.push(assignedTo || null);
     }
-    if (targetWarehouseId) {
+    if (targetWarehouseId !== undefined) {
       updates.push('target_warehouse_id = ?');
-      params.push(targetWarehouseId);
+      params.push(targetWarehouseId || null);
     }
     if (executionType) {
       updates.push('execution_mode = ?');
@@ -327,7 +455,7 @@ const getJobCardById = async (id) => {
             COALESCE(NULLIF(jc.setup_time, 0), 0) as setup_time,
             COALESCE(jc.time_uom, o.time_uom, 'Min') as time_uom, 
             COALESCE(NULLIF(jc.hourly_rate, 0), o.hourly_rate, 0) as hourly_rate, 
-            w.workstation_name, u.username as operator_name,
+            w.workstation_name, u.username as operator_name, v.vendor_name,
             so.project_name, c.company_name as client_name, so.shipping_address
      FROM job_cards jc
      JOIN work_orders wo ON jc.work_order_id = wo.id
@@ -336,6 +464,7 @@ const getJobCardById = async (id) => {
      LEFT JOIN operations o ON jc.operation_id = o.id
      LEFT JOIN workstations w ON jc.workstation_id = w.id
      LEFT JOIN users u ON jc.assigned_to = u.id
+     LEFT JOIN vendors v ON jc.vendor_id = v.id
      LEFT JOIN sales_order_items soi ON wo.sales_order_item_id = soi.id
      LEFT JOIN order_items oi ON wo.sales_order_item_id = oi.id AND wo.sales_order_id = oi.order_id
      WHERE ${whereClause}`,
@@ -493,12 +622,14 @@ const addTimeLog = async (data) => {
       ]
     );
 
-    // Update total produced qty in job card
+    // Update total produced qty, workstation and operator in job card
     await connection.execute(
       `UPDATE job_cards jc 
-       SET produced_qty = (SELECT SUM(produced_qty) FROM job_card_time_logs WHERE job_card_id = ?)
+       SET produced_qty = (SELECT SUM(produced_qty) FROM job_card_time_logs WHERE job_card_id = ?),
+           workstation_id = COALESCE(?, workstation_id),
+           assigned_to = COALESCE(?, assigned_to)
        WHERE id = ?`,
-      [jobCardId, jobCardId]
+      [jobCardId, workstationId || null, operatorId || null, jobCardId]
     );
 
     await connection.commit();
@@ -790,6 +921,49 @@ const updateJobCard = async (id, data) => {
     workOrderId, operationId, workstationId, assignedTo, plannedQty, remarks,
     executionMode, vendorId, vendorRate, status, producedQty, acceptedQty, startDateTime, endDateTime
   } = data;
+
+  const [currentJc] = await pool.query(
+    'SELECT status, produced_qty, start_time, end_time, workstation_id, assigned_to FROM job_cards WHERE id = ?',
+    [id]
+  );
+  if (currentJc.length > 0) {
+    const jc = currentJc[0];
+    const [timeLogs] = await pool.query('SELECT COUNT(*) as count FROM job_card_time_logs WHERE job_card_id = ?', [id]);
+    const logCount = timeLogs[0]?.count || 0;
+
+    const hasLogProcessStarted = jc.status !== 'PENDING' || parseFloat(jc.produced_qty || 0) > 0 || logCount > 0;
+    if (hasLogProcessStarted) {
+      const currentStartStr = jc.start_time ? new Date(jc.start_time).toISOString().slice(0, 19).replace('T', ' ') : null;
+      const currentEndStr = jc.end_time ? new Date(jc.end_time).toISOString().slice(0, 19).replace('T', ' ') : null;
+
+      const newStartStr = startDateTime ? startDateTime.replace('T', ' ').slice(0, 19) : null;
+      const newEndStr = endDateTime ? endDateTime.replace('T', ' ').slice(0, 19) : null;
+
+      const workstationChanged = Number(workstationId || 0) !== Number(jc.workstation_id || 0);
+      const assignedToChanged = Number(assignedTo || 0) !== Number(jc.assigned_to || 0);
+
+      const parseAndCompareTimes = (t1, t2) => {
+        if (!t1 && !t2) return false;
+        if (!t1 || !t2) return true;
+        const d1 = new Date(t1);
+        const d2 = new Date(t2);
+        return Math.abs(d1.getTime() - d2.getTime()) > 60000;
+      };
+
+      const startTimeChanged = parseAndCompareTimes(currentStartStr, newStartStr);
+      const endTimeChanged = parseAndCompareTimes(currentEndStr, newEndStr);
+
+      if (startTimeChanged || endTimeChanged || workstationChanged || assignedToChanged) {
+        throw new Error('Cannot modify planned schedule (dates/times), operator or workstation once logging/operation process has started.');
+      }
+    }
+  }
+
+  // Check overlap first
+  const conflictMessage = await checkOverlap(id, workstationId, assignedTo, startDateTime, endDateTime, executionMode);
+  if (conflictMessage) {
+    throw new Error(conflictMessage);
+  }
 
   await pool.execute(
     `UPDATE job_cards 
@@ -1159,5 +1333,6 @@ module.exports = {
   sendVendorReceiptToPayment,
   getQualityLogFullDetails,
   downloadJobCardQcPdf,
-  getJobCardDetailAnalysis
+  getJobCardDetailAnalysis,
+  getActiveAllocations
 };

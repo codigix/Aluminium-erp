@@ -118,13 +118,28 @@ const WorkOrder = () => {
     {
       label: 'Specification',
       key: 'source_type',
-      render: (val) => (
-        <span className={`text-[10px]  ${
-          val === 'FG' || val === 'ASSEMBLY' ? 'text-indigo-600' : 'text-amber-600'
-        }`}>
-          {val === 'FG' || val === 'ASSEMBLY' ? 'ASSEMBLY' : 'PART'}
-        </span>
-      )
+      render: (val, row) => {
+        const itemCodeUpper = (row.item_code || '').toUpperCase();
+        const itemNameUpper = (row.item_name || '').toUpperCase();
+        let isPart = false;
+
+        if (itemCodeUpper.startsWith('PART-') || itemCodeUpper.includes('PART') ||
+            itemNameUpper.includes('PET PUSHER') || itemNameUpper.includes('SLIDING PLATE')) {
+          isPart = true;
+        } else if (itemCodeUpper.startsWith('ASSEMBLY-') || itemCodeUpper.includes('ASSEMBLY')) {
+          isPart = false;
+        } else {
+          isPart = (val !== 'FG' && val !== 'ASSEMBLY');
+        }
+
+        return (
+          <span className={`text-[10px]  ${
+            isPart ? 'text-amber-600' : 'text-indigo-600'
+          }`}>
+            {isPart ? 'PART' : 'ASSEMBLY'}
+          </span>
+        );
+      }
     },
     {
       label: 'Item To Manufacture',
