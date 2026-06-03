@@ -1757,7 +1757,7 @@ const ensureWorkOrderTables = async () => {
         actual_start_date DATE NULL,
         start_time TIMESTAMP NULL,
         end_time TIMESTAMP NULL,
-        status ENUM('DRAFT', 'PENDING', 'IN_PROGRESS', 'COMPLETED', 'PAUSED') DEFAULT 'DRAFT',
+        status ENUM('DRAFT', 'PENDING', 'READY', 'IN_PROGRESS', 'COMPLETED', 'PAUSED') DEFAULT 'DRAFT',
         remarks TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -1776,7 +1776,7 @@ const ensureWorkOrderTables = async () => {
     if (!existingJcCols.has('actual_start_date')) await connection.query('ALTER TABLE job_cards ADD COLUMN actual_start_date DATE NULL AFTER rejected_qty');
 
     // Update status enum if necessary
-    await connection.query("ALTER TABLE job_cards MODIFY COLUMN status ENUM('DRAFT', 'PENDING', 'IN_PROGRESS', 'COMPLETED', 'PAUSED') DEFAULT 'DRAFT'");
+    await connection.query("ALTER TABLE job_cards MODIFY COLUMN status ENUM('DRAFT', 'PENDING', 'READY', 'IN_PROGRESS', 'COMPLETED', 'PAUSED') DEFAULT 'DRAFT'");
 
     await connection.query(`
       CREATE TABLE IF NOT EXISTS work_order_material_consumption (

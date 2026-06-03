@@ -49,6 +49,7 @@ const deleteJobCard = async (req, res) => {
 const getJobCardLogs = async (req, res) => {
   try {
     const { id } = req.params;
+    await jobCardService.syncUnaccountedDowntime(id);
     const [timeLogs, qualityLogs, downtimeLogs] = await Promise.all([
       jobCardService.getTimeLogs(id),
       jobCardService.getQualityLogs(id),

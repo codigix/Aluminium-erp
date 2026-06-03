@@ -56,11 +56,10 @@ const TimePicker = ({ value, ampmValue, onTimeChange, onAMPMChange, label, small
     <div className="relative w-full" ref={triggerRef}>
       <div
         onClick={toggleOpen}
-        className={`flex items-center gap-1.5 border border-slate-200 rounded transition-all focus-within:ring-2 focus-within:ring-indigo-500/20 ${small ? 'px-2 py-1' : 'px-3 py-2'} ${
-          disabled
+        className={`flex items-center gap-1.5 border border-slate-200 rounded transition-all focus-within:ring-2 focus-within:ring-indigo-500/20 ${small ? 'px-2 py-1' : 'px-3 py-2'} ${disabled
             ? 'bg-slate-50 text-slate-400 cursor-not-allowed border-slate-100'
             : 'bg-white cursor-pointer hover:border-indigo-400'
-        }`}
+          }`}
       >
         <Clock className={`${small ? 'w-3 h-3' : 'w-3.5 h-3.5'} text-slate-400`} />
         <span className={`${small ? 'text-xs ' : 'text-xs'}  ${isPlaceholder ? 'text-slate-400' : disabled ? 'text-slate-400' : 'text-slate-700'}`}>
@@ -283,6 +282,23 @@ const JobCard = () => {
     hours = hours % 12 || 12;
 
     return `${hours.toString().padStart(2, '0')}:${minutes} ${ampm}`;
+  };
+
+  const formatDateTimeShort = (isoString) => {
+    if (!isoString) return '';
+    const date = new Date(String(isoString).replace(' ', 'T'));
+    if (isNaN(date.getTime())) return isoString;
+
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+
+    let hours = date.getHours();
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12 || 12;
+    const formattedHours = String(hours).padStart(2, '0');
+
+    return `${day}/${month} ${formattedHours}:${minutes} ${ampm}`;
   };
 
   const calculateEfficiency = (jc) => {
@@ -1173,11 +1189,11 @@ const JobCard = () => {
     operatorId: '',
     workstationId: '',
     shift: 'SHIFT_A',
-    startTime: '',
-    startAMPM: '',
-    endTime: '',
-    endAMPM: '',
-    producedQty: 0,
+    startTime: '08:00',
+    startAMPM: 'AM',
+    endTime: '08:00',
+    endAMPM: 'PM',
+    producedQty: '',
     day: 1
   });
 
@@ -1185,6 +1201,7 @@ const JobCard = () => {
   useEffect(() => {
     if (showProductionEntry && selectedJC) {
       const calculateAutoEndTime = () => {
+        return; // Disable auto end time suggestions
         const qty = parseFloat(timeLogForm.producedQty || 0);
         if (!timeLogForm.startTime) return;
 
@@ -1193,6 +1210,8 @@ const JobCard = () => {
 
         if (uom === 'hr' || uom === 'hour' || uom === 'hours') stdTime *= 60;
         else if (uom === 'sec' || uom === 'second' || uom === 'seconds') stdTime /= 60;
+
+        if (!stdTime || stdTime <= 0) return;
 
         const totalMinsToAdd = Math.round(stdTime * qty);
 
@@ -1208,18 +1227,18 @@ const JobCard = () => {
 
         let endHours = Math.floor((endTotalMins / 60) % 24);
         let endMins = endTotalMins % 60;
-        let endAMPM = endHours >= 12 ? 'PM' : 'AM';
 
-        // Keep 24h format for the <input type="time" /> value compatibility
-        const formattedEndHours = String(endHours).padStart(2, '0');
-        const formattedEndMins = String(endMins).padStart(2, '0');
-        const formattedEndTime = `${formattedEndHours}:${formattedEndMins}`;
+        const end24 = `${String(endHours).padStart(2, '0')}:${String(endMins).padStart(2, '0')}`;
+        const { time: endTime12, ampm: endTimeAMPM } = to12h(end24);
 
-        setTimeLogForm(prev => ({
-          ...prev,
-          endTime: formattedEndTime,
-          endAMPM: endAMPM
-        }));
+        setTimeLogForm(prev => {
+          if (prev.endTime === endTime12 && prev.endAMPM === endTimeAMPM) return prev;
+          return {
+            ...prev,
+            endTime: endTime12,
+            endAMPM: endTimeAMPM
+          };
+        });
       };
 
       calculateAutoEndTime();
@@ -1230,6 +1249,7 @@ const JobCard = () => {
   useEffect(() => {
     if (editingTimeLogId && selectedJC) {
       const calculateAutoEndTime = () => {
+        return; // Disable auto end time suggestions
         const qty = parseFloat(editTimeLogForm.producedQty || 0);
         if (!editTimeLogForm.startTime) return;
 
@@ -1238,6 +1258,8 @@ const JobCard = () => {
 
         if (uom === 'hr' || uom === 'hour' || uom === 'hours') stdTime *= 60;
         else if (uom === 'sec' || uom === 'second' || uom === 'seconds') stdTime /= 60;
+
+        if (!stdTime || stdTime <= 0) return;
 
         const totalMinsToAdd = Math.round(stdTime * qty);
 
@@ -1252,19 +1274,16 @@ const JobCard = () => {
 
         let endHours = Math.floor((endTotalMins / 60) % 24);
         let endMins = endTotalMins % 60;
-        let endAMPM = endHours >= 12 ? 'PM' : 'AM';
 
-        const formattedEndHours = String(endHours).padStart(2, '0');
-        const formattedEndMins = String(endMins).padStart(2, '0');
-        const formattedEndTime = `${formattedEndHours}:${formattedEndMins}`;
+        const end24 = `${String(endHours).padStart(2, '0')}:${String(endMins).padStart(2, '0')}`;
+        const { time: endTime12, ampm: endTimeAMPM } = to12h(end24);
 
         setEditTimeLogForm(prev => {
-          // Only update if it actually changed to avoid infinite loops or jitter
-          if (prev.endTime === formattedEndTime && prev.endAMPM === endAMPM) return prev;
+          if (prev.endTime === endTime12 && prev.endAMPM === endTimeAMPM) return prev;
           return {
             ...prev,
-            endTime: formattedEndTime,
-            endAMPM: endAMPM
+            endTime: endTime12,
+            endAMPM: endTimeAMPM
           };
         });
       };
@@ -1541,11 +1560,11 @@ const JobCard = () => {
       day: diffDays,
       operatorId: jc.assigned_to || '',
       workstationId: jc.workstation_id || '',
-      producedQty: balanceWip > 0 ? balanceWip : 0,
-      startTime: startInfo.time,
-      startAMPM: startInfo.ampm,
-      endTime: endInfo.time,
-      endAMPM: endInfo.ampm
+      producedQty: '', // Default to empty string so it is not auto-filled
+      startTime: '08:00',
+      startAMPM: 'AM',
+      endTime: '08:00',
+      endAMPM: 'PM'
     }));
     setQualityLogForm(prev => ({ ...prev, checkDate: today, day: diffDays, shift: 'SHIFT_A', inspectedQty: 0, acceptedQty: 0, rejectedQty: 0, scrapQty: 0 }));
     setDowntimeLogForm(prev => ({ ...prev, downtimeDate: today, day: diffDays, shift: 'SHIFT_A', startTime: '', startAMPM: '', endTime: '', endAMPM: '', downtimeType: '', remarks: '' }));
@@ -1773,6 +1792,7 @@ const JobCard = () => {
   };
 
   const calculateAutoEndTime = (startTime, startAMPM, producedQty) => {
+    return; // Disable auto-overwriting of end time
     if (!startTime || !startAMPM || !selectedJC) return;
 
     try {
@@ -2131,8 +2151,8 @@ const JobCard = () => {
                           <p className="text-xs text-slate-500 font-medium">Sequence {precedingSeq}: {precedingStageName}</p>
                         </div>
                         <span className={`px-2 py-0.5 text-[9px] font-bold rounded-full border ${parseFloat(handoverPercentage) >= 100
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
-                            : 'bg-amber-50 text-amber-700 border-amber-100'
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                          : 'bg-amber-50 text-amber-700 border-amber-100'
                           }`}>
                           {parseFloat(handoverPercentage) >= 100 ? 'Full Handover' : 'Partial Handover'} ({handoverPercentage}%)
                         </span>
@@ -2187,8 +2207,8 @@ const JobCard = () => {
                     </div>
                   </div>
                   <span className={`px-2 py-0.5 text-[10px] font-bold rounded border ${isPlanFullyFulfilled
-                      ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
-                      : 'bg-amber-50 text-amber-700 border-amber-100'
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                    : 'bg-amber-50 text-amber-700 border-amber-100'
                     }`}>
                     {isPlanFullyFulfilled ? 'Production Complete' : 'Production Incomplete'}
                   </span>
@@ -2204,10 +2224,10 @@ const JobCard = () => {
                         <div
                           key={jc.id}
                           className={`p-4 rounded-xl border transition-all flex flex-col justify-between h-[110px] ${isActive
-                              ? 'bg-indigo-50/20 border-indigo-200 ring-2 ring-indigo-500/5'
-                              : isCompleted
-                                ? 'bg-emerald-50/10 border-emerald-100'
-                                : 'bg-slate-50/40 border-slate-100'
+                            ? 'bg-indigo-50/20 border-indigo-200 ring-2 ring-indigo-500/5'
+                            : isCompleted
+                              ? 'bg-emerald-50/10 border-emerald-100'
+                              : 'bg-slate-50/40 border-slate-100'
                             }`}
                         >
                           <div className="flex justify-between items-start">
@@ -2448,8 +2468,8 @@ const JobCard = () => {
                       onClick={handleShipmentDispatchSubmit}
                       disabled={!shipmentForm.dispatchQty}
                       className={`flex items-center gap-2 px-6 py-3 rounded-lg text-xs font-bold transition-all shadow-md active:scale-95 ${!shipmentForm.dispatchQty
-                          ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200 shadow-none'
-                          : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-200'
+                        ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200 shadow-none'
+                        : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-200'
                         }`}
                     >
                       <CheckCircle className="w-4 h-4 shrink-0" />
@@ -3046,17 +3066,15 @@ const JobCard = () => {
                         <button
                           onClick={handleTransferQty}
                           disabled={!nextStageForm.nextOperationId}
-                          className={`group relative flex items-center gap-2 p-2 rounded transition-all ${
-                            !nextStageForm.nextOperationId
+                          className={`group relative flex items-center gap-2 p-2 rounded transition-all ${!nextStageForm.nextOperationId
                               ? 'bg-slate-50 text-slate-300 cursor-not-allowed border border-slate-100'
                               : 'bg-indigo-500 hover:bg-indigo-600 text-white shadow-lg shadow-indigo-200'
-                          }`}
+                            }`}
                         >
-                          <div className={`w-8 h-8 rounded flex items-center justify-center transition-colors ${
-                            !nextStageForm.nextOperationId
+                          <div className={`w-8 h-8 rounded flex items-center justify-center transition-colors ${!nextStageForm.nextOperationId
                               ? 'bg-slate-100 text-slate-200'
                               : 'bg-white/20 text-white'
-                          }`}>
+                            }`}>
                             <Layers className="w-4 h-4" />
                           </div>
                           <div className="text-left">
@@ -3070,26 +3088,23 @@ const JobCard = () => {
                         <button
                           onClick={handleReadyForDispatch}
                           disabled={!qcStats.isApproved || !qcStats.isComplete}
-                          className={`group relative flex items-center gap-2 p-2 rounded transition-all ${
-                            !qcStats.isApproved || !qcStats.isComplete
+                          className={`group relative flex items-center gap-2 p-2 rounded transition-all ${!qcStats.isApproved || !qcStats.isComplete
                               ? 'bg-slate-50 text-slate-300 cursor-not-allowed border border-slate-100'
                               : 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-200'
-                          }`}
+                            }`}
                         >
-                          <div className={`w-8 h-8 rounded flex items-center justify-center transition-colors ${
-                            !qcStats.isApproved || !qcStats.isComplete
+                          <div className={`w-8 h-8 rounded flex items-center justify-center transition-colors ${!qcStats.isApproved || !qcStats.isComplete
                               ? 'bg-slate-100 text-slate-200'
                               : 'bg-white/20 text-white'
-                          }`}>
+                            }`}>
                             <CheckCircle className="w-4 h-4" />
                           </div>
                           <div className="text-left">
                             <p className="text-xs opacity-80">Finalize & Dispatch</p>
                             <p className="text-sm font-semibold">Complete Production</p>
                           </div>
-                          <ChevronRight className={`w-4 h-4 ml-4 transition-transform group-hover:translate-x-1 ${
-                            !qcStats.isApproved || !qcStats.isComplete ? 'opacity-20' : 'opacity-100'
-                          }`} />
+                          <ChevronRight className={`w-4 h-4 ml-4 transition-transform group-hover:translate-x-1 ${!qcStats.isApproved || !qcStats.isComplete ? 'opacity-20' : 'opacity-100'
+                            }`} />
                         </button>
                       </div>
                     )}
@@ -3752,6 +3767,66 @@ const JobCard = () => {
     }
   };
 
+  const validateShiftCapacity = (logData) => {
+    if (!selectedJC) return true;
+
+    let stdTime = parseFloat(selectedJC.std_time || selectedJC.cycle_time || 0);
+    if (!stdTime || stdTime <= 0) return true;
+
+    const uom = (selectedJC.time_uom || 'min').toLowerCase();
+    if (uom === 'hr' || uom === 'hour' || uom === 'hours') {
+      stdTime *= 60;
+    } else if (uom === 'sec' || uom === 'second' || uom === 'seconds') {
+      stdTime /= 60;
+    }
+
+    const availableMins = calculateTotalMins(logData.startTime, logData.startAMPM, logData.endTime, logData.endAMPM);
+    if (availableMins <= 0) return true;
+
+    const enteredQty = parseFloat(logData.producedQty || 0);
+    const requiredMins = stdTime * enteredQty;
+
+    if (requiredMins > availableMins) {
+      const maxQty = Math.floor(availableMins / stdTime);
+      
+      const formatMinsToHoursStr = (mins) => {
+        const hrs = mins / 60;
+        return `${Number(hrs.toFixed(2))} Hour${hrs !== 1 ? 's' : ''}`;
+      };
+
+      const requiredHoursStr = formatMinsToHoursStr(requiredMins);
+      const availableHoursStr = formatMinsToHoursStr(availableMins);
+
+      Swal.fire({
+        icon: 'warning',
+        title: 'Shift Capacity Exceeded',
+        width: '360px',
+        customClass: {
+          title: 'text-sm font-bold text-slate-800 pt-3',
+          htmlContainer: 'text-xs text-slate-600 px-4'
+        },
+        html: `
+          <div class="text-left space-y-2.5 p-0.5">
+            <div class="p-2.5 bg-amber-50 border border-amber-200 rounded text-amber-800 text-xs font-semibold">
+              ⚠️ Maximum allowed for this shift is ${maxQty} Units.
+            </div>
+            <div class="space-y-1.5 text-xs text-slate-600">
+              <p><strong>Entered Quantity:</strong> ${enteredQty} Units</p>
+              <p><strong>Required Time:</strong> ${Number(requiredMins.toFixed(2))} Min (${requiredHoursStr})</p>
+              <p><strong>Available Time:</strong> ${Number(availableMins.toFixed(2))} Min (${availableHoursStr})</p>
+            </div>
+            <p class="text-xs text-rose-600 font-semibold mt-2">Please reduce the quantity to ${maxQty} units or less.</p>
+          </div>
+        `,
+        confirmButtonText: 'OK',
+        confirmButtonColor: '#3085d6'
+      });
+      return false;
+    }
+
+    return true;
+  };
+
   const addTimeLog = async (logData) => {
     if (!logData.operatorId || !logData.workstationId) {
       errorToast('Please select Operator and Workstation');
@@ -3773,6 +3848,11 @@ const JobCard = () => {
 
     // Operator Busy Validation
     if (!validateOperatorAvailability(logData.operatorId, logData.logDate, logData.startTime, logData.startAMPM, logData.endTime, logData.endAMPM)) {
+      return;
+    }
+
+    // Shift Capacity Validation
+    if (!validateShiftCapacity(logData)) {
       return;
     }
 
@@ -3833,7 +3913,11 @@ const JobCard = () => {
         // Reset form but keep Day and Date
         setTimeLogForm(prev => ({
           ...prev,
-          producedQty: 0
+          producedQty: '',
+          startTime: '08:00',
+          startAMPM: 'AM',
+          endTime: '08:00',
+          endAMPM: 'PM'
         }));
       } else {
         const error = await response.json();
@@ -3907,6 +3991,11 @@ const JobCard = () => {
   const updateTimeLog = async (logId, logData) => {
     if (!logData.startTime || !logData.endTime || logData.startTime.includes('NaN') || logData.endTime.includes('NaN')) {
       errorToast('Please select valid start and end times');
+      return;
+    }
+
+    // Shift Capacity Validation
+    if (!validateShiftCapacity(logData)) {
       return;
     }
     try {
@@ -5061,8 +5150,8 @@ const JobCard = () => {
         const itemName = (row.item_name || '').toUpperCase();
         const itemCode = (row.item_code || '').toUpperCase();
         const isSA = sourceType === 'SA' || sourceType === 'SUB ASSEMBLY' || sourceType === 'SFG' ||
-                     itemName.includes('PET PUSHER') || itemName.includes('SLIDING PLATE') ||
-                     itemCode.startsWith('PART-') || itemCode.includes('PART');
+          itemName.includes('PET PUSHER') || itemName.includes('SLIDING PLATE') ||
+          itemCode.startsWith('PART-') || itemCode.includes('PART');
 
         let modeText = 'In-house';
         let modeClass = 'text-blue-600';
@@ -5227,15 +5316,16 @@ const JobCard = () => {
             </span>
           </div>
           {row.start_time && row.end_time && (row.outward_challan_id || row.operator_name) ? (
-            <span className="text-[11px] text-slate-500 mt-0.5 font-normal">
-              {formatLocalTime(row.start_time)} - {formatLocalTime(row.end_time)}
-            </span>
+            <div className="text-[11px] text-slate-500 mt-1 font-normal flex flex-col gap-0.5">
+              <span>S: {formatDateTimeShort(row.start_time)}</span>
+              <span>E: {formatDateTimeShort(row.end_time)}</span>
+            </div>
           ) : null}
           {row.status === 'IN_PROGRESS' && row.latest_log_start_time && !row.latest_log_end_time ? (
-            <div className="flex flex-col gap-0.5 mt-0.5">
+            <div className="flex flex-col gap-0.5 mt-1 border-t border-slate-100/50 pt-1">
               <span className="text-[10px] text-indigo-500 font-semibold animate-pulse flex items-center gap-1">
                 <span className="w-1 h-1 bg-indigo-500 rounded-full animate-ping"></span>
-                LIVE: {formatLocalTime(row.latest_log_start_time)} - NOW
+                LIVE S: {formatDateTimeShort(row.latest_log_start_time)}
               </span>
               {(() => {
                 const start = new Date(row.latest_log_start_time);
@@ -5251,10 +5341,9 @@ const JobCard = () => {
               })()}
             </div>
           ) : (row.latest_log_start_time && row.latest_log_end_time && (row.outward_challan_id || row.operator_name)) ? (
-            <div className="flex flex-col gap-0.5 mt-0.5 border-t border-slate-100/50 pt-0.5">
-              <span className="text-[10px] text-slate-400 font-normal">
-                Actual: {formatLocalTime(row.latest_log_start_time)} - {formatLocalTime(row.latest_log_end_time)}
-              </span>
+            <div className="flex flex-col gap-0.5 mt-1 border-t border-slate-100/50 pt-1 text-[10px] text-slate-400 font-normal">
+              <span>Actual S: {formatDateTimeShort(row.latest_log_start_time)}</span>
+              <span>Actual E: {formatDateTimeShort(row.latest_log_end_time)}</span>
               {(() => {
                 const diff = calculateISODuration(row.latest_log_start_time, row.latest_log_end_time);
                 const hrs = Math.floor(diff / 60);
@@ -5848,9 +5937,8 @@ const JobCard = () => {
                             value={formData.vendorId}
                             disabled={hasLogProcessStarted}
                             onChange={(e) => setFormData(prev => ({ ...prev, vendorId: e.target.value }))}
-                            className={`w-full p-2 border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none appearance-none ${
-                              hasLogProcessStarted ? 'bg-slate-50 text-slate-400 cursor-not-allowed' : 'bg-white'
-                            }`}
+                            className={`w-full p-2 border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none appearance-none ${hasLogProcessStarted ? 'bg-slate-50 text-slate-400 cursor-not-allowed' : 'bg-white'
+                              }`}
                           >
                             <option value="">Select Vendor</option>
                             {vendors.map(v => (
@@ -5999,9 +6087,8 @@ const JobCard = () => {
                               disabled={hasLogProcessStarted}
                               value={formData.startDate}
                               onChange={(e) => setFormData(prev => ({ ...prev, startDate: e.target.value }))}
-                              className={`flex-1 p-2 text-xs border border-slate-200 rounded hover:border-indigo-400 transition-colors focus:ring-2 focus:ring-indigo-500/20 outline-none ${
-                                hasLogProcessStarted ? 'bg-slate-50 text-slate-400 cursor-not-allowed border-slate-100' : 'bg-white'
-                              }`}
+                              className={`flex-1 p-2 text-xs border border-slate-200 rounded hover:border-indigo-400 transition-colors focus:ring-2 focus:ring-indigo-500/20 outline-none ${hasLogProcessStarted ? 'bg-slate-50 text-slate-400 cursor-not-allowed border-slate-100' : 'bg-white'
+                                }`}
                             />
                             <div className="w-32">
                               <TimePicker
@@ -6024,9 +6111,8 @@ const JobCard = () => {
                               disabled={hasLogProcessStarted}
                               value={formData.endDate}
                               onChange={(e) => setFormData(prev => ({ ...prev, endDate: e.target.value }))}
-                              className={`flex-1 p-2 text-xs border border-slate-200 rounded hover:border-indigo-400 transition-colors focus:ring-2 focus:ring-indigo-500/20 outline-none ${
-                                hasLogProcessStarted ? 'bg-slate-50 text-slate-400 cursor-not-allowed border-slate-100' : 'bg-white'
-                              }`}
+                              className={`flex-1 p-2 text-xs border border-slate-200 rounded hover:border-indigo-400 transition-colors focus:ring-2 focus:ring-indigo-500/20 outline-none ${hasLogProcessStarted ? 'bg-slate-50 text-slate-400 cursor-not-allowed border-slate-100' : 'bg-white'
+                                }`}
                             />
                             <div className="w-32">
                               <TimePicker
@@ -6511,8 +6597,8 @@ const JobCard = () => {
               onClick={handleVendorInward}
               disabled={selectedJCOutward?.status === 'COMPLETED'}
               className={`flex items-center gap-2 px-6 py-2 rounded transition-all text-xs shadow-lg ${selectedJCOutward?.status === 'COMPLETED'
-                  ? 'bg-slate-300 text-slate-500 cursor-not-allowed shadow-none'
-                  : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-100'
+                ? 'bg-slate-300 text-slate-500 cursor-not-allowed shadow-none'
+                : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-100'
                 }`}
             >
               <CheckCircle className="w-4 h-4" />

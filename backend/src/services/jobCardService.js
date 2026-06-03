@@ -199,6 +199,35 @@ const updateJobCardProgress = async (id, data) => {
   try {
     await connection.beginTransaction();
 
+    // Fetch the current state of this job card to allow carrying forward configured operator/workstation and status transition
+    const [currentJcRow] = await connection.query(
+      'SELECT status, assigned_to, workstation_id FROM job_cards WHERE id = ?',
+      [id]
+    );
+    if (currentJcRow.length === 0) {
+      throw new Error('Job Card not found');
+    }
+    const currentJcStatus = currentJcRow[0].status;
+    const currentAssignedTo = currentJcRow[0].assigned_to;
+    const currentWorkstationId = currentJcRow[0].workstation_id;
+
+    // Carry forward configured values if they are already set in the DB but incoming updates are null/undefined
+    let finalAssignedTo = assignedTo;
+    if ((finalAssignedTo === undefined || finalAssignedTo === null) && currentAssignedTo) {
+      finalAssignedTo = currentAssignedTo;
+    }
+
+    let finalWorkstationId = workstationId;
+    if ((finalWorkstationId === undefined || finalWorkstationId === null) && currentWorkstationId) {
+      finalWorkstationId = currentWorkstationId;
+    }
+
+    // Auto-update status from PENDING to READY when quantity is transferred (i.e. plannedQty is set)
+    let finalStatus = status;
+    if (!finalStatus && currentJcStatus === 'PENDING' && plannedQty !== undefined) {
+      finalStatus = 'READY';
+    }
+
     const updates = [];
     const params = [];
 
@@ -218,7 +247,7 @@ const updateJobCardProgress = async (id, data) => {
       updates.push('rejected_qty = ?');
       params.push(rejectedQty);
     }
-    if (status === 'COMPLETED') {
+    if (finalStatus === 'COMPLETED') {
       // Get operation details to see if it is a shipment operation or subcontracted
       const [opRow] = await connection.query(
         'SELECT COALESCE(o.operation_name, jc.operation_name) as operation_name, o.operation_type, jc.execution_mode FROM job_cards jc LEFT JOIN operations o ON jc.operation_id = o.id WHERE jc.id = ?',
@@ -288,10 +317,10 @@ const updateJobCardProgress = async (id, data) => {
       }
 
       updates.push('status = ?');
-      params.push(status);
-    } else if (status) {
+      params.push(finalStatus);
+    } else if (finalStatus) {
       updates.push('status = ?');
-      params.push(status);
+      params.push(finalStatus);
     }
 
     if (carrierName !== undefined) {
@@ -319,12 +348,12 @@ const updateJobCardProgress = async (id, data) => {
       params.push(dispatchQty);
     }
 
-    if (status === 'IN_PROGRESS') {
+    if (finalStatus === 'IN_PROGRESS') {
       const [jcData] = await connection.query('SELECT workstation_id, assigned_to FROM job_cards WHERE id = ?', [id]);
       if (jcData.length === 0) throw new Error('Job Card not found');
 
-      const checkWorkstationId = workstationId || jcData[0].workstation_id;
-      const checkAssignedTo = assignedTo || jcData[0].assigned_to;
+      const checkWorkstationId = finalWorkstationId || jcData[0].workstation_id;
+      const checkAssignedTo = finalAssignedTo || jcData[0].assigned_to;
 
       if (checkWorkstationId) {
         const [wsRows] = await connection.query('SELECT IFNULL(capacity, 1) as capacity FROM workstations WHERE id = ?', [checkWorkstationId]);
@@ -382,13 +411,13 @@ const updateJobCardProgress = async (id, data) => {
       }
     }
 
-    if (workstationId !== undefined) {
+    if (finalWorkstationId !== undefined) {
       updates.push('workstation_id = ?');
-      params.push(workstationId || null);
+      params.push(finalWorkstationId || null);
     }
-    if (assignedTo !== undefined) {
+    if (finalAssignedTo !== undefined) {
       updates.push('assigned_to = ?');
-      params.push(assignedTo || null);
+      params.push(finalAssignedTo || null);
     }
     if (targetWarehouseId !== undefined) {
       updates.push('target_warehouse_id = ?');
@@ -916,6 +945,185 @@ const addDowntimeLog = async (data) => {
   }
 };
 
+const syncUnaccountedDowntime = async (jobCardId) => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // 1. Get Job Card details
+    const [jcRows] = await connection.query(
+      'SELECT cycle_time, std_time, time_uom FROM job_cards WHERE id = ?',
+      [jobCardId]
+    );
+    if (jcRows.length === 0) {
+      await connection.commit();
+      return;
+    }
+
+    const stdTime = parseFloat(jcRows[0].cycle_time || 0) || parseFloat(jcRows[0].std_time || 0) || 0;
+    if (stdTime <= 0) {
+      // Delete any existing Unaccounted Downtime logs for this job card
+      await connection.execute(
+        "DELETE FROM job_card_downtime_logs WHERE job_card_id = ? AND downtime_type = 'Unaccounted Downtime'",
+        [jobCardId]
+      );
+      await connection.commit();
+      return;
+    }
+
+    // Convert standard cycle time to minutes
+    let stdTimeMins = stdTime;
+    const uom = (jcRows[0].time_uom || 'min').toLowerCase();
+    if (uom === 'hr' || uom === 'hour' || uom === 'hours') stdTimeMins *= 60;
+    else if (uom === 'sec' || uom === 'second' || uom === 'seconds') stdTimeMins /= 60;
+
+    // 2. Fetch all time logs
+    const [timeLogs] = await connection.query(
+      'SELECT day, log_date, shift, produced_qty FROM job_card_time_logs WHERE job_card_id = ?',
+      [jobCardId]
+    );
+
+    // 3. Keep track of day/date/shift combinations that have unaccounted downtime
+    const activeDowntimeKeys = new Set();
+
+    const parseTimeToMinutes = (timeStr, ampm) => {
+      if (!timeStr) return 0;
+      let [hours, minutes] = timeStr.split(':').map(Number);
+      if (ampm === 'PM' && hours < 12) hours += 12;
+      if (ampm === 'AM' && hours === 12) hours = 0;
+      return hours * 60 + minutes;
+    };
+
+    const calculateTotalMins = (start, startAMPM, end, endAMPM) => {
+      const startMins = parseTimeToMinutes(start, startAMPM);
+      const endMins = parseTimeToMinutes(end, endAMPM);
+      let diff = endMins - startMins;
+      if (diff < 0) diff += 24 * 60;
+      return diff;
+    };
+
+    for (const timeLog of timeLogs) {
+      const producedQty = parseFloat(timeLog.produced_qty || 0);
+      if (producedQty <= 0) continue;
+
+      const expectedProductionMins = producedQty * stdTimeMins;
+      const logDateStr = timeLog.log_date instanceof Date ? timeLog.log_date.toISOString().split('T')[0] : String(timeLog.log_date).split(/[ T]/)[0];
+
+      // Query other downtime logs to subtract them from the deficit
+      const [sumRow] = await connection.query(
+        `SELECT IFNULL(SUM(TIMESTAMPDIFF(MINUTE, start_time, end_time)), 0) as other_mins 
+         FROM job_card_downtime_logs 
+         WHERE job_card_id = ? 
+           AND downtime_type != 'Unaccounted Downtime' 
+           AND downtime_date = ? 
+           AND shift = ?`,
+        [jobCardId, logDateStr, timeLog.shift]
+      );
+      const otherDowntimeMins = parseFloat(sumRow[0].other_mins || 0);
+      
+      // Standard shift duration is 720 minutes (12 hours)
+      const shiftMins = 720;
+      const totalAccountedMins = expectedProductionMins + otherDowntimeMins;
+
+      if (totalAccountedMins < shiftMins) {
+        // We have unaccounted downtime!
+        const shiftValue = (timeLog.shift || '').trim().toUpperCase();
+        let shiftStart = '08:00';
+        let shiftStartAMPM = 'AM';
+        let shiftEnd = '08:00';
+        let shiftEndAMPM = 'PM';
+
+        if (shiftValue === 'SHIFT_B' || shiftValue === 'B') {
+          shiftStart = '08:00';
+          shiftStartAMPM = 'PM';
+          shiftEnd = '08:00';
+          shiftEndAMPM = 'AM';
+        }
+
+        const shiftStartMins = (shiftStartAMPM === 'PM') ? 20 * 60 : 8 * 60;
+        const downtimeStartTotalMins = shiftStartMins + totalAccountedMins;
+
+        let startHours = Math.floor((downtimeStartTotalMins / 60) % 24);
+        let startMins = Math.round(downtimeStartTotalMins % 60);
+
+        const startTimeFormatted = `${startHours.toString().padStart(2, '0')}:${startMins.toString().padStart(2, '0')}:00`;
+        const endTimeFormatted = (shiftEndAMPM === 'AM') ? '08:00:00' : '20:00:00';
+
+
+        let startDateStr = logDateStr;
+        if (downtimeStartTotalMins >= 1440) {
+          const sDate = new Date(logDateStr + 'T00:00:00');
+          sDate.setDate(sDate.getDate() + 1);
+          startDateStr = sDate.toISOString().split('T')[0];
+        }
+
+        let endDateStr = logDateStr;
+        if (shiftValue === 'SHIFT_B' || shiftValue === 'B') {
+          const eDate = new Date(logDateStr + 'T00:00:00');
+          eDate.setDate(eDate.getDate() + 1);
+          endDateStr = eDate.toISOString().split('T')[0];
+        }
+
+        const fullStartTime = `${startDateStr} ${startTimeFormatted}`;
+        const fullEndTime = `${endDateStr} ${endTimeFormatted}`;
+
+        const downtimeKey = `${logDateStr}_${timeLog.shift}`;
+        activeDowntimeKeys.add(downtimeKey);
+
+        // Check if record exists
+        const [existing] = await connection.query(
+          "SELECT id, start_time, end_time FROM job_card_downtime_logs WHERE job_card_id = ? AND downtime_type = 'Unaccounted Downtime' AND downtime_date = ? AND shift = ?",
+          [jobCardId, logDateStr, timeLog.shift]
+        );
+
+        if (existing.length === 0) {
+          // Insert
+          await connection.execute(
+            `INSERT INTO job_card_downtime_logs 
+             (job_card_id, day, downtime_date, shift, downtime_type, start_time, end_time, remarks) 
+             VALUES (?, ?, ?, ?, 'Unaccounted Downtime', ?, ?, 'System generated unaccounted downtime')`,
+            [jobCardId, timeLog.day, logDateStr, timeLog.shift, fullStartTime, fullEndTime]
+          );
+        } else {
+          // Update start_time and end_time if they differ
+          const dbStartStr = existing[0].start_time instanceof Date ? existing[0].start_time.toISOString().replace('T', ' ').slice(0, 19) : String(existing[0].start_time);
+          const dbEndStr = existing[0].end_time instanceof Date ? existing[0].end_time.toISOString().replace('T', ' ').slice(0, 19) : String(existing[0].end_time);
+
+          if (!dbStartStr.includes(startTimeFormatted) || !dbEndStr.includes(endTimeFormatted)) {
+            await connection.execute(
+              "UPDATE job_card_downtime_logs SET start_time = ?, end_time = ?, day = ? WHERE id = ?",
+              [fullStartTime, fullEndTime, timeLog.day, existing[0].id]
+            );
+          }
+        }
+      }
+    }
+
+    // 4. Delete any Unaccounted Downtime logs that do not have a matching active time log with deficit
+    const [allUnaccounted] = await connection.query(
+      "SELECT id, downtime_date, shift FROM job_card_downtime_logs WHERE job_card_id = ? AND downtime_type = 'Unaccounted Downtime'",
+      [jobCardId]
+    );
+
+    for (const row of allUnaccounted) {
+      const rowDateStr = row.downtime_date instanceof Date ? row.downtime_date.toISOString().split('T')[0] : String(row.downtime_date).split(/[ T]/)[0];
+      const key = `${rowDateStr}_${row.shift}`;
+      if (!activeDowntimeKeys.has(key)) {
+        await connection.execute("DELETE FROM job_card_downtime_logs WHERE id = ?", [row.id]);
+      }
+    }
+
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    console.error("Error in syncUnaccountedDowntime:", error);
+    throw error;
+  } finally {
+    connection.release();
+  }
+};
+
+
 const updateJobCard = async (id, data) => {
   const {
     workOrderId, operationId, workstationId, assignedTo, plannedQty, remarks,
@@ -931,7 +1139,7 @@ const updateJobCard = async (id, data) => {
     const [timeLogs] = await pool.query('SELECT COUNT(*) as count FROM job_card_time_logs WHERE job_card_id = ?', [id]);
     const logCount = timeLogs[0]?.count || 0;
 
-    const hasLogProcessStarted = jc.status !== 'PENDING' || parseFloat(jc.produced_qty || 0) > 0 || logCount > 0;
+    const hasLogProcessStarted = (jc.status !== 'PENDING' && jc.status !== 'READY') || parseFloat(jc.produced_qty || 0) > 0 || logCount > 0;
     if (hasLogProcessStarted) {
       const currentStartStr = jc.start_time ? new Date(jc.start_time).toISOString().slice(0, 19).replace('T', ' ') : null;
       const currentEndStr = jc.end_time ? new Date(jc.end_time).toISOString().slice(0, 19).replace('T', ' ') : null;
@@ -1334,5 +1542,6 @@ module.exports = {
   getQualityLogFullDetails,
   downloadJobCardQcPdf,
   getJobCardDetailAnalysis,
-  getActiveAllocations
+  getActiveAllocations,
+  syncUnaccountedDowntime
 };
