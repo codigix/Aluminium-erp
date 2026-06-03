@@ -979,127 +979,153 @@ const syncUnaccountedDowntime = async (jobCardId) => {
 
     // 2. Fetch all time logs
     const [timeLogs] = await connection.query(
-      'SELECT day, log_date, shift, produced_qty FROM job_card_time_logs WHERE job_card_id = ?',
+      'SELECT day, log_date, shift, produced_qty, start_time, end_time FROM job_card_time_logs WHERE job_card_id = ?',
       [jobCardId]
     );
 
-    // 3. Keep track of day/date/shift combinations that have unaccounted downtime
-    const activeDowntimeKeys = new Set();
+    const shiftDays = new Map();
+    for (const log of timeLogs) {
+      const logDateStr = log.log_date instanceof Date ? log.log_date.toISOString().split('T')[0] : String(log.log_date).split(/[ T]/)[0];
+      const shiftKey = `${logDateStr}|${log.shift}`;
+      shiftDays.set(shiftKey, log.day);
+    }
 
-    const parseTimeToMinutes = (timeStr, ampm) => {
-      if (!timeStr) return 0;
-      let [hours, minutes] = timeStr.split(':').map(Number);
-      if (ampm === 'PM' && hours < 12) hours += 12;
-      if (ampm === 'AM' && hours === 12) hours = 0;
-      return hours * 60 + minutes;
+    const parseSQLDate = (str) => {
+      if (!str) return null;
+      if (str instanceof Date) return str;
+      const isoStr = String(str).replace(' ', 'T');
+      const d = new Date(isoStr);
+      return isNaN(d.getTime()) ? null : d;
     };
 
-    const calculateTotalMins = (start, startAMPM, end, endAMPM) => {
-      const startMins = parseTimeToMinutes(start, startAMPM);
-      const endMins = parseTimeToMinutes(end, endAMPM);
-      let diff = endMins - startMins;
-      if (diff < 0) diff += 24 * 60;
-      return diff;
+    const formatToSQLDateTime = (date) => {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      const h = String(date.getHours()).padStart(2, '0');
+      const min = String(date.getMinutes()).padStart(2, '0');
+      const s = String(date.getSeconds()).padStart(2, '0');
+      return `${y}-${m}-${d} ${h}:${min}:${s}`;
     };
 
-    for (const timeLog of timeLogs) {
-      const producedQty = parseFloat(timeLog.produced_qty || 0);
-      if (producedQty <= 0) continue;
+    for (const shiftKey of shiftDays.keys()) {
+      const [logDateStr, shift] = shiftKey.split('|');
 
-      const expectedProductionMins = producedQty * stdTimeMins;
-      const logDateStr = timeLog.log_date instanceof Date ? timeLog.log_date.toISOString().split('T')[0] : String(timeLog.log_date).split(/[ T]/)[0];
+      // Delete existing Unaccounted Downtime logs for this job card, date, and shift
+      await connection.execute(
+        "DELETE FROM job_card_downtime_logs WHERE job_card_id = ? AND downtime_type = 'Unaccounted Downtime' AND downtime_date = ? AND shift = ?",
+        [jobCardId, logDateStr, shift]
+      );
 
-      // Query other downtime logs to subtract them from the deficit
-      const [sumRow] = await connection.query(
-        `SELECT IFNULL(SUM(TIMESTAMPDIFF(MINUTE, start_time, end_time)), 0) as other_mins 
+      const isShiftB = (shift === 'SHIFT_B' || shift === 'B');
+      
+      const sDate = new Date(logDateStr + 'T00:00:00');
+      sDate.setDate(sDate.getDate() + 1);
+      const nextYear = sDate.getFullYear();
+      const nextMonth = String(sDate.getMonth() + 1).padStart(2, '0');
+      const nextDay = String(sDate.getDate()).padStart(2, '0');
+      const nextDateStr = `${nextYear}-${nextMonth}-${nextDay}`;
+
+      const shiftStart = parseSQLDate(isShiftB ? `${logDateStr} 20:00:00` : `${logDateStr} 08:00:00`);
+      const shiftEnd = parseSQLDate(isShiftB ? `${nextDateStr} 08:00:00` : `${logDateStr} 20:00:00`);
+
+      const currentShiftTimeLogs = timeLogs.filter(log => {
+        const logDateVal = log.log_date instanceof Date ? log.log_date.toISOString().split('T')[0] : String(log.log_date).split(/[ T]/)[0];
+        return logDateVal === logDateStr && log.shift === shift;
+      });
+
+      const [otherDowntimeLogs] = await connection.query(
+        `SELECT start_time, end_time 
          FROM job_card_downtime_logs 
          WHERE job_card_id = ? 
            AND downtime_type != 'Unaccounted Downtime' 
            AND downtime_date = ? 
            AND shift = ?`,
-        [jobCardId, logDateStr, timeLog.shift]
+        [jobCardId, logDateStr, shift]
       );
-      const otherDowntimeMins = parseFloat(sumRow[0].other_mins || 0);
-      
-      // Standard shift duration is 720 minutes (12 hours)
-      const shiftMins = 720;
-      const totalAccountedMins = expectedProductionMins + otherDowntimeMins;
 
-      if (totalAccountedMins < shiftMins) {
-        // We have unaccounted downtime!
-        const shiftValue = (timeLog.shift || '').trim().toUpperCase();
-        let shiftStart = '08:00';
-        let shiftStartAMPM = 'AM';
-        let shiftEnd = '08:00';
-        let shiftEndAMPM = 'PM';
-
-        if (shiftValue === 'SHIFT_B' || shiftValue === 'B') {
-          shiftStart = '08:00';
-          shiftStartAMPM = 'PM';
-          shiftEnd = '08:00';
-          shiftEndAMPM = 'AM';
+      const busyIntervals = [];
+      for (const tl of currentShiftTimeLogs) {
+        if (tl.start_time && tl.end_time) {
+          busyIntervals.push({
+            start: parseSQLDate(tl.start_time),
+            end: parseSQLDate(tl.end_time)
+          });
         }
-
-        const shiftStartMins = (shiftStartAMPM === 'PM') ? 20 * 60 : 8 * 60;
-        const downtimeStartTotalMins = shiftStartMins + totalAccountedMins;
-
-        let startHours = Math.floor((downtimeStartTotalMins / 60) % 24);
-        let startMins = Math.round(downtimeStartTotalMins % 60);
-
-        const startTimeFormatted = `${startHours.toString().padStart(2, '0')}:${startMins.toString().padStart(2, '0')}:00`;
-        const endTimeFormatted = (shiftEndAMPM === 'AM') ? '08:00:00' : '20:00:00';
-
-
-        let startDateStr = logDateStr;
-        if (downtimeStartTotalMins >= 1440) {
-          const sDate = new Date(logDateStr + 'T00:00:00');
-          sDate.setDate(sDate.getDate() + 1);
-          startDateStr = sDate.toISOString().split('T')[0];
+      }
+      for (const dl of otherDowntimeLogs) {
+        if (dl.start_time && dl.end_time) {
+          busyIntervals.push({
+            start: parseSQLDate(dl.start_time),
+            end: parseSQLDate(dl.end_time)
+          });
         }
+      }
 
-        let endDateStr = logDateStr;
-        if (shiftValue === 'SHIFT_B' || shiftValue === 'B') {
-          const eDate = new Date(logDateStr + 'T00:00:00');
-          eDate.setDate(eDate.getDate() + 1);
-          endDateStr = eDate.toISOString().split('T')[0];
+      const clampedBusy = [];
+      for (const interval of busyIntervals) {
+        if (!interval.start || !interval.end) continue;
+        const start = new Date(Math.max(interval.start.getTime(), shiftStart.getTime()));
+        const end = new Date(Math.min(interval.end.getTime(), shiftEnd.getTime()));
+        if (start < end) {
+          clampedBusy.push({ start, end });
         }
+      }
+      clampedBusy.sort((a, b) => a.start - b.start);
 
-        const fullStartTime = `${startDateStr} ${startTimeFormatted}`;
-        const fullEndTime = `${endDateStr} ${endTimeFormatted}`;
-
-        const downtimeKey = `${logDateStr}_${timeLog.shift}`;
-        activeDowntimeKeys.add(downtimeKey);
-
-        // Check if record exists
-        const [existing] = await connection.query(
-          "SELECT id, start_time, end_time FROM job_card_downtime_logs WHERE job_card_id = ? AND downtime_type = 'Unaccounted Downtime' AND downtime_date = ? AND shift = ?",
-          [jobCardId, logDateStr, timeLog.shift]
-        );
-
-        if (existing.length === 0) {
-          // Insert
-          await connection.execute(
-            `INSERT INTO job_card_downtime_logs 
-             (job_card_id, day, downtime_date, shift, downtime_type, start_time, end_time, remarks) 
-             VALUES (?, ?, ?, ?, 'Unaccounted Downtime', ?, ?, 'System generated unaccounted downtime')`,
-            [jobCardId, timeLog.day, logDateStr, timeLog.shift, fullStartTime, fullEndTime]
-          );
+      const mergedBusy = [];
+      for (const interval of clampedBusy) {
+        if (mergedBusy.length === 0) {
+          mergedBusy.push(interval);
         } else {
-          // Update start_time and end_time if they differ
-          const dbStartStr = existing[0].start_time instanceof Date ? existing[0].start_time.toISOString().replace('T', ' ').slice(0, 19) : String(existing[0].start_time);
-          const dbEndStr = existing[0].end_time instanceof Date ? existing[0].end_time.toISOString().replace('T', ' ').slice(0, 19) : String(existing[0].end_time);
-
-          if (!dbStartStr.includes(startTimeFormatted) || !dbEndStr.includes(endTimeFormatted)) {
-            await connection.execute(
-              "UPDATE job_card_downtime_logs SET start_time = ?, end_time = ?, day = ? WHERE id = ?",
-              [fullStartTime, fullEndTime, timeLog.day, existing[0].id]
-            );
+          const last = mergedBusy[mergedBusy.length - 1];
+          if (interval.start <= last.end) {
+            last.end = new Date(Math.max(last.end.getTime(), interval.end.getTime()));
+          } else {
+            mergedBusy.push(interval);
           }
         }
       }
+
+      const gaps = [];
+      let currentStart = shiftStart;
+      for (const busy of mergedBusy) {
+        if (busy.start > currentStart) {
+          gaps.push({
+            start: currentStart,
+            end: busy.start
+          });
+        }
+        currentStart = new Date(Math.max(currentStart.getTime(), busy.end.getTime()));
+      }
+      if (currentStart < shiftEnd) {
+        gaps.push({
+          start: currentStart,
+          end: shiftEnd
+        });
+      }
+
+      for (const gap of gaps) {
+        const durationMs = gap.end.getTime() - gap.start.getTime();
+        if (durationMs < 60000) continue; // Skip gaps smaller than 1 minute
+
+        await connection.execute(
+          `INSERT INTO job_card_downtime_logs 
+           (job_card_id, day, downtime_date, shift, downtime_type, start_time, end_time, remarks) 
+           VALUES (?, ?, ?, ?, 'Unaccounted Downtime', ?, ?, 'System generated unaccounted downtime')`,
+          [
+            jobCardId,
+            shiftDays.get(shiftKey),
+            logDateStr,
+            shift,
+            formatToSQLDateTime(gap.start),
+            formatToSQLDateTime(gap.end)
+          ]
+        );
+      }
     }
 
-    // 4. Delete any Unaccounted Downtime logs that do not have a matching active time log with deficit
+    // 4. Delete any Unaccounted Downtime logs that do not have a matching active time log
     const [allUnaccounted] = await connection.query(
       "SELECT id, downtime_date, shift FROM job_card_downtime_logs WHERE job_card_id = ? AND downtime_type = 'Unaccounted Downtime'",
       [jobCardId]
@@ -1107,8 +1133,8 @@ const syncUnaccountedDowntime = async (jobCardId) => {
 
     for (const row of allUnaccounted) {
       const rowDateStr = row.downtime_date instanceof Date ? row.downtime_date.toISOString().split('T')[0] : String(row.downtime_date).split(/[ T]/)[0];
-      const key = `${rowDateStr}_${row.shift}`;
-      if (!activeDowntimeKeys.has(key)) {
+      const key = `${rowDateStr}|${row.shift}`;
+      if (!shiftDays.has(key)) {
         await connection.execute("DELETE FROM job_card_downtime_logs WHERE id = ?", [row.id]);
       }
     }
