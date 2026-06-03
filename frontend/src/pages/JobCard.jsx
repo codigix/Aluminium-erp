@@ -261,7 +261,8 @@ const JobCard = () => {
     endTime: '04:00',
     endAMPM: 'PM',
     startDate: new Date().toISOString().split('T')[0],
-    endDate: new Date().toISOString().split('T')[0]
+    endDate: new Date().toISOString().split('T')[0],
+    latestLogStartTime: null
   });
 
   const formatDisplayDate = value => {
@@ -378,6 +379,19 @@ const JobCard = () => {
     return parseTimeToMinutes(parts[0], parts[1]);
   };
 
+  const checkDateTimeOverlap = (startAStr, endAStr, startBStr, endBStr) => {
+    if (!startAStr || !endAStr || !startBStr || !endBStr) return false;
+    const parse = (str) => new Date(str.replace(' ', 'T'));
+    const startA = parse(startAStr);
+    const endA = parse(endAStr);
+    const startB = parse(startBStr);
+    const endB = parse(endBStr);
+    if (isNaN(startA.getTime()) || isNaN(endA.getTime()) || isNaN(startB.getTime()) || isNaN(endB.getTime())) {
+      return false;
+    }
+    return startA < endB && endA > startB;
+  };
+
   const calculateModalStdTimeSuggestion = () => {
     const selectedOp = operations.find(op => String(op.id) === String(formData.operationId));
     if (!selectedOp) return 0;
@@ -395,26 +409,15 @@ const JobCard = () => {
     if (!ws) return null;
     const capacity = 1;
 
-    const newStart = parseTimeToMinutes(formData.startTime, formData.startAMPM || 'AM');
-    const newEnd = parseTimeToMinutes(formData.endTime, formData.endAMPM || 'PM');
+    const formStartStr = formData.startDate + 'T' + to24h(formData.startTime, formData.startAMPM) + ':00';
+    const formEndStr = formData.endDate + 'T' + to24h(formData.endTime, formData.endAMPM) + ':00';
 
-    // Filter other active/planned job cards on the same workstation and same date using liveAllocations
+    // Filter other active/planned job cards on the same workstation using liveAllocations
     const overlappingWSActions = liveAllocations.filter(jc => {
       if (String(jc.id) === String(formData.id)) return false; // Skip current
       if (String(jc.workstation_id) !== String(formData.workstationId)) return false;
 
-      // Check dates
-      const jcDate = jc.start_time ? jc.start_time.split(/[ T]/)[0] : '';
-      if (formData.startDate !== jcDate) return false;
-
-      const jcStartStr = jc.start_time ? to12h(jc.start_time.split(/[ T]/)[1]?.slice(0, 5)) : null;
-      const jcEndStr = jc.end_time ? to12h(jc.end_time.split(/[ T]/)[1]?.slice(0, 5)) : null;
-      if (!jcStartStr || !jcEndStr) return false;
-
-      const busyStart = parseTimeToMinutes(jcStartStr.time, jcStartStr.ampm);
-      const busyEnd = parseTimeToMinutes(jcEndStr.time, jcEndStr.ampm);
-
-      return newStart < busyEnd && newEnd > busyStart;
+      return checkDateTimeOverlap(formStartStr, formEndStr, jc.start_time, jc.end_time);
     });
 
     if (overlappingWSActions.length >= capacity) {
@@ -430,17 +433,7 @@ const JobCard = () => {
         if (String(jc.id) === String(formData.id)) return false;
         if (String(jc.assigned_to) !== String(formData.assignedTo)) return false;
 
-        const jcDate = jc.start_time ? jc.start_time.split(/[ T]/)[0] : '';
-        if (formData.startDate !== jcDate) return false;
-
-        const jcStartStr = jc.start_time ? to12h(jc.start_time.split(/[ T]/)[1]?.slice(0, 5)) : null;
-        const jcEndStr = jc.end_time ? to12h(jc.end_time.split(/[ T]/)[1]?.slice(0, 5)) : null;
-        if (!jcStartStr || !jcEndStr) return false;
-
-        const busyStart = parseTimeToMinutes(jcStartStr.time, jcStartStr.ampm);
-        const busyEnd = parseTimeToMinutes(jcEndStr.time, jcEndStr.ampm);
-
-        return newStart < busyEnd && newEnd > busyStart;
+        return checkDateTimeOverlap(formStartStr, formEndStr, jc.start_time, jc.end_time);
       });
 
       if (overlappingOpActions.length > 0) {
@@ -630,7 +623,7 @@ const JobCard = () => {
 
   useEffect(() => {
     // Auto Suggest End Time logic
-    const hasLogProcessStarted = formData.id && (formData.status !== 'PENDING' || parseFloat(formData.producedQty || 0) > 0);
+    const hasLogProcessStarted = formData.id && (formData.status === 'COMPLETED' || parseFloat(formData.producedQty || 0) > 0 || formData.latestLogStartTime);
 
     if (!hasLogProcessStarted && formData.executionMode === 'In-house' && formData.startTime && formData.operationId && formData.plannedQty) {
       const operation = operations.find(o => String(o.id) === String(formData.operationId));
@@ -1348,14 +1341,22 @@ const JobCard = () => {
   };
 
   const getMachineState = (jc, allJobs) => {
-    // ❌ No workstation assigned
-    if (!jc.workstation_id || jc.workstation_name === 'N/A') {
-      return { status: "NOT_ASSIGNED" };
-    }
-
     // ✅ Completed → never BUSY
     if (jc.status === "COMPLETED") {
       return { status: "COMPLETED" };
+    }
+
+    // ✅ In Progress → always RUNNING (even if workstation is N/A / not assigned)
+    if (jc.status === "IN_PROGRESS") {
+      return {
+        status: "RUNNING",
+        startTime: jc.latest_log_start_time || jc.start_time
+      };
+    }
+
+    // ❌ No workstation assigned
+    if (!jc.workstation_id || jc.workstation_name === 'N/A') {
+      return { status: "NOT_ASSIGNED" };
     }
 
     // find all in-progress jobs on same machine, sorted by start time (log time first)
@@ -1374,14 +1375,6 @@ const JobCard = () => {
 
     const primaryJob = inProgressJobs[0];
 
-    // ✅ Current is the primary running job
-    if (primaryJob && primaryJob.id === jc.id) {
-      return {
-        status: "RUNNING",
-        startTime: jc.latest_log_start_time || jc.start_time
-      };
-    }
-
     // ✅ Machine is BUSY with another job (either running or this is secondary in-progress)
     if (primaryJob) {
       return {
@@ -1389,11 +1382,6 @@ const JobCard = () => {
         jobId: primaryJob.job_card_no,
         endTime: getEstimatedEndTime(primaryJob)
       };
-    }
-
-    // ✅ Current is In-Progress but no start_time (fallback, shouldn't happen)
-    if (jc.status === "IN_PROGRESS" && jc.operator_name) {
-      return { status: "RUNNING", startTime: jc.start_time };
     }
 
     return { status: "FREE" };
@@ -4247,7 +4235,8 @@ const JobCard = () => {
       endTime: '04:00',
       endAMPM: 'PM',
       startDate: new Date().toISOString().split('T')[0],
-      endDate: new Date().toISOString().split('T')[0]
+      endDate: new Date().toISOString().split('T')[0],
+      latestLogStartTime: null
     });
     setSelectedWO(null);
     setIsModalOpen(true);
@@ -4400,7 +4389,8 @@ const JobCard = () => {
       endTime: endInfo.time,
       endAMPM: endInfo.ampm,
       startDate: jc.start_time ? (jc.start_time.includes('T') ? jc.start_time.split('T')[0] : jc.start_time.split(' ')[0]) : new Date().toISOString().split('T')[0],
-      endDate: jc.end_time ? (jc.end_time.includes('T') ? jc.end_time.split('T')[0] : jc.end_time.split(' ')[0]) : new Date().toISOString().split('T')[0]
+      endDate: jc.end_time ? (jc.end_time.includes('T') ? jc.end_time.split('T')[0] : jc.end_time.split(' ')[0]) : new Date().toISOString().split('T')[0],
+      latestLogStartTime: jc.latest_log_start_time || null
     });
     const wo = workOrders.find(w => String(w.id) === String(jc.work_order_id));
     setSelectedWO(wo);
@@ -5817,7 +5807,7 @@ const JobCard = () => {
             );
           }
 
-          const hasLogProcessStarted = formData.id && (formData.status !== 'PENDING' || parseFloat(formData.producedQty || 0) > 0);
+          const hasLogProcessStarted = formData.id && (formData.status === 'COMPLETED' || parseFloat(formData.producedQty || 0) > 0 || formData.latestLogStartTime);
 
           return (
             <form onSubmit={handleSubmit} className="space-y-4 p-1">
@@ -5882,29 +5872,14 @@ const JobCard = () => {
                             let isBusyNow = false;
                             let busyRange = '';
 
+                            const formStartStr = formData.startDate + 'T' + to24h(formData.startTime, formData.startAMPM) + ':00';
+                            const formEndStr = formData.endDate + 'T' + to24h(formData.endTime, formData.endAMPM) + ':00';
+
                             const wsOverlaps = liveAllocations.filter(jc => {
                               if (String(jc.id) === String(formData.id)) return false;
                               if (Number(jc.workstation_id) !== Number(ws.id)) return false;
 
-                              // Check dates
-                              const jcDate = jc.start_time ? jc.start_time.split(/[ T]/)[0] : '';
-                              if (formData.startDate && jcDate && formData.startDate !== jcDate) return false;
-
-                              // If times are set, check time overlap
-                              if (formData.startTime && formData.endTime) {
-                                const newStart = parseTimeToMinutes(formData.startTime, formData.startAMPM || 'AM');
-                                const newEnd = parseTimeToMinutes(formData.endTime, formData.endAMPM || 'PM');
-
-                                const jcStartStr = jc.start_time ? to12h(jc.start_time.split(/[ T]/)[1]?.slice(0, 5)) : null;
-                                const jcEndStr = jc.end_time ? to12h(jc.end_time.split(/[ T]/)[1]?.slice(0, 5)) : null;
-                                if (!jcStartStr || !jcEndStr) return false;
-
-                                const busyStart = parseTimeToMinutes(jcStartStr.time, jcStartStr.ampm);
-                                const busyEnd = parseTimeToMinutes(jcEndStr.time, jcEndStr.ampm);
-
-                                return newStart < busyEnd && newEnd > busyStart;
-                              }
-                              return false;
+                              return checkDateTimeOverlap(formStartStr, formEndStr, jc.start_time, jc.end_time);
                             });
 
                             const capacity = 1;
@@ -5956,29 +5931,14 @@ const JobCard = () => {
                               let isBusyNow = false;
                               let busyRange = '';
 
+                              const formStartStr = formData.startDate + 'T' + to24h(formData.startTime, formData.startAMPM) + ':00';
+                              const formEndStr = formData.endDate + 'T' + to24h(formData.endTime, formData.endAMPM) + ':00';
+
                               const opOverlaps = liveAllocations.filter(jc => {
                                 if (String(jc.id) === String(formData.id)) return false;
                                 if (Number(jc.assigned_to) !== Number(user.id)) return false;
 
-                                // Check dates
-                                const jcDate = jc.start_time ? jc.start_time.split(/[ T]/)[0] : '';
-                                if (formData.startDate && jcDate && formData.startDate !== jcDate) return false;
-
-                                // If times are set, check time overlap
-                                if (formData.startTime && formData.endTime) {
-                                  const newStart = parseTimeToMinutes(formData.startTime, formData.startAMPM || 'AM');
-                                  const newEnd = parseTimeToMinutes(formData.endTime, formData.endAMPM || 'PM');
-
-                                  const jcStartStr = jc.start_time ? to12h(jc.start_time.split(/[ T]/)[1]?.slice(0, 5)) : null;
-                                  const jcEndStr = jc.end_time ? to12h(jc.end_time.split(/[ T]/)[1]?.slice(0, 5)) : null;
-                                  if (!jcStartStr || !jcEndStr) return false;
-
-                                  const busyStart = parseTimeToMinutes(jcStartStr.time, jcStartStr.ampm);
-                                  const busyEnd = parseTimeToMinutes(jcEndStr.time, jcEndStr.ampm);
-
-                                  return newStart < busyEnd && newEnd > busyStart;
-                                }
-                                return false;
+                                return checkDateTimeOverlap(formStartStr, formEndStr, jc.start_time, jc.end_time);
                               });
 
                               if (opOverlaps.length > 0) {

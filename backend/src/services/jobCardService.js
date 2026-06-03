@@ -222,10 +222,10 @@ const updateJobCardProgress = async (id, data) => {
       finalWorkstationId = currentWorkstationId;
     }
 
-    // Auto-update status from PENDING to READY when quantity is transferred (i.e. plannedQty is set)
+    // Auto-update status from PENDING to IN_PROGRESS when quantity is transferred (i.e. plannedQty is set)
     let finalStatus = status;
     if (!finalStatus && currentJcStatus === 'PENDING' && plannedQty !== undefined) {
-      finalStatus = 'READY';
+      finalStatus = 'IN_PROGRESS';
     }
 
     const updates = [];
@@ -304,23 +304,37 @@ const updateJobCardProgress = async (id, data) => {
 
         // Find the next job card in sequence for this work order
         const [nextJcRows] = await connection.query(
-          'SELECT id FROM job_cards WHERE work_order_id = ? AND sequence_no > ? ORDER BY sequence_no ASC, id ASC LIMIT 1',
+          'SELECT id, status FROM job_cards WHERE work_order_id = ? AND sequence_no > ? ORDER BY sequence_no ASC, id ASC LIMIT 1',
           [work_order_id, sequence_no]
         );
         if (nextJcRows.length > 0) {
           const nextJcId = nextJcRows[0].id;
-          await connection.execute(
-            'UPDATE job_cards SET planned_qty = ? WHERE id = ?',
-            [carryQty, nextJcId]
-          );
+          const nextJcStatus = nextJcRows[0].status;
+          if (nextJcStatus === 'PENDING') {
+            await connection.execute(
+              "UPDATE job_cards SET planned_qty = ?, status = 'IN_PROGRESS', actual_start_date = COALESCE(actual_start_date, CURRENT_DATE()) WHERE id = ?",
+              [carryQty, nextJcId]
+            );
+          } else {
+            await connection.execute(
+              'UPDATE job_cards SET planned_qty = ? WHERE id = ?',
+              [carryQty, nextJcId]
+            );
+          }
         }
       }
 
       updates.push('status = ?');
       params.push(finalStatus);
+      if (finalStatus === 'IN_PROGRESS') {
+        updates.push('actual_start_date = COALESCE(actual_start_date, CURRENT_DATE())');
+      }
     } else if (finalStatus) {
       updates.push('status = ?');
       params.push(finalStatus);
+      if (finalStatus === 'IN_PROGRESS') {
+        updates.push('actual_start_date = COALESCE(actual_start_date, CURRENT_DATE())');
+      }
     }
 
     if (carrierName !== undefined) {
@@ -1165,7 +1179,7 @@ const updateJobCard = async (id, data) => {
     const [timeLogs] = await pool.query('SELECT COUNT(*) as count FROM job_card_time_logs WHERE job_card_id = ?', [id]);
     const logCount = timeLogs[0]?.count || 0;
 
-    const hasLogProcessStarted = (jc.status !== 'PENDING' && jc.status !== 'READY') || parseFloat(jc.produced_qty || 0) > 0 || logCount > 0;
+    const hasLogProcessStarted = jc.status === 'COMPLETED' || parseFloat(jc.produced_qty || 0) > 0 || logCount > 0;
     if (hasLogProcessStarted) {
       const currentStartStr = jc.start_time ? new Date(jc.start_time).toISOString().slice(0, 19).replace('T', ' ') : null;
       const currentEndStr = jc.end_time ? new Date(jc.end_time).toISOString().slice(0, 19).replace('T', ' ') : null;
