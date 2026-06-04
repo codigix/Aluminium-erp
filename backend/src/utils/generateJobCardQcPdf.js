@@ -11,160 +11,345 @@ const generateJobCardQcPdf = async (data) => {
     
     // Create template if not exists
     if (!fs.existsSync(templatePath)) {
-        const defaultTemplate = `
-<!DOCTYPE html>
+        const defaultTemplate = `<!DOCTYPE html>
 <html>
 <head>
-    <style>
-        body { font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1e293b; line-height: 1.5; margin: 0; padding: 20px; background-color: #ffffff; }
-        .header { text-align: center; border-bottom: 2px solid #e2e8f0; padding-bottom: 20px; margin-bottom: 30px; position: relative; }
-        .company-name { font-size: 24px; font-weight: 800; color: #0f172a; margin: 0; letter-spacing: -0.025em; text-transform: uppercase; }
-        .report-title { font-size: 18px; font-weight: 600; color: #64748b; margin: 5px 0 0 0; text-transform: uppercase; letter-spacing: 0.05em; }
-        .logo-container { position: absolute; left: 0; top: 0; width: 80px; height: 80px; display: flex; align-items: center; justify-content: center; border: 1px solid #f1f5f9; border-radius: 12px; }
-        .logo-container img { max-width: 60px; max-height: 60px; object-fit: contain; }
-        
-        .info-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-bottom: 30px; }
-        .info-card { background: #f8fafc; border: 1px solid #f1f5f9; border-radius: 12px; padding: 15px; }
-        .info-row { display: flex; justify-content: space-between; margin-bottom: 8px; border-bottom: 1px dashed #e2e8f0; padding-bottom: 4px; }
-        .info-row:last-child { margin-bottom: 0; border-bottom: none; }
-        .label { color: #64748b; font-size: 11px; font-weight: 700; text-transform: uppercase; }
-        .value { color: #0f172a; font-size: 13px; font-weight: 600; }
+  <meta charset="UTF-8" />
+  <title>Quality Control Report</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
 
-        .status-section { display: flex; align-items: center; justify-content: center; margin-bottom: 30px; gap: 40px; padding: 20px; background: #f8fafc; border-radius: 16px; border: 1px solid #e2e8f0; }
-        .status-badge { padding: 8px 24px; border-radius: 9999px; font-size: 14px; font-weight: 800; text-transform: uppercase; }
-        .status-approved { background-color: #ecfdf5; color: #059669; border: 1px solid #10b981; }
-        .status-pending { background-color: #fffbeb; color: #d97706; border: 1px solid #f59e0b; }
-        
-        table { width: 100%; border-collapse: separate; border-spacing: 0; margin-bottom: 30px; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; }
-        th { background: #f8fafc; color: #475569; font-weight: 700; text-align: left; padding: 12px 15px; font-size: 11px; text-transform: uppercase; border-bottom: 2px solid #e2e8f0; }
-        td { padding: 15px; border-bottom: 1px solid #f1f5f9; font-size: 13px; vertical-align: middle; }
-        tr:last-child td { border-bottom: none; }
-        
-        .qty-val { font-weight: 700; font-family: 'Courier New', monospace; }
-        .accepted { color: #16a34a; background: #f0fdf4; padding: 4px 8px; border-radius: 6px; }
-        .rejected { color: #dc2626; background: #fef2f2; padding: 4px 8px; border-radius: 6px; }
+    body {
+      font-family: 'Helvetica', 'Arial', sans-serif;
+      font-size: 10px;
+      color: #333;
+      line-height: 1.4;
+      background: white;
+      padding: 20px;
+    }
 
-        .notes-area { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin-bottom: 40px; }
-        .notes-title { font-size: 12px; font-weight: 700; color: #64748b; margin-bottom: 10px; text-transform: uppercase; }
-        .notes-content { font-size: 13px; color: #334155; font-style: italic; }
+    .report-container {
+      width: 100%;
+      border: 1px solid #000;
+    }
 
-        .seal-container { display: flex; justify-content: center; margin-top: 40px; }
-        .quality-seal { border: 4px double #16a34a; border-radius: 50%; width: 120px; height: 120px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #16a34a; transform: rotate(-15deg); opacity: 0.8; }
-        .seal-text { font-size: 12px; font-weight: 900; text-transform: uppercase; text-align: center; line-height: 1.2; }
-        .seal-icon { font-size: 32px; margin-bottom: 4px; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
 
-        .footer { border-top: 1px solid #e2e8f0; padding-top: 20px; text-align: center; color: #94a3b8; font-size: 10px; position: fixed; bottom: 20px; width: calc(100% - 40px); }
-    </style>
+    th, td {
+      border: 1px solid #000;
+      padding: 5px;
+      vertical-align: middle;
+    }
+
+    .header-section {
+      border-bottom: 2px solid #000;
+    }
+
+    .logo-container {
+      width: 120px;
+      text-align: center;
+      padding: 5px;
+    }
+
+    .logo-img {
+      max-width: 110px;
+      max-height: 60px;
+      object-fit: contain;
+    }
+
+    .company-header {
+      text-align: center;
+      padding: 10px;
+    }
+
+    .company-name {
+      font-size: 24px;
+      font-weight: bold;
+      color: #f26522;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+
+    .report-title {
+      font-size: 16px;
+      font-weight: bold;
+      margin-top: 5px;
+      text-transform: uppercase;
+    }
+
+    .company-address {
+      font-size: 10px;
+      margin-top: 2px;
+    }
+
+    .info-table td {
+      width: 25%;
+      border: 1px solid #ccc;
+    }
+
+    .label {
+      font-weight: bold;
+      background-color: #f9f9f9;
+    }
+
+    .status-passed {
+      color: #16a34a;
+      font-weight: bold;
+    }
+
+    .status-passed-rejection {
+      color: #d97706;
+      font-weight: bold;
+    }
+
+    .status-failed {
+      color: #dc2626;
+      font-weight: bold;
+    }
+
+    .item-table {
+      margin-top: 10px;
+    }
+
+    .item-table th {
+      background-color: #f0f0f0;
+      font-weight: bold;
+      text-align: center;
+    }
+
+    .center {
+      text-align: center;
+    }
+
+    .right {
+      text-align: right;
+    }
+
+    .item-code {
+      font-size: 8px;
+      color: #666;
+      display: block;
+      margin-top: 2px;
+    }
+
+    .remarks-section {
+      margin-top: 10px;
+      padding: 8px;
+      border: 1px solid #000;
+    }
+
+    .summary-section {
+      margin-top: 10px;
+      border: 1px solid #000;
+    }
+
+    .summary-section table td {
+      border: none;
+      padding: 3px 8px;
+    }
+
+    .footer-signatures {
+      margin-top: 30px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      padding: 0 20px;
+    }
+
+    .signature-box {
+      text-align: center;
+      width: 200px;
+    }
+
+    .signature-line {
+      border-top: 1px solid #000;
+      margin-bottom: 5px;
+    }
+
+    .seal-container {
+      text-align: center;
+    }
+
+    .seal-circle {
+      border: 3px solid #16a34a; 
+      color: #16a34a; 
+      border-radius: 50%; 
+      width: 55px; 
+      height: 55px; 
+      margin: 0 auto; 
+      display: flex; 
+      align-items: center; 
+      justify-content: center;
+      position: relative;
+    }
+
+    .seal-text {
+      font-size: 8px; 
+      font-weight: bold; 
+      margin-bottom: 5px; 
+      text-transform: uppercase;
+      color: #16a34a;
+    }
+
+    .system-generated {
+      text-align: center;
+      font-size: 8px;
+      color: #666;
+      margin-top: 20px;
+      font-style: italic;
+    }
+
+    @media print {
+      body {
+        padding: 0;
+      }
+    }
+  </style>
 </head>
 <body>
-    <div class="header">
-        <div class="logo-container">
-            <img src="{{logoPath}}" alt="SP TECHPIONEER">
-        </div>
-        <h1 class="company-name">SP TECHPIONEER PVT. LTD.</h1>
-        <p class="report-title">Quality Inspection Report (Production)</p>
-    </div>
-
-    <div class="info-grid">
-        <div class="info-card">
-            <div class="info-row">
-                <span class="label">Report No</span>
-                <span class="value">{{reportNo}}</span>
-            </div>
-            <div class="info-row">
-                <span class="label">Inspection Date</span>
-                <span class="value">{{check_date}}</span>
-            </div>
-            <div class="info-row">
-                <span class="label">Shift</span>
-                <span class="value">{{shift}}</span>
-            </div>
-        </div>
-        <div class="info-card">
-            <div class="info-row">
-                <span class="label">Job Card No</span>
-                <span class="value">{{job_card_no}}</span>
-            </div>
-            <div class="info-row">
-                <span class="label">Work Order</span>
-                <span class="value">{{wo_number}}</span>
-            </div>
-            <div class="info-row">
-                <span class="label">Operation</span>
-                <span class="value">{{operation_name}}</span>
-            </div>
-        </div>
-    </div>
-
-    <div class="info-card" style="margin-bottom: 30px;">
-        <div class="info-row">
-            <span class="label">Project / Customer</span>
-            <span class="value">{{project_name}} / {{client_name}}</span>
-        </div>
-        <div class="info-row" style="margin-top: 8px; border-top: 1px dashed #e2e8f0; padding-top: 8px;">
-            <span class="label">Item Details</span>
-            <span class="value">{{item_name}} ({{item_code}})</span>
-        </div>
-    </div>
-
-    <div class="status-section">
-        <div style="text-align: center;">
-            <div class="label" style="margin-bottom: 8px;">Status</div>
-            <div class="status-badge {{statusClass}}">{{status}}</div>
-        </div>
-    </div>
-
+  <div class="report-container">
+    <!-- Header -->
     <table>
-        <thead>
-            <tr>
-                <th>Parameters</th>
-                <th style="text-align: center">Inspected Qty</th>
-                <th style="text-align: center">Accepted Qty</th>
-                <th style="text-align: center">Rejected Qty</th>
-                <th style="text-align: center">Scrap Qty</th>
-            </tr>
-        </thead>
-        <tbody>
-            <tr>
-                <td style="font-weight: 600;">Production Quality Check</td>
-                <td style="text-align: center" class="qty-val">{{inspected_qty}}</td>
-                <td style="text-align: center" class="qty-val"><span class="accepted">{{accepted_qty}}</span></td>
-                <td style="text-align: center" class="qty-val"><span class="rejected">{{rejected_qty}}</span></td>
-                <td style="text-align: center" class="qty-val">{{scrap_qty}}</td>
-            </tr>
-        </tbody>
+      <tr>
+        <td class="company-header" style="width: 100%;">
+          <div class="company-name">SP TECHPIONEER PVT. LTD.</div>
+          <div class="report-title">QUALITY CONTROL REPORT</div>
+          <div class="company-address">Plot No. 97, Sector 7, PCNTDA, Bhosari, Pune – 411026</div>
+        </td>
+      </tr>
     </table>
 
-    {{#rejection_reason}}
-    <div class="notes-area" style="border-left: 4px solid #dc2626;">
-        <div class="notes-title" style="color: #dc2626;">Rejection Reason</div>
-        <div class="notes-content">{{rejection_reason}}</div>
-    </div>
-    {{/rejection_reason}}
+    <!-- Info Section -->
+    <table class="info-table">
+      <tr>
+        <td class="label">Report No.</td>
+        <td>: {{reportNo}}</td>
+        <td class="label">Report Date</td>
+        <td>: {{reportDate}}</td>
+      </tr>
+      <tr>
+        <td class="label">Job Card No.</td>
+        <td>: {{jobCardNo}}</td>
+        <td class="label">Inspector</td>
+        <td>: {{inspector}}</td>
+      </tr>
+      <tr>
+        <td class="label">Work Order No.</td>
+        <td>: {{woNo}}</td>
+        <td class="label">Department</td>
+        <td>: {{department}}</td>
+      </tr>
+      <tr>
+        <td class="label">Project</td>
+        <td>: {{project}}</td>
+        <td class="label">Report Status</td>
+        <td class="{{statusClass}}">: {{status}}</td>
+      </tr>
+    </table>
 
-    {{#notes}}
-    <div class="notes-area">
-        <div class="notes-title">Inspector Remarks</div>
-        <div class="notes-content">{{notes}}</div>
-    </div>
-    {{/notes}}
+    <!-- Item Table -->
+    <table class="item-table">
+      <thead>
+        <tr>
+          <th style="width: 40px;">Sr. No.</th>
+          <th>Item Description</th>
+          <th style="width: 100px;">Required Qty</th>
+          <th style="width: 100px;">Accepted Qty</th>
+          <th style="width: 100px;">Rejected Qty</th>
+          <th style="width: 120px;">Rejection Reason</th>
+          <th style="width: 100px;">QC Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="center">1</td>
+          <td>
+            <strong>{{itemName}}</strong>
+            <span class="item-code">{{itemCode}}</span>
+            <span class="item-code">{{operationName}}</span>
+          </td>
+          <td class="center">{{requiredQty}}</td>
+          <td class="center">{{acceptedQty}}</td>
+          <td class="center">{{rejectedQty}}</td>
+          <td class="center">{{rejectionReason}}</td>
+          <td class="center">
+            <span class="status-passed">{{inspectionStatus}}</span>
+          </td>
+        </tr>
+      </tbody>
+    </table>
 
-    {{#isApproved}}
-    <div class="seal-container">
-        <div class="quality-seal">
-            <div class="seal-icon">✓</div>
-            <div class="seal-text">Quality<br>Assured</div>
+    <!-- Remarks -->
+    <div class="remarks-section">
+      <strong>Remarks : </strong> {{remarks}}
+    </div>
+
+    <!-- Summary -->
+    <div class="summary-section">
+      <div style="padding: 5px; border-bottom: 1px solid #000; font-weight: bold; background: #f0f0f0;">SUMMARY</div>
+      <table>
+        <tr>
+          <td style="width: 180px; font-weight: bold;">Total Produced Qty</td>
+          <td style="font-weight: bold;">: {{requiredQty}}</td>
+        </tr>
+        <tr>
+          <td style="font-weight: bold;">Accepted Qty</td>
+          <td style="font-weight: bold;">: {{acceptedQty}}</td>
+        </tr>
+        <tr>
+          <td style="font-weight: bold; color: #dc2626;">Rejected Qty</td>
+          <td style="font-weight: bold; color: #dc2626;">: {{rejectedQty}}</td>
+        </tr>
+        <tr>
+          <td style="font-weight: bold; color: #d97706;">Rework Qty</td>
+          <td style="font-weight: bold; color: #d97706;">: {{reworkQty}}</td>
+        </tr>
+        <tr>
+          <td style="font-weight: bold;">Inspection Status</td>
+          <td style="font-weight: bold;">: {{inspectionStatus}}</td>
+        </tr>
+      </table>
+    </div>
+
+    <!-- Footer Signatures -->
+    <div class="footer-signatures">
+      <div class="signature-box">
+        <div class="signature-line"></div>
+        <strong>Inspector Signature</strong><br/>
+        {{inspector}}<br/>
+        {{reportDate}}
+      </div>
+      
+      {{#isApproved}}
+      <div class="seal-container">
+        <div class="seal-text">Quality Assured</div>
+        <div class="seal-circle">
+          <svg xmlns="http://www.w3.org/2000/svg" width="35" height="35" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
         </div>
-    </div>
-    {{/isApproved}}
+      </div>
+      {{/isApproved}}
 
-    <div class="footer">
-        <p>This is a system-generated report and does not require physical signature.</p>
-        <p>Plot No. 97, Sector 7, PCNTDA, Bhosari, Pune - 411 026</p>
+      <div class="signature-box">
+        <div class="signature-line"></div>
+        <strong>Approved By</strong><br/>
+        (Name)<br/>
+        (Designation)
+      </div>
     </div>
+  </div>
+
+  <div class="system-generated">
+    This is a system generated report and does not require physical signature.
+  </div>
 </body>
-</html>
-        `;
+</html>`;
         const templateDir = path.dirname(templatePath);
         if (!fs.existsSync(templateDir)) fs.mkdirSync(templateDir, { recursive: true });
         fs.writeFileSync(templatePath, defaultTemplate);
@@ -185,6 +370,32 @@ const generateJobCardQcPdf = async (data) => {
       }
     };
 
+    const accepted = parseFloat(log.accepted_qty || 0);
+    const rejected = parseFloat(log.rejected_qty || 0);
+    const produced = parseFloat(log.inspected_qty || 0);
+
+    let statusText = 'PENDING';
+    let statusClass = 'status-failed';
+    let statusColor = '#dc2626';
+
+    if (accepted === produced && rejected === 0) {
+      statusText = 'PASSED';
+      statusClass = 'status-passed';
+      statusColor = '#16a34a';
+    } else if (accepted > 0 && rejected > 0) {
+      statusText = 'QC CHECKED';
+      statusClass = 'status-passed-rejection';
+      statusColor = '#d97706';
+    } else if (accepted === 0 && rejected > 0) {
+      statusText = 'REJECTED';
+      statusClass = 'status-failed';
+      statusColor = '#dc2626';
+    } else {
+      statusText = log.status === 'APPROVED' ? 'PASSED' : log.status;
+      statusClass = log.status === 'APPROVED' ? 'status-passed' : 'status-failed';
+      statusColor = log.status === 'APPROVED' ? '#16a34a' : '#dc2626';
+    }
+
     const renderData = {
       logoPath: 'file://' + path.join(__dirname, '../../../frontend/src/assets/sptechpioneer logo.png'),
       reportNo: `QC-${new Date(log.check_date || Date.now()).getFullYear()}-${String(log.id).padStart(4, '0')}`,
@@ -194,16 +405,21 @@ const generateJobCardQcPdf = async (data) => {
       woNo: log.wo_number,
       department: 'Quality Assurance',
       project: `${log.project_name || 'Stock'} - Drawing ${log.drawing_no || '—'} for ${log.client_name || 'Internal'}`,
-      status: log.status === 'APPROVED' ? 'PASSED' : log.status,
-      statusClass: log.status === 'APPROVED' ? 'status-passed' : 'status-failed',
+      status: statusText,
+      statusClass: statusClass,
       itemName: log.item_name,
       itemCode: log.item_code,
       operationName: log.operation_name,
       designQty: `${parseFloat(log.planned_qty || 0).toFixed(3)} Nos`,
       requiredQty: `${parseFloat(log.inspected_qty || 0).toFixed(3)} Nos`,
       receivedQty: `${parseFloat(log.accepted_qty || 0).toFixed(3)} Nos`,
+      acceptedQty: `${parseFloat(log.accepted_qty || 0).toFixed(3)} Nos`,
+      rejectedQty: `${parseFloat(log.rejected_qty || 0).toFixed(3)} Nos`,
+      rejectionReason: log.rejection_reason || '—',
+      reworkQty: `${parseFloat(log.rejected_qty || 0).toFixed(3)} Nos`,
+      inspectionStatus: 'QC Checked',
       itemStatus: log.status === 'APPROVED' ? 'AVAILABLE' : 'PENDING',
-      statusColor: log.status === 'APPROVED' ? '#16a34a' : '#dc2626',
+      statusColor: statusColor,
       remarks: log.notes || 'Auto-created from Quality Inspection',
       availableCount: log.status === 'APPROVED' ? 1 : 0,
       isApproved: log.status === 'APPROVED'

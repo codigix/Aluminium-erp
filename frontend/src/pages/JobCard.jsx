@@ -57,8 +57,8 @@ const TimePicker = ({ value, ampmValue, onTimeChange, onAMPMChange, label, small
       <div
         onClick={toggleOpen}
         className={`flex items-center gap-1.5 border border-slate-200 rounded transition-all focus-within:ring-2 focus-within:ring-indigo-500/20 ${small ? 'px-2 py-1' : 'px-3 py-2'} ${disabled
-            ? 'bg-slate-50 text-slate-400 cursor-not-allowed border-slate-100'
-            : 'bg-white cursor-pointer hover:border-indigo-400'
+          ? 'bg-slate-50 text-slate-400 cursor-not-allowed border-slate-100'
+          : 'bg-white cursor-pointer hover:border-indigo-400'
           }`}
       >
         <Clock className={`${small ? 'w-3 h-3' : 'w-3.5 h-3.5'} text-slate-400`} />
@@ -394,12 +394,60 @@ const JobCard = () => {
 
   const calculateModalStdTimeSuggestion = () => {
     const selectedOp = operations.find(op => String(op.id) === String(formData.operationId));
-    if (!selectedOp) return 0;
-    const cycleTime = parseFloat(selectedOp.cycle_time) || parseFloat(selectedOp.std_time) || 0;
-    const setupTime = parseFloat(selectedOp.setup_time || 0);
-    const qty = parseFloat(formData.plannedQty || 0);
-    return Math.round((cycleTime * qty) + setupTime);
+    if (!selectedOp && !formData.stdTime) return 0;
+
+    let netTime = parseFloat(formData.stdTime) || (selectedOp ? (parseFloat(selectedOp.cycle_time) || parseFloat(selectedOp.std_time) || 0) : 0);
+    let timeUom = parseFloat(formData.stdTime) > 0 ? formData.timeUom : (selectedOp?.time_uom || 'Min');
+
+    if (timeUom === 'Hr') netTime *= 60;
+    else if (timeUom === 'Sec') netTime /= 60;
+
+    const planned = parseFloat(formData.plannedQty || 0);
+    const produced = parseFloat(formData.producedQty || 0);
+    const qty = Math.max(0, planned - produced);
+
+    const setupTime = parseFloat(selectedOp?.setup_time || 0);
+
+    return Math.round((netTime * qty) + setupTime);
   };
+
+  const handleAutoSuggestEndDateTime = () => {
+    const selectedOp = operations.find(o => String(o.id) === String(formData.operationId));
+    if (!selectedOp && !formData.stdTime) return;
+
+    let netTime = parseFloat(formData.stdTime) || (selectedOp ? (parseFloat(selectedOp.cycle_time) || parseFloat(selectedOp.std_time) || 0) : 0);
+    let timeUom = parseFloat(formData.stdTime) > 0 ? formData.timeUom : (selectedOp?.time_uom || 'Min');
+
+    if (timeUom === 'Hr') netTime *= 60;
+    else if (timeUom === 'Sec') netTime /= 60;
+
+    if (netTime > 0 && formData.startTime && formData.startDate) {
+      const start24 = to24h(formData.startTime, formData.startAMPM);
+      const start = new Date(`${formData.startDate}T${start24}:00`);
+
+      if (!isNaN(start.getTime())) {
+        const planned = parseFloat(formData.plannedQty || 0);
+        const produced = parseFloat(formData.producedQty || 0);
+        const qty = Math.max(0, planned - produced);
+
+        const totalMins = Math.round(netTime * qty);
+        const end = new Date(start.getTime() + totalMins * 60000);
+
+        const endDate = end.getFullYear() + '-' + (end.getMonth() + 1).toString().padStart(2, '0') + '-' + end.getDate().toString().padStart(2, '0');
+        const end24 = end.getHours().toString().padStart(2, '0') + ':' + end.getMinutes().toString().padStart(2, '0');
+        const { time: endTime, ampm: endAMPM } = to12h(end24);
+
+        setFormData(prev => ({
+          ...prev,
+          endDate,
+          endTime,
+          endAMPM
+        }));
+      }
+    }
+  };
+
+
 
   const calculateModalOverlapAlert = () => {
     if (formData.executionMode === 'Outsource') return null;
@@ -484,8 +532,20 @@ const JobCard = () => {
           rejected: 0,
           scrap: 0,
           downtime: 0,
-          id: log.id
+          id: log.id,
+          startTime: log.start_time,
+          endTime: log.end_time
         };
+      } else {
+        if (log.start_time && (!reportMap[key].startTime || new Date(log.start_time) < new Date(reportMap[key].startTime))) {
+          reportMap[key].startTime = log.start_time;
+        }
+        if (log.end_time && (!reportMap[key].endTime || new Date(log.end_time) > new Date(reportMap[key].endTime))) {
+          reportMap[key].endTime = log.end_time;
+        }
+        if (log.operator_name && (!reportMap[key].operator || reportMap[key].operator === 'N/A')) {
+          reportMap[key].operator = log.operator_name;
+        }
       }
       reportMap[key].produced += parseFloat(log.produced_qty || 0);
       reportMap[key].mins += calculateISODuration(log.start_time, log.end_time);
@@ -639,7 +699,9 @@ const JobCard = () => {
         const start = new Date(`${formData.startDate}T${start24}:00`);
 
         if (!isNaN(start.getTime())) {
-          const qty = parseFloat(formData.producedQty || 0) > 0 ? parseFloat(formData.producedQty) : parseFloat(formData.plannedQty || 0);
+          const planned = parseFloat(formData.plannedQty || 0);
+          const produced = parseFloat(formData.producedQty || 0);
+          const qty = Math.max(0, planned - produced);
           const totalMins = Math.round(netTime * qty);
           const end = new Date(start.getTime() + totalMins * 60000);
 
@@ -1497,7 +1559,26 @@ const JobCard = () => {
     }
   };
 
+  const validateJobCardCompleteness = (jc) => {
+    const isShipment = isShipmentOp(jc);
+    const isSubcontract = jc.execution_type === 'Outsource' || jc.execution_type === 'Subcontract' || jc.execution_type === 'Sub-Contract' || jc.outward_challan_id;
+
+    if (!isSubcontract && !isShipment) {
+      const isWorkstationNull = !jc.workstation_id;
+      const isStartTimeNull = !jc.start_time;
+      const isEndTimeNull = !jc.end_time;
+      const hasNoTimeLogs = !jc.produced_qty || parseFloat(jc.produced_qty) === 0;
+
+      if (jc.status === 'IN_PROGRESS' && isWorkstationNull && isStartTimeNull && isEndTimeNull && hasNoTimeLogs) {
+        errorToast('Cannot Log Production. Assign workstation and operation timing first.');
+        return false;
+      }
+    }
+    return true;
+  };
+
   const handleLogProgress = async (jc) => {
+    if (!validateJobCardCompleteness(jc)) return;
     setSelectedJC(jc);
     setActiveTab('time');
     await fetchLogs(jc.id);
@@ -1520,13 +1601,15 @@ const JobCard = () => {
     const currentIndex = woJCs.findIndex(j => j.id === jc.id);
     const precedingJC = currentIndex > 0 ? woJCs[currentIndex - 1] : null;
     const availableQty = precedingJC ? parseFloat(precedingJC.accepted_qty || precedingJC.produced_qty || 0) : parseFloat(jc.planned_qty || 0);
+    const dispatchedQty = parseFloat(jc.dispatch_qty || jc.accepted_qty || 0);
+    const remainingQty = Math.max(0, availableQty - dispatchedQty);
 
     setShipmentForm({
       dispatchMode: 'Partial',
       dispatchDate: new Date().toISOString().split('T')[0],
       sourceWarehouseId: precedingJC ? (precedingJC.target_warehouse_id || '') : '',
       targetWarehouseId: jc.target_warehouse_id || '',
-      dispatchQty: availableQty,
+      dispatchQty: remainingQty,
       carrierName: jc.carrier_name || '',
       trackingNumber: jc.tracking_number || '',
       shippingNotes: jc.shipping_notes || '',
@@ -1881,11 +1964,22 @@ const JobCard = () => {
     const remainingQty = Math.max(0, parseFloat(selectedJC.planned_qty || 0) - dispatchedQty);
     const isConstrained = availableQty < parseFloat(selectedJC.planned_qty || 0);
 
+    const targetQty = parseFloat(selectedJC.wo_quantity || selectedJC.planned_qty || 0);
+    const remainingAvailableQty = Math.max(0, availableQty - dispatchedQty);
+    const remainingWorkOrderQty = Math.max(0, targetQty - dispatchedQty);
+
+    const selectedNextJCForBtn = woJCs.find(j => String(j.operation_id) === String(nextStageForm.nextOperationId));
+    const alreadyTransferredQtyForBtn = selectedNextJCForBtn
+      ? (selectedNextJCForBtn.status === 'PENDING' ? 0 : Math.max(parseFloat(selectedNextJCForBtn.planned_qty || 0), parseFloat(selectedNextJCForBtn.accepted_qty || 0)))
+      : parseFloat(selectedJC.transferred_qty || 0);
+    const availableTransferQty = Math.max(0, (selectedJC.accepted_qty || qcStats.totalAccepted || 0) - alreadyTransferredQtyForBtn);
+    const isTransferDisabled = !nextStageForm.nextOperationId || availableTransferQty <= 0;
+
     // Handover percentage
     const handoverPercentage = selectedJC.planned_qty > 0 ? ((availableQty / selectedJC.planned_qty) * 100).toFixed(1) : '0.0';
 
     // Check if other stages in the work order are completed
-    const isPlanFullyFulfilled = woJCs.filter(j => j.id !== selectedJC.id).every(j => j.status === 'COMPLETED');
+    const isPlanFullyFulfilled = woJCs.filter(j => j.id !== selectedJC.id).every(j => j.status === 'COMPLETED' || (parseFloat(j.accepted_qty || 0) >= parseFloat(j.planned_qty || 0) && parseFloat(j.planned_qty || 0) > 0));
 
     return (
       <div className="space-y-2 pb-12">
@@ -1983,15 +2077,15 @@ const JobCard = () => {
                   <button
                     type="button"
                     onClick={() => {
-                      setShipmentForm(prev => ({ ...prev, dispatchQty: availableQty }));
-                      successToast(`Transferred ${availableQty} Units to Dispatch Qty!`);
+                      setShipmentForm(prev => ({ ...prev, dispatchQty: remainingAvailableQty }));
+                      successToast(`Transferred ${remainingAvailableQty} Units to Dispatch Qty!`);
                     }}
                     className="px-3.5 py-2 bg-emerald-600 text-white hover:bg-emerald-700 rounded-lg text-xs font-bold transition-all shadow-sm active:scale-95 flex items-center gap-1.5"
                   >
                     <svg className="w-3.5 h-3.5 text-emerald-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
                     </svg>
-                    Transfer {availableQty} Units
+                    Transfer {remainingAvailableQty} Units
                   </button>
                 </div>
               </div>
@@ -2000,26 +2094,11 @@ const JobCard = () => {
               <div className="border-t border-slate-100 my-2"></div>
 
               {/* Stats Columns row */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-1">
+              <div className="grid grid-cols-3 gap-4 pt-1">
                 <div>
                   <p className="text-[11px] text-slate-400 font-medium">Ready for Dispatch</p>
-                  <p className="text-lg font-bold text-slate-900 mt-0.5">
-                    <span className="text-amber-500 font-extrabold">{availableQty}</span>
-                    <span className="text-slate-400 text-sm font-normal"> / {selectedJC.planned_qty} Units</span>
-                  </p>
-                </div>
-
-                <div>
-                  <p className="text-[11px] text-slate-400 font-medium">Remaining</p>
-                  <p className="text-lg font-bold text-rose-600 mt-0.5">
-                    {remainingQty} <span className="text-xs text-rose-400 font-normal">Units</span>
-                  </p>
-                </div>
-
-                <div>
-                  <p className="text-[11px] text-slate-400 font-medium">Ready for Dispatch</p>
-                  <p className="text-lg font-bold text-blue-600 mt-0.5">
-                    {availableQty} <span className="text-xs text-blue-400 font-normal">Units</span>
+                  <p className="text-lg font-bold text-amber-600 mt-0.5">
+                    {remainingAvailableQty} <span className="text-xs text-amber-400 font-normal">Units</span>
                   </p>
                 </div>
 
@@ -2027,6 +2106,13 @@ const JobCard = () => {
                   <p className="text-[11px] text-slate-400 font-medium">Dispatched</p>
                   <p className="text-lg font-bold text-indigo-600 mt-0.5">
                     {dispatchedQty} <span className="text-xs text-indigo-400 font-normal">Units</span>
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-[11px] text-slate-400 font-medium">Remaining</p>
+                  <p className="text-lg font-bold text-rose-600 mt-0.5">
+                    {remainingWorkOrderQty} <span className="text-xs text-rose-400 font-normal">Units</span>
                   </p>
                 </div>
               </div>
@@ -2079,9 +2165,15 @@ const JobCard = () => {
                     {(((parseFloat(selectedJC.cycle_time) || parseFloat(selectedJC.std_time) || 0) * parseFloat(selectedJC.planned_qty || 0)) + parseFloat(selectedJC.setup_time || 0)).toFixed(0)} <span className="text-xs  text-indigo-400 lowercase">Min</span>
                   </p>
                   <div className="text-[9px] text-slate-400 mt-1 flex gap-1">
-                    <span>C: {parseFloat(selectedJC.cycle_time) || parseFloat(selectedJC.std_time) || 0}m</span>
+                    <span>C: {(() => {
+                      const val = parseFloat(selectedJC.cycle_time) || parseFloat(selectedJC.std_time) || 0;
+                      return val >= 1 ? Math.round(val) : val;
+                    })()}m</span>
                     <span>•</span>
-                    <span>S: {(selectedJC.setup_time || 0)}m</span>
+                    <span>S: {(() => {
+                      const val = parseFloat(selectedJC.setup_time || 0);
+                      return val >= 1 ? Math.round(val) : val;
+                    })()}m</span>
                   </div>
                 </div>
               </div>
@@ -2131,7 +2223,7 @@ const JobCard = () => {
                 <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
                   <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
                     {/* Left: Progress details */}
-                    <div className="lg:col-span-8 space-y-3">
+                    <div className="lg:col-span-7 space-y-3">
                       <div className="flex justify-between items-center">
                         <div>
                           <p className="text-xs font-semibold text-slate-700">Source Stage</p>
@@ -2159,7 +2251,7 @@ const JobCard = () => {
                     </div>
 
                     {/* Right: Mini-stats grid */}
-                    <div className="lg:col-span-4 grid grid-cols-4 gap-2 border-l border-slate-100 pl-6 min-w-[250px]">
+                    <div className="lg:col-span-5 grid grid-cols-5 gap-2 border-l border-slate-100 pl-6 min-w-[320px]">
                       <div className="text-center">
                         <p className="text-[10px] text-slate-400 font-semibold uppercase">Produced</p>
                         <p className="text-sm font-bold text-slate-800 mt-1">{precedingJC ? (precedingJC.produced_qty || 0) : selectedJC.planned_qty}</p>
@@ -2175,6 +2267,17 @@ const JobCard = () => {
                       <div className="text-center">
                         <p className="text-[10px] text-slate-400 font-semibold uppercase text-blue-600">Received</p>
                         <p className="text-sm font-extrabold text-blue-600 mt-1">{precedingJC ? (precedingJC.received_qty || precedingJC.accepted_qty || 0) : selectedJC.planned_qty}</p>
+                      </div>
+                      <div className="text-center border-l border-slate-100 pl-2">
+                        <p className="text-[10px] text-slate-400 font-semibold uppercase text-rose-600">Balance WIP</p>
+                        <p className="text-sm font-extrabold text-rose-600 mt-1">
+                          {(() => {
+                            const precedingAccepted = precedingJC ? (precedingJC.accepted_qty || precedingJC.produced_qty || 0) : 0;
+                            const totalQty = parseFloat(selectedJC.wo_quantity || selectedJC.planned_qty || 0);
+                            const precedingWip = Math.max(0, totalQty - parseFloat(precedingAccepted));
+                            return `${precedingWip.toFixed(2)} Units`;
+                          })()}
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -2236,9 +2339,14 @@ const JobCard = () => {
                           </div>
 
                           <div className="pt-2 border-t border-slate-100/60 flex justify-between items-center mt-2">
-                            <span className="text-[10px] text-slate-400 font-medium">Ready Qty</span>
+                            <span className="text-[10px] text-slate-400 font-medium">
+                              {isShipmentOp(jc) ? 'Dispatched' : 'Ready Qty'}
+                            </span>
                             <span className="text-xs font-bold text-slate-700">
-                              {jc.accepted_qty || jc.produced_qty || 0} / {jc.planned_qty || 0}
+                              {isShipmentOp(jc)
+                                ? `${parseFloat(jc.dispatch_qty || jc.accepted_qty || 0)} / ${parseFloat(selectedJC.wo_quantity || jc.planned_qty || 0)}`
+                                : `${parseFloat(jc.accepted_qty || jc.produced_qty || 0)} / ${parseFloat(jc.planned_qty || 0)}`
+                              }
                             </span>
                           </div>
                         </div>
@@ -2361,13 +2469,13 @@ const JobCard = () => {
                           <input
                             type="number"
                             min="0.001"
-                            max={availableQty}
+                            max={remainingQty}
                             step="any"
                             value={shipmentForm.dispatchQty}
                             onChange={e => {
                               const val = parseFloat(e.target.value) || 0;
-                              if (val > availableQty) {
-                                warningToast(`Cannot exceed available predecessor qty (${availableQty} Units)`);
+                              if (val > remainingQty) {
+                                warningToast(`Cannot exceed available remaining qty (${remainingQty} Units)`);
                               }
                               setShipmentForm(prev => ({ ...prev, dispatchQty: e.target.value }));
                             }}
@@ -2375,14 +2483,14 @@ const JobCard = () => {
                           />
                           <button
                             type="button"
-                            onClick={() => setShipmentForm(prev => ({ ...prev, dispatchQty: availableQty }))}
+                            onClick={() => setShipmentForm(prev => ({ ...prev, dispatchQty: remainingQty }))}
                             className="absolute right-1.5 top-1.5 px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded text-[10px] font-bold transition-all"
                           >
-                            Ready: {availableQty}
+                            Ready: {remainingQty}
                           </button>
                         </div>
                         <p className="text-[10px] text-slate-400 mt-1.5">
-                          Recommended: Only dispatch <span className="font-semibold text-amber-600">{availableQty} units</span> which have passed quality check.
+                          Recommended: Only dispatch <span className="font-semibold text-amber-600">{remainingQty} units</span> which have passed quality check.
                         </p>
                       </FormControl>
                     </div>
@@ -2723,7 +2831,8 @@ const JobCard = () => {
                         <FormControl label="Execution (P)">
                           <div className="p-2 bg-indigo-50 border border-indigo-100 rounded text-xs text-indigo-700 ">
                             {(() => {
-                              const cycleTime = parseFloat(selectedJC.cycle_time) || parseFloat(selectedJC.std_time) || 0;
+                              const rawCycleTime = parseFloat(selectedJC.cycle_time) || parseFloat(selectedJC.std_time) || 0;
+                              const cycleTime = rawCycleTime >= 1 ? Math.round(rawCycleTime) : rawCycleTime;
                               const setupTime = parseFloat(selectedJC.setup_time || 0);
                               const qty = parseFloat(timeLogForm.producedQty || 0);
                               const total = (cycleTime * qty) + setupTime;
@@ -2969,7 +3078,7 @@ const JobCard = () => {
                     <div className="text-right">
                       <p className="flex items-center gap-1.5 text-xs  text-slate-400  ">
                         <Box className="w-3 h-3" />
-                        Transferred so far: <span className="text-slate-700">{(selectedJC.transferred_qty || 0).toFixed(2)}</span>
+                        Transferred so far: <span className="text-slate-700">{parseFloat(selectedJC.transferred_qty || 0).toFixed(2)}</span>
                       </p>
                     </div>
                   </div>
@@ -3052,22 +3161,22 @@ const JobCard = () => {
                       <div className="flex items-center gap-4">
                         <button
                           onClick={handleTransferQty}
-                          disabled={!nextStageForm.nextOperationId}
-                          className={`group relative flex items-center gap-2 p-2 rounded transition-all ${!nextStageForm.nextOperationId
-                              ? 'bg-slate-50 text-slate-300 cursor-not-allowed border border-slate-100'
-                              : 'bg-indigo-500 hover:bg-indigo-600 text-white shadow-lg shadow-indigo-200'
+                          disabled={isTransferDisabled}
+                          className={`group relative flex items-center gap-2 p-2 rounded transition-all ${isTransferDisabled
+                            ? 'bg-slate-50 text-slate-300 cursor-not-allowed border border-slate-100'
+                            : 'bg-indigo-500 hover:bg-indigo-600 text-white shadow-lg shadow-indigo-200'
                             }`}
                         >
-                          <div className={`w-8 h-8 rounded flex items-center justify-center transition-colors ${!nextStageForm.nextOperationId
-                              ? 'bg-slate-100 text-slate-200'
-                              : 'bg-white/20 text-white'
+                          <div className={`w-8 h-8 rounded flex items-center justify-center transition-colors ${isTransferDisabled
+                            ? 'bg-slate-100 text-slate-200'
+                            : 'bg-white/20 text-white'
                             }`}>
                             <Layers className="w-4 h-4" />
                           </div>
                           <div className="text-left">
                             <p className="text-xs opacity-80">Transfer Qty</p>
                             <p className="text-sm font-semibold">
-                              Transfer {(qcStats.totalAccepted || qcStats.totalProduced || 0).toFixed(0)} Qty
+                              Transfer {availableTransferQty.toFixed(0)} Qty
                             </p>
                           </div>
                         </button>
@@ -3076,13 +3185,13 @@ const JobCard = () => {
                           onClick={handleReadyForDispatch}
                           disabled={!qcStats.isApproved || !qcStats.isComplete}
                           className={`group relative flex items-center gap-2 p-2 rounded transition-all ${!qcStats.isApproved || !qcStats.isComplete
-                              ? 'bg-slate-50 text-slate-300 cursor-not-allowed border border-slate-100'
-                              : 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-200'
+                            ? 'bg-slate-50 text-slate-300 cursor-not-allowed border border-slate-100'
+                            : 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-200'
                             }`}
                         >
                           <div className={`w-8 h-8 rounded flex items-center justify-center transition-colors ${!qcStats.isApproved || !qcStats.isComplete
-                              ? 'bg-slate-100 text-slate-200'
-                              : 'bg-white/20 text-white'
+                            ? 'bg-slate-100 text-slate-200'
+                            : 'bg-white/20 text-white'
                             }`}>
                             <CheckCircle className="w-4 h-4" />
                           </div>
@@ -3317,7 +3426,28 @@ const JobCard = () => {
         }
       }
 
-      const carryQty = qcStats.totalAccepted || qcStats.totalProduced || 0;
+      const woJCs = jobCards
+        .filter(j => String(j.work_order_id) === String(selectedJC.work_order_id))
+        .sort((a, b) => {
+          const aSeq = parseInt(a.sequence_no || a.operation_sequence || 0);
+          const bSeq = parseInt(b.sequence_no || b.operation_sequence || 0);
+          if (aSeq !== bSeq) return aSeq - bSeq;
+          return a.id - b.id;
+        });
+
+      const nextJC = woJCs.find(j => String(j.operation_id) === String(nextStageForm.nextOperationId));
+      if (!nextJC) {
+        errorToast('Next Operation Job Card not found.');
+        return;
+      }
+
+      const alreadyTransferredQty = nextJC.status === 'PENDING' ? 0 : Math.max(parseFloat(nextJC.planned_qty || 0), parseFloat(nextJC.accepted_qty || 0));
+      const carryQty = Math.max(0, (selectedJC.accepted_qty || qcStats.totalAccepted || 0) - alreadyTransferredQty);
+
+      if (carryQty <= 0) {
+        errorToast('No quantity available to transfer.');
+        return;
+      }
 
       const confirmTransfer = await Swal.fire({
         title: `Transfer ${carryQty} Qty?`,
@@ -3331,42 +3461,27 @@ const JobCard = () => {
 
       if (!confirmTransfer.isConfirmed) return;
 
-      const woJCs = jobCards
-        .filter(j => String(j.work_order_id) === String(selectedJC.work_order_id))
-        .sort((a, b) => {
-          const aSeq = parseInt(a.sequence_no || a.operation_sequence || 0);
-          const bSeq = parseInt(b.sequence_no || b.operation_sequence || 0);
-          if (aSeq !== bSeq) return aSeq - bSeq;
-          return a.id - b.id;
-        });
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/job-cards/${nextJC.id}/progress`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          assignedTo: nextStageForm.assignOperatorId || null,
+          executionType: nextStageForm.executionMode,
+          targetWarehouseId: nextStageForm.targetWarehouseId || null,
+          plannedQty: carryQty
+        })
+      });
 
-      const nextJC = woJCs.find(j => String(j.operation_id) === String(nextStageForm.nextOperationId));
-
-      if (nextJC) {
-        const token = localStorage.getItem('authToken');
-        const response = await fetch(`${API_BASE}/job-cards/${nextJC.id}/progress`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            assignedTo: nextStageForm.assignOperatorId || null,
-            executionType: nextStageForm.executionMode,
-            targetWarehouseId: nextStageForm.targetWarehouseId || null,
-            plannedQty: carryQty
-          })
-        });
-
-        if (response.ok) {
-          successToast(`Successfully transferred ${carryQty} Qty to next operation.`);
-          fetchJobCards();
-        } else {
-          const errData = await response.json().catch(() => ({}));
-          errorToast(errData.error || 'Failed to transfer quantity.');
-        }
+      if (response.ok) {
+        successToast(`Successfully transferred ${carryQty} Qty to next operation.`);
+        fetchJobCards();
       } else {
-        errorToast('Next Operation Job Card not found.');
+        const errData = await response.json().catch(() => ({}));
+        errorToast(errData.error || 'Failed to transfer quantity.');
       }
     } catch (error) {
       console.error('Error transferring quantity:', error);
@@ -3461,8 +3576,7 @@ const JobCard = () => {
               body: JSON.stringify({
                 assignedTo: nextStageForm.assignOperatorId || null,
                 executionType: nextStageForm.executionMode,
-                targetWarehouseId: nextStageForm.targetWarehouseId || null,
-                plannedQty: qcStats.totalAccepted || qcStats.totalProduced || 0
+                targetWarehouseId: nextStageForm.targetWarehouseId || null
               })
             });
           }
@@ -3484,12 +3598,24 @@ const JobCard = () => {
   const handleShipmentDispatchSubmit = async (e) => {
     if (e) e.preventDefault();
     try {
+      const dispatchedQty = parseFloat(selectedJC.dispatch_qty || selectedJC.accepted_qty || 0);
+      const newDispatchQty = parseFloat(shipmentForm.dispatchQty) || 0;
+      const totalDispatched = dispatchedQty + newDispatchQty;
+      const targetQty = parseFloat(selectedJC.wo_quantity || selectedJC.planned_qty || 0);
+
+      const isCompleted = shipmentForm.dispatchMode === 'Complete' || totalDispatched >= targetQty;
+      const nextStatus = isCompleted ? 'COMPLETED' : 'IN_PROGRESS';
+
+      const confirmText = isCompleted
+        ? `Are you sure you want to dispatch ${shipmentForm.dispatchQty} units? This will complete the shipment stage.`
+        : `Are you sure you want to dispatch ${shipmentForm.dispatchQty} units? This is a partial dispatch, so the shipment stage will remain active.`;
+
       const result = await Swal.fire({
         title: 'Confirm Dispatch?',
-        text: `Are you sure you want to dispatch ${shipmentForm.dispatchQty} units? This will complete the shipment stage.`,
+        text: confirmText,
         icon: 'question',
         showCancelButton: true,
-        confirmButtonColor: '#4f46e5',
+        confirmButtonColor: isCompleted ? '#4f46e5' : '#f59e0b',
         cancelButtonColor: '#64748b',
         confirmButtonText: 'Yes, Confirm Dispatch'
       });
@@ -3504,10 +3630,10 @@ const JobCard = () => {
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          status: 'COMPLETED',
-          producedQty: parseFloat(shipmentForm.dispatchQty) || 0,
-          acceptedQty: parseFloat(shipmentForm.dispatchQty) || 0,
-          dispatchQty: parseFloat(shipmentForm.dispatchQty) || 0,
+          status: nextStatus,
+          producedQty: parseFloat(selectedJC.produced_qty || 0) + newDispatchQty,
+          acceptedQty: parseFloat(selectedJC.accepted_qty || 0) + newDispatchQty,
+          dispatchQty: dispatchedQty + newDispatchQty,
           carrierName: shipmentForm.carrierName,
           trackingNumber: shipmentForm.trackingNumber,
           shippingNotes: shipmentForm.shippingNotes,
@@ -3518,7 +3644,10 @@ const JobCard = () => {
       });
 
       if (response.ok) {
-        successToast('Shipment dispatched successfully and stage completed!');
+        successToast(isCompleted
+          ? 'Shipment dispatched successfully and stage completed!'
+          : `Shipment of ${shipmentForm.dispatchQty} units dispatched successfully! Stage remains In-Progress.`
+        );
         setShowProductionEntry(false);
         fetchJobCards();
         navigate(`${deptPrefix}/job-card`);
@@ -3767,6 +3896,11 @@ const JobCard = () => {
       stdTime /= 60;
     }
 
+    // Align validation with UI rounding (toFixed(0)) for integer-like standard/cycle times
+    if (stdTime >= 1) {
+      stdTime = Math.round(stdTime);
+    }
+
     const availableMins = calculateTotalMins(logData.startTime, logData.startAMPM, logData.endTime, logData.endAMPM);
     if (availableMins <= 0) return true;
 
@@ -3778,7 +3912,7 @@ const JobCard = () => {
 
     if (requiredMins > allowedLimit) {
       const maxQty = Math.floor(allowedLimit / stdTime);
-      
+
       const formatMinsToHoursStr = (mins) => {
         const hrs = mins / 60;
         return `${Number(hrs.toFixed(2))} Hour${hrs !== 1 ? 's' : ''}`;
@@ -4949,8 +5083,15 @@ const JobCard = () => {
     {
       label: 'Date',
       key: 'date',
-      render: (val) => (
-        <span className="text-slate-900 ">{new Date(val).toLocaleDateString('en-GB')}</span>
+      render: (val, row) => (
+        <div className="flex flex-col">
+          <span className="text-slate-900 font-medium">{new Date(val).toLocaleDateString('en-GB')}</span>
+          {row.startTime || row.endTime ? (
+            <span className="text-[10px] text-slate-500 font-semibold mt-0.5 whitespace-nowrap">
+              {row.startTime ? formatLocalTime(row.startTime) : '--:--'} - {row.endTime ? formatLocalTime(row.endTime) : 'Running'}
+            </span>
+          ) : null}
+        </div>
       )
     },
     {
@@ -5180,10 +5321,62 @@ const JobCard = () => {
       }
     },
     {
-      label: 'Target',
+      label: 'Target → Received',
       key: 'planned_qty',
-      className: 'text-center',
-      render: (val) => <span className="text-xs  text-slate-900">{val || 0}</span>
+      className: 'text-left',
+      render: (val, row) => {
+        const target = parseFloat(row.wo_quantity || 0);
+        const received = parseFloat(row.planned_qty || 0);
+        const produced = parseFloat(row.produced_qty || 0);
+        const accepted = parseFloat(row.accepted_qty || 0);
+        const rejected = parseFloat(row.rejected_qty || 0);
+        const left = Math.max(0, target - accepted);
+
+        const percentage = target > 0 ? Math.min(100, Math.round((accepted / target) * 100)) : 0;
+
+        return (
+          <div className="flex flex-col gap-1 min-w-[170px] text-[11px] font-sans">
+            {/* Header: Complete% and Numbers */}
+            <div className="flex justify-between items-center text-slate-700">
+              <span className="font-semibold text-slate-800">{percentage}% Complete</span>
+              <span className="font-medium">
+                <span className="text-emerald-600 font-bold">{accepted}</span>
+                {received !== target && (
+                  <>
+                    <span className="text-slate-300 mx-1">/</span>
+                    <span className="text-amber-500 font-bold">{received}</span>
+                  </>
+                )}
+                <span className="text-slate-300 mx-1">/</span>
+                <span className="text-slate-500 font-bold">{target}</span>
+              </span>
+            </div>
+
+            {/* Progress Bar */}
+            <div className="w-full h-1.5 bg-amber-100 rounded-full overflow-hidden border border-amber-200/20">
+              <div
+                className="h-full bg-indigo-600 rounded-full transition-all duration-300"
+                style={{ width: `${percentage}%` }}
+              />
+            </div>
+
+            {/* Footer details */}
+            <div className="flex justify-between items-center text-slate-500">
+              <div className="flex items-center gap-2">
+                <span className="flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 inline-block" />
+                  <span>P: {produced}</span>
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500 inline-block" />
+                  <span>R: {rejected}</span>
+                </span>
+              </div>
+              <span className="text-slate-400 italic font-medium">{left} left</span>
+            </div>
+          </div>
+        );
+      }
     },
     {
       label: 'Produced',
@@ -5332,21 +5525,6 @@ const JobCard = () => {
                 );
               })()}
             </div>
-          ) : (row.latest_log_start_time && row.latest_log_end_time && (row.outward_challan_id || row.operator_name)) ? (
-            <div className="flex flex-col gap-0.5 mt-1 border-t border-slate-100/50 pt-1 text-[10px] text-slate-400 font-normal">
-              <span>Actual S: {formatDateTimeShort(row.latest_log_start_time)}</span>
-              <span>Actual E: {formatDateTimeShort(row.latest_log_end_time)}</span>
-              {(() => {
-                const diff = calculateISODuration(row.latest_log_start_time, row.latest_log_end_time);
-                const hrs = Math.floor(diff / 60);
-                const mins = diff % 60;
-                return (
-                  <span className="text-[9px] text-slate-400 flex items-center gap-1">
-                    <Clock className="w-2 h-2" /> ⏱ {hrs}h {mins}m logged
-                  </span>
-                );
-              })()}
-            </div>
           ) : (!row.start_time || !row.end_time) && (
             <span className="text-xs text-slate-400 mt-0.5 italic ">No Time Logged</span>
           )}
@@ -5385,7 +5563,7 @@ const JobCard = () => {
               <Eye className="w-3.5 h-3.5" />
             </button>
 
-            {isAssigned && (
+            {(isAssigned || jc.status === 'IN_PROGRESS' || jc.status === 'COMPLETED') && (
               <>
                 {/* Log / Record Time - ONLY for In-house */}
                 {!isSubcontract && (
@@ -5409,11 +5587,11 @@ const JobCard = () => {
                         </button>
                       )
                     )}
-                    {jc.status === 'IN_PROGRESS' && (
+                    {(jc.status === 'IN_PROGRESS' || jc.status === 'COMPLETED') && (
                       isShipment ? (
                         <button
                           onClick={() => handleLogProgress(jc)}
-                          className="p-1 text-indigo-600 hover:bg-indigo-50 rounded transition-all animate-pulse"
+                          className={`p-1 text-indigo-600 hover:bg-indigo-50 rounded transition-all ${jc.status === 'IN_PROGRESS' ? 'animate-pulse' : ''}`}
                           title="📈 Live Tracking / Production Entry"
                         >
                           <Zap className="w-3.5 h-3.5 fill-indigo-600" />
@@ -5421,7 +5599,7 @@ const JobCard = () => {
                       ) : (
                         <button
                           onClick={() => handleLogProgress(jc)}
-                          className="p-1 text-indigo-600 hover:bg-indigo-50 rounded transition-all animate-pulse"
+                          className={`p-1 text-indigo-600 hover:bg-indigo-50 rounded transition-all ${jc.status === 'IN_PROGRESS' ? 'animate-pulse' : ''}`}
                           title="Log Progress"
                         >
                           <Zap className="w-3.5 h-3.5 fill-indigo-600" />
@@ -5455,6 +5633,7 @@ const JobCard = () => {
                 {/* Quick Record - Manage Production Modal */}
                 <button
                   onClick={() => {
+                    if (!validateJobCardCompleteness(jc)) return;
                     setSelectedJC(jc);
                     setShowProductionEntry(true);
                     fetchLogs(jc.id);
@@ -5807,7 +5986,7 @@ const JobCard = () => {
             );
           }
 
-          const hasLogProcessStarted = formData.id && (formData.status === 'COMPLETED' || parseFloat(formData.producedQty || 0) > 0 || formData.latestLogStartTime);
+          const hasLogProcessStarted = false; // Always allow editing planned schedule, operator, and workstation in edit form
 
           return (
             <form onSubmit={handleSubmit} className="space-y-4 p-1">
@@ -6009,6 +6188,9 @@ const JobCard = () => {
                           onChange={(e) => setFormData(prev => ({ ...prev, plannedQty: e.target.value }))}
                           className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs outline-none"
                         />
+                        <p className="text-[10px] text-slate-500 mt-1 font-medium">
+                          Remaining: {Math.max(0, parseFloat(formData.plannedQty || 0) - parseFloat(formData.producedQty || 0)).toFixed(3)}
+                        </p>
                       </FormControl>
                       <FormControl label="Produced Qty">
                         <input
@@ -6066,7 +6248,13 @@ const JobCard = () => {
 
                         <div className="space-y-1 relative">
                           <label className="text-xs   text-slate-500  ">End DateTime</label>
-                          <span className="absolute right-0 top-0 text-xs  text-indigo-600   ">Auto Suggest</span>
+                          <button
+                            type="button"
+                            onClick={handleAutoSuggestEndDateTime}
+                            className="absolute right-0 top-0 text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+                          >
+                            Auto Suggest
+                          </button>
                           <div className="flex gap-1.5">
                             <input
                               type="date"

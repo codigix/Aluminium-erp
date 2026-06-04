@@ -23,6 +23,7 @@ const listJobCards = async () => {
             (SELECT id FROM outward_challans WHERE job_card_id = jc.id ORDER BY created_at DESC LIMIT 1) as outward_challan_id,
             (SELECT challan_number FROM outward_challans WHERE job_card_id = jc.id ORDER BY created_at DESC LIMIT 1) as outward_challan_no,
             (SELECT SUM(dispatch_qty) FROM outward_challans WHERE job_card_id = jc.id) as dispatch_qty,
+            COALESCE((SELECT CASE WHEN status = 'PENDING' THEN 0 ELSE GREATEST(COALESCE(planned_qty, 0), COALESCE(accepted_qty, 0)) END FROM job_cards WHERE work_order_id = jc.work_order_id AND sequence_no > jc.sequence_no ORDER BY sequence_no ASC, id ASC LIMIT 1), 0) as transferred_qty,
             COALESCE(jc.execution_mode, 'In-house') as execution_type,
             (SELECT start_time FROM job_card_time_logs WHERE job_card_id = jc.id ORDER BY log_date DESC, start_time DESC, id DESC LIMIT 1) as latest_log_start_time,
             (SELECT end_time FROM job_card_time_logs WHERE job_card_id = jc.id ORDER BY log_date DESC, start_time DESC, id DESC LIMIT 1) as latest_log_end_time,
@@ -201,7 +202,7 @@ const updateJobCardProgress = async (id, data) => {
 
     // Fetch the current state of this job card to allow carrying forward configured operator/workstation and status transition
     const [currentJcRow] = await connection.query(
-      'SELECT status, assigned_to, workstation_id FROM job_cards WHERE id = ?',
+      'SELECT status, assigned_to, workstation_id, dispatch_qty FROM job_cards WHERE id = ?',
       [id]
     );
     if (currentJcRow.length === 0) {
@@ -210,6 +211,7 @@ const updateJobCardProgress = async (id, data) => {
     const currentJcStatus = currentJcRow[0].status;
     const currentAssignedTo = currentJcRow[0].assigned_to;
     const currentWorkstationId = currentJcRow[0].workstation_id;
+    const prevDispatchQty = parseFloat(currentJcRow[0].dispatch_qty || 0);
 
     // Carry forward configured values if they are already set in the DB but incoming updates are null/undefined
     let finalAssignedTo = assignedTo;
@@ -240,7 +242,11 @@ const updateJobCardProgress = async (id, data) => {
       params.push(acceptedQty);
     }
     if (plannedQty !== undefined) {
-      updates.push('planned_qty = ?');
+      if (currentJcStatus === 'PENDING') {
+        updates.push('planned_qty = ?');
+      } else {
+        updates.push('planned_qty = COALESCE(planned_qty, 0) + ?');
+      }
       params.push(plannedQty);
     }
     if (rejectedQty !== undefined) {
@@ -323,6 +329,8 @@ const updateJobCardProgress = async (id, data) => {
           }
         }
       }
+
+
 
       updates.push('status = ?');
       params.push(finalStatus);
@@ -456,6 +464,104 @@ const updateJobCardProgress = async (id, data) => {
       await connection.execute(query, params);
     }
 
+    // Get operation details to see if it is a shipment operation
+    const [opRow] = await connection.query(
+      'SELECT COALESCE(o.operation_name, jc.operation_name) as operation_name, o.operation_type, jc.execution_mode, jc.work_order_id FROM job_cards jc LEFT JOIN operations o ON jc.operation_id = o.id WHERE jc.id = ?',
+      [id]
+    );
+    const isShipment = opRow.length > 0 && (
+      String(opRow[0].operation_name || '').toLowerCase() === 'shipment' ||
+      String(opRow[0].operation_name || '').toLowerCase() === 'dispatch' ||
+      String(opRow[0].operation_type || '').toLowerCase() === 'dispatch'
+    );
+
+    if (isShipment && opRow.length > 0) {
+      const workOrderId = opRow[0].work_order_id;
+      const [woRow] = await connection.query(
+        'SELECT sales_order_id, sales_order_item_id FROM work_orders WHERE id = ?',
+        [workOrderId]
+      );
+      const salesOrderId = woRow.length > 0 ? woRow[0].sales_order_id : null;
+      const salesOrderItemId = woRow.length > 0 ? woRow[0].sales_order_item_id : null;
+
+      if (salesOrderId) {
+        const newDispatchQtyVal = dispatchQty !== undefined ? parseFloat(dispatchQty || 0) : 0;
+
+        // If this is a new dispatch (new dispatch qty is greater than previous dispatch qty)
+        if (newDispatchQtyVal > prevDispatchQty) {
+          // Count existing shipment orders for this job card to create a unique suffix
+          const [existingCount] = await connection.query(
+            'SELECT count(*) as count FROM shipment_orders WHERE job_card_id = ?',
+            [id]
+          );
+          const count = existingCount[0].count;
+
+          const [orderRows] = await connection.query(
+            `SELECT 
+              so.company_id, 
+              c.company_name,
+              so.target_dispatch_date, 
+              so.production_priority,
+              ct.email as customer_email,
+              ct.phone as customer_phone,
+              (SELECT CONCAT_WS(', ', line1, line2, city, state, pincode) FROM company_addresses WHERE company_id = so.company_id AND address_type = 'SHIPPING' LIMIT 1) as shipping_address,
+              (SELECT CONCAT_WS(', ', line1, line2, city, state, pincode) FROM company_addresses WHERE company_id = so.company_id AND address_type = 'BILLING' LIMIT 1) as billing_address
+            FROM sales_orders so
+            LEFT JOIN companies c ON so.company_id = c.id
+            LEFT JOIN (
+              SELECT company_id, email, phone,
+                     ROW_NUMBER() OVER (PARTITION BY company_id ORDER BY contact_type = 'PRIMARY' DESC, id ASC) as rn
+              FROM contacts
+            ) ct ON ct.company_id = so.company_id AND ct.rn = 1
+            WHERE so.id = ?`,
+            [salesOrderId]
+          );
+          const order = orderRows[0];
+
+          const date = new Date();
+          const year = date.getFullYear();
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          
+          // Generate a unique shipment code. Append suffix only if there are already existing shipment orders.
+          let shipmentCode = `SHP-${year}${month}-SO${String(salesOrderId).padStart(4, '0')}-JC${id}`;
+          if (count > 0) {
+            shipmentCode += `-${count + 1}`;
+          }
+
+          const dispatchIncrement = newDispatchQtyVal - prevDispatchQty;
+
+          await connection.execute(
+            `INSERT INTO shipment_orders (
+              shipment_code, sales_order_id, sales_order_item_id, job_card_id, customer_id, customer_name, 
+              customer_phone, customer_email, shipping_address, billing_address,
+              dispatch_target_date, priority, quantity, status
+            )
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING_ACCEPTANCE')`,
+            [
+              shipmentCode, 
+              salesOrderId, 
+              salesOrderItemId,
+              id,
+              order?.company_id || null, 
+              order?.company_name || null,
+              order?.customer_phone || null,
+              order?.customer_email || null,
+              order?.shipping_address || null,
+              order?.billing_address || null,
+              order?.target_dispatch_date || null, 
+              order?.production_priority || 'NORMAL',
+              dispatchIncrement
+            ]
+          );
+
+          await connection.execute(
+            "UPDATE sales_orders SET status = 'READY_FOR_SHIPMENT', current_department = 'SHIPMENT', updated_at = NOW() WHERE id = ?",
+            [salesOrderId]
+          );
+        }
+      }
+    }
+
     // Update Work Order status based on Job Cards
     const [jcRows] = await connection.query('SELECT work_order_id FROM job_cards WHERE id = ?', [id]);
     if (jcRows.length > 0) {
@@ -499,7 +605,8 @@ const getJobCardById = async (id) => {
             COALESCE(jc.time_uom, o.time_uom, 'Min') as time_uom, 
             COALESCE(NULLIF(jc.hourly_rate, 0), o.hourly_rate, 0) as hourly_rate, 
             w.workstation_name, u.username as operator_name, v.vendor_name,
-            so.project_name, c.company_name as client_name, so.shipping_address
+            so.project_name, c.company_name as client_name, so.shipping_address,
+            COALESCE((SELECT CASE WHEN status = 'PENDING' THEN 0 ELSE GREATEST(COALESCE(planned_qty, 0), COALESCE(accepted_qty, 0)) END FROM job_cards WHERE work_order_id = jc.work_order_id AND sequence_no > jc.sequence_no ORDER BY sequence_no ASC, id ASC LIMIT 1), 0) as transferred_qty
      FROM job_cards jc
      JOIN work_orders wo ON jc.work_order_id = wo.id
      LEFT JOIN sales_orders so ON wo.sales_order_id = so.id
@@ -1170,42 +1277,6 @@ const updateJobCard = async (id, data) => {
     executionMode, vendorId, vendorRate, status, producedQty, acceptedQty, startDateTime, endDateTime
   } = data;
 
-  const [currentJc] = await pool.query(
-    'SELECT status, produced_qty, start_time, end_time, workstation_id, assigned_to FROM job_cards WHERE id = ?',
-    [id]
-  );
-  if (currentJc.length > 0) {
-    const jc = currentJc[0];
-    const [timeLogs] = await pool.query('SELECT COUNT(*) as count FROM job_card_time_logs WHERE job_card_id = ?', [id]);
-    const logCount = timeLogs[0]?.count || 0;
-
-    const hasLogProcessStarted = jc.status === 'COMPLETED' || parseFloat(jc.produced_qty || 0) > 0 || logCount > 0;
-    if (hasLogProcessStarted) {
-      const currentStartStr = jc.start_time ? new Date(jc.start_time).toISOString().slice(0, 19).replace('T', ' ') : null;
-      const currentEndStr = jc.end_time ? new Date(jc.end_time).toISOString().slice(0, 19).replace('T', ' ') : null;
-
-      const newStartStr = startDateTime ? startDateTime.replace('T', ' ').slice(0, 19) : null;
-      const newEndStr = endDateTime ? endDateTime.replace('T', ' ').slice(0, 19) : null;
-
-      const workstationChanged = Number(workstationId || 0) !== Number(jc.workstation_id || 0);
-      const assignedToChanged = Number(assignedTo || 0) !== Number(jc.assigned_to || 0);
-
-      const parseAndCompareTimes = (t1, t2) => {
-        if (!t1 && !t2) return false;
-        if (!t1 || !t2) return true;
-        const d1 = new Date(t1);
-        const d2 = new Date(t2);
-        return Math.abs(d1.getTime() - d2.getTime()) > 60000;
-      };
-
-      const startTimeChanged = parseAndCompareTimes(currentStartStr, newStartStr);
-      const endTimeChanged = parseAndCompareTimes(currentEndStr, newEndStr);
-
-      if (startTimeChanged || endTimeChanged || workstationChanged || assignedToChanged) {
-        throw new Error('Cannot modify planned schedule (dates/times), operator or workstation once logging/operation process has started.');
-      }
-    }
-  }
 
   // Check overlap first
   const conflictMessage = await checkOverlap(id, workstationId, assignedTo, startDateTime, endDateTime, executionMode);
@@ -1404,7 +1475,8 @@ const getJobCardDetailAnalysis = async (idOrNo) => {
             so.target_dispatch_date,
             (SELECT SUM(produced_qty) FROM job_card_time_logs WHERE job_card_id = jc.id) as actual_produced,
             (SELECT SUM(inspected_qty) FROM job_card_quality_logs WHERE job_card_id = jc.id AND status = 'APPROVED') as actual_accepted,
-            (SELECT SUM(rejected_qty) FROM job_card_quality_logs WHERE job_card_id = jc.id AND status = 'APPROVED') as actual_rejected
+            (SELECT SUM(rejected_qty) FROM job_card_quality_logs WHERE job_card_id = jc.id AND status = 'APPROVED') as actual_rejected,
+            COALESCE((SELECT CASE WHEN status = 'PENDING' THEN 0 ELSE GREATEST(COALESCE(planned_qty, 0), COALESCE(accepted_qty, 0)) END FROM job_cards WHERE work_order_id = jc.work_order_id AND sequence_no > jc.sequence_no ORDER BY sequence_no ASC, id ASC LIMIT 1), 0) as transferred_qty
      FROM job_cards jc
      LEFT JOIN work_orders wo ON jc.work_order_id = wo.id
      LEFT JOIN sales_orders so ON wo.sales_order_id = so.id

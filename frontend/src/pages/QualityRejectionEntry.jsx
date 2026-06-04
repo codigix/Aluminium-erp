@@ -7,7 +7,9 @@ import {
   Save,
   Check,
   History,
-  FileText
+  FileText,
+  Eye,
+  Edit
 } from 'lucide-react';
 import { StatusBadge } from '../components/ui.jsx';
 
@@ -35,6 +37,110 @@ const QualityRejectionEntry = () => {
   const [successMessage, setSuccessMessage] = useState('Pending entry from production has been added to the queue and is ready for quality inspection.');
   const [records, setRecords] = useState([]);
 
+  const [selectedRecord, setSelectedRecord] = useState(null);
+  const [modalMode, setModalMode] = useState(null); // 'view' or 'edit'
+  
+  // State for edit form inputs
+  const [editAccepted, setEditAccepted] = useState('');
+  const [editRejected, setEditRejected] = useState('');
+  const [editReason, setEditReason] = useState('');
+  const [editScrap, setEditScrap] = useState('');
+  const [editNotes, setEditNotes] = useState('');
+
+  const openViewModal = (record) => {
+    setSelectedRecord(record);
+    setModalMode('view');
+  };
+
+  const openEditModal = (record) => {
+    setSelectedRecord(record);
+    setModalMode('edit');
+    setEditAccepted(record.accepted);
+    setEditRejected(record.rejected);
+    setEditReason(record.reason);
+    setEditScrap(record.scrapQty);
+    setEditNotes(record.notes);
+  };
+
+  const handleEditAcceptedChange = (val) => {
+    const cleanValue = val.replace(/[^0-9.]/g, '');
+    const parts = cleanValue.split('.');
+    const sanitizedValue = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : cleanValue;
+    
+    setEditAccepted(sanitizedValue);
+    
+    const produced = parseFloat(selectedRecord.producedQty) || 0;
+    const acceptedVal = sanitizedValue === '' ? 0 : (parseFloat(sanitizedValue) || 0);
+    const rejectedVal = Math.max(0, produced - acceptedVal);
+    
+    const formattedRejected = Number(rejectedVal.toFixed(3));
+    setEditRejected(sanitizedValue === '' ? '' : String(formattedRejected));
+
+    if (rejectedVal === 0) {
+      setEditReason('');
+    }
+  };
+
+  const handleSaveEdit = async () => {
+    const acceptedVal = parseFloat(editAccepted || 0);
+    const rejectedVal = parseFloat(editRejected || 0);
+    const producedVal = parseFloat(selectedRecord.producedQty || 0);
+    const scrapVal = parseFloat(editScrap || 0);
+
+    if (editAccepted === '') {
+      alert('Please enter accepted quantity');
+      return;
+    }
+
+    if (acceptedVal < 0) {
+      alert('Accepted quantity cannot be negative');
+      return;
+    }
+
+    if (acceptedVal > producedVal) {
+      alert(`Accepted quantity (${acceptedVal}) cannot exceed produced quantity (${producedVal})`);
+      return;
+    }
+
+    if (rejectedVal > 0 && !editReason) {
+      alert('Please select a rejection reason');
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('authToken');
+      
+      const payload = {
+        acceptedQty: acceptedVal,
+        rejectedQty: rejectedVal,
+        rejectionReason: editReason || null,
+        scrapQty: scrapVal,
+        notes: editNotes
+      };
+
+      const response = await fetch(`${API_BASE}/job-cards/quality-logs/${selectedRecord.id}`, {
+        method: 'PUT',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}` 
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (response.ok) {
+        setSuccessMessage('Inspection record updated successfully');
+        setTimeout(() => setSuccessMessage(''), 5000);
+        setModalMode(null);
+        setSelectedRecord(null);
+        fetchQueue();
+      } else {
+        alert('Failed to update quality inspection record');
+      }
+    } catch (error) {
+      console.error('Error updating quality inspection record:', error);
+    }
+  };
+
   const fetchQueue = async () => {
     setLoading(true);
     try {
@@ -49,13 +155,17 @@ const QualityRejectionEntry = () => {
           id: item.id, // Log ID
           jobCardNo: item.jobId,
           date: formatDisplayDate(item.date),
+          rawDate: item.date,
           dateShift: `${formatDisplayDate(item.date)} / SHIFT ${item.shift}`,
           operation: item.operation,
           producedQty: item.producedQty,
           accepted: item.acceptedQty || '',
           rejected: item.rejectedQty || '',
           reason: item.rejectionReason || '',
-          status: item.status
+          status: item.status,
+          notes: item.notes || '',
+          scrapQty: item.scrapQty || '',
+          rawShift: item.rawShift
         }));
         setRecords(mappedData);
       }
@@ -71,14 +181,52 @@ const QualityRejectionEntry = () => {
   }, []);
 
   const handleInputChange = (id, field, value) => {
-    setRecords(prev => prev.map(record => 
-      record.id === id ? { ...record, [field]: value } : record
-    ));
+    setRecords(prev => prev.map(record => {
+      if (record.id === id) {
+        let updatedRecord = { ...record, [field]: value };
+        if (field === 'accepted') {
+          // Allow only digits and a single decimal point
+          const cleanValue = value.replace(/[^0-9.]/g, '');
+          const parts = cleanValue.split('.');
+          const sanitizedValue = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : cleanValue;
+          
+          updatedRecord.accepted = sanitizedValue;
+
+          const produced = parseFloat(record.producedQty) || 0;
+          const acceptedVal = sanitizedValue === '' ? 0 : (parseFloat(sanitizedValue) || 0);
+          const rejectedVal = Math.max(0, produced - acceptedVal);
+          
+          const formattedRejected = Number(rejectedVal.toFixed(3));
+          updatedRecord.rejected = sanitizedValue === '' ? '' : String(formattedRejected);
+        }
+        return updatedRecord;
+      }
+      return record;
+    }));
   };
 
   const handleInspect = async (record) => {
-    if (record.accepted === '' && record.rejected === '') {
-      alert('Please enter accepted or rejected quantity');
+    const acceptedVal = parseFloat(record.accepted || 0);
+    const rejectedVal = parseFloat(record.rejected || 0);
+    const producedVal = parseFloat(record.producedQty || 0);
+
+    if (record.accepted === '') {
+      alert('Please enter accepted quantity');
+      return;
+    }
+
+    if (acceptedVal < 0) {
+      alert('Accepted quantity cannot be negative');
+      return;
+    }
+
+    if (acceptedVal > producedVal) {
+      alert(`Accepted quantity (${acceptedVal}) cannot exceed produced quantity (${producedVal})`);
+      return;
+    }
+
+    if (rejectedVal > 0 && !record.reason) {
+      alert('Please select a rejection reason');
       return;
     }
 
@@ -86,9 +234,9 @@ const QualityRejectionEntry = () => {
       const token = localStorage.getItem('authToken');
       
       const payload = {
-        acceptedQty: parseFloat(record.accepted || 0),
-        rejectedQty: parseFloat(record.rejected || 0),
-        rejectionReason: record.reason,
+        acceptedQty: acceptedVal,
+        rejectedQty: rejectedVal,
+        rejectionReason: record.reason || null,
         status: 'APPROVED'
       };
 
@@ -237,10 +385,10 @@ const QualityRejectionEntry = () => {
                   <td className="px-3 py-2">
                     <input 
                       type="text"
-                      className="w-full px-2 py-1 bg-white border border-slate-200 rounded-md text-[11px] text-center focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all"
+                      className="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded-md text-[11px] text-center outline-none cursor-not-allowed transition-all"
                       placeholder="0"
                       value={record.rejected}
-                      onChange={(e) => handleInputChange(record.id, 'rejected', e.target.value)}
+                      readOnly
                     />
                   </td>
                   <td className="px-3 py-2">
@@ -332,14 +480,32 @@ const QualityRejectionEntry = () => {
                     <StatusBadge status={record.status} small />
                   </td>
                   <td className="px-3 py-2 text-right">
-                    <button 
-                      onClick={() => handleDownloadReport(record.id)}
-                      className="px-2 py-1 bg-white border border-slate-200 text-slate-600 rounded-md text-[10px] hover:bg-slate-50 transition-all flex items-center gap-1 ml-auto"
-                      title="Download QC Report"
-                    >
-                      <FileText className="w-3 h-3" />
-                      QC Report
-                    </button>
+                    <div className="flex items-center justify-end gap-1.5">
+                      <button 
+                        onClick={() => openViewModal(record)}
+                        className="px-2 py-1 bg-white border border-slate-200 text-indigo-600 rounded-md text-[10px] hover:bg-indigo-50 transition-all flex items-center gap-1"
+                        title="View Details"
+                      >
+                        <Eye className="w-3 h-3" />
+                        View
+                      </button>
+                      <button 
+                        onClick={() => openEditModal(record)}
+                        className="px-2 py-1 bg-white border border-slate-200 text-amber-600 rounded-md text-[10px] hover:bg-amber-50 transition-all flex items-center gap-1"
+                        title="Edit Record"
+                      >
+                        <Edit className="w-3 h-3" />
+                        Edit
+                      </button>
+                      <button 
+                        onClick={() => handleDownloadReport(record.id)}
+                        className="px-2 py-1 bg-white border border-slate-200 text-slate-600 rounded-md text-[10px] hover:bg-slate-50 transition-all flex items-center gap-1"
+                        title="Download QC Report"
+                      >
+                        <FileText className="w-3 h-3" />
+                        QC Report
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -354,6 +520,194 @@ const QualityRejectionEntry = () => {
           </table>
         </div>
       </div>
+
+      {/* Modal Overlay */}
+      {modalMode && selectedRecord && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 text-xs">
+          <div className="bg-white rounded border border-slate-200 shadow-xl max-w-sm w-full overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="px-3 py-2 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+              <h3 className="font-semibold text-slate-900 text-xs">
+                {modalMode === 'view' ? 'Quality Inspection Details' : 'Edit Inspection Record'}
+              </h3>
+              <button 
+                onClick={() => { setModalMode(null); setSelectedRecord(null); }}
+                className="text-slate-400 hover:text-slate-600 transition-colors text-base font-bold leading-none p-1"
+              >
+                &times;
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-3 space-y-3 text-slate-700">
+              {/* Job Card Summary */}
+              <div className="bg-slate-50/50 p-2 rounded border border-slate-150 flex justify-between items-center text-[11px]">
+                <div>
+                  <span className="text-[10px] text-slate-400 font-medium block uppercase">Job Card ID</span>
+                  <span className="font-semibold text-slate-800">{selectedRecord.jobCardNo}</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] text-slate-400 font-medium block uppercase">Operation</span>
+                  <span className="font-semibold text-slate-800">{selectedRecord.operation}</span>
+                </div>
+              </div>
+
+              {modalMode === 'view' ? (
+                // VIEW MODE
+                <div className="grid grid-cols-2 gap-2 text-[11px]">
+                  <div>
+                    <span className="text-slate-400 block">Date / Shift</span>
+                    <span className="font-medium text-slate-800">{selectedRecord.dateShift}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block">Status</span>
+                    <span className="inline-block mt-0.5">
+                      <StatusBadge status={selectedRecord.status} small />
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block">Produced Qty</span>
+                    <span className="font-semibold text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 text-[10px]">
+                      {selectedRecord.producedQty}
+                    </span>
+                  </div>
+                  <div className="flex gap-3">
+                    <div>
+                      <span className="text-slate-400 block">Accepted</span>
+                      <span className="font-semibold text-emerald-600">{selectedRecord.accepted}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block">Rejected</span>
+                      <span className="font-semibold text-rose-600">{selectedRecord.rejected}</span>
+                    </div>
+                  </div>
+                  {parseFloat(selectedRecord.rejected || 0) > 0 && (
+                    <div className="col-span-2">
+                      <span className="text-slate-400 block">Rejection Reason</span>
+                      <span className="font-medium text-rose-600 bg-rose-50 border border-rose-100 px-2 py-1 rounded block mt-0.5">
+                        {selectedRecord.reason}
+                      </span>
+                    </div>
+                  )}
+                  {selectedRecord.scrapQty !== '' && parseFloat(selectedRecord.scrapQty || 0) > 0 && (
+                    <div>
+                      <span className="text-slate-400 block">Scrap Qty</span>
+                      <span className="font-medium text-orange-600">{selectedRecord.scrapQty}</span>
+                    </div>
+                  )}
+                  {selectedRecord.notes && (
+                    <div className="col-span-2">
+                      <span className="text-slate-400 block">Notes / Remarks</span>
+                      <p className="bg-slate-50 p-2 rounded border border-slate-100 mt-1 whitespace-pre-wrap text-slate-600">
+                        {selectedRecord.notes}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                // EDIT MODE
+                <div className="space-y-2.5 text-[11px]">
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <label className="text-slate-500 block mb-0.5">Produced</label>
+                      <input 
+                        type="text"
+                        className="w-full px-2 py-1 bg-slate-100 border border-slate-200 rounded text-center cursor-not-allowed outline-none font-medium text-slate-600 text-[11px]"
+                        value={selectedRecord.producedQty}
+                        readOnly
+                      />
+                    </div>
+                    <div>
+                      <label className="text-slate-500 block mb-0.5">Accepted</label>
+                      <input 
+                        type="text"
+                        className="w-full px-2 py-1 bg-white border border-slate-200 rounded text-center focus:ring-1 focus:ring-indigo-500 outline-none transition-all font-semibold text-emerald-600 text-[11px]"
+                        value={editAccepted}
+                        onChange={(e) => handleEditAcceptedChange(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-slate-500 block mb-0.5">Rejected</label>
+                      <input 
+                        type="text"
+                        className="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded text-center cursor-not-allowed outline-none font-semibold text-rose-600 text-[11px]"
+                        value={editRejected}
+                        readOnly
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-slate-500 block mb-0.5">Rejection Reason</label>
+                    <select 
+                      className="w-full px-2 py-1 bg-white border border-slate-200 rounded focus:ring-1 focus:ring-indigo-500 outline-none cursor-pointer text-[11px]"
+                      value={editReason}
+                      onChange={(e) => setEditReason(e.target.value)}
+                      disabled={parseFloat(editRejected || 0) === 0}
+                    >
+                      <option value="">Select Reason</option>
+                      {rejectionReasons.map(reason => (
+                        <option key={reason} value={reason}>{reason}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-slate-500 block mb-0.5">Scrap Qty</label>
+                    <input 
+                      type="text"
+                      className="w-full px-2 py-1 bg-white border border-slate-200 rounded focus:ring-1 focus:ring-indigo-500 outline-none text-[11px]"
+                      placeholder="0"
+                      value={editScrap}
+                      onChange={(e) => {
+                        const cleanValue = e.target.value.replace(/[^0-9.]/g, '');
+                        setEditScrap(cleanValue);
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-slate-500 block mb-0.5">Notes / Remarks</label>
+                    <textarea 
+                      className="w-full px-2 py-1 bg-white border border-slate-200 rounded focus:ring-1 focus:ring-indigo-500 outline-none h-14 resize-none text-[11px]"
+                      placeholder="Enter inspection remarks..."
+                      value={editNotes}
+                      onChange={(e) => setEditNotes(e.target.value)}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-3 py-2 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-1.5">
+              <button 
+                onClick={() => { setModalMode(null); setSelectedRecord(null); }}
+                className="px-2.5 py-1 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded text-[10px] transition-colors"
+              >
+                Close
+              </button>
+              {modalMode === 'view' ? (
+                <button 
+                  onClick={() => handleDownloadReport(selectedRecord.id)}
+                  className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-[10px] transition-colors flex items-center gap-1 shadow-sm"
+                >
+                  <FileText className="w-3 h-3" />
+                  QC Report
+                </button>
+              ) : (
+                <button 
+                  onClick={handleSaveEdit}
+                  className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[10px] transition-colors flex items-center gap-1 shadow-sm"
+                >
+                  <Save className="w-3 h-3" />
+                  Save
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

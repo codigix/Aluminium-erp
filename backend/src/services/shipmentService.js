@@ -153,32 +153,72 @@ const getShipmentOrderById = async (id) => {
       }
     }
   } else {
-    // Standard Sales Order based shipment
-    const [soItems] = await pool.query(`
+    // Standard Sales Order based shipment - fetch only dispatched items from shipment job cards
+    let queryStr = `
       SELECT 
-        soi.*,
-        COALESCE(sb.warehouse, 'MAIN STORE') as warehouse
+        soi.item_code,
+        soi.description,
+        soi.drawing_no,
+        soi.unit,
+        SUM(COALESCE(jc.dispatch_qty, jc.accepted_qty, 0)) as quantity,
+        COALESCE(w.warehouse_name, 'MAIN STORE') as warehouse
       FROM sales_order_items soi
-      LEFT JOIN stock_balance sb ON sb.item_code = soi.item_code
-      WHERE soi.sales_order_id = ? 
-    `, [shipment.sales_order_id]);
+      JOIN work_orders wo ON wo.sales_order_item_id = soi.id
+      JOIN job_cards jc ON jc.work_order_id = wo.id
+      LEFT JOIN warehouses w ON jc.target_warehouse_id = w.id
+    `;
+    let queryParams = [];
+    if (shipment.job_card_id) {
+      queryStr += ` WHERE jc.id = ? `;
+      queryParams.push(shipment.job_card_id);
+    } else if (shipment.sales_order_item_id) {
+      queryStr += ` WHERE soi.id = ? AND (jc.operation_name = 'shipment' OR jc.operation_name = 'dispatch') `;
+      queryParams.push(shipment.sales_order_item_id);
+    } else {
+      queryStr += ` WHERE soi.sales_order_id = ? AND (jc.operation_name = 'shipment' OR jc.operation_name = 'dispatch') `;
+      queryParams.push(shipment.sales_order_id);
+    }
+    queryStr += ` GROUP BY soi.id, w.warehouse_name HAVING quantity > 0 `;
+
+    const [dispatchedItems] = await pool.query(queryStr, queryParams);
     
-    if (soItems.length > 0) {
-      items = soItems;
+    if (shipment.job_card_id && shipment.quantity !== null && shipment.quantity !== undefined) {
+      for (const item of dispatchedItems) {
+        item.quantity = shipment.quantity;
+      }
+    }
+    
+    if (dispatchedItems.length > 0) {
+      items = dispatchedItems;
     } else if (shipment.shipment_code && shipment.shipment_code.includes('-ORD')) {
       // Fallback to order_items if it's an ORD-based shipment
-      const [orderItems] = await pool.query(`
+      let ordQueryStr = `
         SELECT 
           oi.item_code,
           oi.drawing_no,
           oi.description,
-          oi.quantity,
-          'PCS' as unit,
-          COALESCE(sb.warehouse, 'MAIN STORE') as warehouse
+          oi.unit,
+          SUM(COALESCE(jc.dispatch_qty, jc.accepted_qty, 0)) as quantity,
+          COALESCE(w.warehouse_name, 'MAIN STORE') as warehouse
         FROM order_items oi
-        LEFT JOIN stock_balance sb ON sb.item_code = oi.item_code
-        WHERE oi.order_id = ?
-      `, [shipment.sales_order_id]);
+        JOIN work_orders wo ON wo.sales_order_item_id = oi.id
+        JOIN job_cards jc ON jc.work_order_id = wo.id
+        LEFT JOIN warehouses w ON jc.target_warehouse_id = w.id
+      `;
+      let ordQueryParams = [];
+      if (shipment.job_card_id) {
+        ordQueryStr += ` WHERE jc.id = ? `;
+        ordQueryParams.push(shipment.job_card_id);
+      } else if (shipment.sales_order_item_id) {
+        ordQueryStr += ` WHERE oi.id = ? AND (jc.operation_name = 'shipment' OR jc.operation_name = 'dispatch') `;
+        ordQueryParams.push(shipment.sales_order_item_id);
+      } else {
+        ordQueryStr += ` WHERE oi.order_id = ? AND (jc.operation_name = 'shipment' OR jc.operation_name = 'dispatch') `;
+        ordQueryParams.push(shipment.sales_order_id);
+      }
+      ordQueryStr += ` GROUP BY oi.id, w.warehouse_name HAVING quantity > 0 `;
+
+      const [orderItems] = await pool.query(ordQueryStr, ordQueryParams);
       items = orderItems;
     }
     
@@ -245,28 +285,65 @@ const updateShipmentStatus = async (shipmentOrderId, status) => {
           items = qcItems;
         }
       } else {
-        const [soItems] = await connection.query(`
+        // Standard Sales Order based shipment
+        let queryStr = `
           SELECT 
             COALESCE(NULLIF(TRIM(soi.item_code), ''), soi.drawing_no) as item_code,
             soi.description,
-            soi.quantity,
-            soi.unit
+            SUM(COALESCE(jc.dispatch_qty, jc.accepted_qty, 0)) as quantity,
+            soi.unit,
+            COALESCE(w.warehouse_name, 'MAIN STORE') as warehouse,
+            jc.target_warehouse_id as warehouse_id
           FROM sales_order_items soi
-          WHERE soi.sales_order_id = ?
-        `, [shipment.sales_order_id]);
+          JOIN work_orders wo ON wo.sales_order_item_id = soi.id
+          JOIN job_cards jc ON jc.work_order_id = wo.id
+          LEFT JOIN warehouses w ON jc.target_warehouse_id = w.id
+        `;
+        let queryParams = [];
+        if (shipment.job_card_id) {
+          queryStr += ` WHERE jc.id = ? `;
+          queryParams.push(shipment.job_card_id);
+        } else if (shipment.sales_order_item_id) {
+          queryStr += ` WHERE soi.id = ? AND (jc.operation_name = 'shipment' OR jc.operation_name = 'dispatch') `;
+          queryParams.push(shipment.sales_order_item_id);
+        } else {
+          queryStr += ` WHERE soi.sales_order_id = ? AND (jc.operation_name = 'shipment' OR jc.operation_name = 'dispatch') `;
+          queryParams.push(shipment.sales_order_id);
+        }
+        queryStr += ` GROUP BY soi.id, w.warehouse_name HAVING quantity > 0 `;
+
+        const [soItems] = await connection.query(queryStr, queryParams);
         
         if (soItems.length > 0) {
           items = soItems;
         } else if (shipment.shipment_code && shipment.shipment_code.includes('-ORD')) {
-          const [orderItems] = await connection.query(`
+          let ordQueryStr = `
             SELECT 
               COALESCE(NULLIF(TRIM(oi.item_code), ''), oi.drawing_no) as item_code,
               oi.description,
-              oi.quantity,
-              'PCS' as unit
+              SUM(COALESCE(jc.dispatch_qty, jc.accepted_qty, 0)) as quantity,
+              'PCS' as unit,
+              COALESCE(w.warehouse_name, 'MAIN STORE') as warehouse,
+              jc.target_warehouse_id as warehouse_id
             FROM order_items oi
-            WHERE oi.order_id = ?
-          `, [shipment.sales_order_id]);
+            JOIN work_orders wo ON wo.sales_order_item_id = oi.id
+            JOIN job_cards jc ON jc.work_order_id = wo.id
+            LEFT JOIN warehouses w ON jc.target_warehouse_id = w.id
+          `;
+          let ordQueryParams = [];
+          if (shipment.job_card_id) {
+            ordQueryStr += ` WHERE jc.id = ? `;
+            ordQueryParams.push(shipment.job_card_id);
+          } else if (shipment.sales_order_item_id) {
+            ordQueryStr += ` WHERE oi.id = ? AND (jc.operation_name = 'shipment' OR jc.operation_name = 'dispatch') `;
+            ordQueryParams.push(shipment.sales_order_item_id);
+          } else {
+            ordQueryStr += ` WHERE oi.order_id = ? AND (jc.operation_name = 'shipment' OR jc.operation_name = 'dispatch') `;
+            ordQueryParams.push(shipment.sales_order_id);
+          }
+          ordQueryStr += ` GROUP BY oi.id, w.warehouse_name HAVING quantity > 0 `;
+
+          const [orderItems] = await connection.query(ordQueryStr, ordQueryParams);
           items = orderItems;
         }
       }

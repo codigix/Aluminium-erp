@@ -1148,14 +1148,19 @@ const ensureShipmentOrdersTable = async () => {
         id INT AUTO_INCREMENT PRIMARY KEY,
         shipment_code VARCHAR(50) UNIQUE NOT NULL,
         sales_order_id INT NULL,
+        sales_order_item_id INT NULL,
+        job_card_id INT NULL,
         customer_id INT,
+        quantity DECIMAL(12, 3) NULL,
         dispatch_target_date DATE,
         priority VARCHAR(50),
         status ENUM('PENDING_ACCEPTANCE', 'ACCEPTED', 'REJECTED', 'PLANNING', 'PLANNED', 'READY_TO_DISPATCH', 'DISPATCHED', 'CANCELLED', 'IN_TRANSIT', 'OUT_FOR_DELIVERY', 'DELIVERED', 'DELAYED', 'CLOSED', 'RETURN_INITIATED', 'RETURN_PICKUP_ASSIGNED', 'RETURN_IN_TRANSIT', 'RETURN_RECEIVED', 'RETURN_COMPLETED') DEFAULT 'PENDING_ACCEPTANCE',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         FOREIGN KEY (sales_order_id) REFERENCES sales_orders(id) ON DELETE CASCADE,
-        FOREIGN KEY (customer_id) REFERENCES companies(id) ON DELETE SET NULL
+        FOREIGN KEY (customer_id) REFERENCES companies(id) ON DELETE SET NULL,
+        FOREIGN KEY (sales_order_item_id) REFERENCES sales_order_items(id) ON DELETE SET NULL,
+        FOREIGN KEY (job_card_id) REFERENCES job_cards(id) ON DELETE SET NULL
       )
     `);
 
@@ -1182,7 +1187,10 @@ const ensureShipmentOrdersTable = async () => {
       { name: 'billing_address', definition: 'TEXT NULL' },
       { name: 'customer_name', definition: 'VARCHAR(255) NULL' },
       { name: 'customer_phone', definition: 'VARCHAR(20) NULL' },
-      { name: 'customer_email', definition: 'VARCHAR(255) NULL' }
+      { name: 'customer_email', definition: 'VARCHAR(255) NULL' },
+      { name: 'sales_order_item_id', definition: 'INT NULL' },
+      { name: 'job_card_id', definition: 'INT NULL' },
+      { name: 'quantity', definition: 'DECIMAL(12, 3) NULL' }
     ];
 
     for (const col of columnsToAdd) {

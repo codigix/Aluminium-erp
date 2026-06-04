@@ -91,6 +91,11 @@
       font-weight: bold;
     }
 
+    .status-passed-rejection {
+      color: #d97706;
+      font-weight: bold;
+    }
+
     .status-failed {
       color: #dc2626;
       font-weight: bold;
@@ -242,10 +247,11 @@
         <tr>
           <th style="width: 40px;">Sr. No.</th>
           <th>Item Description</th>
-          <th style="width: 100px;">Design Qty</th>
-          <th style="width: 100px;">Required</th>
-          <th style="width: 100px;">Received Qty</th>
-          <th style="width: 100px;">Item Status</th>
+          <th style="width: 100px;">Required Qty</th>
+          <th style="width: 100px;">Accepted Qty</th>
+          <th style="width: 100px;">Rejected Qty</th>
+          <th style="width: 120px;">Rejection Reason</th>
+          <th style="width: 100px;">QC Status</th>
         </tr>
       </thead>
       <tbody>
@@ -256,11 +262,12 @@
             <span class="item-code">{{itemCode}}</span>
             <span class="item-code">{{operationName}}</span>
           </td>
-          <td class="center">{{designQty}}</td>
           <td class="center">{{requiredQty}}</td>
-          <td class="center">{{receivedQty}}</td>
+          <td class="center">{{acceptedQty}}</td>
+          <td class="center">{{rejectedQty}}</td>
+          <td class="center">{{rejectionReason}}</td>
           <td class="center">
-            <span class="{{statusClass}}">{{itemStatus}}</span>
+            <span class="status-passed">{{inspectionStatus}}</span>
           </td>
         </tr>
       </tbody>
@@ -276,12 +283,24 @@
       <div style="padding: 5px; border-bottom: 1px solid #000; font-weight: bold; background: #f0f0f0;">SUMMARY</div>
       <table>
         <tr>
-          <td style="width: 150px;">Total Items Inspected</td>
-          <td>: 1</td>
+          <td style="width: 180px; font-weight: bold;">Total Produced Qty</td>
+          <td style="font-weight: bold;">: {{requiredQty}}</td>
         </tr>
         <tr>
-          <td>Items Available</td>
-          <td>: {{availableCount}}</td>
+          <td style="font-weight: bold;">Accepted Qty</td>
+          <td style="font-weight: bold;">: {{acceptedQty}}</td>
+        </tr>
+        <tr>
+          <td style="font-weight: bold; color: #dc2626;">Rejected Qty</td>
+          <td style="font-weight: bold; color: #dc2626;">: {{rejectedQty}}</td>
+        </tr>
+        <tr>
+          <td style="font-weight: bold; color: #d97706;">Rework Qty</td>
+          <td style="font-weight: bold; color: #d97706;">: {{reworkQty}}</td>
+        </tr>
+        <tr>
+          <td style="font-weight: bold;">Inspection Status</td>
+          <td style="font-weight: bold;">: {{inspectionStatus}}</td>
         </tr>
       </table>
     </div>

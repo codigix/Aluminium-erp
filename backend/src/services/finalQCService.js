@@ -33,7 +33,7 @@ const completeFinalQC = async (salesOrderId, inspectionData) => {
     // 2. If PASSED, auto-create Shipment Order
     if (status === 'PASSED') {
       const [existingShipment] = await connection.query(
-        'SELECT id FROM shipment_orders WHERE sales_order_id = ?',
+        'SELECT id FROM shipment_orders WHERE sales_order_id = ? AND sales_order_item_id IS NULL',
         [salesOrderId]
       );
 
@@ -105,7 +105,7 @@ const createShipmentOrder = async (salesOrderId) => {
 
     // 1. Check if shipment order already exists
     const [existingShipment] = await connection.query(
-      'SELECT id FROM shipment_orders WHERE sales_order_id = ?',
+      'SELECT id FROM shipment_orders WHERE sales_order_id = ? AND sales_order_item_id IS NULL',
       [salesOrderId]
     );
 

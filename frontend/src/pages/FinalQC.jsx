@@ -106,7 +106,7 @@ const FinalQC = () => {
 
   const filteredOrders = orders.filter(o => 
     (o.so_number || `SO-${o.id}`).toLowerCase().includes(searchQuery.toLowerCase()) ||
-    o.company_name.toLowerCase().includes(searchQuery.toLowerCase())
+    (o.company_name || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (

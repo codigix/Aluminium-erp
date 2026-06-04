@@ -16,12 +16,15 @@ const getPendingQualityQueue = async (req, res) => {
       jobId: row.jobId,
       date: row.check_date,
       shift: row.shift === 'SHIFT_A' ? 'A' : row.shift === 'SHIFT_B' ? 'B' : 'C',
+      rawShift: row.shift,
       operation: row.operation,
       producedQty: row.inspected_qty,
       acceptedQty: row.accepted_qty,
       rejectedQty: row.rejected_qty,
       rejectionReason: row.rejection_reason,
-      status: row.status
+      status: row.status,
+      notes: row.notes,
+      scrapQty: row.scrap_qty
     }));
 
     res.json(formattedRows);

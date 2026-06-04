@@ -95,9 +95,9 @@ const ShipmentOrders = ({ apiRequest }) => {
   };
 
   const filteredOrders = orders.filter(o => 
-    o.shipment_code.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (o.shipment_code || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
     (o.so_number || `SO-${o.id}`).toLowerCase().includes(searchQuery.toLowerCase()) ||
-    o.company_name.toLowerCase().includes(searchQuery.toLowerCase())
+    (o.company_name || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const columns = [
@@ -290,34 +290,43 @@ const ShipmentOrders = ({ apiRequest }) => {
                 <table className="w-full text-left">
                   <thead className="bg-slate-50">
                     <tr className="text-xs  text-slate-500   border-b border-slate-100">
-                      <th className=" p-2">Item Details</th>
-                      <th className="p-2 ">Warehouse</th>
-                      <th className="p-2  text-center">Design Qty</th>
-                      <th className="p-2  text-center">Unit</th>
+                      <th className="p-2">Part Name</th>
+                      <th className="p-2">Drawing No</th>
+                      <th className="p-2">Warehouse</th>
+                      <th className="p-2 text-center">Dispatched Qty</th>
+                      <th className="p-2 text-center">UOM</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
-                    {selectedOrder.items?.map((item, idx) => (
-                      <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                        <td className=" p-2">
-                          <div className="flex flex-col">
-                            <span className=" text-slate-900 text-xs">{item.description || 'Unnamed Item'}</span>
-                            <span className="text-xs text-slate-400 ">Code: {item.item_code}</span>
-                          </div>
-                        </td>
-                        <td className="p-2 ">
-                          <span className="text-xs  text-slate-500  bg-slate-100 px-2 py-1 rounded ">
-                            {item.warehouse || 'MAIN STORE'}
-                          </span>
-                        </td>
-                        <td className="p-2  text-center  text-slate-700 text-xs">
-                          {parseFloat(item.quantity || 0).toFixed(3)}
-                        </td>
-                        <td className="p-2  text-center  text-slate-500 text-xs">
-                          {item.unit || 'PCS'}
+                    {!selectedOrder.items || selectedOrder.items.length === 0 ? (
+                      <tr>
+                        <td colSpan="5" className="p-4 text-center text-slate-400 text-xs">
+                          No items have been dispatched yet for this shipment order.
                         </td>
                       </tr>
-                    ))}
+                    ) : (
+                      selectedOrder.items.map((item, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                          <td className="p-2 text-xs text-slate-900 font-medium">
+                            {item.description || 'Unnamed Item'}
+                          </td>
+                          <td className="p-2 text-xs text-slate-600">
+                            {item.drawing_no || '—'}
+                          </td>
+                          <td className="p-2">
+                            <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded">
+                              {item.warehouse || 'MAIN STORE'}
+                            </span>
+                          </td>
+                          <td className="p-2 text-center text-slate-700 text-xs font-bold">
+                            {parseFloat(item.quantity || 0)}
+                          </td>
+                          <td className="p-2 text-center text-slate-500 text-xs">
+                            {item.unit || 'PCS'}
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
