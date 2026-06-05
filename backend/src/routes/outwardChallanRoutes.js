@@ -307,4 +307,84 @@ router.get('/inward', authenticate, async (req, res) => {
   }
 });
 
+// Get outward challan PDF by ID
+router.get('/:id/pdf', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const [challans] = await pool.execute(
+      `SELECT oc.*, v.vendor_name, v.vendor_code, jc.job_card_no, wo.wo_number 
+       FROM outward_challans oc
+       JOIN vendors v ON oc.vendor_id = v.id
+       JOIN job_cards jc ON oc.job_card_id = jc.id
+       JOIN work_orders wo ON oc.work_order_id = wo.id
+       WHERE oc.id = ?`,
+      [id]
+    );
+
+    if (challans.length === 0) {
+      return res.status(404).json({ message: 'Outward challan not found' });
+    }
+
+    const challan = challans[0];
+
+    // Get outward challan items
+    const [items] = await pool.execute(
+      `SELECT oci.* 
+       FROM outward_challan_items oci
+       WHERE oci.challan_id = ?`,
+      [challan.id]
+    );
+
+    challan.items = items;
+
+    const generateOutwardChallanPdf = require('../utils/generateOutwardChallanPdf');
+    const pdfPath = await generateOutwardChallanPdf(challan);
+    
+    res.download(pdfPath, `Outward_Challan_${challan.challan_number}.pdf`, (err) => {
+      if (err) {
+        console.error('Download error:', err);
+      }
+    });
+  } catch (error) {
+    console.error('Outward PDF Generation/Download Error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Get outward challan by ID
+router.get('/:id', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const [challans] = await pool.execute(
+      `SELECT oc.*, v.vendor_name, jc.job_card_no, wo.wo_number 
+       FROM outward_challans oc
+       JOIN vendors v ON oc.vendor_id = v.id
+       JOIN job_cards jc ON oc.job_card_id = jc.id
+       JOIN work_orders wo ON oc.work_order_id = wo.id
+       WHERE oc.id = ?`,
+      [id]
+    );
+
+    if (challans.length === 0) {
+      return res.status(404).json({ message: 'Outward challan not found' });
+    }
+
+    const challan = challans[0];
+
+    // Get outward challan items
+    const [items] = await pool.execute(
+      `SELECT oci.* 
+       FROM outward_challan_items oci
+       WHERE oci.challan_id = ?`,
+      [challan.id]
+    );
+
+    challan.items = items;
+    res.json(challan);
+  } catch (error) {
+    console.error('Error fetching outward challan by ID:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
 module.exports = router;

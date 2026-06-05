@@ -1680,7 +1680,7 @@ const JobCard = () => {
         return a.id - b.id;
       });
     const currentIndex = woJCs.findIndex(j => j.id === jc.id);
-    
+
     const precedingJC = (() => {
       const precedingJCs = woJCs.filter(j => {
         const jSeq = parseInt(j.operation_sequence || j.sequence_no || 0);
@@ -1758,8 +1758,8 @@ const JobCard = () => {
     const nextJC = (() => {
       const sameItemNext = remainingJCs.find(j => j.item_code === jc.item_code || j.item_name === jc.item_name);
       if (sameItemNext) return sameItemNext;
-      const parentFGNext = remainingJCs.find(j => 
-        j.item_name === jc.source_fg || 
+      const parentFGNext = remainingJCs.find(j =>
+        j.item_name === jc.source_fg ||
         j.item_code === jc.source_fg ||
         (j.source_type && j.source_type !== 'SA')
       );
@@ -2048,7 +2048,7 @@ const JobCard = () => {
         return a.id - b.id;
       });
     const currentIndex = woJCs.findIndex(j => j.id === selectedJC.id);
-    
+
     const precedingJC = (() => {
       const precedingJCs = woJCs.filter(j => {
         const jSeq = parseInt(j.operation_sequence || j.sequence_no || 0);
@@ -2492,6 +2492,12 @@ const JobCard = () => {
                   {/* Warning banner if not fully completed */}
                   {!isPlanFullyFulfilled && (
                     <div className="p-3 bg-amber-50/50 rounded-lg border border-amber-100/60 text-amber-800 text-[11px] font-semibold flex items-center gap-1.5">
+                      {isDowntimeAutoFilled && (
+                        <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded text-amber-800 text-xs font-semibold flex items-center gap-2">
+                          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                          <span>No Production Recorded</span>
+                        </div>
+                      )}
                       <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
                       <span>Production plan is not fully fulfilled. Full dispatch is disabled to prevent shipping errors.</span>
                     </div>
@@ -2936,12 +2942,18 @@ const JobCard = () => {
                                   placeholder="08:00"
                                   placeholderAMPM="AM"
                                   onTimeChange={(newTime) => {
-                                    setTimeLogForm({ ...timeLogForm, startTime: newTime, startAMPM: timeLogForm.startAMPM || 'AM' });
-                                    calculateAutoEndTime(newTime, timeLogForm.startAMPM || 'AM', timeLogForm.producedQty);
+                                    setTimeLogForm(prev => {
+                                      const updated = { ...prev, startTime: newTime, startAMPM: prev.startAMPM || 'AM' };
+                                      calculateAutoEndTime(newTime, prev.startAMPM || 'AM', prev.producedQty);
+                                      return updated;
+                                    });
                                   }}
                                   onAMPMChange={(newAMPM) => {
-                                    setTimeLogForm({ ...timeLogForm, startAMPM: newAMPM });
-                                    calculateAutoEndTime(timeLogForm.startTime, newAMPM, timeLogForm.producedQty);
+                                    setTimeLogForm(prev => {
+                                      const updated = { ...prev, startAMPM: newAMPM };
+                                      calculateAutoEndTime(prev.startTime, newAMPM, prev.producedQty);
+                                      return updated;
+                                    });
                                   }}
                                 />
                               </div>
@@ -2952,8 +2964,8 @@ const JobCard = () => {
                                   ampmValue={timeLogForm.endAMPM}
                                   placeholder="04:00"
                                   placeholderAMPM="PM"
-                                  onTimeChange={(newTime) => setTimeLogForm({ ...timeLogForm, endTime: newTime, endAMPM: timeLogForm.endAMPM || 'PM' })}
-                                  onAMPMChange={(newAMPM) => setTimeLogForm({ ...timeLogForm, endAMPM: newAMPM })}
+                                  onTimeChange={(newTime) => setTimeLogForm(prev => ({ ...prev, endTime: newTime, endAMPM: prev.endAMPM || 'PM' }))}
+                                  onAMPMChange={(newAMPM) => setTimeLogForm(prev => ({ ...prev, endAMPM: newAMPM }))}
                                 />
                               </div>
                             </div>
@@ -3120,8 +3132,8 @@ const JobCard = () => {
                           ampmValue={downtimeLogForm.startAMPM}
                           placeholder="08:00"
                           placeholderAMPM="AM"
-                          onTimeChange={(newTime) => setDowntimeLogForm({ ...downtimeLogForm, startTime: newTime, startAMPM: downtimeLogForm.startAMPM || 'AM' })}
-                          onAMPMChange={(newAMPM) => setDowntimeLogForm({ ...downtimeLogForm, startAMPM: newAMPM })}
+                          onTimeChange={(newTime) => setDowntimeLogForm(prev => ({ ...prev, startTime: newTime, startAMPM: prev.startAMPM || 'AM' }))}
+                          onAMPMChange={(newAMPM) => setDowntimeLogForm(prev => ({ ...prev, startAMPM: newAMPM }))}
                         />
                       </FormControl>
                       <FormControl label="End Time" required>
@@ -3130,8 +3142,8 @@ const JobCard = () => {
                           ampmValue={downtimeLogForm.endAMPM}
                           placeholder="04:00"
                           placeholderAMPM="PM"
-                          onTimeChange={(newTime) => setDowntimeLogForm({ ...downtimeLogForm, endTime: newTime, endAMPM: downtimeLogForm.endAMPM || 'PM' })}
-                          onAMPMChange={(newAMPM) => setDowntimeLogForm({ ...downtimeLogForm, endAMPM: newAMPM })}
+                          onTimeChange={(newTime) => setDowntimeLogForm(prev => ({ ...prev, endTime: newTime, endAMPM: prev.endAMPM || 'PM' }))}
+                          onAMPMChange={(newAMPM) => setDowntimeLogForm(prev => ({ ...prev, endAMPM: newAMPM }))}
                         />
                       </FormControl>
                       <FormControl label="Total Mins">
@@ -3487,6 +3499,7 @@ const JobCard = () => {
 
   const handleOutwardChallan = async (jc) => {
     setSelectedJCOutward(jc);
+    let materialItems = [];
 
     if (jc.outward_challan_id) {
       try {
@@ -3517,6 +3530,13 @@ const JobCard = () => {
       } catch (error) {
         console.error('Error fetching existing outward challan:', error);
       }
+    } else {
+      // Pre-populate with the Job Card's own item code and planned quantity as the dispatched item
+      materialItems = [{
+        itemCode: jc.item_code || '',
+        requiredQty: parseFloat(jc.planned_qty || 0),
+        releaseQty: parseFloat(jc.planned_qty || 0)
+      }];
     }
 
     setOutwardFormData({
@@ -3527,7 +3547,7 @@ const JobCard = () => {
       dispatchDate: new Date().toISOString().split('T')[0],
       dispatchQty: jc.planned_qty || 0,
       dispatchNotes: '',
-      materialItems: []
+      materialItems: materialItems
     });
     setIsOutwardModalOpen(true);
   };
@@ -5038,7 +5058,7 @@ const JobCard = () => {
               ? 'bg-rose-50 text-rose-600 border-rose-100'
               : 'bg-emerald-50 text-emerald-600 border-emerald-100'
               }`}>
-              {(row.rejected_qty > 0 || row.scrap_qty > 0) ? 'QC REJECTED' : 'QC PASSED'}
+              {(row.rejected_qty > 0 || row.scrap_qty > 0) ? 'QC REJECTED' : 'QC CHECKED'}
             </div>
             <p className="text-xs  text-slate-400 italic leading-tight truncate" title={val || row.rejection_reason}>
               {val || row.rejection_reason || 'No observations recorded'}
@@ -5783,7 +5803,7 @@ const JobCard = () => {
                   </>
                 )}
 
-                {/* Outward / Inward Flow - ONLY for Subcontract */}
+                {/* Outward Flow - ONLY for Subcontract */}
                 {isSubcontract && (
                   <>
                     <button
@@ -5792,14 +5812,6 @@ const JobCard = () => {
                       title="Outward Challan"
                     >
                       <Truck className="w-3.5 h-3.5" />
-                    </button>
-
-                    <button
-                      onClick={() => navigate(`${deptPrefix}/job-card/inward?id=${jc.id}`)}
-                      className="p-1 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-all"
-                      title="Inward Entry"
-                    >
-                      <Package className="w-3.5 h-3.5" />
                     </button>
                   </>
                 )}

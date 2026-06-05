@@ -9,7 +9,7 @@ const listJobCards = async () => {
             jc.start_time, jc.end_time, jc.produced_qty, jc.accepted_qty, jc.rejected_qty, jc.rework_qty, jc.scrap_qty, jc.remarks, jc.vendor_id, jc.vendor_rate,
             ROW_NUMBER() OVER (PARTITION BY COALESCE(wo.plan_id, wo.parent_wo_id, wo.id) ORDER BY CASE WHEN wo.source_type = 'SA' THEN 0 ELSE 1 END ASC, wo.id ASC, jc.sequence_no ASC, jc.id ASC) as operation_sequence,
             wo.wo_number, wo.item_name, wo.priority, wo.quantity as wo_quantity, wo.status as wo_status, wo.end_date as wo_end_date, wo.source_type,
-            wo.plan_id, wo.sales_order_id, wo.parent_wo_id,
+            wo.plan_id, wo.sales_order_id, wo.parent_wo_id, wo.item_code, wo.sales_order_item_id,
             COALESCE(soi_parent.description, oi_parent.description, soi_source.description, soi_fallback.description, oi_fallback.description, wo_parent.item_name, wo.source_fg) as source_fg,
             COALESCE(soi.drawing_no, oi.drawing_no, soi_parent.drawing_no, oi_parent.drawing_no, wo.bom_no, wo_parent.bom_no, wo_parent.item_code, wo.item_code) as drawing_no,
             so.project_name, c.company_name as client_name,
@@ -602,7 +602,7 @@ const getJobCardById = async (id) => {
   const isUuid = typeof id === 'string' && id.length === 36;
   const whereClause = isUuid ? 'jc.public_id = ?' : 'jc.id = ?';
   const [rows] = await pool.query(
-    `SELECT jc.*, wo.wo_number, wo.item_name,
+    `SELECT jc.*, wo.wo_number, wo.item_name, wo.item_code, wo.sales_order_item_id,
             COALESCE(soi.drawing_no, oi.drawing_no, wo.bom_no, wo.item_code) as drawing_no,
             COALESCE(o.operation_name, jc.operation_name) as operation_name, 
             COALESCE(NULLIF(jc.std_time, 0), o.std_time, 0) as std_time, 
@@ -1306,7 +1306,7 @@ const getJobCardDetailAnalysis = async (idOrNo) => {
     const isUuid = typeof idOrNo === 'string' && idOrNo.length === 36;
     const whereClause = isUuid ? 'jc.public_id = :id' : 'jc.id = :id OR TRIM(jc.job_card_no) = :no OR jc.job_card_no LIKE :likeNo';
 
-    const query = `SELECT jc.*, wo.wo_number, wo.item_name, wo.item_code, wo.priority, wo.quantity as wo_total_qty,
+    const query = `SELECT jc.*, wo.wo_number, wo.item_name, wo.item_code, wo.sales_order_item_id, wo.priority, wo.quantity as wo_total_qty,
             COALESCE(o.operation_name, jc.operation_name) as op_name,
             w.workstation_name, u.username as operator_name,
             so.project_name, c.company_name as client_name, so.shipping_address,
