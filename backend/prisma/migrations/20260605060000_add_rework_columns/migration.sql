@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE `job_cards` ADD COLUMN `rework_qty` DECIMAL(12, 3) NULL DEFAULT 0.000,
+    ADD COLUMN `scrap_qty` DECIMAL(12, 3) NULL DEFAULT 0.000;

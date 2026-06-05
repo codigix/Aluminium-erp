@@ -641,6 +641,8 @@ model job_cards {
   produced_qty           Decimal?                 @default(0.000) @db.Decimal(12, 3)
   accepted_qty           Decimal?                 @default(0.000) @db.Decimal(12, 3)
   rejected_qty           Decimal?                 @default(0.000) @db.Decimal(12, 3)
+  rework_qty             Decimal?                 @default(0.000) @db.Decimal(12, 3)
+  scrap_qty              Decimal?                 @default(0.000) @db.Decimal(12, 3)
   actual_start_date      DateTime?                @db.Date
   start_time             DateTime?                @db.Timestamp(0)
   end_time               DateTime?                @db.Timestamp(0)

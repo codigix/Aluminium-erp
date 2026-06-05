@@ -6,7 +6,8 @@ const listJobCards = async () => {
   const [rows] = await pool.query(
     `SELECT jc.id, jc.job_card_no, jc.work_order_id, jc.operation_id, jc.workstation_id, jc.assigned_to, jc.planned_qty, jc.status, jc.execution_mode, jc.public_id,
             jc.sequence_no, jc.actual_start_date, jc.created_at,
-            jc.start_time, jc.end_time, jc.produced_qty, jc.accepted_qty, jc.rejected_qty, jc.remarks, jc.vendor_id, jc.vendor_rate,
+            jc.start_time, jc.end_time, jc.produced_qty, jc.accepted_qty, jc.rejected_qty, jc.rework_qty, jc.scrap_qty, jc.remarks, jc.vendor_id, jc.vendor_rate,
+            ROW_NUMBER() OVER (PARTITION BY COALESCE(wo.plan_id, wo.parent_wo_id, wo.id) ORDER BY CASE WHEN wo.source_type = 'SA' THEN 0 ELSE 1 END ASC, wo.id ASC, jc.sequence_no ASC, jc.id ASC) as operation_sequence,
             wo.wo_number, wo.item_name, wo.priority, wo.quantity as wo_quantity, wo.status as wo_status, wo.end_date as wo_end_date, wo.source_type,
             wo.plan_id, wo.sales_order_id, wo.parent_wo_id,
             COALESCE(soi_parent.description, oi_parent.description, soi_source.description, soi_fallback.description, oi_fallback.description, wo_parent.item_name, wo.source_fg) as source_fg,
@@ -105,8 +106,8 @@ const checkOverlap = async (id, workstationId, assignedTo, startDateTime, endDat
         AND (? < end_time AND ? > start_time)
         ${id ? 'AND id != ?' : ''}
     `;
-    const params = id 
-      ? [workstationId, startStr, endStr, id] 
+    const params = id
+      ? [workstationId, startStr, endStr, id]
       : [workstationId, startStr, endStr];
 
     const [wsOverlaps] = await pool.query(query, params);
@@ -133,8 +134,8 @@ const checkOverlap = async (id, workstationId, assignedTo, startDateTime, endDat
         AND (? < end_time AND ? > start_time)
         ${id ? 'AND id != ?' : ''}
     `;
-    const params = id 
-      ? [assignedTo, startStr, endStr, id] 
+    const params = id
+      ? [assignedTo, startStr, endStr, id]
       : [assignedTo, startStr, endStr];
 
     const [opOverlaps] = await pool.query(query, params);
@@ -193,7 +194,7 @@ const createJobCard = async (data) => {
 };
 
 const updateJobCardProgress = async (id, data) => {
-  const { producedQty, acceptedQty, rejectedQty, status, startTime, endTime, workstationId, assignedTo, targetWarehouseId, executionType,
+  const { producedQty, acceptedQty, rejectedQty, scrapQty, status, startTime, endTime, workstationId, assignedTo, targetWarehouseId, executionType,
     carrierName, trackingNumber, shippingNotes, dispatchDate, dispatchMode, dispatchQty, plannedQty } = data;
 
   const connection = await pool.getConnection();
@@ -252,6 +253,10 @@ const updateJobCardProgress = async (id, data) => {
     if (rejectedQty !== undefined) {
       updates.push('rejected_qty = ?');
       params.push(rejectedQty);
+    }
+    if (scrapQty !== undefined) {
+      updates.push('scrap_qty = ?');
+      params.push(scrapQty);
     }
     if (finalStatus === 'COMPLETED') {
       // Get operation details to see if it is a shipment operation or subcontracted
@@ -521,7 +526,7 @@ const updateJobCardProgress = async (id, data) => {
           const date = new Date();
           const year = date.getFullYear();
           const month = String(date.getMonth() + 1).padStart(2, '0');
-          
+
           // Generate a unique shipment code. Append suffix only if there are already existing shipment orders.
           let shipmentCode = `SHP-${year}${month}-SO${String(salesOrderId).padStart(4, '0')}-JC${id}`;
           if (count > 0) {
@@ -538,17 +543,17 @@ const updateJobCardProgress = async (id, data) => {
             )
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING_ACCEPTANCE')`,
             [
-              shipmentCode, 
-              salesOrderId, 
+              shipmentCode,
+              salesOrderId,
               salesOrderItemId,
               id,
-              order?.company_id || null, 
+              order?.company_id || null,
               order?.company_name || null,
               order?.customer_phone || null,
               order?.customer_email || null,
               order?.shipping_address || null,
               order?.billing_address || null,
-              order?.target_dispatch_date || null, 
+              order?.target_dispatch_date || null,
               order?.production_priority || 'NORMAL',
               dispatchIncrement
             ]
@@ -580,6 +585,7 @@ const updateJobCardProgress = async (id, data) => {
       }
 
       await connection.execute('UPDATE work_orders SET status = ? WHERE id = ?', [newWoStatus, workOrderId]);
+      await syncReworkQuantities(workOrderId, connection);
     }
 
     await connection.commit();
@@ -922,11 +928,16 @@ const addQualityLog = async (data) => {
     if (status === 'APPROVED') {
       await connection.execute(
         `UPDATE job_cards jc 
-         SET accepted_qty = (SELECT SUM(accepted_qty) FROM job_card_quality_logs WHERE job_card_id = ? AND status = 'APPROVED'),
-             rejected_qty = (SELECT SUM(rejected_qty) FROM job_card_quality_logs WHERE job_card_id = ? AND status = 'APPROVED')
+         SET accepted_qty = COALESCE((SELECT SUM(accepted_qty) FROM job_card_quality_logs WHERE job_card_id = ? AND status = 'APPROVED'), 0),
+             rejected_qty = COALESCE((SELECT SUM(rejected_qty) FROM job_card_quality_logs WHERE job_card_id = ? AND status = 'APPROVED'), 0),
+             scrap_qty = COALESCE((SELECT SUM(scrap_qty) FROM job_card_quality_logs WHERE job_card_id = ? AND status = 'APPROVED'), 0)
          WHERE id = ?`,
-        [jobCardId, jobCardId, jobCardId]
+        [jobCardId, jobCardId, jobCardId, jobCardId]
       );
+      const [jcRow] = await connection.query('SELECT work_order_id FROM job_cards WHERE id = ?', [jobCardId]);
+      if (jcRow.length > 0) {
+        await syncReworkQuantities(jcRow[0].work_order_id, connection);
+      }
     }
 
     await connection.commit();
@@ -983,11 +994,16 @@ const updateQualityLog = async (id, data) => {
     if (jobCardId) {
       await connection.execute(
         `UPDATE job_cards jc 
-         SET accepted_qty = (SELECT SUM(accepted_qty) FROM job_card_quality_logs WHERE job_card_id = ? AND status = 'APPROVED'),
-             rejected_qty = (SELECT SUM(rejected_qty) FROM job_card_quality_logs WHERE job_card_id = ? AND status = 'APPROVED')
+         SET accepted_qty = COALESCE((SELECT SUM(accepted_qty) FROM job_card_quality_logs WHERE job_card_id = ? AND status = 'APPROVED'), 0),
+             rejected_qty = COALESCE((SELECT SUM(rejected_qty) FROM job_card_quality_logs WHERE job_card_id = ? AND status = 'APPROVED'), 0),
+             scrap_qty = COALESCE((SELECT SUM(scrap_qty) FROM job_card_quality_logs WHERE job_card_id = ? AND status = 'APPROVED'), 0)
          WHERE id = ?`,
-        [jobCardId, jobCardId, jobCardId]
+        [jobCardId, jobCardId, jobCardId, jobCardId]
       );
+      const [jcRow] = await connection.query('SELECT work_order_id FROM job_cards WHERE id = ?', [jobCardId]);
+      if (jcRow.length > 0) {
+        await syncReworkQuantities(jcRow[0].work_order_id, connection);
+      }
     }
 
     await connection.commit();
@@ -1071,194 +1087,11 @@ const syncUnaccountedDowntime = async (jobCardId) => {
   try {
     await connection.beginTransaction();
 
-    // 1. Get Job Card details
-    const [jcRows] = await connection.query(
-      'SELECT cycle_time, std_time, time_uom FROM job_cards WHERE id = ?',
+    // Delete any existing Unaccounted Downtime logs for this job card
+    await connection.execute(
+      "DELETE FROM job_card_downtime_logs WHERE job_card_id = ? AND downtime_type = 'Unaccounted Downtime'",
       [jobCardId]
     );
-    if (jcRows.length === 0) {
-      await connection.commit();
-      return;
-    }
-
-    const stdTime = parseFloat(jcRows[0].cycle_time || 0) || parseFloat(jcRows[0].std_time || 0) || 0;
-    if (stdTime <= 0) {
-      // Delete any existing Unaccounted Downtime logs for this job card
-      await connection.execute(
-        "DELETE FROM job_card_downtime_logs WHERE job_card_id = ? AND downtime_type = 'Unaccounted Downtime'",
-        [jobCardId]
-      );
-      await connection.commit();
-      return;
-    }
-
-    // Convert standard cycle time to minutes
-    let stdTimeMins = stdTime;
-    const uom = (jcRows[0].time_uom || 'min').toLowerCase();
-    if (uom === 'hr' || uom === 'hour' || uom === 'hours') stdTimeMins *= 60;
-    else if (uom === 'sec' || uom === 'second' || uom === 'seconds') stdTimeMins /= 60;
-
-    // 2. Fetch all time logs
-    const [timeLogs] = await connection.query(
-      'SELECT day, log_date, shift, produced_qty, start_time, end_time FROM job_card_time_logs WHERE job_card_id = ?',
-      [jobCardId]
-    );
-
-    const shiftDays = new Map();
-    for (const log of timeLogs) {
-      const logDateStr = log.log_date instanceof Date ? log.log_date.toISOString().split('T')[0] : String(log.log_date).split(/[ T]/)[0];
-      const shiftKey = `${logDateStr}|${log.shift}`;
-      shiftDays.set(shiftKey, log.day);
-    }
-
-    const parseSQLDate = (str) => {
-      if (!str) return null;
-      if (str instanceof Date) return str;
-      const isoStr = String(str).replace(' ', 'T');
-      const d = new Date(isoStr);
-      return isNaN(d.getTime()) ? null : d;
-    };
-
-    const formatToSQLDateTime = (date) => {
-      const y = date.getFullYear();
-      const m = String(date.getMonth() + 1).padStart(2, '0');
-      const d = String(date.getDate()).padStart(2, '0');
-      const h = String(date.getHours()).padStart(2, '0');
-      const min = String(date.getMinutes()).padStart(2, '0');
-      const s = String(date.getSeconds()).padStart(2, '0');
-      return `${y}-${m}-${d} ${h}:${min}:${s}`;
-    };
-
-    for (const shiftKey of shiftDays.keys()) {
-      const [logDateStr, shift] = shiftKey.split('|');
-
-      // Delete existing Unaccounted Downtime logs for this job card, date, and shift
-      await connection.execute(
-        "DELETE FROM job_card_downtime_logs WHERE job_card_id = ? AND downtime_type = 'Unaccounted Downtime' AND downtime_date = ? AND shift = ?",
-        [jobCardId, logDateStr, shift]
-      );
-
-      const isShiftB = (shift === 'SHIFT_B' || shift === 'B');
-      
-      const sDate = new Date(logDateStr + 'T00:00:00');
-      sDate.setDate(sDate.getDate() + 1);
-      const nextYear = sDate.getFullYear();
-      const nextMonth = String(sDate.getMonth() + 1).padStart(2, '0');
-      const nextDay = String(sDate.getDate()).padStart(2, '0');
-      const nextDateStr = `${nextYear}-${nextMonth}-${nextDay}`;
-
-      const shiftStart = parseSQLDate(isShiftB ? `${logDateStr} 20:00:00` : `${logDateStr} 08:00:00`);
-      const shiftEnd = parseSQLDate(isShiftB ? `${nextDateStr} 08:00:00` : `${logDateStr} 20:00:00`);
-
-      const currentShiftTimeLogs = timeLogs.filter(log => {
-        const logDateVal = log.log_date instanceof Date ? log.log_date.toISOString().split('T')[0] : String(log.log_date).split(/[ T]/)[0];
-        return logDateVal === logDateStr && log.shift === shift;
-      });
-
-      const [otherDowntimeLogs] = await connection.query(
-        `SELECT start_time, end_time 
-         FROM job_card_downtime_logs 
-         WHERE job_card_id = ? 
-           AND downtime_type != 'Unaccounted Downtime' 
-           AND downtime_date = ? 
-           AND shift = ?`,
-        [jobCardId, logDateStr, shift]
-      );
-
-      const busyIntervals = [];
-      for (const tl of currentShiftTimeLogs) {
-        if (tl.start_time && tl.end_time) {
-          busyIntervals.push({
-            start: parseSQLDate(tl.start_time),
-            end: parseSQLDate(tl.end_time)
-          });
-        }
-      }
-      for (const dl of otherDowntimeLogs) {
-        if (dl.start_time && dl.end_time) {
-          busyIntervals.push({
-            start: parseSQLDate(dl.start_time),
-            end: parseSQLDate(dl.end_time)
-          });
-        }
-      }
-
-      const clampedBusy = [];
-      for (const interval of busyIntervals) {
-        if (!interval.start || !interval.end) continue;
-        const start = new Date(Math.max(interval.start.getTime(), shiftStart.getTime()));
-        const end = new Date(Math.min(interval.end.getTime(), shiftEnd.getTime()));
-        if (start < end) {
-          clampedBusy.push({ start, end });
-        }
-      }
-      clampedBusy.sort((a, b) => a.start - b.start);
-
-      const mergedBusy = [];
-      for (const interval of clampedBusy) {
-        if (mergedBusy.length === 0) {
-          mergedBusy.push(interval);
-        } else {
-          const last = mergedBusy[mergedBusy.length - 1];
-          if (interval.start <= last.end) {
-            last.end = new Date(Math.max(last.end.getTime(), interval.end.getTime()));
-          } else {
-            mergedBusy.push(interval);
-          }
-        }
-      }
-
-      const gaps = [];
-      let currentStart = shiftStart;
-      for (const busy of mergedBusy) {
-        if (busy.start > currentStart) {
-          gaps.push({
-            start: currentStart,
-            end: busy.start
-          });
-        }
-        currentStart = new Date(Math.max(currentStart.getTime(), busy.end.getTime()));
-      }
-      if (currentStart < shiftEnd) {
-        gaps.push({
-          start: currentStart,
-          end: shiftEnd
-        });
-      }
-
-      for (const gap of gaps) {
-        const durationMs = gap.end.getTime() - gap.start.getTime();
-        if (durationMs < 60000) continue; // Skip gaps smaller than 1 minute
-
-        await connection.execute(
-          `INSERT INTO job_card_downtime_logs 
-           (job_card_id, day, downtime_date, shift, downtime_type, start_time, end_time, remarks) 
-           VALUES (?, ?, ?, ?, 'Unaccounted Downtime', ?, ?, 'System generated unaccounted downtime')`,
-          [
-            jobCardId,
-            shiftDays.get(shiftKey),
-            logDateStr,
-            shift,
-            formatToSQLDateTime(gap.start),
-            formatToSQLDateTime(gap.end)
-          ]
-        );
-      }
-    }
-
-    // 4. Delete any Unaccounted Downtime logs that do not have a matching active time log
-    const [allUnaccounted] = await connection.query(
-      "SELECT id, downtime_date, shift FROM job_card_downtime_logs WHERE job_card_id = ? AND downtime_type = 'Unaccounted Downtime'",
-      [jobCardId]
-    );
-
-    for (const row of allUnaccounted) {
-      const rowDateStr = row.downtime_date instanceof Date ? row.downtime_date.toISOString().split('T')[0] : String(row.downtime_date).split(/[ T]/)[0];
-      const key = `${rowDateStr}|${row.shift}`;
-      if (!shiftDays.has(key)) {
-        await connection.execute("DELETE FROM job_card_downtime_logs WHERE id = ?", [row.id]);
-      }
-    }
 
     await connection.commit();
   } catch (error) {
@@ -1348,10 +1181,15 @@ const deleteQualityLog = async (logId) => {
     await pool.execute(
       `UPDATE job_cards jc 
        SET accepted_qty = COALESCE((SELECT SUM(accepted_qty) FROM job_card_quality_logs WHERE job_card_id = ? AND status = 'APPROVED'), 0),
-           rejected_qty = COALESCE((SELECT SUM(rejected_qty) FROM job_card_quality_logs WHERE job_card_id = ? AND status = 'APPROVED'), 0)
+           rejected_qty = COALESCE((SELECT SUM(rejected_qty) FROM job_card_quality_logs WHERE job_card_id = ? AND status = 'APPROVED'), 0),
+           scrap_qty = COALESCE((SELECT SUM(scrap_qty) FROM job_card_quality_logs WHERE job_card_id = ? AND status = 'APPROVED'), 0)
        WHERE id = ?`,
-      [jobCardId, jobCardId, jobCardId]
+      [jobCardId, jobCardId, jobCardId, jobCardId]
     );
+    const [jcRow] = await pool.query('SELECT work_order_id FROM job_cards WHERE id = ?', [jobCardId]);
+    if (jcRow.length > 0) {
+      await syncReworkQuantities(jcRow[0].work_order_id, pool);
+    }
   }
 };
 
@@ -1626,6 +1464,32 @@ const getJobCardDetailAnalysis = async (idOrNo) => {
     };
   } catch (error) {
     throw error;
+  }
+};
+
+const syncReworkQuantities = async (workOrderId, connection) => {
+  const [jobCards] = await connection.query(
+    'SELECT id, sequence_no, accepted_qty, rejected_qty, scrap_qty FROM job_cards WHERE work_order_id = ? ORDER BY sequence_no ASC, id ASC',
+    [workOrderId]
+  );
+
+  if (jobCards.length === 0) return;
+
+  let totalRework = 0;
+  for (const jc of jobCards) {
+    const rejected = parseFloat(jc.rejected_qty || 0);
+    const scrap = parseFloat(jc.scrap_qty || 0);
+    const reworkReturned = Math.max(0, rejected - scrap);
+    totalRework += reworkReturned;
+  }
+
+  for (let i = 0; i < jobCards.length; i++) {
+    const jc = jobCards[i];
+    const newReworkQty = (i === 0) ? totalRework : 0;
+    await connection.execute(
+      'UPDATE job_cards SET rework_qty = ? WHERE id = ?',
+      [newReworkQty, jc.id]
+    );
   }
 };
 

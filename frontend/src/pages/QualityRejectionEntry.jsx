@@ -107,6 +107,16 @@ const QualityRejectionEntry = () => {
       return;
     }
 
+    if (scrapVal < 0) {
+      alert('Scrap quantity cannot be negative');
+      return;
+    }
+
+    if (scrapVal > rejectedVal) {
+      alert(`Scrap quantity (${scrapVal}) cannot exceed rejected quantity (${rejectedVal})`);
+      return;
+    }
+
     try {
       const token = localStorage.getItem('authToken');
       
@@ -477,7 +487,7 @@ const QualityRejectionEntry = () => {
                   <td className="px-3 py-2 text-center text-rose-600 ">{record.rejected}</td>
                   <td className="px-3 py-2 text-slate-500 italic">{record.reason || '—'}</td>
                   <td className="px-3 py-2 text-center">
-                    <StatusBadge status={record.status} small />
+                    <StatusBadge status="QC_CHECKED" small />
                   </td>
                   <td className="px-3 py-2 text-right">
                     <div className="flex items-center justify-end gap-1.5">

@@ -376,6 +376,9 @@ export const StatusBadge = ({ status }) => {
         // Primary style: Indigo/Blue-ish
         return 'bg-rose-600 border-rose-700 text-white shadow-sm'
 
+      case 'QC_CHECKED':
+        return 'bg-emerald-500 border-emerald-600 text-white shadow-sm'
+
       case 'PROCESSING':
       case 'DESIGN_IN_REVIEW':
       case 'IN_DESIGN':
@@ -430,6 +433,7 @@ export const StatusBadge = ({ status }) => {
   }
 
   const formatStatus = (s) => {
+    if (s === 'QC_CHECKED') return 'QC CHECKED';
     return s.split('_').map(word => word.charAt(0) + word.slice(1).toLowerCase()).join(' ')
   }
 
