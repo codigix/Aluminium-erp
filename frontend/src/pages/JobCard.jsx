@@ -2489,15 +2489,8 @@ const JobCard = () => {
                     })}
                   </div>
 
-                  {/* Warning banner if not fully completed */}
                   {!isPlanFullyFulfilled && (
                     <div className="p-3 bg-amber-50/50 rounded-lg border border-amber-100/60 text-amber-800 text-[11px] font-semibold flex items-center gap-1.5">
-                      {isDowntimeAutoFilled && (
-                        <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded text-amber-800 text-xs font-semibold flex items-center gap-2">
-                          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                          <span>No Production Recorded</span>
-                        </div>
-                      )}
                       <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
                       <span>Production plan is not fully fulfilled. Full dispatch is disabled to prevent shipping errors.</span>
                     </div>
