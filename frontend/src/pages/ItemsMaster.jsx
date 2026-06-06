@@ -38,8 +38,8 @@ const ItemsMaster = () => {
     itemName: '',
     itemGroup: '',
     defaultUom: 'Nos',
-    valuationRate: 0,
-    sellingRate: 0,
+    valuationRate: '',
+    sellingRate: '',
     noOfCavity: 1,
     weightPerUnit: 0,
     weightUom: '',
@@ -90,8 +90,8 @@ const ItemsMaster = () => {
       itemName: item.material_name || '',
       itemGroup: displayGroup,
       defaultUom: item.unit || 'Nos',
-      valuationRate: item.valuation_rate || 0,
-      sellingRate: item.selling_rate || 0,
+      valuationRate: item.valuation_rate !== undefined && item.valuation_rate !== null ? item.valuation_rate : '',
+      sellingRate: item.selling_rate !== undefined && item.selling_rate !== null ? item.selling_rate : '',
       noOfCavity: item.no_of_cavity || 1,
       weightPerUnit: item.weight_per_unit || 0,
       weightUom: item.weight_uom || '',
@@ -359,7 +359,7 @@ const ItemsMaster = () => {
         drawingNo: existingItem.drawing_no || '',
         revision: existingItem.revision || '',
         defaultUom: existingItem.unit || existingItem.uom || itemFormData.defaultUom,
-        valuationRate: existingItem.valuation_rate || 0,
+        valuationRate: existingItem.valuation_rate !== undefined && existingItem.valuation_rate !== null ? existingItem.valuation_rate : '',
         hsnCode: existingItem.hsn_code || ''
       };
       setItemFormData(newFormData);
@@ -421,8 +421,8 @@ const ItemsMaster = () => {
       itemName: '',
       itemGroup: '',
       defaultUom: 'Nos',
-      valuationRate: 0,
-      sellingRate: 0,
+      valuationRate: '',
+      sellingRate: '',
       noOfCavity: 1,
       weightPerUnit: 0,
       weightUom: '',
@@ -1226,8 +1226,8 @@ const ItemsMaster = () => {
                   type="number"
                   step="0.01"
                   className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                  value={itemFormData.valuationRate}
-                  onChange={(e) => setItemFormData({...itemFormData, valuationRate: parseFloat(e.target.value) || 0})}
+                  value={itemFormData.valuationRate === undefined || itemFormData.valuationRate === null ? '' : itemFormData.valuationRate}
+                  onChange={(e) => setItemFormData({...itemFormData, valuationRate: e.target.value})}
                 />
               </div>
               <div className="space-y-2">

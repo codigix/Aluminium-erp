@@ -170,12 +170,15 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
     
     setSelectedQC(qc);
     fetchAttachments(qc.id);
-    const items = (qc.items_detail || []).map(item => ({
-      ...item,
-      accepted_qty: item.accepted_qty !== undefined && item.accepted_qty !== null ? item.accepted_qty : (item.received_qty || 0),
-      rejected_qty: item.rejected_qty !== undefined && item.rejected_qty !== null ? item.rejected_qty : 0,
-      remarks: item.remarks || ''
-    }));
+    const items = (qc.items_detail || []).map(item => {
+      const initialAcceptedQty = item.accepted_qty !== undefined && item.accepted_qty !== null ? item.accepted_qty : (item.received_qty || 0);
+      return {
+        ...item,
+        accepted_qty: parseFloat(initialAcceptedQty).toFixed(3),
+        rejected_qty: item.rejected_qty !== undefined && item.rejected_qty !== null ? item.rejected_qty : 0,
+        remarks: item.remarks || ''
+      };
+    });
 
     // Calculate initial status based on items ONLY if status is PENDING
     let hasShortageOverage = false;
@@ -285,7 +288,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
   const handleItemQtyChange = (idx, value) => {
     const newItems = [...editFormData.items];
     const qty = parseFloat(value) || 0;
-    newItems[idx].accepted_qty = qty;
+    newItems[idx].accepted_qty = value;
     
     // Auto-calculate rejected quantity (Discrepancy with Invoice)
     const received = parseFloat(newItems[idx].received_qty) || 0;
@@ -994,8 +997,12 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
           <input
             type="number"
             step="0.001"
-            value={parseFloat(val || 0).toFixed(3)}
+            value={val === undefined || val === null ? '' : val}
             onChange={(e) => handleItemQtyChange(idx, e.target.value)}
+            onBlur={(e) => {
+              const formattedVal = parseFloat(e.target.value || 0).toFixed(3);
+              handleItemQtyChange(idx, formattedVal);
+            }}
             className="w-24 p-2.5 bg-white border border-blue-200 rounded text-center text-xs text-blue-600 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all"
           />
           <span className="text-xs  text-slate-400 uppercase">{item.uom || 'Nos'}</span>

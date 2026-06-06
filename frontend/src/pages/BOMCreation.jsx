@@ -545,7 +545,7 @@ const BOMCreation = () => {
 
     orders.forEach(client => {
       const items = clientData[client.id]?.items || [];
-      const topLevelItems = items.filter(i => !i.parent_bom_id);
+      const topLevelItems = items.filter(i => !i.parent_bom_id && i.status?.toLowerCase() === 'approved');
       const drawingsMap = {};
 
       topLevelItems.forEach(i => {
@@ -623,7 +623,7 @@ const BOMCreation = () => {
 
   const isClientBOMCompleted = (row) => {
     const items = clientData[row.id]?.items || [];
-    const topLevelItems = items.filter(item => !item.parent_bom_id);
+    const topLevelItems = items.filter(item => !item.parent_bom_id && item.status?.toLowerCase() === 'approved');
     const drawingsMap = topLevelItems.reduce((acc, item) => {
       const dwg = cleanText(item.drawing_no || 'N/A');
       if (!acc[dwg]) acc[dwg] = [];
@@ -658,7 +658,7 @@ const BOMCreation = () => {
       render: (_, row) => {
         const items = clientData[row.id]?.items || [];
         // Only consider top-level items to avoid counting sub-parts
-        const topLevelItems = items.filter(item => !item.parent_bom_id);
+        const topLevelItems = items.filter(item => !item.parent_bom_id && item.status?.toLowerCase() === 'approved');
         
         // Group by drawing_no to count unique drawings
         const drawingsMap = topLevelItems.reduce((acc, item) => {
@@ -684,7 +684,7 @@ const BOMCreation = () => {
       key: 'fg_bom_cost',
       render: (_, row) => {
         const items = clientData[row.id]?.items || [];
-        const topLevelItems = items.filter(item => !item.parent_bom_id);
+        const topLevelItems = items.filter(item => !item.parent_bom_id && item.status?.toLowerCase() === 'approved');
         const drawingsMap = topLevelItems.reduce((acc, item) => {
           const dwg = cleanText(item.drawing_no || 'N/A');
           if (!acc[dwg]) acc[dwg] = [];
@@ -815,7 +815,7 @@ const BOMCreation = () => {
       );
     }
 
-    const topLevelItems = items.filter(item => !item.parent_bom_id);
+    const topLevelItems = items.filter(item => !item.parent_bom_id && item.status?.toLowerCase() === 'approved');
     const drawingsMap = topLevelItems.reduce((acc, item) => {
       const dwg = cleanText(item.drawing_no || 'N/A');
       if (!acc[dwg]) acc[dwg] = [];
