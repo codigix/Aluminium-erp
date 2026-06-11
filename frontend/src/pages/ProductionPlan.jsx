@@ -2743,9 +2743,21 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                               <div>
                                 <span className="text-slate-700 ">{op.operation_name}</span>
                                 <div className="text-xs  text-slate-400 font-normal  flex items-center gap-1">
-                                  <span className={op.item_type === 'FG' ? 'text-indigo-500' : 'text-rose-500'}>
-                                    {op.item_type === 'FG' ? 'ASSEMBLY' : 'PART'}:
-                                  </span>
+                                  {(() => {
+                                    const itemCodeStr = (op.source_item || op.itemCode || '').toUpperCase();
+                                    const displayType = itemCodeStr.startsWith('ASSEMBLY-')
+                                      ? 'ASSEMBLY'
+                                      : (itemCodeStr.startsWith('PART-')
+                                          ? 'PART'
+                                          : (op.item_type === 'FG' ? 'ASSEMBLY' : 'PART')
+                                        );
+                                    const isAssembly = displayType === 'ASSEMBLY';
+                                    return (
+                                      <span className={isAssembly ? 'text-indigo-500' : 'text-rose-500'}>
+                                        {displayType}:
+                                      </span>
+                                    );
+                                  })()}
                                   <span className="text-slate-500">{op.source_item || op.itemCode || 'Main Item'}</span>
                                 </div>
                               </div>
