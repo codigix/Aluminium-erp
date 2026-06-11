@@ -661,12 +661,50 @@ const updateJobCardProgress = async (id, data) => {
       }
     }
 
-    // Update Work Order status based on Job Cards
-    const [jcRows] = await connection.query('SELECT work_order_id FROM job_cards WHERE id = ?', [id]);
-    if (jcRows.length > 0) {
-      const workOrderId = jcRows[0].work_order_id;
+    const affectedWoIds = [];
+    if (finalStatus === 'COMPLETED' && isShipment && opRow.length > 0) {
+      const workOrderId = opRow[0].work_order_id;
+      affectedWoIds.push(workOrderId);
 
-      const [allJcs] = await connection.query('SELECT status FROM job_cards WHERE work_order_id = ?', [workOrderId]);
+      await connection.execute(
+        'UPDATE job_cards SET status = "COMPLETED" WHERE work_order_id = ? AND status != "COMPLETED"',
+        [workOrderId]
+      );
+
+      // Find child/sub-assembly work orders under the same plan
+      const [parentWoRows] = await connection.query(
+        'SELECT id, plan_id, item_code FROM work_orders WHERE id = ?',
+        [workOrderId]
+      );
+      if (parentWoRows.length > 0) {
+        const { id: parentId, plan_id: planId, item_code: parentItemCode } = parentWoRows[0];
+        
+        // Find child work orders by parent_wo_id or source_fg matching parent's item_code under the same plan
+        const [childWoRows] = await connection.query(
+          'SELECT id FROM work_orders WHERE plan_id = ? AND (parent_wo_id = ? OR source_fg = ?)',
+          [planId, parentId, parentItemCode]
+        );
+        
+        if (childWoRows.length > 0) {
+          const childWoIds = childWoRows.map(row => row.id);
+          affectedWoIds.push(...childWoIds);
+
+          // Complete all job cards for these child work orders
+          await connection.query(
+            `UPDATE job_cards SET status = "COMPLETED" WHERE work_order_id IN (${childWoIds.join(',')}) AND status != "COMPLETED"`
+          );
+        }
+      }
+    } else {
+      const [jcRows] = await connection.query('SELECT work_order_id FROM job_cards WHERE id = ?', [id]);
+      if (jcRows.length > 0) {
+        affectedWoIds.push(jcRows[0].work_order_id);
+      }
+    }
+
+    // Update Work Order status based on Job Cards
+    for (const woId of affectedWoIds) {
+      const [allJcs] = await connection.query('SELECT status FROM job_cards WHERE work_order_id = ?', [woId]);
 
       let newWoStatus = 'RELEASED';
       if (allJcs.some(jc => jc.status === 'IN_PROGRESS')) {
@@ -678,8 +716,40 @@ const updateJobCardProgress = async (id, data) => {
         if (hasStarted) newWoStatus = 'IN_PROGRESS';
       }
 
-      await connection.execute('UPDATE work_orders SET status = ? WHERE id = ?', [newWoStatus, workOrderId]);
-      await syncReworkQuantities(workOrderId, connection);
+      await connection.execute('UPDATE work_orders SET status = ? WHERE id = ?', [newWoStatus, woId]);
+      await syncReworkQuantities(woId, connection);
+
+      if (newWoStatus === 'COMPLETED') {
+        const [woRow] = await connection.query(
+          'SELECT plan_id, production_plan_item_id FROM work_orders WHERE id = ?',
+          [woId]
+        );
+        if (woRow.length > 0) {
+          const planId = woRow[0].plan_id;
+          const ppiId = woRow[0].production_plan_item_id;
+
+          if (ppiId) {
+            await connection.execute(
+              'UPDATE production_plan_items SET status = "COMPLETED" WHERE id = ?',
+              [ppiId]
+            );
+          }
+
+          if (planId) {
+            const [woRows] = await connection.query(
+              'SELECT id, status FROM work_orders WHERE plan_id = ?',
+              [planId]
+            );
+            const allCompleted = woRows.every(wo => wo.status === 'COMPLETED' || wo.status === 'CANCELLED');
+            if (allCompleted) {
+              await connection.execute(
+                'UPDATE production_plans SET status = "COMPLETED" WHERE id = ?',
+                [planId]
+              );
+            }
+          }
+        }
+      }
     }
 
     await connection.commit();
@@ -702,7 +772,6 @@ const getJobCardById = async (id) => {
             jc.std_time, jc.time_uom, jc.hourly_rate, jc.operation_name, jc.execution_mode, jc.vendor_id, jc.vendor_rate,
             jc.sequence_no, jc.target_warehouse_id, jc.jc_number, jc.cycle_time, jc.setup_time, jc.public_id,
             jc.carrier_name, jc.tracking_number, jc.shipping_notes, jc.dispatch_date, jc.dispatch_mode,
-            jc.parent_bom_item, jc.child_bom_item, jc.dependency_type, jc.bom_level,
             (SELECT id FROM outward_challans WHERE job_card_id = jc.id ORDER BY created_at DESC LIMIT 1) as outward_challan_id,
             (SELECT challan_number FROM outward_challans WHERE job_card_id = jc.id ORDER BY created_at DESC LIMIT 1) as outward_challan_no,
             (SELECT SUM(dispatch_qty) FROM outward_challans WHERE job_card_id = jc.id) as dispatch_qty,

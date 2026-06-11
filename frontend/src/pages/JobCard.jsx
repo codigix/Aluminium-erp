@@ -1701,12 +1701,12 @@ const JobCard = () => {
     if (selectedJC && logs.timeLogs && logs.timeLogs.length > 0) {
       const latestLog = logs.timeLogs[0];
       const logDateOnly = latestLog.log_date?.split(/[ T]/)[0];
-      
-      const hasDowntimeLog = logs.downtimeLogs && logs.downtimeLogs.some(dt => 
-        dt.downtime_date?.split(/[ T]/)[0] === logDateOnly && 
+
+      const hasDowntimeLog = logs.downtimeLogs && logs.downtimeLogs.some(dt =>
+        dt.downtime_date?.split(/[ T]/)[0] === logDateOnly &&
         normalizeShift(dt.shift) === normalizeShift(latestLog.shift)
       );
-      
+
       if (!hasDowntimeLog) {
         const prefill = getDowntimePrefillTimes(logDateOnly, latestLog.shift);
         if (prefill) {
@@ -2006,7 +2006,7 @@ const JobCard = () => {
 
     // Sum produced qty from all logs to calculate remaining qty correctly
     const totalProduced = timeLogs.reduce((sum, log) => sum + parseFloat(log.produced_qty || 0), 0);
-    const logRemainingQty = Math.max(0, (parseFloat(jc.planned_qty || 0) + parseFloat(jc.rework_qty || 0)) - totalProduced);
+    const logRemainingQty = Math.max(0, parseFloat(jc.wo_quantity || jc.planned_qty || 0) - parseFloat(jc.accepted_qty || 0));
 
     const startStr = formatLocalTime(rawStart);
     const [startTimeVal, startAMPMVal] = startStr.includes(' ') ? startStr.split(' ') : ['08:00', 'AM'];
@@ -2468,6 +2468,9 @@ const JobCard = () => {
     if (!selectedJC) return null;
 
     const balanceWip = parseFloat(selectedJC.planned_qty || 0) + parseFloat(selectedJC.rework_qty || 0) - parseFloat(selectedJC.accepted_qty || 0);
+    const targetQtyForRemaining = parseFloat(selectedJC.wo_quantity || selectedJC.planned_qty || 0);
+    const acceptedQtyForRemaining = parseFloat(selectedJC.accepted_qty || 0);
+    const remainingPendingQty = Math.max(0, targetQtyForRemaining - acceptedQtyForRemaining);
 
     const totalStdMins = (() => {
       const cycleTime = parseFloat(selectedJC.cycle_time) || parseFloat(selectedJC.std_time) || 0;
@@ -2584,7 +2587,7 @@ const JobCard = () => {
     const remainingQty = Math.max(0, (parseFloat(selectedJC.planned_qty || 0) + parseFloat(selectedJC.rework_qty || 0)) - dispatchedQty);
     const isConstrained = availableQty < (parseFloat(selectedJC.planned_qty || 0) + parseFloat(selectedJC.rework_qty || 0));
 
-    const targetQty = parseFloat(selectedJC.wo_quantity || selectedJC.planned_qty || 0) + parseFloat(selectedJC.rework_qty || 0);
+    const targetQty = parseFloat(selectedJC.wo_quantity || selectedJC.planned_qty || 0);
     const remainingAvailableQty = Math.max(0, availableQty - dispatchedQty);
     const remainingWorkOrderQty = Math.max(0, targetQty - dispatchedQty);
 
@@ -2773,6 +2776,12 @@ const JobCard = () => {
                 <p className="text-xs  text-slate-400   mb-1.5">Balance WIP</p>
                 <p className="text-sm  text-amber-600">
                   {balanceWip.toFixed(2)} <span className="text-xs text-amber-400">Units</span>
+                </p>
+              </div>
+              <div className="text-center">
+                <p className="text-xs font-semibold text-rose-500 mb-1.5">Remaining Qty</p>
+                <p className="text-sm font-bold text-rose-600">
+                  {remainingPendingQty} <span className="text-xs text-rose-400">Units</span>
                 </p>
               </div>
               <div className="text-center border-l border-slate-100">
@@ -2985,7 +2994,7 @@ const JobCard = () => {
                             // Assembly status checks both non-shipment and shipment
                             const allNonShipmentCompleted = nonShipmentOps.every(op => op.status === 'COMPLETED' || parseFloat(op.accepted_qty || 0) >= parseFloat(op.planned_qty || 0));
                             const shipmentCompleted = shipmentOp.status === 'COMPLETED' || dispatchedQty >= shipmentPlanned;
-                            
+
                             if (allNonShipmentCompleted && shipmentCompleted) {
                               status = 'Completed';
                               isPartCompleted = true;
@@ -3004,11 +3013,10 @@ const JobCard = () => {
                           return (
                             <div
                               key={key}
-                              className={`p-4 rounded-xl border bg-white transition-all shadow-sm flex flex-col justify-between border-slate-100 hover:shadow-md ${
-                                sortedOps.some(op => op.id === selectedJC.id)
+                              className={`p-4 rounded-xl border bg-white transition-all shadow-sm flex flex-col justify-between border-slate-100 hover:shadow-md ${sortedOps.some(op => op.id === selectedJC.id)
                                   ? 'ring-2 ring-indigo-500/10 border-indigo-200 bg-indigo-50/5'
                                   : ''
-                              }`}
+                                }`}
                             >
                               <div className="space-y-3">
                                 {/* Part Card Header */}
@@ -3028,13 +3036,12 @@ const JobCard = () => {
                                       )}
                                     </div>
                                   </div>
-                                  <span className={`px-1.5 py-0.2 text-[8px] font-bold rounded border uppercase tracking-wider ${
-                                    isPartCompleted
+                                  <span className={`px-1.5 py-0.2 text-[8px] font-bold rounded border uppercase tracking-wider ${isPartCompleted
                                       ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
                                       : status === 'In Progress'
                                         ? 'bg-amber-50 text-amber-700 border-amber-100'
                                         : 'bg-slate-50 text-slate-400 border-slate-200/50'
-                                  }`}>
+                                    }`}>
                                     {status}
                                   </span>
                                 </div>
@@ -3050,9 +3057,8 @@ const JobCard = () => {
                                   </div>
                                   <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
                                     <div
-                                      className={`h-full rounded-full transition-all duration-500 ${
-                                        isPartCompleted ? 'bg-emerald-500' : 'bg-indigo-500'
-                                      }`}
+                                      className={`h-full rounded-full transition-all duration-500 ${isPartCompleted ? 'bg-emerald-500' : 'bg-indigo-500'
+                                        }`}
                                       style={{ width: `${Math.min(100, (acceptedQty / (plannedQty || 1)) * 100)}%` }}
                                     ></div>
                                   </div>
@@ -3069,16 +3075,14 @@ const JobCard = () => {
                                         {idx > 0 && <span className="text-slate-300 text-[8px] shrink-0">→</span>}
                                         <div
                                           onClick={() => handleLogProgress(op)}
-                                          className={`flex items-center gap-1 px-1.5 py-0.5 rounded cursor-pointer transition-all shrink-0 border ${
-                                            isOpActive
+                                          className={`flex items-center gap-1 px-1.5 py-0.5 rounded cursor-pointer transition-all shrink-0 border ${isOpActive
                                               ? 'bg-indigo-50 border-indigo-200 text-indigo-700 font-extrabold shadow-sm'
                                               : 'bg-slate-50 border-slate-100 hover:bg-slate-100 text-slate-500'
-                                          }`}
-                                          title={`${op.operation_name}: ${
-                                            isShipment
+                                            }`}
+                                          title={`${op.operation_name}: ${isShipment
                                               ? `Dispatch ${parseFloat(op.dispatch_qty || op.accepted_qty || 0)}/${parseFloat(op.planned_qty || 0)}`
                                               : `Ready ${parseFloat(op.accepted_qty || op.produced_qty || 0)}/${parseFloat(op.planned_qty || 0)}`
-                                          }`}
+                                            }`}
                                         >
                                           {isOpCompleted ? (
                                             <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full shrink-0"></span>
@@ -3518,7 +3522,17 @@ const JobCard = () => {
                         </FormControl>
                       </div>
                       <div className='col-span-2'>
-                        <FormControl label="Produce Qty" required>
+                        <FormControl 
+                          label={
+                            <span className="flex justify-between items-center w-full">
+                              <span>Produce Qty</span>
+                              <span className="text-[10px] text-amber-600 font-bold">
+                                Rem: {remainingPendingQty}
+                              </span>
+                            </span>
+                          } 
+                          required
+                        >
                           <div className="relative">
                             <input
                               type="number"
@@ -6276,7 +6290,7 @@ const JobCard = () => {
       className: 'text-left',
       render: (val, row) => {
         const rework = parseFloat(row.rework_qty || 0);
-        const target = parseFloat(row.wo_quantity || 0) + rework;
+        const target = parseFloat(row.wo_quantity || row.planned_qty || 0);
         const seq = parseInt(row.operation_sequence || row.sequence_no || 0);
         const isFirstOp = (() => {
           const woJCs = jobCards.filter(j => String(j.work_order_id) === String(row.work_order_id));
