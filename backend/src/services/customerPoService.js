@@ -612,8 +612,9 @@ const generateCustomerPoPDF = async (poId, currentUser = null, includeDispatchSt
   if (!po) throw new Error('Customer PO not found');
 
   let displayedItems = po.items || [];
+  // Keep all items for the Sent PO report as requested, including not dispatched ones
   if (sentReport) {
-    displayedItems = displayedItems.filter(item => parseFloat(item.dispatched_qty || 0) > 0);
+    // No filtering: include all items (including not dispatched ones)
   } else if (balanceReport) {
     displayedItems = displayedItems.filter(item => parseFloat(item.dispatched_qty || 0) < parseFloat(item.quantity));
     displayedItems = displayedItems.map(item => {
@@ -1545,14 +1546,12 @@ const generateCustomerPoPDF = async (poId, currentUser = null, includeDispatchSt
       const dispatched = parseFloat(i.dispatched_qty) || 0;
       const dispFormatted = dispatched % 1 === 0 ? parseInt(dispatched) : dispatched;
       const ordFormatted = ordered % 1 === 0 ? parseInt(ordered) : ordered;
-      
-      let statusText = 'Not Dispatched';
+      let dispatch_status_str = 'Pending';
       if (dispatched >= ordered && ordered > 0) {
-        statusText = 'Fully Dispatched';
+        dispatch_status_str = 'Completed';
       } else if (dispatched > 0) {
-        statusText = 'Partially Dispatched';
+        dispatch_status_str = `${dispFormatted}/${ordFormatted} Partial`;
       }
-      const dispatch_status_str = `${dispFormatted}/${ordFormatted} ${statusText}`;
 
       return {
         ...i,
