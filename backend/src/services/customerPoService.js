@@ -607,9 +607,37 @@ const deleteCustomerPo = async id => {
   }
 };
 
-const generateCustomerPoPDF = async (poId, currentUser = null) => {
+const generateCustomerPoPDF = async (poId, currentUser = null, includeDispatchStatus = false, balanceReport = false, sentReport = false) => {
   const po = await getCustomerPoById(poId);
   if (!po) throw new Error('Customer PO not found');
+
+  let displayedItems = po.items || [];
+  if (sentReport) {
+    displayedItems = displayedItems.filter(item => parseFloat(item.dispatched_qty || 0) > 0);
+  } else if (balanceReport) {
+    displayedItems = displayedItems.filter(item => parseFloat(item.dispatched_qty || 0) < parseFloat(item.quantity));
+    displayedItems = displayedItems.map(item => {
+      const originalQty = parseFloat(item.quantity) || 0;
+      const dispatched = parseFloat(item.dispatched_qty) || 0;
+      const remainingQty = Math.max(originalQty - dispatched, 0);
+      const rate = parseFloat(item.rate) || 0;
+      const basicAmount = remainingQty * rate;
+      
+      const cgstAmount = basicAmount * ((parseFloat(item.cgst_percent) || 0) / 100);
+      const sgstAmount = basicAmount * ((parseFloat(item.sgst_percent) || 0) / 100);
+      const igstAmount = basicAmount * ((parseFloat(item.igst_percent) || 0) / 100);
+
+      return {
+        ...item,
+        original_quantity: originalQty,
+        quantity: remainingQty,
+        basic_amount: basicAmount,
+        cgst_amount: cgstAmount,
+        sgst_amount: sgstAmount,
+        igst_amount: igstAmount
+      };
+    });
+  }
 
   let creator = null;
   if (currentUser && currentUser.id) {
@@ -698,7 +726,7 @@ const generateCustomerPoPDF = async (poId, currentUser = null) => {
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Purchase Order - {{hostCompanyName}}</title>
+<title>{{poTitle}} - {{hostCompanyName}}</title>
 <style>
   @page {
     size: A4 landscape;
@@ -1044,7 +1072,7 @@ const generateCustomerPoPDF = async (poId, currentUser = null) => {
       </td>
       
       <td style="width: 30%; border-left: 1.5px solid #000; padding: 0;">
-        <div class="po-title-block">PURCHASE ORDER</div>
+        <div class="po-title-block">{{poTitle}}</div>
         <table class="po-details-table">
           <tr>
             <td style="width: 45%; font-weight: bold;">Purchase Order No.</td>
@@ -1208,7 +1236,12 @@ const generateCustomerPoPDF = async (poId, currentUser = null) => {
     <thead>
       <tr>
         <th style="width: 3%;">SL No.</th>
+        {{#includeDispatchStatus}}
+        <th style="width: 15%; text-align: left; vertical-align: top; line-height: 1.3;">Item No.<br/>Item Description</th>
+        {{/includeDispatchStatus}}
+        {{^includeDispatchStatus}}
         <th style="width: 25%; text-align: left; vertical-align: top; line-height: 1.3;">Item No.<br/>Item Description</th>
+        {{/includeDispatchStatus}}
         <th style="width: 5%;">HSN Code</th>
         <th style="width: 7%;">Item Dlv. Dt.</th>
         <th style="width: 7%;">Pur. Req. No.</th>
@@ -1222,6 +1255,9 @@ const generateCustomerPoPDF = async (poId, currentUser = null) => {
         <th style="width: 6%; text-align: right;">CGST Amt</th>
         <th style="width: 3%; text-align: right; line-height: 1.2;">SGST<br/>%</th>
         <th style="width: 6%; text-align: right;">SGST Amt</th>
+        {{#includeDispatchStatus}}
+        <th style="width: 10%; text-align: center; vertical-align: top;">Dispatch Status</th>
+        {{/includeDispatchStatus}}
       </tr>
     </thead>
     <tbody>
@@ -1250,6 +1286,9 @@ const generateCustomerPoPDF = async (poId, currentUser = null) => {
         <td style="text-align: right;">{{cgst_amount}}</td>
         <td style="text-align: right;">{{sgst_rate}}%</td>
         <td style="text-align: right;">{{sgst_amount}}</td>
+        {{#includeDispatchStatus}}
+        <td style="text-align: center; font-weight: bold; font-size: 7px; vertical-align: middle;">{{dispatch_status_str}}</td>
+        {{/includeDispatchStatus}}
       </tr>
       {{#sub_assemblies}}
       <tr class="sub-assembly-row {{#is_last}}last-sub-assembly{{/is_last}}" style="background: #fafafa; font-size: 6.5px;">
@@ -1268,12 +1307,18 @@ const generateCustomerPoPDF = async (poId, currentUser = null) => {
         <td></td>
         <td></td>
         <td></td>
+        {{#includeDispatchStatus}}
+        <td></td>
+        {{/includeDispatchStatus}}
       </tr>
       {{/sub_assemblies}}
       {{/items}}
       {{#empty_rows}}
       <tr style="height: 22px;">
         <td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>
+        {{#includeDispatchStatus}}
+        <td></td>
+        {{/includeDispatchStatus}}
       </tr>
       {{/empty_rows}}
     </tbody>
@@ -1414,12 +1459,12 @@ const generateCustomerPoPDF = async (poId, currentUser = null) => {
   const formatDate = (date) => date ? new Date(date).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-') : '—';
   const formatCurrency = (val) => Number(val || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-  const subtotal = po.items.reduce((sum, item) => sum + (parseFloat(item.basic_amount) || 0) - (parseFloat(item.discount) || 0), 0);
-  const cgst_total = po.items.reduce((sum, item) => sum + (parseFloat(item.cgst_amount) || 0), 0);
-  const sgst_total = po.items.reduce((sum, item) => sum + (parseFloat(item.sgst_amount) || 0), 0);
-  const grand_total = parseFloat(po.net_total || (subtotal + cgst_total + sgst_total));
+  const subtotal = displayedItems.reduce((sum, item) => sum + (parseFloat(item.basic_amount) || 0) - (parseFloat(item.discount) || 0), 0);
+  const cgst_total = displayedItems.reduce((sum, item) => sum + (parseFloat(item.cgst_amount) || 0), 0);
+  const sgst_total = displayedItems.reduce((sum, item) => sum + (parseFloat(item.sgst_amount) || 0), 0);
+  const grand_total = (balanceReport || sentReport) ? (subtotal + cgst_total + sgst_total) : parseFloat(po.net_total || (subtotal + cgst_total + sgst_total));
 
-  const firstItem = po.items[0] || {};
+  const firstItem = displayedItems[0] || {};
   const cgst_rate_summary = parseFloat(firstItem.cgst_percent || 0).toFixed(0);
   const sgst_rate_summary = parseFloat(firstItem.sgst_percent || 0).toFixed(0);
 
@@ -1442,6 +1487,8 @@ const generateCustomerPoPDF = async (poId, currentUser = null) => {
 
   const viewData = {
     ...po,
+    includeDispatchStatus,
+    poTitle: sentReport ? 'SENT CUSTOMER PO' : (balanceReport ? 'BALANCE DISPATCH REPORT' : 'PURCHASE ORDER'),
     po_date: formatDate(po.po_date),
     expected_delivery_date: formatDate(po.expected_delivery_date),
     vendor_name: po.company_name || 'N/A',
@@ -1491,8 +1538,22 @@ const generateCustomerPoPDF = async (poId, currentUser = null) => {
     hostIFSCCode: activeCompany?.ifsc_code ? activeCompany.ifsc_code.toUpperCase() : 'HDFC0001234',
     hostBranchName: activeCompany?.branch_name || 'Bhosari, Pune - 411026, Maharashtra',
     hostState: activeCompany?.state || 'Maharashtra',
-    items: (po.items || []).map((i, idx) => {
+    items: displayedItems.map((i, idx) => {
       const has_sub_assemblies = i.sub_assemblies && i.sub_assemblies.length > 0;
+      
+      const ordered = parseFloat(i.original_quantity || i.quantity) || 0;
+      const dispatched = parseFloat(i.dispatched_qty) || 0;
+      const dispFormatted = dispatched % 1 === 0 ? parseInt(dispatched) : dispatched;
+      const ordFormatted = ordered % 1 === 0 ? parseInt(ordered) : ordered;
+      
+      let statusText = 'Not Dispatched';
+      if (dispatched >= ordered && ordered > 0) {
+        statusText = 'Fully Dispatched';
+      } else if (dispatched > 0) {
+        statusText = 'Partially Dispatched';
+      }
+      const dispatch_status_str = `${dispFormatted}/${ordFormatted} ${statusText}`;
+
       return {
         ...i,
         sl_no: idx + 1,
@@ -1515,6 +1576,7 @@ const generateCustomerPoPDF = async (poId, currentUser = null) => {
         sgst_rate: parseFloat(i.sgst_percent || 0).toFixed(2),
         sgst_amount: parseFloat(i.sgst_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
         has_sub_assemblies,
+        dispatch_status_str,
         sub_assemblies: (i.sub_assemblies || []).map((sa, saIdx) => {
           const saQty = (parseFloat(sa.quantity || 0) * (parseFloat(i.quantity) || 0));
           const saRate = parseFloat(sa.rate || 0);
@@ -1531,7 +1593,7 @@ const generateCustomerPoPDF = async (poId, currentUser = null) => {
         })
       };
     }),
-    empty_rows: Array.from({ length: Math.max(0, 4 - (po.items || []).length) })
+    empty_rows: Array.from({ length: Math.max(0, 4 - displayedItems.length) }).map(() => ({ includeDispatchStatus }))
   };
 
   const html = mustache.render(htmlTemplate, viewData);

@@ -733,12 +733,18 @@ const CustomerPO = ({
     }
   }
 
-  const handleDownloadPdf = async (poId, poNumber) => {
+  const handleDownloadPdf = async (poId, poNumber, includeDispatchStatus = false, balanceReport = false, sentReport = false) => {
     try {
       const baseUrl = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
       const token = localStorage.getItem('authToken');
 
-      const response = await fetch(`${baseUrl}/customer-pos/${poId}/pdf`, {
+      let queryParams = [];
+      if (includeDispatchStatus) queryParams.push('includeDispatchStatus=true');
+      if (balanceReport) queryParams.push('balanceReport=true');
+      if (sentReport) queryParams.push('sentReport=true');
+      const queryString = queryParams.length > 0 ? `?${queryParams.join('&')}` : '';
+
+      const response = await fetch(`${baseUrl}/customer-pos/${poId}/pdf${queryString}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -1188,7 +1194,7 @@ const CustomerPO = ({
                     </button>
                     <button
                       type="button"
-                      onClick={() => handleDownloadPdf(editingPoId, poForm.poNumber)}
+                      onClick={() => handleDownloadPdf(editingPoId, poForm.poNumber, true, false, true)}
                       className="p-2 rounded hover:bg-blue-100 transition-all text-blue-600 active:scale-90 bg-blue-50 border border-blue-100 flex items-center gap-2 text-xs "
                       title="Download Customer PO PDF"
                     >
@@ -1197,9 +1203,9 @@ const CustomerPO = ({
                     </button>
                     <button
                       type="button"
-                      onClick={handleDownloadBalanceReport}
+                      onClick={() => handleDownloadPdf(editingPoId, poForm.poNumber, true, true, false)}
                       className="p-2 rounded hover:bg-emerald-100 transition-all text-emerald-600 active:scale-90 bg-emerald-50 border border-emerald-100 flex items-center gap-2 text-xs "
-                      title="Download Balance Dispatch Report CSV"
+                      title="Download Balance Dispatch Report PDF"
                     >
                       <FileText className="w-3.5 h-3.5" />
                       Download Balance Dispatch Report

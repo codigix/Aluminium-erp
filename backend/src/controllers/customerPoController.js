@@ -190,7 +190,10 @@ const getCustomerPo = async (req, res, next) => {
 
 const generateCustomerPoPdf = async (req, res, next) => {
   try {
-    const pdfBuffer = await customerPoService.generateCustomerPoPDF(req.params.id, req.user);
+    const includeDispatchStatus = req.query.includeDispatchStatus === 'true';
+    const balanceReport = req.query.balanceReport === 'true';
+    const sentReport = req.query.sentReport === 'true';
+    const pdfBuffer = await customerPoService.generateCustomerPoPDF(req.params.id, req.user, includeDispatchStatus, balanceReport, sentReport);
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename=CustomerPO-${req.params.id}.pdf`);
     res.send(pdfBuffer);
