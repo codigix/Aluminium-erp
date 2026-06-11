@@ -177,6 +177,17 @@ const createCustomerPo = async payload => {
         }
       }
     }
+    // Auto-link any matching sales orders that have customer_po_id IS NULL
+    if (companyId && projectName) {
+      await connection.execute(
+        `UPDATE sales_orders 
+         SET customer_po_id = ? 
+         WHERE company_id = ? 
+           AND TRIM(UPPER(project_name)) = TRIM(UPPER(?)) 
+           AND customer_po_id IS NULL`,
+        [customerPoId, companyId, projectName]
+      );
+    }
 
     await connection.commit();
 
@@ -288,6 +299,48 @@ const getCustomerPoById = async id => {
   );
 
   const enrichedItems = await Promise.all(items.map(async (item) => {
+    let dispatched_qty = 0;
+    if ((item.item_code && item.item_code.trim()) || (item.drawing_no && item.drawing_no.trim())) {
+      try {
+        const [dispRows] = await pool.query(
+          `SELECT COALESCE(SUM(COALESCE(jc.dispatch_qty, jc.accepted_qty, 0)), 0) as dispatched_qty
+           FROM job_cards jc
+           JOIN work_orders wo ON jc.work_order_id = wo.id
+           LEFT JOIN sales_order_items soi ON wo.sales_order_item_id = soi.id
+           LEFT JOIN order_items oi ON wo.sales_order_item_id = oi.id
+           WHERE (jc.operation_name = 'shipment' OR jc.operation_name = 'dispatch')
+             AND wo.source_type = 'FG'
+             AND (
+               (
+                 (
+                   wo.sales_order_id IN (SELECT id FROM sales_orders WHERE customer_po_id = ? OR (customer_po_id IS NULL AND company_id = ? AND TRIM(UPPER(project_name)) = TRIM(UPPER(?))))
+                   OR
+                   wo.sales_order_id IN (SELECT id FROM orders WHERE quotation_id IN (SELECT id FROM sales_orders WHERE customer_po_id = ? OR (customer_po_id IS NULL AND company_id = ? AND TRIM(UPPER(project_name)) = TRIM(UPPER(?)))))
+                 )
+                 AND (
+                   (soi.item_code IS NOT NULL AND TRIM(UPPER(soi.item_code)) = TRIM(UPPER(?)))
+                   OR (soi.drawing_no IS NOT NULL AND TRIM(UPPER(soi.drawing_no)) = TRIM(UPPER(?)))
+                   OR (oi.item_code IS NOT NULL AND TRIM(UPPER(oi.item_code)) = TRIM(UPPER(?)))
+                   OR (oi.drawing_no IS NOT NULL AND TRIM(UPPER(oi.drawing_no)) = TRIM(UPPER(?)))
+                   OR (wo.item_code IS NOT NULL AND TRIM(UPPER(wo.item_code)) = TRIM(UPPER(?)))
+                   OR (wo.bom_no IS NOT NULL AND TRIM(UPPER(wo.bom_no)) = TRIM(UPPER(?)))
+                 )
+               )
+             )`,
+          [
+            id, po.company_id, po.project_name,
+            id, po.company_id, po.project_name,
+            item.item_code, item.drawing_no,
+            item.item_code, item.drawing_no,
+            item.item_code, item.drawing_no
+          ]
+        );
+        dispatched_qty = Number(dispRows[0]?.dispatched_qty || 0);
+      } catch (err) {
+        console.error('Error fetching dispatch quantity for item:', err);
+      }
+    }
+
     // 1. Try to fetch stored sub-assemblies first (as a snapshot)
     const [storedSA] = await pool.query(
       `SELECT drawing_no as drawingNo, description, quantity, unit, rate, hsn_code, delivery_date 
@@ -297,7 +350,7 @@ const getCustomerPoById = async id => {
     );
 
     if (storedSA.length > 0) {
-      return { ...item, sub_assemblies: storedSA };
+      return { ...item, sub_assemblies: storedSA, dispatched_qty };
     }
 
     // 2. Fallback to dynamic BOM fetching ONLY for legacy records that have NO stored sub-assemblies
@@ -314,12 +367,13 @@ const getCustomerPoById = async id => {
       );
 
       if (anyStoredSA.length > 0) {
-        return item; // Modern record, trust the (empty) snapshot
+        return { ...item, dispatched_qty }; // Modern record, trust the (empty) snapshot
       }
 
       const sub_assemblies = await bomService.getItemComponents(null, item.item_code, item.drawing_no);
       return { 
         ...item, 
+        dispatched_qty,
         sub_assemblies: sub_assemblies.map(sa => ({
           drawingNo: sa.drawing_no || sa.component_code,
           description: sa.description,
@@ -329,7 +383,7 @@ const getCustomerPoById = async id => {
         }))
       };
     }
-    return item;
+    return { ...item, dispatched_qty };
   }));
 
   return { ...rows[0], items: enrichedItems };
@@ -450,6 +504,19 @@ const updateCustomerPo = async (id, payload) => {
           );
         }
       }
+    }
+    // Auto-link any matching sales orders that have customer_po_id IS NULL
+    const [poRows] = await connection.execute('SELECT company_id FROM customer_pos WHERE id = ?', [id]);
+    const companyId = poRows[0]?.company_id;
+    if (companyId && projectName) {
+      await connection.execute(
+        `UPDATE sales_orders 
+         SET customer_po_id = ? 
+         WHERE company_id = ? 
+           AND TRIM(UPPER(project_name)) = TRIM(UPPER(?)) 
+           AND customer_po_id IS NULL`,
+        [id, companyId, projectName]
+      );
     }
 
     await connection.commit();

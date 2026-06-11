@@ -2923,54 +2923,183 @@ const JobCard = () => {
                 </div>
 
                 <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5 space-y-4">
-                  {/* Grid of Work Order Stage Cards */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    {woJCs.map((jc, index) => {
-                      const isCompleted = jc.status === 'COMPLETED';
-                      const isActive = jc.id === selectedJC.id;
-                      return (
-                        <div
-                          key={jc.id}
-                          className={`p-4 rounded-xl border transition-all flex flex-col justify-between h-[110px] ${isActive
-                            ? 'bg-indigo-50/20 border-indigo-200 ring-2 ring-indigo-500/5'
-                            : isCompleted
-                              ? 'bg-emerald-50/10 border-emerald-100'
-                              : 'bg-slate-50/40 border-slate-100'
-                            }`}
-                        >
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <p className="text-[9px] text-slate-400 font-semibold tracking-wider truncate uppercase max-w-[120px]">
-                                {jc.drawing_no || selectedJC.drawing_no || 'SA-COMPONENT'}
-                              </p>
-                              <h4 className="text-xs font-bold text-slate-800 mt-0.5 truncate max-w-[140px]">
-                                {jc.operation_name}
-                              </h4>
-                            </div>
-                            <span className="p-1 rounded bg-white border border-slate-100 text-slate-400">
-                              {isCompleted ? (
-                                <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
-                              ) : (
-                                <Clock className="w-3.5 h-3.5 text-slate-400" />
-                              )}
-                            </span>
-                          </div>
+                  {/* Group operations by Part (item_code / drawing_no) */}
+                  {(() => {
+                    const partsMap = {};
+                    woJCs.forEach(jc => {
+                      const key = jc.item_code || jc.drawing_no || 'UNKNOWN';
+                      if (!partsMap[key]) {
+                        partsMap[key] = {
+                          item_code: jc.item_code,
+                          item_name: jc.item_name || jc.drawing_no || 'Unknown Part',
+                          drawing_no: jc.drawing_no,
+                          source_type: jc.source_type,
+                          operations: [],
+                          isAssembly: jc.source_type === 'FG' || jc.source_type === 'Finished Goods' || (jc.operation_name || '').toLowerCase() === 'shipment'
+                        };
+                      }
+                      partsMap[key].operations.push(jc);
+                      if (jc.source_type === 'FG' || jc.source_type === 'Finished Goods' || (jc.operation_name || '').toLowerCase() === 'shipment') {
+                        partsMap[key].isAssembly = true;
+                      }
+                    });
 
-                          <div className="pt-2 border-t border-slate-100/60 flex justify-between items-center mt-2">
-                            <span className="text-[10px] text-slate-400 font-medium">
-                              {isShipmentOp(jc) ? 'Dispatched' : 'Ready Qty'}
-                            </span>
-                            <span className="text-xs font-bold text-slate-700">
-                              {isShipmentOp(jc)
-                                ? `${parseFloat(jc.dispatch_qty || jc.accepted_qty || 0)} / ${parseFloat(jc.wo_quantity || selectedJC.wo_quantity || jc.planned_qty || 0)}`
-                                : `${parseFloat(jc.accepted_qty || jc.produced_qty || 0)} / ${parseFloat(jc.wo_quantity || selectedJC.wo_quantity || jc.planned_qty || 0)}`
-                              }
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                    // Sort parts: child parts (Sub-Assemblies) first, Assembly part last
+                    const sortedPartKeys = Object.keys(partsMap).sort((a, b) => {
+                      const isAAssembly = partsMap[a].isAssembly;
+                      const isBAssembly = partsMap[b].isAssembly;
+                      if (isAAssembly && !isBAssembly) return 1;
+                      if (!isAAssembly && isBAssembly) return -1;
+                      return 0;
+                    });
+
+                    return (
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {sortedPartKeys.map(key => {
+                          const part = partsMap[key];
+                          // Sort operations sequentially by sequence_no
+                          const sortedOps = [...part.operations].sort((a, b) => {
+                            const aSeq = parseInt(a.sequence_no || a.operation_sequence || 0);
+                            const bSeq = parseInt(b.sequence_no || b.operation_sequence || 0);
+                            return aSeq - bSeq;
+                          });
+
+                          // Progress calculations: find the last non-shipment operation
+                          const nonShipmentOps = sortedOps.filter(op => !isShipmentOp(op));
+                          const lastNonShipmentOp = nonShipmentOps[nonShipmentOps.length - 1] || sortedOps[sortedOps.length - 1];
+
+                          const plannedQty = lastNonShipmentOp ? parseFloat(lastNonShipmentOp.planned_qty || 0) : 0;
+                          const acceptedQty = lastNonShipmentOp ? parseFloat(lastNonShipmentOp.accepted_qty || 0) : 0;
+
+                          // Overall Status Logic:
+                          // Completed: acceptedQty >= plannedQty (for non-shipment)
+                          // If Assembly: also must have Shipment completed if shipment is present
+                          const shipmentOp = sortedOps.find(isShipmentOp);
+                          const dispatchedQty = shipmentOp ? parseFloat(shipmentOp.dispatch_qty || shipmentOp.accepted_qty || 0) : 0;
+                          const shipmentPlanned = shipmentOp ? parseFloat(shipmentOp.planned_qty || 0) : 0;
+
+                          let status = 'Pending';
+                          let isPartCompleted = false;
+
+                          if (shipmentOp) {
+                            // Assembly status checks both non-shipment and shipment
+                            const allNonShipmentCompleted = nonShipmentOps.every(op => op.status === 'COMPLETED' || parseFloat(op.accepted_qty || 0) >= parseFloat(op.planned_qty || 0));
+                            const shipmentCompleted = shipmentOp.status === 'COMPLETED' || dispatchedQty >= shipmentPlanned;
+                            
+                            if (allNonShipmentCompleted && shipmentCompleted) {
+                              status = 'Completed';
+                              isPartCompleted = true;
+                            } else if (sortedOps.some(op => op.status === 'IN_PROGRESS' || op.status === 'COMPLETED' || parseFloat(op.accepted_qty || 0) > 0)) {
+                              status = 'In Progress';
+                            }
+                          } else {
+                            if (acceptedQty >= plannedQty && plannedQty > 0) {
+                              status = 'Completed';
+                              isPartCompleted = true;
+                            } else if (sortedOps.some(op => op.status === 'IN_PROGRESS' || op.status === 'COMPLETED' || parseFloat(op.accepted_qty || 0) > 0)) {
+                              status = 'In Progress';
+                            }
+                          }
+
+                          return (
+                            <div
+                              key={key}
+                              className={`p-4 rounded-xl border bg-white transition-all shadow-sm flex flex-col justify-between border-slate-100 hover:shadow-md ${
+                                sortedOps.some(op => op.id === selectedJC.id)
+                                  ? 'ring-2 ring-indigo-500/10 border-indigo-200 bg-indigo-50/5'
+                                  : ''
+                              }`}
+                            >
+                              <div className="space-y-3">
+                                {/* Part Card Header */}
+                                <div className="flex justify-between items-start gap-2">
+                                  <div className="space-y-0.5">
+                                    <h4 className="text-xs font-bold text-slate-800 tracking-tight uppercase leading-tight truncate max-w-[150px]" title={part.item_name}>
+                                      {part.item_name}
+                                    </h4>
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className="text-[9px] bg-slate-50 text-slate-400 font-semibold px-1 py-0.2 rounded border border-slate-200/50">
+                                        {part.drawing_no || 'SA-COMPONENT'}
+                                      </span>
+                                      {part.isAssembly && (
+                                        <span className="text-[8px] bg-indigo-50/50 text-indigo-600 font-bold px-1 py-0.2 rounded border border-indigo-100/50 uppercase">
+                                          Assembly
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <span className={`px-1.5 py-0.2 text-[8px] font-bold rounded border uppercase tracking-wider ${
+                                    isPartCompleted
+                                      ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                      : status === 'In Progress'
+                                        ? 'bg-amber-50 text-amber-700 border-amber-100'
+                                        : 'bg-slate-50 text-slate-400 border-slate-200/50'
+                                  }`}>
+                                    {status}
+                                  </span>
+                                </div>
+
+                                {/* Part Progress Metric */}
+                                <div className="pt-2 border-t border-slate-100/60 space-y-1">
+                                  <div className="flex justify-between items-center text-[9px]">
+                                    <span className="text-slate-400 font-medium">Fabrication Progress</span>
+                                    <span className="font-bold text-slate-700 flex items-center gap-1">
+                                      {acceptedQty} / {plannedQty}
+                                      {isPartCompleted && <CheckCircle className="w-2.5 h-2.5 text-emerald-500 inline shrink-0" />}
+                                    </span>
+                                  </div>
+                                  <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                                    <div
+                                      className={`h-full rounded-full transition-all duration-500 ${
+                                        isPartCompleted ? 'bg-emerald-500' : 'bg-indigo-500'
+                                      }`}
+                                      style={{ width: `${Math.min(100, (acceptedQty / (plannedQty || 1)) * 100)}%` }}
+                                    ></div>
+                                  </div>
+                                </div>
+
+                                {/* Operations Stepper */}
+                                <div className="pt-2 border-t border-slate-100/60 flex items-center gap-1.5 overflow-x-auto scrollbar-hide py-1">
+                                  {sortedOps.map((op, idx) => {
+                                    const isOpCompleted = op.status === 'COMPLETED';
+                                    const isOpActive = op.id === selectedJC.id;
+                                    const isShipment = isShipmentOp(op);
+                                    return (
+                                      <React.Fragment key={op.id}>
+                                        {idx > 0 && <span className="text-slate-300 text-[8px] shrink-0">→</span>}
+                                        <div
+                                          onClick={() => handleLogProgress(op)}
+                                          className={`flex items-center gap-1 px-1.5 py-0.5 rounded cursor-pointer transition-all shrink-0 border ${
+                                            isOpActive
+                                              ? 'bg-indigo-50 border-indigo-200 text-indigo-700 font-extrabold shadow-sm'
+                                              : 'bg-slate-50 border-slate-100 hover:bg-slate-100 text-slate-500'
+                                          }`}
+                                          title={`${op.operation_name}: ${
+                                            isShipment
+                                              ? `Dispatch ${parseFloat(op.dispatch_qty || op.accepted_qty || 0)}/${parseFloat(op.planned_qty || 0)}`
+                                              : `Ready ${parseFloat(op.accepted_qty || op.produced_qty || 0)}/${parseFloat(op.planned_qty || 0)}`
+                                          }`}
+                                        >
+                                          {isOpCompleted ? (
+                                            <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full shrink-0"></span>
+                                          ) : op.status === 'IN_PROGRESS' ? (
+                                            <span className="w-1.5 h-1.5 bg-amber-500 rounded-full shrink-0 animate-pulse"></span>
+                                          ) : (
+                                            <span className="w-1.5 h-1.5 bg-slate-300 rounded-full shrink-0"></span>
+                                          )}
+                                          <span className="text-[8px] uppercase tracking-wider truncate max-w-[45px]">{op.operation_name}</span>
+                                        </div>
+                                      </React.Fragment>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
 
                   {!isPlanFullyFulfilled && (
                     <div className="p-3 bg-amber-50/50 rounded-lg border border-amber-100/60 text-amber-800 text-[11px] font-semibold flex items-center gap-1.5">
