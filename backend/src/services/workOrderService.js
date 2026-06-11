@@ -446,7 +446,9 @@ const createJobCardsForWorkOrder = async (workOrderId, connection, initialStatus
       time_uom: op.time_uom || op.timeUom || 'Min',
       hourly_rate: op.hourly_rate || op.hourlyRate,
       operation_type: op.process_type || op.processType || op.operation_type || op.operationType || 'In-House',
-      execution_type: op.process_type || op.processType || op.operation_type || op.operationType || 'In-House'
+      execution_type: op.process_type || op.processType || op.operation_type || op.operationType || 'In-House',
+      cycle_time_min: op.cycle_time_min || op.cycleTimeMin || 0,
+      setup_time_min: op.setup_time_min || op.setupTimeMin || 0
     }));
   } else {
     // Fetch from BOM if not provided (fallback)
@@ -485,12 +487,12 @@ const createJobCardsForWorkOrder = async (workOrderId, connection, initialStatus
     }
 
     const jcNo = await generateJobCardNo(connection);
-    let stdTime = op.net_time || op.base_time || op.cycle_time_min || masterOps[0]?.std_time || 0;
-    
-    // If it's from production_plan_operations (op.net_time), it's stored in Hours in database but we use Min in Job Cards
-    // We check if net_time is explicitly provided which is the case for Production Plan operations
-    if (op.net_time) {
-      stdTime = parseFloat(op.net_time) * 60;
+    let stdTime = parseFloat(op.cycle_time_min || 0);
+    if (!stdTime) {
+      stdTime = op.net_time || op.base_time || masterOps[0]?.std_time || 0;
+      if (op.net_time) {
+        stdTime = parseFloat(op.net_time) * 60;
+      }
     }
 
     const cycleTime = op.cycle_time_min || (masterOps[0]?.std_time && masterOps[0]?.time_uom === 'Min' ? masterOps[0]?.std_time : 0);

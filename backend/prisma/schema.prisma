@@ -640,6 +640,7 @@ model job_cards {
   planned_qty            Decimal?                 @db.Decimal(12, 3)
   produced_qty           Decimal?                 @default(0.000) @db.Decimal(12, 3)
   accepted_qty           Decimal?                 @default(0.000) @db.Decimal(12, 3)
+  transferred_qty        Decimal?                 @default(0.000) @db.Decimal(12, 3)
   rejected_qty           Decimal?                 @default(0.000) @db.Decimal(12, 3)
   rework_qty             Decimal?                 @default(0.000) @db.Decimal(12, 3)
   scrap_qty              Decimal?                 @default(0.000) @db.Decimal(12, 3)
@@ -672,6 +673,10 @@ model job_cards {
   shipping_notes         String?                  @db.Text
   dispatch_date          DateTime?                @db.Date
   dispatch_mode          String?                  @default("Partial") @db.VarChar(100)
+  parent_bom_item        String?                  @db.VarChar(120)
+  child_bom_item         String?                  @db.VarChar(120)
+  dependency_type        String?                  @db.VarChar(50)
+  bom_level              Int?
   inward_challans        inward_challans[]
   job_card_downtime_logs job_card_downtime_logs[]
   job_card_quality_logs  job_card_quality_logs[]

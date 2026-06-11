@@ -31,6 +31,17 @@ const TimePicker = ({ value, ampmValue, onTimeChange, onAMPMChange, label, small
   const minutes = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0'));
   const periods = ['AM', 'PM'];
 
+  if (disabled) {
+    return (
+      <div className={`flex items-center gap-1.5 border border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed rounded ${small ? 'px-2 py-1' : 'px-3 py-2'} w-full`}>
+        <Clock className={`${small ? 'w-3 h-3' : 'w-3.5 h-3.5'} text-slate-300`} />
+        <span className="text-xs font-medium text-slate-400">
+          {hour}:{minute} {displayAMPM}
+        </span>
+      </div>
+    );
+  }
+
   useLayoutEffect(() => {
     if (isOpen && triggerRef.current) {
       const rect = triggerRef.current.getBoundingClientRect();
@@ -65,7 +76,9 @@ const TimePicker = ({ value, ampmValue, onTimeChange, onAMPMChange, label, small
         <span className={`${small ? 'text-xs ' : 'text-xs'}  ${isPlaceholder ? 'text-slate-400' : disabled ? 'text-slate-400' : 'text-slate-700'}`}>
           {hour}:{minute} {displayAMPM}
         </span>
-        <ChevronDown className={`${small ? 'w-2.5 h-2.5' : 'w-3 h-3'} text-slate-400 ml-auto transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        {!disabled && (
+          <ChevronDown className={`${small ? 'w-2.5 h-2.5' : 'w-3 h-3'} text-slate-400 ml-auto transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        )}
       </div>
 
       {isOpen && (
@@ -703,17 +716,17 @@ const JobCard = () => {
     }
   };
 
-  const fetchInwardItems = async (jobCardId, jcFallback = null) => {
+  const fetchInwardItems = async (jobCardId, jcFallback = null, challanId = null) => {
     try {
       const token = localStorage.getItem('authToken');
 
       // 1. Fetch original outward items
-      const response = await fetch(`${API_BASE}/outward-challans/job-card/${jobCardId}/items`, {
+      const response = await fetch(`${API_BASE}/outward-challans/job-card/${jobCardId}/items${challanId ? `?challanId=${challanId}` : ''}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
       // 2. Fetch existing inward challan from new endpoint
-      const inwardRes = await fetch(`${API_BASE}/outward-challans/inward/job-card/${jobCardId}`, {
+      const inwardRes = await fetch(`${API_BASE}/outward-challans/inward/job-card/${jobCardId}${challanId ? `?challanId=${challanId}` : ''}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -1331,7 +1344,6 @@ const JobCard = () => {
   useEffect(() => {
     if (showProductionEntry && selectedJC) {
       const calculateAutoEndTime = () => {
-        return; // Disable auto end time suggestions
         const qty = parseFloat(timeLogForm.producedQty || 0);
         if (!timeLogForm.startTime) return;
 
@@ -1379,7 +1391,6 @@ const JobCard = () => {
   useEffect(() => {
     if (editingTimeLogId && selectedJC) {
       const calculateAutoEndTime = () => {
-        return; // Disable auto end time suggestions
         const qty = parseFloat(editTimeLogForm.producedQty || 0);
         if (!editTimeLogForm.startTime) return;
 
@@ -1421,6 +1432,316 @@ const JobCard = () => {
       calculateAutoEndTime();
     }
   }, [editTimeLogForm.producedQty, editTimeLogForm.startTime, editTimeLogForm.startAMPM, editingTimeLogId, selectedJC?.std_time, selectedJC?.time_uom]);
+
+
+  const normalizeShift = (s) => {
+    if (!s) return '';
+    if (s === 'SHIFT_A') return 'A';
+    if (s === 'SHIFT_B') return 'B';
+    if (s === 'SHIFT_C') return 'C';
+    return s;
+  };
+
+  const mapToFormShift = (s) => {
+    if (s === 'A' || s === 'SHIFT_A') return 'SHIFT_A';
+    if (s === 'B' || s === 'SHIFT_B') return 'SHIFT_B';
+    if (s === 'C' || s === 'SHIFT_C') return 'SHIFT_C';
+    return 'SHIFT_A';
+  };
+
+  const getRemainingMinsForDowntime = (downtimeDate, shift) => {
+    if (!selectedJC || !logs.timeLogs) return 0;
+    const normShift = normalizeShift(shift);
+    const matchingProdLog = logs.timeLogs.find(l => {
+      const logDateOnly = l.log_date?.split(/[ T]/)[0];
+      return logDateOnly === downtimeDate && normalizeShift(l.shift) === normShift;
+    });
+    if (!matchingProdLog) return 0;
+
+    const prodStartStr = formatLocalTime(matchingProdLog.start_time);
+    const prodEndStr = formatLocalTime(matchingProdLog.end_time);
+    const [pStartT, pStartA] = prodStartStr.split(' ');
+    const [pEndT, pEndA] = prodEndStr.split(' ');
+
+    const actualMins = calculateTotalMins(pStartT, pStartA || 'AM', pEndT, pEndA || 'AM');
+    const rawCycleTime = parseFloat(selectedJC.cycle_time) || parseFloat(selectedJC.std_time) || 0;
+    const cycleTime = rawCycleTime >= 1 ? Math.round(rawCycleTime) : rawCycleTime;
+    const setupTime = parseFloat(selectedJC.setup_time || 0);
+    const qty = parseFloat(matchingProdLog.produced_qty || 0);
+    const standardMins = Math.round((cycleTime * qty) + setupTime);
+    return Math.max(0, actualMins - standardMins);
+  };
+
+  const adjustTimeByMinutes = (timeStr, ampm, minsOffset) => {
+    if (!timeStr) return { time: '', ampm: 'AM' };
+    const mins = parseTimeToMinutes(timeStr, ampm || 'AM');
+    let newMins = (mins + minsOffset) % (24 * 60);
+    if (newMins < 0) {
+      newMins += 24 * 60;
+    }
+    const hrs24 = Math.floor(newMins / 60);
+    const minsPart = newMins % 60;
+    const time24Str = `${hrs24.toString().padStart(2, '0')}:${minsPart.toString().padStart(2, '0')}`;
+    return to12h(time24Str);
+  };
+
+  const getDowntimePrefillTimes = (downtimeDate, shift) => {
+    if (!selectedJC || !logs.timeLogs) return null;
+    const normShift = normalizeShift(shift);
+    const matchingLog = logs.timeLogs.find(l => {
+      const logDateOnly = l.log_date?.split(/[ T]/)[0];
+      return logDateOnly === downtimeDate && normalizeShift(l.shift) === normShift;
+    });
+
+    if (!matchingLog) return null;
+
+    const startStr = formatLocalTime(matchingLog.start_time);
+    const endStr = formatLocalTime(matchingLog.end_time);
+    const [startTime, startAMPM] = startStr.split(' ');
+    const [endTime, endAMPM] = endStr.split(' ');
+
+    const actualMins = calculateTotalMins(startTime, startAMPM || 'AM', endTime, endAMPM || 'AM');
+    const rawCycleTime = parseFloat(selectedJC.cycle_time) || parseFloat(selectedJC.std_time) || 0;
+    const cycleTime = rawCycleTime >= 1 ? Math.round(rawCycleTime) : rawCycleTime;
+    const setupTime = parseFloat(selectedJC.setup_time || 0);
+    const qty = parseFloat(matchingLog.produced_qty || 0);
+    const standardMins = Math.round((cycleTime * qty) + setupTime);
+    const remainingMins = actualMins - standardMins;
+
+    if (remainingMins > 0) {
+      const startMinutesFromMidnight = parseTimeToMinutes(startTime, startAMPM || 'AM');
+      const downtimeStartMinutes = (startMinutesFromMidnight + standardMins) % (24 * 60);
+      const startHrs24 = Math.floor(downtimeStartMinutes / 60);
+      const startMinsPart = downtimeStartMinutes % 60;
+      const start24hStr = `${startHrs24.toString().padStart(2, '0')}:${startMinsPart.toString().padStart(2, '0')}`;
+      const { time: downtimeStartTime, ampm: downtimeStartAMPM } = to12h(start24hStr);
+
+      return {
+        startTime: downtimeStartTime,
+        startAMPM: downtimeStartAMPM,
+        endTime: endTime,
+        endAMPM: endAMPM || 'AM',
+        remarks: `Unaccounted time from production log (${qty} units produced)`,
+        downtimeType: 'Unplanned Downtime'
+      };
+    }
+    return null;
+  };
+
+  const validateDowntimeWithinProductionInterval = (logData) => {
+    const normShift = normalizeShift(logData.shift);
+    const matchingProdLog = logs.timeLogs?.find(l => {
+      const logDateOnly = l.log_date?.split(/[ T]/)[0];
+      return logDateOnly === logData.downtimeDate && normalizeShift(l.shift) === normShift;
+    });
+
+    if (!matchingProdLog) {
+      return {
+        valid: false,
+        msg: "Downtime period must be within the recorded production time interval."
+      };
+    }
+
+    const prodStartStr = formatLocalTime(matchingProdLog.start_time);
+    const prodEndStr = formatLocalTime(matchingProdLog.end_time);
+    const [pStartT, pStartA] = prodStartStr.split(' ');
+    const [pEndT, pEndA] = prodEndStr.split(' ');
+
+    const pStartMins = parseTimeToMinutes(pStartT, pStartA || 'AM');
+    const pEndMins = parseTimeToMinutes(pEndT, pEndA || 'AM');
+
+    const getOffset = (timeMins, startMins) => {
+      let offset = timeMins - startMins;
+      if (offset < 0) offset += 24 * 60;
+      return offset;
+    };
+
+    const prodEndOffset = getOffset(pEndMins, pStartMins);
+
+    const dtStartMins = parseTimeToMinutes(logData.startTime, logData.startAMPM);
+    const downtimeDuration = calculateTotalMins(logData.startTime, logData.startAMPM, logData.endTime, logData.endAMPM);
+
+    const dtStartOffset = getOffset(dtStartMins, pStartMins);
+    const dtEndOffset = dtStartOffset + downtimeDuration;
+
+    if (downtimeDuration <= 0 || dtEndOffset > prodEndOffset) {
+      return {
+        valid: false,
+        msg: "Downtime period must be within the recorded production time interval."
+      };
+    }
+
+    return { valid: true };
+  };
+
+  const handleDowntimeTimeChange = (changedField, newVal) => {
+    setDowntimeLogForm(prev => {
+      const updated = { ...prev };
+      if (changedField === 'startTime') {
+        updated.startTime = newVal;
+        updated.startAMPM = prev.startAMPM || 'AM';
+      } else if (changedField === 'startAMPM') {
+        updated.startAMPM = newVal;
+      } else if (changedField === 'endTime') {
+        updated.endTime = newVal;
+        updated.endAMPM = prev.endAMPM || 'PM';
+      } else if (changedField === 'endAMPM') {
+        updated.endAMPM = newVal;
+      }
+
+      const remainingMins = getRemainingMinsForDowntime(updated.downtimeDate, updated.shift);
+
+      if (remainingMins > 0) {
+        if (changedField === 'startTime' || changedField === 'startAMPM') {
+          if (updated.startTime) {
+            const adjusted = adjustTimeByMinutes(updated.startTime, updated.startAMPM, remainingMins);
+            updated.endTime = adjusted.time;
+            updated.endAMPM = adjusted.ampm;
+          }
+        } else if (changedField === 'endTime' || changedField === 'endAMPM') {
+          if (updated.endTime) {
+            const adjusted = adjustTimeByMinutes(updated.endTime, updated.endAMPM, -remainingMins);
+            updated.startTime = adjusted.time;
+            updated.startAMPM = adjusted.ampm;
+          }
+        }
+      }
+      return updated;
+    });
+  };
+
+  const handleDowntimeShiftChange = (newShift) => {
+    setDowntimeLogForm(prev => {
+      const updated = { ...prev, shift: newShift };
+      const prefill = getDowntimePrefillTimes(updated.downtimeDate, newShift);
+      if (prefill) {
+        updated.startTime = prefill.startTime;
+        updated.startAMPM = prefill.startAMPM;
+        updated.endTime = prefill.endTime;
+        updated.endAMPM = prefill.endAMPM;
+        updated.remarks = prefill.remarks;
+        updated.downtimeType = prefill.downtimeType;
+      } else {
+        updated.startTime = '';
+        updated.startAMPM = '';
+        updated.endTime = '';
+        updated.endAMPM = '';
+        updated.remarks = '';
+      }
+      return updated;
+    });
+  };
+
+  const handleDowntimeDateChange = (newDate) => {
+    if (!selectedJC) return;
+    const diffDays = calculateDayOffset(selectedJC, newDate);
+    setDowntimeLogForm(prev => {
+      const updated = { ...prev, downtimeDate: newDate, day: diffDays };
+      const prefill = getDowntimePrefillTimes(newDate, updated.shift);
+      if (prefill) {
+        updated.startTime = prefill.startTime;
+        updated.startAMPM = prefill.startAMPM;
+        updated.endTime = prefill.endTime;
+        updated.endAMPM = prefill.endAMPM;
+        updated.remarks = prefill.remarks;
+        updated.downtimeType = prefill.downtimeType;
+      } else {
+        updated.startTime = '';
+        updated.startAMPM = '';
+        updated.endTime = '';
+        updated.endAMPM = '';
+        updated.remarks = '';
+      }
+      return updated;
+    });
+  };
+
+  const handleDowntimeDayChange = (newDay) => {
+    if (!selectedJC) return;
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const startDateStr = selectedJC.actual_start_date || selectedJC.created_at || selectedJC.start_time || todayStr;
+    const startDate = new Date(startDateStr);
+    const newDateObj = new Date(Date.UTC(startDate.getFullYear(), startDate.getMonth(), startDate.getDate() + (parseInt(newDay || 1) - 1)));
+    const formattedDate = newDateObj.toISOString().slice(0, 10);
+
+    setDowntimeLogForm(prev => {
+      const updated = { ...prev, day: newDay, downtimeDate: formattedDate };
+      const prefill = getDowntimePrefillTimes(formattedDate, updated.shift);
+      if (prefill) {
+        updated.startTime = prefill.startTime;
+        updated.startAMPM = prefill.startAMPM;
+        updated.endTime = prefill.endTime;
+        updated.endAMPM = prefill.endAMPM;
+        updated.remarks = prefill.remarks;
+        updated.downtimeType = prefill.downtimeType;
+      } else {
+        updated.startTime = '';
+        updated.startAMPM = '';
+        updated.endTime = '';
+        updated.endAMPM = '';
+        updated.remarks = '';
+      }
+      return updated;
+    });
+  };
+
+  useEffect(() => {
+    if (selectedJC && logs.timeLogs && logs.timeLogs.length > 0) {
+      const latestLog = logs.timeLogs[0];
+      const logDateOnly = latestLog.log_date?.split(/[ T]/)[0];
+      
+      const hasDowntimeLog = logs.downtimeLogs && logs.downtimeLogs.some(dt => 
+        dt.downtime_date?.split(/[ T]/)[0] === logDateOnly && 
+        normalizeShift(dt.shift) === normalizeShift(latestLog.shift)
+      );
+      
+      if (!hasDowntimeLog) {
+        const prefill = getDowntimePrefillTimes(logDateOnly, latestLog.shift);
+        if (prefill) {
+          setDowntimeLogForm(prev => {
+            const mappedShift = mapToFormShift(latestLog.shift);
+            if (
+              prev.startTime === prefill.startTime &&
+              prev.endTime === prefill.endTime &&
+              prev.startAMPM === prefill.startAMPM &&
+              prev.endAMPM === prefill.endAMPM &&
+              prev.downtimeDate === logDateOnly &&
+              prev.shift === mappedShift
+            ) {
+              return prev;
+            }
+            return {
+              ...prev,
+              downtimeDate: logDateOnly,
+              day: latestLog.day || prev.day,
+              shift: mappedShift,
+              startTime: prefill.startTime,
+              startAMPM: prefill.startAMPM,
+              endTime: prefill.endTime,
+              endAMPM: prefill.endAMPM,
+              downtimeType: prefill.downtimeType,
+              remarks: prefill.remarks
+            };
+          });
+        }
+      } else {
+        setDowntimeLogForm(prev => {
+          if (prev.startTime === '' && prev.endTime === '') return prev;
+          if (prev.remarks && prev.remarks.includes('Unaccounted time from')) {
+            return {
+              ...prev,
+              startTime: '',
+              startAMPM: '',
+              endTime: '',
+              endAMPM: '',
+              remarks: ''
+            };
+          }
+          return prev;
+        });
+      }
+    }
+  }, [logs.timeLogs, logs.downtimeLogs, selectedJC?.id]);
 
 
   const handleDayChange = (type, val) => {
@@ -1675,7 +1996,7 @@ const JobCard = () => {
       })
       .sort((a, b) => {
         const aSeq = parseInt(a.operation_sequence || a.sequence_no || 0);
-        const bSeq = parseInt(b.sequence_no || b.operation_sequence || 0);
+        const bSeq = parseInt(b.operation_sequence || b.sequence_no || 0);
         if (aSeq !== bSeq) return aSeq - bSeq;
         return a.id - b.id;
       });
@@ -1758,12 +2079,6 @@ const JobCard = () => {
     const nextJC = (() => {
       const sameItemNext = remainingJCs.find(j => j.item_code === jc.item_code || j.item_name === jc.item_name);
       if (sameItemNext) return sameItemNext;
-      const parentFGNext = remainingJCs.find(j =>
-        j.item_name === jc.source_fg ||
-        j.item_code === jc.source_fg ||
-        (j.source_type && j.source_type !== 'SA')
-      );
-      if (parentFGNext) return parentFGNext;
       return remainingJCs[0] || null;
     })();
 
@@ -1771,7 +2086,7 @@ const JobCard = () => {
     const normalizedMode = (mode.toLowerCase().includes('outsource') || mode.toLowerCase().includes('sub')) ? 'Outsource' : 'In-house';
 
     setNextStageForm({
-      nextOperationId: nextJC ? nextJC.operation_id : '',
+      nextOperationId: nextJC ? nextJC.id : '',
       assignOperatorId: nextJC ? (nextJC.assigned_to || '') : '',
       targetWarehouseId: nextJC ? (nextJC.target_warehouse_id || '') : '',
       executionMode: normalizedMode
@@ -1827,7 +2142,7 @@ const JobCard = () => {
             inwardItems: [],
             vendorInvoice: null
           }));
-          fetchInwardItems(jc.id, jc);
+          fetchInwardItems(jc.id, jc, jc.outward_challan_id);
           setIsInwardModalOpen(true);
         }
       }
@@ -2042,8 +2357,8 @@ const JobCard = () => {
         return false;
       })
       .sort((a, b) => {
-        const aSeq = parseInt(a.sequence_no || a.operation_sequence || 0);
-        const bSeq = parseInt(b.sequence_no || b.operation_sequence || 0);
+        const aSeq = parseInt(a.operation_sequence || a.sequence_no || 0);
+        const bSeq = parseInt(b.operation_sequence || b.sequence_no || 0);
         if (aSeq !== bSeq) return aSeq - bSeq;
         return a.id - b.id;
       });
@@ -2065,25 +2380,35 @@ const JobCard = () => {
       return null;
     })();
 
-    const currentSeq = parseInt(selectedJC.sequence_no || selectedJC.operation_sequence || 0);
-    const remainingJCs = woJCs.filter(j => {
-      const seq = parseInt(j.sequence_no || j.operation_sequence || 0);
-      return seq > currentSeq;
-    });
-    const nextOperationOptions = remainingJCs.map(j => ({
-      value: j.operation_id,
-      label: j.operation_name
-    }));
+    const nextOperationOptions = (() => {
+      // 1. Check if there are subsequent job cards in the same work order
+      const sameWoNext = woJCs.filter(j =>
+        String(j.work_order_id) === String(selectedJC.work_order_id) &&
+        parseInt(j.sequence_no || j.operation_sequence || 0) > parseInt(selectedJC.sequence_no || selectedJC.operation_sequence || 0)
+      );
+      if (sameWoNext.length > 0) {
+        // Return the immediate next job card in the same work order
+        const immediateNext = sameWoNext.sort((a, b) => parseInt(a.sequence_no || a.operation_sequence || 0) - parseInt(b.sequence_no || b.operation_sequence || 0))[0];
+        return [{
+          value: immediateNext.id,
+          label: immediateNext.operation_name
+        }];
+      }
 
-    console.log("DEBUG nextOperationOptions:", {
-      selectedJC_id: selectedJC.id,
-      selectedJC_sequence_no: selectedJC.sequence_no,
-      selectedJC_operation_sequence: selectedJC.operation_sequence,
-      currentSeq,
-      woJCs: woJCs.map(j => ({ id: j.id, op: j.operation_name, seq: j.sequence_no })),
-      remainingJCs: remainingJCs.map(j => ({ id: j.id, op: j.operation_name, seq: j.sequence_no })),
-      nextOperationOptions
-    });
+      // 2. If it's the last operation of a child work order, find the parent's first job card
+      if (selectedJC.parent_wo_id) {
+        const parentWoJcs = jobCards.filter(j => String(j.work_order_id) === String(selectedJC.parent_wo_id));
+        if (parentWoJcs.length > 0) {
+          const parentFirstJc = parentWoJcs.sort((a, b) => parseInt(a.sequence_no || a.operation_sequence || 0) - parseInt(b.sequence_no || b.operation_sequence || 0))[0];
+          return [{
+            value: parentFirstJc.id,
+            label: `${parentFirstJc.operation_name} (Assembly)`
+          }];
+        }
+      }
+
+      return [];
+    })();
 
     const isSelectedOperatorBusy = (() => {
       if (!nextStageForm.assignOperatorId) return false;
@@ -2094,7 +2419,35 @@ const JobCard = () => {
     const precedingSeq = precedingJC ? (precedingJC.sequence_no || precedingJC.operation_sequence || currentIndex) : 0;
 
     // Handover limits
-    const availableQty = precedingJC ? parseFloat(precedingJC.accepted_qty || precedingJC.produced_qty || 0) : (parseFloat(selectedJC.planned_qty || 0) + parseFloat(selectedJC.rework_qty || 0));
+    const availableQty = (() => {
+      // Find all child job cards (job cards where parent_wo_id matches selectedJC.work_order_id)
+      const childJcs = jobCards.filter(j => String(j.parent_wo_id) === String(selectedJC.work_order_id));
+      if (childJcs.length > 0) {
+        // Group by work order and find the last operation of each child
+        const childWoGroups = {};
+        childJcs.forEach(j => {
+          if (!childWoGroups[j.work_order_id]) childWoGroups[j.work_order_id] = [];
+          childWoGroups[j.work_order_id].push(j);
+        });
+
+        const equivalentParentQtys = [];
+        Object.keys(childWoGroups).forEach(woId => {
+          const wjcs = childWoGroups[woId];
+          const lastJc = wjcs.sort((a, b) => parseInt(b.sequence_no || b.operation_sequence || 0) - parseInt(a.sequence_no || a.operation_sequence || 0))[0];
+
+          const childWoQty = parseFloat(lastJc.wo_quantity || lastJc.planned_qty || 1);
+          const parentWoQty = parseFloat(selectedJC.wo_quantity || selectedJC.planned_qty || 1);
+          const ratio = parentWoQty / childWoQty;
+
+          const childAccepted = parseFloat(lastJc.accepted_qty || lastJc.produced_qty || 0);
+          equivalentParentQtys.push(childAccepted * ratio);
+        });
+
+        return equivalentParentQtys.length > 0 ? Math.min(...equivalentParentQtys) : 0;
+      }
+
+      return precedingJC ? parseFloat(precedingJC.accepted_qty || precedingJC.produced_qty || 0) : (parseFloat(selectedJC.planned_qty || 0) + parseFloat(selectedJC.rework_qty || 0));
+    })();
     const dispatchedQty = parseFloat(selectedJC.dispatch_qty || selectedJC.accepted_qty || 0);
     const remainingQty = Math.max(0, (parseFloat(selectedJC.planned_qty || 0) + parseFloat(selectedJC.rework_qty || 0)) - dispatchedQty);
     const isConstrained = availableQty < (parseFloat(selectedJC.planned_qty || 0) + parseFloat(selectedJC.rework_qty || 0));
@@ -2103,10 +2456,8 @@ const JobCard = () => {
     const remainingAvailableQty = Math.max(0, availableQty - dispatchedQty);
     const remainingWorkOrderQty = Math.max(0, targetQty - dispatchedQty);
 
-    const selectedNextJCForBtn = woJCs.find(j => String(j.operation_id) === String(nextStageForm.nextOperationId));
-    const alreadyTransferredQtyForBtn = selectedNextJCForBtn
-      ? (selectedNextJCForBtn.status === 'PENDING' ? 0 : Math.max(parseFloat(selectedNextJCForBtn.planned_qty || 0), parseFloat(selectedNextJCForBtn.accepted_qty || 0)))
-      : parseFloat(selectedJC.transferred_qty || 0);
+    const selectedNextJCForBtn = woJCs.find(j => String(j.id) === String(nextStageForm.nextOperationId));
+    const alreadyTransferredQtyForBtn = parseFloat(selectedJC.transferred_qty || 0);
     const availableTransferQty = Math.max(0, (selectedJC.accepted_qty || qcStats.totalAccepted || 0) - alreadyTransferredQtyForBtn);
     const isTransferDisabled = !nextStageForm.nextOperationId || availableTransferQty <= 0;
 
@@ -2302,7 +2653,7 @@ const JobCard = () => {
                   <div className="text-[9px] text-slate-400 mt-1 flex gap-1">
                     <span>C: {(() => {
                       const val = parseFloat(selectedJC.cycle_time) || parseFloat(selectedJC.std_time) || 0;
-                      return val >= 1 ? Math.round(val) : val;
+                      return Number(val.toFixed(3));
                     })()}m</span>
                     <span>•</span>
                     <span>S: {(() => {
@@ -2315,7 +2666,7 @@ const JobCard = () => {
               <div className="text-center border-l border-slate-100">
                 <p className="text-xs text-slate-400 mb-1.5 ">Net Time (Per Unit)</p>
                 <p className="text-sm  text-slate-600">
-                  {(parseFloat(selectedJC.cycle_time) || parseFloat(selectedJC.std_time) || 0).toFixed(0)} <span className="text-xs  text-slate-400 lowercase">{(selectedJC.time_uom || 'Min').toLowerCase()}</span>
+                  {Number((parseFloat(selectedJC.cycle_time) || parseFloat(selectedJC.std_time) || 0).toFixed(3))} <span className="text-xs  text-slate-400 lowercase">{(selectedJC.time_uom || 'Min').toLowerCase()}</span>
                   <span className="text-[9px] text-slate-400 ml-1">/ unit</span>
                 </p>
               </div>
@@ -2914,9 +3265,6 @@ const JobCard = () => {
                               onChange={e => {
                                 const newQty = e.target.value;
                                 setTimeLogForm({ ...timeLogForm, producedQty: newQty });
-                                if (timeLogForm.startTime) {
-                                  calculateAutoEndTime(timeLogForm.startTime, timeLogForm.startAMPM || 'AM', newQty);
-                                }
                               }}
                               className="w-full p-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-indigo-500"
                             />
@@ -2935,18 +3283,10 @@ const JobCard = () => {
                                   placeholder="08:00"
                                   placeholderAMPM="AM"
                                   onTimeChange={(newTime) => {
-                                    setTimeLogForm(prev => {
-                                      const updated = { ...prev, startTime: newTime, startAMPM: prev.startAMPM || 'AM' };
-                                      calculateAutoEndTime(newTime, prev.startAMPM || 'AM', prev.producedQty);
-                                      return updated;
-                                    });
+                                    setTimeLogForm(prev => ({ ...prev, startTime: newTime, startAMPM: prev.startAMPM || 'AM' }));
                                   }}
                                   onAMPMChange={(newAMPM) => {
-                                    setTimeLogForm(prev => {
-                                      const updated = { ...prev, startAMPM: newAMPM };
-                                      calculateAutoEndTime(prev.startTime, newAMPM, prev.producedQty);
-                                      return updated;
-                                    });
+                                    setTimeLogForm(prev => ({ ...prev, startAMPM: newAMPM }));
                                   }}
                                 />
                               </div>
@@ -2957,6 +3297,7 @@ const JobCard = () => {
                                   ampmValue={timeLogForm.endAMPM}
                                   placeholder="04:00"
                                   placeholderAMPM="PM"
+                                  disabled={false}
                                   onTimeChange={(newTime) => setTimeLogForm(prev => ({ ...prev, endTime: newTime, endAMPM: prev.endAMPM || 'PM' }))}
                                   onAMPMChange={(newAMPM) => setTimeLogForm(prev => ({ ...prev, endAMPM: newAMPM }))}
                                 />
@@ -3088,20 +3429,20 @@ const JobCard = () => {
                           <input
                             type="number"
                             value={downtimeLogForm.day}
-                            onChange={e => setDowntimeLogForm({ ...downtimeLogForm, day: e.target.value })}
+                            onChange={e => handleDowntimeDayChange(e.target.value)}
                             className="w-14 px-2 py-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-amber-500 "
                           />
                           <input
                             type="date"
                             value={downtimeLogForm.downtimeDate}
-                            onChange={e => handleDateChange('downtime', e.target.value)}
+                            onChange={e => handleDowntimeDateChange(e.target.value)}
                             className="flex-1 p-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-amber-500"
                           />
                         </div>
                       </FormControl>
                       <FormControl label="Shift" required>
                         <div className="flex items-center gap-1">
-                          <select value={downtimeLogForm.shift} onChange={e => setDowntimeLogForm({ ...downtimeLogForm, shift: e.target.value })} className="flex-1 p-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-amber-500 appearance-none">
+                          <select value={downtimeLogForm.shift} onChange={e => handleDowntimeShiftChange(e.target.value)} className="flex-1 p-2 bg-white border border-slate-200 rounded text-xs outline-none focus:border-amber-500 appearance-none">
                             <option value="SHIFT_A">A</option>
                             <option value="SHIFT_B">B</option>
                             <option value="SHIFT_C">C</option>
@@ -3125,8 +3466,8 @@ const JobCard = () => {
                           ampmValue={downtimeLogForm.startAMPM}
                           placeholder="08:00"
                           placeholderAMPM="AM"
-                          onTimeChange={(newTime) => setDowntimeLogForm(prev => ({ ...prev, startTime: newTime, startAMPM: prev.startAMPM || 'AM' }))}
-                          onAMPMChange={(newAMPM) => setDowntimeLogForm(prev => ({ ...prev, startAMPM: newAMPM }))}
+                          onTimeChange={(newTime) => handleDowntimeTimeChange('startTime', newTime)}
+                          onAMPMChange={(newAMPM) => handleDowntimeTimeChange('startAMPM', newAMPM)}
                         />
                       </FormControl>
                       <FormControl label="End Time" required>
@@ -3135,8 +3476,8 @@ const JobCard = () => {
                           ampmValue={downtimeLogForm.endAMPM}
                           placeholder="04:00"
                           placeholderAMPM="PM"
-                          onTimeChange={(newTime) => setDowntimeLogForm(prev => ({ ...prev, endTime: newTime, endAMPM: prev.endAMPM || 'PM' }))}
-                          onAMPMChange={(newAMPM) => setDowntimeLogForm(prev => ({ ...prev, endAMPM: newAMPM }))}
+                          onTimeChange={(newTime) => handleDowntimeTimeChange('endTime', newTime)}
+                          onAMPMChange={(newAMPM) => handleDowntimeTimeChange('endAMPM', newAMPM)}
                         />
                       </FormControl>
                       <FormControl label="Total Mins">
@@ -3149,6 +3490,70 @@ const JobCard = () => {
                         />
                       </FormControl>
                     </div>
+
+                    {/* Dynamic Live Summary Card */}
+                    {(() => {
+                      const hasRecordedDowntime = logs.downtimeLogs?.some(dt => {
+                        const dtDateOnly = dt.downtime_date?.split(/[ T]/)[0];
+                        return dtDateOnly === downtimeLogForm.downtimeDate && normalizeShift(dt.shift) === normalizeShift(downtimeLogForm.shift);
+                      });
+
+                      if (hasRecordedDowntime) {
+                        return null;
+                      }
+
+                      const matchingProdLog = logs.timeLogs?.find(l => {
+                        const logDateOnly = l.log_date?.split(/[ T]/)[0];
+                        return logDateOnly === downtimeLogForm.downtimeDate && normalizeShift(l.shift) === normalizeShift(downtimeLogForm.shift);
+                      });
+
+                      if (!matchingProdLog) {
+                        return (
+                          <div className="mb-6 p-4 bg-amber-50/50 rounded-xl border border-amber-100/50 flex items-center gap-3">
+                            <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />
+                            <div className="text-xs text-amber-800">
+                              No matching production log found for the selected Date and Shift. A recorded production time log is required to register downtime.
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      const prodStartStr = formatLocalTime(matchingProdLog.start_time);
+                      const prodEndStr = formatLocalTime(matchingProdLog.end_time);
+                      const [pStartT, pStartA] = prodStartStr.split(' ');
+                      const [pEndT, pEndA] = prodEndStr.split(' ');
+                      const prodDuration = calculateTotalMins(pStartT, pStartA || 'AM', pEndT, pEndA || 'AM');
+
+                      const downtimeDuration = calculateTotalMins(downtimeLogForm.startTime, downtimeLogForm.startAMPM, downtimeLogForm.endTime, downtimeLogForm.endAMPM) || 0;
+                      const netWorkingTime = Math.max(0, prodDuration - downtimeDuration);
+
+                      return (
+                        <div className="mb-6 p-5 rounded-xl border border-slate-100 bg-gradient-to-r from-slate-50 to-white shadow-sm flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 flex-1">
+                            <div className="space-y-1">
+                              <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider block">Production Time</span>
+                              <span className="text-xs font-semibold text-slate-700 block">{prodStartStr} → {prodEndStr}</span>
+                              <span className="text-[10px] text-slate-500 font-medium bg-slate-100 px-1.5 py-0.5 rounded w-max block">{prodDuration} Min</span>
+                            </div>
+                            <div className="space-y-1">
+                              <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider block">Downtime</span>
+                              <span className="text-xs font-semibold text-slate-700 block">
+                                {downtimeLogForm.startTime ? `${downtimeLogForm.startTime} ${downtimeLogForm.startAMPM}` : '—'} → {downtimeLogForm.endTime ? `${downtimeLogForm.endTime} ${downtimeLogForm.endAMPM}` : '—'}
+                              </span>
+                              <span className="text-[10px] text-orange-600 font-medium bg-orange-50 px-1.5 py-0.5 rounded w-max block">Selected</span>
+                            </div>
+                            <div className="space-y-1">
+                              <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider block">Downtime Duration</span>
+                              <span className="text-lg font-bold text-orange-600 block">{downtimeDuration} <span className="text-xs font-normal text-slate-500">Min</span></span>
+                            </div>
+                            <div className="space-y-1">
+                              <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider block">Net Working Time</span>
+                              <span className="text-lg font-bold text-emerald-600 block">{netWorkingTime} <span className="text-xs font-normal text-slate-500">Min</span></span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     <div className="flex items-center justify-between gap-6">
                       <div className="flex-1">
@@ -3493,6 +3898,8 @@ const JobCard = () => {
   const handleOutwardChallan = async (jc) => {
     setSelectedJCOutward(jc);
     let materialItems = [];
+    let allChallans = [];
+    let latestChallan = null;
 
     if (jc.outward_challan_id) {
       try {
@@ -3501,48 +3908,76 @@ const JobCard = () => {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (response.ok) {
-          const challan = await response.json();
-          setOutwardFormData({
-            id: challan.id,
-            vendorId: challan.vendor_id || '',
-            operationName: challan.operation_name || jc.operation_name || '',
-            plannedQty: challan.planned_qty || jc.planned_qty || 0,
-            expectedReturnDate: challan.expected_return_date ? challan.expected_return_date.split('T')[0] : '',
-            dispatchDate: challan.dispatch_date ? challan.dispatch_date.split('T')[0] : new Date().toISOString().split('T')[0],
-            dispatchQty: challan.dispatch_qty || jc.planned_qty || 0,
-            dispatchNotes: challan.notes || '',
-            materialItems: (challan.items || []).map(item => ({
-              itemCode: item.item_code,
-              requiredQty: item.required_qty,
-              releaseQty: item.release_qty
-            }))
-          });
-          setIsOutwardModalOpen(true);
-          return;
+          const data = await response.json();
+          latestChallan = data;
+          allChallans = data.allChallans || [];
         }
       } catch (error) {
         console.error('Error fetching existing outward challan:', error);
       }
-    } else {
-      // Pre-populate with the Job Card's own item code and planned quantity as the dispatched item
-      materialItems = [{
-        itemCode: jc.item_code || '',
-        requiredQty: parseFloat(jc.planned_qty || 0),
-        releaseQty: parseFloat(jc.planned_qty || 0)
-      }];
     }
 
-    setOutwardFormData({
-      vendorId: jc.vendor_id || '',
-      operationName: jc.operation_name || '',
-      plannedQty: jc.planned_qty || 0,
-      expectedReturnDate: '',
-      dispatchDate: new Date().toISOString().split('T')[0],
-      dispatchQty: jc.planned_qty || 0,
-      dispatchNotes: '',
-      materialItems: materialItems
-    });
-    setIsOutwardModalOpen(true);
+    const plannedQty = parseFloat(jc.planned_qty || 0);
+    const totalReceivedQty = parseFloat(jc.produced_qty || 0);
+
+    let openDispatchQty = 0;
+    if (allChallans.length > 0) {
+      allChallans.forEach(ch => {
+        if (ch.status === 'DISPATCHED') {
+          const rec = parseFloat(ch.received_qty || 0);
+          const disp = parseFloat(ch.dispatch_qty || 0);
+          openDispatchQty += Math.max(0, disp - rec);
+        }
+      });
+    }
+
+    const remainingQty = plannedQty - totalReceivedQty - openDispatchQty;
+
+    // Case 1: Remaining Qty > 0 -> Create a NEW outward challan for the remaining qty
+    if (remainingQty > 0) {
+      materialItems = [{
+        itemCode: jc.item_code || '',
+        requiredQty: remainingQty,
+        releaseQty: remainingQty
+      }];
+
+      setOutwardFormData({
+        vendorId: jc.vendor_id || '',
+        operationName: jc.operation_name || '',
+        plannedQty: plannedQty,
+        expectedReturnDate: '',
+        dispatchDate: new Date().toISOString().split('T')[0],
+        dispatchQty: remainingQty,
+        dispatchNotes: '',
+        materialItems: materialItems
+      });
+      setIsOutwardModalOpen(true);
+      return;
+    }
+
+    // Case 2: Remaining Qty <= 0 -> Check if the latest challan is DISPATCHED and can be edited
+    if (latestChallan && latestChallan.status === 'DISPATCHED') {
+      setOutwardFormData({
+        id: latestChallan.id,
+        vendorId: latestChallan.vendor_id || '',
+        operationName: latestChallan.operation_name || jc.operation_name || '',
+        plannedQty: latestChallan.planned_qty || jc.planned_qty || 0,
+        expectedReturnDate: latestChallan.expected_return_date ? latestChallan.expected_return_date.split('T')[0] : '',
+        dispatchDate: latestChallan.dispatch_date ? latestChallan.dispatch_date.split('T')[0] : new Date().toISOString().split('T')[0],
+        dispatchQty: latestChallan.dispatch_qty || jc.planned_qty || 0,
+        dispatchNotes: latestChallan.notes || '',
+        materialItems: (latestChallan.items || []).map(item => ({
+          itemCode: item.item_code,
+          requiredQty: item.required_qty,
+          releaseQty: item.release_qty
+        }))
+      });
+      setIsOutwardModalOpen(true);
+      return;
+    }
+
+    // Case 3: No remaining quantity and latest challan is already RECEIVED
+    errorToast('All quantities have been fully dispatched and received.');
   };
 
   const handleTransferQty = async () => {
@@ -3583,19 +4018,19 @@ const JobCard = () => {
           return false;
         })
         .sort((a, b) => {
-          const aSeq = parseInt(a.sequence_no || a.operation_sequence || 0);
-          const bSeq = parseInt(b.sequence_no || b.operation_sequence || 0);
+          const aSeq = parseInt(a.operation_sequence || a.sequence_no || 0);
+          const bSeq = parseInt(b.operation_sequence || b.sequence_no || 0);
           if (aSeq !== bSeq) return aSeq - bSeq;
           return a.id - b.id;
         });
 
-      const nextJC = woJCs.find(j => String(j.operation_id) === String(nextStageForm.nextOperationId));
+      const nextJC = woJCs.find(j => String(j.id) === String(nextStageForm.nextOperationId));
       if (!nextJC) {
         errorToast('Next Operation Job Card not found.');
         return;
       }
 
-      const alreadyTransferredQty = nextJC.status === 'PENDING' ? 0 : Math.max(parseFloat(nextJC.planned_qty || 0), parseFloat(nextJC.accepted_qty || 0));
+      const alreadyTransferredQty = parseFloat(selectedJC.transferred_qty || 0);
       const carryQty = Math.max(0, (selectedJC.accepted_qty || qcStats.totalAccepted || 0) - alreadyTransferredQty);
 
       if (carryQty <= 0) {
@@ -3626,7 +4061,8 @@ const JobCard = () => {
           assignedTo: nextStageForm.assignOperatorId || null,
           executionType: nextStageForm.executionMode,
           targetWarehouseId: nextStageForm.targetWarehouseId || null,
-          plannedQty: carryQty
+          plannedQty: carryQty,
+          sourceJobCardId: selectedJC.id
         })
       });
 
@@ -3704,19 +4140,24 @@ const JobCard = () => {
 
         if (response.ok) {
           // If there's a next operation selected, we can optionally update its operator/status
-          // Finding the next JC in sequence to auto-assign it
+          const parentId = selectedJC.plan_id || selectedJC.parent_wo_id || selectedJC.sales_order_id;
           const woJCs = jobCards
-            .filter(j => String(j.work_order_id) === String(selectedJC.work_order_id))
+            .filter(j => {
+              if (String(j.work_order_id) === String(selectedJC.work_order_id)) return true;
+              const jParentId = j.plan_id || j.parent_wo_id || j.sales_order_id;
+              if (parentId && jParentId && String(parentId) === String(jParentId)) return true;
+              return false;
+            })
             .sort((a, b) => {
-              const aSeq = parseInt(a.sequence_no || a.operation_sequence || 0);
-              const bSeq = parseInt(b.sequence_no || b.operation_sequence || 0);
+              const aSeq = parseInt(a.operation_sequence || a.sequence_no || 0);
+              const bSeq = parseInt(b.operation_sequence || b.sequence_no || 0);
               if (aSeq !== bSeq) return aSeq - bSeq;
               return a.id - b.id;
             });
 
           const currentIndex = woJCs.findIndex(j => j.id === selectedJC.id);
           const nextJC = nextStageForm.nextOperationId
-            ? woJCs.find(j => String(j.operation_id) === String(nextStageForm.nextOperationId))
+            ? woJCs.find(j => String(j.id) === String(nextStageForm.nextOperationId))
             : (currentIndex !== -1 ? woJCs[currentIndex + 1] : null);
 
           if (nextJC && nextStageForm.nextOperationId) {
@@ -4050,10 +4491,7 @@ const JobCard = () => {
       stdTime /= 60;
     }
 
-    // Align validation with UI rounding (toFixed(0)) for integer-like standard/cycle times
-    if (stdTime >= 1) {
-      stdTime = Math.round(stdTime);
-    }
+    // OEE capacity validation uses the exact standard time decimal
 
     const availableMins = calculateTotalMins(logData.startTime, logData.startAMPM, logData.endTime, logData.endAMPM);
     if (availableMins <= 0) return true;
@@ -4103,6 +4541,41 @@ const JobCard = () => {
     }
 
     return true;
+  };
+
+  const validateWithinAllocatedSchedule = (logStartTime, logStartAMPM, logEndTime, logEndAMPM) => {
+    if (!selectedJC || !selectedJC.start_time || !selectedJC.end_time) return true;
+
+    try {
+      const jcStartStr = selectedJC.start_time.split('T')[1]?.slice(0, 5) || selectedJC.start_time.split(' ')[1]?.slice(0, 5);
+      const jcEndStr = selectedJC.end_time.split('T')[1]?.slice(0, 5) || selectedJC.end_time.split(' ')[1]?.slice(0, 5);
+      if (!jcStartStr || !jcEndStr) return true;
+
+      const jcStart12 = to12h(jcStartStr);
+      const jcEnd12 = to12h(jcEndStr);
+
+      const planStart = parseTimeToMinutes(jcStart12.time, jcStart12.ampm);
+      const planEnd = parseTimeToMinutes(jcEnd12.time, jcEnd12.ampm);
+
+      const logStart = parseTimeToMinutes(logStartTime, logStartAMPM);
+      const logEnd = parseTimeToMinutes(logEndTime, logEndAMPM);
+
+      const isOvernightPlan = planEnd < planStart;
+
+      if (isOvernightPlan) {
+        const isStartValid = logStart >= planStart || logStart <= planEnd;
+        const isEndValid = logEnd >= planStart || logEnd <= planEnd;
+        if (!isStartValid || !isEndValid) return false;
+      } else {
+        if (logStart < planStart || logEnd > planEnd) {
+          return false;
+        }
+      }
+      return true;
+    } catch (e) {
+      console.error(e);
+      return true;
+    }
   };
 
   const addTimeLog = async (logData) => {
@@ -4188,6 +4661,40 @@ const JobCard = () => {
       if (response.ok) {
         await fetchLogs(selectedJC.id);
         fetchJobCards();
+
+        // Calculate and prefill remaining downtime
+        const actualMins = calculateTotalMins(logData.startTime, logData.startAMPM, logData.endTime, logData.endAMPM);
+        const rawCycleTime = parseFloat(selectedJC.cycle_time) || parseFloat(selectedJC.std_time) || 0;
+        const cycleTime = rawCycleTime >= 1 ? Math.round(rawCycleTime) : rawCycleTime;
+        const setupTime = parseFloat(selectedJC.setup_time || 0);
+        const qty = parseFloat(logData.producedQty || 0);
+        const standardMins = Math.round((cycleTime * qty) + setupTime);
+        const remainingMins = actualMins - standardMins;
+
+        if (remainingMins > 0) {
+          const startMinutesFromMidnight = parseTimeToMinutes(logData.startTime, logData.startAMPM);
+          const downtimeStartMinutes = (startMinutesFromMidnight + standardMins) % (24 * 60);
+          const startHrs24 = Math.floor(downtimeStartMinutes / 60);
+          const startMinsPart = downtimeStartMinutes % 60;
+          const start24hStr = `${startHrs24.toString().padStart(2, '0')}:${startMinsPart.toString().padStart(2, '0')}`;
+          const { time: downtimeStartTime, ampm: downtimeStartAMPM } = to12h(start24hStr);
+
+          setDowntimeLogForm({
+            downtimeDate: logData.logDate,
+            day: logData.day,
+            shift: logData.shift,
+            startTime: downtimeStartTime,
+            startAMPM: downtimeStartAMPM,
+            endTime: logData.endTime,
+            endAMPM: logData.endAMPM,
+            downtimeType: 'Unplanned Downtime',
+            remarks: `Unaccounted time from production log (${qty} units produced)`,
+            day: logData.day
+          });
+
+          warningToast(`Recorded Production Log. Remaining ${remainingMins} mins prefilled as Operational Downtime below!`);
+        }
+
         // Reset form but keep Day and Date
         const startInfo = selectedJC.start_time ? to12h(selectedJC.start_time.split('T')[1]?.slice(0, 5) || selectedJC.start_time.split(' ')[1]?.slice(0, 5)) : { time: '08:00', ampm: 'AM' };
         const endInfo = selectedJC.end_time ? to12h(selectedJC.end_time.split('T')[1]?.slice(0, 5) || selectedJC.end_time.split(' ')[1]?.slice(0, 5)) : { time: '04:00', ampm: 'PM' };
@@ -4314,6 +4821,39 @@ const JobCard = () => {
         setEditingTimeLogId(null);
         await fetchLogs(selectedJC.id);
         fetchJobCards();
+
+        // Calculate and prefill remaining downtime
+        const actualMins = calculateTotalMins(logData.startTime, logData.startAMPM, logData.endTime, logData.endAMPM);
+        const rawCycleTime = parseFloat(selectedJC.cycle_time) || parseFloat(selectedJC.std_time) || 0;
+        const cycleTime = rawCycleTime >= 1 ? Math.round(rawCycleTime) : rawCycleTime;
+        const setupTime = parseFloat(selectedJC.setup_time || 0);
+        const qty = parseFloat(logData.producedQty || 0);
+        const standardMins = Math.round((cycleTime * qty) + setupTime);
+        const remainingMins = actualMins - standardMins;
+
+        if (remainingMins > 0) {
+          const startMinutesFromMidnight = parseTimeToMinutes(logData.startTime, logData.startAMPM);
+          const downtimeStartMinutes = (startMinutesFromMidnight + standardMins) % (24 * 60);
+          const startHrs24 = Math.floor(downtimeStartMinutes / 60);
+          const startMinsPart = downtimeStartMinutes % 60;
+          const start24hStr = `${startHrs24.toString().padStart(2, '0')}:${startMinsPart.toString().padStart(2, '0')}`;
+          const { time: downtimeStartTime, ampm: downtimeStartAMPM } = to12h(start24hStr);
+
+          setDowntimeLogForm({
+            downtimeDate: logData.logDate,
+            day: logData.day,
+            shift: logData.shift,
+            startTime: downtimeStartTime,
+            startAMPM: downtimeStartAMPM,
+            endTime: logData.endTime,
+            endAMPM: logData.endAMPM,
+            downtimeType: 'Unplanned Downtime',
+            remarks: `Unaccounted time from updated production log (${qty} units produced)`,
+            day: logData.day
+          });
+
+          warningToast(`Updated Production Log. Remaining ${remainingMins} mins prefilled as Operational Downtime below!`);
+        }
       } else {
         errorToast('Failed to update time log');
       }
@@ -4390,6 +4930,12 @@ const JobCard = () => {
 
     if (!logData.startTime || !logData.endTime) {
       errorToast('Please select Downtime Period');
+      return;
+    }
+
+    const validity = validateDowntimeWithinProductionInterval(logData);
+    if (!validity.valid) {
+      errorToast(validity.msg);
       return;
     }
 
@@ -4670,7 +5216,7 @@ const JobCard = () => {
       status: jc.status || 'PENDING',
       producedQty: jc.produced_qty || 0,
       acceptedQty: jc.accepted_qty || 0,
-      stdTime: jc.std_time || 0,
+      stdTime: parseFloat(jc.std_time) || 0,
       timeUom: jc.time_uom || 'Min',
       startDateTime: jc.start_time || '',
       endDateTime: jc.end_time || '',
@@ -4874,6 +5420,7 @@ const JobCard = () => {
                     small
                     value={editTimeLogForm.endTime}
                     ampmValue={editTimeLogForm.endAMPM}
+                    disabled={false}
                     onTimeChange={(newTime) => setEditTimeLogForm({ ...editTimeLogForm, endTime: newTime })}
                     onAMPMChange={(newAMPM) => setEditTimeLogForm({ ...editTimeLogForm, endAMPM: newAMPM })}
                   />
@@ -5589,7 +6136,7 @@ const JobCard = () => {
           <div className="flex flex-col gap-0.5">
             <div className="flex items-center gap-1 text-[10px] text-slate-500">
               <Clock className="w-2.5 h-2.5" />
-              <span>{Math.round(cycleTime)} {row.time_uom || 'min'}/u</span>
+              <span>{Number(cycleTime.toFixed(3))} {row.time_uom || 'min'}/u</span>
             </div>
             <div className="flex items-center gap-1 text-[10px] text-slate-600">
               <span className=" text-emerald-600">₹{totalCost.toFixed(2)}</span>
@@ -5975,6 +6522,35 @@ const JobCard = () => {
                 </div>
               </div>
             </div>
+
+            {/* Subcontracting Summary */}
+            {(() => {
+              const isSubcontract = viewingJobCard.execution_mode === 'Outsource' || viewingJobCard.outward_challan_id;
+              if (!isSubcontract) return null;
+              return (
+                <div className="bg-slate-850 rounded p-3 border border-slate-700/50 mb-1 text-white">
+                  <p className="text-[10px] text-indigo-300 font-semibold uppercase tracking-wider mb-2">Subcontracting Status</p>
+                  <div className="grid grid-cols-4 gap-2 text-center">
+                    <div>
+                      <p className="text-slate-400 text-[10px] uppercase font-medium">Planned Qty</p>
+                      <p className="text-base font-bold text-white mt-0.5">{parseFloat(viewingJobCard.planned_qty || 0).toFixed(2)}</p>
+                    </div>
+                    <div>
+                      <p className="text-slate-400 text-[10px] uppercase font-medium">Dispatched Qty</p>
+                      <p className="text-base font-bold text-indigo-300 mt-0.5">{parseFloat(viewingJobCard.dispatch_qty || 0).toFixed(2)}</p>
+                    </div>
+                    <div>
+                      <p className="text-slate-400 text-[10px] uppercase font-medium">Received Qty</p>
+                      <p className="text-base font-bold text-emerald-400 mt-0.5">{parseFloat(viewingJobCard.produced_qty || 0).toFixed(2)}</p>
+                    </div>
+                    <div>
+                      <p className="text-slate-400 text-[10px] uppercase font-medium">Pending Vendor</p>
+                      <p className="text-base font-bold text-amber-400 mt-0.5">{Math.max(0, parseFloat(viewingJobCard.planned_qty || 0) - parseFloat(viewingJobCard.produced_qty || 0)).toFixed(2)}</p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Tabs */}
             <Tabs
@@ -6566,31 +7142,8 @@ const JobCard = () => {
                             type="number"
                             step="0.01"
                             value={formData.stdTime}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setFormData(prev => {
-                                const suggested = calculateSuggestedEndDateTime(
-                                  prev.startDate,
-                                  prev.startTime,
-                                  prev.startAMPM,
-                                  prev.plannedQty,
-                                  prev.producedQty,
-                                  val,
-                                  'Min'
-                                );
-                                return {
-                                  ...prev,
-                                  stdTime: val,
-                                  timeUom: 'Min',
-                                  ...(suggested.endDate ? {
-                                    endDate: suggested.endDate,
-                                    endTime: suggested.endTime,
-                                    endAMPM: suggested.endAMPM
-                                  } : {})
-                                };
-                              });
-                            }}
-                            className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                            readOnly
+                            className="w-full p-2 bg-slate-50 text-slate-500 border border-slate-200 rounded text-xs outline-none cursor-not-allowed"
                           />
                         </FormControl>
                       </div>
@@ -6672,6 +7225,26 @@ const JobCard = () => {
             <div>
               <h3 className="text-sm  text-slate-900">Dispatch Job Card {selectedJCOutward?.job_card_no} to Vendor</h3>
               <p className="text-xs text-slate-500">Create an outward challan for subcontracted operations</p>
+            </div>
+          </div>
+
+          {/* Subcontracting Summary Display */}
+          <div className="grid grid-cols-4 gap-2 bg-indigo-50/50 p-2.5 rounded border border-indigo-100/30 text-center">
+            <div>
+              <p className="text-[10px] text-slate-500 font-medium uppercase">Planned Qty</p>
+              <p className="text-sm font-bold text-slate-800">{parseFloat(selectedJCOutward?.planned_qty || 0).toFixed(2)}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-slate-500 font-medium uppercase">Dispatched Qty</p>
+              <p className="text-sm font-bold text-indigo-600">{parseFloat(selectedJCOutward?.dispatch_qty || 0).toFixed(2)}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-slate-500 font-medium uppercase">Received Qty</p>
+              <p className="text-sm font-bold text-emerald-600">{parseFloat(selectedJCOutward?.produced_qty || 0).toFixed(2)}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-slate-500 font-medium uppercase">Pending Vendor</p>
+              <p className="text-sm font-bold text-amber-600">{Math.max(0, parseFloat(selectedJCOutward?.planned_qty || 0) - parseFloat(selectedJCOutward?.produced_qty || 0)).toFixed(2)}</p>
             </div>
           </div>
 

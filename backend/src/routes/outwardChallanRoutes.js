@@ -32,6 +32,51 @@ router.post('/', authenticate, authorize(['PROD_MANAGE']), async (req, res) => {
       dispatchNotes, materialItems 
     } = req.body;
 
+    // A. Validate remaining quantity to prevent duplicate or excessive dispatches
+    const [jcRows] = await connection.execute(
+      `SELECT planned_qty FROM job_cards WHERE id = ?`,
+      [jobCardId]
+    );
+    if (jcRows.length === 0) {
+      return res.status(404).json({ message: 'Job Card not found' });
+    }
+    const jcPlannedQty = parseFloat(jcRows[0].planned_qty || 0);
+
+    const [receivedRows] = await connection.execute(
+      `SELECT COALESCE(SUM(total_received_qty), 0) as total_received 
+       FROM inward_challans 
+       WHERE job_card_id = ?`,
+      [jobCardId]
+    );
+    const totalReceivedQty = parseFloat(receivedRows[0].total_received || 0);
+
+    const [challans] = await connection.execute(
+      `SELECT id, dispatch_qty, status FROM outward_challans WHERE job_card_id = ?`,
+      [jobCardId]
+    );
+
+    let openDispatchQty = 0;
+    for (const ch of challans) {
+      if (ch.status === 'DISPATCHED') {
+        const [chRecRows] = await connection.execute(
+          `SELECT COALESCE(SUM(total_received_qty), 0) as received 
+           FROM inward_challans 
+           WHERE outward_challan_id = ?`,
+          [ch.id]
+        );
+        const chReceived = parseFloat(chRecRows[0].received || 0);
+        openDispatchQty += Math.max(0, parseFloat(ch.dispatch_qty || 0) - chReceived);
+      }
+    }
+
+    const remainingQty = jcPlannedQty - totalReceivedQty - openDispatchQty;
+
+    if (parseFloat(dispatchQty) > remainingQty + 0.001) {
+      return res.status(400).json({ 
+        message: `Cannot dispatch ${dispatchQty} units. Available balance quantity is ${remainingQty.toFixed(3)} units.` 
+      });
+    }
+
     // 1. Create Outward Challan Header
     const challanNumber = `OC-${Date.now()}`;
     const [result] = await connection.execute(
@@ -54,10 +99,18 @@ router.post('/', authenticate, authorize(['PROD_MANAGE']), async (req, res) => {
       }
     }
 
-    // 3. Update Job Card with outward challan info and vendor_id
+    // 3. Update Job Card with outward challan info, vendor_id, and cumulative dispatch_qty
+    const [sumRows] = await connection.execute(
+      `SELECT COALESCE(SUM(dispatch_qty), 0) as total_dispatch 
+       FROM outward_challans 
+       WHERE job_card_id = ?`,
+      [jobCardId]
+    );
+    const totalDispatch = parseFloat(sumRows[0].total_dispatch || 0);
+
     await connection.execute(
       `UPDATE job_cards SET outward_challan_id = ?, outward_challan_no = ?, dispatch_qty = ?, vendor_id = ? WHERE id = ?`,
-      [challanId, challanNumber, dispatchQty, vendorId, jobCardId]
+      [challanId, challanNumber, totalDispatch, vendorId, jobCardId]
     );
 
     await connection.commit();
@@ -87,7 +140,7 @@ router.post('/inward', authenticate, authorize(['PROD_MANAGE']), async (req, res
       `INSERT INTO inward_challans 
        (inward_number, outward_challan_id, job_card_id, vendor_id, received_date, vendor_invoice_no, total_received_qty, notes, status) 
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'RECEIVED')`,
-      [inwardNumber, outwardChallanId, jobCardId, vendorId, receivedDate || null, vendorInvoiceNo, totalReceivedQty, notes]
+      [inwardNumber, outwardChallanId, jobCardId, vendorId, receivedDate || null, vendorInvoiceNo || null, totalReceivedQty, notes || null]
     );
 
     const inwardId = result.insertId;
@@ -104,29 +157,151 @@ router.post('/inward', authenticate, authorize(['PROD_MANAGE']), async (req, res
       }
     }
 
-    // 3. Update Outward Challan Status
-    await connection.execute(
-      `UPDATE outward_challans SET status = 'RECEIVED' WHERE id = ?`,
+    // 3. Get current quantities and info from Job Card
+    const [jcRows] = await connection.execute(
+      `SELECT work_order_id, sequence_no, produced_qty, accepted_qty, rejected_qty, scrap_qty, dispatch_qty, planned_qty 
+       FROM job_cards 
+       WHERE id = ?`,
+      [jobCardId]
+    );
+
+    if (jcRows.length === 0) {
+      throw new Error('Job Card not found');
+    }
+
+    const currentJc = jcRows[0];
+    const currentProduced = parseFloat(currentJc.produced_qty || 0);
+    const currentAccepted = parseFloat(currentJc.accepted_qty || 0);
+    const currentRejected = parseFloat(currentJc.rejected_qty || 0);
+    const currentScrap = parseFloat(currentJc.scrap_qty || 0);
+    const dispatchQtyLimit = parseFloat(currentJc.dispatch_qty || currentJc.planned_qty || 0);
+
+    const incomingReceived = parseFloat(totalReceivedQty || 0);
+    const finalAccepted = acceptedQty !== undefined && acceptedQty !== null ? parseFloat(acceptedQty) : incomingReceived;
+    const finalRejected = rejectedQty !== undefined && rejectedQty !== null ? parseFloat(rejectedQty) : 0;
+    const incomingScrap = parseFloat(scrapQty || 0);
+
+    const newProduced = currentProduced + incomingReceived;
+    const newAccepted = currentAccepted + finalAccepted;
+    const newRejected = currentRejected + finalRejected;
+    const newScrap = currentScrap + incomingScrap;
+
+    // Fetch this specific outward challan's details
+    const [ocRows] = await connection.execute(
+      `SELECT dispatch_qty FROM outward_challans WHERE id = ?`,
       [outwardChallanId]
     );
+    if (ocRows.length === 0) {
+      throw new Error('Outward Challan not found');
+    }
+    const ocDispatchQty = parseFloat(ocRows[0].dispatch_qty || 0);
 
-    // 4. Update Job Card status to COMPLETED and save quantities
-    const finalAccepted = acceptedQty !== undefined && acceptedQty !== null ? acceptedQty : totalReceivedQty;
-    const finalRejected = rejectedQty !== undefined && rejectedQty !== null ? rejectedQty : 0;
-    
+    // Sum all received quantities for this outward challan (including the one just inserted)
+    const [inwardSumRows] = await connection.execute(
+      `SELECT COALESCE(SUM(total_received_qty), 0) as total_received 
+       FROM inward_challans 
+       WHERE outward_challan_id = ?`,
+      [outwardChallanId]
+    );
+    const totalReceivedForChallan = parseFloat(inwardSumRows[0].total_received || 0);
+
+    // Check if this specific outward challan is fully received
+    const isChallanFullyReceived = totalReceivedForChallan >= ocDispatchQty;
+    const newChallanStatus = isChallanFullyReceived ? 'RECEIVED' : 'DISPATCHED';
+
+    // 4. Update Outward Challan Status
     await connection.execute(
-      `UPDATE job_cards 
-       SET produced_qty = ?, accepted_qty = ?, rejected_qty = ?, status = 'COMPLETED' 
-       WHERE id = ?`,
-      [totalReceivedQty, finalAccepted, finalRejected, jobCardId]
+      `UPDATE outward_challans SET status = ? WHERE id = ?`,
+      [newChallanStatus, outwardChallanId]
     );
 
-    // 5. Update Work Order status if needed
-    const [allJcs] = await connection.query('SELECT status FROM job_cards WHERE work_order_id = (SELECT work_order_id FROM job_cards WHERE id = ?)', [jobCardId]);
+    // Check if Job Card is fully received (newProduced >= planned_qty)
+    const isJcFullyReceived = newProduced >= parseFloat(currentJc.planned_qty || 0);
+    const newStatus = isJcFullyReceived ? 'COMPLETED' : 'IN_PROGRESS';
+
+    // 5. Update Job Card with cumulative quantities and new status
+    await connection.execute(
+      `UPDATE job_cards 
+       SET produced_qty = ?, accepted_qty = ?, rejected_qty = ?, scrap_qty = ?, status = ? 
+       WHERE id = ?`,
+      [newProduced, newAccepted, newRejected, newScrap, newStatus, jobCardId]
+    );
+
+    // 6. Find next Job Card in sequence
+    const [nextJcRows] = await connection.query(
+      'SELECT id, status FROM job_cards WHERE work_order_id = ? AND sequence_no > ? ORDER BY sequence_no ASC, id ASC LIMIT 1',
+      [currentJc.work_order_id, currentJc.sequence_no]
+    );
+
+    let targetJcId = null;
+    let isParentJc = false;
+    let targetJcStatus = null;
+
+    if (nextJcRows.length > 0) {
+      targetJcId = nextJcRows[0].id;
+      targetJcStatus = nextJcRows[0].status;
+    } else {
+      // If no next operation in the same work order, check if this is a child work order
+      const [woRows] = await connection.query(
+        'SELECT parent_wo_id FROM work_orders WHERE id = ?',
+        [currentJc.work_order_id]
+      );
+      const parentWoId = woRows[0]?.parent_wo_id;
+      if (parentWoId) {
+        // Find the first job card in the parent work order
+        const [parentJcRows] = await connection.query(
+          'SELECT id, status FROM job_cards WHERE work_order_id = ? ORDER BY sequence_no ASC, id ASC LIMIT 1',
+          [parentWoId]
+        );
+        if (parentJcRows.length > 0) {
+          targetJcId = parentJcRows[0].id;
+          targetJcStatus = parentJcRows[0].status;
+          isParentJc = true;
+        }
+      }
+    }
+
+    // 7. Quantity Transfer to Next Operation
+    if (targetJcId) {
+      if (isParentJc) {
+        if (targetJcStatus === 'PENDING') {
+          await connection.execute(
+            "UPDATE job_cards SET planned_qty = ?, status = 'IN_PROGRESS', actual_start_date = COALESCE(actual_start_date, CURRENT_DATE()) WHERE id = ?",
+            [incomingReceived, targetJcId]
+          );
+        } else {
+          await connection.execute(
+            'UPDATE job_cards SET planned_qty = COALESCE(planned_qty, 0) + ? WHERE id = ?',
+            [incomingReceived, targetJcId]
+          );
+        }
+      } else {
+        if (targetJcStatus === 'PENDING') {
+          await connection.execute(
+            "UPDATE job_cards SET planned_qty = ?, status = 'IN_PROGRESS', actual_start_date = COALESCE(actual_start_date, CURRENT_DATE()) WHERE id = ?",
+            [incomingReceived, targetJcId]
+          );
+        } else {
+          await connection.execute(
+            'UPDATE job_cards SET planned_qty = COALESCE(planned_qty, 0) + ? WHERE id = ?',
+            [incomingReceived, targetJcId]
+          );
+        }
+      }
+
+      // Update transferred_qty on the current job card
+      await connection.execute(
+        'UPDATE job_cards SET transferred_qty = COALESCE(transferred_qty, 0) + ? WHERE id = ?',
+        [incomingReceived, jobCardId]
+      );
+    }
+
+    // 8. Update Work Order status if needed
+    const [allJcs] = await connection.query(
+      'SELECT status FROM job_cards WHERE work_order_id = ?',
+      [currentJc.work_order_id]
+    );
     if (allJcs.length > 0) {
-      const [jcRow] = await connection.query('SELECT work_order_id FROM job_cards WHERE id = ?', [jobCardId]);
-      const workOrderId = jcRow[0].work_order_id;
-      
       let newWoStatus = 'RELEASED';
       if (allJcs.some(jc => jc.status === 'IN_PROGRESS')) {
         newWoStatus = 'IN_PROGRESS';
@@ -137,7 +312,7 @@ router.post('/inward', authenticate, authorize(['PROD_MANAGE']), async (req, res
         if (hasStarted) newWoStatus = 'IN_PROGRESS';
       }
 
-      await connection.execute('UPDATE work_orders SET status = ? WHERE id = ?', [newWoStatus, workOrderId]);
+      await connection.execute('UPDATE work_orders SET status = ? WHERE id = ?', [newWoStatus, currentJc.work_order_id]);
     }
 
     await connection.commit();
@@ -156,7 +331,11 @@ router.get('/job-card/:jobCardId', authenticate, async (req, res) => {
   try {
     const { jobCardId } = req.params;
     const [challans] = await pool.execute(
-      `SELECT * FROM outward_challans WHERE job_card_id = ? ORDER BY created_at DESC LIMIT 1`,
+      `SELECT oc.*,
+              COALESCE((SELECT SUM(total_received_qty) FROM inward_challans WHERE outward_challan_id = oc.id), 0) as received_qty
+       FROM outward_challans oc 
+       WHERE oc.job_card_id = ? 
+       ORDER BY oc.created_at DESC`,
       [jobCardId]
     );
 
@@ -164,7 +343,7 @@ router.get('/job-card/:jobCardId', authenticate, async (req, res) => {
       return res.status(404).json({ message: 'Outward challan not found for this job card' });
     }
 
-    const challan = challans[0];
+    const challan = { ...challans[0] };
 
     // Get outward challan items
     const [items] = await pool.execute(
@@ -175,6 +354,7 @@ router.get('/job-card/:jobCardId', authenticate, async (req, res) => {
     );
 
     challan.items = items;
+    challan.allChallans = challans; // Include all challans for the Job Card
     res.json(challan);
   } catch (error) {
     console.error('Error fetching outward challan:', error);
@@ -192,6 +372,62 @@ router.put('/:id', authenticate, authorize(['PROD_MANAGE']), async (req, res) =>
       vendorId, expectedReturnDate, dispatchQty, dispatchDate,
       dispatchNotes, materialItems 
     } = req.body;
+
+    // A. Fetch Job Card ID for the current challan
+    const [challanRows] = await connection.execute(
+      `SELECT job_card_id FROM outward_challans WHERE id = ?`,
+      [id]
+    );
+    if (challanRows.length === 0) {
+      return res.status(404).json({ message: 'Outward Challan not found' });
+    }
+    const jobCardId = challanRows[0].job_card_id;
+
+    // B. Validate remaining quantity (excluding the current challan being edited)
+    const [jcRows] = await connection.execute(
+      `SELECT planned_qty FROM job_cards WHERE id = ?`,
+      [jobCardId]
+    );
+    if (jcRows.length === 0) {
+      return res.status(404).json({ message: 'Job Card not found' });
+    }
+    const jcPlannedQty = parseFloat(jcRows[0].planned_qty || 0);
+
+    const [receivedRows] = await connection.execute(
+      `SELECT COALESCE(SUM(total_received_qty), 0) as total_received 
+       FROM inward_challans 
+       WHERE job_card_id = ?`,
+      [jobCardId]
+    );
+    const totalReceivedQty = parseFloat(receivedRows[0].total_received || 0);
+
+    const [allChallans] = await connection.execute(
+      `SELECT id, dispatch_qty, status FROM outward_challans WHERE job_card_id = ?`,
+      [jobCardId]
+    );
+
+    let openDispatchQty = 0;
+    for (const ch of allChallans) {
+      if (ch.id === parseInt(id)) continue; // Skip the current challan being updated
+      if (ch.status === 'DISPATCHED') {
+        const [chRecRows] = await connection.execute(
+          `SELECT COALESCE(SUM(total_received_qty), 0) as received 
+           FROM inward_challans 
+           WHERE outward_challan_id = ?`,
+          [ch.id]
+        );
+        const chReceived = parseFloat(chRecRows[0].received || 0);
+        openDispatchQty += Math.max(0, parseFloat(ch.dispatch_qty || 0) - chReceived);
+      }
+    }
+
+    const remainingQty = jcPlannedQty - totalReceivedQty - openDispatchQty;
+
+    if (parseFloat(dispatchQty) > remainingQty + 0.001) {
+      return res.status(400).json({ 
+        message: `Cannot update dispatch quantity to ${dispatchQty} units. Available balance quantity is ${remainingQty.toFixed(3)} units.` 
+      });
+    }
 
     // 1. Update Outward Challan Header
     await connection.execute(
@@ -218,18 +454,19 @@ router.put('/:id', authenticate, authorize(['PROD_MANAGE']), async (req, res) =>
       }
     }
 
-    // 4. Update Job Card with dispatch quantity and vendor id
-    const [challanRows] = await connection.execute(
-      `SELECT job_card_id FROM outward_challans WHERE id = ?`,
-      [id]
+    // 4. Recalculate and update Job Card with cumulative dispatch quantity
+    const [sumRows] = await connection.execute(
+      `SELECT COALESCE(SUM(dispatch_qty), 0) as total_dispatch 
+       FROM outward_challans 
+       WHERE job_card_id = ?`,
+      [jobCardId]
     );
-    if (challanRows.length > 0) {
-      const jobCardId = challanRows[0].job_card_id;
-      await connection.execute(
-        `UPDATE job_cards SET dispatch_qty = ?, vendor_id = ? WHERE id = ?`,
-        [dispatchQty, vendorId, jobCardId]
-      );
-    }
+    const totalDispatch = parseFloat(sumRows[0].total_dispatch || 0);
+
+    await connection.execute(
+      `UPDATE job_cards SET dispatch_qty = ?, vendor_id = ? WHERE id = ?`,
+      [totalDispatch, vendorId, jobCardId]
+    );
 
     await connection.commit();
     res.json({ message: 'Outward Challan updated' });
@@ -243,16 +480,24 @@ router.put('/:id', authenticate, authorize(['PROD_MANAGE']), async (req, res) =>
 });
 
 router.get('/job-card/:jobCardId/items', authenticate, async (req, res) => {
-
   try {
     const { jobCardId } = req.params;
-    const [items] = await pool.execute(
-      `SELECT oci.*, oc.challan_number 
-       FROM outward_challan_items oci
-       JOIN outward_challans oc ON oci.challan_id = oc.id
-       WHERE oc.job_card_id = ?`,
-      [jobCardId]
-    );
+    const { challanId } = req.query;
+    
+    let query = `
+      SELECT oci.*, oc.challan_number 
+      FROM outward_challan_items oci
+      JOIN outward_challans oc ON oci.challan_id = oc.id
+      WHERE oc.job_card_id = ?
+    `;
+    let params = [jobCardId];
+    
+    if (challanId) {
+      query += ` AND oc.id = ?`;
+      params.push(challanId);
+    }
+    
+    const [items] = await pool.execute(query, params);
     res.json(items);
   } catch (error) {
     console.error('Error fetching outward challan items:', error);
@@ -264,10 +509,19 @@ router.get('/job-card/:jobCardId/items', authenticate, async (req, res) => {
 router.get('/inward/job-card/:jobCardId', authenticate, async (req, res) => {
   try {
     const { jobCardId } = req.params;
-    const [inwards] = await pool.execute(
-      `SELECT * FROM inward_challans WHERE job_card_id = ? ORDER BY created_at DESC LIMIT 1`,
-      [jobCardId]
-    );
+    const { challanId } = req.query;
+    
+    let query = `SELECT * FROM inward_challans WHERE job_card_id = ?`;
+    let params = [jobCardId];
+    
+    if (challanId) {
+      query += ` AND outward_challan_id = ?`;
+      params.push(challanId);
+    }
+    
+    query += ` ORDER BY created_at DESC LIMIT 1`;
+    
+    const [inwards] = await pool.execute(query, params);
 
     if (inwards.length === 0) {
       return res.status(404).json({ message: 'Inward challan not found for this job card' });

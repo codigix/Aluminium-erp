@@ -650,6 +650,7 @@ CREATE TABLE `job_cards` (
     `planned_qty` DECIMAL(12, 3) NULL,
     `produced_qty` DECIMAL(12, 3) NULL DEFAULT 0.000,
     `accepted_qty` DECIMAL(12, 3) NULL DEFAULT 0.000,
+    `transferred_qty` DECIMAL(12, 3) NULL DEFAULT 0.000,
     `rejected_qty` DECIMAL(12, 3) NULL DEFAULT 0.000,
     `actual_start_date` DATE NULL,
     `start_time` TIMESTAMP(0) NULL,

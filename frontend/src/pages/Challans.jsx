@@ -102,7 +102,7 @@ const Challans = () => {
         if (challan) {
           setSelectedChallan(challan);
           setIsViewMode(true);
-          fetchInwardItems(challan.job_card_id);
+          fetchInwardItems(challan.job_card_id, challan.outward_challan_id);
           setIsInwardModalOpen(true);
         }
       } else {
@@ -129,7 +129,7 @@ const Challans = () => {
           inwardItems: [],
           vendorInvoice: null
         });
-        fetchInwardItems(challan.job_card_id);
+        fetchInwardItems(challan.job_card_id, challan.id);
         setIsInwardModalOpen(true);
       }
     } else {
@@ -152,17 +152,17 @@ const Challans = () => {
     vendorInvoice: null
   });
 
-  const fetchInwardItems = async (jobCardId) => {
+  const fetchInwardItems = async (jobCardId, challanId = null) => {
     try {
       const token = localStorage.getItem('authToken');
       
       // 1. Fetch original outward items
-      const response = await fetch(`${API_BASE}/outward-challans/job-card/${jobCardId}/items`, {
+      const response = await fetch(`${API_BASE}/outward-challans/job-card/${jobCardId}/items${challanId ? `?challanId=${challanId}` : ''}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
       // 2. Fetch existing inward challan from new endpoint
-      const inwardRes = await fetch(`${API_BASE}/outward-challans/inward/job-card/${jobCardId}`, {
+      const inwardRes = await fetch(`${API_BASE}/outward-challans/inward/job-card/${jobCardId}${challanId ? `?challanId=${challanId}` : ''}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 

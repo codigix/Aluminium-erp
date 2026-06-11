@@ -2145,7 +2145,9 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
           step: (idx + 1).toString().padStart(2, '0'),
           operationName: op.operation_name || null,
           baseTime: op.base_hour ?? op.baseTime ?? 0,
-          sourceItem: op.itemCode || op.source_item || null
+          sourceItem: op.itemCode || op.source_item || null,
+          cycle_time_min: op.cycle_time_min || op.cycleTimeMin || 0,
+          setup_time_min: op.setup_time_min || op.setupTimeMin || 0
         }))
       };
 
@@ -2758,10 +2760,10 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                               {op.process_type || op.operation_type || 'In-House'}
                             </span>
                           </td>
-                          <td className="py-4 px-2 text-right text-slate-400 ">{Math.round(parseFloat(op.net_time || op.base_time || 0) * 60)} min</td>
+                          <td className="py-4 px-2 text-right text-slate-400 ">{parseFloat(op.cycle_time_min) || Math.round(parseFloat(op.net_time || op.base_time || 0) * 60)} min</td>
                           <td className="py-4 px-2 text-right text-indigo-600 font-semibold ">
                             {Math.round(
-                              (parseFloat(op.net_time || op.base_time || 0) * 60 * (selectedPlanConfig.target_qty || 1)) +
+                              ((parseFloat(op.cycle_time_min) || (parseFloat(op.net_time || op.base_time || 0) * 60)) * (selectedPlanConfig.target_qty || 1)) +
                               parseFloat(op.setup_time_min || 0)
                             )} min
                           </td>

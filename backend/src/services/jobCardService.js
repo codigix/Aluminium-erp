@@ -24,7 +24,7 @@ const listJobCards = async () => {
             (SELECT id FROM outward_challans WHERE job_card_id = jc.id ORDER BY created_at DESC LIMIT 1) as outward_challan_id,
             (SELECT challan_number FROM outward_challans WHERE job_card_id = jc.id ORDER BY created_at DESC LIMIT 1) as outward_challan_no,
             (SELECT SUM(dispatch_qty) FROM outward_challans WHERE job_card_id = jc.id) as dispatch_qty,
-            COALESCE((SELECT CASE WHEN status = 'PENDING' THEN 0 ELSE GREATEST(COALESCE(planned_qty, 0), COALESCE(accepted_qty, 0)) END FROM job_cards WHERE work_order_id = jc.work_order_id AND sequence_no > jc.sequence_no ORDER BY sequence_no ASC, id ASC LIMIT 1), 0) as transferred_qty,
+            COALESCE(jc.transferred_qty, (SELECT CASE WHEN status = 'PENDING' THEN 0 ELSE GREATEST(COALESCE(planned_qty, 0), COALESCE(accepted_qty, 0)) END FROM job_cards WHERE work_order_id = jc.work_order_id AND sequence_no > jc.sequence_no ORDER BY sequence_no ASC, id ASC LIMIT 1), 0) as transferred_qty,
             COALESCE(jc.execution_mode, 'In-house') as execution_type,
             (SELECT start_time FROM job_card_time_logs WHERE job_card_id = jc.id ORDER BY log_date DESC, start_time DESC, id DESC LIMIT 1) as latest_log_start_time,
             (SELECT end_time FROM job_card_time_logs WHERE job_card_id = jc.id ORDER BY log_date DESC, start_time DESC, id DESC LIMIT 1) as latest_log_end_time,
@@ -195,7 +195,7 @@ const createJobCard = async (data) => {
 
 const updateJobCardProgress = async (id, data) => {
   const { producedQty, acceptedQty, rejectedQty, scrapQty, status, startTime, endTime, workstationId, assignedTo, targetWarehouseId, executionType,
-    carrierName, trackingNumber, shippingNotes, dispatchDate, dispatchMode, dispatchQty, plannedQty } = data;
+    carrierName, trackingNumber, shippingNotes, dispatchDate, dispatchMode, dispatchQty, plannedQty, sourceJobCardId } = data;
 
   const connection = await pool.getConnection();
   try {
@@ -318,20 +318,67 @@ const updateJobCardProgress = async (id, data) => {
           'SELECT id, status FROM job_cards WHERE work_order_id = ? AND sequence_no > ? ORDER BY sequence_no ASC, id ASC LIMIT 1',
           [work_order_id, sequence_no]
         );
+
+        let targetJcId = null;
+        let isParentJc = false;
+        let targetJcStatus = null;
+
         if (nextJcRows.length > 0) {
-          const nextJcId = nextJcRows[0].id;
-          const nextJcStatus = nextJcRows[0].status;
-          if (nextJcStatus === 'PENDING') {
-            await connection.execute(
-              "UPDATE job_cards SET planned_qty = ?, status = 'IN_PROGRESS', actual_start_date = COALESCE(actual_start_date, CURRENT_DATE()) WHERE id = ?",
-              [carryQty, nextJcId]
+          targetJcId = nextJcRows[0].id;
+          targetJcStatus = nextJcRows[0].status;
+        } else {
+          // If no next operation in the same work order, check if this is a child work order
+          const [woRows] = await connection.query(
+            'SELECT parent_wo_id FROM work_orders WHERE id = ?',
+            [work_order_id]
+          );
+          const parentWoId = woRows[0]?.parent_wo_id;
+          if (parentWoId) {
+            // Find the first job card in the parent work order
+            const [parentJcRows] = await connection.query(
+              'SELECT id, status FROM job_cards WHERE work_order_id = ? ORDER BY sequence_no ASC, id ASC LIMIT 1',
+              [parentWoId]
             );
-          } else {
-            await connection.execute(
-              'UPDATE job_cards SET planned_qty = ? WHERE id = ?',
-              [carryQty, nextJcId]
-            );
+            if (parentJcRows.length > 0) {
+              targetJcId = parentJcRows[0].id;
+              targetJcStatus = parentJcRows[0].status;
+              isParentJc = true;
+            }
           }
+        }
+
+        if (targetJcId) {
+          if (isParentJc) {
+            if (targetJcStatus === 'PENDING') {
+              await connection.execute(
+                "UPDATE job_cards SET planned_qty = ?, status = 'IN_PROGRESS', actual_start_date = COALESCE(actual_start_date, CURRENT_DATE()) WHERE id = ?",
+                [carryQty, targetJcId]
+              );
+            } else {
+              await connection.execute(
+                'UPDATE job_cards SET planned_qty = COALESCE(planned_qty, 0) + ? WHERE id = ?',
+                [carryQty, targetJcId]
+              );
+            }
+          } else {
+            if (targetJcStatus === 'PENDING') {
+              await connection.execute(
+                "UPDATE job_cards SET planned_qty = ?, status = 'IN_PROGRESS', actual_start_date = COALESCE(actual_start_date, CURRENT_DATE()) WHERE id = ?",
+                [carryQty, targetJcId]
+              );
+            } else {
+              await connection.execute(
+                'UPDATE job_cards SET planned_qty = ? WHERE id = ?',
+                [carryQty, targetJcId]
+              );
+            }
+          }
+
+          // Update transferred_qty on the current job card
+          await connection.execute(
+            'UPDATE job_cards SET transferred_qty = ? WHERE id = ?',
+            [carryQty, id]
+          );
         }
       }
 
@@ -469,6 +516,13 @@ const updateJobCardProgress = async (id, data) => {
       await connection.execute(query, params);
     }
 
+    if (sourceJobCardId && plannedQty !== undefined) {
+      await connection.execute(
+        'UPDATE job_cards SET transferred_qty = COALESCE(transferred_qty, 0) + ? WHERE id = ?',
+        [plannedQty, sourceJobCardId]
+      );
+    }
+
     // Get operation details to see if it is a shipment operation
     const [opRow] = await connection.query(
       'SELECT COALESCE(o.operation_name, jc.operation_name) as operation_name, o.operation_type, jc.execution_mode, jc.work_order_id FROM job_cards jc LEFT JOIN operations o ON jc.operation_id = o.id WHERE jc.id = ?',
@@ -602,7 +656,17 @@ const getJobCardById = async (id) => {
   const isUuid = typeof id === 'string' && id.length === 36;
   const whereClause = isUuid ? 'jc.public_id = ?' : 'jc.id = ?';
   const [rows] = await pool.query(
-    `SELECT jc.*, wo.wo_number, wo.item_name, wo.item_code, wo.sales_order_item_id,
+    `SELECT jc.id, jc.job_card_no, jc.work_order_id, jc.operation_id, jc.workstation_id, jc.assigned_to, jc.planned_qty,
+            jc.produced_qty, jc.accepted_qty, jc.rejected_qty, jc.rework_qty, jc.scrap_qty,
+            jc.actual_start_date, jc.start_time, jc.end_time, jc.status, jc.remarks, jc.created_at, jc.updated_at,
+            jc.std_time, jc.time_uom, jc.hourly_rate, jc.operation_name, jc.execution_mode, jc.vendor_id, jc.vendor_rate,
+            jc.sequence_no, jc.target_warehouse_id, jc.jc_number, jc.cycle_time, jc.setup_time, jc.public_id,
+            jc.carrier_name, jc.tracking_number, jc.shipping_notes, jc.dispatch_date, jc.dispatch_mode,
+            jc.parent_bom_item, jc.child_bom_item, jc.dependency_type, jc.bom_level,
+            (SELECT id FROM outward_challans WHERE job_card_id = jc.id ORDER BY created_at DESC LIMIT 1) as outward_challan_id,
+            (SELECT challan_number FROM outward_challans WHERE job_card_id = jc.id ORDER BY created_at DESC LIMIT 1) as outward_challan_no,
+            (SELECT SUM(dispatch_qty) FROM outward_challans WHERE job_card_id = jc.id) as dispatch_qty,
+            wo.wo_number, wo.item_name, wo.item_code, wo.sales_order_item_id,
             COALESCE(soi.drawing_no, oi.drawing_no, wo.bom_no, wo.item_code) as drawing_no,
             COALESCE(o.operation_name, jc.operation_name) as operation_name, 
             COALESCE(NULLIF(jc.std_time, 0), o.std_time, 0) as std_time, 
@@ -612,7 +676,7 @@ const getJobCardById = async (id) => {
             COALESCE(NULLIF(jc.hourly_rate, 0), o.hourly_rate, 0) as hourly_rate, 
             w.workstation_name, u.username as operator_name, v.vendor_name,
             so.project_name, c.company_name as client_name, so.shipping_address,
-            COALESCE((SELECT CASE WHEN status = 'PENDING' THEN 0 ELSE GREATEST(COALESCE(planned_qty, 0), COALESCE(accepted_qty, 0)) END FROM job_cards WHERE work_order_id = jc.work_order_id AND sequence_no > jc.sequence_no ORDER BY sequence_no ASC, id ASC LIMIT 1), 0) as transferred_qty
+            COALESCE(jc.transferred_qty, (SELECT CASE WHEN status = 'PENDING' THEN 0 ELSE GREATEST(COALESCE(planned_qty, 0), COALESCE(accepted_qty, 0)) END FROM job_cards WHERE work_order_id = jc.work_order_id AND sequence_no > jc.sequence_no ORDER BY sequence_no ASC, id ASC LIMIT 1), 0) as transferred_qty
      FROM job_cards jc
      JOIN work_orders wo ON jc.work_order_id = wo.id
      LEFT JOIN sales_orders so ON wo.sales_order_id = so.id
@@ -1519,5 +1583,6 @@ module.exports = {
   downloadJobCardQcPdf,
   getJobCardDetailAnalysis,
   getActiveAllocations,
-  syncUnaccountedDowntime
+  syncUnaccountedDowntime,
+  syncReworkQuantities
 };

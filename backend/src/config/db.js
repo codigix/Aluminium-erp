@@ -1672,6 +1672,12 @@ const ensureProductionPlanTables = async () => {
     if (!existingPpoCols.has('net_time')) {
       await connection.query('ALTER TABLE production_plan_operations ADD COLUMN net_time DECIMAL(12, 2) DEFAULT 0 AFTER base_time');
     }
+    if (!existingPpoCols.has('cycle_time_min')) {
+      await connection.query('ALTER TABLE production_plan_operations ADD COLUMN cycle_time_min DECIMAL(12, 3) DEFAULT 0 AFTER net_time');
+    }
+    if (!existingPpoCols.has('setup_time_min')) {
+      await connection.query('ALTER TABLE production_plan_operations ADD COLUMN setup_time_min DECIMAL(12, 3) DEFAULT 0 AFTER cycle_time_min');
+    }
 
     console.log('Production Plan tables synchronized');
   } catch (error) {
@@ -1761,6 +1767,7 @@ const ensureWorkOrderTables = async () => {
         planned_qty DECIMAL(12, 3),
         produced_qty DECIMAL(12, 3) DEFAULT 0,
         accepted_qty DECIMAL(12, 3) DEFAULT 0,
+        transferred_qty DECIMAL(12, 3) DEFAULT 0,
         rejected_qty DECIMAL(12, 3) DEFAULT 0,
         actual_start_date DATE NULL,
         start_time TIMESTAMP NULL,
@@ -1781,6 +1788,7 @@ const ensureWorkOrderTables = async () => {
     const existingJcCols = new Set(jcCols.map(c => c.Field));
     if (!existingJcCols.has('job_card_no')) await connection.query('ALTER TABLE job_cards ADD COLUMN job_card_no VARCHAR(50) UNIQUE AFTER id');
     if (!existingJcCols.has('accepted_qty')) await connection.query('ALTER TABLE job_cards ADD COLUMN accepted_qty DECIMAL(12, 3) DEFAULT 0 AFTER produced_qty');
+    if (!existingJcCols.has('transferred_qty')) await connection.query('ALTER TABLE job_cards ADD COLUMN transferred_qty DECIMAL(12, 3) DEFAULT 0 AFTER accepted_qty');
     if (!existingJcCols.has('actual_start_date')) await connection.query('ALTER TABLE job_cards ADD COLUMN actual_start_date DATE NULL AFTER rejected_qty');
 
     // Update status enum if necessary

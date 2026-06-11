@@ -302,18 +302,20 @@ const createProductionPlan = async (planData, createdBy) => {
       for (const op of operations) {
         await connection.execute(
           `INSERT INTO production_plan_operations 
-           (plan_id, step_no, operation_name, process_type, workstation, base_time, net_time, source_item, item_type)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (plan_id, step_no, operation_name, process_type, workstation, base_time, net_time, source_item, item_type, cycle_time_min, setup_time_min)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             planId,
             op.step || op.stepNo || 0,
-            op.operationName || null,
+            op.operationName || op.operation_name || null,
             op.processType || op.operation_type || 'In-House',
             op.workstation || null,
             op.baseTime || op.base_time || op.baseTimeHrs || op.base_hour || 0,
             op.netTime || op.net_time || 0,
             op.sourceItem || op.source_item || null,
-            op.item_type || op.itemType || 'FG'
+            op.item_type || op.itemType || 'FG',
+            op.cycle_time_min || op.cycleTimeMin || 0,
+            op.setup_time_min || op.setupTimeMin || 0
           ]
         );
       }
@@ -471,8 +473,8 @@ const updateProductionPlan = async (planId, planData, updatedBy) => {
       for (const op of operations) {
         await connection.execute(
           `INSERT INTO production_plan_operations 
-           (plan_id, step_no, operation_name, process_type, workstation, base_time, net_time, source_item, item_type)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (plan_id, step_no, operation_name, process_type, workstation, base_time, net_time, source_item, item_type, cycle_time_min, setup_time_min)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             planId,
             op.step || op.stepNo || 0,
@@ -482,7 +484,9 @@ const updateProductionPlan = async (planId, planData, updatedBy) => {
             op.baseTime || op.base_time || op.baseTimeHrs || op.base_hour || 0,
             op.netTime || op.net_time || 0,
             op.sourceItem || op.itemCode || op.source_item || null,
-            op.item_type || op.itemType || 'FG'
+            op.item_type || op.itemType || 'FG',
+            op.cycle_time_min || op.cycleTimeMin || 0,
+            op.setup_time_min || op.setupTimeMin || 0
           ]
         );
       }
