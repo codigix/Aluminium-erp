@@ -173,6 +173,12 @@ const JobCard = () => {
     const opType = (jc.operation_type || '').toLowerCase();
     return opName === 'shipment' || opName === 'dispatch' || opType === 'dispatch';
   };
+  const isPlanFulfilled = (jc) => {
+    if (!jc) return true;
+    if (!jc.plan_id) return true;
+    const status = (jc.mr_status || '').toUpperCase().trim();
+    return status === 'FULFILLED' || status === 'COMPLETED';
+  };
   const calculateDayOffset = (jc, targetDateStr) => {
     if (!jc) return 1;
     const todayStr = new Date().toISOString().slice(0, 10);
@@ -1203,10 +1209,12 @@ const JobCard = () => {
       if (response.ok) {
         const data = await response.json();
         setLogs(data);
+        return data;
       }
     } catch (error) {
       console.error('Error fetching logs:', error);
     }
+    return null;
   };
 
   const [viewingTimeLog, setViewingTimeLog] = useState(null);
@@ -1343,6 +1351,10 @@ const JobCard = () => {
 
   useEffect(() => {
     if (showProductionEntry && selectedJC) {
+      // Bypassed for first entry to respect the assigned start/end times
+      if (!logs.timeLogs || logs.timeLogs.length === 0) {
+        return;
+      }
       const calculateAutoEndTime = () => {
         const qty = parseFloat(timeLogForm.producedQty || 0);
         if (!timeLogForm.startTime) return;
@@ -1385,7 +1397,7 @@ const JobCard = () => {
 
       calculateAutoEndTime();
     }
-  }, [timeLogForm.producedQty, timeLogForm.startTime, timeLogForm.startAMPM, showProductionEntry, selectedJC?.std_time, selectedJC?.time_uom]);
+  }, [timeLogForm.producedQty, timeLogForm.startTime, timeLogForm.startAMPM, showProductionEntry, selectedJC?.std_time, selectedJC?.time_uom, logs.timeLogs]);
 
 
   useEffect(() => {
@@ -1846,6 +1858,16 @@ const JobCard = () => {
   };
 
   const handleUpdateStatus = async (jc, status) => {
+    if (status === 'IN_PROGRESS' && !isPlanFulfilled(jc)) {
+      Swal.fire({
+        title: 'Production Plan Not Fulfilled',
+        text: `Cannot start Job Card ${jc.job_card_no || ''}: The associated production plan does not have a fulfilled Material Requirement.`,
+        icon: 'error',
+        confirmButtonColor: '#4f46e5'
+      });
+      return;
+    }
+
     if (status === 'IN_PROGRESS' && jc.workstation_id) {
       const ws = workstations.find(w => w.id === jc.workstation_id);
       const capacity = 1;
@@ -1973,11 +1995,143 @@ const JobCard = () => {
     return true;
   };
 
+  const prefillProductionEntryForm = (jc, timeLogs) => {
+    const today = new Date().toISOString().split('T')[0];
+    let rawStart = jc.start_time;
+    if (timeLogs.length > 0 && timeLogs[0].end_time) {
+      rawStart = timeLogs[0].end_time;
+    }
+    const startDate = rawStart ? (String(rawStart).includes('T') ? String(rawStart).split('T')[0] : String(rawStart).split(' ')[0]) : today;
+    const diffDays = calculateDayOffset(jc, startDate);
+
+    // Sum produced qty from all logs to calculate remaining qty correctly
+    const totalProduced = timeLogs.reduce((sum, log) => sum + parseFloat(log.produced_qty || 0), 0);
+    const logRemainingQty = Math.max(0, (parseFloat(jc.planned_qty || 0) + parseFloat(jc.rework_qty || 0)) - totalProduced);
+
+    const startStr = formatLocalTime(rawStart);
+    const [startTimeVal, startAMPMVal] = startStr.includes(' ') ? startStr.split(' ') : ['08:00', 'AM'];
+
+    let endTimeVal = '04:00';
+    let endAMPMVal = 'PM';
+
+    if (timeLogs.length === 0) {
+      const endStr = formatLocalTime(jc.end_time);
+      const [eTime, eAMPM] = endStr.includes(' ') ? endStr.split(' ') : ['04:00', 'PM'];
+      endTimeVal = eTime;
+      endAMPMVal = eAMPM;
+    } else {
+      const startDateObj = new Date(String(rawStart).replace(' ', 'T'));
+      if (!isNaN(startDateObj.getTime())) {
+        let stdTime = parseFloat(jc.std_time || 0);
+        const uom = (jc.time_uom || 'min').toLowerCase();
+        if (uom === 'hr' || uom === 'hour' || uom === 'hours') stdTime *= 60;
+        else if (uom === 'sec' || uom === 'second' || uom === 'seconds') stdTime /= 60;
+
+        const totalMinsToAdd = Math.round(stdTime * logRemainingQty);
+        const endDateObj = new Date(startDateObj.getTime() + totalMinsToAdd * 60000);
+
+        let endHours = endDateObj.getHours();
+        const endMinutes = endDateObj.getMinutes().toString().padStart(2, '0');
+        const endAMPM = endHours >= 12 ? 'PM' : 'AM';
+        endHours = endHours % 12 || 12;
+
+        endTimeVal = `${endHours.toString().padStart(2, '0')}:${endMinutes}`;
+        endAMPMVal = endAMPM;
+      }
+    }
+
+    setTimeLogForm(prev => ({
+      ...prev,
+      logDate: startDate,
+      day: diffDays,
+      operatorId: jc.assigned_to || '',
+      workstationId: jc.workstation_id || '',
+      producedQty: logRemainingQty,
+      startTime: startTimeVal,
+      startAMPM: startAMPMVal,
+      endTime: endTimeVal,
+      endAMPM: endAMPMVal
+    }));
+    setQualityLogForm(prev => ({ ...prev, checkDate: startDate, day: diffDays, shift: 'SHIFT_A', inspectedQty: 0, acceptedQty: 0, rejectedQty: 0, scrapQty: 0 }));
+    setDowntimeLogForm(prev => ({ ...prev, downtimeDate: startDate, day: diffDays, shift: 'SHIFT_A', startTime: '', startAMPM: '', endTime: '', endAMPM: '', downtimeType: '', remarks: '' }));
+  };
+
+  const handleEndTimeChange = (newTime, newAMPM) => {
+    setTimeLogForm(prev => {
+      const endTime = newTime !== undefined ? newTime : prev.endTime;
+      const endAMPM = newAMPM !== undefined ? newAMPM : prev.endAMPM;
+
+      if (!logs.timeLogs || logs.timeLogs.length === 0) {
+        return {
+          ...prev,
+          endTime,
+          endAMPM
+        };
+      }
+
+      const totalMins = calculateTotalMins(prev.startTime, prev.startAMPM, endTime, endAMPM);
+
+      let stdTime = parseFloat(selectedJC?.std_time || 0);
+      const uom = (selectedJC?.time_uom || 'min').toLowerCase();
+      if (uom === 'hr' || uom === 'hour' || uom === 'hours') stdTime *= 60;
+      else if (uom === 'sec' || uom === 'second' || uom === 'seconds') stdTime /= 60;
+
+      let nextQty = prev.producedQty;
+      if (stdTime > 0) {
+        const calculatedQty = Math.round(totalMins / stdTime);
+        nextQty = calculatedQty > 0 ? calculatedQty : '';
+      }
+
+      return {
+        ...prev,
+        endTime,
+        endAMPM,
+        producedQty: nextQty
+      };
+    });
+  };
+
+  const handleEditEndTimeChange = (newTime, newAMPM) => {
+    setEditTimeLogForm(prev => {
+      const endTime = newTime !== undefined ? newTime : prev.endTime;
+      const endAMPM = newAMPM !== undefined ? newAMPM : prev.endAMPM;
+
+      const totalMins = calculateTotalMins(prev.startTime, prev.startAMPM, endTime, endAMPM);
+
+      let stdTime = parseFloat(selectedJC?.std_time || 0);
+      const uom = (selectedJC?.time_uom || 'min').toLowerCase();
+      if (uom === 'hr' || uom === 'hour' || uom === 'hours') stdTime *= 60;
+      else if (uom === 'sec' || uom === 'second' || uom === 'seconds') stdTime /= 60;
+
+      let nextQty = prev.producedQty;
+      if (stdTime > 0) {
+        const calculatedQty = Math.round(totalMins / stdTime);
+        nextQty = calculatedQty > 0 ? calculatedQty : '';
+      }
+
+      return {
+        ...prev,
+        endTime,
+        endAMPM,
+        producedQty: nextQty
+      };
+    });
+  };
+
   const handleLogProgress = async (jc) => {
+    if (!isPlanFulfilled(jc)) {
+      Swal.fire({
+        title: 'Production Plan Not Fulfilled',
+        text: `Cannot enter production details: The associated production plan does not have a fulfilled Material Requirement.`,
+        icon: 'error',
+        confirmButtonColor: '#4f46e5'
+      });
+      return;
+    }
     if (!validateJobCardCompleteness(jc)) return;
     setSelectedJC(jc);
     setActiveTab('time');
-    await fetchLogs(jc.id);
+    const fetchedLogs = await fetchLogs(jc.id);
     setProgressData({
       producedQty: 0,
       acceptedQty: 0,
@@ -2034,30 +2188,8 @@ const JobCard = () => {
       enableAutoTransfer: false
     });
 
-    // Pre-fill forms
-    const today = new Date().toISOString().split('T')[0];
-    const startDate = jc.start_time ? (jc.start_time.includes('T') ? jc.start_time.split('T')[0] : jc.start_time.split(' ')[0]) : today;
-    const diffDays = calculateDayOffset(jc, startDate);
-
-    const logRemainingQty = Math.max(0, (parseFloat(jc.planned_qty || 0) + parseFloat(jc.rework_qty || 0)) - parseFloat(jc.accepted_qty || 0));
-
-    const startInfo = jc.start_time ? to12h(jc.start_time.split('T')[1]?.slice(0, 5) || jc.start_time.split(' ')[1]?.slice(0, 5)) : { time: '08:00', ampm: 'AM' };
-    const endInfo = jc.end_time ? to12h(jc.end_time.split('T')[1]?.slice(0, 5) || jc.end_time.split(' ')[1]?.slice(0, 5)) : { time: '04:00', ampm: 'PM' };
-
-    setTimeLogForm(prev => ({
-      ...prev,
-      logDate: startDate,
-      day: diffDays,
-      operatorId: jc.assigned_to || '',
-      workstationId: jc.workstation_id || '',
-      producedQty: logRemainingQty,
-      startTime: startInfo.time,
-      startAMPM: startInfo.ampm,
-      endTime: endInfo.time,
-      endAMPM: endInfo.ampm
-    }));
-    setQualityLogForm(prev => ({ ...prev, checkDate: startDate, day: diffDays, shift: 'SHIFT_A', inspectedQty: 0, acceptedQty: 0, rejectedQty: 0, scrapQty: 0 }));
-    setDowntimeLogForm(prev => ({ ...prev, downtimeDate: startDate, day: diffDays, shift: 'SHIFT_A', startTime: '', startAMPM: '', endTime: '', endAMPM: '', downtimeType: '', remarks: '' }));
+    // Prefill the forms dynamically using the helper function
+    prefillProductionEntryForm(jc, fetchedLogs ? (fetchedLogs.timeLogs || []) : []);
 
     // Set machine status based on current job state
     const mState = getMachineState(jc, jobCards);
@@ -3298,8 +3430,8 @@ const JobCard = () => {
                                   placeholder="04:00"
                                   placeholderAMPM="PM"
                                   disabled={false}
-                                  onTimeChange={(newTime) => setTimeLogForm(prev => ({ ...prev, endTime: newTime, endAMPM: prev.endAMPM || 'PM' }))}
-                                  onAMPMChange={(newAMPM) => setTimeLogForm(prev => ({ ...prev, endAMPM: newAMPM }))}
+                                  onTimeChange={(newTime) => handleEndTimeChange(newTime, undefined)}
+                                  onAMPMChange={(newAMPM) => handleEndTimeChange(undefined, newAMPM)}
                                 />
                               </div>
                             </div>
@@ -4659,7 +4791,7 @@ const JobCard = () => {
       });
 
       if (response.ok) {
-        await fetchLogs(selectedJC.id);
+        const updatedLogs = await fetchLogs(selectedJC.id);
         fetchJobCards();
 
         // Calculate and prefill remaining downtime
@@ -4695,17 +4827,8 @@ const JobCard = () => {
           warningToast(`Recorded Production Log. Remaining ${remainingMins} mins prefilled as Operational Downtime below!`);
         }
 
-        // Reset form but keep Day and Date
-        const startInfo = selectedJC.start_time ? to12h(selectedJC.start_time.split('T')[1]?.slice(0, 5) || selectedJC.start_time.split(' ')[1]?.slice(0, 5)) : { time: '08:00', ampm: 'AM' };
-        const endInfo = selectedJC.end_time ? to12h(selectedJC.end_time.split('T')[1]?.slice(0, 5) || selectedJC.end_time.split(' ')[1]?.slice(0, 5)) : { time: '04:00', ampm: 'PM' };
-        setTimeLogForm(prev => ({
-          ...prev,
-          producedQty: '',
-          startTime: startInfo.time,
-          startAMPM: startInfo.ampm,
-          endTime: endInfo.time,
-          endAMPM: endInfo.ampm
-        }));
+        // Prefill for the next production entry using helper
+        prefillProductionEntryForm(selectedJC, updatedLogs ? (updatedLogs.timeLogs || []) : []);
       } else {
         const error = await response.json();
         errorToast(error.error || error.message || 'Failed to record time log');
@@ -4764,8 +4887,9 @@ const JobCard = () => {
 
         if (response.ok) {
           successToast('Time log deleted');
-          await fetchLogs(selectedJC.id);
+          const updatedLogs = await fetchLogs(selectedJC.id);
           fetchJobCards();
+          prefillProductionEntryForm(selectedJC, updatedLogs ? (updatedLogs.timeLogs || []) : []);
         } else {
           errorToast('Failed to delete time log');
         }
@@ -4819,7 +4943,7 @@ const JobCard = () => {
       if (response.ok) {
         successToast('Time log updated');
         setEditingTimeLogId(null);
-        await fetchLogs(selectedJC.id);
+        const updatedLogs = await fetchLogs(selectedJC.id);
         fetchJobCards();
 
         // Calculate and prefill remaining downtime
@@ -4854,6 +4978,9 @@ const JobCard = () => {
 
           warningToast(`Updated Production Log. Remaining ${remainingMins} mins prefilled as Operational Downtime below!`);
         }
+
+        // Prefill for the next production entry using helper
+        prefillProductionEntryForm(selectedJC, updatedLogs ? (updatedLogs.timeLogs || []) : []);
       } else {
         errorToast('Failed to update time log');
       }
@@ -5236,6 +5363,20 @@ const JobCard = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    if (formData.status === 'IN_PROGRESS') {
+      const isEdit = !!formData.id;
+      const targetJC = isEdit ? jobCards.find(j => String(j.id) === String(formData.id)) : null;
+      if (targetJC && !isPlanFulfilled(targetJC)) {
+        Swal.fire({
+          title: 'Production Plan Not Fulfilled',
+          text: `Cannot start Job Card: The associated production plan does not have a fulfilled Material Requirement.`,
+          icon: 'error',
+          confirmButtonColor: '#4f46e5'
+        });
+        return;
+      }
+    }
+
     // 1. Validate resource schedule conflicts before submitting
     const overlapAlert = calculateModalOverlapAlert();
     if (overlapAlert) {
@@ -5421,8 +5562,8 @@ const JobCard = () => {
                     value={editTimeLogForm.endTime}
                     ampmValue={editTimeLogForm.endAMPM}
                     disabled={false}
-                    onTimeChange={(newTime) => setEditTimeLogForm({ ...editTimeLogForm, endTime: newTime })}
-                    onAMPMChange={(newAMPM) => setEditTimeLogForm({ ...editTimeLogForm, endAMPM: newAMPM })}
+                    onTimeChange={(newTime) => handleEditEndTimeChange(newTime, undefined)}
+                    onAMPMChange={(newAMPM) => handleEditEndTimeChange(undefined, newAMPM)}
                   />
                 </div>
               </div>
@@ -5575,37 +5716,6 @@ const JobCard = () => {
           {val?.trim() === 'APPROVED' ? 'Verified' : 'Pending Verification'}
         </div>
       )
-    },
-    {
-      label: 'Notes / Remarks',
-      key: 'notes',
-      render: (val, row) => {
-        const isEditing = editingQualityLogId === row.id;
-        if (isEditing) {
-          return (
-            <input
-              type="text"
-              placeholder="Internal notes..."
-              value={editQualityLogForm.notes || ''}
-              className="w-full px-1 py-1 border rounded text-xs focus:ring-1 focus:ring-indigo-500"
-              onChange={e => setEditQualityLogForm({ ...editQualityLogForm, notes: e.target.value })}
-            />
-          );
-        }
-        return (
-          <div className={`flex flex-col gap-1 max-w-[200px]`}>
-            <div className={`inline-flex items-center  rounded text-xs   border w-fit  ${(row.rejected_qty > 0 || row.scrap_qty > 0)
-              ? 'bg-rose-50 text-rose-600 border-rose-100'
-              : 'bg-emerald-50 text-emerald-600 border-emerald-100'
-              }`}>
-              {(row.rejected_qty > 0 || row.scrap_qty > 0) ? 'QC REJECTED' : 'QC CHECKED'}
-            </div>
-            <p className="text-xs  text-slate-400 italic leading-tight truncate" title={val || row.rejection_reason}>
-              {val || row.rejection_reason || 'No observations recorded'}
-            </p>
-          </div>
-        );
-      }
     },
     {
       label: 'Accepted',
@@ -6359,6 +6469,15 @@ const JobCard = () => {
                 {/* Quick Record - Manage Production Modal */}
                 <button
                   onClick={() => {
+                    if (!isPlanFulfilled(jc)) {
+                      Swal.fire({
+                        title: 'Production Plan Not Fulfilled',
+                        text: `Cannot enter production details: The associated production plan does not have a fulfilled Material Requirement.`,
+                        icon: 'error',
+                        confirmButtonColor: '#4f46e5'
+                      });
+                      return;
+                    }
                     if (!validateJobCardCompleteness(jc)) return;
                     setSelectedJC(jc);
                     setShowProductionEntry(true);

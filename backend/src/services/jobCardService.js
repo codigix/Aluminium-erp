@@ -2,6 +2,31 @@ const crypto = require('crypto');
 const pool = require('../config/db');
 const generateJobCardQcPdf = require('../utils/generateJobCardQcPdf');
 
+const checkProductionPlanFulfilled = async (connectionOrPool, { jobCardId, workOrderId }) => {
+  let planId = null;
+  if (workOrderId) {
+    const [woRows] = await connectionOrPool.query('SELECT plan_id FROM work_orders WHERE id = ?', [workOrderId]);
+    planId = woRows[0]?.plan_id;
+  } else if (jobCardId) {
+    const [jcRows] = await connectionOrPool.query(
+      'SELECT wo.plan_id FROM job_cards jc JOIN work_orders wo ON jc.work_order_id = wo.id WHERE jc.id = ?',
+      [jobCardId]
+    );
+    planId = jcRows[0]?.plan_id;
+  }
+  
+  if (!planId) return true; // No production plan associated, allow it.
+
+  const [mrRows] = await connectionOrPool.query(
+    'SELECT status FROM material_requests WHERE plan_id = ? ORDER BY id DESC LIMIT 1',
+    [planId]
+  );
+  if (mrRows.length === 0) return false; // Has plan but no MR exists at all.
+
+  const normalized = (mrRows[0].status || '').toUpperCase().trim();
+  return normalized === 'FULFILLED' || normalized === 'COMPLETED';
+};
+
 const listJobCards = async () => {
   const [rows] = await pool.query(
     `SELECT jc.id, jc.job_card_no, jc.work_order_id, jc.operation_id, jc.workstation_id, jc.assigned_to, jc.planned_qty, jc.status, jc.execution_mode, jc.public_id,
@@ -10,6 +35,7 @@ const listJobCards = async () => {
             ROW_NUMBER() OVER (PARTITION BY COALESCE(wo.plan_id, wo.parent_wo_id, wo.id) ORDER BY CASE WHEN wo.source_type = 'SA' THEN 0 ELSE 1 END ASC, wo.id ASC, jc.sequence_no ASC, jc.id ASC) as operation_sequence,
             wo.wo_number, wo.item_name, wo.priority, wo.quantity as wo_quantity, wo.status as wo_status, wo.end_date as wo_end_date, wo.source_type,
             wo.plan_id, wo.sales_order_id, wo.parent_wo_id, wo.item_code, wo.sales_order_item_id,
+            (SELECT status FROM material_requests WHERE plan_id = wo.plan_id ORDER BY id DESC LIMIT 1) as mr_status,
             COALESCE(soi_parent.description, oi_parent.description, soi_source.description, soi_fallback.description, oi_fallback.description, wo_parent.item_name, wo.source_fg) as source_fg,
             COALESCE(soi.drawing_no, oi.drawing_no, soi_parent.drawing_no, oi_parent.drawing_no, wo.bom_no, wo_parent.bom_no, wo_parent.item_code, wo.item_code) as drawing_no,
             so.project_name, c.company_name as client_name,
@@ -162,6 +188,13 @@ const createJobCard = async (data) => {
     throw new Error(conflictMessage);
   }
 
+  if (status === 'IN_PROGRESS' || producedQty > 0 || acceptedQty > 0) {
+    const isPlanFulfilled = await checkProductionPlanFulfilled(pool, { workOrderId });
+    if (!isPlanFulfilled) {
+      throw new Error("Cannot start Job Card: The associated production plan does not have a fulfilled Material Requirement.");
+    }
+  }
+
   // Check if item is rejected
   const [itemRows] = await pool.query(
     `SELECT soi.status 
@@ -229,6 +262,13 @@ const updateJobCardProgress = async (id, data) => {
     let finalStatus = status;
     if (!finalStatus && currentJcStatus === 'PENDING' && plannedQty !== undefined) {
       finalStatus = 'IN_PROGRESS';
+    }
+
+    if (finalStatus === 'IN_PROGRESS' || producedQty !== undefined || acceptedQty !== undefined) {
+      const isPlanFulfilled = await checkProductionPlanFulfilled(connection, { jobCardId: id });
+      if (!isPlanFulfilled) {
+        throw new Error("Cannot start or enter production details: The associated production plan does not have a fulfilled Material Requirement.");
+      }
     }
 
     const updates = [];
@@ -666,6 +706,7 @@ const getJobCardById = async (id) => {
             (SELECT id FROM outward_challans WHERE job_card_id = jc.id ORDER BY created_at DESC LIMIT 1) as outward_challan_id,
             (SELECT challan_number FROM outward_challans WHERE job_card_id = jc.id ORDER BY created_at DESC LIMIT 1) as outward_challan_no,
             (SELECT SUM(dispatch_qty) FROM outward_challans WHERE job_card_id = jc.id) as dispatch_qty,
+            (SELECT status FROM material_requests WHERE plan_id = wo.plan_id ORDER BY id DESC LIMIT 1) as mr_status,
             wo.wo_number, wo.item_name, wo.item_code, wo.sales_order_item_id,
             COALESCE(soi.drawing_no, oi.drawing_no, wo.bom_no, wo.item_code) as drawing_no,
             COALESCE(o.operation_name, jc.operation_name) as operation_name, 
@@ -711,6 +752,12 @@ const addTimeLog = async (data) => {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
+
+    // Check if the production plan's material requirement is fulfilled
+    const isPlanFulfilled = await checkProductionPlanFulfilled(connection, { jobCardId });
+    if (!isPlanFulfilled) {
+      throw new Error("Cannot add production entry: The associated production plan does not have a fulfilled Material Requirement.");
+    }
 
     // 1. Prevent duplicate entry (job_card_id, log_date, shift)
     const [existingLogs] = await connection.query(
@@ -1179,6 +1226,13 @@ const updateJobCard = async (id, data) => {
   const conflictMessage = await checkOverlap(id, workstationId, assignedTo, startDateTime, endDateTime, executionMode);
   if (conflictMessage) {
     throw new Error(conflictMessage);
+  }
+
+  if (status === 'IN_PROGRESS' || producedQty > 0 || acceptedQty > 0) {
+    const isPlanFulfilled = await checkProductionPlanFulfilled(pool, { jobCardId: id });
+    if (!isPlanFulfilled) {
+      throw new Error("Cannot start or enter production details: The associated production plan does not have a fulfilled Material Requirement.");
+    }
   }
 
   await pool.execute(

@@ -765,23 +765,31 @@ export const DataTable = ({
                 </th>
               )}
               {renderExpanded && !hideExpander && <th className="p-4 border-b border-slate-200 w-10"></th>}
-              {columns.map((col, idx) => (
-                <th
-                  key={idx}
-                  className={`p-2 border-b border-slate-200 bg-slate-50 text-slate-600 text-xs    ${col.sortable ? 'cursor-pointer hover:bg-slate-100 transition-colors' : ''} ${col.className || ''}`}
-                  onClick={() => col.sortable && handleSort(col.key)}
-                  style={{ width: col.width }}
-                >
-                  <div className="flex items-center gap-2">
-                    {col.label}
-                    {col.sortable && (
-                      <span className="text-slate-300 group-hover:text-slate-500">
-                        {sortConfig?.key === col.key ? (sortConfig.direction === 'ascending' ? <ChevronUp className="w-3 h-3 text-rose-500" /> : <ChevronDown className="w-3 h-3 text-rose-500" />) : <ChevronsUpDown className="w-3 h-3" />}
-                      </span>
-                    )}
-                  </div>
-                </th>
-              ))}
+              {columns.map((col, idx) => {
+                const justifyClass = col.className?.includes('text-right') || col.className?.includes('text-end')
+                  ? 'justify-end'
+                  : col.className?.includes('text-center')
+                    ? 'justify-center'
+                    : 'justify-start';
+
+                return (
+                  <th
+                    key={idx}
+                    className={`p-2 border-b border-slate-200 bg-slate-50 text-slate-600 text-xs    ${col.sortable ? 'cursor-pointer hover:bg-slate-100 transition-colors' : ''} ${col.className || ''}`}
+                    onClick={() => col.sortable && handleSort(col.key)}
+                    style={{ width: col.width, minWidth: col.width }}
+                  >
+                    <div className={`flex items-center gap-2 ${justifyClass}`}>
+                      {col.label}
+                      {col.sortable && (
+                        <span className="text-slate-300 group-hover:text-slate-500">
+                          {sortConfig?.key === col.key ? (sortConfig.direction === 'ascending' ? <ChevronUp className="w-3 h-3 text-rose-500" /> : <ChevronDown className="w-3 h-3 text-rose-500" />) : <ChevronsUpDown className="w-3 h-3" />}
+                        </span>
+                      )}
+                    </div>
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody className="divide-y bg-white divide-slate-100">
@@ -848,7 +856,7 @@ export const DataTable = ({
                         </td>
                       )}
                       {columns.map((col, colIdx) => (
-                        <td key={colIdx} className={`p-2 whitespace-nowrap text-xs text-slate-600 group-hover:text-slate-900 transition-colors align-middle ${col.className || ''}`}>
+                        <td key={colIdx} style={{ width: col.width, minWidth: col.width }} className={`p-2 whitespace-nowrap text-xs text-slate-600 group-hover:text-slate-900 transition-colors align-middle ${col.className || ''}`}>
                           {col.render ? col.render(row[col.key], row, (currentPage - 1) * pageSize + rowIdx) : (row[col.key] || '—')}
                         </td>
                       ))}
