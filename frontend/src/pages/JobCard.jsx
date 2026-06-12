@@ -6561,9 +6561,7 @@ const JobCard = () => {
 
         const received = precedingJC
           ? parseFloat(precedingJC.transferred_qty || 0)
-          : (row.child_parts && row.child_parts.length > 0)
-            ? parseFloat(row.assembly_available_qty || 0)
-            : (parseFloat(row.planned_qty || 0) + rework);
+          : (target + rework);
         const produced = parseFloat(row.produced_qty || 0);
         const accepted = parseFloat(row.accepted_qty || 0);
         const rejected = parseFloat(row.rejected_qty || 0);

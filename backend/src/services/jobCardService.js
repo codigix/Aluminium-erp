@@ -417,12 +417,37 @@ const createJobCard = async (data) => {
 };
 
 const updateJobCardProgress = async (id, data) => {
+  const maxRetries = 3;
+  let attempt = 0;
+  while (attempt < maxRetries) {
+    attempt++;
+    const connection = await pool.getConnection();
+    try {
+      await connection.beginTransaction();
+      await updateJobCardProgressInternal(connection, id, data);
+      await connection.commit();
+      return;
+    } catch (error) {
+      await connection.rollback();
+      if (error.code === 'ER_LOCK_DEADLOCK' && attempt < maxRetries) {
+        console.warn(`[updateJobCardProgress] Deadlock detected on attempt ${attempt}. Retrying in 100ms...`);
+        connection.release();
+        await new Promise(resolve => setTimeout(resolve, 100));
+        continue;
+      }
+      console.error('Error updating job card progress:', error);
+      throw error;
+    } finally {
+      connection.release();
+    }
+  }
+};
+
+const updateJobCardProgressInternal = async (connection, id, data) => {
   const { producedQty, acceptedQty, rejectedQty, scrapQty, status, startTime, endTime, workstationId, assignedTo, targetWarehouseId, executionType,
     carrierName, trackingNumber, shippingNotes, dispatchDate, dispatchMode, dispatchQty, plannedQty, sourceJobCardId } = data;
 
-  const connection = await pool.getConnection();
   try {
-    await connection.beginTransaction();
 
     // Fetch the current state of this job card to allow carrying forward configured operator/workstation and status transition
     const [currentJcRow] = await connection.query(
@@ -1058,13 +1083,8 @@ const updateJobCardProgress = async (id, data) => {
       }
     }
 
-    await connection.commit();
   } catch (error) {
-    await connection.rollback();
-    console.error('Error updating job card progress:', error);
     throw error;
-  } finally {
-    connection.release();
   }
 };
 

@@ -512,10 +512,7 @@ const createJobCardsForWorkOrder = async (workOrderId, connection, initialStatus
     const hourlyRate = op.hourly_rate || masterOps[0]?.hourly_rate || 0;
     const executionType = op.operation_type || 'In-House';
 
-    // For Assembly/FG work orders, even the first operation starts with planned_qty = 0
-    // until child components are completed and transferred.
-    const isAssembly = (wo.source_type === 'FG');
-    const initialPlannedQty = (i === 0 && !isAssembly) ? wo.quantity : 0;
+    const initialPlannedQty = i === 0 ? wo.quantity : 0;
     await connection.execute(
       `INSERT INTO job_cards 
        (job_card_no, work_order_id, operation_id, workstation_id, planned_qty, status, std_time, time_uom, hourly_rate, operation_name, execution_type, execution_mode, sequence_no, target_warehouse_id, cycle_time, setup_time)
