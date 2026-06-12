@@ -236,6 +236,7 @@ router.post('/inward', authenticate, authorize(['PROD_MANAGE']), async (req, res
     let targetJcId = null;
     let isParentJc = false;
     let targetJcStatus = null;
+    let parentWoId = null;
 
     if (nextJcRows.length > 0) {
       targetJcId = nextJcRows[0].id;
@@ -246,7 +247,7 @@ router.post('/inward', authenticate, authorize(['PROD_MANAGE']), async (req, res
         'SELECT parent_wo_id FROM work_orders WHERE id = ?',
         [currentJc.work_order_id]
       );
-      const parentWoId = woRows[0]?.parent_wo_id;
+      parentWoId = woRows[0]?.parent_wo_id;
       if (parentWoId) {
         // Find the first job card in the parent work order
         const [parentJcRows] = await connection.query(
@@ -263,16 +264,61 @@ router.post('/inward', authenticate, authorize(['PROD_MANAGE']), async (req, res
 
     // 7. Quantity Transfer to Next Operation
     if (targetJcId) {
+      // Update transferred_qty on the current job card first so the parent MIN logic sees it
+      await connection.execute(
+        'UPDATE job_cards SET transferred_qty = COALESCE(transferred_qty, 0) + ? WHERE id = ?',
+        [incomingReceived, jobCardId]
+      );
+
       if (isParentJc) {
-        if (targetJcStatus === 'PENDING') {
-          await connection.execute(
-            "UPDATE job_cards SET planned_qty = ?, status = 'IN_PROGRESS', actual_start_date = COALESCE(actual_start_date, CURRENT_DATE()) WHERE id = ?",
-            [incomingReceived, targetJcId]
+        // Calculate parent available qty based on child parts
+        const [parentWo] = await connection.query('SELECT plan_id, item_code, quantity FROM work_orders WHERE id = ?', [parentWoId]);
+        const parentItemCode = parentWo[0]?.item_code;
+        const parentPlanId = parentWo[0]?.plan_id;
+        const parentPlannedQty = parseFloat(parentWo[0]?.quantity || 0);
+
+        const [childWos] = await connection.query(
+          'SELECT id, quantity FROM work_orders WHERE plan_id = ? AND (parent_wo_id = ? OR source_fg = ?) AND id != ?',
+          [parentPlanId, parentWoId, parentItemCode, parentWoId]
+        );
+
+        let minTransferred = parentPlannedQty;
+        const childParts = [];
+        for (const childWo of childWos) {
+          const [finalJc] = await connection.query(
+            'SELECT COALESCE(transferred_qty, 0) as transferred_qty FROM job_cards WHERE work_order_id = ? ORDER BY sequence_no DESC, id DESC LIMIT 1',
+            [childWo.id]
           );
+          const transferred = parseFloat(finalJc[0]?.transferred_qty || 0);
+          childParts.push({
+            required_qty: parseFloat(childWo.quantity),
+            transferred_qty: transferred
+          });
+          if (transferred < minTransferred) {
+            minTransferred = transferred;
+          }
+        }
+
+        const assemblyAvailableQty = minTransferred;
+        const hasPendingComponents = childParts.some(cp => cp.transferred_qty < cp.required_qty);
+        const isWaiting = (assemblyAvailableQty === 0 || hasPendingComponents);
+
+        if (targetJcStatus === 'PENDING') {
+          if (!isWaiting) {
+            await connection.execute(
+              "UPDATE job_cards SET planned_qty = ?, status = 'IN_PROGRESS', actual_start_date = COALESCE(actual_start_date, CURRENT_DATE()) WHERE id = ?",
+              [assemblyAvailableQty, targetJcId]
+            );
+          } else {
+            await connection.execute(
+              "UPDATE job_cards SET planned_qty = ? WHERE id = ?",
+              [assemblyAvailableQty, targetJcId]
+            );
+          }
         } else {
           await connection.execute(
-            'UPDATE job_cards SET planned_qty = COALESCE(planned_qty, 0) + ? WHERE id = ?',
-            [incomingReceived, targetJcId]
+            'UPDATE job_cards SET planned_qty = ? WHERE id = ?',
+            [assemblyAvailableQty, targetJcId]
           );
         }
       } else {
@@ -283,17 +329,11 @@ router.post('/inward', authenticate, authorize(['PROD_MANAGE']), async (req, res
           );
         } else {
           await connection.execute(
-            'UPDATE job_cards SET planned_qty = COALESCE(planned_qty, 0) + ? WHERE id = ?',
+            'UPDATE job_cards SET planned_qty = ? WHERE id = ?',
             [incomingReceived, targetJcId]
           );
         }
       }
-
-      // Update transferred_qty on the current job card
-      await connection.execute(
-        'UPDATE job_cards SET transferred_qty = COALESCE(transferred_qty, 0) + ? WHERE id = ?',
-        [incomingReceived, jobCardId]
-      );
     }
 
     // 8. Update Work Order status if needed

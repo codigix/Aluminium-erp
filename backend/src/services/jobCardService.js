@@ -77,6 +77,53 @@ const listJobCards = async () => {
      LEFT JOIN vendors v ON jc.vendor_id = v.id
      ORDER BY batch_latest_id DESC, CASE WHEN wo.source_type = 'SA' THEN 0 ELSE 1 END ASC, wo.id ASC, jc.sequence_no ASC, jc.id ASC`
   );
+
+  for (const row of rows) {
+    const [childWos] = await pool.query(
+      'SELECT id, item_code, item_name, quantity FROM work_orders WHERE plan_id = ? AND (parent_wo_id = ? OR source_fg = ?) AND id != ?',
+      [row.plan_id, row.work_order_id, row.item_code, row.work_order_id]
+    );
+
+    if (childWos.length > 0) {
+      row.child_parts = [];
+      let minTransferred = parseFloat(row.wo_quantity || row.planned_qty || 0);
+
+      for (const childWo of childWos) {
+        const [finalJc] = await pool.query(
+          'SELECT COALESCE(transferred_qty, 0) as transferred_qty FROM job_cards WHERE work_order_id = ? ORDER BY sequence_no DESC, id DESC LIMIT 1',
+          [childWo.id]
+        );
+        const transferred = parseFloat(finalJc[0]?.transferred_qty || 0);
+
+        row.child_parts.push({
+          item_code: childWo.item_code,
+          item_name: childWo.item_name,
+          required_qty: parseFloat(childWo.quantity),
+          transferred_qty: transferred
+        });
+
+        if (transferred < minTransferred) {
+          minTransferred = transferred;
+        }
+      }
+
+      row.assembly_available_qty = minTransferred;
+      const [minSeqRow] = await pool.query(
+        'SELECT MIN(sequence_no) as min_seq FROM job_cards WHERE work_order_id = ?',
+        [row.work_order_id]
+      );
+      const isFirstOp = row.sequence_no === minSeqRow[0]?.min_seq;
+
+      row.is_first_op = isFirstOp;
+      row.is_assembly_waiting = isFirstOp && (minTransferred === 0 || row.child_parts.some(cp => cp.transferred_qty < cp.required_qty));
+    } else {
+      row.child_parts = null;
+      row.assembly_available_qty = parseFloat(row.planned_qty || 0);
+      row.is_assembly_waiting = false;
+      row.is_first_op = false;
+    }
+  }
+
   return rows;
 };
 
@@ -98,9 +145,120 @@ const getActiveAllocations = async () => {
 };
 
 
+const checkSequenceOverlap = async (id, workOrderId, startDateTime, endDateTime) => {
+  if (!workOrderId || !startDateTime || !endDateTime) return null;
+
+  const startStr = startDateTime.replace('T', ' ').slice(0, 19);
+  const endStr = endDateTime.replace('T', ' ').slice(0, 19);
+
+  const currentStart = new Date(startStr.replace(' ', 'T'));
+  const currentEnd = new Date(endStr.replace(' ', 'T'));
+
+  if (isNaN(currentStart.getTime()) || isNaN(currentEnd.getTime())) {
+    return null;
+  }
+
+  // Get current item's details (item_code and drawing_no)
+  let currentItemCode = '';
+  let currentDrawingNo = '';
+  let currentSequenceNo = 0;
+
+  if (id) {
+    const [jcRow] = await pool.query(
+      `SELECT jc.sequence_no, wo.item_code, 
+              COALESCE(soi.drawing_no, oi.drawing_no, wo.bom_no, wo.item_code) as drawing_no
+       FROM job_cards jc
+       JOIN work_orders wo ON jc.work_order_id = wo.id
+       LEFT JOIN sales_order_items soi ON wo.sales_order_item_id = soi.id
+       LEFT JOIN order_items oi ON wo.sales_order_item_id = oi.id AND wo.sales_order_id = oi.order_id
+       WHERE jc.id = ?`,
+      [id]
+    );
+    if (jcRow.length > 0) {
+      currentSequenceNo = jcRow[0].sequence_no;
+      currentItemCode = jcRow[0].item_code;
+      currentDrawingNo = jcRow[0].drawing_no;
+    }
+  } else {
+    const [woRow] = await pool.query(
+      `SELECT wo.item_code, 
+              COALESCE(soi.drawing_no, oi.drawing_no, wo.bom_no, wo.item_code) as drawing_no
+       FROM work_orders wo
+       LEFT JOIN sales_order_items soi ON wo.sales_order_item_id = soi.id
+       LEFT JOIN order_items oi ON wo.sales_order_item_id = oi.id AND wo.sales_order_id = oi.order_id
+       WHERE wo.id = ?`,
+      [workOrderId]
+    );
+    if (woRow.length > 0) {
+      currentItemCode = woRow[0].item_code;
+      currentDrawingNo = woRow[0].drawing_no;
+    }
+
+    const [seqRow] = await pool.query(
+      `SELECT COALESCE(MAX(jc.sequence_no), 0) as maxSeq 
+       FROM job_cards jc
+       JOIN work_orders wo ON jc.work_order_id = wo.id
+       LEFT JOIN sales_order_items soi ON wo.sales_order_item_id = soi.id
+       LEFT JOIN order_items oi ON wo.sales_order_item_id = oi.id AND wo.sales_order_id = oi.order_id
+       WHERE jc.work_order_id = ? AND jc.status != 'CANCELLED'
+         AND (wo.item_code = ? OR COALESCE(soi.drawing_no, oi.drawing_no, wo.bom_no, wo.item_code) = ?)`,
+      [workOrderId, currentItemCode, currentDrawingNo]
+    );
+    currentSequenceNo = (seqRow[0]?.maxSeq || 0) + 1;
+  }
+
+  // Fetch other active job cards of the same work order
+  const query = `
+    SELECT jc.id, jc.job_card_no, jc.sequence_no, jc.start_time, jc.end_time,
+           wo.item_code, 
+           COALESCE(soi.drawing_no, oi.drawing_no, wo.bom_no, wo.item_code) as drawing_no
+    FROM job_cards jc
+    JOIN work_orders wo ON jc.work_order_id = wo.id
+    LEFT JOIN sales_order_items soi ON wo.sales_order_item_id = soi.id
+    LEFT JOIN order_items oi ON wo.sales_order_item_id = oi.id AND wo.sales_order_id = oi.order_id
+    WHERE jc.work_order_id = ? 
+      AND jc.status != 'CANCELLED' 
+      AND jc.start_time IS NOT NULL 
+      AND jc.end_time IS NOT NULL
+      ${id ? 'AND jc.id != ?' : ''}
+  `;
+  const params = id ? [workOrderId, id] : [workOrderId];
+  const [rows] = await pool.query(query, params);
+
+  for (const row of rows) {
+    const isSameRouting = row.item_code === currentItemCode;
+    if (!isSameRouting) continue;
+
+    const otherStart = new Date(row.start_time);
+    const otherEnd = new Date(row.end_time);
+    if (isNaN(otherStart.getTime()) || isNaN(otherEnd.getTime())) continue;
+
+    // 1. Enforce no time overlap at all
+    const isOverlap = currentStart < otherEnd && currentEnd > otherStart;
+    if (isOverlap) {
+      return `Time overlap detected. Another Job Card for this Work Order is already scheduled during the selected time period.`;
+    }
+
+    // 2. Enforce dependent operation sequence ordering
+    if (row.sequence_no < currentSequenceNo) {
+      // current is AFTER row, so currentStart must be >= otherEnd
+      if (currentStart < otherEnd) {
+        return `Time overlap detected. Another Job Card for this Work Order is already scheduled during the selected time period.`;
+      }
+    } else if (row.sequence_no > currentSequenceNo) {
+      // current is BEFORE row, so currentEnd must be <= otherStart
+      if (currentEnd > otherStart) {
+        return `Time overlap detected. Another Job Card for this Work Order is already scheduled during the selected time period.`;
+      }
+    }
+  }
+
+  return null;
+};
+
+
 const checkOverlap = async (id, workstationId, assignedTo, startDateTime, endDateTime, executionMode) => {
-  if (executionMode === 'Outsource') return null;
-  if (!startDateTime || !endDateTime) return null;
+  return null;
 
   const startStr = startDateTime.replace('T', ' ').slice(0, 19);
   const endStr = endDateTime.replace('T', ' ').slice(0, 19);
@@ -188,6 +346,12 @@ const createJobCard = async (data) => {
     throw new Error(conflictMessage);
   }
 
+  // Check sequence timing overlap
+  const seqConflictMessage = await checkSequenceOverlap(null, workOrderId, startDateTime, endDateTime);
+  if (seqConflictMessage) {
+    throw new Error(seqConflictMessage);
+  }
+
   if (status === 'IN_PROGRESS' || producedQty > 0 || acceptedQty > 0) {
     const isPlanFulfilled = await checkProductionPlanFulfilled(pool, { workOrderId });
     if (!isPlanFulfilled) {
@@ -208,18 +372,44 @@ const createJobCard = async (data) => {
     throw new Error('Cannot create Job Card for a rejected drawing/item.');
   }
 
+  // Get sequence_no for manual creation
+  const [woRow] = await pool.query(
+    `SELECT wo.item_code, 
+            COALESCE(soi.drawing_no, oi.drawing_no, wo.bom_no, wo.item_code) as drawing_no
+     FROM work_orders wo
+     LEFT JOIN sales_order_items soi ON wo.sales_order_item_id = soi.id
+     LEFT JOIN order_items oi ON wo.sales_order_item_id = oi.id AND wo.sales_order_id = oi.order_id
+     WHERE wo.id = ?`,
+    [workOrderId]
+  );
+  const currentItemCode = woRow[0]?.item_code || '';
+  const currentDrawingNo = woRow[0]?.drawing_no || '';
+
+  const [seqRow] = await pool.query(
+    `SELECT COALESCE(MAX(jc.sequence_no), 0) as maxSeq 
+     FROM job_cards jc
+     JOIN work_orders wo ON jc.work_order_id = wo.id
+     LEFT JOIN sales_order_items soi ON wo.sales_order_item_id = soi.id
+     LEFT JOIN order_items oi ON wo.sales_order_item_id = oi.id AND wo.sales_order_id = oi.order_id
+     WHERE jc.work_order_id = ? AND jc.status != 'CANCELLED'
+       AND (wo.item_code = ? OR COALESCE(soi.drawing_no, oi.drawing_no, wo.bom_no, wo.item_code) = ?)`,
+    [workOrderId, currentItemCode, currentDrawingNo]
+  );
+  const sequenceNo = (seqRow[0]?.maxSeq || 0) + 1;
+
   const publicId = crypto.randomUUID();
   const [result] = await pool.execute(
     `INSERT INTO job_cards 
      (job_card_no, work_order_id, operation_id, workstation_id, assigned_to, planned_qty, remarks, 
-      status, execution_mode, vendor_id, vendor_rate, produced_qty, accepted_qty, start_time, end_time, public_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      status, execution_mode, vendor_id, vendor_rate, produced_qty, accepted_qty, start_time, end_time, public_id, sequence_no)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       jobCardNo || null, workOrderId, operationId || null, workstationId || null, assignedTo || null, plannedQty, remarks,
       status || 'PENDING', executionMode || 'In-house', vendorId || null, vendorRate || 0, producedQty || 0, acceptedQty || 0,
       startDateTime ? startDateTime.replace('T', ' ') : null,
       endDateTime ? endDateTime.replace('T', ' ') : null,
-      publicId
+      publicId,
+      sequenceNo
     ]
   );
 
@@ -262,6 +452,68 @@ const updateJobCardProgress = async (id, data) => {
     let finalStatus = status;
     if (!finalStatus && currentJcStatus === 'PENDING' && plannedQty !== undefined) {
       finalStatus = 'IN_PROGRESS';
+    }
+
+    // Fetch Job Card and Work Order details to check assembly component availability
+    const [jcDetails] = await connection.query(
+      `SELECT jc.sequence_no, jc.planned_qty, jc.status,
+              wo.id as work_order_id, wo.plan_id, wo.item_code, wo.quantity as wo_quantity
+       FROM job_cards jc
+       JOIN work_orders wo ON jc.work_order_id = wo.id
+       WHERE jc.id = ?`,
+      [id]
+    );
+    if (jcDetails.length > 0) {
+      const jcDetail = jcDetails[0];
+      const [childWos] = await connection.query(
+        'SELECT id, item_code, item_name, quantity FROM work_orders WHERE plan_id = ? AND (parent_wo_id = ? OR source_fg = ?) AND id != ?',
+        [jcDetail.plan_id, jcDetail.work_order_id, jcDetail.item_code, jcDetail.work_order_id]
+      );
+
+      if (childWos.length > 0) {
+        let minTransferred = parseFloat(jcDetail.wo_quantity || jcDetail.planned_qty || 0);
+        const childParts = [];
+
+        for (const childWo of childWos) {
+          const [finalJc] = await connection.query(
+            'SELECT COALESCE(transferred_qty, 0) as transferred_qty FROM job_cards WHERE work_order_id = ? ORDER BY sequence_no DESC, id DESC LIMIT 1',
+            [childWo.id]
+          );
+          const transferred = parseFloat(finalJc[0]?.transferred_qty || 0);
+          childParts.push({
+            required_qty: parseFloat(childWo.quantity),
+            transferred_qty: transferred
+          });
+
+          if (transferred < minTransferred) {
+            minTransferred = transferred;
+          }
+        }
+
+        const assemblyAvailableQty = minTransferred;
+        const [minSeqRow] = await connection.query(
+          'SELECT MIN(sequence_no) as min_seq FROM job_cards WHERE work_order_id = ?',
+          [jcDetail.work_order_id]
+        );
+        const isFirstOp = jcDetail.sequence_no === minSeqRow[0]?.min_seq;
+
+        const isAssemblyWaiting = isFirstOp && (assemblyAvailableQty === 0 || childParts.some(cp => cp.transferred_qty < cp.required_qty));
+        if (isAssemblyWaiting) {
+          if (plannedQty !== undefined) {
+            // Bypass the validation blocks during quantity transfer by keeping it PENDING and unassigned
+            finalStatus = currentJcStatus;
+            finalAssignedTo = currentAssignedTo;
+            finalWorkstationId = currentWorkstationId;
+          } else {
+            const isAssigning = (finalWorkstationId !== undefined && finalWorkstationId !== null && finalWorkstationId !== currentWorkstationId) || 
+                                (finalAssignedTo !== undefined && finalAssignedTo !== null && finalAssignedTo !== currentAssignedTo);
+            const isStartingOrCompleting = (finalStatus === 'IN_PROGRESS' || finalStatus === 'COMPLETED');
+            if (isAssigning || isStartingOrCompleting) {
+              throw new Error('Cannot start, assign workstation/operator, or update status: Assembly is waiting for components.');
+            }
+          }
+        }
+      }
     }
 
     if (finalStatus === 'IN_PROGRESS' || producedQty !== undefined || acceptedQty !== undefined) {
@@ -351,7 +603,11 @@ const updateJobCardProgress = async (id, data) => {
       );
       if (currentJc.length > 0) {
         const { work_order_id, sequence_no, accepted_qty, produced_qty } = currentJc[0];
-        const carryQty = parseFloat(accepted_qty || produced_qty || 0);
+        const carryQty = parseFloat(
+          acceptedQty !== undefined ? acceptedQty :
+          (producedQty !== undefined ? producedQty :
+          (accepted_qty || produced_qty || 0))
+        );
 
         // Find the next job card in sequence for this work order
         const [nextJcRows] = await connection.query(
@@ -362,6 +618,7 @@ const updateJobCardProgress = async (id, data) => {
         let targetJcId = null;
         let isParentJc = false;
         let targetJcStatus = null;
+        let parentWoId = null;
 
         if (nextJcRows.length > 0) {
           targetJcId = nextJcRows[0].id;
@@ -369,10 +626,24 @@ const updateJobCardProgress = async (id, data) => {
         } else {
           // If no next operation in the same work order, check if this is a child work order
           const [woRows] = await connection.query(
-            'SELECT parent_wo_id FROM work_orders WHERE id = ?',
+            'SELECT parent_wo_id, plan_id, source_fg FROM work_orders WHERE id = ?',
             [work_order_id]
           );
-          const parentWoId = woRows[0]?.parent_wo_id;
+          parentWoId = woRows[0]?.parent_wo_id;
+          const planId = woRows[0]?.plan_id;
+          const sourceFg = woRows[0]?.source_fg;
+          
+          if (!parentWoId && planId && sourceFg) {
+            // Fallback: Find parent work order under the same plan whose source_type is FG
+            const [parentWoRows] = await connection.query(
+              'SELECT id FROM work_orders WHERE plan_id = ? AND source_type = "FG" LIMIT 1',
+              [planId]
+            );
+            if (parentWoRows.length > 0) {
+              parentWoId = parentWoRows[0].id;
+            }
+          }
+
           if (parentWoId) {
             // Find the first job card in the parent work order
             const [parentJcRows] = await connection.query(
@@ -389,30 +660,63 @@ const updateJobCardProgress = async (id, data) => {
 
         if (targetJcId) {
           if (isParentJc) {
-            if (targetJcStatus === 'PENDING') {
-              await connection.execute(
-                "UPDATE job_cards SET planned_qty = ?, status = 'IN_PROGRESS', actual_start_date = COALESCE(actual_start_date, CURRENT_DATE()) WHERE id = ?",
-                [carryQty, targetJcId]
-              );
-            } else {
-              await connection.execute(
-                'UPDATE job_cards SET planned_qty = COALESCE(planned_qty, 0) + ? WHERE id = ?',
-                [carryQty, targetJcId]
-              );
+            // Calculate parent available qty based on child parts
+            const [parentWo] = await connection.query('SELECT plan_id, item_code, quantity FROM work_orders WHERE id = ?', [parentWoId]);
+            const parentItemCode = parentWo[0]?.item_code;
+            const parentPlanId = parentWo[0]?.plan_id;
+            const parentPlannedQty = parseFloat(parentWo[0]?.quantity || 0);
+
+            const [childWos] = await connection.query(
+              'SELECT id, quantity FROM work_orders WHERE plan_id = ? AND (parent_wo_id = ? OR source_fg = ?) AND id != ?',
+              [parentPlanId, parentWoId, parentItemCode, parentWoId]
+            );
+
+            let minTransferred = parentPlannedQty;
+            const childParts = [];
+            for (const childWo of childWos) {
+              let transferred = 0;
+              if (childWo.id === work_order_id) {
+                transferred = carryQty;
+              } else {
+                const [finalJc] = await connection.query(
+                  'SELECT COALESCE(transferred_qty, 0) as transferred_qty FROM job_cards WHERE work_order_id = ? ORDER BY sequence_no DESC, id DESC LIMIT 1',
+                  [childWo.id]
+                );
+                transferred = parseFloat(finalJc[0]?.transferred_qty || 0);
+              }
+              childParts.push({
+                required_qty: parseFloat(childWo.quantity),
+                transferred_qty: transferred
+              });
+              if (transferred < minTransferred) {
+                minTransferred = transferred;
+              }
             }
-          } else {
+
+            const assemblyAvailableQty = minTransferred;
+            const hasPendingComponents = childParts.some(cp => cp.transferred_qty < cp.required_qty);
+            const isWaiting = (assemblyAvailableQty === 0 || hasPendingComponents);
+
             if (targetJcStatus === 'PENDING') {
-              await connection.execute(
-                "UPDATE job_cards SET planned_qty = ?, status = 'IN_PROGRESS', actual_start_date = COALESCE(actual_start_date, CURRENT_DATE()) WHERE id = ?",
-                [carryQty, targetJcId]
-              );
+              if (!isWaiting) {
+                await connection.execute(
+                  "UPDATE job_cards SET planned_qty = ?, status = 'IN_PROGRESS', actual_start_date = COALESCE(actual_start_date, CURRENT_DATE()) WHERE id = ?",
+                  [assemblyAvailableQty, targetJcId]
+                );
+              } else {
+                await connection.execute(
+                  "UPDATE job_cards SET planned_qty = ? WHERE id = ?",
+                  [assemblyAvailableQty, targetJcId]
+                );
+              }
             } else {
               await connection.execute(
                 'UPDATE job_cards SET planned_qty = ? WHERE id = ?',
-                [carryQty, targetJcId]
+                [assemblyAvailableQty, targetJcId]
               );
             }
           }
+
 
           // Update transferred_qty on the current job card
           await connection.execute(
@@ -481,7 +785,8 @@ const updateJobCardProgress = async (id, data) => {
              WHERE tl.workstation_id = ? 
                AND tl.start_time <= ? 
                AND tl.end_time > ?
-               AND tl.job_card_id != ?`,
+               AND tl.job_card_id != ?
+               AND jc.status != 'CANCELLED' AND jc.status != 'COMPLETED'`,
             [checkWorkstationId, startTime, startTime, id]
           );
           if (overlappingWS.length >= capacity) {
@@ -507,7 +812,8 @@ const updateJobCardProgress = async (id, data) => {
              WHERE tl.operator_id = ? 
                AND tl.start_time <= ? 
                AND tl.end_time > ?
-               AND tl.job_card_id != ?`,
+               AND tl.job_card_id != ?
+               AND jc.status != 'CANCELLED' AND jc.status != 'COMPLETED'`,
             [checkAssignedTo, startTime, startTime, id]
           );
           if (overlapOp.length > 0) {
@@ -776,7 +1082,7 @@ const getJobCardById = async (id) => {
             (SELECT challan_number FROM outward_challans WHERE job_card_id = jc.id ORDER BY created_at DESC LIMIT 1) as outward_challan_no,
             (SELECT SUM(dispatch_qty) FROM outward_challans WHERE job_card_id = jc.id) as dispatch_qty,
             (SELECT status FROM material_requests WHERE plan_id = wo.plan_id ORDER BY id DESC LIMIT 1) as mr_status,
-            wo.wo_number, wo.item_name, wo.item_code, wo.sales_order_item_id,
+            wo.plan_id, wo.quantity as wo_quantity, wo.wo_number, wo.item_name, wo.item_code, wo.sales_order_item_id, wo.parent_wo_id, wo.source_type,
             COALESCE(soi.drawing_no, oi.drawing_no, wo.bom_no, wo.item_code) as drawing_no,
             COALESCE(o.operation_name, jc.operation_name) as operation_name, 
             COALESCE(NULLIF(jc.std_time, 0), o.std_time, 0) as std_time, 
@@ -800,6 +1106,54 @@ const getJobCardById = async (id) => {
      WHERE ${whereClause}`,
     [id]
   );
+  
+  if (rows.length > 0) {
+    const row = rows[0];
+    const [childWos] = await pool.query(
+      'SELECT id, item_code, item_name, quantity FROM work_orders WHERE plan_id = ? AND (parent_wo_id = ? OR source_fg = ?) AND id != ?',
+      [row.plan_id, row.work_order_id, row.item_code, row.work_order_id]
+    );
+
+    if (childWos.length > 0) {
+      row.child_parts = [];
+      let minTransferred = parseFloat(row.wo_quantity || row.planned_qty || 0);
+
+      for (const childWo of childWos) {
+        const [finalJc] = await pool.query(
+          'SELECT COALESCE(transferred_qty, 0) as transferred_qty FROM job_cards WHERE work_order_id = ? ORDER BY sequence_no DESC, id DESC LIMIT 1',
+          [childWo.id]
+        );
+        const transferred = parseFloat(finalJc[0]?.transferred_qty || 0);
+
+        row.child_parts.push({
+          item_code: childWo.item_code,
+          item_name: childWo.item_name,
+          required_qty: parseFloat(childWo.quantity),
+          transferred_qty: transferred
+        });
+
+        if (transferred < minTransferred) {
+          minTransferred = transferred;
+        }
+      }
+
+      row.assembly_available_qty = minTransferred;
+      const [minSeqRow] = await pool.query(
+        'SELECT MIN(sequence_no) as min_seq FROM job_cards WHERE work_order_id = ?',
+        [row.work_order_id]
+      );
+      const isFirstOp = row.sequence_no === minSeqRow[0]?.min_seq;
+
+      row.is_first_op = isFirstOp;
+      row.is_assembly_waiting = isFirstOp && (minTransferred === 0 || row.child_parts.some(cp => cp.transferred_qty < cp.required_qty));
+    } else {
+      row.child_parts = null;
+      row.assembly_available_qty = parseFloat(row.planned_qty || 0);
+      row.is_assembly_waiting = false;
+      row.is_first_op = false;
+    }
+  }
+
   return rows[0];
 };
 
@@ -815,6 +1169,78 @@ const getTimeLogs = async (jobCardId) => {
   return rows;
 };
 
+const getProductionStartDate = async (connection, jobCardId) => {
+  const [jcRow] = await connection.query(
+    `SELECT wo.plan_id, jc.work_order_id FROM job_cards jc JOIN work_orders wo ON jc.work_order_id = wo.id WHERE jc.id = ?`,
+    [jobCardId]
+  );
+  if (jcRow.length === 0) return new Date().toISOString().slice(0, 10);
+
+  const planId = jcRow[0].plan_id;
+  const workOrderId = jcRow[0].work_order_id;
+
+  const query = `
+    SELECT MIN(DATE(COALESCE(jc.actual_start_date, jc.start_time, jc.created_at))) as prod_start_date
+    FROM job_cards jc
+    JOIN work_orders wo ON jc.work_order_id = wo.id
+    WHERE (wo.plan_id = ? AND wo.plan_id IS NOT NULL)
+       OR (jc.work_order_id = ? AND wo.plan_id IS NULL)
+  `;
+  const params = [planId || null, workOrderId];
+  const [rows] = await connection.query(query, params);
+
+  let dateVal = rows[0]?.prod_start_date;
+  if (dateVal) {
+    if (dateVal instanceof Date) {
+      dateVal = dateVal.toISOString().slice(0, 10);
+    } else {
+      dateVal = String(dateVal).slice(0, 10);
+    }
+    return dateVal;
+  }
+  return new Date().toISOString().slice(0, 10);
+};
+
+const adjustActualStartDate = async (connection, jobCardId, newStartDate) => {
+  await connection.execute(
+    "UPDATE job_cards SET actual_start_date = ? WHERE id = ?",
+    [newStartDate, jobCardId]
+  );
+
+  const [jcRow] = await connection.query(
+    `SELECT wo.plan_id, jc.work_order_id FROM job_cards jc JOIN work_orders wo ON jc.work_order_id = wo.id WHERE jc.id = ?`,
+    [jobCardId]
+  );
+  if (jcRow.length === 0) return;
+  const planId = jcRow[0].plan_id;
+  const workOrderId = jcRow[0].work_order_id;
+
+  const groupQuery = `
+    SELECT jc.id FROM job_cards jc
+    JOIN work_orders wo ON jc.work_order_id = wo.id
+    WHERE (wo.plan_id = ? AND wo.plan_id IS NOT NULL)
+       OR (jc.work_order_id = ? AND wo.plan_id IS NULL)
+  `;
+  const [groupRows] = await connection.query(groupQuery, [planId || null, workOrderId]);
+  const jcIds = groupRows.map(r => r.id);
+
+  if (jcIds.length > 0) {
+    const idsStr = jcIds.join(',');
+    await connection.execute(
+      `UPDATE job_card_time_logs SET day = DATEDIFF(log_date, ?) + 1 WHERE job_card_id IN (${idsStr})`,
+      [newStartDate]
+    );
+    await connection.execute(
+      `UPDATE job_card_quality_logs SET day = DATEDIFF(check_date, ?) + 1 WHERE job_card_id IN (${idsStr})`,
+      [newStartDate]
+    );
+    await connection.execute(
+      `UPDATE job_card_downtime_logs SET day = DATEDIFF(downtime_date, ?) + 1 WHERE job_card_id IN (${idsStr})`,
+      [newStartDate]
+    );
+  }
+};
+
 const addTimeLog = async (data) => {
   const { jobCardId, logDate, operatorId, workstationId, shift, startTime, endTime, producedQty, day } = data;
 
@@ -828,18 +1254,73 @@ const addTimeLog = async (data) => {
       throw new Error("Cannot add production entry: The associated production plan does not have a fulfilled Material Requirement.");
     }
 
-    // 1. Prevent duplicate entry (job_card_id, log_date, shift)
-    const [existingLogs] = await connection.query(
-      'SELECT id FROM job_card_time_logs WHERE job_card_id = ? AND log_date = ? AND shift = ?',
-      [jobCardId, logDate, shift]
+    // Check if the assembly is waiting for components
+    const [jcDetails] = await connection.query(
+      `SELECT jc.sequence_no, jc.planned_qty, jc.status,
+              wo.id as work_order_id, wo.plan_id, wo.item_code, wo.quantity as wo_quantity
+       FROM job_cards jc
+       JOIN work_orders wo ON jc.work_order_id = wo.id
+       WHERE jc.id = ?`,
+      [jobCardId]
     );
-    if (existingLogs.length > 0) {
-      throw new Error(`A log for this shift (${shift}) on ${logDate} already exists for this Job Card.`);
+    if (jcDetails.length > 0) {
+      const jcDetail = jcDetails[0];
+      const [childWos] = await connection.query(
+        'SELECT id, item_code, item_name, quantity FROM work_orders WHERE plan_id = ? AND (parent_wo_id = ? OR source_fg = ?) AND id != ?',
+        [jcDetail.plan_id, jcDetail.work_order_id, jcDetail.item_code, jcDetail.work_order_id]
+      );
+
+      if (childWos.length > 0) {
+        let minTransferred = parseFloat(jcDetail.wo_quantity || jcDetail.planned_qty || 0);
+        const childParts = [];
+
+        for (const childWo of childWos) {
+          const [finalJc] = await connection.query(
+            'SELECT COALESCE(transferred_qty, 0) as transferred_qty FROM job_cards WHERE work_order_id = ? ORDER BY sequence_no DESC, id DESC LIMIT 1',
+            [childWo.id]
+          );
+          const transferred = parseFloat(finalJc[0]?.transferred_qty || 0);
+          childParts.push({
+            required_qty: parseFloat(childWo.quantity),
+            transferred_qty: transferred
+          });
+
+          if (transferred < minTransferred) {
+            minTransferred = transferred;
+          }
+        }
+
+        const assemblyAvailableQty = minTransferred;
+        const [minSeqRow] = await connection.query(
+          'SELECT MIN(sequence_no) as min_seq FROM job_cards WHERE work_order_id = ?',
+          [jcDetail.work_order_id]
+        );
+        const isFirstOp = jcDetail.sequence_no === minSeqRow[0]?.min_seq;
+
+        const isAssemblyWaiting = isFirstOp && (assemblyAvailableQty === 0 || childParts.some(cp => cp.transferred_qty < cp.required_qty));
+        if (isAssemblyWaiting) {
+          throw new Error('Cannot add production entry: Assembly is waiting for components.');
+        }
+      }
     }
 
     // 1b. Check Operator and Workstation availability with time overlap
     const fullStartTime = (logDate && startTime) ? `${logDate} ${startTime}` : null;
     const fullEndTime = (logDate && endTime) ? `${logDate} ${endTime}` : null;
+
+    // 1. Prevent overlapping time log for this same Job Card
+    if (fullStartTime && fullEndTime) {
+      const [overlappingLogs] = await connection.query(
+        `SELECT id FROM job_card_time_logs 
+         WHERE job_card_id = ? 
+           AND start_time < ? 
+           AND end_time > ?`,
+        [jobCardId, fullEndTime, fullStartTime]
+      );
+      if (overlappingLogs.length > 0) {
+        throw new Error(`Time overlap detected. Another time log for this Job Card already exists during the selected time period.`);
+      }
+    }
 
     if (workstationId) {
       const [wsRows] = await connection.query('SELECT IFNULL(capacity, 1) as capacity FROM workstations WHERE id = ?', [workstationId]);
@@ -852,7 +1333,8 @@ const addTimeLog = async (data) => {
            JOIN job_cards jc ON tl.job_card_id = jc.id
            WHERE tl.workstation_id = ? 
              AND tl.start_time < ? 
-             AND tl.end_time > ?`,
+             AND tl.end_time > ?
+             AND jc.status != 'CANCELLED' AND jc.status != 'COMPLETED'`,
           [workstationId, fullEndTime, fullStartTime]
         );
         if (overlappingWS.length >= capacity) {
@@ -877,7 +1359,8 @@ const addTimeLog = async (data) => {
            JOIN job_cards jc ON tl.job_card_id = jc.id
            WHERE tl.operator_id = ? 
              AND tl.start_time < ? 
-             AND tl.end_time > ?`,
+             AND tl.end_time > ?
+             AND jc.status != 'CANCELLED' AND jc.status != 'COMPLETED'`,
           [operatorId, fullEndTime, fullStartTime]
         );
         if (overlapOp.length > 0) {
@@ -901,36 +1384,36 @@ const addTimeLog = async (data) => {
     );
     if (jcRows.length === 0) throw new Error('Job Card not found');
 
-    let actualStartDate = jcRows[0].actual_start_date;
-    // If it's a Date object, convert to YYYY-MM-DD string to avoid timezone shifts
-    if (actualStartDate instanceof Date) {
-      actualStartDate = actualStartDate.toISOString().split('T')[0];
+    let jcActualStartDate = jcRows[0].actual_start_date;
+    if (jcActualStartDate instanceof Date) {
+      jcActualStartDate = jcActualStartDate.toISOString().split('T')[0];
     }
-    let calculatedDay = 1;
 
-    // 3. Logic for Day calculation
-    if (!actualStartDate) {
-      // First Entry
-      actualStartDate = logDate;
+    if (!jcActualStartDate) {
+      // First Entry for this job card
       await connection.execute(
         "UPDATE job_cards SET actual_start_date = ?, status = 'IN_PROGRESS', workstation_id = ?, assigned_to = ? WHERE id = ?",
-        [actualStartDate, workstationId, operatorId, jobCardId]
+        [logDate, workstationId, operatorId, jobCardId]
       );
-      calculatedDay = 1;
     } else {
       // Update workstation and operator even if not the first entry to reflect current activity
       await connection.execute(
         "UPDATE job_cards SET workstation_id = ?, assigned_to = ? WHERE id = ?",
         [workstationId, operatorId, jobCardId]
       );
-      // Future Entries
-      const start = new Date(actualStartDate + 'T00:00:00');
-      const current = new Date(logDate + 'T00:00:00');
+    }
 
-      if (current < start) {
-        throw new Error(`Production date (${logDate}) cannot be earlier than actual start date (${actualStartDate})`);
-      }
+    // Calculate productionStartDate of the plan/batch
+    const productionStartDate = await getProductionStartDate(connection, jobCardId);
+    let calculatedDay = 1;
 
+    const start = new Date(productionStartDate + 'T00:00:00');
+    const current = new Date(logDate + 'T00:00:00');
+
+    if (current < start) {
+      await adjustActualStartDate(connection, jobCardId, logDate);
+      calculatedDay = 1;
+    } else {
       const diffTime = current - start;
       const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
       calculatedDay = diffDays + 1;
@@ -1048,30 +1531,34 @@ const addQualityLog = async (data) => {
   try {
     await connection.beginTransaction();
 
-    // 1. Get actual_start_date from job card
+     // 1. Get actual_start_date from job card
     const [jobCard] = await connection.query('SELECT actual_start_date FROM job_cards WHERE id = ?', [jobCardId]);
     if (jobCard.length === 0) throw new Error('Job Card not found');
 
-    let actualStartDate = jobCard[0].actual_start_date;
-    if (actualStartDate instanceof Date) {
-      actualStartDate = actualStartDate.toISOString().split('T')[0];
+    let jcActualStartDate = jobCard[0].actual_start_date;
+    if (jcActualStartDate instanceof Date) {
+      jcActualStartDate = jcActualStartDate.toISOString().split('T')[0];
     }
-    let calculatedDay = 1;
 
-    // 2. Logic for Day calculation
-    if (!actualStartDate) {
-      // First Entry
-      actualStartDate = checkDate;
+    if (!jcActualStartDate) {
+      // First Entry for this job card
       await connection.execute(
         "UPDATE job_cards SET actual_start_date = ?, status = 'IN_PROGRESS' WHERE id = ?",
-        [actualStartDate, jobCardId]
+        [checkDate, jobCardId]
       );
+    }
+
+    // Calculate productionStartDate of the plan/batch
+    const productionStartDate = await getProductionStartDate(connection, jobCardId);
+    let calculatedDay = 1;
+
+    const start = new Date(productionStartDate + 'T00:00:00');
+    const current = new Date(checkDate + 'T00:00:00');
+
+    if (current < start) {
+      await adjustActualStartDate(connection, jobCardId, checkDate);
       calculatedDay = 1;
     } else {
-      // Future Entries
-      const start = new Date(actualStartDate + 'T00:00:00');
-      const current = new Date(checkDate + 'T00:00:00');
-
       const diffTime = current - start;
       const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
       calculatedDay = diffDays + 1;
@@ -1209,30 +1696,34 @@ const addDowntimeLog = async (data) => {
   try {
     await connection.beginTransaction();
 
-    // 1. Get actual_start_date from job card
+     // 1. Get actual_start_date from job card
     const [jobCard] = await connection.query('SELECT actual_start_date FROM job_cards WHERE id = ?', [jobCardId]);
     if (jobCard.length === 0) throw new Error('Job Card not found');
 
-    let actualStartDate = jobCard[0].actual_start_date;
-    if (actualStartDate instanceof Date) {
-      actualStartDate = actualStartDate.toISOString().split('T')[0];
+    let jcActualStartDate = jobCard[0].actual_start_date;
+    if (jcActualStartDate instanceof Date) {
+      jcActualStartDate = jcActualStartDate.toISOString().split('T')[0];
     }
-    let calculatedDay = 1;
 
-    // 2. Logic for Day calculation
-    if (!actualStartDate) {
-      // First Entry
-      actualStartDate = downtimeDate;
+    if (!jcActualStartDate) {
+      // First Entry for this job card
       await connection.execute(
         "UPDATE job_cards SET actual_start_date = ?, status = 'IN_PROGRESS' WHERE id = ?",
-        [actualStartDate, jobCardId]
+        [downtimeDate, jobCardId]
       );
+    }
+
+    // Calculate productionStartDate of the plan/batch
+    const productionStartDate = await getProductionStartDate(connection, jobCardId);
+    let calculatedDay = 1;
+
+    const start = new Date(productionStartDate + 'T00:00:00');
+    const current = new Date(downtimeDate + 'T00:00:00');
+
+    if (current < start) {
+      await adjustActualStartDate(connection, jobCardId, downtimeDate);
       calculatedDay = 1;
     } else {
-      // Future Entries
-      const start = new Date(actualStartDate + 'T00:00:00');
-      const current = new Date(downtimeDate + 'T00:00:00');
-
       const diffTime = current - start;
       const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
       calculatedDay = diffDays + 1;
@@ -1297,10 +1788,93 @@ const updateJobCard = async (id, data) => {
     throw new Error(conflictMessage);
   }
 
+  // Check sequence timing overlap
+  const seqConflictMessage = await checkSequenceOverlap(id, workOrderId, startDateTime, endDateTime);
+  if (seqConflictMessage) {
+    throw new Error(seqConflictMessage);
+  }
+
+  // Check if the assembly is waiting for components
+  const [jcDetails] = await pool.query(
+    `SELECT jc.sequence_no, jc.planned_qty, jc.status,
+            wo.id as work_order_id, wo.plan_id, wo.item_code, wo.quantity as wo_quantity
+     FROM job_cards jc
+     JOIN work_orders wo ON jc.work_order_id = wo.id
+     WHERE jc.id = ?`,
+    [id]
+  );
+  if (jcDetails.length > 0) {
+    const jcDetail = jcDetails[0];
+    const [childWos] = await pool.query(
+      'SELECT id, item_code, item_name, quantity FROM work_orders WHERE plan_id = ? AND (parent_wo_id = ? OR source_fg = ?) AND id != ?',
+      [jcDetail.plan_id, jcDetail.work_order_id, jcDetail.item_code, jcDetail.work_order_id]
+    );
+
+    if (childWos.length > 0) {
+      let minTransferred = parseFloat(jcDetail.wo_quantity || jcDetail.planned_qty || 0);
+      const childParts = [];
+
+      for (const childWo of childWos) {
+        const [finalJc] = await pool.query(
+          'SELECT COALESCE(transferred_qty, 0) as transferred_qty FROM job_cards WHERE work_order_id = ? ORDER BY sequence_no DESC, id DESC LIMIT 1',
+          [childWo.id]
+        );
+        const transferred = parseFloat(finalJc[0]?.transferred_qty || 0);
+        childParts.push({
+          required_qty: parseFloat(childWo.quantity),
+          transferred_qty: transferred
+        });
+
+        if (transferred < minTransferred) {
+          minTransferred = transferred;
+        }
+      }
+
+      const assemblyAvailableQty = minTransferred;
+      const [minSeqRow] = await pool.query(
+        'SELECT MIN(sequence_no) as min_seq FROM job_cards WHERE work_order_id = ?',
+        [jcDetail.work_order_id]
+      );
+      const isFirstOp = jcDetail.sequence_no === minSeqRow[0]?.min_seq;
+
+      const isAssemblyWaiting = isFirstOp && (assemblyAvailableQty === 0 || childParts.some(cp => cp.transferred_qty < cp.required_qty));
+      if (isAssemblyWaiting) {
+        const isAssigning = (workstationId !== undefined && workstationId !== null) || (assignedTo !== undefined && assignedTo !== null);
+        const isStartingOrCompleting = (status === 'IN_PROGRESS' || status === 'COMPLETED');
+        if (isAssigning || isStartingOrCompleting) {
+          throw new Error('Cannot start, assign workstation/operator, or update status: Assembly is waiting for components.');
+        }
+      }
+    }
+  }
+
   if (status === 'IN_PROGRESS' || producedQty > 0 || acceptedQty > 0) {
     const isPlanFulfilled = await checkProductionPlanFulfilled(pool, { jobCardId: id });
     if (!isPlanFulfilled) {
       throw new Error("Cannot start or enter production details: The associated production plan does not have a fulfilled Material Requirement.");
+    }
+  }
+
+  if (status === 'IN_PROGRESS' && executionMode !== 'Outsource') {
+    if (workstationId) {
+      const [wsRows] = await pool.query('SELECT IFNULL(capacity, 1) as capacity FROM workstations WHERE id = ?', [workstationId]);
+      const capacity = wsRows.length > 0 ? wsRows[0].capacity : 1;
+      const [activeJobs] = await pool.query(
+        'SELECT job_card_no FROM job_cards WHERE workstation_id = ? AND status = "IN_PROGRESS" AND id != ?',
+        [workstationId, id]
+      );
+      if (activeJobs.length >= capacity) {
+        throw new Error(`Workstation is busy with Job Card ${activeJobs[0].job_card_no}`);
+      }
+    }
+    if (assignedTo) {
+      const [busyOp] = await pool.query(
+        'SELECT job_card_no FROM job_cards WHERE assigned_to = ? AND status = "IN_PROGRESS" AND id != ?',
+        [assignedTo, id]
+      );
+      if (busyOp.length > 0) {
+        throw new Error(`Operator is busy with Job Card ${busyOp[0].job_card_no}`);
+      }
     }
   }
 
@@ -1662,17 +2236,26 @@ const syncReworkQuantities = async (workOrderId, connection) => {
 
   if (jobCards.length === 0) return;
 
-  let totalRework = 0;
-  for (const jc of jobCards) {
+  const reworkGenerated = jobCards.map(jc => {
     const rejected = parseFloat(jc.rejected_qty || 0);
     const scrap = parseFloat(jc.scrap_qty || 0);
-    const reworkReturned = Math.max(0, rejected - scrap);
-    totalRework += reworkReturned;
-  }
+    return Math.max(0, rejected - scrap);
+  });
 
   for (let i = 0; i < jobCards.length; i++) {
     const jc = jobCards[i];
-    const newReworkQty = (i === 0) ? totalRework : 0;
+    let newReworkQty = 0;
+
+    // Sum rework generated by all downstream operations
+    for (let j = i + 1; j < jobCards.length; j++) {
+      newReworkQty += reworkGenerated[j];
+    }
+
+    // First operation also includes its own generated rework
+    if (i === 0) {
+      newReworkQty += reworkGenerated[0];
+    }
+
     await connection.execute(
       'UPDATE job_cards SET rework_qty = ? WHERE id = ?',
       [newReworkQty, jc.id]

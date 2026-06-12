@@ -134,7 +134,7 @@ const createWorkOrdersFromPlan = async (planId) => {
       const parentName = parents.length > 0 ? parents[0].item_name : null;
 
       await connection.query(
-        'UPDATE work_orders SET parent_wo_id = ?, source_fg = ? WHERE id IN (?) AND source_fg IS NULL',
+        'UPDATE work_orders SET parent_wo_id = ?, source_fg = COALESCE(source_fg, ?) WHERE id IN (?)',
         [parentWoId, parentName, saWorkOrderIds]
       );
     }
@@ -402,19 +402,28 @@ const createJobCardsForWorkOrder = async (workOrderId, connection, initialStatus
     const woSoiCode = woDetails[0]?.item_code;
 
     operationsToUse = providedOperations.filter(op => {
+      const isFG = wo.source_type === 'FG';
+      const isSA = wo.source_type === 'SA';
+
       const opSource = (op.source_item || op.sourceItem || '').toUpperCase();
       const opType = (op.item_type || op.itemType || '').toUpperCase();
-      
+
+      const opIsFG = ['FG', 'FINISHED GOOD', 'FINISHED GOODS'].includes(opType);
+      const opIsSA = ['SA', 'SUB ASSEMBLY', 'SUB-ASSEMBLY', 'SUBASSEMBLY', 'SFG'].includes(opType) || 
+                     opSource.startsWith('PART-') || opSource.includes('PART');
+
+      // SPECIAL OVERRIDE: Any operation named 'ASSEMBLY' (case-insensitive) always belongs to the parent FG assembly
+      // unless it explicitly specifies a child part as its source item.
+      const isAssemblyOp = (op.operation_name || op.operationName || '').toUpperCase().includes('ASSEMBLY');
+      if (isAssemblyOp && !opIsSA) {
+        return isFG; // Assign ONLY to FG work orders, block from SA
+      }
+
       const targetCode = (wo.item_code || '').toUpperCase();
       const targetDrawing = (woDrawing || '').toUpperCase();
       const targetSoiCode = (woSoiCode || '').toUpperCase();
       const targetName = (wo.item_name || '').toUpperCase();
       const targetSourceFg = (wo.source_fg || '').toUpperCase();
-
-      const isFG = wo.source_type === 'FG';
-      const isSA = wo.source_type === 'SA';
-      const opIsFG = ['FG', 'FINISHED GOOD', 'FINISHED GOODS'].includes(opType);
-      const opIsSA = ['SA', 'SUB ASSEMBLY', 'SUB-ASSEMBLY', 'SUBASSEMBLY'].includes(opType);
 
       // Priority 1: Direct match by source item code, drawing, name, source_fg, or SOI code
       if (opSource) {
@@ -503,15 +512,35 @@ const createJobCardsForWorkOrder = async (workOrderId, connection, initialStatus
     const hourlyRate = op.hourly_rate || masterOps[0]?.hourly_rate || 0;
     const executionType = op.operation_type || 'In-House';
 
+    // For Assembly/FG work orders, even the first operation starts with planned_qty = 0
+    // until child components are completed and transferred.
+    const isAssembly = (wo.source_type === 'FG');
+    const initialPlannedQty = (i === 0 && !isAssembly) ? wo.quantity : 0;
     await connection.execute(
       `INSERT INTO job_cards 
        (job_card_no, work_order_id, operation_id, workstation_id, planned_qty, status, std_time, time_uom, hourly_rate, operation_name, execution_type, execution_mode, sequence_no, target_warehouse_id, cycle_time, setup_time)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [jcNo, workOrderId, masterOps[0]?.id || null, masterWs[0]?.id || null, wo.quantity, initialStatus, stdTime, timeUom, hourlyRate, op.operation_name, executionType, executionType, sequenceNo, targetWarehouseId, cycleTime, setupTime]
+      [
+        jcNo,
+        workOrderId,
+        masterOps[0]?.id || null,
+        masterWs[0]?.id || null,
+        initialPlannedQty,
+        initialStatus,
+        stdTime,
+        timeUom,
+        hourlyRate,
+        op.operation_name,
+        executionType,
+        'In-house',
+        sequenceNo,
+        targetWarehouseId,
+        cycleTime,
+        setupTime
+      ]
     );
   }
 };
-
 const updateWorkOrderStatus = async (id, status) => {
   const connection = await pool.getConnection();
   try {
