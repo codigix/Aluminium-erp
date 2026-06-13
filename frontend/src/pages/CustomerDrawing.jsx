@@ -19,7 +19,8 @@ const getEmptyDrawingRow = () => ({
   hsn_code: '',
   delivery_date: '',
   drawing_type: 'Part',
-  file: null,
+  files: [],
+  existingFiles: [],
   remarks: ''
 });
 
@@ -48,6 +49,7 @@ const CustomerDrawing = () => {
   const [uploadMode, setUploadMode] = useState('bulk'); // 'bulk' or 'manual'
   const [clientLocked, setClientLocked] = useState(false);
   const [deletedDrawingIds, setDeletedDrawingIds] = useState([]);
+  const [activeDrawingIdForFiles, setActiveDrawingIdForFiles] = useState(null);
 
   // Revisions Modal State
   const [showRevisions, setShowRevisions] = useState(false);
@@ -756,20 +758,24 @@ const CustomerDrawing = () => {
       const row = editingRequirementData;
       const company = companies.find(c => c.company_name === (row.client_name || row.company_name));
 
-      const manualDrawings = (row.original_items || []).map(item => ({
-        id: item.id || crypto.randomUUID(),
-        drawing_id: item.drawing_id || item.drawing_master_id,
-        drawing_no: item.drawing_no || '',
-        revision: item.revision || item.revision_no || '',
-        qty: item.quantity || item.qty || 1,
-        description: item.description || '',
-        hsn_code: item.hsn_code || '',
-        delivery_date: item.delivery_date ? new Date(item.delivery_date).toISOString().split('T')[0] : '',
-        drawing_type: item.drawing_type || 'Part',
-        remarks: item.remarks || '',
-        file: null,
-        file_path: item.file_path || item.drawing_pdf
-      }));
+      const manualDrawings = (row.original_items || []).map(item => {
+        const pathVal = item.file_path || item.drawing_pdf || '';
+        const existingFiles = pathVal.split(',').filter(Boolean);
+        return {
+          id: item.id || crypto.randomUUID(),
+          drawing_id: item.drawing_id || item.drawing_master_id,
+          drawing_no: item.drawing_no || '',
+          revision: item.revision || item.revision_no || '',
+          qty: item.quantity || item.qty || 1,
+          description: item.description || '',
+          hsn_code: item.hsn_code || '',
+          delivery_date: item.delivery_date ? new Date(item.delivery_date).toISOString().split('T')[0] : '',
+          drawing_type: item.drawing_type || 'Part',
+          remarks: item.remarks || '',
+          files: [],
+          existingFiles: existingFiles
+        };
+      });
 
       formik.setValues({
         client_name: row.client_name || row.company_name || '',
@@ -1009,7 +1015,6 @@ const CustomerDrawing = () => {
         Yup.object().shape({
           drawing_no: Yup.string().required('Drawing # is required'),
           drawing_type: Yup.string().required('Type is required'),
-          file: Yup.mixed().nullable().optional(),
         })
       ),
       otherwise: (schema) => schema.nullable(),
@@ -1127,8 +1132,14 @@ const CustomerDrawing = () => {
                 formData.append('delivery_date', drawing.delivery_date || '');
                 formData.append('drawing_type', drawing.drawing_type || 'Part');
                 formData.append('remarks', drawing.remarks || '');
-                if (drawing.file) {
-                  formData.append('drawing_pdf', drawing.file);
+                // Append the list of kept existing files as JSON
+                formData.append('existingFiles', JSON.stringify(drawing.existingFiles || []));
+                
+                // Append newly uploaded files
+                if (drawing.files && drawing.files.length > 0) {
+                  drawing.files.forEach(f => {
+                    formData.append('drawing_pdf', f);
+                  });
                 }
 
                 // Use drawing_id if available, fallback to id (which should be the drawing_master_id for existing)
@@ -1316,9 +1327,49 @@ const CustomerDrawing = () => {
   };
 
   const handleManualFileChange = (e, id) => {
-    const file = e.target.files[0];
-    if (file) {
-      handleManualDrawingChange(id, 'file', file);
+    const selectedFiles = Array.from(e.target.files || []);
+    if (selectedFiles.length > 0) {
+      const validFiles = [];
+      const invalidFiles = [];
+
+      for (const file of selectedFiles) {
+        const ext = file.name.toLowerCase().split('.').pop();
+        const isValid = file.type === 'application/pdf' || 
+                        file.type.startsWith('image/') || 
+                        ['pdf', 'jpg', 'jpeg', 'png', 'webp'].includes(ext);
+        if (isValid) {
+          validFiles.push(file);
+        } else {
+          invalidFiles.push(file.name);
+        }
+      }
+
+      if (invalidFiles.length > 0) {
+        errorToast(`Unsupported file types: ${invalidFiles.join(', ')}. Only PDF and images (.jpg, .jpeg, .png, .webp) are allowed.`);
+      }
+
+      if (validFiles.length > 0) {
+        const currentManualDrawings = formik.values.manualDrawings;
+        const row = currentManualDrawings.find(d => d.id === id);
+        if (row) {
+          const currentFiles = row.files || [];
+          handleManualDrawingChange(id, 'files', [...currentFiles, ...validFiles]);
+        }
+      }
+      e.target.value = '';
+    }
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = (e, id) => {
+    e.preventDefault();
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      const eTarget = { files };
+      handleManualFileChange({ target: eTarget }, id);
     }
   };
 
@@ -1361,12 +1412,13 @@ const CustomerDrawing = () => {
   };
 
   const saveSingleDrawing = async (drawingData, sendToDesign = false) => {
-    const fileExt = drawingData.file ? drawingData.file.name.split('.').pop().toUpperCase() : '';
+    const firstFile = drawingData.file || (drawingData.files && drawingData.files[0]);
+    const fileExt = firstFile ? firstFile.name.split('.').pop().toUpperCase() : '';
     const isExcel = fileExt === 'XLSX' || fileExt === 'XLS';
 
     // Removed mandatory file check as requested
     /*
-    if (!drawingData.file) {
+    if (!firstFile) {
       warningToast('Drawing File is mandatory');
       return null;
     }
@@ -1392,7 +1444,7 @@ const CustomerDrawing = () => {
       formData.append('billingAddress', drawingData.billing_address || '');
       formData.append('shippingAddress', drawingData.shipping_address || '');
 
-      formData.append('drawingNo', drawingData.drawing_no || (drawingData.file ? drawingData.file.name : 'BATCH_IMPORT'));
+      formData.append('drawingNo', drawingData.drawing_no || (firstFile ? firstFile.name : 'BATCH_IMPORT'));
       formData.append('revision', drawingData.revision || '');
       formData.append('qty', drawingData.qty || 1);
       formData.append('description', drawingData.description || '');
@@ -1406,6 +1458,10 @@ const CustomerDrawing = () => {
       }
       if (drawingData.file) {
         formData.append('file', drawingData.file);
+      } else if (drawingData.files && drawingData.files.length > 0) {
+        drawingData.files.forEach(f => {
+          formData.append('file', f);
+        });
       }
       if (drawingData.zipFile) {
         formData.append('zipFile', drawingData.zipFile);
@@ -2151,17 +2207,27 @@ const CustomerDrawing = () => {
 
               {modalMode === 'edit' && (
                 <div>
-                  <label className="block text-xs text-slate-700 mb-1">Update PDF File</label>
+                  <label className="block text-xs text-slate-700 mb-1">Update Drawing Image</label>
                   <div className="flex items-center justify-center border-2 border-dashed border-slate-300 rounded p-2 hover:border-indigo-400 transition-colors bg-white cursor-pointer relative">
                     <input
                       type="file"
-                      accept=".pdf,.stp,.step,.igs,.iges,.dwg,.dxf,.png,.jpg,.jpeg"
+                      accept="image/*"
                       className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                      onChange={(e) => setEditData({ ...editData, drawing_pdf: e.target.files[0] })}
+                      onChange={(e) => {
+                        const file = e.target.files[0];
+                        if (file) {
+                          if (!file.type.startsWith('image/')) {
+                            errorToast('Only image files are allowed');
+                            e.target.value = '';
+                            return;
+                          }
+                          setEditData({ ...editData, drawing_pdf: file });
+                        }
+                      }}
                     />
                     <div className="text-center">
                       <svg className="mx-auto h-8 w-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
-                      <p className="mt-1 text-xs text-slate-500">{editData.drawing_pdf ? editData.drawing_pdf.name : 'Click to update PDF'}</p>
+                      <p className="mt-1 text-xs text-slate-500">{editData.drawing_pdf ? editData.drawing_pdf.name : 'Click to update image'}</p>
                     </div>
                   </div>
                 </div>
@@ -2179,7 +2245,7 @@ const CustomerDrawing = () => {
                     className="text-xs text-indigo-600 hover:underline flex items-center gap-1"
                   >
                     <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                    View Current PDF
+                    View Current Image
                   </button>
                 </div>
               )}
@@ -2743,39 +2809,22 @@ const CustomerDrawing = () => {
                             onBlur={formik.handleBlur}
                           />
                         </td>
-                        <td className="px-2 py-2">
-                          <div className="flex flex-col gap-1">
-                            <div className="relative">
-                              <input
-                                type="file"
-                                name={`manualDrawings[${index}].file`}
-                                accept=".pdf,.dwg,.dxf,.step,.stp,.igs,.iges,.png,.jpg,.jpeg"
-                                className="hidden"
-                                onChange={(e) => handleManualFileChange(e, drawing.id)}
-                                onBlur={formik.handleBlur}
-                                id={`file-${drawing.id}`}
-                              />
-                              <label
-                                htmlFor={`file-${drawing.id}`}
-                                className={`flex items-center gap-1 px-2 py-1 border border-dashed rounded text-xs  cursor-pointer transition-colors ${drawing.file ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : (formik.errors.manualDrawings?.[index]?.file ? 'border-red-500 bg-red-50' : 'border-slate-300 bg-slate-50 text-slate-600 hover:border-indigo-400')}`}
-                              >
-                                <Plus className="w-3 h-3" />
-                                <span className="truncate max-w-[60px]">{drawing.file ? drawing.file.name : 'Choose'}</span>
-                              </label>
-                            </div>
-                            {formMode === 'edit' && drawing.file_path && !drawing.file && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setPreviewDrawing({ ...drawing, drawing_pdf: drawing.file_path });
-                                  setShowPreviewModal(true);
-                                }}
-                                className="text-xs  text-indigo-600 hover:underline text-left flex items-center gap-1"
-                              >
-                                <Eye size={10} /> View Current
-                              </button>
+                        <td className="px-2 py-2 text-center">
+                          <button
+                            type="button"
+                            onClick={() => setActiveDrawingIdForFiles(drawing.id)}
+                            className="p-1.5 rounded border text-xs font-semibold flex items-center justify-center gap-1 transition-all mx-auto bg-emerald-50 border-emerald-300 text-emerald-700 hover:bg-emerald-100 shadow-sm"
+                            title={((drawing.existingFiles?.length || 0) + (drawing.files?.length || 0)) === 0 ? 'Choose Files' : `${(drawing.existingFiles?.length || 0) + (drawing.files?.length || 0)} File(s)`}
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                            </svg>
+                            {((drawing.existingFiles?.length || 0) + (drawing.files?.length || 0)) > 0 && (
+                              <span className="text-[10px] bg-emerald-600 text-white rounded-full px-1 min-w-[16px] h-4 flex items-center justify-center font-bold">
+                                {(drawing.existingFiles?.length || 0) + (drawing.files?.length || 0)}
+                              </span>
                             )}
-                          </div>
+                          </button>
                         </td>
                         <td className="px-2 py-2">
                           <select
@@ -2969,6 +3018,190 @@ const CustomerDrawing = () => {
         onClose={() => setShowPreviewModal(false)}
         drawing={previewDrawing}
       />
+
+      {/* Drawing Attachments Modal */}
+      {activeDrawingIdForFiles && (() => {
+        const activeDrawing = formik.values.manualDrawings.find(d => d.id === activeDrawingIdForFiles);
+        if (!activeDrawing) return null;
+        
+        return (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+            <div className="bg-white rounded-xl border border-slate-100 shadow-2xl w-full max-w-xl overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in duration-300">
+              {/* Modal Header */}
+              <div className="bg-slate-50 px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-slate-800">Drawing Attachments & Documents</h3>
+                    <p className="text-xs text-slate-400 mt-0.5 font-mono">Drawing #: {activeDrawing.drawing_no || 'New Drawing'}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setActiveDrawingIdForFiles(null)}
+                  className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors text-slate-400 hover:text-slate-600"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="p-6 overflow-y-auto space-y-6 flex-1 min-h-0 custom-scrollbar">
+                {/* Currently Attached Files */}
+                <div className="space-y-3">
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Currently Attached Files</h4>
+                  <div className="border border-slate-100 rounded-xl overflow-hidden bg-slate-50/50">
+                    {((activeDrawing.existingFiles || []).length + (activeDrawing.files || []).length) > 0 ? (
+                      <div className="divide-y divide-slate-100 bg-white">
+                        {/* Existing Files */}
+                        {(activeDrawing.existingFiles || []).map((filePath, fileIdx) => {
+                          const fileName = filePath.split('/').pop().replace(/^\d+-/, '');
+                          return (
+                            <div key={`exist-${fileIdx}`} className="flex items-center justify-between p-3 hover:bg-slate-50/50 transition-all group">
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg group-hover:scale-105 transition-all">
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                  </svg>
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-xs font-semibold text-slate-700 truncate max-w-[320px]" title={fileName}>{fileName}</p>
+                                  <p className="text-[10px] text-slate-400 mt-0.5">Uploaded drawing file</p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setPreviewDrawing({ ...activeDrawing, drawing_pdf: filePath });
+                                    setShowPreviewModal(true);
+                                  }}
+                                  className="p-1.5 text-indigo-500 hover:bg-indigo-50 rounded-lg transition-all"
+                                  title="Preview Document"
+                                >
+                                  <Eye size={15} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const updated = activeDrawing.existingFiles.filter((_, idx) => idx !== fileIdx);
+                                    handleManualDrawingChange(activeDrawing.id, 'existingFiles', updated);
+                                  }}
+                                  className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg transition-all"
+                                  title="Delete Document"
+                                >
+                                  <Trash2 size={15} />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+
+                        {/* New Files */}
+                        {(activeDrawing.files || []).map((fileObj, fileIdx) => {
+                          const fileName = fileObj.name;
+                          return (
+                            <div key={`new-${fileIdx}`} className="flex items-center justify-between p-3 hover:bg-slate-50/50 transition-all group">
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg group-hover:scale-105 transition-all">
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                  </svg>
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-xs font-semibold text-emerald-700 truncate max-w-[320px]" title={fileName}>{fileName}</p>
+                                  <p className="text-[10px] text-emerald-500 mt-0.5">Staged for upload</p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const localUrl = URL.createObjectURL(fileObj);
+                                    setPreviewDrawing({ ...activeDrawing, drawing_pdf: localUrl, file_type: fileObj.type.split('/')[1]?.toUpperCase() });
+                                    setShowPreviewModal(true);
+                                  }}
+                                  className="p-1.5 text-emerald-500 hover:bg-emerald-50 rounded-lg transition-all"
+                                  title="Preview staged file"
+                                >
+                                  <Eye size={15} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const updated = activeDrawing.files.filter((_, idx) => idx !== fileIdx);
+                                    handleManualDrawingChange(activeDrawing.id, 'files', updated);
+                                  }}
+                                  className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg transition-all"
+                                  title="Remove staged file"
+                                >
+                                  <Trash2 size={15} />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="py-8 text-center bg-white">
+                        <div className="inline-flex p-3 bg-slate-50 text-slate-400 rounded-full mb-2">
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 13h6m-3-3v6m-9 1V4a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+                          </svg>
+                        </div>
+                        <p className="text-xs text-slate-500 font-medium">No attachments uploaded yet</p>
+                        <p className="text-[10px] text-slate-400 mt-1">Add PDF drawings or image files below to attach them</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Upload Section */}
+                <div className="space-y-3">
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Upload New Files</h4>
+                  <div
+                    onClick={() => document.getElementById('attachmentsInput').click()}
+                    onDragOver={handleDragOver}
+                    onDrop={(e) => handleDrop(e, activeDrawing.id)}
+                    className="border-2 border-dashed border-slate-200 hover:border-indigo-400 bg-slate-50/50 hover:bg-indigo-50/10 rounded-xl p-6 text-center cursor-pointer transition-all group"
+                  >
+                    <input
+                      type="file"
+                      id="attachmentsInput"
+                      multiple
+                      accept=".pdf,.jpg,.jpeg,.png,.webp,image/*,application/pdf"
+                      onChange={(e) => handleManualFileChange(e, activeDrawing.id)}
+                      className="hidden"
+                    />
+                    <div className="inline-flex p-3 bg-white text-slate-500 group-hover:text-indigo-500 rounded-lg shadow-sm border border-slate-100 group-hover:scale-105 transition-all mb-3">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                      </svg>
+                    </div>
+                    <p className="text-xs font-semibold text-slate-700">Drag & drop or click to upload</p>
+                    <p className="text-[10px] text-slate-400 mt-1">Supports PDF drawings and image files up to 10MB each</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="bg-slate-50 px-6 py-4 border-t border-slate-100 flex justify-end">
+                <button
+                  onClick={() => setActiveDrawingIdForFiles(null)}
+                  className="px-5 py-2 bg-indigo-600 text-white rounded-lg text-xs font-semibold hover:bg-indigo-700 transition-all shadow-md active:scale-95"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };

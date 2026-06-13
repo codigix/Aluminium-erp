@@ -57,17 +57,46 @@ const updateDrawing = async (req, res, next) => {
       remarks,
       drawingNo,
       drawing_type,
-      hsn_code,
       hsnCode,
+      hsn_code,
       deliveryDate,
-      delivery_date
+      delivery_date,
+      existingFiles
     } = req.body;
-    const drawingPdf = req.file ? `uploads/${req.file.filename}` : null;
+    
+    // Support both multiple files (upload.fields) and single file (upload.single)
+    const filesArray = req.files?.drawing_pdf || (req.file ? [req.file] : []);
+    const newFilePaths = filesArray.map(f => `uploads/${f.filename}`);
+
+    let keptFiles = [];
+    if (existingFiles) {
+      try {
+        keptFiles = JSON.parse(existingFiles);
+        if (!Array.isArray(keptFiles)) {
+          keptFiles = existingFiles ? existingFiles.split(',').filter(Boolean) : [];
+        }
+      } catch (e) {
+        keptFiles = existingFiles ? existingFiles.split(',').filter(Boolean) : [];
+      }
+    }
+
+    const finalFilePaths = [...keptFiles, ...newFilePaths];
+    // If no files at all, set drawingPdf to '' (since file_path is NOT NULL)
+    const drawingPdf = finalFilePaths.join(',') || '';
+
+    // Determine drawing type extension or MIXED
+    let fileType = 'NONE';
+    if (finalFilePaths.length === 1) {
+      fileType = path.extname(finalFilePaths[0]).replace('.', '').toUpperCase();
+    } else if (finalFilePaths.length > 1) {
+      fileType = 'MIXED';
+    }
 
     await drawingService.updateDrawing(id, {
       description,
       revisionNo,
       drawingPdf,
+      fileType,
       clientName,
       projectName,
       contactPerson,
@@ -116,7 +145,8 @@ const createDrawing = async (req, res, next) => {
     } = req.body;
 
     // Check for both single file and multiple files (upload.fields)
-    const excelFile = req.files?.file?.[0] || req.file;
+    const filesArray = req.files?.file || (req.file ? [req.file] : []);
+    const excelFile = filesArray[0];
     const zipFile = req.files?.zipFile?.[0];
 
     const fileName = excelFile ? excelFile.filename : null;
@@ -125,7 +155,26 @@ const createDrawing = async (req, res, next) => {
 
     // Use absolute path for reading the file with XLSX
     const absoluteExcelPath = fileName ? path.join(uploadsPath, fileName) : null;
-    const dbFilePath = fileName ? `uploads/${fileName}` : null;
+    
+    const isExcel = fileName && (fileType === 'XLSX' || fileType === 'XLS');
+    
+    let dbFilePath = null;
+    let finalFileType = fileType;
+
+    if (isExcel) {
+      dbFilePath = `uploads/${fileName}`;
+    } else {
+      const filePaths = filesArray.map(f => `uploads/${f.filename}`);
+      dbFilePath = filePaths.join(',') || '';
+      
+      if (filesArray.length === 1) {
+        finalFileType = path.extname(excelFile.filename).replace('.', '').toUpperCase();
+      } else if (filesArray.length > 1) {
+        finalFileType = 'MIXED';
+      } else {
+        finalFileType = 'NONE';
+      }
+    }
 
     const uploadedBy = req.user ? `${req.user.first_name || ''} ${req.user.last_name || ''}`.trim() : 'Sales';
 
@@ -225,7 +274,7 @@ const createDrawing = async (req, res, next) => {
       qty,
       description,
       filePath: dbFilePath,
-      fileType,
+      fileType: finalFileType || fileType,
       remarks,
       uploadedBy,
       contactPerson,

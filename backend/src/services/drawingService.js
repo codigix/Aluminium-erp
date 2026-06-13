@@ -241,7 +241,8 @@ const updateDrawing = async (id, data) => {
   const {
     description, revisionNo, drawingPdf, clientName, projectName, contactPerson,
     phoneNumber, emailAddress, customerType, gstin, city, state,
-    billingAddress, shippingAddress, qty, remarks, drawingNo, drawing_type, hsnCode, deliveryDate
+    billingAddress, shippingAddress, qty, remarks, drawingNo, drawing_type, hsnCode, deliveryDate,
+    fileType
   } = data;
 
   const connection = await pool.getConnection();
@@ -264,7 +265,8 @@ const updateDrawing = async (id, data) => {
     if (description !== undefined) { updates.push('description = ?'); params.push(description); }
     if (revisionNo !== undefined) { updates.push('revision = ?'); params.push(revisionNo); }
     if (drawing_type !== undefined) { updates.push('drawing_type = ?'); params.push(drawing_type); }
-    if (drawingPdf !== undefined && drawingPdf !== null) { updates.push('file_path = ?'); params.push(drawingPdf); }
+    if (drawingPdf !== undefined) { updates.push('file_path = ?'); params.push(drawingPdf); }
+    if (fileType !== undefined) { updates.push('file_type = ?'); params.push(fileType); }
     if (clientName !== undefined) { updates.push('client_name = ?'); params.push(clientName); }
     if (projectName !== undefined) { updates.push('project_name = ?'); params.push(projectName); }
     if (contactPerson !== undefined) { updates.push('contact_person = ?'); params.push(contactPerson); }

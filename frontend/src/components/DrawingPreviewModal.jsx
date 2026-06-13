@@ -4,11 +4,19 @@ import { FileText, Download, Hash, Calendar, User, Package, MessageSquare, Histo
 import { getFileUrl } from '../utils/url';
 
 const DrawingPreviewModal = ({ isOpen, onClose, drawing }) => {
+  const [activeIdx, setActiveIdx] = React.useState(0);
+
+  React.useEffect(() => {
+    setActiveIdx(0);
+  }, [drawing]);
+
   if (!drawing) return null;
 
   const filePath = drawing.file_path || drawing.drawing_pdf || '';
-  const fileUrl = getFileUrl(filePath);
-  const extension = filePath.split('?')[0].toLowerCase().split('.').pop();
+  const files = filePath.split(',').filter(Boolean);
+  const activeFilePath = files[activeIdx] || '';
+  const fileUrl = getFileUrl(activeFilePath);
+  const extension = activeFilePath.split('?')[0].toLowerCase().split('.').pop();
   
   const serverFileType = (drawing.file_type || '').toUpperCase();
   
@@ -23,7 +31,7 @@ const DrawingPreviewModal = ({ isOpen, onClose, drawing }) => {
 
   const previewFile = {
     url: fileUrl,
-    name: drawing.drawing_no || drawing.name || 'Drawing',
+    name: (activeFilePath.split('/').pop().replace(/^\d+-/, '')) || drawing.drawing_no || drawing.name || 'Drawing',
     type: type,
     extension: extension
   };
@@ -53,6 +61,7 @@ const DrawingPreviewModal = ({ isOpen, onClose, drawing }) => {
       title={`Drawing Insight: ${previewFile.name}`}
       size="4xl"
       className="rounded shadow-xl"
+      overlayClassName="z-[60]"
     >
       <div className="flex flex-col lg:flex-row gap-2 h-[60vh]">
         {/* Sidebar Details */}
@@ -115,8 +124,34 @@ const DrawingPreviewModal = ({ isOpen, onClose, drawing }) => {
         </div>
 
         {/* Preview Container */}
-        <div className="flex-1 bg-slate-50 rounded  border border-slate-200 overflow-hidden relative group">
-          {previewFile.type === 'image' ? (
+        <div className="flex-1 bg-slate-50 rounded  border border-slate-200 overflow-hidden relative group flex flex-col">
+          {files.length > 1 && (
+            <div className="flex flex-wrap items-center gap-1.5 p-2 bg-slate-100 border-b border-slate-200">
+              <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider px-1">Files ({files.length}):</span>
+              {files.map((file, idx) => {
+                const name = file.split('/').pop().replace(/^\d+-/, '');
+                const isActive = idx === activeIdx;
+                return (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => setActiveIdx(idx)}
+                    className={`px-2 py-0.5 text-[10px] rounded transition-all truncate max-w-[150px] font-medium border ${
+                      isActive
+                        ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm font-semibold'
+                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
+                    title={name}
+                  >
+                    {name}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          
+          <div className="flex-1 relative w-full h-full overflow-hidden">
+            {previewFile.type === 'image' ? (
             <div className="w-full h-full flex items-center justify-center p-2">
               <img 
                 src={previewFile.url} 
@@ -195,6 +230,7 @@ const DrawingPreviewModal = ({ isOpen, onClose, drawing }) => {
              </button>
           </div>
         </div>
+      </div>
       </div>
     </Modal>
   );

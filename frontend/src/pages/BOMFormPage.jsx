@@ -678,8 +678,8 @@ const BOMFormPage = () => {
       return;
     }
 
-    // Check if we already have it in approvedDrawings
-    let dwg = approvedDrawings.find(d => d.drawing_no === drawingNo);
+    // Check if we already have it in approvedDrawings AND it contains a valid file path
+    let dwg = approvedDrawings.find(d => d.drawing_no === drawingNo && (d.file_path || d.drawing_pdf));
     if (!dwg) {
       // Fetch from backend
       try {
@@ -697,7 +697,13 @@ const BOMFormPage = () => {
     }
 
     if (dwg) {
-      setPreviewDrawing(dwg);
+      const finalDwg = {
+        ...dwg,
+        file_path: dwg.file_path || dwg.drawing_pdf,
+        drawing_pdf: dwg.drawing_pdf || dwg.file_path,
+        client_name: dwg.client_name || dwg.company_name
+      };
+      setPreviewDrawing(finalDwg);
       setShowPreviewModal(true);
     } else {
       errorToast('Drawing file not found in system');
@@ -1229,6 +1235,7 @@ const BOMFormPage = () => {
           currentApprovedDrawings = drawingsData.flatMap(order => (order.items || []).map(item => ({
             ...item,
             company_name: order.company_name,
+            client_name: order.company_name,
             po_number: order.po_number
           })));
           setApprovedDrawings(currentApprovedDrawings);
@@ -1358,8 +1365,10 @@ const BOMFormPage = () => {
                 diameter: (isHistorical && parseFloat(m.diameter) > 0) ? m.diameter : (m.diameter || s?.diameter),
                 outer_diameter: (isHistorical && parseFloat(m.outer_diameter) > 0) ? m.outer_diameter : (m.outer_diameter || s?.outer_diameter),
                 density: m.density || s?.density || '',
-                shape_id: m.shape_id || s?.shape_id || '',
-                material_id: m.material_id || s?.material_id || ''
+                shape_id: m.shape_id || m.shapeId || s?.shape_id || '',
+                shapeId: m.shape_id || m.shapeId || s?.shape_id || '',
+                material_id: m.material_id || m.materialId || s?.material_id || '',
+                materialId: m.material_id || m.materialId || s?.material_id || ''
               };
             });
           }
@@ -1471,6 +1480,11 @@ const BOMFormPage = () => {
         payload.materialName = payload.materialName;
         payload.itemGroup = payload.itemGroup;
         payload.rate = parseFloat(payload.rate) || 0;
+        payload.shape_id = formData.shapeId || '';
+        payload.shapeId = formData.shapeId || '';
+        payload.material_id = formData.materialId || '';
+        payload.materialId = formData.materialId || '';
+        payload.density = formData.density || '';
         delete payload.qty;
         delete payload.weightPerUnit;
         delete payload.scrapPercent;
@@ -1554,6 +1568,11 @@ const BOMFormPage = () => {
         payload.itemGroup = payload.itemGroup;
         payload.drawingNo = formData.drawingNo || formData.drawing_no || 'N/A';
         payload.drawing_no = payload.drawingNo;
+        payload.shape_id = formData.shapeId || '';
+        payload.shapeId = formData.shapeId || '';
+        payload.material_id = formData.materialId || '';
+        payload.materialId = formData.materialId || '';
+        payload.density = formData.density || '';
       } else if (section === 'components') {
         payload.component_code = payload.componentCode;
         payload.quantity = parseFloat(payload.quantity) || 0;
@@ -2587,14 +2606,24 @@ const BOMFormPage = () => {
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs  text-slate-500 ml-1">BOM Revision</label>
-                  <input
-                    type="text"
-                    disabled={isReadOnly}
-                    className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all disabled:bg-slate-50 disabled:text-slate-400"
-                    placeholder="e.g. 1.0"
-                    value={productForm.revision}
-                    onChange={(e) => setProductForm({ ...productForm, revision: e.target.value })}
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      disabled={isReadOnly}
+                      className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all disabled:bg-slate-50 disabled:text-slate-400"
+                      placeholder="e.g. 1.0"
+                      value={productForm.revision}
+                      onChange={(e) => setProductForm({ ...productForm, revision: e.target.value })}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handlePreviewByNo(productForm.drawingNo)}
+                      className="px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 border border-indigo-200 rounded text-xs font-semibold transition-all active:scale-95 flex items-center gap-1.5"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      Preview
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -2913,7 +2942,7 @@ const BOMFormPage = () => {
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-12 gap-2">
-                    <div className="md:col-span-3 space-y-1">
+                    <div className={`${(['raw materials', 'raw material', 'rm', 'consumables', 'consumable', 'con'].includes((materialForm.itemGroup || '').toLowerCase().trim()) && (materialForm.uom || '').toLowerCase() === 'kg') ? 'md:col-span-4' : 'md:col-span-5'} space-y-1`}>
                       <label className="text-xs  text-slate-500 ml-1">Material Selection <span className="text-rose-500">*</span></label>
                       <SearchableSelect
                         placeholder="Select material..."
@@ -3020,12 +3049,12 @@ const BOMFormPage = () => {
                       />
                     </div>
 
-                    <div className="md:col-span-1 space-y-1">
+                    <div className={`${(['raw materials', 'raw material', 'rm', 'consumables', 'consumable', 'con'].includes((materialForm.itemGroup || '').toLowerCase().trim()) && (materialForm.uom || '').toLowerCase() === 'kg') ? 'md:col-span-1' : 'md:col-span-2'} space-y-1`}>
                       <label className="text-xs  text-slate-500 ml-1">Quantity</label>
                       <input type="number" className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none transition-all" placeholder="0.00" step="0.01" value={materialForm.qty} onChange={(e) => setMaterialForm({ ...materialForm, qty: e.target.value })} />
                     </div>
 
-                    <div className="md:col-span-1 space-y-1">
+                    <div className={`${(['raw materials', 'raw material', 'rm', 'consumables', 'consumable', 'con'].includes((materialForm.itemGroup || '').toLowerCase().trim()) && (materialForm.uom || '').toLowerCase() === 'kg') ? 'md:col-span-1' : 'md:col-span-2'} space-y-1`}>
                       <label className="text-xs  text-slate-500 ml-1">UOM</label>
                       <select className="w-full px-2 py-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none transition-all" value={materialForm.uom} onChange={(e) => setMaterialForm({ ...materialForm, uom: e.target.value })}>
                         <option value="Kg">Kg</option>
@@ -3045,7 +3074,7 @@ const BOMFormPage = () => {
                       </select>
                     </div>
 
-                    <div className="md:col-span-2 space-y-1">
+                    <div className="md:col-span-3 space-y-1">
                       <label className="text-xs  text-slate-500 ml-1">Item Group</label>
                       <select className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none transition-all" value={materialForm.itemGroup} onChange={(e) => setMaterialForm({ ...materialForm, itemGroup: e.target.value })}>
                         <option value="">Select Group</option>
@@ -3088,37 +3117,7 @@ const BOMFormPage = () => {
                       return null;
                     })()}
 
-                    <div className={`space-y-1 flex flex-col justify-end ${(() => {
-                      const isWeightBasedGroup = ['raw materials', 'raw material', 'rm', 'consumables', 'consumable', 'con'].includes((materialForm.itemGroup || '').toLowerCase().trim());
-                      const isKg = (materialForm.uom || '').toLowerCase() === 'kg';
-                      return (isWeightBasedGroup && isKg) ? 'md:col-span-2' : 'md:col-span-4';
-                    })()}`}>
-                      {editingSectionItem?.section === 'materials' ? (
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => handleUpdateSectionItem('materials', materialForm, setMaterialForm, { materialName: '', itemCode: '', qty: '1', uom: 'Kg', itemGroup: 'Raw Material', rate: '', warehouse: '', operation: '', parentId: '', description: '', weightPerUnit: '', scrapPercent: '0', length: '', width: '', thickness: '', diameter: '', outer_diameter: '', density: '', shapeId: '', materialId: '' })}
-                            className="flex-1 py-2 bg-blue-600 text-white rounded  text-xs  hover:bg-blue-700 shadow-lg shadow-blue-100 transition-all active:scale-95 flex items-center justify-center gap-2"
-                          >
-                            <Save className="w-4 h-4" />
-                            Update
-                          </button>
-                          <button
-                            onClick={() => handleCancelEditSectionItem('materials')}
-                            className="px-3 py-2 bg-slate-100 text-slate-600 rounded  text-xs  hover:bg-slate-200 transition-all active:scale-95"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => handleAddSectionItem('materials', materialForm, setMaterialForm, { materialName: '', itemCode: '', qty: '1', uom: 'Kg', itemGroup: 'Raw Material', rate: '', warehouse: '', operation: '', parentId: '', description: '', weightPerUnit: '', scrapPercent: '0', length: '', width: '', thickness: '', diameter: '', outer_diameter: '', density: '', shapeId: '', materialId: '' })}
-                          className="w-full py-2 bg-emerald-600 text-white rounded  text-xs  hover:bg-emerald-700 shadow-lg shadow-emerald-100 transition-all active:scale-95 flex items-center justify-center gap-2"
-                        >
-                          <Plus className="w-4 h-4" />
-                          Add Material
-                        </button>
-                      )}
-                    </div>
+                    {/* Button moved to second block row */}
 
                     {(() => {
                       const groupUpper = (materialForm.itemGroup || '').toUpperCase().trim();
@@ -3231,12 +3230,12 @@ const BOMFormPage = () => {
                     })()}
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-2 mt-3">
-                    <div className="space-y-1">
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-2 mt-3">
+                    <div className="md:col-span-2 space-y-1">
                       <label className="text-xs  text-slate-500 ml-1">Rate (₹)</label>
                       <input type="number" className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none transition-all" placeholder="0.00" step="0.01" value={materialForm.rate} onChange={(e) => setMaterialForm({ ...materialForm, rate: e.target.value })} />
                     </div>
-                    <div className="space-y-1">
+                    <div className="md:col-span-2 space-y-1">
                       <label className="text-xs  text-slate-500 ml-1">Warehouse</label>
                       <select className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-emerald-500 outline-none transition-all" value={materialForm.warehouse} onChange={(e) => setMaterialForm({ ...materialForm, warehouse: e.target.value })}>
                         <option value="">Default</option>
@@ -3244,7 +3243,7 @@ const BOMFormPage = () => {
                         <option value="Scrap">Scrap Yard</option>
                       </select>
                     </div>
-                    <div className="space-y-1">
+                    <div className="md:col-span-2 space-y-1">
                       <label className="text-xs  text-slate-500 ml-1">Operation Link</label>
                       <SearchableSelect
                         placeholder="Select Operation"
@@ -3256,7 +3255,7 @@ const BOMFormPage = () => {
                         onChange={(e) => setMaterialForm({ ...materialForm, operation: e.target.value })}
                       />
                     </div>
-                    <div className="space-y-1">
+                    <div className="md:col-span-3 space-y-1">
                       <label className="text-xs  text-slate-500 ml-1">Parent Component</label>
                       <select
                         disabled={productForm.itemGroup === 'Assembly'}
@@ -3269,6 +3268,36 @@ const BOMFormPage = () => {
                           <option key={c.id} value={c.id}>{c.component_code || c.componentCode}</option>
                         ))}
                       </select>
+                    </div>
+                    <div className="md:col-span-3 flex items-end">
+                      {editingSectionItem?.section === 'materials' ? (
+                        <div className="flex gap-2 w-full">
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateSectionItem('materials', materialForm, setMaterialForm, { materialName: '', itemCode: '', qty: '1', uom: 'Kg', itemGroup: 'Raw Material', rate: '', warehouse: '', operation: '', parentId: '', description: '', weightPerUnit: '', scrapPercent: '0', length: '', width: '', thickness: '', diameter: '', outer_diameter: '', density: '', shapeId: '', materialId: '' })}
+                            className="flex-1 py-2 bg-blue-600 text-white rounded  text-xs  hover:bg-blue-700 shadow-lg shadow-blue-100 transition-all active:scale-95 flex items-center justify-center gap-2"
+                          >
+                            <Save className="w-4 h-4" />
+                            Update
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleCancelEditSectionItem('materials')}
+                            className="px-3 py-2 bg-slate-100 text-slate-600 rounded  text-xs  hover:bg-slate-200 transition-all active:scale-95"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleAddSectionItem('materials', materialForm, setMaterialForm, { materialName: '', itemCode: '', qty: '1', uom: 'Kg', itemGroup: 'Raw Material', rate: '', warehouse: '', operation: '', parentId: '', description: '', weightPerUnit: '', scrapPercent: '0', length: '', width: '', thickness: '', diameter: '', outer_diameter: '', density: '', shapeId: '', materialId: '' })}
+                          className="w-full py-2 bg-emerald-600 text-white rounded  text-xs  hover:bg-emerald-700 shadow-lg shadow-emerald-100 transition-all active:scale-95 flex items-center justify-center gap-2"
+                        >
+                          <Plus className="w-4 h-4" />
+                          Add Material
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>

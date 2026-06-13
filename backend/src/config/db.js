@@ -1414,7 +1414,10 @@ const ensureBOMMaterialsColumns = async () => {
       { name: 'operation', definition: 'VARCHAR(100)' },
       { name: 'description', definition: 'TEXT' },
       { name: 'weight_per_unit', definition: 'DECIMAL(10, 4) DEFAULT 0' },
-      { name: 'scrap_percent', definition: 'DECIMAL(10, 2) DEFAULT 0' }
+      { name: 'scrap_percent', definition: 'DECIMAL(10, 2) DEFAULT 0' },
+      { name: 'shape_id', definition: 'INT NULL' },
+      { name: 'material_id', definition: 'INT NULL' },
+      { name: 'density', definition: 'DECIMAL(12, 6) NULL' }
     ];
 
     const missing = requiredColumns.filter(column => !existing.has(column.name));

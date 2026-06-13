@@ -462,7 +462,7 @@ export const Badge = ({ children, variant = 'default', className = '' }) => {
   );
 };
 
-export const Modal = ({ isOpen, onClose, title, children, className = '', size = '4xl' }) => {
+export const Modal = ({ isOpen, onClose, title, children, className = '', size = '4xl', overlayClassName = 'z-50' }) => {
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
@@ -496,7 +496,7 @@ export const Modal = ({ isOpen, onClose, title, children, className = '', size =
   const isFull = size === 'full';
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-start bg-black/60 backdrop-blur-sm overflow-y-auto py-4 sm:py-8" onClick={onClose}>
+    <div className={`fixed inset-0 flex flex-col items-center justify-start bg-black/60 backdrop-blur-sm overflow-y-auto py-4 sm:py-8 ${overlayClassName}`} onClick={onClose}>
       <div className={`rounded  shadow-2xl ${maxWidth} w-full ${isFull ? 'min-h-full mx-0 rounded-none !my-0' : 'mx-4 h-fit max-h-[85vh] flex flex-col overflow-hidden'} border ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} ${className}`} onClick={(e) => e.stopPropagation()}>
         <div className={`sticky top-0 z-10 border-b p-2 flex items-center justify-between ${isDark ? 'bg-slate-900/95 border-slate-800 text-white' : 'bg-white/95 border-slate-100 text-slate-900 '}`}>
           <h2 className="text-lg  ">{title}</h2>
