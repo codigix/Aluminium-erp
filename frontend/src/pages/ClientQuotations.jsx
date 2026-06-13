@@ -739,6 +739,7 @@ const ClientQuotations = () => {
         status: 'BOM Approved',
         displayStatus: 'BOM Approved',
         uniqueKey: `pending_${name}`,
+        project_name: data.orders?.[0]?.project_name,
         quotes: data.orders.flatMap(o => (o.items || []).map(item => ({ ...item, project_name: o.project_name })))
       })).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     }
@@ -1761,6 +1762,7 @@ const ClientQuotations = () => {
           clientId: group.company_id,
           clientName: group.company_name,
           clientEmail: firstQuote?.client_email || '',
+          contact_person: firstQuote?.contact_person || '',
           phone: firstQuote?.client_phone || '',
           address: firstQuote?.client_address || '',
           version: group.version || 1,
@@ -1804,6 +1806,7 @@ const ClientQuotations = () => {
           clientId: group.company_id,
           clientName: group.company_name,
           clientEmail: firstQuote?.client_email || '',
+          contact_person: firstQuote?.contact_person || '',
           phone: firstQuote?.client_phone || '',
           address: firstQuote?.client_address || '',
           version: (group.version || 1) + 1,
@@ -1914,6 +1917,7 @@ const ClientQuotations = () => {
             clientId: group.company_id,
             clientName: group.company_name,
             clientEmail: firstQuote?.client_email || '',
+            contact_person: firstQuote?.contact_person || '',
             phone: firstQuote?.client_phone || '',
             address: firstQuote?.client_address || '',
             version: (group.version || 1) + 1,

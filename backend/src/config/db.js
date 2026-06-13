@@ -412,7 +412,11 @@ const ensureQuotationRequestColumns = async () => {
     const existing = new Set(columns.map(column => column.Field));
     const requiredColumns = [
       { name: 'item_group', definition: 'VARCHAR(50) NULL' },
-      { name: 'host_company_id', definition: 'INT NULL' }
+      { name: 'host_company_id', definition: 'INT NULL' },
+      { name: 'client_email', definition: 'VARCHAR(255) NULL' },
+      { name: 'client_phone', definition: 'VARCHAR(50) NULL' },
+      { name: 'contact_person', definition: 'VARCHAR(255) NULL' },
+      { name: 'client_address', definition: 'TEXT NULL' }
     ];
 
     const missing = requiredColumns.filter(column => !existing.has(column.name));

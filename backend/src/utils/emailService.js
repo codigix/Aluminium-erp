@@ -540,7 +540,7 @@ const sendShipmentStatusEmail = async (shipmentData, status, attachments = []) =
   }
 };
 
-const sendQuotationEmail = async (clientEmail, clientName, items, totalAmount, notes, clientId, quoteNumber, hostCompanyId = null) => {
+const sendQuotationEmail = async (clientEmail, clientName, items, totalAmount, notes, clientId, quoteNumber, hostCompanyId = null, passedClientDetails = null) => {
   try {
     const transporter = createTransporter();
     const adminCompanyMasterService = require('../services/adminCompanyMasterService');
@@ -580,6 +580,13 @@ const sendQuotationEmail = async (clientEmail, clientName, items, totalAmount, n
       } catch (err) {
         console.error('Error fetching client details in email service:', err);
       }
+    }
+
+    if (passedClientDetails) {
+      clientDetails = {
+        ...clientDetails,
+        ...passedClientDetails
+      };
     }
 
     const html = generateQuotationHTML(clientName, items, totalAmount, notes, clientId, quoteNumber, hostCompany, clientDetails);
@@ -674,7 +681,7 @@ const sendReplyEmail = async (to, subject, message, replyToId) => {
   }
 };
 
-const generateQuotationPDF = async (clientName, items, totalAmount, notes, clientId, quoteNumber, hostCompanyId = null) => {
+const generateQuotationPDF = async (clientName, items, totalAmount, notes, clientId, quoteNumber, hostCompanyId = null, passedClientDetails = null) => {
   const adminCompanyMasterService = require('../services/adminCompanyMasterService');
   let hostCompany = null;
   if (hostCompanyId) {
@@ -712,6 +719,13 @@ const generateQuotationPDF = async (clientName, items, totalAmount, notes, clien
     } catch (err) {
       console.error('Error fetching client details in PDF service:', err);
     }
+  }
+
+  if (passedClientDetails) {
+    clientDetails = {
+      ...clientDetails,
+      ...passedClientDetails
+    };
   }
 
   const html = generateQuotationHTML(clientName, items, totalAmount, notes, clientId, quoteNumber, hostCompany, clientDetails);

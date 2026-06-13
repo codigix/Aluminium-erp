@@ -82,7 +82,19 @@ const listDrawings = async (search = '', onlyShared = false, clientName = null) 
     params.push(searchPattern, searchPattern, searchPattern);
   }
 
-  query += ` ORDER BY d.id DESC, (soi.item_group LIKE '%FG%' OR soi.item_group LIKE '%FINISHED%') DESC, (soi.bom_cost > 0) DESC, soi.id DESC`;
+  query += ` ORDER BY 
+    CASE 
+      WHEN (
+        COALESCE(soi.status, '') NOT IN ('APPROVED', 'REJECTED') 
+        AND COALESCE(d.status, '') NOT IN ('APPROVED', 'REJECTED') 
+        AND (soi.id IS NOT NULL OR COALESCE(d.status, '') IN ('SHARED', 'PENDING'))
+      ) THEN 1 
+      ELSE 2 
+    END ASC, 
+    d.id DESC, 
+    (soi.item_group LIKE '%FG%' OR soi.item_group LIKE '%FINISHED%') DESC, 
+    (soi.bom_cost > 0) DESC, 
+    soi.id DESC`;
   const [rows] = await pool.query(query, params);
 
   // Enrich with sub-assemblies for items with BOM structure
@@ -345,31 +357,7 @@ const updateDrawing = async (id, data) => {
           }
         }
 
-        // Update Contact
-        if (contactPerson !== undefined || phoneNumber !== undefined || emailAddress !== undefined) {
-          const [so] = await connection.query('SELECT company_id FROM sales_orders WHERE id = ?', [item.sales_order_id]);
-          if (so.length > 0) {
-            const companyId = so[0].company_id;
-            const [contacts] = await connection.query(
-              'SELECT id FROM contacts WHERE company_id = ? AND contact_type = "PRIMARY"',
-              [companyId]
-            );
-            if (contacts.length > 0) {
-              const contactUpdates = [];
-              const contactParams = [];
-              if (contactPerson !== undefined) { contactUpdates.push('name = ?'); contactParams.push(contactPerson); }
-              if (emailAddress !== undefined) { contactUpdates.push('email = ?'); contactParams.push(emailAddress); }
-              if (phoneNumber !== undefined) { contactUpdates.push('phone = ?'); contactParams.push(phoneNumber); }
 
-              if (contactUpdates.length > 0) {
-                await connection.execute(
-                  `UPDATE contacts SET ${contactUpdates.join(', ')} WHERE id = ?`,
-                  [...contactParams, contacts[0].id]
-                );
-              }
-            }
-          }
-        }
       }
     }
 
@@ -468,7 +456,7 @@ const createCustomerDrawing = async (data) => {
       ,
       [
         drawingPublicId,
-        clientName || null, projectName || null, drawingNo, revision || null, qty || 1, description || null, drawing_type || 'Part', hsnCode || null, deliveryDate || null, filePath, fileType, remarks || null,
+        clientName || null, projectName || null, drawingNo, revision || null, qty || 1, description || null, drawing_type || 'Part', hsnCode || null, deliveryDate || null, filePath || null, fileType || null, remarks || null,
         uploadedBy || 'Sales', contactPerson || null, phoneNumber || null, emailAddress || null,
         customerType || null, gstin || null, city || null, state || null, billingAddress || null, shippingAddress || null,
         fileType === 'XLSX' || fileType === 'XLS' ? filePath : null,
@@ -505,12 +493,6 @@ const createCustomerDrawing = async (data) => {
         await connection.execute(
           'INSERT INTO contacts (company_id, name, email, phone, contact_type, status) VALUES (?, ?, ?, ?, "PRIMARY", "ACTIVE")',
           [companyId, contactPerson || 'Primary Contact', emailAddress || null, phoneNumber || null]
-        );
-      } else {
-        // Update existing contact if new info is provided
-        await connection.execute(
-          'UPDATE contacts SET name = COALESCE(?, name), email = COALESCE(?, email), phone = COALESCE(?, phone) WHERE id = ?',
-          [contactPerson || null, emailAddress || null, phoneNumber || null, contacts[0].id]
         );
       }
     }
@@ -588,7 +570,7 @@ const createBatchCustomerDrawings = async (batchData, batchInfo = {}) => {
         ,
         [
           drawingPublicId,
-          clientName || null, projectName || null, drawingNo, revision || null, qty || 1, description || null, drawing_type || 'Part', hsnCode || null, deliveryDate || null, filePath, fileType, remarks || null,
+          clientName || null, projectName || null, drawingNo, revision || null, qty || 1, description || null, drawing_type || 'Part', hsnCode || null, deliveryDate || null, filePath || null, fileType || null, remarks || null,
           uploadedBy || 'Sales', contactPerson || null, phoneNumber || null, emailAddress || null,
           customerType || null, gstin || null, city || null, state || null, billingAddress || null, shippingAddress || null,
           batchInfo.excelPath || null,

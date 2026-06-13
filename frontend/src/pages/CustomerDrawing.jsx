@@ -277,7 +277,12 @@ const CustomerDrawing = () => {
             sales_order_id: order.id,
             po_number: order.po_number,
             po_date: order.po_date,
-            po_net_total: order.po_net_total
+            po_net_total: order.po_net_total,
+            order_contact_person: order.contact_person,
+            order_email: order.email,
+            order_phone: order.phone,
+            order_address: order.address,
+            order_project_name: order.project_name
           });
         });
       }
@@ -314,7 +319,16 @@ const CustomerDrawing = () => {
     }
 
     const clientData = approvedGroupedByClient[selectedApprovedClient];
-    if (!clientData.email) {
+    
+    // Find the first priced item and extract its order/project contact person and email
+    const firstQuotedItem = selectedApprovedItems.find(item => quotePrices[item.id] && quotePrices[item.id] > 0);
+    const contactPerson = firstQuotedItem?.order_contact_person || clientData.contact_person;
+    const email = firstQuotedItem?.order_email || clientData.email;
+    const phone = firstQuotedItem?.order_phone || clientData.phone;
+    const address = firstQuotedItem?.order_address || clientData.address;
+    const projectName = firstQuotedItem?.order_project_name || clientData.orders?.[0]?.project_name || '';
+
+    if (!email) {
       errorToast('Client email address not available. Cannot create quotation.');
       return;
     }
@@ -324,6 +338,9 @@ const CustomerDrawing = () => {
       html: `
         <div style="text-align: left; font-size: 16px;">
           <p><strong>Client:</strong> ${clientData.company_name}</p>
+          <p><strong>Project:</strong> ${projectName}</p>
+          <p><strong>Contact Person:</strong> ${contactPerson}</p>
+          <p><strong>Email:</strong> ${email}</p>
           <p><strong>Items:</strong> ${selectedApprovedItems.length}</p>
           <p><strong>Total Value:</strong> ₹${calculateQuotationTotal().toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
           <p style="color: #666; margin-top: 8px;">Quotation will be created and sent to client.</p>
@@ -342,10 +359,11 @@ const CustomerDrawing = () => {
         const quotationData = {
           company_id: clientData.company_id,
           company_name: clientData.company_name,
-          contact_person: clientData.contact_person,
-          email: clientData.email,
-          phone: clientData.phone,
-          address: clientData.address,
+          contact_person: contactPerson,
+          email: email,
+          phone: phone,
+          address: address,
+          projectName: projectName,
           items: selectedApprovedItems.map(item => ({
             sales_order_id: item.sales_order_id,
             sales_order_item_id: item.id,
@@ -353,9 +371,11 @@ const CustomerDrawing = () => {
             description: item.description,
             quantity: item.quantity,
             unit: item.unit,
-            quoted_price: quotePrices[item.id] || 0
+            quoted_price: quotePrices[item.id] || 0,
+            quotedPrice: quotePrices[item.id] || 0
           })),
           total_amount: calculateQuotationTotal(),
+          totalAmount: calculateQuotationTotal(),
           notes: quotationNotes
         };
 
@@ -543,9 +563,9 @@ const CustomerDrawing = () => {
             drawing_count: 0,
             original_items: [],
             // Ensure contact info is preserved
-            contact_person: so.contact_person || firstDrawingWithContact?.contact_person,
-            contact_phone: so.contact_phone || firstDrawingWithContact?.phone,
-            email_address: so.email_address || firstDrawingWithContact?.email,
+            contact_person: firstDrawingWithContact?.contact_person || so.contact_person,
+            contact_phone: firstDrawingWithContact?.phone || so.contact_phone,
+            email_address: firstDrawingWithContact?.email || so.email_address,
             customer_type: so.customer_type || firstDrawingWithContact?.customer_type,
             gstin: so.gstin || firstDrawingWithContact?.gstin,
             city: so.city || firstDrawingWithContact?.city,

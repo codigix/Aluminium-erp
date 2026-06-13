@@ -54,8 +54,9 @@ const listSalesOrders = async (includeWithoutPo = true) => {
     `SELECT so.*, 
             COALESCE(so.project_name, cp.project_name) as project_name,
             so.target_dispatch_date as delivery_date, c.company_name, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path,
-            COALESCE(ct.email, "") as email_address, COALESCE(ct.phone, "") as contact_phone,
-            COALESCE(ct.name, "") as contact_person,
+            COALESCE(cd_contact.email, ct.email, "") as email_address, 
+            COALESCE(cd_contact.phone, ct.phone, "") as contact_phone,
+            COALESCE(cd_contact.contact_person, ct.name, "") as contact_person,
             (SELECT GROUP_CONCAT(DISTINCT drawing_no SEPARATOR ', ') FROM sales_order_items WHERE sales_order_id = so.id) as drawing_no,
             (SELECT reason FROM design_rejections WHERE sales_order_id = so.id ORDER BY created_at DESC LIMIT 1) as rejection_reason,
             (SELECT COUNT(*) FROM sales_order_items WHERE sales_order_id = so.id AND UPPER(TRIM(status)) = 'APPROVED') as approved_items_count,
@@ -68,13 +69,20 @@ const listSalesOrders = async (includeWithoutPo = true) => {
               ROW_NUMBER() OVER (PARTITION BY company_id ORDER BY contact_type = 'PRIMARY' DESC, id ASC) as rn
        FROM contacts
      ) ct ON ct.company_id = c.id AND ct.rn = 1
+     LEFT JOIN (
+       SELECT soi.sales_order_id, cd.contact_person, cd.phone, cd.email,
+              ROW_NUMBER() OVER (PARTITION BY soi.sales_order_id ORDER BY cd.id ASC) as rn
+       FROM sales_order_items soi
+       JOIN customer_drawings cd ON soi.drawing_id = cd.id
+       WHERE cd.contact_person IS NOT NULL OR cd.phone IS NOT NULL OR cd.email IS NOT NULL
+     ) cd_contact ON cd_contact.sales_order_id = so.id AND cd_contact.rn = 1
      ${whereClause}
      ORDER BY so.created_at DESC`
   );
 
   for (const order of rows) {
     const [items] = await pool.query(
-      `SELECT soi.*, soi.quantity as design_qty, cd.file_path, cd.hsn_code, COALESCE(soi.delivery_date, cd.delivery_date) as delivery_date 
+      `SELECT soi.*, soi.quantity as design_qty, cd.file_path, cd.hsn_code, cd.contact_person, cd.phone, cd.email, COALESCE(soi.delivery_date, cd.delivery_date) as delivery_date 
        FROM sales_order_items soi
        LEFT JOIN customer_drawings cd ON soi.drawing_id = cd.id
        WHERE soi.sales_order_id = ?`,
@@ -94,9 +102,9 @@ const getSalesOrderById = async (id) => {
     `SELECT so.*, 
             COALESCE(so.project_name, cp.project_name) as project_name,
             so.target_dispatch_date as delivery_date, c.company_name, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path,
-            COALESCE(ct.email, cd_client.email, "") as email_address, 
-            COALESCE(ct.phone, cd_client.phone, "") as contact_phone,
-            COALESCE(ct.name, cd_client.contact_person, "") as contact_person,
+            COALESCE(cd_contact.email, ct.email, cd_client.email, "") as email_address, 
+            COALESCE(cd_contact.phone, ct.phone, cd_client.phone, "") as contact_phone,
+            COALESCE(cd_contact.contact_person, ct.name, cd_client.contact_person, "") as contact_person,
             COALESCE(so.billing_address, ba.billing_address, cd_client.billing_address, "") as billing_address,
             COALESCE(so.shipping_address, sa.shipping_address, cd_client.shipping_address, "") as shipping_address
      FROM sales_orders so
@@ -124,6 +132,13 @@ const getSalesOrderById = async (id) => {
        FROM customer_drawings 
        GROUP BY client_name
      ) cd_client ON cd_client.client_name = c.company_name
+     LEFT JOIN (
+       SELECT soi.sales_order_id, cd.contact_person, cd.phone, cd.email,
+              ROW_NUMBER() OVER (PARTITION BY soi.sales_order_id ORDER BY cd.id ASC) as rn
+       FROM sales_order_items soi
+       JOIN customer_drawings cd ON soi.drawing_id = cd.id
+       WHERE cd.contact_person IS NOT NULL OR cd.phone IS NOT NULL OR cd.email IS NOT NULL
+     ) cd_contact ON cd_contact.sales_order_id = so.id AND cd_contact.rn = 1
      WHERE ${whereClause}`,
     [id]
   );
@@ -133,7 +148,7 @@ const getSalesOrderById = async (id) => {
   order.client = order.company_name;
 
   const [items] = await pool.query(
-    `SELECT soi.*, cd.file_path, cd.hsn_code, COALESCE(soi.delivery_date, cd.delivery_date) as delivery_date 
+    `SELECT soi.*, cd.file_path, cd.hsn_code, cd.contact_person, cd.phone, cd.email, COALESCE(soi.delivery_date, cd.delivery_date) as delivery_date 
      FROM sales_order_items soi
      LEFT JOIN customer_drawings cd ON soi.drawing_id = cd.id
      WHERE soi.sales_order_id = ?`,
@@ -183,7 +198,9 @@ const getIncomingOrders = async (departmentCode, includeAccepted = false) => {
             soi.item_id, soi.item_code, soi.drawing_no, soi.description AS item_description, soi.quantity AS item_qty, soi.unit AS item_unit, soi.item_status, soi.item_rejection_reason,
             cd.drawing_name,
             sb.material_type as item_group,
-            COALESCE(ct.email, "") as email_address, COALESCE(ct.phone, "") as contact_phone, COALESCE(ct.name, "") as contact_person,
+            COALESCE(cd_contact.email, ct.email, "") as email_address, 
+            COALESCE(cd_contact.phone, ct.phone, "") as contact_phone, 
+            COALESCE(cd_contact.contact_person, ct.name, "") as contact_person,
             (SELECT reason FROM design_rejections WHERE sales_order_id = so.id ORDER BY created_at DESC LIMIT 1) as rejection_reason
      FROM sales_orders so
      LEFT JOIN companies c ON c.id = so.company_id
@@ -194,6 +211,13 @@ const getIncomingOrders = async (departmentCode, includeAccepted = false) => {
               ROW_NUMBER() OVER (PARTITION BY company_id ORDER BY contact_type = 'PRIMARY' DESC, id ASC) as rn
        FROM contacts
      ) ct ON ct.company_id = c.id AND ct.rn = 1
+     LEFT JOIN (
+       SELECT soi.sales_order_id, cd.contact_person, cd.phone, cd.email,
+              ROW_NUMBER() OVER (PARTITION BY soi.sales_order_id ORDER BY cd.id ASC) as rn
+       FROM sales_order_items soi
+       JOIN customer_drawings cd ON soi.drawing_id = cd.id
+       WHERE cd.contact_person IS NOT NULL OR cd.phone IS NOT NULL OR cd.email IS NOT NULL
+     ) cd_contact ON cd_contact.sales_order_id = so.id AND cd_contact.rn = 1
      LEFT JOIN (
        SELECT sales_order_id, id as item_id, item_code, drawing_no, description, quantity, quantity as design_qty, unit, status as item_status, rejection_reason as item_rejection_reason
        FROM sales_order_items
@@ -916,9 +940,9 @@ const bulkRejectDesigns = async (orderIds, reason) => {
 
 const getApprovedDrawings = async (companyId = null) => {
   let query = `SELECT so.*, c.company_name, c.company_code, c.id as company_id_check,
-     IFNULL(ct.email, '') as email,
-     IFNULL(ct.phone, '') as phone,
-     IFNULL(ct.name, '') as contact_person,
+     COALESCE(cd_contact.email, ct.email, '') as email,
+     COALESCE(cd_contact.phone, ct.phone, '') as phone,
+     COALESCE(cd_contact.contact_person, ct.name, '') as contact_person,
      cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total,
      (SELECT reason FROM design_rejections WHERE sales_order_id = so.id ORDER BY created_at DESC LIMIT 1) as rejection_reason
      FROM sales_orders so
@@ -929,6 +953,13 @@ const getApprovedDrawings = async (companyId = null) => {
               ROW_NUMBER() OVER (PARTITION BY company_id ORDER BY contact_type = 'PRIMARY' DESC, id ASC) as rn
        FROM contacts
      ) ct ON ct.company_id = c.id AND ct.rn = 1
+     LEFT JOIN (
+       SELECT soi.sales_order_id, cd.contact_person, cd.phone, cd.email,
+              ROW_NUMBER() OVER (PARTITION BY soi.sales_order_id ORDER BY cd.id ASC) as rn
+       FROM sales_order_items soi
+       JOIN customer_drawings cd ON soi.drawing_id = cd.id
+       WHERE cd.contact_person IS NOT NULL OR cd.phone IS NOT NULL OR cd.email IS NOT NULL
+     ) cd_contact ON cd_contact.sales_order_id = so.id AND cd_contact.rn = 1
      WHERE (TRIM(UPPER(so.status)) IN ('DESIGN_APPROVED', 'BOM_SUBMITTED', 'BOM_APPROVED', 'QUOTATION_SENT', 'PROCUREMENT_IN_PROGRESS', 'MATERIAL_PURCHASE_IN_PROGRESS', 'MATERIAL_READY', 'IN_PRODUCTION', 'PRODUCTION_COMPLETED', 'QC_IN_PROGRESS', 'QC_APPROVED', 'QC_REJECTED', 'READY_FOR_SHIPMENT'))
         AND so.quotation_id IS NULL`;
 
@@ -947,6 +978,7 @@ const getApprovedDrawings = async (companyId = null) => {
       `SELECT soi.id, soi.sales_order_id, soi.bom_id, soi.item_code, soi.item_type, soi.item_group, 
               soi.unit, soi.description, soi.is_active, soi.is_default, soi.quantity, 
               soi.drawing_no, soi.drawing_id, soi.status, soi.created_by, soi.created_at, soi.updated_at,
+              cd.contact_person, cd.phone, cd.email,
               (
                 SELECT bom_cost FROM sales_order_items v2 
                 WHERE ((v2.bom_id = soi.bom_id AND soi.bom_id IS NOT NULL AND v2.bom_id IS NOT NULL)
@@ -982,6 +1014,7 @@ const getApprovedDrawings = async (companyId = null) => {
        LEFT JOIN sales_orders so ON soi.sales_order_id = so.id
        LEFT JOIN customer_po_items poi ON so.customer_po_id = poi.customer_po_id 
             AND (TRIM(soi.drawing_no) = TRIM(poi.drawing_no) AND soi.drawing_no IS NOT NULL)
+       LEFT JOIN customer_drawings cd ON soi.drawing_id = cd.id
        WHERE soi.sales_order_id = ? 
        AND (
          TRIM(UPPER(soi.item_group)) IN ('ASSEMBLY', 'PART') 

@@ -13,9 +13,10 @@ const getQuotationRequests = async (req, res, next) => {
                qr.version, qr.parent_id, qr.batch_id, qr.host_company_id,
                COALESCE(qr.project_name, so.project_name, 'Manual Quotation') as project_name, 
                so.bom_id, c.company_name, 
-               (SELECT email FROM contacts WHERE company_id = c.id AND (contact_type = 'PRIMARY' OR contact_type = 'PURCHASE') LIMIT 1) as client_email,
-               (SELECT phone FROM contacts WHERE company_id = c.id AND (contact_type = 'PRIMARY' OR contact_type = 'PURCHASE') LIMIT 1) as client_phone,
-               (SELECT CONCAT(line1, ', ', IFNULL(line2, ''), city, ', ', state, ' ', pincode) FROM company_addresses WHERE company_id = c.id LIMIT 1) as client_address,
+               COALESCE(qr.client_email, cd_proj.email, cd_contact.email, ct.email, '') as client_email,
+               COALESCE(qr.client_phone, cd_proj.phone, cd_contact.phone, ct.phone, '') as client_phone,
+               COALESCE(qr.contact_person, cd_proj.contact_person, cd_contact.contact_person, ct.name, '') as contact_person,
+               COALESCE(qr.client_address, cd_proj.billing_address, (SELECT CONCAT(line1, ', ', IFNULL(line2, ''), city, ', ', state, ' ', pincode) FROM company_addresses WHERE company_id = c.id LIMIT 1)) as client_address,
                cp.po_number,
                qr.drawing_no as drawing_no,
                COALESCE(qr.description, soi.description, '—') as item_description,
@@ -45,6 +46,26 @@ const getQuotationRequests = async (req, res, next) => {
         LEFT JOIN sales_order_items soi ON (soi.id = qr.sales_order_item_id AND qr.status != 'COMPONENT')
         LEFT JOIN customer_po_items poi ON so.customer_po_id = poi.customer_po_id 
              AND (TRIM(soi.drawing_no) = TRIM(poi.drawing_no) AND soi.drawing_no IS NOT NULL)
+        LEFT JOIN (
+          SELECT company_id, email, phone, name, 
+                 ROW_NUMBER() OVER (PARTITION BY company_id ORDER BY contact_type = 'PRIMARY' DESC, id ASC) as rn
+          FROM contacts
+        ) ct ON ct.company_id = c.id AND ct.rn = 1
+        LEFT JOIN (
+          SELECT soi.sales_order_id, cd.contact_person, cd.phone, cd.email,
+                 ROW_NUMBER() OVER (PARTITION BY soi.sales_order_id ORDER BY cd.id ASC) as rn
+          FROM sales_order_items soi
+          JOIN customer_drawings cd ON soi.drawing_id = cd.id
+          WHERE cd.contact_person IS NOT NULL OR cd.phone IS NOT NULL OR cd.email IS NOT NULL
+        ) cd_contact ON cd_contact.sales_order_id = qr.sales_order_id AND cd_contact.rn = 1
+        LEFT JOIN (
+          SELECT client_name, project_name, email, phone, contact_person, billing_address,
+                 ROW_NUMBER() OVER (PARTITION BY client_name, project_name ORDER BY id DESC) as rn
+          FROM customer_drawings
+          WHERE contact_person IS NOT NULL OR phone IS NOT NULL OR email IS NOT NULL
+        ) cd_proj ON cd_proj.client_name = c.company_name 
+                 AND TRIM(LOWER(cd_proj.project_name)) = TRIM(LOWER(COALESCE(qr.project_name, so.project_name)))
+                 AND cd_proj.rn = 1
       ) qry
       WHERE 1=1
     `;
@@ -418,15 +439,30 @@ const rejectQuotationRequest = async (req, res, next) => {
 const sendQuotationViaEmail = async (req, res, next) => {
   const connection = await pool.getConnection();
   try {
-    const { clientId, clientEmail, clientName, items, totalAmount, notes, emailRequired = true, status, projectName, clearPendingBomId } = req.body;
+    const resolvedClientId = req.body.clientId || req.body.company_id;
+    const resolvedClientName = req.body.clientName || req.body.company_name;
+    const resolvedClientEmail = req.body.clientEmail || req.body.email;
+    const resolvedClientPhone = req.body.clientPhone || req.body.phone;
+    const resolvedContactPerson = req.body.contactPerson || req.body.contact_person;
+    const resolvedClientAddress = req.body.clientAddress || req.body.address;
 
-    if (!clientId || !items || items.length === 0) {
+    const { 
+      items, 
+      totalAmount, 
+      notes, 
+      emailRequired = true, 
+      status, 
+      projectName, 
+      clearPendingBomId 
+    } = req.body;
+
+    if (!resolvedClientId || !items || items.length === 0) {
       return res.status(400).json({
         error: 'Missing required fields: clientId, items'
       });
     }
 
-    if (emailRequired && (!clientEmail || !clientName)) {
+    if (emailRequired && (!resolvedClientEmail || !resolvedClientName)) {
       return res.status(400).json({
         error: 'Missing required fields for email: clientEmail, clientName'
       });
@@ -462,6 +498,36 @@ const sendQuotationViaEmail = async (req, res, next) => {
       }
     }
 
+    // Resolve snapshot contact details (with fallbacks if frontend didn't supply them)
+    let finalClientEmail = resolvedClientEmail || null;
+    let finalClientPhone = resolvedClientPhone || null;
+    let finalContactPerson = resolvedContactPerson || null;
+    let finalClientAddress = resolvedClientAddress || null;
+
+    if (!finalClientEmail || !finalClientPhone || !finalContactPerson || !finalClientAddress) {
+      const [contactRows] = await connection.query(
+        `SELECT email, phone, name FROM contacts WHERE company_id = ? 
+         ORDER BY contact_type = 'PRIMARY' DESC, id ASC LIMIT 1`,
+        [resolvedClientId]
+      );
+      if (contactRows.length > 0) {
+        if (!finalClientEmail) finalClientEmail = contactRows[0].email || '';
+        if (!finalClientPhone) finalClientPhone = contactRows[0].phone || '';
+        if (!finalContactPerson) finalContactPerson = contactRows[0].name || '';
+      }
+      if (!finalClientAddress) {
+        const [addrRows] = await connection.query(
+          `SELECT line1, line2, city, state, pincode FROM company_addresses WHERE company_id = ? LIMIT 1`,
+          [resolvedClientId]
+        );
+        if (addrRows.length > 0) {
+          finalClientAddress = [addrRows[0].line1, addrRows[0].line2, addrRows[0].city, addrRows[0].state, addrRows[0].pincode]
+            .filter(Boolean)
+            .join(', ');
+        }
+      }
+    }
+
     const quotationIds = [];
     const sanitizedSalesOrderIds = new Set();
 
@@ -469,17 +535,17 @@ const sendQuotationViaEmail = async (req, res, next) => {
     for (const item of items) {
       try {
         // 1. Save Parent Item
-        const lineTotal = (item.quotedPrice || 0) * (item.quantity || 1);
+        const lineTotal = (item.quotedPrice || item.quoted_price || 0) * (item.quantity || 1);
         const gstRate = parseFloat(item.gst_percentage) || 18;
         const lineTotalInclGst = lineTotal * (1 + gstRate / 100);
 
         const finalStatus = (status || item.status || 'SENT').toUpperCase();
 
         // Sanitize sales_order_id and sales_order_item_id
-        const rawOrderId = Number(item.orderId);
+        const rawOrderId = Number(item.orderId || item.sales_order_id);
         const salesOrderId = (!isNaN(rawOrderId) && validOrderIds.has(rawOrderId)) ? rawOrderId : null;
 
-        const rawOrderItemId = Number(item.salesOrderItemId);
+        const rawOrderItemId = Number(item.salesOrderItemId || item.sales_order_item_id);
         const salesOrderItemId = (!isNaN(rawOrderItemId) && validOrderItemIds.has(rawOrderItemId)) ? rawOrderItemId : null;
 
         if (salesOrderId) {
@@ -492,13 +558,14 @@ const sendQuotationViaEmail = async (req, res, next) => {
              status, total_amount, received_amount, rejection_reason, 
              notes, created_at, profit_percentage, gst_percentage,
              version, parent_id, drawing_no, description, item_unit,
-             project_name, batch_id, item_group, bom_cost, item_code, host_company_id
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             project_name, batch_id, item_group, bom_cost, item_code, host_company_id,
+             client_email, client_phone, contact_person, client_address
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             salesOrderId,
             salesOrderItemId,
             item.quantity || 0,
-            clientId,
+            resolvedClientId,
             finalStatus,
             lineTotal,
             lineTotalInclGst,
@@ -516,7 +583,11 @@ const sendQuotationViaEmail = async (req, res, next) => {
             item.item_group || item.item_group_calc || null,
             item.bom_cost || 0,
             item.item_code || null,
-            req.body.hostCompanyId ? Number(req.body.hostCompanyId) : null
+            req.body.hostCompanyId ? Number(req.body.hostCompanyId) : null,
+            finalClientEmail,
+            finalClientPhone,
+            finalContactPerson,
+            finalClientAddress
           ]
         );
 
@@ -529,7 +600,7 @@ const sendQuotationViaEmail = async (req, res, next) => {
 
         if (!components) {
           components = await bomService.getItemComponents(
-            item.salesOrderItemId,
+            salesOrderItemId,
             item.item_code,
             item.drawing_no
           );
@@ -541,10 +612,11 @@ const sendQuotationViaEmail = async (req, res, next) => {
                company_id, status, total_amount, received_amount, 
                created_at, version, parent_id, drawing_no, description, 
                item_unit, item_qty, batch_id, item_group, bom_cost, 
-               project_name, item_code, rejection_reason
-             ) VALUES (?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+               project_name, item_code, rejection_reason,
+               client_email, client_phone, contact_person, client_address
+             ) VALUES (?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
-              clientId,
+              resolvedClientId,
               'COMPONENT',
               0,
               sa.rate || sa.bom_cost || 0,
@@ -559,7 +631,11 @@ const sendQuotationViaEmail = async (req, res, next) => {
               sa.bom_cost || 0,
               projectName || null,
               sa.item_code || null,
-              String(parentQrId)
+              String(parentQrId),
+              finalClientEmail,
+              finalClientPhone,
+              finalContactPerson,
+              finalClientAddress
             ]
           );
         }
@@ -592,14 +668,20 @@ const sendQuotationViaEmail = async (req, res, next) => {
     if (emailRequired) {
       try {
         const emailResult = await emailService.sendQuotationEmail(
-          clientEmail,
-          clientName,
+          resolvedClientEmail,
+          resolvedClientName,
           items,
           totalAmountNum,
           notes,
-          clientId,
+          resolvedClientId,
           quoteNumber,
-          req.body.hostCompanyId
+          req.body.hostCompanyId,
+          {
+            email: finalClientEmail,
+            phone: finalClientPhone,
+            contact_person: finalContactPerson,
+            address: finalClientAddress
+          }
         );
         emailSent = true;
         emailMessageId = emailResult.messageId;
@@ -749,7 +831,11 @@ const downloadQuotationPDF = async (req, res, next) => {
 
     // 1. Fetch the representative quotation to get client info and timestamp
     const [quotes] = await pool.query(
-      `SELECT qr.*, c.company_name, c.id as client_id 
+      `SELECT qr.*, c.company_name, c.id as client_id,
+              COALESCE(qr.client_email, (SELECT email FROM contacts WHERE company_id = c.id AND (contact_type = 'PRIMARY' OR contact_type = 'PURCHASE') LIMIT 1)) as client_email,
+              COALESCE(qr.client_phone, (SELECT phone FROM contacts WHERE company_id = c.id AND (contact_type = 'PRIMARY' OR contact_type = 'PURCHASE') LIMIT 1)) as client_phone,
+              COALESCE(qr.contact_person, (SELECT name FROM contacts WHERE company_id = c.id AND (contact_type = 'PRIMARY' OR contact_type = 'PURCHASE') LIMIT 1)) as contact_person,
+              COALESCE(qr.client_address, (SELECT CONCAT(line1, ', ', IFNULL(line2, ''), city, ', ', state, ' ', pincode) FROM company_addresses WHERE company_id = c.id LIMIT 1)) as client_address
        FROM quotation_requests qr 
        JOIN companies c ON qr.company_id = c.id 
        WHERE qr.id = ?`,
@@ -816,7 +902,13 @@ const downloadQuotationPDF = async (req, res, next) => {
       representative.notes,
       representative.client_id,
       quoteNumber,
-      representative.host_company_id
+      representative.host_company_id,
+      {
+        email: representative.client_email,
+        phone: representative.client_phone,
+        contact_person: representative.contact_person,
+        address: representative.client_address
+      }
     );
 
     res.setHeader('Content-Type', 'application/pdf');
@@ -867,9 +959,33 @@ const getQuotationVersionDetails = async (req, res, next) => {
 
     // 1. Fetch the main record to get batch_id and version
     const [quotes] = await pool.query(
-      `SELECT qr.*, c.company_name
+      `SELECT qr.*, c.company_name,
+              COALESCE(qr.client_email, cd_proj.email, cd_contact.email, ct.email, '') as client_email,
+              COALESCE(qr.client_phone, cd_proj.phone, cd_contact.phone, ct.phone, '') as client_phone,
+              COALESCE(qr.contact_person, cd_proj.contact_person, cd_contact.contact_person, ct.name, '') as contact_person,
+              COALESCE(qr.client_address, cd_proj.billing_address, (SELECT CONCAT(line1, ', ', IFNULL(line2, ''), city, ', ', state, ' ', pincode) FROM company_addresses WHERE company_id = c.id LIMIT 1)) as client_address
        FROM quotation_requests qr 
        JOIN companies c ON qr.company_id = c.id 
+       LEFT JOIN (
+         SELECT company_id, email, phone, name, 
+                ROW_NUMBER() OVER (PARTITION BY company_id ORDER BY contact_type = 'PRIMARY' DESC, id ASC) as rn
+         FROM contacts
+       ) ct ON ct.company_id = c.id AND ct.rn = 1
+       LEFT JOIN (
+         SELECT soi.sales_order_id, cd.contact_person, cd.phone, cd.email,
+                ROW_NUMBER() OVER (PARTITION BY soi.sales_order_id ORDER BY cd.id ASC) as rn
+         FROM sales_order_items soi
+         JOIN customer_drawings cd ON soi.drawing_id = cd.id
+         WHERE cd.contact_person IS NOT NULL OR cd.phone IS NOT NULL OR cd.email IS NOT NULL
+       ) cd_contact ON cd_contact.sales_order_id = qr.sales_order_id AND cd_contact.rn = 1
+       LEFT JOIN (
+         SELECT client_name, project_name, email, phone, contact_person, billing_address,
+                ROW_NUMBER() OVER (PARTITION BY client_name, project_name ORDER BY id DESC) as rn
+         FROM customer_drawings
+         WHERE contact_person IS NOT NULL OR phone IS NOT NULL OR email IS NOT NULL
+       ) cd_proj ON cd_proj.client_name = c.company_name 
+                AND TRIM(LOWER(cd_proj.project_name)) = TRIM(LOWER(qr.project_name))
+                AND cd_proj.rn = 1
        WHERE qr.id = ?`,
       [id]
     );
@@ -1107,9 +1223,20 @@ const sendExistingQuotationEmail = async (req, res, next) => {
     // Corrected SQL query to fetch client email from contacts table
     const [quotes] = await pool.query(
       `SELECT qr.*, c.company_name, c.id as client_id,
-              (SELECT email FROM contacts WHERE company_id = c.id AND (contact_type = 'PRIMARY' OR contact_type = 'PURCHASE') LIMIT 1) as client_email
+              COALESCE(qr.client_email, cd_proj.email, (SELECT email FROM contacts WHERE company_id = c.id AND (contact_type = 'PRIMARY' OR contact_type = 'PURCHASE') LIMIT 1)) as client_email,
+              COALESCE(qr.client_phone, cd_proj.phone, (SELECT phone FROM contacts WHERE company_id = c.id AND (contact_type = 'PRIMARY' OR contact_type = 'PURCHASE') LIMIT 1)) as client_phone,
+              COALESCE(qr.contact_person, cd_proj.contact_person, (SELECT name FROM contacts WHERE company_id = c.id AND (contact_type = 'PRIMARY' OR contact_type = 'PURCHASE') LIMIT 1)) as contact_person,
+              COALESCE(qr.client_address, cd_proj.billing_address, (SELECT CONCAT(line1, ', ', IFNULL(line2, ''), city, ', ', state, ' ', pincode) FROM company_addresses WHERE company_id = c.id LIMIT 1)) as client_address
        FROM quotation_requests qr 
        JOIN companies c ON qr.company_id = c.id 
+       LEFT JOIN (
+         SELECT client_name, project_name, email, phone, contact_person, billing_address,
+                ROW_NUMBER() OVER (PARTITION BY client_name, project_name ORDER BY id DESC) as rn
+         FROM customer_drawings
+         WHERE contact_person IS NOT NULL OR phone IS NOT NULL OR email IS NOT NULL
+       ) cd_proj ON cd_proj.client_name = c.company_name 
+                AND TRIM(LOWER(cd_proj.project_name)) = TRIM(LOWER(qr.project_name))
+                AND cd_proj.rn = 1
        WHERE qr.id = ?`,
       [id]
     );
@@ -1182,7 +1309,13 @@ const sendExistingQuotationEmail = async (req, res, next) => {
       representative.notes,
       representative.client_id,
       quoteNumber,
-      representative.host_company_id
+      representative.host_company_id,
+      {
+        email: clientEmail,
+        phone: representative.client_phone,
+        contact_person: representative.contact_person,
+        address: representative.client_address
+      }
     );
 
     const emailMessageId = emailResult?.messageId || null;

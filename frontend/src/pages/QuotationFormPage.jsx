@@ -96,8 +96,9 @@ const QuotationFormPage = () => {
     }
   }, [selectedClient?.company_name]);
 
-  // Resolve client contact and address details dynamically when clients array or selectedClient.id/company_name changes
+  // Resolve client contact and address details dynamically when clients array, selectedClient, projectName, or drawings changes
   useEffect(() => {
+    if (isLocked) return;
     if ((selectedClient?.id || selectedClient?.company_name) && clients.length > 0) {
       const client = clients.find(c => 
         (selectedClient.id && String(c.id) === String(selectedClient.id)) ||
@@ -105,19 +106,40 @@ const QuotationFormPage = () => {
          c.company_name.toLowerCase().trim() === selectedClient.company_name.toLowerCase().trim())
       );
       if (client) {
-        const primaryContact = client.contacts?.find(c => c.contact_type === 'PRIMARY') || client.contacts?.[0] || {};
-        const billing = client.addresses?.find(address => address.address_type === 'BILLING') || client.addresses?.[0] || {};
-        const addressStr = [billing.line1, billing.line2, billing.city, billing.state, billing.pincode].filter(Boolean).join(', ');
+        // First, check if there is a customer drawing matching the selected project name to get project-wise contacts
+        const matchedDrawing = (drawings || []).find(d => 
+          d.project_name && projectName && 
+          d.project_name.toLowerCase().trim() === projectName.toLowerCase().trim()
+        );
 
-        const nextEmail = primaryContact.email || '';
-        const nextPhone = primaryContact.phone || '';
-        const nextName = primaryContact.name || '';
-        const nextAddr = addressStr || 'N/A';
+        let nextEmail = '';
+        let nextPhone = '';
+        let nextName = '';
+        let nextAddr = '';
 
-        const emailNeedsUpdate = !selectedClient.email || selectedClient.email === 'N/A' || selectedClient.email !== nextEmail;
-        const phoneNeedsUpdate = !selectedClient.phone || selectedClient.phone === 'N/A' || selectedClient.phone !== nextPhone;
-        const contactNeedsUpdate = !selectedClient.contact_person || selectedClient.contact_person === 'N/A' || selectedClient.contact_person !== nextName;
-        const addressNeedsUpdate = !selectedClient.address || selectedClient.address === 'N/A' || selectedClient.address !== nextAddr;
+        if (matchedDrawing) {
+          nextEmail = matchedDrawing.email || '';
+          nextPhone = matchedDrawing.phone || '';
+          nextName = matchedDrawing.contact_person || '';
+          nextAddr = matchedDrawing.billing_address || matchedDrawing.address || '';
+        }
+
+        // If no project-wise contact found (or fields are empty), fall back to client primary contact
+        if (!nextEmail || !nextPhone || !nextName || !nextAddr) {
+          const primaryContact = client.contacts?.find(c => c.contact_type === 'PRIMARY') || client.contacts?.[0] || {};
+          const billing = client.addresses?.find(address => address.address_type === 'BILLING') || client.addresses?.[0] || {};
+          const addressStr = [billing.line1, billing.line2, billing.city, billing.state, billing.pincode].filter(Boolean).join(', ');
+
+          if (!nextEmail) nextEmail = primaryContact.email || '';
+          if (!nextPhone) nextPhone = primaryContact.phone || '';
+          if (!nextName) nextName = primaryContact.name || '';
+          if (!nextAddr) nextAddr = addressStr || 'N/A';
+        }
+
+        const emailNeedsUpdate = selectedClient.email !== nextEmail;
+        const phoneNeedsUpdate = selectedClient.phone !== nextPhone;
+        const contactNeedsUpdate = selectedClient.contact_person !== nextName;
+        const addressNeedsUpdate = selectedClient.address !== nextAddr;
         const nameNeedsUpdate = !selectedClient.company_name || selectedClient.company_name !== client.company_name;
 
         if (emailNeedsUpdate || phoneNeedsUpdate || contactNeedsUpdate || addressNeedsUpdate || nameNeedsUpdate) {
@@ -140,7 +162,10 @@ const QuotationFormPage = () => {
     selectedClient?.phone,
     selectedClient?.address,
     selectedClient?.contact_person,
-    clients
+    clients,
+    drawings,
+    projectName,
+    isLocked
   ]);
 
   // Sync selected host company details when ID changes or when hostCompanies is loaded
@@ -641,8 +666,8 @@ const QuotationFormPage = () => {
         company_name: versionData.company_name || versionData.clientName,
         email: versionData.client_email || versionData.clientEmail || '',
         contact_person: versionData.contact_person || '',
-        phone: versionData.phone || '',
-        address: versionData.address || ''
+        phone: versionData.phone || versionData.client_phone || '',
+        address: versionData.address || versionData.client_address || ''
       });
 
       if (versionData.host_company_id) {
@@ -724,6 +749,8 @@ const QuotationFormPage = () => {
             has_pending_bom_applied: override?.has_pending_bom_applied || item.has_pending_bom_applied,
             id: item.id || Date.now() + Math.random(),
             salesOrderItemId: item.sales_order_item_id || item.salesOrderItemId,
+            orderId: item.orderId || item.sales_order_id || item.salesOrderId,
+            sales_order_id: item.orderId || item.sales_order_id || item.salesOrderId,
             drawing_id: item.drawing_id,
             rate: drwRate,
             bom_cost: bomCost || item.bom_cost || drwRate,
@@ -1057,6 +1084,9 @@ const QuotationFormPage = () => {
         clientId: selectedClient.id,
         clientName: selectedClient.company_name,
         clientEmail: selectedClient.email,
+        clientPhone: selectedClient.phone,
+        contactPerson: selectedClient.contact_person,
+        clientAddress: selectedClient.address,
         projectName: projectName,
         hostCompanyId: selectedHostId ? Number(selectedHostId) : null,
         items: sortedItems.map(item => ({
