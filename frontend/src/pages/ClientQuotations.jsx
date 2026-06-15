@@ -288,8 +288,10 @@ const ClientQuotations = () => {
       const initialGst = {};
       normalizedDrawings.forEach(order => {
         const clientName = order.company_name || 'Unassigned';
-        if (!grouped[clientName]) {
-          grouped[clientName] = {
+        const groupKey = `${clientName}_${order.id}`;
+        
+        if (!grouped[groupKey]) {
+          grouped[groupKey] = {
             company_name: clientName,
             company_id: order.company_id,
             contact_person: order.contact_person || '',
@@ -301,9 +303,9 @@ const ClientQuotations = () => {
             // Store all items here for client-wide grouping
             all_items_map: {}
           };
-          initialPrices[clientName] = {};
-          initialProfits[clientName] = {};
-          initialGst[clientName] = {};
+          initialPrices[groupKey] = {};
+          initialProfits[groupKey] = {};
+          initialGst[groupKey] = {};
         }
 
         // Process items and group by identity across ALL orders for this client
@@ -325,23 +327,23 @@ const ClientQuotations = () => {
           if (item.is_component > 0) return;
 
           const identity = `${item.drawing_no || 'NA'}_${item.item_code || 'NA'}_${item.item_group_calc}`;
-          const existing = grouped[clientName].all_items_map[identity];
+          const existing = grouped[groupKey].all_items_map[identity];
 
           if (!existing) {
-            grouped[clientName].all_items_map[identity] = { ...item, project_name: order.project_name };
+            grouped[groupKey].all_items_map[identity] = { ...item, project_name: order.project_name };
           } else {
             const comp = compareVersions(item.revision_no || item.version, existing.revision_no || existing.version);
             // Prioritize higher revision, then higher ID
             if (comp > 0 || (comp === 0 && parseInt(item.id) > parseInt(existing.id))) {
-              grouped[clientName].all_items_map[identity] = { ...item, project_name: order.project_name };
+              grouped[groupKey].all_items_map[identity] = { ...item, project_name: order.project_name };
             }
           }
         });
       });
 
       // Finalize the grouped data structure
-      Object.keys(grouped).forEach(clientName => {
-        const client = grouped[clientName];
+      Object.keys(grouped).forEach(groupKey => {
+        const client = grouped[groupKey];
         let items = Object.values(client.all_items_map);
 
         // EXTRA PASS: Hide items from top-level if they already exist as nested sub-assemblies in this client group
@@ -418,8 +420,8 @@ const ClientQuotations = () => {
 
         items.forEach(item => {
           const margin = 0; // Default margin
-          initialProfits[clientName][item.id] = margin;
-          initialGst[clientName][item.id] = 18;
+          initialProfits[groupKey][item.id] = margin;
+          initialGst[groupKey][item.id] = 18;
 
           const g = (item.item_group_calc || '').toUpperCase();
           const isPart = g.includes('PART');
@@ -428,9 +430,9 @@ const ClientQuotations = () => {
           if (item.bom_cost && Number(item.bom_cost) > 0) {
             // Calculate price for both FG and Sub-Assemblies as per user request
             const calculatedPrice = (isAssembly || isPart) ? Number(item.bom_cost) * (1 + margin / 100) : 0;
-            initialPrices[clientName][item.id] = calculatedPrice.toFixed(2);
+            initialPrices[groupKey][item.id] = calculatedPrice.toFixed(2);
           } else {
-            initialPrices[clientName][item.id] = "0.00";
+            initialPrices[groupKey][item.id] = "0.00";
           }
         });
 
@@ -439,9 +441,9 @@ const ClientQuotations = () => {
 
       // Filter out clients that have no items after all filtering/grouping
       const finalGrouped = {};
-      Object.keys(grouped).forEach(clientName => {
-        if (grouped[clientName].orders?.[0]?.items?.length > 0) {
-          finalGrouped[clientName] = grouped[clientName];
+      Object.keys(grouped).forEach(groupKey => {
+        if (grouped[groupKey].orders?.[0]?.items?.length > 0) {
+          finalGrouped[groupKey] = grouped[groupKey];
         }
       });
 
@@ -738,6 +740,7 @@ const ClientQuotations = () => {
         type: 'PENDING',
         status: 'BOM Approved',
         displayStatus: 'BOM Approved',
+        groupKey: name,
         uniqueKey: `pending_${name}`,
         project_name: data.orders?.[0]?.project_name,
         quotes: data.orders.flatMap(o => (o.items || []).map(item => ({ ...item, project_name: o.project_name })))
@@ -873,9 +876,9 @@ const ClientQuotations = () => {
                     const isAssembly = !isPart;
 
                     if (isAssembly || isPart) {
-                      const rate = parseFloat(quotePricesMap[group.company_name]?.[item.id]) || 0;
+                      const rate = parseFloat(quotePricesMap[(group.groupKey || group.company_name)]?.[item.id]) || 0;
                       const qty = parseFloat(item.design_qty) || 0;
-                      const gst = parseFloat(gstMap[group.company_name]?.[item.id]) || 18;
+                      const gst = parseFloat(gstMap[(group.groupKey || group.company_name)]?.[item.id]) || 18;
                       total += (rate * qty) * (1 + gst / 100);
                     }
                   });
@@ -1163,8 +1166,8 @@ const ClientQuotations = () => {
                                     <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded px-2 py-1">
                                       <input
                                         type="text"
-                                        value={profitMap[group.company_name]?.[item.id]}
-                                        onChange={(e) => handleProfitChange(group.company_name, item, e.target.value)}
+                                        value={profitMap[(group.groupKey || group.company_name)]?.[item.id]}
+                                        onChange={(e) => handleProfitChange((group.groupKey || group.company_name), item, e.target.value)}
                                         className="w-full bg-transparent text-xs text-slate-900 focus:outline-none "
                                       />
                                       <span className="text-slate-400 text-xs ">%</span>
@@ -1175,16 +1178,16 @@ const ClientQuotations = () => {
                                       <span className="text-indigo-600 text-xs  ">₹</span>
                                       <input
                                         type="text"
-                                        value={quotePricesMap[group.company_name]?.[item.id]}
-                                        onChange={(e) => handlePriceChange(group.company_name, item, e.target.value)}
+                                        value={quotePricesMap[(group.groupKey || group.company_name)]?.[item.id]}
+                                        onChange={(e) => handlePriceChange((group.groupKey || group.company_name), item, e.target.value)}
                                         className="w-full bg-transparent text-xs text-indigo-700 focus:outline-none "
                                       />
                                     </div>
                                   </td>
                                   <td className="px-4 p-2">
                                     <select
-                                      value={gstMap[group.company_name]?.[item.id]}
-                                      onChange={(e) => handleGstChange(group.company_name, item.id, e.target.value)}
+                                      value={gstMap[(group.groupKey || group.company_name)]?.[item.id]}
+                                      onChange={(e) => handleGstChange((group.groupKey || group.company_name), item.id, e.target.value)}
                                       className="w-full bg-slate-50 border border-slate-200 rounded px-1.5 py-1 text-xs text-slate-700 focus:outline-none"
                                     >
                                       <option value="0">0%</option>
@@ -1197,7 +1200,7 @@ const ClientQuotations = () => {
                                   <td className="px-4 p-2 text-right pr-6">
                                     <div className="flex flex-col">
                                       <span className="text-xs  text-slate-900">
-                                        {formatCurrency((parseFloat(quotePricesMap[group.company_name]?.[item.id]) || 0) * (parseFloat(item.design_qty || item.item_qty) || 0))}
+                                        {formatCurrency((parseFloat(quotePricesMap[(group.groupKey || group.company_name)]?.[item.id]) || 0) * (parseFloat(item.design_qty || item.item_qty) || 0))}
                                       </span>
                                       <span className="text-[9px] text-slate-400">Base Amount</span>
                                     </div>
@@ -1328,10 +1331,10 @@ const ClientQuotations = () => {
                   const isAssembly = !isPart;
 
                   if (isAssembly || isPart) {
-                    const unitRate = parseFloat(quotePricesMap[group.company_name]?.[item.id]) || 0;
+                    const unitRate = parseFloat(quotePricesMap[(group.groupKey || group.company_name)]?.[item.id]) || 0;
                     const qty = parseFloat(item.design_qty) || 0;
-                    const gstRate = parseFloat(gstMap[group.company_name]?.[item.id]) || 18;
-                    const profitP = parseFloat(profitMap[group.company_name]?.[item.id]) || 0;
+                    const gstRate = parseFloat(gstMap[(group.groupKey || group.company_name)]?.[item.id]) || 18;
+                    const profitP = parseFloat(profitMap[(group.groupKey || group.company_name)]?.[item.id]) || 0;
                     const lineTotal = unitRate * qty;
 
                     subTotal += lineTotal;
@@ -1362,7 +1365,7 @@ const ClientQuotations = () => {
                       </div>
                     </div>
                     <button
-                      onClick={() => handleSendQuote(group.company_name)}
+                      onClick={() => handleSendQuote(group.groupKey || group.company_name)}
                       disabled={(subTotal + totalTax) === 0}
                       className="mt-2  flex justify-center items-center gap-2 p-2 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 disabled:opacity-50 active:scale-95"
                     >
@@ -1568,11 +1571,11 @@ const ClientQuotations = () => {
     }
   };
 
-  const handleSendQuote = async (clientName) => {
-    const clientData = groupedByClient[clientName];
+  const handleSendQuote = async (groupKey) => {
+    const clientData = groupedByClient[groupKey];
     if (!clientData) return;
 
-    const prices = quotePricesMap[clientName] || {};
+    const prices = quotePricesMap[groupKey] || {};
     let allItems = [];
 
     clientData.orders.forEach(order => {
@@ -1604,7 +1607,7 @@ const ClientQuotations = () => {
           address: clientData.address,
           projectName: clientData.orders[0]?.project_name || allItems[0]?.project_name || '',
           items: allItems.map(item => {
-            const gsts = gstMap[clientName] || {};
+            const gsts = gstMap[groupKey] || {};
             const itemPrice = parseFloat(prices[item.id]) || 0;
 
             return {
