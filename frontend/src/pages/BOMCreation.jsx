@@ -53,6 +53,8 @@ const BOMCreation = () => {
   const [clientData, setClientData] = useState({}); // { [clientId]: { items: [], loading: false } }
   const [expandedDrawings, setExpandedDrawings] = useState({}); // { drawingKey: boolean }
   const [expandedBOMGroups, setExpandedBOMGroups] = useState(new Set());
+  const [globalSearchTerm, setGlobalSearchTerm] = useState('');
+  const [expandedClientRows, setExpandedClientRows] = useState(new Set());
   const location = useLocation();
 
   // Preview State
@@ -306,6 +308,81 @@ const BOMCreation = () => {
       }
     }
   }, [filter, orders, clientData]);
+
+  useEffect(() => {
+    if (!globalSearchTerm) return;
+    
+    const searchMatch = globalSearchTerm.trim().toLowerCase();
+    let hasChanges = false;
+    let nextExpandedDrawings = { ...expandedDrawings };
+    let nextExpandedClients = new Set(expandedClientRows);
+
+    orders.forEach(client => {
+      const items = clientData[client.id]?.items || [];
+      const topLevelItems = items.filter(item => !item.parent_bom_id && item.status?.toLowerCase() === 'approved');
+      
+      const drawingsMap = topLevelItems.reduce((acc, item) => {
+        const dwg = cleanText(item.drawing_no || 'N/A');
+        if (!acc[dwg]) acc[dwg] = [];
+        acc[dwg].push(item);
+        return acc;
+      }, {});
+      
+      let clientMatches = false;
+
+      Object.entries(drawingsMap).forEach(([dwgNo, dwgItems]) => {
+        const drawingName = dwgItems[0].drawing_name || dwgItems[0].item_name || dwgItems[0].item_description || 'No Description';
+        const childItems = items.filter(i => i.parent_bom_id && dwgItems.some(p => p.id === i.parent_bom_id));
+        const allItems = [...dwgItems, ...childItems];
+        
+        let isMatched = false;
+        if (dwgNo.toLowerCase().includes(searchMatch)) isMatched = true;
+        else if (drawingName.toLowerCase().includes(searchMatch)) isMatched = true;
+        else if (allItems.some(i => 
+          (i.item_code || '').toLowerCase().includes(searchMatch) || 
+          (i.description || i.material_name || '').toLowerCase().includes(searchMatch) ||
+          (i.drawing_no || '').toLowerCase().includes(searchMatch)
+        )) {
+          isMatched = true;
+        }
+        
+        if (isMatched) {
+          clientMatches = true;
+          const dwgKey = `${client.id}_${dwgNo}`;
+          if (!nextExpandedDrawings[dwgKey]) {
+            nextExpandedDrawings[dwgKey] = true;
+            hasChanges = true;
+          }
+        }
+      });
+      
+      if (clientMatches && !nextExpandedClients.has(client.id)) {
+        nextExpandedClients.add(client.id);
+        hasChanges = true;
+      }
+    });
+
+    if (hasChanges) {
+      setExpandedDrawings(nextExpandedDrawings);
+      setExpandedClientRows(nextExpandedClients);
+      
+      setTimeout(() => {
+        const highlighted = document.querySelectorAll('.highlight-match');
+        if (highlighted.length > 0) {
+          const rect = highlighted[0].getBoundingClientRect();
+          const isVisible = (
+            rect.top >= 0 &&
+            rect.left >= 0 &&
+            rect.bottom <= (window.innerHeight || document.documentElement.clientHeight) &&
+            rect.right <= (window.innerWidth || document.documentElement.clientWidth)
+          );
+          if (!isVisible) {
+            highlighted[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }
+      }, 400);
+    }
+  }, [globalSearchTerm, orders, clientData]);
 
   const toggleDrawing = (dwgKey) => {
     setExpandedDrawings(prev => ({ ...prev, [dwgKey]: !prev[dwgKey] }));
@@ -621,6 +698,46 @@ const BOMCreation = () => {
     return orders;
   }, [orders]);
 
+  const customFilter = useCallback((client, searchStr) => {
+    if (!searchStr) return false;
+    const searchLower = searchStr.trim().toLowerCase();
+    
+    // Check top-level client fields
+    if ((client.client_name || '').toLowerCase().includes(searchLower)) return true;
+    if ((client.project_name || '').toLowerCase().includes(searchLower)) return true;
+
+    // Check only the items that will actually be rendered (approved top-level items)
+    const items = clientData[client.id]?.items || [];
+    const topLevelItems = items.filter(item => !item.parent_bom_id && item.status?.toLowerCase() === 'approved');
+      
+    const drawingsMap = topLevelItems.reduce((acc, item) => {
+      const dwg = cleanText(item.drawing_no || 'N/A');
+      if (!acc[dwg]) acc[dwg] = [];
+      acc[dwg].push(item);
+      return acc;
+    }, {});
+
+    let hasRenderableMatch = false;
+
+    Object.entries(drawingsMap).forEach(([dwgNo, dwgItems]) => {
+      const drawingName = dwgItems[0].drawing_name || dwgItems[0].item_name || dwgItems[0].item_description || 'No Description';
+      const childItems = items.filter(i => i.parent_bom_id && dwgItems.some(p => p.id === i.parent_bom_id));
+      const allItems = [...dwgItems, ...childItems];
+      
+      if (dwgNo.toLowerCase().includes(searchLower)) hasRenderableMatch = true;
+      else if (drawingName.toLowerCase().includes(searchLower)) hasRenderableMatch = true;
+      else if (allItems.some(i => 
+        (i.item_code || '').toLowerCase().includes(searchLower) || 
+        (i.description || i.material_name || '').toLowerCase().includes(searchLower) ||
+        (i.drawing_no || '').toLowerCase().includes(searchLower)
+      )) {
+        hasRenderableMatch = true;
+      }
+    });
+
+    return hasRenderableMatch;
+  }, [clientData]);
+
   const isClientBOMCompleted = (row) => {
     const items = clientData[row.id]?.items || [];
     const topLevelItems = items.filter(item => !item.parent_bom_id && item.status?.toLowerCase() === 'approved');
@@ -823,14 +940,34 @@ const BOMCreation = () => {
       return acc;
     }, {});
 
+    const searchMatch = globalSearchTerm ? globalSearchTerm.trim().toLowerCase() : '';
+
+    const filteredDrawings = Object.entries(drawingsMap).filter(([dwgNo, dwgItems]) => {
+      if (!searchMatch) return true;
+      
+      const drawingName = dwgItems[0].drawing_name || dwgItems[0].item_name || dwgItems[0].item_description || 'No Description';
+      const childItems = items.filter(i => i.parent_bom_id && dwgItems.some(p => p.id === i.parent_bom_id));
+      const allItems = [...dwgItems, ...childItems];
+      
+      if (dwgNo.toLowerCase().includes(searchMatch)) return true;
+      if (drawingName.toLowerCase().includes(searchMatch)) return true;
+      if (allItems.some(i => 
+        (i.item_code || '').toLowerCase().includes(searchMatch) || 
+        (i.description || i.material_name || '').toLowerCase().includes(searchMatch) ||
+        (i.drawing_no || '').toLowerCase().includes(searchMatch)
+      )) return true;
+      
+      return false;
+    });
+
     return (
       <div className="bg-slate-50/50 p-2 rounded border border-slate-100 m-2 space-y-2">
-        {Object.entries(drawingsMap).length === 0 ? (
+        {filteredDrawings.length === 0 ? (
           <div className="text-center py-6">
-            <p className="text-sm text-slate-400 ">No drawings found for this client.</p>
+            <p className="text-sm text-slate-400 ">{searchMatch ? "No matching drawings found." : "No drawings found for this client."}</p>
           </div>
         ) : (
-          Object.entries(drawingsMap).map(([dwgNo, dwgItems]) => {
+          filteredDrawings.map(([dwgNo, dwgItems]) => {
             const dwgKey = `${client.id}_${dwgNo}`;
             const isDwgExpanded = expandedDrawings[dwgKey];
             const drawingName = dwgItems[0].drawing_name || dwgItems[0].item_name || dwgItems[0].item_description || 'No Description';
@@ -888,8 +1025,10 @@ const BOMCreation = () => {
               }
             }
 
+            const highlightClass = searchMatch ? "ring-2 ring-rose-500 bg-rose-50 shadow-md highlight-match" : "";
+
             return (
-              <div key={dwgKey} className="bg-white border border-slate-100 rounded  shadow-sm overflow-hidden">
+              <div key={dwgKey} className={`bg-white border border-slate-100 rounded shadow-sm overflow-hidden transition-all duration-300 ${highlightClass}`}>
                 <div
                   onClick={() => toggleDrawing(dwgKey)}
                   className="p-2 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition-colors"
@@ -1170,6 +1309,10 @@ const BOMCreation = () => {
           renderExpanded={renderClientExpanded}
           searchPlaceholder="Search by client, drawing, or code..."
           emptyMessage="No active clients found."
+          onSearchChange={setGlobalSearchTerm}
+          expandedRows={expandedClientRows}
+          onExpandedChange={setExpandedClientRows}
+          customFilter={customFilter}
         />
 
       </div>

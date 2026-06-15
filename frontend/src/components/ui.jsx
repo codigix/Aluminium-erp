@@ -620,7 +620,9 @@ export const DataTable = ({
   onSelectionChange,
   rowId: rowIdProp = 'id',
   expandedRows: expandedRowsProp,
-  onExpandedChange
+  onExpandedChange,
+  onSearchChange,
+  customFilter
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState(null);
@@ -673,13 +675,18 @@ export const DataTable = ({
     return sortedData.filter(item => {
       if (hideHeader) return true;
       const searchLower = String(searchTerm || '').toLowerCase();
+      
+      if (customFilter && customFilter(item, searchLower)) {
+        return true;
+      }
+
       // Only search in columns that are defined
       return columns.some(col => {
         const val = item[col.key];
         return String(val || '').toLowerCase().includes(searchLower);
       });
     });
-  }, [sortedData, searchTerm, hideHeader, columns]);
+  }, [sortedData, searchTerm, hideHeader, columns, customFilter]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -740,7 +747,10 @@ export const DataTable = ({
                 type="text"
                 placeholder={searchPlaceholder}
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  if (onSearchChange) onSearchChange(e.target.value);
+                }}
                 className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded text-xs focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none transition-all placeholder:text-slate-400 bg-white text-slate-900 shadow-sm"
               />
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-rose-500 transition-colors" />
