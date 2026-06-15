@@ -51,6 +51,7 @@ const SalesOrders = () => {
   const [hostCompanies, setHostCompanies] = useState([]);
   const [selectedHostId, setSelectedHostId] = useState('');
   const [selectedHostCompany, setSelectedHostCompany] = useState(null);
+  const [allCustomerPos, setAllCustomerPos] = useState([]);
 
   useEffect(() => {
     if (selectedHostId && hostCompanies.length > 0) {
@@ -97,6 +98,7 @@ const SalesOrders = () => {
       fetchOrders();
       fetchCompanies();
       fetchHostCompanies();
+      fetchAllCustomerPos();
       if (parsedUser.department_code === 'ADMIN' || parsedUser.department_code === 'DESIGN_ENG' || parsedUser.department_code === 'SALES') {
         fetchBoms();
       }
@@ -129,6 +131,12 @@ const SalesOrders = () => {
   // Dynamic customer fields fetcher to avoid race condition on company load
   useEffect(() => {
     if (formData.customerId && companies.length > 0) {
+      if (formMode === 'edit' || formMode === 'view') {
+        return; // Skip auto-populating from company master for saved orders
+      }
+      if (formData.customerPoId && String(formData.customerPoId).startsWith('PO_')) {
+        return; // Skip auto-populating from company master if a Customer PO is selected
+      }
       const company = companies.find(c => String(c.id) === String(formData.customerId));
       if (company) {
         const primaryContact = company.contacts?.find(ct => ct.contact_type === 'PRIMARY') || company.contacts?.[0];
@@ -189,7 +197,8 @@ const SalesOrders = () => {
           const id = Number(formData.customerPoId);
           if (q.dbId === id) {
             if (formData.sourceType === 'DRAWING') return q.isApprovedDrawing;
-            if (formData.sourceType === 'QUOTATION') return !q.isApprovedDrawing;
+            if (formData.sourceType === 'QUOTATION') return !q.isApprovedDrawing && !q.isCustomerPo;
+            if (formData.sourceType === 'DIRECT') return q.isCustomerPo;
           }
         }
         return false;
@@ -237,6 +246,34 @@ const SalesOrders = () => {
       }
     } catch (err) {
       console.error('Error fetching companies:', err);
+    }
+  };
+
+  const fetchAllCustomerPos = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/customer-pos`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const poOptions = (Array.isArray(data) ? data : []).map(po => ({
+          id: po.id,
+          dbId: po.id,
+          uniqueKey: `PO_${po.id}`,
+          company_id: po.company_id,
+          created_at: po.created_at,
+          status: po.status,
+          po_number: po.po_number,
+          company_name: po.company_name,
+          host_company_id: po.host_company_id || po.hostCompanyId || null,
+          isCustomerPo: true,
+          items: []
+        }));
+        setAllCustomerPos(poOptions);
+      }
+    } catch (err) {
+      console.error('Error fetching all POs:', err);
     }
   };
 
@@ -373,7 +410,7 @@ const SalesOrders = () => {
   };
 
   const handleCustomerPoChange = async (uniqueKey) => {
-    const group = quotations.find(q => q.uniqueKey === uniqueKey);
+    const group = quotations.find(q => q.uniqueKey === uniqueKey) || allCustomerPos.find(q => q.uniqueKey === uniqueKey);
     if (!group) return;
 
     let items = [];
@@ -385,6 +422,7 @@ const SalesOrders = () => {
     let bomId = null;
     let projectName = '';
     let finalHostId = null;
+    let customerUpdateFields = {};
 
     if (group.isCustomerPo) {
       try {
@@ -398,6 +436,23 @@ const SalesOrders = () => {
           sourceType = 'DIRECT';
           projectName = poData.project_name || poData.remarks || `Order for ${poData.company_name}`;
           finalHostId = poData.host_company_id || null;
+
+          if (poData.company_id) {
+            const company = companies.find(c => String(c.id) === String(poData.company_id));
+            const billing = company?.addresses?.find(address => address.address_type === 'BILLING') || {};
+
+            customerUpdateFields.customerId = String(poData.company_id);
+            customerUpdateFields.customerEmail = (poData.email && poData.email !== '—') ? poData.email : (poData.company_email || '');
+            customerUpdateFields.customerPhone = (poData.phone && poData.phone !== '—') ? poData.phone : (poData.billing_contact_phone || poData.shipping_contact_phone || '');
+            customerUpdateFields.customerContactPerson = (poData.contact_person && poData.contact_person !== '—') ? poData.contact_person : (poData.billing_contact_name || poData.shipping_contact_name || '');
+            customerUpdateFields.customerBillingAddress = (poData.billing_address && poData.billing_address !== '—') ? poData.billing_address : '';
+            customerUpdateFields.customerShippingAddress = (poData.shipping_address && poData.shipping_address !== '—') ? poData.shipping_address : '';
+            customerUpdateFields.customerGstin = poData.gstin || '';
+            customerUpdateFields.customerType = poData.customer_type || 'REGULAR';
+            customerUpdateFields.customerCity = billing?.city || '';
+            customerUpdateFields.customerState = billing?.state || '';
+            fetchApprovedQuotations(poData.company_id);
+          }
 
           const poItems = poData.items || [];
           items = poItems.map(item => {
@@ -494,7 +549,8 @@ const SalesOrders = () => {
       quotation_id: sourceType !== 'DIRECT' ? quotationId : null,
       customer_po_id: sourceType === 'DIRECT' ? quotationId : null,
       bomId: bomId || prev.bomId,
-      projectName: projectName || prev.projectName
+      projectName: projectName || prev.projectName,
+      ...customerUpdateFields
     }));
 
     // Pre-select host company from quotation/PO if saved, or fall back to default active company
@@ -618,11 +674,54 @@ const SalesOrders = () => {
         let mappedPoId = data.customer_po_id || data.quotation_id || '';
         if (data.source_type === 'DRAWING' && data.quotation_id) {
           mappedPoId = `Approved _${data.quotation_id}`;
+        } else if (data.source_type === 'DIRECT' && data.customer_po_id) {
+          mappedPoId = `PO_${data.customer_po_id}`;
         }
 
         const subtotalInclusiveOfProfit = Number(data.subtotal) || 0;
         const baseItemsSubtotal = formattedItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
         const totalProfitVal = subtotalInclusiveOfProfit - baseItemsSubtotal;
+
+        let customerUpdateFields = {};
+        if (data.source_type === 'DIRECT' && data.customer_po_id) {
+          try {
+            const poResponse = await fetch(`${API_BASE}/customer-pos/${data.customer_po_id}`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (poResponse.ok) {
+              const poData = await poResponse.json();
+              const company = companies.find(c => String(c.id) === String(poData.company_id));
+              const billing = company?.addresses?.find(address => address.address_type === 'BILLING') || {};
+
+              customerUpdateFields.customerEmail = (poData.email && poData.email !== '—') ? poData.email : (poData.company_email || '');
+              customerUpdateFields.customerPhone = (poData.phone && poData.phone !== '—') ? poData.phone : (poData.billing_contact_phone || poData.shipping_contact_phone || '');
+              customerUpdateFields.customerContactPerson = (poData.contact_person && poData.contact_person !== '—') ? poData.contact_person : (poData.billing_contact_name || poData.shipping_contact_name || '');
+              customerUpdateFields.customerBillingAddress = (poData.billing_address && poData.billing_address !== '—') ? poData.billing_address : '';
+              customerUpdateFields.customerShippingAddress = (poData.shipping_address && poData.shipping_address !== '—') ? poData.shipping_address : '';
+              customerUpdateFields.customerGstin = poData.gstin || '';
+              customerUpdateFields.customerType = poData.customer_type || 'REGULAR';
+              customerUpdateFields.customerCity = billing?.city || '';
+              customerUpdateFields.customerState = billing?.state || '';
+            }
+          } catch (poErr) {
+            console.error('Error fetching PO details during edit:', poErr);
+          }
+        }
+
+        if (!customerUpdateFields.customerEmail) {
+          customerUpdateFields.customerEmail = data.contact_email || data.email_address || '';
+          customerUpdateFields.customerPhone = data.contact_mobile || data.contact_phone || '';
+          customerUpdateFields.customerContactPerson = data.contact_person || '';
+          customerUpdateFields.customerBillingAddress = data.billing_address || '';
+          customerUpdateFields.customerShippingAddress = data.shipping_address || '';
+          
+          const company = companies.find(c => String(c.id) === String(data.client_id || data.company_id));
+          const billing = company?.addresses?.find(address => address.address_type === 'BILLING') || {};
+          customerUpdateFields.customerGstin = company?.gstin || '';
+          customerUpdateFields.customerType = company?.customer_type || 'REGULAR';
+          customerUpdateFields.customerCity = billing?.city || '';
+          customerUpdateFields.customerState = billing?.state || '';
+        }
 
         setFormData({
           ...initialFormState,
@@ -647,7 +746,8 @@ const SalesOrders = () => {
           subtotal: subtotalInclusiveOfProfit,
           gst: Number(data.gst) || 0,
           grand_total: Number(data.grand_total) || 0,
-          items: formattedItems
+          items: formattedItems,
+          ...customerUpdateFields
         });
         if (data.host_company_id) {
           setSelectedHostId(String(data.host_company_id));
@@ -1343,6 +1443,33 @@ const SalesOrders = () => {
           {/* Customer Details */}
           <Card title="Customer Details" className='bg-white border border-slate-200 rounded-xl' subtitle="Customer contact information">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-3 p-2">
+              <FormControl label="Select Customer PO">
+                <div className="flex gap-2">
+                  <div className="flex-1">
+                    <SearchableSelect
+                      options={allCustomerPos.map(q => ({
+                        value: q.uniqueKey,
+                        label: `PO: ${q.po_number} - ${q.company_name} - ${q.status}`
+                      }))}
+                      value={formData.customerPoId}
+                      onChange={(e) => handleCustomerPoChange(e.target.value)}
+                      placeholder="Select Customer PO..."
+                      disabled={formMode === 'view'}
+                    />
+                  </div>
+                  {formData.customerPoId && String(formData.customerPoId).startsWith('PO_') && (
+                    <button
+                      type="button"
+                      className="p-2 bg-indigo-50 text-indigo-600 rounded hover:bg-indigo-100 transition-colors border border-indigo-100"
+                      title="View PO PDF"
+                      onClick={handleViewPoPdf}
+                    >
+                      <FileText className="w-5 h-5" />
+                    </button>
+                  )}
+                </div>
+              </FormControl>
+
               <FormControl label="Customer *">
                 <SearchableSelect
                   options={companies.map(c => ({ value: c.id, label: c.company_name }))}
@@ -1455,37 +1582,9 @@ const SalesOrders = () => {
             </div>
           </Card>
 
-          {/* Customer Purchase Order and storage */}
-          <Card title="Customer Purchase Order and storage" className='bg-white' subtitle="PO & Inventory">
+          {/* Project and storage details */}
+          <Card title="Project & Inventory" className='bg-white' subtitle="Project and storage details">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2 p-2">
-              <FormControl label="Select Customer PO *">
-                <div className="flex gap-2">
-                  <div className="flex-1">
-                    <SearchableSelect
-                      options={quotations
-                        .filter(q => q.isCustomerPo)
-                        .map(q => ({
-                          value: q.uniqueKey,
-                          label: `PO: ${q.po_number} - ${q.company_name} - ${q.status}`
-                        }))}
-                      value={formData.customerPoId}
-                      onChange={(e) => handleCustomerPoChange(e.target.value)}
-                      placeholder="Select Customer PO..."
-                      disabled={formMode === 'view'}
-                    />
-                  </div>
-                  {formData.customerPoId && (
-                    <button
-                      type="button"
-                      className="p-2 bg-indigo-50 text-indigo-600 rounded  hover:bg-indigo-100 transition-colors border border-indigo-100"
-                      title="View PO PDF"
-                      onClick={handleViewPoPdf}
-                    >
-                      <FileText className="w-5 h-5" />
-                    </button>
-                  )}
-                </div>
-              </FormControl>
               <FormControl label="Project Name">
                 <input
                   className="w-full p-2 border border-slate-200 rounded  text-xs"

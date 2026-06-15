@@ -2,9 +2,9 @@ import React, { useState, useMemo } from 'react'
 import {
   Loader2, ChevronRight, Eye, Plus, Trash2, X, Download, Pencil, Send,
   Search, RefreshCw, Filter, FileText, Calendar, Building2,
-  DollarSign, Package, CheckCircle2, Clock, AlertCircle, GitBranch, Upload, MapPin
+  DollarSign, Package, CheckCircle2, Clock, AlertCircle, GitBranch, Upload, MapPin, User
 } from 'lucide-react'
-import { Card, DataTable } from '../components/ui.jsx'
+import { Card, DataTable, SearchableSelect } from '../components/ui.jsx'
 import SendEmailModal from '../components/SendEmailModal'
 import { getFileUrl } from '../utils/url'
 
@@ -37,6 +37,7 @@ const CustomerPO = ({
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('ALL')
   const [selectedQuoteId, setSelectedQuoteId] = useState('')
+  const [selectedQuoteContact, setSelectedQuoteContact] = useState(null)
   const [showEmailModal, setShowEmailModal] = useState(false)
   const [emailPoData, setEmailPoData] = useState(null)
   const [allDrawings, setAllDrawings] = useState([])
@@ -46,6 +47,73 @@ const CustomerPO = ({
   const [attachments, setAttachments] = useState([])
   const [existingAttachments, setExistingAttachments] = useState([])
   const [localError, setLocalError] = useState('')
+
+  const quotationOptions = useMemo(() => {
+    const grouped = {};
+
+    quotationRequests.forEach(q => {
+      // Ignore component snapshots
+      if (q.status?.trim().toUpperCase() === 'COMPONENT') return;
+
+      const rootId = q.parent_id || q.id;
+      const chainKey = `${q.company_id}_${rootId}`;
+
+      if (!grouped[chainKey]) {
+        grouped[chainKey] = {
+          id: q.id,
+          display_id: rootId,
+          company_id: q.company_id,
+          company_name: q.company_name,
+          project_name: q.project_name,
+          status: q.status,
+          version: q.version || 1,
+          batch_id: q.batch_id,
+          parent_id: q.parent_id,
+          po_number: q.po_number,
+          quotes: []
+        };
+      }
+
+      grouped[chainKey].quotes.push(q);
+
+      // Track the latest version inside each chain
+      const currentVersion = grouped[chainKey].version || 0;
+      const qVersion = q.version || 1;
+      const currentStatus = (grouped[chainKey].status || '').trim().toUpperCase();
+      const qStatus = (q.status || '').trim().toUpperCase();
+
+      if (qVersion > currentVersion || (qVersion === currentVersion && qStatus === 'APPROVED' && currentStatus !== 'APPROVED')) {
+        grouped[chainKey].id = q.id;
+        grouped[chainKey].status = q.status;
+        grouped[chainKey].version = q.version;
+        grouped[chainKey].project_name = q.project_name;
+        grouped[chainKey].batch_id = q.batch_id;
+        grouped[chainKey].parent_id = q.parent_id;
+        grouped[chainKey].po_number = q.po_number;
+      }
+    });
+
+    // Filter to keep only chains where the latest version is APPROVED
+    const approvedChains = Object.values(grouped).filter(group => {
+      const isApproved = (group.status || '').trim().toUpperCase() === 'APPROVED';
+      return isApproved;
+    });
+
+    // Sort descending by root ID
+    approvedChains.sort((a, b) => b.display_id - a.display_id);
+
+    const list = approvedChains.map(group => ({
+      value: String(group.id),
+      label: `QRT-${String(group.display_id).padStart(4, '0')} - ${group.company_name} (${group.project_name || 'No Project'}) ${group.version > 1 ? `(V${group.version})` : ''}`
+    }));
+
+    return [
+      { value: 'clear', label: '❌ Clear Selection (Manual Entry)' },
+      ...list
+    ];
+  }, [quotationRequests]);
+
+
 
   const handleOpenPdf = (pdfPath) => {
     if (!pdfPath) return;
@@ -133,6 +201,34 @@ const CustomerPO = ({
       }
     ]
   })
+
+  const selectedCompany = useMemo(() => {
+    if (!poForm.companyId) return null;
+    return companies.find(c => String(c.id) === String(poForm.companyId)) || null;
+  }, [poForm.companyId, companies]);
+
+  const customerContactInfo = useMemo(() => {
+    if (selectedQuoteContact) {
+      return selectedQuoteContact;
+    }
+
+    if (!selectedCompany) return null;
+
+    const primaryContact = selectedCompany.contacts?.find(ct => ct.contact_type === 'PRIMARY') || selectedCompany.contacts?.[0];
+    const billing = selectedCompany.addresses?.find(address => address.address_type === 'BILLING') || {};
+    const shipping = selectedCompany.addresses?.find(address => address.address_type === 'SHIPPING') || {};
+
+    const billingAddressStr = [billing.line1, billing.line2, billing.city, billing.state, billing.pincode].filter(Boolean).join(', ');
+    const shippingAddressStr = [shipping.line1, shipping.line2, shipping.city, shipping.state, shipping.pincode].filter(Boolean).join(', ');
+
+    return {
+      contactPerson: primaryContact?.name || selectedCompany.contact_person || '—',
+      email: primaryContact?.email || selectedCompany.email || selectedCompany.contact_email || '—',
+      phone: primaryContact?.phone || selectedCompany.phone || selectedCompany.contact_mobile || '—',
+      billingAddress: billingAddressStr || selectedCompany.billing_address || '—',
+      shippingAddress: shippingAddressStr || selectedCompany.shipping_address || '—'
+    };
+  }, [selectedQuoteId, selectedQuoteContact, selectedCompany]);
 
   // Sync selected host company details when ID changes
   React.useEffect(() => {
@@ -301,8 +397,12 @@ const CustomerPO = ({
   }, []);
 
   const handleQuotationSelect = async (quoteId) => {
+    if (quoteId === 'clear' || !quoteId) {
+      setSelectedQuoteId('');
+      setSelectedQuoteContact(null);
+      return;
+    }
     setSelectedQuoteId(quoteId);
-    if (!quoteId) return;
 
     try {
       setPoFormLoading(true);
@@ -329,6 +429,14 @@ const CustomerPO = ({
         }
         quote = basicQuote;
       }
+
+      setSelectedQuoteContact({
+        contactPerson: quote.contact_person || '—',
+        email: quote.client_email || '—',
+        phone: quote.client_phone || '—',
+        billingAddress: quote.client_address || '—',
+        shippingAddress: quote.client_address || '—'
+      });
 
       // If we have a version group, it already contains the items.
       // If we have a basic quote, we might need to find its siblings if it's part of a batch.
@@ -485,6 +593,7 @@ const CustomerPO = ({
       window.history.pushState({}, '', '/sales/customer-po');
     }
     setSelectedQuoteId('')
+    setSelectedQuoteContact(null)
     setSelectedHostId('')
     setSelectedHostCompany(null)
     setPoForm({
@@ -583,6 +692,20 @@ const CustomerPO = ({
             })()
           }))
         });
+        const hasContact = (data.contact_person && data.contact_person !== '—') ||
+                            (data.email && data.email !== '—') ||
+                            (data.phone && data.phone !== '—');
+        if (hasContact) {
+          setSelectedQuoteContact({
+            contactPerson: data.contact_person || '—',
+            email: data.email || '—',
+            phone: data.phone || '—',
+            billingAddress: data.billing_address || '—',
+            shippingAddress: data.shipping_address || '—'
+          });
+        } else {
+          setSelectedQuoteContact(null);
+        }
       } catch (error) {
         showToast(error.message || 'Failed to fetch PO details');
         closePoForm();
@@ -1352,75 +1475,14 @@ const CustomerPO = ({
                     {formMode === 'CREATE' && (
                       <div className="space-y-2">
                         <label className="text-xs  text-slate-400   ml-1">Quotation No (Fetch Details)</label>
-                        <select
+                        <SearchableSelect
+                          options={quotationOptions}
                           value={selectedQuoteId}
                           onChange={(e) => handleQuotationSelect(e.target.value)}
-                          className="w-full bg-slate-50 border-2 border-slate-100 rounded p-2 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all  text-slate-700 appearance-none"
-                        >
-                          <option value="">Manual Entry (No Quotation)</option>
-                          {(() => {
-                            const grouped = {};
-
-                            quotationRequests.forEach(q => {
-                              // Ignore component snapshots
-                              if (q.status?.trim().toUpperCase() === 'COMPONENT') return;
-
-                              const rootId = q.parent_id || q.id;
-                              const chainKey = `${q.company_id}_${rootId}`;
-
-                              if (!grouped[chainKey]) {
-                                grouped[chainKey] = {
-                                  id: q.id,
-                                  display_id: rootId,
-                                  company_id: q.company_id,
-                                  company_name: q.company_name,
-                                  project_name: q.project_name,
-                                  status: q.status,
-                                  version: q.version || 1,
-                                  batch_id: q.batch_id,
-                                  parent_id: q.parent_id,
-                                  po_number: q.po_number,
-                                  quotes: []
-                                };
-                              }
-
-                              grouped[chainKey].quotes.push(q);
-
-                              // Track the latest version inside each chain
-                              const currentVersion = grouped[chainKey].version || 0;
-                              const qVersion = q.version || 1;
-                              const currentStatus = (grouped[chainKey].status || '').trim().toUpperCase();
-                              const qStatus = (q.status || '').trim().toUpperCase();
-
-                              if (qVersion > currentVersion || (qVersion === currentVersion && qStatus === 'APPROVED' && currentStatus !== 'APPROVED')) {
-                                grouped[chainKey].id = q.id;
-                                grouped[chainKey].status = q.status;
-                                grouped[chainKey].version = q.version;
-                                grouped[chainKey].project_name = q.project_name;
-                                grouped[chainKey].batch_id = q.batch_id;
-                                grouped[chainKey].parent_id = q.parent_id;
-                                grouped[chainKey].po_number = q.po_number;
-                              }
-                            });
-
-                            // Filter to keep only chains where the latest version is APPROVED
-                            // and a PO has not already been created (po_number is null/empty)
-                            const approvedChains = Object.values(grouped).filter(group => {
-                              const isApproved = (group.status || '').trim().toUpperCase() === 'APPROVED';
-                              const hasNoPo = !group.po_number;
-                              return isApproved && hasNoPo;
-                            });
-
-                            // Sort descending by root ID
-                            approvedChains.sort((a, b) => b.display_id - a.display_id);
-
-                            return approvedChains.map(group => (
-                              <option key={group.id} value={group.id}>
-                                QRT-{String(group.display_id).padStart(4, '0')} - {group.company_name} ({group.project_name || 'No Project'}) {group.version > 1 ? `(V${group.version})` : ''}
-                              </option>
-                            ));
-                          })()}
-                        </select>
+                          placeholder="Search or Select Quotation..."
+                          allowCustom={false}
+                          className="w-full bg-slate-50 border-2 border-slate-100 rounded p-2 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-700"
+                        />
                       </div>
                     )}
                     <div className="space-y-2">
@@ -1449,6 +1511,48 @@ const CustomerPO = ({
                       </select>
                     </div>
                   </div>
+
+                  {customerContactInfo && (
+                    <div className="p-3 bg-slate-50/70 border border-slate-200/60 rounded animate-in fade-in duration-300">
+                      <div className="flex items-center gap-2 pb-1.5 mb-2 border-b border-slate-200/40">
+                        <User className="w-3.5 h-3.5 text-indigo-500" />
+                        <span className="text-[11px] font-semibold text-slate-700">Customer Details</span>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+                        <div className="space-y-0.5 min-w-0">
+                          <p className="text-[10px] text-slate-400 font-medium">Contact Person</p>
+                          <p className="text-xs text-slate-700 font-semibold truncate select-all" title={customerContactInfo.contactPerson}>
+                            {customerContactInfo.contactPerson}
+                          </p>
+                        </div>
+                        <div className="space-y-0.5 min-w-0">
+                          <p className="text-[10px] text-slate-400 font-medium">Email Address</p>
+                          <p className="text-xs text-slate-700 font-semibold truncate select-all" title={customerContactInfo.email}>
+                            {customerContactInfo.email}
+                          </p>
+                        </div>
+                        <div className="space-y-0.5 min-w-0">
+                          <p className="text-[10px] text-slate-400 font-medium">Phone Number</p>
+                          <p className="text-xs text-slate-700 font-semibold truncate select-all" title={customerContactInfo.phone}>
+                            {customerContactInfo.phone}
+                          </p>
+                        </div>
+                        <div className="space-y-0.5 min-w-0">
+                          <p className="text-[10px] text-slate-400 font-medium">Billing Address</p>
+                          <p className="text-xs text-slate-600 truncate select-all" title={customerContactInfo.billingAddress}>
+                            {customerContactInfo.billingAddress}
+                          </p>
+                        </div>
+                        <div className="space-y-0.5 min-w-0">
+                          <p className="text-[10px] text-slate-400 font-medium">Shipping Address</p>
+                          <p className="text-xs text-slate-600 truncate select-all" title={customerContactInfo.shippingAddress}>
+                            {customerContactInfo.shippingAddress}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                     <div className="space-y-2">

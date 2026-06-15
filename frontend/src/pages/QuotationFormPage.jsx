@@ -130,10 +130,15 @@ const QuotationFormPage = () => {
           const billing = client.addresses?.find(address => address.address_type === 'BILLING') || client.addresses?.[0] || {};
           const addressStr = [billing.line1, billing.line2, billing.city, billing.state, billing.pincode].filter(Boolean).join(', ');
 
-          if (!nextEmail) nextEmail = primaryContact.email || '';
-          if (!nextPhone) nextPhone = primaryContact.phone || '';
-          if (!nextName) nextName = primaryContact.name || '';
-          if (!nextAddr) nextAddr = addressStr || 'N/A';
+          // In revise/revisions mode, if we are still looking at the same client, we should preserve the parent quotation's details instead of defaulting to N/A or empty
+          const isSameClientAsParent = (mode === 'revise' || version > 1) && 
+            selectedClient?.id && initialData && 
+            String(selectedClient.id) === String(initialData.clientId || initialData.company_id || initialData.companyId);
+
+          if (!nextEmail) nextEmail = isSameClientAsParent && selectedClient.email ? selectedClient.email : (primaryContact.email || '');
+          if (!nextPhone) nextPhone = isSameClientAsParent && selectedClient.phone ? selectedClient.phone : (primaryContact.phone || '');
+          if (!nextName) nextName = isSameClientAsParent && selectedClient.contact_person ? selectedClient.contact_person : (primaryContact.name || '');
+          if (!nextAddr || nextAddr === 'N/A') nextAddr = isSameClientAsParent && selectedClient.address && selectedClient.address !== 'N/A' ? selectedClient.address : (addressStr || 'N/A');
         }
 
         const emailNeedsUpdate = selectedClient.email !== nextEmail;

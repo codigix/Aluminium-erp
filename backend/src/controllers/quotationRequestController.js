@@ -149,6 +149,10 @@ const getQuotationVersionHistory = async (req, res, next) => {
               COALESCE(soi.unit, qr.item_unit) as item_unit,
               COALESCE(soi.item_code, qr.item_code) as item_code,
               COALESCE(sb.current_balance, 0) as available_stock,
+              COALESCE(qr.client_email, cd_proj.email, cd_contact.email, ct.email, '') as resolved_client_email,
+              COALESCE(qr.client_phone, cd_proj.phone, cd_contact.phone, ct.phone, '') as resolved_client_phone,
+              COALESCE(qr.contact_person, cd_proj.contact_person, cd_contact.contact_person, ct.name, '') as resolved_contact_person,
+              COALESCE(qr.client_address, cd_proj.billing_address, (SELECT CONCAT(line1, ', ', IFNULL(line2, ''), city, ', ', state, ' ', pincode) FROM company_addresses WHERE company_id = c.id LIMIT 1)) as resolved_client_address,
               (
                 SELECT bom_cost FROM sales_order_items v2 
                 WHERE ((v2.bom_id = soi.bom_id AND soi.bom_id IS NOT NULL)
@@ -165,6 +169,26 @@ const getQuotationVersionHistory = async (req, res, next) => {
          FROM stock_balance
          GROUP BY item_code
        ) sb ON LOWER(TRIM(COALESCE(soi.item_code, qr.item_code))) = LOWER(TRIM(sb.item_code))
+       LEFT JOIN (
+         SELECT company_id, email, phone, name, 
+                ROW_NUMBER() OVER (PARTITION BY company_id ORDER BY contact_type = 'PRIMARY' DESC, id ASC) as rn
+         FROM contacts
+       ) ct ON ct.company_id = c.id AND ct.rn = 1
+       LEFT JOIN (
+         SELECT soi.sales_order_id, cd.contact_person, cd.phone, cd.email,
+                ROW_NUMBER() OVER (PARTITION BY soi.sales_order_id ORDER BY cd.id ASC) as rn
+         FROM sales_order_items soi
+         JOIN customer_drawings cd ON soi.drawing_id = cd.id
+         WHERE cd.contact_person IS NOT NULL OR cd.phone IS NOT NULL OR cd.email IS NOT NULL
+       ) cd_contact ON cd_contact.sales_order_id = qr.sales_order_id AND cd_contact.rn = 1
+       LEFT JOIN (
+         SELECT client_name, project_name, email, phone, contact_person, billing_address,
+                ROW_NUMBER() OVER (PARTITION BY client_name, project_name ORDER BY id DESC) as rn
+         FROM customer_drawings
+         WHERE contact_person IS NOT NULL OR phone IS NOT NULL OR email IS NOT NULL
+       ) cd_proj ON cd_proj.client_name = c.company_name 
+                AND TRIM(LOWER(cd_proj.project_name)) = TRIM(LOWER(qr.project_name))
+                AND cd_proj.rn = 1
        WHERE qr.id = ? OR qr.parent_id = ? 
           OR qr.parent_id IN (SELECT id FROM quotation_requests WHERE id = ? OR parent_id = ?)
           OR qr.id IN (SELECT parent_id FROM quotation_requests WHERE id = ?)
@@ -194,6 +218,10 @@ const getQuotationVersionHistory = async (req, res, next) => {
           company_id: row.company_id,
           company_name: row.company_name,
           host_company_id: row.host_company_id,
+          client_email: row.resolved_client_email,
+          client_phone: row.resolved_client_phone,
+          contact_person: row.resolved_contact_person,
+          client_address: row.resolved_client_address,
           items: []
         };
         versionGroups.push(versionMap[row.version]);
@@ -498,11 +526,23 @@ const sendQuotationViaEmail = async (req, res, next) => {
       }
     }
 
+    // If this is a revision, load parent details as fallback for contact info
+    let parentQuote = null;
+    if (finalParentId) {
+      const [parentRows] = await connection.query(
+        'SELECT client_email, client_phone, contact_person, client_address FROM quotation_requests WHERE id = ?',
+        [finalParentId]
+      );
+      if (parentRows.length > 0) {
+        parentQuote = parentRows[0];
+      }
+    }
+
     // Resolve snapshot contact details (with fallbacks if frontend didn't supply them)
-    let finalClientEmail = resolvedClientEmail || null;
-    let finalClientPhone = resolvedClientPhone || null;
-    let finalContactPerson = resolvedContactPerson || null;
-    let finalClientAddress = resolvedClientAddress || null;
+    let finalClientEmail = resolvedClientEmail || (parentQuote ? parentQuote.client_email : null);
+    let finalClientPhone = resolvedClientPhone || (parentQuote ? parentQuote.client_phone : null);
+    let finalContactPerson = resolvedContactPerson || (parentQuote ? parentQuote.contact_person : null);
+    let finalClientAddress = resolvedClientAddress || (parentQuote ? parentQuote.client_address : null);
 
     if (!finalClientEmail || !finalClientPhone || !finalContactPerson || !finalClientAddress) {
       const [contactRows] = await connection.query(

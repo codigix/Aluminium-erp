@@ -203,6 +203,28 @@ const getOrderById = async (id) => {
   if (rows.length === 0) return null;
   
   const order = rows[0];
+
+  // Enrich order with Customer PO contact details if it's direct
+  if (order.source_type === 'DIRECT' && order.quotation_id) {
+    try {
+      const customerPoService = require('./customerPoService');
+      const poData = await customerPoService.getCustomerPoById(order.quotation_id);
+      if (poData) {
+        order.contact_email = (poData.email && poData.email !== '—') ? poData.email : (order.contact_email || poData.company_email || '');
+        order.contact_mobile = (poData.phone && poData.phone !== '—') ? poData.phone : (order.contact_mobile || poData.billing_contact_phone || poData.shipping_contact_phone || '');
+        order.contact_person = (poData.contact_person && poData.contact_person !== '—') ? poData.contact_person : (order.contact_person || poData.billing_contact_name || poData.shipping_contact_name || '');
+        if (poData.billing_address && poData.billing_address !== '—') {
+          order.billing_address = poData.billing_address;
+        }
+        if (poData.shipping_address && poData.shipping_address !== '—') {
+          order.shipping_address = poData.shipping_address;
+        }
+      }
+    } catch (err) {
+      console.error('Error enriching order details from Customer PO:', err);
+    }
+  }
+
   const [items] = await pool.query('SELECT * FROM order_items WHERE order_id = ?', [order.id]);
   
   const enrichedItems = await Promise.all(items.map(async (item) => {
@@ -449,6 +471,27 @@ const generateOrderPDF = async (orderId) => {
   if (!orderRows.length) throw new Error('Order not found');
   const order = orderRows[0];
 
+  // Enrich order with Customer PO contact details if it's direct
+  if (order.source_type === 'DIRECT' && order.quotation_id) {
+    try {
+      const customerPoService = require('./customerPoService');
+      const poData = await customerPoService.getCustomerPoById(order.quotation_id);
+      if (poData) {
+        order.contact_email = (poData.email && poData.email !== '—') ? poData.email : (order.contact_email || poData.company_email || '');
+        order.contact_mobile = (poData.phone && poData.phone !== '—') ? poData.phone : (order.contact_mobile || poData.billing_contact_phone || poData.shipping_contact_phone || '');
+        order.contact_person = (poData.contact_person && poData.contact_person !== '—') ? poData.contact_person : (order.contact_person || poData.billing_contact_name || poData.shipping_contact_name || '');
+        if (poData.billing_address && poData.billing_address !== '—') {
+          order.billing_address = poData.billing_address;
+        }
+        if (poData.shipping_address && poData.shipping_address !== '—') {
+          order.shipping_address = poData.shipping_address;
+        }
+      }
+    } catch (err) {
+      console.error('Error enriching order PDF from Customer PO:', err);
+    }
+  }
+
   const adminCompanyMasterService = require('./adminCompanyMasterService');
   let activeCompany = null;
   if (order.host_company_id) {
@@ -509,32 +552,36 @@ const generateOrderPDF = async (orderId) => {
                           companyDetails?.contacts?.[0] || {};
 
   // Format billing address
-  const addrParts = [
-    billing.line1 || order.billing_line1,
-    billing.line2 || order.billing_line2,
-    billing.city || order.billing_city,
-    billing.state || order.billing_state,
-    (billing.pincode || order.billing_pincode) ? `Pincode: ${billing.pincode || order.billing_pincode}` : null
-  ].filter(Boolean);
-  order.billing_address = addrParts.join(', ');
+  if (!order.billing_address || order.billing_address === '') {
+    const addrParts = [
+      billing.line1 || order.billing_line1,
+      billing.line2 || order.billing_line2,
+      billing.city || order.billing_city,
+      billing.state || order.billing_state,
+      (billing.pincode || order.billing_pincode) ? `Pincode: ${billing.pincode || order.billing_pincode}` : null
+    ].filter(Boolean);
+    order.billing_address = addrParts.join(', ');
+  }
   order.billing_state = billing.state || order.billing_state || '';
 
   // Format shipping address
-  const shippingAddrParts = [
-    shipping.line1,
-    shipping.line2,
-    shipping.city,
-    shipping.state,
-    shipping.pincode ? `Pincode: ${shipping.pincode}` : null
-  ].filter(Boolean);
-  order.shipping_address = shippingAddrParts.length > 0 ? shippingAddrParts.join(', ') : order.billing_address;
+  if (!order.shipping_address || order.shipping_address === '') {
+    const shippingAddrParts = [
+      shipping.line1,
+      shipping.line2,
+      shipping.city,
+      shipping.state,
+      shipping.pincode ? `Pincode: ${shipping.pincode}` : null
+    ].filter(Boolean);
+    order.shipping_address = shippingAddrParts.length > 0 ? shippingAddrParts.join(', ') : order.billing_address;
+  }
   order.shipping_state = shipping.state || order.billing_state || '';
 
   // Format contacts
-  order.billing_contact_name = billingContact.name || '';
-  order.billing_contact_phone = billingContact.phone || '';
-  order.shipping_contact_name = shippingContact.name || '';
-  order.shipping_contact_phone = shippingContact.phone || '';
+  order.billing_contact_name = order.contact_person || billingContact.name || '';
+  order.billing_contact_phone = order.contact_mobile || billingContact.phone || '';
+  order.shipping_contact_name = order.contact_person || shippingContact.name || '';
+  order.shipping_contact_phone = order.contact_mobile || shippingContact.phone || '';
 
   // GSTIN
   order.gstin = companyDetails?.gstin || order.gstin || '';

@@ -1,33 +1,18 @@
 const mysql = require('mysql2/promise');
+require('dotenv').config({ path: './backend/.env' });
+const customerPoService = require('./src/services/customerPoService');
 
-(async () => {
-  const pool = mysql.createPool({
-    host: 'localhost',
-    user: 'root',
-    password: 'root',
-    database: 'sales_erp'
-  });
-  
+async function check() {
   try {
-    const [rows] = await pool.query('SELECT company_id, COUNT(*) as cnt FROM contacts GROUP BY company_id');
-    console.log('Total contacts per company:');
-    console.log(JSON.stringify(rows, null, 2));
-    
-    const [check12] = await pool.query('SELECT id, name, email, phone, contact_type FROM contacts WHERE company_id = 12');
-    console.log('\nContacts for company 12:');
-    console.log(JSON.stringify(check12, null, 2));
-    
-    if (check12.length === 0) {
-      console.log('\nNo contacts found for company 12. Creating sample contact...');
-      const [result] = await pool.query(
-        'INSERT INTO contacts (company_id, name, email, phone, contact_type, status) VALUES (?, ?, ?, ?, ?, ?)',
-        [12, 'John Doe', 'john@example.com', '9876543210', 'PRIMARY', 'ACTIVE']
-      );
-      console.log('Created contact:', result.insertId);
-    }
-  } catch (error) {
-    console.error('Error:', error.message);
-  } finally {
-    process.exit(0);
+    const po = await customerPoService.getCustomerPoById(38);
+    console.log('PO 38 Details:');
+    console.log('company_email:', po.company_email);
+    console.log('billing_contact_name:', po.billing_contact_name);
+    console.log('billing_contact_phone:', po.billing_contact_phone);
+    console.log('billing_address:', po.billing_address);
+    console.log('shipping_address:', po.shipping_address);
+  } catch (err) {
+    console.error(err);
   }
-})();
+}
+check();

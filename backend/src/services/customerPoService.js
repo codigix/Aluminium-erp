@@ -289,6 +289,56 @@ const getCustomerPoById = async id => {
   po.pan = companyDetails?.pan || po.pan || '';
   po.cin = companyDetails?.cin || po.cin || '';
 
+  // Fetch linked quotation request details if available to override with precise project contacts
+  try {
+    if (po.project_name) {
+      const [quotes] = await pool.query(
+        `SELECT qr.id,
+                COALESCE(qr.client_email, cd_proj.email, cd_contact.email, ct.email, '') as resolved_client_email,
+                COALESCE(qr.client_phone, cd_proj.phone, cd_contact.phone, ct.phone, '') as resolved_client_phone,
+                COALESCE(qr.contact_person, cd_proj.contact_person, cd_contact.contact_person, ct.name, '') as resolved_contact_person,
+                COALESCE(qr.client_address, cd_proj.billing_address, (SELECT CONCAT(line1, ', ', IFNULL(line2, ''), city, ', ', state, ' ', pincode) FROM company_addresses WHERE company_id = c.id LIMIT 1)) as resolved_client_address
+         FROM quotation_requests qr
+         JOIN companies c ON c.id = qr.company_id
+         LEFT JOIN sales_orders so ON so.id = qr.sales_order_id
+         LEFT JOIN (
+           SELECT company_id, email, phone, name, 
+                  ROW_NUMBER() OVER (PARTITION BY company_id ORDER BY contact_type = 'PRIMARY' DESC, id ASC) as rn
+           FROM contacts
+         ) ct ON ct.company_id = c.id AND ct.rn = 1
+         LEFT JOIN (
+           SELECT soi.sales_order_id, cd.contact_person, cd.phone, cd.email,
+                  ROW_NUMBER() OVER (PARTITION BY soi.sales_order_id ORDER BY cd.id ASC) as rn
+           FROM sales_order_items soi
+           JOIN customer_drawings cd ON soi.drawing_id = cd.id
+           WHERE cd.contact_person IS NOT NULL OR cd.phone IS NOT NULL OR cd.email IS NOT NULL
+         ) cd_contact ON cd_contact.sales_order_id = qr.sales_order_id AND cd_contact.rn = 1
+         LEFT JOIN (
+           SELECT client_name, project_name, email, phone, contact_person, billing_address,
+                  ROW_NUMBER() OVER (PARTITION BY client_name, project_name ORDER BY id DESC) as rn
+           FROM customer_drawings
+           WHERE contact_person IS NOT NULL OR phone IS NOT NULL OR email IS NOT NULL
+         ) cd_proj ON cd_proj.client_name = c.company_name 
+                  AND TRIM(LOWER(cd_proj.project_name)) = TRIM(LOWER(COALESCE(qr.project_name, so.project_name)))
+                  AND cd_proj.rn = 1
+         WHERE qr.company_id = ? AND TRIM(UPPER(qr.project_name)) = TRIM(UPPER(?))
+         ORDER BY qr.version DESC, qr.id DESC
+         LIMIT 1`,
+        [po.company_id, po.project_name]
+      );
+
+      if (quotes.length > 0) {
+        po.contact_person = quotes[0].resolved_contact_person || po.contact_person || '—';
+        po.email = quotes[0].resolved_client_email || po.email || '—';
+        po.phone = quotes[0].resolved_client_phone || po.phone || '—';
+        po.billing_address = quotes[0].resolved_client_address || po.billing_address || '—';
+        po.shipping_address = quotes[0].resolved_client_address || po.shipping_address || '—';
+      }
+    }
+  } catch (err) {
+    console.error('Error fetching quotation details for PO view:', err);
+  }
+
   const [items] = await pool.query(
     `SELECT id, item_code, drawing_no, description, quantity, unit, rate, basic_amount, discount, 
             cgst_percent, sgst_percent, igst_percent, cgst_amount, sgst_amount, igst_amount, hsn_code, delivery_date
@@ -537,62 +587,8 @@ const deleteCustomerPo = async id => {
     // Delete items first
     await connection.execute('DELETE FROM customer_po_items WHERE customer_po_id = ?', [id]);
     
-    // Find linked sales orders
-    const [soRows] = await connection.execute('SELECT id FROM sales_orders WHERE customer_po_id = ?', [id]);
-    
-    for (const so of soRows) {
-      // Find and delete related production plans, work orders, and job cards
-      const [planRows] = await connection.execute('SELECT id FROM production_plans WHERE sales_order_id = ?', [so.id]);
-      for (const plan of planRows) {
-        // Delete job cards linked via work orders
-        await connection.execute(
-          `DELETE FROM job_cards 
-           WHERE work_order_id IN (SELECT id FROM work_orders WHERE plan_id = ?)`,
-          [plan.id]
-        );
-        // Delete work orders
-        await connection.execute('DELETE FROM work_orders WHERE plan_id = ?', [plan.id]);
-        
-        // Delete material requests linked to this plan
-        await connection.execute('DELETE FROM material_request_items WHERE mr_id IN (SELECT id FROM material_requests WHERE plan_id = ?)', [plan.id]);
-        await connection.execute('DELETE FROM material_requests WHERE plan_id = ?', [plan.id]);
-
-        // Delete production plan (cascades to production_plan_items, materials, operations, etc. in many schemas)
-        await connection.execute('DELETE FROM production_plans WHERE id = ?', [plan.id]);
-      }
-
-      // Find sales order items to clean up their BOM components
-      const [soiRows] = await connection.execute('SELECT id FROM sales_order_items WHERE sales_order_id = ?', [so.id]);
-      for (const soi of soiRows) {
-        await connection.execute('DELETE FROM sales_order_item_materials WHERE sales_order_item_id = ?', [soi.id]);
-        await connection.execute('DELETE FROM sales_order_item_components WHERE sales_order_item_id = ?', [soi.id]);
-        await connection.execute('DELETE FROM sales_order_item_operations WHERE sales_order_item_id = ?', [soi.id]);
-        await connection.execute('DELETE FROM sales_order_item_scrap WHERE sales_order_item_id = ?', [soi.id]);
-      }
-
-      // Delete linked sales order items
-      await connection.execute('DELETE FROM sales_order_items WHERE sales_order_id = ?', [so.id]);
-      // Delete the sales order
-      await connection.execute('DELETE FROM sales_orders WHERE id = ?', [so.id]);
-    }
-
-    // Also check for direct orders in the new system linked to this PO (if any)
-    const [orderRows] = await connection.execute('SELECT id FROM orders WHERE quotation_id IN (SELECT id FROM sales_orders WHERE customer_po_id = ?)', [id]);
-    for (const order of orderRows) {
-       // Cleanup production plans for direct orders
-       const [planRows] = await connection.execute('SELECT id FROM production_plans WHERE sales_order_id = ?', [order.id]);
-       for (const plan of planRows) {
-         await connection.execute(`DELETE FROM job_cards WHERE work_order_id IN (SELECT id FROM work_orders WHERE plan_id = ?)`, [plan.id]);
-         await connection.execute('DELETE FROM work_orders WHERE plan_id = ?', [plan.id]);
-         await connection.execute('DELETE FROM material_request_items WHERE mr_id IN (SELECT id FROM material_requests WHERE plan_id = ?)', [plan.id]);
-         await connection.execute('DELETE FROM material_requests WHERE plan_id = ?', [plan.id]);
-         await connection.execute('DELETE FROM production_plans WHERE id = ?', [plan.id]);
-       }
-       // Note: order_items usually don't have separate BOM tables like sales_order_items yet, 
-       // they often link back to sales_order_items for BOM.
-       await connection.execute('DELETE FROM order_items WHERE order_id = ?', [order.id]);
-       await connection.execute('DELETE FROM orders WHERE id = ?', [order.id]);
-    }
+    // Unlink sales orders instead of deleting them (which would cascade delete quotation requests, drawings, BOMs, etc.)
+    await connection.execute('UPDATE sales_orders SET customer_po_id = NULL WHERE customer_po_id = ?', [id]);
 
     // Delete the PO
     const [result] = await connection.execute('DELETE FROM customer_pos WHERE id = ?', [id]);
