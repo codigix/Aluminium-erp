@@ -1227,7 +1227,7 @@ function App() {
     { label: 'DESIGN & ENG', isGroup: true, groupId: 'design-group' },
     { label: 'Drawing Master', moduleId: 'drawing-master', icon: 'layers', indent: true, prefix: '/design' },
     { label: 'Items Master', moduleId: 'item-master', icon: 'box', indent: true, prefix: '/design' },
-    { label: 'BOM Creation', moduleId: 'bom-creation', icon: 'list-tree', indent: true, prefix: '/design' },
+    { label: 'Part Details', moduleId: 'bom-creation', icon: 'list-tree', indent: true, prefix: '/design' },
     { label: 'Routing / Operations', moduleId: 'routing-operations', icon: 'settings-2', indent: true, prefix: '/design' },
     { label: 'Process Sheet', moduleId: 'process-sheet', icon: 'spreadsheet', indent: true, prefix: '/design' },
 

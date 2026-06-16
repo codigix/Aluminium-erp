@@ -2209,8 +2209,8 @@ const BOMFormPage = () => {
                 {isReadOnly
                   ? `Viewing BOM V${productForm.revision || '1'}: ${cleanText(productForm.description) || itemId} ${productForm.itemGroup ? `(${productForm.itemGroup})` : ''}`
                   : (productForm.drawingNo && productForm.drawingNo !== 'N/A'
-                    ? `Create BOM: ${productForm.drawingNo}`
-                    : 'Create BOM')}
+                    ? `Create Part Details: ${productForm.drawingNo}`
+                    : 'Create Part Details')}
                 {productForm.revision && (
                   <span className={`p-1 rounded text-xs border  ${selectedItem?.status === 'Approved' ? 'text-emerald-50  ' :
                     selectedItem?.status === 'Draft' ? 'text-amber-50 ' :

@@ -1,5 +1,17 @@
 import Swal from 'sweetalert2';
 
+const getToastPosition = () => {
+  try {
+    const path = window.location.pathname;
+    if (path.includes('/bom-creation') || path.includes('/bom-form')) {
+      return 'bottom-start';
+    }
+  } catch (e) {
+    // Fallback if window is not defined (e.g., in SSR or test environments)
+  }
+  return 'bottom-end';
+};
+
 const Toast = Swal.mixin({
   toast: true,
   position: 'bottom-end',
@@ -15,7 +27,8 @@ const Toast = Swal.mixin({
 export const showToast = (icon, title) => {
   Toast.fire({
     icon,
-    title
+    title,
+    position: getToastPosition()
   });
 };
 

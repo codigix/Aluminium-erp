@@ -55,7 +55,45 @@ const BOMCreation = () => {
   const [expandedBOMGroups, setExpandedBOMGroups] = useState(new Set());
   const [globalSearchTerm, setGlobalSearchTerm] = useState('');
   const [expandedClientRows, setExpandedClientRows] = useState(new Set());
+  const [activeTab, setActiveTab] = useState('All');
+  const [typeFilter, setTypeFilter] = useState('All');
   const location = useLocation();
+
+  const [accessTimestamps, setAccessTimestamps] = useState({});
+
+  useEffect(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem('bomAccessTimestamps')) || {};
+      setAccessTimestamps(stored);
+    } catch (e) {
+      setAccessTimestamps({});
+    }
+  }, []);
+
+  const handleAccessProject = (rowId) => {
+    if (!rowId) return;
+    const key = 'bomAccessTimestamps';
+    let stored = {};
+    try {
+      stored = JSON.parse(localStorage.getItem(key)) || {};
+    } catch (e) {
+      stored = {};
+    }
+    stored[rowId] = Date.now();
+    localStorage.setItem(key, JSON.stringify(stored));
+    setAccessTimestamps(stored);
+  };
+
+  const formatTimeAgo = (timestamp) => {
+    const diffMs = Date.now() - timestamp;
+    const diffMins = Math.round(diffMs / 60000);
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins} min ago`;
+    const diffHours = Math.round(diffMins / 60);
+    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+    const diffDays = Math.round(diffHours / 24);
+    return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+  };
 
   // Preview State
   const [showPreviewModal, setShowPreviewModal] = useState(false);
@@ -80,6 +118,7 @@ const BOMCreation = () => {
 
   const handleViewBOMDetails = async (client) => {
     try {
+      handleAccessProject(client.id);
       // Find the first sales order ID from the client's items to fetch details
       // Note: The BOM Approval modal usually shows details for a specific Sales Order.
       // Since this table is grouped by Client, we'll need to handle it.
@@ -331,9 +370,28 @@ const BOMCreation = () => {
       let clientMatches = false;
 
       Object.entries(drawingsMap).forEach(([dwgNo, dwgItems]) => {
+        const drawingType = dwgItems.find(i => i.drawing_type)?.drawing_type || '';
+        const isAssemblyDrawing = (drawingType || '').toUpperCase().includes('ASSEMBLY');
+        
+        if (typeFilter === 'Assembly' && !isAssemblyDrawing) return;
+        if (typeFilter === 'Part' && isAssemblyDrawing) return;
+
+        const parentBOMs = dwgItems.filter(i => i.has_bom || i.has_master_bom);
+        const childBOMs = items.filter(i => i.parent_bom_id && dwgItems.some(p => p.id === i.parent_bom_id));
+        const allItemsWithBOM = [...parentBOMs, ...childBOMs];
+
+        let isCompleted = false;
+        if (isAssemblyDrawing) {
+          isCompleted = dwgItems.some(i => i.has_bom || i.has_master_bom);
+        } else {
+          isCompleted = allItemsWithBOM.length > 0;
+        }
+
+        if (activeTab === 'Completed' && !isCompleted) return;
+        if (activeTab === 'In Process' && isCompleted) return;
+
         const drawingName = dwgItems[0].drawing_name || dwgItems[0].item_name || dwgItems[0].item_description || 'No Description';
-        const childItems = items.filter(i => i.parent_bom_id && dwgItems.some(p => p.id === i.parent_bom_id));
-        const allItems = [...dwgItems, ...childItems];
+        const allItems = [...dwgItems, ...childBOMs];
         
         let isMatched = false;
         if (dwgNo.toLowerCase().includes(searchMatch)) isMatched = true;
@@ -382,7 +440,7 @@ const BOMCreation = () => {
         }
       }, 400);
     }
-  }, [globalSearchTerm, orders, clientData]);
+  }, [globalSearchTerm, orders, clientData, activeTab, typeFilter]);
 
   const toggleDrawing = (dwgKey) => {
     setExpandedDrawings(prev => ({ ...prev, [dwgKey]: !prev[dwgKey] }));
@@ -619,6 +677,7 @@ const BOMCreation = () => {
     let totalDrawings = 0;
     let completedDrawings = 0;
     let totalCost = 0;
+    const activeClientsSet = new Set();
 
     orders.forEach(client => {
       const items = clientData[client.id]?.items || [];
@@ -632,10 +691,18 @@ const BOMCreation = () => {
       });
 
       const drawings = Object.keys(drawingsMap);
-      totalDrawings += drawings.length;
 
       drawings.forEach(dwgNo => {
         const dwgItems = drawingsMap[dwgNo];
+        const drawingType = dwgItems.find(i => i.drawing_type)?.drawing_type || '';
+        const isAssemblyDrawing = (drawingType || '').toUpperCase().includes('ASSEMBLY');
+
+        if (typeFilter === 'Assembly' && !isAssemblyDrawing) return;
+        if (typeFilter === 'Part' && isAssemblyDrawing) return;
+
+        activeClientsSet.add(client.id);
+        totalDrawings++;
+
         const childBOMs = items.filter(i => i.parent_bom_id && dwgItems.some(p => p.id === i.parent_bom_id));
         const allDwgItems = [...dwgItems, ...childBOMs];
 
@@ -687,26 +754,104 @@ const BOMCreation = () => {
     });
 
     return {
-      totalClients: orders.length,
+      totalClients: activeClientsSet.size,
       totalDrawings,
       completionRate: totalDrawings > 0 ? Math.round((completedDrawings / totalDrawings) * 100) : 0,
       totalCost
     };
-  }, [orders, clientData]);
+  }, [orders, clientData, typeFilter]);
 
   const filteredOrders = useMemo(() => {
-    return orders;
-  }, [orders]);
+    return orders.filter(client => {
+      if (!clientData[client.id] || clientData[client.id].loading) {
+        return true;
+      }
+      
+      const items = clientData[client.id]?.items || [];
+      const topLevelItems = items.filter(item => !item.parent_bom_id && item.status?.toLowerCase() === 'approved');
+      
+      const drawingsMap = topLevelItems.reduce((acc, item) => {
+        const dwg = cleanText(item.drawing_no || 'N/A');
+        if (!acc[dwg]) acc[dwg] = [];
+        acc[dwg].push(item);
+        return acc;
+      }, {});
+
+      const matchingDrawings = Object.entries(drawingsMap).filter(([dwgNo, dwgItems]) => {
+        const drawingType = dwgItems.find(i => i.drawing_type)?.drawing_type || '';
+        const isAssemblyDrawing = (drawingType || '').toUpperCase().includes('ASSEMBLY');
+        
+        if (typeFilter === 'Assembly' && !isAssemblyDrawing) return false;
+        if (typeFilter === 'Part' && isAssemblyDrawing) return false;
+
+        const parentBOMs = dwgItems.filter(i => i.has_bom || i.has_master_bom);
+        const childBOMs = items.filter(i => i.parent_bom_id && dwgItems.some(p => p.id === i.parent_bom_id));
+        const allItemsWithBOM = [...parentBOMs, ...childBOMs];
+
+        let isCompleted = false;
+        if (isAssemblyDrawing) {
+          isCompleted = dwgItems.some(i => i.has_bom || i.has_master_bom);
+        } else {
+          isCompleted = allItemsWithBOM.length > 0;
+        }
+
+        if (activeTab === 'Completed' && !isCompleted) return false;
+        if (activeTab === 'In Process' && isCompleted) return false;
+
+        return true;
+      });
+
+      return matchingDrawings.length > 0;
+    });
+  }, [orders, clientData, activeTab, typeFilter]);
+
+  const sortedOrders = useMemo(() => {
+    return [...filteredOrders].sort((a, b) => {
+      const accessTimeA = accessTimestamps[a.id] || 0;
+      const accessTimeB = accessTimestamps[b.id] || 0;
+
+      if (accessTimeB !== accessTimeA) {
+        return accessTimeB - accessTimeA;
+      }
+
+      let maxTimeA = 0;
+      if (a.items) {
+        a.items.forEach(item => {
+          const t = item.created_at ? new Date(item.created_at).getTime() : 0;
+          if (t > maxTimeA) maxTimeA = t;
+        });
+      }
+      const itemsA = clientData[a.id]?.items || [];
+      itemsA.forEach(item => {
+        const t = item.created_at ? new Date(item.created_at).getTime() : 0;
+        if (t > maxTimeA) maxTimeA = t;
+        const u = item.updated_at ? new Date(item.updated_at).getTime() : 0;
+        if (u > maxTimeA) maxTimeA = u;
+      });
+
+      let maxTimeB = 0;
+      if (b.items) {
+        b.items.forEach(item => {
+          const t = item.created_at ? new Date(item.created_at).getTime() : 0;
+          if (t > maxTimeB) maxTimeB = t;
+        });
+      }
+      const itemsB = clientData[b.id]?.items || [];
+      itemsB.forEach(item => {
+        const t = item.created_at ? new Date(item.created_at).getTime() : 0;
+        if (t > maxTimeB) maxTimeB = t;
+        const u = item.updated_at ? new Date(item.updated_at).getTime() : 0;
+        if (u > maxTimeB) maxTimeB = u;
+      });
+
+      return maxTimeB - maxTimeA;
+    });
+  }, [filteredOrders, clientData, accessTimestamps]);
 
   const customFilter = useCallback((client, searchStr) => {
     if (!searchStr) return false;
     const searchLower = searchStr.trim().toLowerCase();
     
-    // Check top-level client fields
-    if ((client.client_name || '').toLowerCase().includes(searchLower)) return true;
-    if ((client.project_name || '').toLowerCase().includes(searchLower)) return true;
-
-    // Check only the items that will actually be rendered (approved top-level items)
     const items = clientData[client.id]?.items || [];
     const topLevelItems = items.filter(item => !item.parent_bom_id && item.status?.toLowerCase() === 'approved');
       
@@ -717,9 +862,38 @@ const BOMCreation = () => {
       return acc;
     }, {});
 
+    const filteredDrawings = Object.entries(drawingsMap).filter(([dwgNo, dwgItems]) => {
+      const drawingType = dwgItems.find(i => i.drawing_type)?.drawing_type || '';
+      const isAssemblyDrawing = (drawingType || '').toUpperCase().includes('ASSEMBLY');
+      
+      if (typeFilter === 'Assembly' && !isAssemblyDrawing) return false;
+      if (typeFilter === 'Part' && isAssemblyDrawing) return false;
+
+      const parentBOMs = dwgItems.filter(i => i.has_bom || i.has_master_bom);
+      const childBOMs = items.filter(i => i.parent_bom_id && dwgItems.some(p => p.id === i.parent_bom_id));
+      const allItemsWithBOM = [...parentBOMs, ...childBOMs];
+
+      let isCompleted = false;
+      if (isAssemblyDrawing) {
+        isCompleted = dwgItems.some(i => i.has_bom || i.has_master_bom);
+      } else {
+        isCompleted = allItemsWithBOM.length > 0;
+      }
+
+      if (activeTab === 'Completed' && !isCompleted) return false;
+      if (activeTab === 'In Process' && isCompleted) return false;
+
+      return true;
+    });
+
+    if (filteredDrawings.length === 0) return false;
+
+    if ((client.client_name || '').toLowerCase().includes(searchLower)) return true;
+    if ((client.project_name || '').toLowerCase().includes(searchLower)) return true;
+
     let hasRenderableMatch = false;
 
-    Object.entries(drawingsMap).forEach(([dwgNo, dwgItems]) => {
+    filteredDrawings.forEach(([dwgNo, dwgItems]) => {
       const drawingName = dwgItems[0].drawing_name || dwgItems[0].item_name || dwgItems[0].item_description || 'No Description';
       const childItems = items.filter(i => i.parent_bom_id && dwgItems.some(p => p.id === i.parent_bom_id));
       const allItems = [...dwgItems, ...childItems];
@@ -736,7 +910,7 @@ const BOMCreation = () => {
     });
 
     return hasRenderableMatch;
-  }, [clientData]);
+  }, [clientData, activeTab, typeFilter]);
 
   const isClientBOMCompleted = (row) => {
     const items = clientData[row.id]?.items || [];
@@ -756,16 +930,14 @@ const BOMCreation = () => {
 
   const columns = [
     {
-      label: 'Client Name',
-      key: 'client_name',
+      label: 'Project / Client',
+      key: 'project_name',
       sortable: true,
       className: ' text-slate-900',
       render: (val, row) => (
         <div className="flex flex-col">
-          <span className=" text-slate-900">{val}</span>
-          {row.items?.[0]?.project_name && (
-            <span className="text-xs  text-slate-500 font-normal">{row.items[0].project_name}</span>
-          )}
+          <span className=" text-slate-900 font-semibold">{row.project_name || 'No Project'}</span>
+          <span className="text-xs  text-slate-500 font-normal">{row.client_name || val}</span>
         </div>
       )
     },
@@ -774,10 +946,8 @@ const BOMCreation = () => {
       key: 'total_drawings',
       render: (_, row) => {
         const items = clientData[row.id]?.items || [];
-        // Only consider top-level items to avoid counting sub-parts
         const topLevelItems = items.filter(item => !item.parent_bom_id && item.status?.toLowerCase() === 'approved');
         
-        // Group by drawing_no to count unique drawings
         const drawingsMap = topLevelItems.reduce((acc, item) => {
           const dwg = cleanText(item.drawing_no || 'N/A');
           if (!acc[dwg]) acc[dwg] = [];
@@ -785,15 +955,31 @@ const BOMCreation = () => {
           return acc;
         }, {});
 
-        // Filter unique drawings to only include those that have at least one PART or ASSEMBLY item
-        const filteredDrawingsCount = Object.values(drawingsMap).filter(dwgItems => {
-          return dwgItems.some(item => {
-            const group = (item.item_group || item.itemGroup || '').toUpperCase();
-            return group === 'PART' || group === 'ASSEMBLY';
-          });
+        const count = Object.values(drawingsMap).filter(dwgItems => {
+          const drawingType = dwgItems.find(i => i.drawing_type)?.drawing_type || '';
+          const isAssemblyDrawing = (drawingType || '').toUpperCase().includes('ASSEMBLY');
+          
+          if (typeFilter === 'Assembly' && !isAssemblyDrawing) return false;
+          if (typeFilter === 'Part' && isAssemblyDrawing) return false;
+
+          const parentBOMs = dwgItems.filter(i => i.has_bom || i.has_master_bom);
+          const childBOMs = items.filter(i => i.parent_bom_id && dwgItems.some(p => p.id === i.parent_bom_id));
+          const allItemsWithBOM = [...parentBOMs, ...childBOMs];
+
+          let isCompleted = false;
+          if (isAssemblyDrawing) {
+            isCompleted = dwgItems.some(i => i.has_bom || i.has_master_bom);
+          } else {
+            isCompleted = allItemsWithBOM.length > 0;
+          }
+
+          if (activeTab === 'Completed' && !isCompleted) return false;
+          if (activeTab === 'In Process' && isCompleted) return false;
+
+          return true;
         }).length;
 
-        return <span className="text-sm text-slate-700">{filteredDrawingsCount}</span>;
+        return <span className="text-sm text-slate-700">{count}</span>;
       }
     },
     {
@@ -812,7 +998,26 @@ const BOMCreation = () => {
         let clientTotalCost = 0;
 
         Object.entries(drawingsMap).forEach(([dwgNo, dwgItems]) => {
+          const drawingType = dwgItems.find(i => i.drawing_type)?.drawing_type || '';
+          const isAssemblyDrawing = (drawingType || '').toUpperCase().includes('ASSEMBLY');
+          
+          if (typeFilter === 'Assembly' && !isAssemblyDrawing) return;
+          if (typeFilter === 'Part' && isAssemblyDrawing) return;
+
+          const parentBOMs = dwgItems.filter(i => i.has_bom || i.has_master_bom);
           const childBOMs = items.filter(i => i.parent_bom_id && dwgItems.some(p => p.id === i.parent_bom_id));
+          const allItemsWithBOM = [...parentBOMs, ...childBOMs];
+
+          let isCompleted = false;
+          if (isAssemblyDrawing) {
+            isCompleted = dwgItems.some(i => i.has_bom || i.has_master_bom);
+          } else {
+            isCompleted = allItemsWithBOM.length > 0;
+          }
+
+          if (activeTab === 'Completed' && !isCompleted) return;
+          if (activeTab === 'In Process' && isCompleted) return;
+
           const allDwgItems = [...dwgItems, ...childBOMs];
 
           // Group by item to handle versions
@@ -866,54 +1071,62 @@ const BOMCreation = () => {
       key: 'actions',
       render: (_, row) => {
         const isCompleted = isClientBOMCompleted(row);
+        const accessTime = accessTimestamps[row.id];
         return (
-          <div className="flex items-center gap-2">
-            <button
-              onClick={(e) => { e.stopPropagation(); handleViewBOMDetails(row); }}
-              className="p-1.5 rounded border border-slate-200 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 transition-all shadow-sm"
-              title="View BOM Details"
-            >
-              <Eye className="w-4 h-4" />
-            </button>
-            <button
-              onClick={(e) => { e.stopPropagation(); handleDeleteAllClientBOMs(row); }}
-              className="p-1.5 rounded border border-slate-200 text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all shadow-sm"
-              title="Delete All Client BOMs"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-            {(() => {
-              // Check if BOM has already been sent for approval or has progressed further
-              const isSentOrBeyond = row.items?.some(i => {
-                const s = (i.sales_order_status || '').toUpperCase();
-                return s.includes('BOM_SUBMITTED') || s.includes('BOM_APPROVED') || 
-                       s.includes('QUOTATION') || s.includes('PO_') ||
-                       s.includes('PRODUCTION') || s.includes('PLAN') || 
-                       s.includes('SHIPMENT') || s.includes('COMPLETED') || 
-                       s.includes('PAID');
-              });
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={(e) => { e.stopPropagation(); handleViewBOMDetails(row); }}
+                className="p-1.5 rounded border border-slate-200 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 transition-all shadow-sm"
+                title="View BOM Details"
+              >
+                <Eye className="w-4 h-4" />
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); handleDeleteAllClientBOMs(row); }}
+                className="p-1.5 rounded border border-slate-200 text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all shadow-sm"
+                title="Delete All Client BOMs"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+              {(() => {
+                // Check if BOM has already been sent for approval or has progressed further
+                const isSentOrBeyond = row.items?.some(i => {
+                  const s = (i.sales_order_status || '').toUpperCase();
+                  return s.includes('BOM_SUBMITTED') || s.includes('BOM_APPROVED') || 
+                         s.includes('QUOTATION') || s.includes('PO_') ||
+                         s.includes('PRODUCTION') || s.includes('PLAN') || 
+                         s.includes('SHIPMENT') || s.includes('COMPLETED') || 
+                         s.includes('PAID');
+                });
 
-              if (isSentOrBeyond) {
-                return null; // Never show again after sending for approval
-              }
+                if (isSentOrBeyond) {
+                  return null; // Never show again after sending for approval
+                }
 
-              // Before Send: Show active "Send for Approval"
-              return (
-                <button
-                  onClick={(e) => { e.stopPropagation(); handleSendForApproval(row); }}
-                  disabled={!isCompleted}
-                  className={`flex items-center gap-2 p-1.5 rounded text-xs transition-all border ${isCompleted
-                    ? "bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border-emerald-100"
-                    : "bg-slate-50 text-slate-400 border-slate-100 cursor-not-allowed opacity-60"
-                    }`}
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
-                  </svg>
-                  Send for Approval
-                </button>
-              );
-            })()}
+                // Before Send: Show active "Send for Approval"
+                return (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleSendForApproval(row); }}
+                    disabled={!isCompleted}
+                    className={`flex items-center gap-2 p-1.5 rounded text-xs transition-all border ${isCompleted
+                      ? "bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border-emerald-100"
+                      : "bg-slate-50 text-slate-400 border-slate-100 cursor-not-allowed opacity-60"
+                      }`}
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
+                    </svg>
+                    Send for Approval
+                  </button>
+                );
+              })()}
+            </div>
+            {accessTime && (
+              <span className="text-[10px] text-slate-400 leading-none font-medium whitespace-nowrap">
+                Last Opened: {formatTimeAgo(accessTime)}
+              </span>
+            )}
           </div>
         );
       }
@@ -943,11 +1156,38 @@ const BOMCreation = () => {
     const searchMatch = globalSearchTerm ? globalSearchTerm.trim().toLowerCase() : '';
 
     const filteredDrawings = Object.entries(drawingsMap).filter(([dwgNo, dwgItems]) => {
+      const drawingType = dwgItems.find(i => i.drawing_type)?.drawing_type || '';
+      const isAssemblyDrawing = (drawingType || '').toUpperCase().includes('ASSEMBLY');
+      
+      if (typeFilter === 'Assembly' && !isAssemblyDrawing) return false;
+      if (typeFilter === 'Part' && isAssemblyDrawing) return false;
+
+      const parentBOMs = dwgItems.filter(i => i.has_bom || i.has_master_bom);
+      const childBOMs = items.filter(i => i.parent_bom_id && dwgItems.some(p => p.id === i.parent_bom_id));
+      const allItemsWithBOM = [...parentBOMs, ...childBOMs];
+
+      let isCompleted = false;
+      if (isAssemblyDrawing) {
+        isCompleted = dwgItems.some(i => i.has_bom || i.has_master_bom);
+      } else {
+        isCompleted = allItemsWithBOM.length > 0;
+      }
+
+      if (activeTab === 'Completed' && !isCompleted) return false;
+      if (activeTab === 'In Process' && isCompleted) return false;
+
       if (!searchMatch) return true;
+
+      // If search query matches the project name or client name, show all drawings of this client
+      if (
+        (client.project_name || '').toLowerCase().includes(searchMatch) ||
+        (client.client_name || '').toLowerCase().includes(searchMatch)
+      ) {
+        return true;
+      }
       
       const drawingName = dwgItems[0].drawing_name || dwgItems[0].item_name || dwgItems[0].item_description || 'No Description';
-      const childItems = items.filter(i => i.parent_bom_id && dwgItems.some(p => p.id === i.parent_bom_id));
-      const allItems = [...dwgItems, ...childItems];
+      const allItems = [...dwgItems, ...childBOMs];
       
       if (dwgNo.toLowerCase().includes(searchMatch)) return true;
       if (drawingName.toLowerCase().includes(searchMatch)) return true;
@@ -1082,7 +1322,10 @@ const BOMCreation = () => {
                     </div>
                     <Link
                       to={`/bom-form?drawing_no=${encodeURIComponent(dwgNo)}&drawing_id=${dwgItems[0].drawing_public_id || drawingId}&drawing_name=${encodeURIComponent(drawingName)}&sales_order_id=${dwgItems[0].sales_order_public_id || dwgItems[0].sales_order_id}`}
-                      onClick={(e) => e.stopPropagation()}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleAccessProject(client.id);
+                      }}
                       className="p-2 rounded text-xs transition-all shadow-sm flex items-center gap-1.5 bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-100"
                     >
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1220,7 +1463,10 @@ const BOMCreation = () => {
                                       <div className="flex justify-end gap-1">
                                         <Link
                                           to={`/bom-form/${latest.id}?view=true`}
-                                          onClick={(e) => e.stopPropagation()}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleAccessProject(client.id);
+                                          }}
                                           className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-all"
                                           title="View Latest BOM"
                                         >
@@ -1228,7 +1474,10 @@ const BOMCreation = () => {
                                         </Link>
                                         <Link
                                           to={`/bom-form/${latest.id}`}
-                                          onClick={(e) => e.stopPropagation()}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleAccessProject(client.id);
+                                          }}
                                           className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded transition-all"
                                           title="Edit Latest BOM"
                                         >
@@ -1267,7 +1516,7 @@ const BOMCreation = () => {
         {/* Header Section */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
           <div>
-            <h1 className="text-xl  text-slate-900">BOM Creation Center</h1>
+            <h1 className="text-xl  text-slate-900">Part Creation Center</h1>
             <p className="text-xs text-slate-500 ">Manage and define Bill of Materials for client production orders</p>
           </div>
         </div>
@@ -1299,11 +1548,11 @@ const BOMCreation = () => {
           ))}
         </div>
 
-
+        {/* Recently Accessed BOMs card removed */}
 
         <DataTable
           columns={columns}
-          data={filteredOrders}
+          data={sortedOrders}
           loading={loading}
           pageSize={10}
           renderExpanded={renderClientExpanded}
@@ -1313,6 +1562,57 @@ const BOMCreation = () => {
           expandedRows={expandedClientRows}
           onExpandedChange={setExpandedClientRows}
           customFilter={customFilter}
+          actions={
+            <div className="flex items-center gap-3">
+              {/* Type Filter */}
+              <div className="flex items-center gap-1.5 bg-white px-2.5 py-1 rounded border border-slate-200 shadow-sm">
+                <span className="text-[11px] text-slate-500 font-semibold uppercase tracking-wider">Type:</span>
+                <select
+                  value={typeFilter}
+                  onChange={(e) => setTypeFilter(e.target.value)}
+                  className="bg-transparent text-slate-800 text-xs font-semibold focus:outline-none cursor-pointer pr-1"
+                >
+                  <option value="All">All</option>
+                  <option value="Assembly">Assembly</option>
+                  <option value="Part">Part</option>
+                </select>
+              </div>
+
+              {/* Status Tabs */}
+              <div className="flex border border-slate-200 rounded bg-white p-0.5 shadow-sm">
+                <button
+                  onClick={() => setActiveTab('All')}
+                  className={`px-3.5 py-1 rounded text-xs font-semibold transition-all ${
+                    activeTab === 'All'
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'bg-transparent text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  All
+                </button>
+                <button
+                  onClick={() => setActiveTab('In Process')}
+                  className={`px-3.5 py-1 rounded text-xs font-semibold transition-all ${
+                    activeTab === 'In Process'
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'bg-transparent text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  In Process
+                </button>
+                <button
+                  onClick={() => setActiveTab('Completed')}
+                  className={`px-3.5 py-1 rounded text-xs font-semibold transition-all ${
+                    activeTab === 'Completed'
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'bg-transparent text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  Completed
+                </button>
+              </div>
+            </div>
+          }
         />
 
       </div>
