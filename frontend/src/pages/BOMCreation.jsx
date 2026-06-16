@@ -358,7 +358,7 @@ const BOMCreation = () => {
 
     orders.forEach(client => {
       const items = clientData[client.id]?.items || [];
-      const topLevelItems = items.filter(item => !item.parent_bom_id && item.status?.toLowerCase() === 'approved');
+      const topLevelItems = items.filter(item => item.status?.toLowerCase() === 'approved');
       
       const drawingsMap = topLevelItems.reduce((acc, item) => {
         const dwg = cleanText(item.drawing_no || 'N/A');
@@ -681,7 +681,7 @@ const BOMCreation = () => {
 
     orders.forEach(client => {
       const items = clientData[client.id]?.items || [];
-      const topLevelItems = items.filter(i => !i.parent_bom_id && i.status?.toLowerCase() === 'approved');
+      const topLevelItems = items.filter(i => i.status?.toLowerCase() === 'approved');
       const drawingsMap = {};
 
       topLevelItems.forEach(i => {
@@ -768,7 +768,7 @@ const BOMCreation = () => {
       }
       
       const items = clientData[client.id]?.items || [];
-      const topLevelItems = items.filter(item => !item.parent_bom_id && item.status?.toLowerCase() === 'approved');
+      const topLevelItems = items.filter(item => item.status?.toLowerCase() === 'approved');
       
       const drawingsMap = topLevelItems.reduce((acc, item) => {
         const dwg = cleanText(item.drawing_no || 'N/A');
@@ -853,7 +853,7 @@ const BOMCreation = () => {
     const searchLower = searchStr.trim().toLowerCase();
     
     const items = clientData[client.id]?.items || [];
-    const topLevelItems = items.filter(item => !item.parent_bom_id && item.status?.toLowerCase() === 'approved');
+    const topLevelItems = items.filter(item => item.status?.toLowerCase() === 'approved');
       
     const drawingsMap = topLevelItems.reduce((acc, item) => {
       const dwg = cleanText(item.drawing_no || 'N/A');
@@ -914,7 +914,7 @@ const BOMCreation = () => {
 
   const isClientBOMCompleted = (row) => {
     const items = clientData[row.id]?.items || [];
-    const topLevelItems = items.filter(item => !item.parent_bom_id && item.status?.toLowerCase() === 'approved');
+    const topLevelItems = items.filter(item => item.status?.toLowerCase() === 'approved');
     const drawingsMap = topLevelItems.reduce((acc, item) => {
       const dwg = cleanText(item.drawing_no || 'N/A');
       if (!acc[dwg]) acc[dwg] = [];
@@ -946,7 +946,7 @@ const BOMCreation = () => {
       key: 'total_drawings',
       render: (_, row) => {
         const items = clientData[row.id]?.items || [];
-        const topLevelItems = items.filter(item => !item.parent_bom_id && item.status?.toLowerCase() === 'approved');
+        const topLevelItems = items.filter(item => item.status?.toLowerCase() === 'approved');
         
         const drawingsMap = topLevelItems.reduce((acc, item) => {
           const dwg = cleanText(item.drawing_no || 'N/A');
@@ -987,7 +987,7 @@ const BOMCreation = () => {
       key: 'fg_bom_cost',
       render: (_, row) => {
         const items = clientData[row.id]?.items || [];
-        const topLevelItems = items.filter(item => !item.parent_bom_id && item.status?.toLowerCase() === 'approved');
+        const topLevelItems = items.filter(item => item.status?.toLowerCase() === 'approved');
         const drawingsMap = topLevelItems.reduce((acc, item) => {
           const dwg = cleanText(item.drawing_no || 'N/A');
           if (!acc[dwg]) acc[dwg] = [];
@@ -1145,7 +1145,7 @@ const BOMCreation = () => {
       );
     }
 
-    const topLevelItems = items.filter(item => !item.parent_bom_id && item.status?.toLowerCase() === 'approved');
+    const topLevelItems = items.filter(item => item.status?.toLowerCase() === 'approved');
     const drawingsMap = topLevelItems.reduce((acc, item) => {
       const dwg = cleanText(item.drawing_no || 'N/A');
       if (!acc[dwg]) acc[dwg] = [];
@@ -1217,7 +1217,7 @@ const BOMCreation = () => {
             const parentBOMs = dwgItems.filter(i => i.has_bom || i.has_master_bom);
             const childBOMs = items.filter(i => i.parent_bom_id && dwgItems.some(p => p.id === i.parent_bom_id));
             const allDwgItems = [...dwgItems, ...childBOMs];
-            const allItemsWithBOM = [...parentBOMs, ...childBOMs];
+            const allItemsWithBOM = [...parentBOMs];
 
             // Group all unique items under this drawing to resolve versions
             const latestCosts = allDwgItems.reduce((acc, i) => {
