@@ -622,7 +622,8 @@ export const DataTable = ({
   expandedRows: expandedRowsProp,
   onExpandedChange,
   onSearchChange,
-  customFilter
+  customFilter,
+  rowClassName
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState(null);
@@ -833,7 +834,7 @@ export const DataTable = ({
                 return (
                   <React.Fragment key={rowId}>
                     <tr
-                      className={`group transition-all duration-150 ${onRowClick ? 'cursor-pointer hover:bg-slate-50/80' : 'hover:bg-slate-50/50'} ${isExpanded || isSelected ? 'bg-rose-50/30' : ''}`}
+                      className={`group transition-all duration-150 ${onRowClick ? 'cursor-pointer hover:bg-slate-50/80' : 'hover:bg-slate-50/50'} ${isExpanded || isSelected ? 'bg-rose-50/30' : ''} ${rowClassName ? rowClassName(row, (currentPage - 1) * pageSize + rowIdx) : ''}`}
                       onClick={(e) => {
                         if (renderExpanded && !disableRowClickExpansion) toggleRow(rowId);
                         if (onRowClick) onRowClick(row, e);

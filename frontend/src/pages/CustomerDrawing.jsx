@@ -37,6 +37,7 @@ const CustomerDrawing = () => {
 
   const [drawings, setDrawings] = useState([]);
   const [requirements, setRequirements] = useState([]);
+  const [requirementsSearchTerm, setRequirementsSearchTerm] = useState('');
   const [showFormModal, setShowFormModal] = useState(false);
   const [reqLoading, setReqLoading] = useState(false);
   const [companies, setCompanies] = useState([]);
@@ -803,6 +804,8 @@ const CustomerDrawing = () => {
     }
   }, [showFormModal, formMode, editingRequirementData, companies]);
 
+
+
   // Keep viewingClient drawings in sync with the main drawings list
   useEffect(() => {
     if (viewingClient) {
@@ -1238,6 +1241,50 @@ const CustomerDrawing = () => {
       }
     },
   });
+
+  const generateNextProjectName = () => {
+    const prefix = 'PRO-';
+    const year = new Date().getFullYear();
+    const pattern = new RegExp(`^${prefix}${year}-(\\d{4})$`);
+
+    let maxSeq = 0;
+    requirements.forEach(req => {
+      if (req.project_name) {
+        const match = req.project_name.match(pattern);
+        if (match) {
+          const seq = parseInt(match[1], 10);
+          if (seq > maxSeq) {
+            maxSeq = seq;
+          }
+        }
+      }
+    });
+
+    const nextSeq = String(maxSeq + 1).padStart(4, '0');
+    return `${prefix}${year}-${nextSeq}`;
+  };
+
+  useEffect(() => {
+    if (showFormModal && formMode === 'add') {
+      const nextProjName = generateNextProjectName();
+      if (formik.values.project_name !== nextProjName) {
+        formik.setFieldValue('project_name', nextProjName);
+      }
+    }
+  }, [showFormModal, formMode, requirements, formik.values.project_name]);
+
+  // Auto-scroll to highlighted drawing row in either View or Edit modal
+  useEffect(() => {
+    if (showFormModal || showClientDrawingsModal) {
+      const timer = setTimeout(() => {
+        const highlightedEl = document.querySelector('.highlighted-drawing-row');
+        if (highlightedEl) {
+          highlightedEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [showFormModal, showClientDrawingsModal, viewingClient, formik.values.manualDrawings]);
 
   // Keep uploadMode state in sync with formik
   useEffect(() => {
@@ -1999,6 +2046,12 @@ const CustomerDrawing = () => {
             data={requirements}
             loading={reqLoading}
             pageSize={10}
+            onSearchChange={setRequirementsSearchTerm}
+            customFilter={(row, searchLower) => {
+              return row.original_items?.some(item => 
+                String(item.drawing_no || '').toLowerCase().includes(searchLower)
+              );
+            }}
           />
         </div>
       </Card>
@@ -2512,15 +2565,11 @@ const CustomerDrawing = () => {
               <input
                 type="text"
                 name="project_name"
+                readOnly
                 placeholder="Project Name"
-                className={`w-full p-2 .5 border rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-400 transition-colors ${formik.touched.project_name && formik.errors.project_name ? 'border-red-500' : 'border-slate-300'}`}
+                className="w-full p-2 border border-slate-300 rounded text-xs bg-slate-50 cursor-not-allowed text-slate-600 font-semibold"
                 value={formik.values.project_name}
-                onChange={formik.handleChange}
-                onBlur={formik.handleBlur}
               />
-              {formik.touched.project_name && formik.errors.project_name && (
-                <div className="text-red-500 text-xs  mt-0.5">{formik.errors.project_name}</div>
-              )}
             </div>
 
             {/* Client Selection */}
@@ -2741,8 +2790,11 @@ const CustomerDrawing = () => {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-slate-200">
-                    {formik.values.manualDrawings.map((drawing, index) => (
-                      <tr key={drawing.id}>
+                    {formik.values.manualDrawings.map((drawing, index) => {
+                      const query = requirementsSearchTerm?.trim().toLowerCase();
+                      const isHighlighted = query && drawing.drawing_no && String(drawing.drawing_no).trim().toLowerCase().includes(query);
+                      return (
+                        <tr key={drawing.id} className={isHighlighted ? 'highlighted-drawing-row' : ''}>
                         <td className="px-2 py-2">
                           <input
                             type="text"
@@ -2859,8 +2911,9 @@ const CustomerDrawing = () => {
                           </button>
                         </td>
                       </tr>
-                    ))}
-                  </tbody>
+                    );
+                  })}
+                </tbody>
                 </table>
               </div>
             </div>
@@ -2990,6 +3043,13 @@ const CustomerDrawing = () => {
                 data={viewingClient.drawings}
                 pageSize={10}
                 emptyMessage="No drawings found for this client"
+                rowClassName={(row) => {
+                  const query = requirementsSearchTerm?.trim().toLowerCase();
+                  if (query && row.drawing_no && String(row.drawing_no).trim().toLowerCase().includes(query)) {
+                    return 'highlighted-drawing-row';
+                  }
+                  return '';
+                }}
               />
             </div>
 

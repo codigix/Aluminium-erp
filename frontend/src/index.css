@@ -74,3 +74,35 @@ html, body {
 th{
   font-weight: 100;
 }
+
+/* Drawing row highlight styling */
+@keyframes highlight-fade {
+  0% {
+    background-color: #FFE082;
+  }
+  100% {
+    background-color: #FFF3CD;
+  }
+}
+
+.highlighted-drawing-row td {
+  background-color: #FFF3CD !important;
+  border-top: 2px solid #FFC107 !important;
+  border-bottom: 2px solid #FFC107 !important;
+  animation: highlight-fade 2s ease-out;
+}
+
+.highlighted-drawing-row td:first-child {
+  border-left: 2px solid #FFC107 !important;
+}
+
+.highlighted-drawing-row td:last-child {
+  border-right: 2px solid #FFC107 !important;
+}
+
+.highlighted-drawing-row input,
+.highlighted-drawing-row select,
+.highlighted-drawing-row textarea {
+  background-color: #FFF3CD !important;
+}
+
