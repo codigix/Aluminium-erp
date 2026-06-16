@@ -55,6 +55,8 @@ const QuotationFormPage = () => {
     return [...existingItems, ...newItems];
   }, [items]);
   const [notes, setNotes] = useState('');
+  const [discountType, setDiscountType] = useState('percentage');
+  const [discountValue, setDiscountValue] = useState(0);
   const [clients, setClients] = useState([]);
   const [drawings, setDrawings] = useState([]);
   const [hostCompanies, setHostCompanies] = useState([]);
@@ -109,20 +111,20 @@ const QuotationFormPage = () => {
   useEffect(() => {
     if (isLocked) return;
     if ((selectedClient?.id || selectedClient?.company_name) && clients.length > 0) {
-      const client = clients.find(c => 
+      const client = clients.find(c =>
         (selectedClient.id && String(c.id) === String(selectedClient.id)) ||
-        (c.company_name && selectedClient.company_name && 
-         c.company_name.toLowerCase().trim() === selectedClient.company_name.toLowerCase().trim())
+        (c.company_name && selectedClient.company_name &&
+          c.company_name.toLowerCase().trim() === selectedClient.company_name.toLowerCase().trim())
       );
       if (client) {
         // Determine if this is the client initialized from parent (Client Requirement or Quotation data)
         const isSameClientAsParent = selectedClient && (
           (initialData && (
             (initialData.clientId && String(selectedClient.id) === String(initialData.clientId || initialData.company_id || initialData.companyId)) ||
-            (initialData.clientName && selectedClient.company_name && 
-             String(selectedClient.company_name).toLowerCase().trim() === String(initialData.clientName).toLowerCase().trim())
+            (initialData.clientName && selectedClient.company_name &&
+              String(selectedClient.company_name).toLowerCase().trim() === String(initialData.clientName).toLowerCase().trim())
           )) ||
-          (selectedVersionId && versionHistory.some(vh => 
+          (selectedVersionId && versionHistory.some(vh =>
             String(vh.company_id || vh.clientId) === String(selectedClient.id)
           ))
         );
@@ -135,8 +137,8 @@ const QuotationFormPage = () => {
 
         // Medium Priority: Match by Project Name drawing (Drawing Master / Client Master project data) for remaining empty fields
         if (!nextEmail || !nextPhone || !nextName || !nextAddr || nextAddr === 'N/A') {
-          const matchedDrawing = (drawings || []).find(d => 
-            d.project_name && projectName && 
+          const matchedDrawing = (drawings || []).find(d =>
+            d.project_name && projectName &&
             d.project_name.toLowerCase().trim() === projectName.toLowerCase().trim()
           );
 
@@ -285,8 +287,11 @@ const QuotationFormPage = () => {
           return {
             ...item,
             id: item.id || Date.now() + Math.random(),
+            quantity: parseFloat(item.quantity) || 0,
             rate: drwRate,
             bom_cost: bomCost || drwRate,
+            profit_percentage: parseFloat(item.profit_percentage) || 0,
+            override_percentage: parseFloat(item.override_percentage) || 0,
             total: (parseFloat(item.quantity) || 0) * drwRate,
             gst_percentage: item.gst_percentage || 18,
             isManual: !item.drawing_id && !!item.drawing_no,
@@ -319,6 +324,8 @@ const QuotationFormPage = () => {
 
       setItems(mappedItems);
       setNotes(initialData.notes || '');
+      setDiscountType(initialData.discount_type || initialData.discountType || 'percentage');
+      setDiscountValue(parseFloat(initialData.discount_value || initialData.discountValue) || 0);
     } else if (!hasInitialized.current) {
       generateQuotationNo();
       hasInitialized.current = true;
@@ -429,8 +436,11 @@ const QuotationFormPage = () => {
 
             // Update rate to new BOM cost if it was 0, matched old cost, OR we are in a mode that allows auto-update
             if (currentRate === 0 || rateMatchesCost || mode === 'revise' || mode === 'create') {
-              newItem.rate = drwRate;
-              newItem.total = (parseFloat(item.quantity) || 0) * drwRate;
+              const profit = parseFloat(newItem.profit_percentage) || 0;
+              const override = parseFloat(newItem.override_percentage) || 0;
+              const calculatedRate = drwRate * (1 + profit / 100) * (1 + override / 100);
+              newItem.rate = calculatedRate;
+              newItem.total = (parseFloat(item.quantity) || 0) * calculatedRate;
             }
           }
 
@@ -569,7 +579,7 @@ const QuotationFormPage = () => {
 
   const handleActivateHostGlobally = async () => {
     if (!selectedHostCompany) return;
-    
+
     const result = await Swal.fire({
       title: 'Activate Billing Profile?',
       text: `Do you want to make "${selectedHostCompany.company_name}" the active host company globally?`,
@@ -584,9 +594,9 @@ const QuotationFormPage = () => {
         const token = localStorage.getItem('authToken');
         const response = await fetch(`${API_BASE}/admin-company-master/${selectedHostCompany.id}`, {
           method: 'PUT',
-          headers: { 
+          headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}` 
+            'Authorization': `Bearer ${token}`
           },
           body: JSON.stringify({ status: 'ACTIVE' })
         });
@@ -684,6 +694,8 @@ const QuotationFormPage = () => {
       setQuotationDate(versionData.created_at.split('T')[0]);
       setProjectName(versionData.project_name || '');
       setNotes(versionData.notes || '');
+      setDiscountType(versionData.discount_type || versionData.discountType || 'percentage');
+      setDiscountValue(parseFloat(versionData.discount_value || versionData.discountValue) || 0);
 
       setSelectedClient({
         id: versionData.company_id || versionData.clientId,
@@ -772,12 +784,15 @@ const QuotationFormPage = () => {
             ...item,
             has_pending_bom_applied: override?.has_pending_bom_applied || item.has_pending_bom_applied,
             id: item.id || Date.now() + Math.random(),
+            quantity: parseFloat(item.quantity) || 0,
             salesOrderItemId: item.sales_order_item_id || item.salesOrderItemId,
             orderId: item.orderId || item.sales_order_id || item.salesOrderId,
             sales_order_id: item.orderId || item.sales_order_id || item.salesOrderId,
             drawing_id: item.drawing_id,
             rate: drwRate,
             bom_cost: bomCost || item.bom_cost || drwRate,
+            profit_percentage: parseFloat(item.profit_percentage) || 0,
+            override_percentage: parseFloat(item.override_percentage) || 0,
             total: (parseFloat(item.quantity) || 0) * drwRate,
             gst_percentage: item.gst_percentage || 18,
             drawing_no: item.drawing_no,
@@ -936,9 +951,15 @@ const QuotationFormPage = () => {
         if (field === 'bom_cost') {
           updatedItem.isBOMCostManuallyEdited = true;
         }
-        if (field === 'quantity' || field === 'rate') {
-          updatedItem.total = (parseFloat(updatedItem.quantity) || 0) * (parseFloat(updatedItem.rate) || 0);
-        }
+
+        // Recalculate rate based on BOM cost, profit percentage, and override percentage
+        const cost = parseFloat(updatedItem.bom_cost) || 0;
+        const profit = parseFloat(updatedItem.profit_percentage) || 0;
+        const override = parseFloat(updatedItem.override_percentage) || 0;
+        updatedItem.rate = cost * (1 + profit / 100) * (1 + override / 100);
+
+        // Recalculate total
+        updatedItem.total = (parseFloat(updatedItem.quantity) || 0) * (parseFloat(updatedItem.rate) || 0);
         return updatedItem;
       }
       return item;
@@ -1116,13 +1137,54 @@ const QuotationFormPage = () => {
       );
     });
 
-    const baseAmount = billableItems.reduce((sum, item) => sum + (parseFloat(item.total) || 0), 0);
+    const bomBaseAmount = billableItems.reduce((sum, item) => {
+      const qty = parseFloat(item.quantity) || 0;
+      const bomCost = parseFloat(item.bom_cost) || 0;
+      return sum + (qty * bomCost);
+    }, 0);
+
+    const profitAdded = billableItems.reduce((sum, item) => {
+      const qty = parseFloat(item.quantity) || 0;
+      const bomCost = parseFloat(item.bom_cost) || 0;
+      const profitP = parseFloat(item.profit_percentage) || 0;
+      return sum + (qty * bomCost * profitP / 100);
+    }, 0);
+
+    const overrideAdded = billableItems.reduce((sum, item) => {
+      const qty = parseFloat(item.quantity) || 0;
+      const bomCost = parseFloat(item.bom_cost) || 0;
+      const profitP = parseFloat(item.profit_percentage) || 0;
+      const overrideP = parseFloat(item.override_percentage) || 0;
+      const profitAmt = bomCost * (profitP / 100);
+      const overrideAmt = (bomCost + profitAmt) * (overrideP / 100);
+      return sum + (qty * overrideAmt);
+    }, 0);
+
+    const preDiscountSum = bomBaseAmount + profitAdded + overrideAdded;
+    let discountAmt = 0;
+    if (discountType === 'percentage') {
+      discountAmt = preDiscountSum * (parseFloat(discountValue) || 0) / 100;
+    } else {
+      discountAmt = parseFloat(discountValue) || 0;
+    }
+    if (discountAmt > preDiscountSum) {
+      discountAmt = preDiscountSum;
+    }
+
+    const discountRatio = preDiscountSum > 0 ? (preDiscountSum - discountAmt) / preDiscountSum : 1;
+    const baseAmount = preDiscountSum - discountAmt;
     const gstAmount = billableItems.reduce((sum, item) => {
       const itemTotal = parseFloat(item.total) || 0;
       const gstPercent = parseFloat(item.gst_percentage) || 18;
       return sum + (itemTotal * gstPercent / 100);
-    }, 0);
+    }, 0) * discountRatio;
+
     return {
+      bomBaseAmount,
+      profitAdded,
+      overrideAdded,
+      preDiscountSum,
+      discountAmount: discountAmt,
       baseAmount,
       gstAmount,
       totalAmount: baseAmount + gstAmount
@@ -1181,6 +1243,8 @@ const QuotationFormPage = () => {
         clientAddress: selectedClient.address,
         projectName: projectName,
         hostCompanyId: selectedHostId ? Number(selectedHostId) : null,
+        discount_type: discountType,
+        discount_value: parseFloat(discountValue) || 0,
         items: sortedItems.map(item => ({
           salesOrderItemId: item.salesOrderItemId || null,
           bom_id: item.bom_id || null,
@@ -1197,7 +1261,8 @@ const QuotationFormPage = () => {
           gst_percentage: parseFloat(item.gst_percentage) || 18,
           item_group: item.item_group || null,
           status: status.toUpperCase() === 'REVISED' ? 'REVISED' : (item.status || 'SENT'),
-          profit_percentage: 0,
+          profit_percentage: parseFloat(item.profit_percentage) || 0,
+          override_percentage: parseFloat(item.override_percentage) || 0,
           sub_assemblies: (() => {
             const seen = new Set();
             return (item.sub_assemblies || []).filter(sa => {
@@ -1427,9 +1492,9 @@ const QuotationFormPage = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-2">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
         {/* Section 1: Quotation Details */}
-        <div className="lg:col-span-2 space-y-4 bg-white ">
+        <div className="lg:col-span-3 space-y-4 bg-white ">
           {/* Host Company Profile Details */}
           <div className="space-y-2">
             <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
@@ -1487,11 +1552,10 @@ const QuotationFormPage = () => {
                       </div>
                     )}
                     <span className="text-xs font-bold text-slate-800 leading-tight truncate w-full">{selectedHostCompany.company_name}</span>
-                    <span className={`text-[9px] mt-1.5 px-2 py-0.5 rounded-full font-semibold border ${
-                      selectedHostCompany.status === 'ACTIVE'
+                    <span className={`text-[9px] mt-1.5 px-2 py-0.5 rounded-full font-semibold border ${selectedHostCompany.status === 'ACTIVE'
                         ? 'bg-emerald-50 border-emerald-100 text-emerald-600'
                         : 'bg-slate-100 border-slate-200 text-slate-500'
-                    }`}>
+                      }`}>
                       {selectedHostCompany.status === 'ACTIVE' ? 'Active Global Billing' : 'Inactive'}
                     </span>
                   </div>
@@ -1705,19 +1769,22 @@ const QuotationFormPage = () => {
               <table className="w-full text-left border-collapse table-fixed">
                 <thead>
                   <tr className="bg-slate-50/50">
-                    <th className="w-12 p-2 text-xs  text-slate-400   border-b border-slate-100">No.</th>
-                    <th className="w-72 p-2 text-xs  text-slate-400   border-b border-slate-100">Drawing & Description</th>
-                    <th className="w-32 p-2 text-xs  text-slate-400   border-b border-slate-100">Qty</th>
-                    <th className="w-32 p-2 text-xs  text-slate-400   border-b border-slate-100">BOM Cost (₹)</th>
-                    <th className="w-32 p-2 text-xs  text-slate-400   border-b border-slate-100">Rate (₹)</th>
-                    <th className="w-40 p-2 text-xs  text-slate-400   border-b border-slate-100">Total (₹)</th>
-                    {!isLocked && <th className="w-20 p-2 text-xs  text-slate-400   border-b border-slate-100 text-center">Actions</th>}
+                    <th className="w-12 p-2 text-xs text-slate-400 border-b border-slate-100">No.</th>
+                    <th className="w-64 p-2 text-xs text-slate-400 border-b border-slate-100">Drawing & Description</th>
+                    <th className="w-16 p-2 text-xs text-slate-400 border-b border-slate-100">Type</th>
+                    <th className="w-24 p-2 text-xs text-slate-400 border-b border-slate-100">Qty</th>
+                    <th className="w-28 p-2 text-xs text-slate-400 border-b border-slate-100">BOM Cost (₹)</th>
+                    <th className="w-24 p-2 text-xs text-slate-400 border-b border-slate-100">Profit %</th>
+                    <th className="w-24 p-2 text-xs text-slate-400 border-b border-slate-100">Override %</th>
+                    <th className="w-28 p-2 text-xs text-slate-400 border-b border-slate-100">Rate (₹)</th>
+                    <th className="w-32 p-2 text-xs text-slate-400 border-b border-slate-100">Total (₹)</th>
+                    {!isLocked && <th className="w-16 p-2 text-xs text-slate-400 border-b border-slate-100 text-center">Actions</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
                   {sortedItems.length === 0 ? (
                     <tr>
-                      <td colSpan={isLocked ? "5" : "6"} className="p-2 text-center text-slate-400 text-xs italic">
+                      <td colSpan={isLocked ? "9" : "10"} className="p-2 text-center text-slate-400 text-xs italic">
                         {isLocked ? "No items in this version." : "No items added yet. Click \"Add Item\" to begin."}
                       </td>
                     </tr>
@@ -1728,7 +1795,7 @@ const QuotationFormPage = () => {
                       // Parent Item Row
                       rows.push(
                         <tr key={item.id} className="hover:bg-slate-50/30 transition-colors">
-                          <td className="p-2 text-xs  text-slate-400">{index + 1}</td>
+                          <td className="p-2 text-xs text-slate-400">{index + 1}</td>
                           <td className="p-2 align-top">
                             <div className="space-y-1">
                               <div className="flex items-center gap-2 group">
@@ -1737,17 +1804,6 @@ const QuotationFormPage = () => {
                                     <div className="flex flex-col">
                                       <div className="flex items-center gap-2 mb-0.5">
                                         <span className="text-sm text-slate-900">{item.description || 'No Description'}</span>
-                                        {(() => {
-                                          const g = (item.item_group || '').toUpperCase();
-                                          const isPart = g.includes('PART');
-                                          return (
-                                            <span className={`px-1.5 py-0.5 rounded text-xs border ${isPart
-                                                ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-blue-100 text-blue-700 border-blue-200'
-                                              }`}>
-                                              {isPart ? 'PART' : 'ASSEMBLY'}
-                                            </span>
-                                          );
-                                        })()}
                                       </div>
                                       <div className="flex items-center gap-2">
                                         <span className="text-xs text-slate-500 font-mono">{(item.drawing_no || 'Manual Item').toUpperCase()}</span>
@@ -1771,7 +1827,7 @@ const QuotationFormPage = () => {
                                               description: d.drawing_description || d.description || ''
                                             }))}
                                             value={(() => {
-                                              const matchedDwg = drawings.find(d => 
+                                              const matchedDwg = drawings.find(d =>
                                                 (item.drawing_id && String(d.id) === String(item.drawing_id)) ||
                                                 (!item.drawing_id && item.drawing_no && String(d.drawing_no).trim().toUpperCase() === String(item.drawing_no).trim().toUpperCase())
                                               );
@@ -1797,17 +1853,22 @@ const QuotationFormPage = () => {
                                                     ? (drwBomCost !== null ? drwBomCost : parseFloat(drw?.rate || drw?.quotedPrice || 0))
                                                     : parseFloat(drw?.rate || drw?.quotedPrice || drw?.bom_cost || it.rate || 0);
 
+                                                  const newBomCost = isNewRow ? drwBomCost : drwRate;
+                                                  const profit = parseFloat(it.profit_percentage) || 0;
+                                                  const override = parseFloat(it.override_percentage) || 0;
+                                                  const newRate = newBomCost * (1 + profit / 100) * (1 + override / 100);
+
                                                   return {
                                                     ...it,
                                                     drawing_id: actualVal,
                                                     drawing_no: (drw?.drawing_no || '').toUpperCase(),
                                                     description: drw?.drawing_description || drw?.description || '',
-                                                    rate: drwRate,
-                                                    bom_cost: isNewRow ? drwBomCost : drwRate,
+                                                    rate: newRate,
+                                                    bom_cost: newBomCost,
                                                     isBOMCostManuallyEdited: false,
                                                     item_group: drw?.item_group || it.item_group,
                                                     unit: drw?.unit || it.unit || 'Nos',
-                                                    total: (parseFloat(it.quantity) || 0) * drwRate,
+                                                    total: (parseFloat(it.quantity) || 0) * newRate,
                                                     sub_assemblies: g.includes('ASSEMBLY')
                                                       ? ((drw?.sub_assemblies && drw.sub_assemblies.length > 0)
                                                         ? drw.sub_assemblies.filter(sa => (sa.item_group || '').toUpperCase().includes('PART'))
@@ -1837,23 +1898,25 @@ const QuotationFormPage = () => {
                                             className="border-none p-0 focus-within:ring-0 shadow-none bg-transparent text-xs text-slate-500 hide-arrow"
                                           />
                                         </div>
-                                        {(() => {
-                                          const g = (item.item_group || '').toUpperCase();
-                                          const isPart = g.includes('PART');
-                                          return (
-                                            <span className={`px-1.5 py-0.5 rounded text-xs border ${isPart
-                                                ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-blue-100 text-blue-700 border-blue-200'
-                                              }`}>
-                                              {isPart ? 'PART' : 'ASSEMBLY'}
-                                            </span>
-                                          );
-                                        })()}
                                       </div>
                                     </div>
                                   )}
                                 </div>
                               </div>
                             </div>
+                          </td>
+                          <td className="p-2 align-top text-xs">
+                            {(() => {
+                              const g = (item.item_group || '').toUpperCase();
+                              const isPart = g.includes('PART');
+                              return (
+                                <span className={`px-1.5 py-0.5 rounded text-[10px] border ${isPart
+                                  ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-blue-100 text-blue-700 border-blue-200'
+                                  }`}>
+                                  {isPart ? 'PART' : 'ASM'}
+                                </span>
+                              );
+                            })()}
                           </td>
                           <td className="p-2">
                             <div className="flex items-center gap-1.5">
@@ -1862,7 +1925,11 @@ const QuotationFormPage = () => {
                                 value={item.quantity}
                                 readOnly={isLocked}
                                 onChange={(e) => handleItemChange(item.id, 'quantity', e.target.value)}
-                                className={`w-full px-2 py-1 text-xs border rounded outline-none transition-all ${isLocked ? 'bg-transparent border-transparent text-slate-700 ' : 'bg-white border-slate-200 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500'}`}
+                                onBlur={(e) => {
+                                  const val = parseFloat(e.target.value);
+                                  handleItemChange(item.id, 'quantity', isNaN(val) ? '' : val);
+                                }}
+                                className={`flex-1 min-w-0 px-2 py-1 text-xs border rounded outline-none transition-all ${isLocked ? 'bg-transparent border-transparent text-slate-700 ' : 'bg-white border-slate-200 text-slate-700 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500'}`}
                               />
                               <span className="text-xs text-slate-400 ">{item.unit || 'Nos'}</span>
                             </div>
@@ -1874,20 +1941,46 @@ const QuotationFormPage = () => {
                               readOnly={isLocked}
                               onChange={(e) => handleItemChange(item.id, 'bom_cost', e.target.value)}
                               placeholder=""
-                              className={`w-full px-2 py-1 text-xs font-semibold border rounded outline-none transition-all ${
-                                isLocked 
-                                  ? 'bg-transparent border-transparent text-slate-700' 
+                              className={`w-full px-2 py-1 text-xs font-semibold border rounded outline-none transition-all ${isLocked
+                                  ? 'bg-transparent border-transparent text-slate-700'
                                   : 'bg-white border-slate-200 text-emerald-600 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500'
-                              }`}
+                                }`}
                             />
                           </td>
                           <td className="p-2">
                             <input
                               type="number"
-                              value={item.rate}
+                              value={item.profit_percentage || ''}
                               readOnly={isLocked}
-                              onChange={(e) => handleItemChange(item.id, 'rate', e.target.value)}
-                              className={`w-full px-2 py-1 text-xs font-semibold border rounded outline-none transition-all ${isLocked ? 'bg-transparent border-transparent text-slate-700' : 'bg-white border-slate-200 text-indigo-600 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500'}`}
+                              onChange={(e) => handleItemChange(item.id, 'profit_percentage', e.target.value)}
+                              onBlur={(e) => {
+                                const val = parseFloat(e.target.value);
+                                handleItemChange(item.id, 'profit_percentage', isNaN(val) ? '' : val);
+                              }}
+                              placeholder="0%"
+                              className={`w-full px-2 py-1 text-xs border rounded outline-none transition-all ${isLocked ? 'bg-transparent border-transparent text-slate-700' : 'bg-white border-slate-200 text-slate-700 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500'}`}
+                            />
+                          </td>
+                          <td className="p-2">
+                            <input
+                              type="number"
+                              value={item.override_percentage || ''}
+                              readOnly={isLocked}
+                              onChange={(e) => handleItemChange(item.id, 'override_percentage', e.target.value)}
+                              onBlur={(e) => {
+                                const val = parseFloat(e.target.value);
+                                handleItemChange(item.id, 'override_percentage', isNaN(val) ? '' : val);
+                              }}
+                              placeholder="0%"
+                              className={`w-full px-2 py-1 text-xs border rounded outline-none transition-all ${isLocked ? 'bg-transparent border-transparent text-slate-700' : 'bg-white border-slate-200 text-slate-700 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500'}`}
+                            />
+                          </td>
+                          <td className="p-2">
+                            <input
+                              type="number"
+                              value={item.rate || ''}
+                              readOnly
+                              className="w-full px-2 py-1 text-xs font-semibold bg-transparent border-transparent text-indigo-600 outline-none cursor-default"
                             />
                           </td>
                           <td className="p-2 text-xs text-slate-900">
@@ -1952,26 +2045,27 @@ const QuotationFormPage = () => {
                                     <span className="text-[11px] text-slate-700 font-semibold">{sa.description}</span>
                                     <div className="flex items-center gap-2 mt-0.5">
                                       <span className="text-[9px] text-slate-500 font-mono ">{(sa.drawing_no || '').toUpperCase()}</span>
-                                      <span className={`px-1 py-0.5 rounded-[3px] text-[8px] border ${(sa.item_group || '').toUpperCase().includes('ASSEMBLY')
-                                          ? 'bg-blue-50 text-blue-600 border-blue-100/50'
-                                          : 'bg-emerald-50 text-emerald-600 border-emerald-100/50'
-                                        }`}>
-                                        {(sa.item_group || 'PART').toUpperCase()}
-                                      </span>
                                     </div>
                                   </div>
                                 </div>
                               </td>
+                              <td className="p-2 border-b border-slate-100 text-[10px] text-slate-500 font-semibold">
+                                {(sa.item_group || 'PART').toUpperCase().includes('ASSEMBLY') ? 'ASM' : 'PART'}
+                              </td>
                               <td className="p-2 border-b border-slate-100 text-[11px] text-slate-600 ">
-                                {saQty.toFixed(3)} {sa.unit || 'Nos'}
+                                {parseFloat(saQty.toFixed(3))} {sa.unit || 'Nos'}
                               </td>
                               <td className="p-2 border-b border-slate-100 text-[11px] text-indigo-600  bg-indigo-50/30">
+                                {formatCurrency(saBomCost)}
+                              </td>
+                              <td className="p-2 border-b border-slate-100 text-[11px] text-slate-400">-</td>
+                              <td className="p-2 border-b border-slate-100 text-[11px] text-slate-400">-</td>
+                              <td className="p-2 border-b border-slate-100 text-[11px] text-slate-600">
                                 {formatCurrency(saBomCost)}
                               </td>
                               <td className="p-2 border-b border-slate-100 text-[11px] text-slate-700 font-semibold">
                                 {formatCurrency(saRate)}
                               </td>
-                              <td className="p-2 border-b border-slate-100"></td>
                               {!isLocked && <td className="p-2 border-b border-slate-100"></td>}
                             </tr>
                           );
@@ -2025,9 +2119,66 @@ const QuotationFormPage = () => {
                 </div>
               )}
 
+              {/* Overall Discount Section */}
+              <div className="p-2 bg-slate-50 rounded border border-slate-100 space-y-1.5 my-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Overall Discount</span>
+                </div>
+                <div className="flex gap-2">
+                  <select
+                    disabled={isLocked}
+                    value={discountType}
+                    onChange={(e) => setDiscountType(e.target.value)}
+                    className="text-xs bg-white border border-slate-200 rounded px-2 py-1 outline-none focus:ring-1 focus:ring-indigo-500 text-slate-700 w-28 disabled:bg-slate-100 disabled:text-slate-400 font-medium"
+                  >
+                    <option value="percentage">Percentage (%)</option>
+                    <option value="fixed">Fixed (₹)</option>
+                  </select>
+                  <input
+                    type="number"
+                    disabled={isLocked}
+                    value={discountValue === 0 ? '' : discountValue}
+                    placeholder="0.00"
+                    min="0"
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === '') {
+                        setDiscountValue(0);
+                      } else {
+                        const parsed = parseFloat(val);
+                        setDiscountValue(isNaN(parsed) ? 0 : parsed);
+                      }
+                    }}
+                    onBlur={(e) => {
+                      const val = parseFloat(e.target.value) || 0;
+                      setDiscountValue(Math.max(0, val));
+                    }}
+                    className="flex-1 text-xs text-right bg-white border border-slate-200 rounded px-2 py-1 outline-none focus:ring-1 focus:ring-indigo-500 text-slate-900 font-semibold disabled:bg-slate-100 disabled:text-slate-400"
+                  />
+                </div>
+              </div>
+
               <div className="flex justify-between items-center text-xs">
-                <span className="text-slate-500 ">Base Amount</span>
-                <span className="text-slate-900 ">{formatCurrency(summary.baseAmount)}</span>
+                <span className="text-slate-500 ">Base Amount (BOM Cost)</span>
+                <span className="text-slate-900 ">{formatCurrency(summary.bomBaseAmount)}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-slate-500 ">Profit Added</span>
+                <span className="text-slate-900 ">{formatCurrency(summary.profitAdded)}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-slate-500 ">Override Added</span>
+                <span className="text-slate-900 ">{formatCurrency(summary.overrideAdded)}</span>
+              </div>
+              {summary.discountAmount > 0 && (
+                <div className="flex justify-between items-center text-xs text-rose-600 font-medium">
+                  <span>Discount Amount (-)</span>
+                  <span>-{formatCurrency(summary.discountAmount)}</span>
+                </div>
+              )}
+              <div className="flex justify-between items-center text-xs border-t border-slate-100/60 pt-2">
+                <span className="text-slate-500 font-medium">Subtotal (Pre-Tax)</span>
+                <span className="text-slate-900 font-medium">{formatCurrency(summary.baseAmount)}</span>
               </div>
               <div className="flex justify-between items-center text-xs">
                 <span className="text-slate-500 ">GST (18%)</span>

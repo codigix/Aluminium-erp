@@ -33,12 +33,14 @@ const generateQuotationHTML = (clientName, items, totalAmount, notes, clientId, 
   let subTotal = 0;
   let totalTax = 0;
   let totalProfit = 0;
+  let totalOverride = 0;
 
   const itemsHTML = (items || [])
     .map((item, idx) => {
       const isRejected = item.status === 'REJECTED';
       const quantity = item.quantity || 1;
       const profitP = parseFloat(item.profit_percentage) || 0;
+      const overrideP = parseFloat(item.override_percentage) || 0;
       const gstRate = parseFloat(item.gst_percentage) || 18;
       
       // Calculate rates
@@ -52,10 +54,14 @@ const generateQuotationHTML = (clientName, items, totalAmount, notes, clientId, 
         subTotal += lineTotalBase;
         totalTax += lineTax;
         
-        // Calculate profit amount for this line
-        const basePrice = unitRate / (1 + profitP / 100);
-        const profitAmount = (unitRate - basePrice) * quantity;
+        // Calculate profit & override amounts for this line
+        const bomCost = parseFloat(item.bom_cost) || 0;
+        const itemBomCost = bomCost || (unitRate / (1 + profitP / 100) / (1 + overrideP / 100)) || 0;
+        const profitAmount = itemBomCost * (profitP / 100) * quantity;
+        const overrideAmount = (itemBomCost * (1 + profitP / 100)) * (overrideP / 100) * quantity;
+        
         totalProfit += profitAmount;
+        totalOverride += overrideAmount;
       }
 
       const unitPriceStr = isRejected ? 
@@ -148,6 +154,21 @@ const generateQuotationHTML = (clientName, items, totalAmount, notes, clientId, 
 
   const hostEmail = hostCompany?.email || hostCompany?.company_email || 'reactjscodigix@gmail.com';
   const hostPhone = hostCompany?.phone || hostCompany?.company_phone || hostCompany?.contact_mobile || '+91 9876543210';
+  
+  const discountType = (items && items[0]) ? items[0].discount_type || 'percentage' : 'percentage';
+  const discountValue = (items && items[0]) ? parseFloat(items[0].discount_value) || 0 : 0;
+
+  let discountAmount = 0;
+  if (discountType === 'percentage') {
+    discountAmount = subTotal * (discountValue / 100);
+  } else {
+    discountAmount = discountValue;
+  }
+  if (discountAmount > subTotal) discountAmount = subTotal;
+
+  const discountRatio = subTotal > 0 ? (subTotal - discountAmount) / subTotal : 1;
+  const finalTax = totalTax * discountRatio;
+  const grandTotal = (subTotal - discountAmount) + finalTax;
 
   const html = `
     <!DOCTYPE html>
@@ -235,6 +256,12 @@ const generateQuotationHTML = (clientName, items, totalAmount, notes, clientId, 
           <td style="color: #2563eb; font-weight: medium;">Total Profit</td>
           <td style="text-align: right; color: #1e40af; font-weight: bold;">₹${totalProfit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
         </tr>
+        ${totalOverride > 0 ? `
+        <tr>
+          <td style="color: #4b5563; font-weight: medium;">Total Override</td>
+          <td style="text-align: right; color: #1f2937; font-weight: bold;">₹${totalOverride.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+        </tr>
+        ` : ''}
         <tr>
           <td style="color: #64748b;">Tax (GST)</td>
           <td style="text-align: right; color: #334155;">₹${totalTax.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>

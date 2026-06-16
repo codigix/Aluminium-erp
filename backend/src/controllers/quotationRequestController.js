@@ -9,7 +9,8 @@ const getQuotationRequests = async (req, res, next) => {
     let query = `
       SELECT *, COALESCE(total_amount / NULLIF(item_qty, 0), 0) as unit_rate FROM (
         SELECT qr.id as qr_id, qr.sales_order_id, qr.company_id, qr.status, qr.total_amount, qr.received_amount, qr.notes, qr.created_at, qr.rejection_reason, qr.reply_pdf,
-               qr.profit_percentage, qr.gst_percentage, qr.pending_bom_cost,
+               qr.profit_percentage, qr.override_percentage, qr.gst_percentage, qr.pending_bom_cost,
+               qr.discount_type, qr.discount_value,
                qr.version, qr.parent_id, qr.batch_id, qr.host_company_id,
                COALESCE(qr.project_name, so.project_name, 'Manual Quotation') as project_name, 
                so.bom_id, c.company_name, 
@@ -222,6 +223,8 @@ const getQuotationVersionHistory = async (req, res, next) => {
           client_phone: row.resolved_client_phone,
           contact_person: row.resolved_contact_person,
           client_address: row.resolved_client_address,
+          discount_type: row.discount_type || 'percentage',
+          discount_value: parseFloat(row.discount_value) || 0,
           items: []
         };
         versionGroups.push(versionMap[row.version]);
@@ -256,6 +259,8 @@ const getQuotationVersionHistory = async (req, res, next) => {
         bom_cost: parseFloat(row.bom_cost) || 0,
         latest_bom_cost: parseFloat(row.latest_bom_cost) || 0,
         total: lineTotal,
+        profit_percentage: parseFloat(row.profit_percentage) || 0,
+        override_percentage: parseFloat(row.override_percentage) || 0,
         gst_percentage: row.gst_percentage,
         item_group: row.item_group,
         status: row.status,
@@ -600,11 +605,12 @@ const sendQuotationViaEmail = async (req, res, next) => {
           `INSERT INTO quotation_requests (
              sales_order_id, sales_order_item_id, item_qty, company_id, 
              status, total_amount, received_amount, rejection_reason, 
-             notes, created_at, profit_percentage, gst_percentage,
+             notes, created_at, profit_percentage, override_percentage, gst_percentage,
              version, parent_id, drawing_no, description, item_unit,
              project_name, batch_id, item_group, bom_cost, item_code, host_company_id,
-             client_email, client_phone, contact_person, client_address
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             client_email, client_phone, contact_person, client_address,
+             discount_type, discount_value
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             salesOrderId,
             salesOrderItemId,
@@ -616,6 +622,7 @@ const sendQuotationViaEmail = async (req, res, next) => {
             item.rejection_reason || null,
             notes || null,
             item.profit_percentage || 0,
+            item.override_percentage || 0,
             gstRate,
             finalVersion,
             finalParentId,
@@ -631,7 +638,9 @@ const sendQuotationViaEmail = async (req, res, next) => {
             finalClientEmail,
             finalClientPhone,
             finalContactPerson,
-            finalClientAddress
+            finalClientAddress,
+            req.body.discount_type || 'percentage',
+            parseFloat(req.body.discount_value) || 0
           ]
         );
 
@@ -924,6 +933,8 @@ const downloadQuotationPDF = async (req, res, next) => {
         quantity: q.item_qty || 1,
         quotedPrice: (parseFloat(q.total_amount) / (q.item_qty || 1)) || 0,
         profit_percentage: q.profit_percentage || 0,
+        override_percentage: q.override_percentage || 0,
+        bom_cost: parseFloat(q.bom_cost) || 0,
         gst_percentage: q.gst_percentage || 18,
         status: q.status,
         sub_assemblies: components.map(sa => ({
@@ -1088,6 +1099,8 @@ const getQuotationVersionDetails = async (req, res, next) => {
         rate: parseFloat(row.total_amount / (row.item_qty || 1)) || 0,
         bom_cost: parseFloat(row.bom_cost) || 0,
         total: parseFloat(row.total_amount) || 0,
+        profit_percentage: parseFloat(row.profit_percentage) || 0,
+        override_percentage: parseFloat(row.override_percentage) || 0,
         gst_percentage: row.gst_percentage,
         item_group: row.item_group,
         status: row.status,
@@ -1330,6 +1343,8 @@ const sendExistingQuotationEmail = async (req, res, next) => {
         quantity: q.item_qty || 1,
         quotedPrice: (parseFloat(q.total_amount) / (q.item_qty || 1)) || 0,
         profit_percentage: q.profit_percentage || 0,
+        override_percentage: q.override_percentage || 0,
+        bom_cost: parseFloat(q.bom_cost) || 0,
         gst_percentage: q.gst_percentage || 18,
         status: q.status,
         sub_assemblies: components.map(sa => ({

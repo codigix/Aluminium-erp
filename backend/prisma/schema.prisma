@@ -1435,6 +1435,9 @@ model quotation_requests {
   received_amount          Decimal?                   @default(0.00) @db.Decimal(14, 2)
   profit_percentage        Decimal?                   @default(0.00) @db.Decimal(10, 2)
   gst_percentage           Decimal?                   @default(18.00) @db.Decimal(10, 2)
+  override_percentage      Decimal?                   @default(0.00) @db.Decimal(10, 2)
+  discount_type            String?                    @default("percentage") @db.VarChar(50)
+  discount_value           Decimal?                   @default(0.00) @db.Decimal(10, 2)
   version                  Int?                       @default(1)
   parent_id                Int?
   drawing_no               String?                    @db.VarChar(255)

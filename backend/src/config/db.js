@@ -416,7 +416,10 @@ const ensureQuotationRequestColumns = async () => {
       { name: 'client_email', definition: 'VARCHAR(255) NULL' },
       { name: 'client_phone', definition: 'VARCHAR(50) NULL' },
       { name: 'contact_person', definition: 'VARCHAR(255) NULL' },
-      { name: 'client_address', definition: 'TEXT NULL' }
+      { name: 'client_address', definition: 'TEXT NULL' },
+      { name: 'override_percentage', definition: 'DECIMAL(10, 2) NULL DEFAULT 0.00' },
+      { name: 'discount_type', definition: 'VARCHAR(50) NULL DEFAULT "percentage"' },
+      { name: 'discount_value', definition: 'DECIMAL(10, 2) NULL DEFAULT 0.00' }
     ];
 
     const missing = requiredColumns.filter(column => !existing.has(column.name));
