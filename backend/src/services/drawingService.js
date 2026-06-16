@@ -839,6 +839,7 @@ const getApprovedDrawings = async () => {
        MAX(d.file_path) as file_path,
        MAX(d.description) as drawing_description,
        MAX(d.hsn_code) as hsn_code,
+       MAX(d.delivery_date) as delivery_date,
        MAX(latest_bom.id) as id,
        MAX(latest_bom.bom_cost) as bom_cost, 
        MAX(latest_bom.item_group) as item_group, 
@@ -846,7 +847,7 @@ const getApprovedDrawings = async () => {
        MAX(latest_bom.description) as description,
        MAX(latest_bom.item_code) as item_code
      FROM customer_drawings d
-     INNER JOIN (
+     LEFT JOIN (
        SELECT 
          id,
          drawing_no, 
@@ -862,11 +863,11 @@ const getApprovedDrawings = async () => {
          SELECT MAX(soi2.id) 
          FROM sales_order_items soi2
          JOIN sales_orders so ON so.id = soi2.sales_order_id
-         WHERE soi2.bom_cost > 0 AND so.quotation_id IS NULL
+         WHERE soi2.bom_cost > 0
          GROUP BY COALESCE(soi2.drawing_id, soi2.drawing_no)
        )
      ) latest_bom ON (d.id = latest_bom.drawing_id OR (latest_bom.drawing_id IS NULL AND d.drawing_no = latest_bom.drawing_no))
-     WHERE d.status = 'APPROVED' OR d.shared_with_design = 1
+     WHERE d.status IN ('APPROVED', 'SHARED', 'PENDING') OR d.shared_with_design = 1
      GROUP BY d.client_name, d.drawing_no
      ORDER BY MAX(d.created_at) DESC`
   );

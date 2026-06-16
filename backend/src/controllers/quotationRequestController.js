@@ -481,7 +481,11 @@ const sendQuotationViaEmail = async (req, res, next) => {
       emailRequired = true, 
       status, 
       projectName, 
-      clearPendingBomId 
+      clearPendingBomId,
+      customSubject,
+      customMessage,
+      attachPDF,
+      customAttachments
     } = req.body;
 
     if (!resolvedClientId || !items || items.length === 0) {
@@ -721,7 +725,11 @@ const sendQuotationViaEmail = async (req, res, next) => {
             phone: finalClientPhone,
             contact_person: finalContactPerson,
             address: finalClientAddress
-          }
+          },
+          customSubject,
+          customMessage,
+          attachPDF !== undefined ? attachPDF : true,
+          customAttachments || []
         );
         emailSent = true;
         emailMessageId = emailResult.messageId;
@@ -1258,6 +1266,7 @@ const requestQuotationUpdateFromBOM = async (req, res, next) => {
 const sendExistingQuotationEmail = async (req, res, next) => {
   try {
     const { id } = req.params;
+    const { to, subject, message, attachPDF, customAttachments } = req.body;
 
     // 1. Fetch the representative quotation to get client info and timestamp
     // Corrected SQL query to fetch client email from contacts table
@@ -1286,7 +1295,7 @@ const sendExistingQuotationEmail = async (req, res, next) => {
     }
 
     const representative = quotes[0];
-    const clientEmail = representative.client_email;
+    const clientEmail = to || representative.client_email;
     const clientName = representative.company_name;
 
     if (!clientEmail) {
@@ -1355,7 +1364,11 @@ const sendExistingQuotationEmail = async (req, res, next) => {
         phone: representative.client_phone,
         contact_person: representative.contact_person,
         address: representative.client_address
-      }
+      },
+      subject,
+      message,
+      attachPDF !== undefined ? attachPDF : true,
+      customAttachments || []
     );
 
     const emailMessageId = emailResult?.messageId || null;
@@ -1364,6 +1377,12 @@ const sendExistingQuotationEmail = async (req, res, next) => {
     const messageText = `Quotation ${quoteNumber} sent to client.\nTotal Amount (Incl. GST): ₹${totalAmountNum.toLocaleString('en-IN')}\nItems: ${items.length}`;
 
     for (const q of batchQuotes) {
+      if (q.status === 'DRAFT') {
+        await pool.execute(
+          'UPDATE quotation_requests SET status = ?, updated_at = NOW() WHERE id = ?',
+          ['SENT', q.id]
+        );
+      }
       await pool.execute(
         `INSERT INTO quotation_communications 
          (quotation_id, quotation_type, sender_type, message, email_message_id, created_at, is_read) 

@@ -12,6 +12,7 @@ import { Card, StatusBadge, SearchableSelect } from '../components/ui.jsx';
 import { successToast, errorToast } from '../utils/toast';
 import Swal from 'sweetalert2';
 import { getFileUrl } from '../utils/url';
+import SendEmailModal from '../components/SendEmailModal.jsx';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -37,7 +38,10 @@ const QuotationFormPage = () => {
   const [items, setItems] = useState([]);
 
   const sortedItems = useMemo(() => {
-    return [...items].sort((a, b) => {
+    const existingItems = items.filter(item => !item.isNew);
+    const newItems = items.filter(item => item.isNew);
+
+    existingItems.sort((a, b) => {
       const dwgA = (a.drawing_no || '').trim().toUpperCase();
       const dwgB = (b.drawing_no || '').trim().toUpperCase();
 
@@ -47,6 +51,8 @@ const QuotationFormPage = () => {
 
       return dwgA.localeCompare(dwgB, undefined, { numeric: true, sensitivity: 'base' });
     });
+
+    return [...existingItems, ...newItems];
   }, [items]);
   const [notes, setNotes] = useState('');
   const [clients, setClients] = useState([]);
@@ -64,6 +70,9 @@ const QuotationFormPage = () => {
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [refreshingDrawings, setRefreshingDrawings] = useState(false);
   const hasInitialized = useRef(false);
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [emailModalData, setEmailModalData] = useState(null);
+  const [pendingSaveParams, setPendingSaveParams] = useState(null);
 
   // Locking logic: Only the latest version can be edited, and only if it's NOT approved.
   const maxVersion = Math.max(
@@ -90,7 +99,7 @@ const QuotationFormPage = () => {
 
   useEffect(() => {
     if (selectedClient?.company_name) {
-      fetchDrawings(selectedClient.company_name);
+      fetchDrawings();
     } else {
       setDrawings([]);
     }
@@ -106,39 +115,49 @@ const QuotationFormPage = () => {
          c.company_name.toLowerCase().trim() === selectedClient.company_name.toLowerCase().trim())
       );
       if (client) {
-        // First, check if there is a customer drawing matching the selected project name to get project-wise contacts
-        const matchedDrawing = (drawings || []).find(d => 
-          d.project_name && projectName && 
-          d.project_name.toLowerCase().trim() === projectName.toLowerCase().trim()
+        // Determine if this is the client initialized from parent (Client Requirement or Quotation data)
+        const isSameClientAsParent = selectedClient && (
+          (initialData && (
+            (initialData.clientId && String(selectedClient.id) === String(initialData.clientId || initialData.company_id || initialData.companyId)) ||
+            (initialData.clientName && selectedClient.company_name && 
+             String(selectedClient.company_name).toLowerCase().trim() === String(initialData.clientName).toLowerCase().trim())
+          )) ||
+          (selectedVersionId && versionHistory.some(vh => 
+            String(vh.company_id || vh.clientId) === String(selectedClient.id)
+          ))
         );
 
-        let nextEmail = '';
-        let nextPhone = '';
-        let nextName = '';
-        let nextAddr = '';
+        // Highest Priority: Client Requirement Data / Quotation Data already in state
+        let nextEmail = isSameClientAsParent && selectedClient.email ? selectedClient.email : '';
+        let nextPhone = isSameClientAsParent && selectedClient.phone ? selectedClient.phone : '';
+        let nextName = isSameClientAsParent && selectedClient.contact_person ? selectedClient.contact_person : '';
+        let nextAddr = isSameClientAsParent && selectedClient.address && selectedClient.address !== 'N/A' ? selectedClient.address : '';
 
-        if (matchedDrawing) {
-          nextEmail = matchedDrawing.email || '';
-          nextPhone = matchedDrawing.phone || '';
-          nextName = matchedDrawing.contact_person || '';
-          nextAddr = matchedDrawing.billing_address || matchedDrawing.address || '';
+        // Medium Priority: Match by Project Name drawing (Drawing Master / Client Master project data) for remaining empty fields
+        if (!nextEmail || !nextPhone || !nextName || !nextAddr || nextAddr === 'N/A') {
+          const matchedDrawing = (drawings || []).find(d => 
+            d.project_name && projectName && 
+            d.project_name.toLowerCase().trim() === projectName.toLowerCase().trim()
+          );
+
+          if (matchedDrawing) {
+            if (!nextEmail) nextEmail = matchedDrawing.email || '';
+            if (!nextPhone) nextPhone = matchedDrawing.phone || '';
+            if (!nextName) nextName = matchedDrawing.contact_person || '';
+            if (!nextAddr || nextAddr === 'N/A') nextAddr = matchedDrawing.billing_address || matchedDrawing.address || '';
+          }
         }
 
-        // If no project-wise contact found (or fields are empty), fall back to client primary contact
-        if (!nextEmail || !nextPhone || !nextName || !nextAddr) {
+        // Lowest Priority: Fall back to client primary contact (Client Master general data) for any remaining empty fields
+        if (!nextEmail || !nextPhone || !nextName || !nextAddr || nextAddr === 'N/A') {
           const primaryContact = client.contacts?.find(c => c.contact_type === 'PRIMARY') || client.contacts?.[0] || {};
           const billing = client.addresses?.find(address => address.address_type === 'BILLING') || client.addresses?.[0] || {};
           const addressStr = [billing.line1, billing.line2, billing.city, billing.state, billing.pincode].filter(Boolean).join(', ');
 
-          // In revise/revisions mode, if we are still looking at the same client, we should preserve the parent quotation's details instead of defaulting to N/A or empty
-          const isSameClientAsParent = (mode === 'revise' || version > 1) && 
-            selectedClient?.id && initialData && 
-            String(selectedClient.id) === String(initialData.clientId || initialData.company_id || initialData.companyId);
-
-          if (!nextEmail) nextEmail = isSameClientAsParent && selectedClient.email ? selectedClient.email : (primaryContact.email || '');
-          if (!nextPhone) nextPhone = isSameClientAsParent && selectedClient.phone ? selectedClient.phone : (primaryContact.phone || '');
-          if (!nextName) nextName = isSameClientAsParent && selectedClient.contact_person ? selectedClient.contact_person : (primaryContact.name || '');
-          if (!nextAddr || nextAddr === 'N/A') nextAddr = isSameClientAsParent && selectedClient.address && selectedClient.address !== 'N/A' ? selectedClient.address : (addressStr || 'N/A');
+          if (!nextEmail) nextEmail = primaryContact.email || '';
+          if (!nextPhone) nextPhone = primaryContact.phone || '';
+          if (!nextName) nextName = primaryContact.name || '';
+          if (!nextAddr || nextAddr === 'N/A') nextAddr = addressStr || 'N/A';
         }
 
         const emailNeedsUpdate = selectedClient.email !== nextEmail;
@@ -170,7 +189,9 @@ const QuotationFormPage = () => {
     clients,
     drawings,
     projectName,
-    isLocked
+    isLocked,
+    selectedVersionId,
+    versionHistory
   ]);
 
   // Sync selected host company details when ID changes or when hostCompanies is loaded
@@ -402,7 +423,7 @@ const QuotationFormPage = () => {
           // Master drawings might have stale base costs if they haven't been dynamically synced with full BOM materials/operations.
           const isDowngradeForAssembly = g.includes('ASSEMBLY') && currentBOMCost > drwRate;
 
-          if (costChanged && shouldSync && !item.has_pending_bom_applied && !isDowngradeForAssembly) {
+          if (costChanged && shouldSync && !item.has_pending_bom_applied && !isDowngradeForAssembly && !item.isBOMCostManuallyEdited) {
             newItem.bom_cost = drwRate;
             changed = true;
 
@@ -582,13 +603,11 @@ const QuotationFormPage = () => {
     }
   };
 
-  const fetchDrawings = async (clientName = null) => {
+  const fetchDrawings = async () => {
     try {
       setRefreshingDrawings(true);
       const token = localStorage.getItem('authToken');
-      const url = clientName
-        ? `${API_BASE}/drawings?clientName=${encodeURIComponent(clientName)}`
-        : `${API_BASE}/drawings`;
+      const url = `${API_BASE}/drawings/approved`;
       const response = await fetch(url, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -900,7 +919,8 @@ const QuotationFormPage = () => {
       total: 0,
       gst_percentage: 18,
       isManual: false,
-      sub_assemblies: []
+      sub_assemblies: [],
+      isNew: true
     };
     setItems([...items, newItem]);
   };
@@ -913,6 +933,9 @@ const QuotationFormPage = () => {
     const updatedItems = items.map(item => {
       if (item.id === id) {
         const updatedItem = { ...item, [field]: value };
+        if (field === 'bom_cost') {
+          updatedItem.isBOMCostManuallyEdited = true;
+        }
         if (field === 'quantity' || field === 'rate') {
           updatedItem.total = (parseFloat(updatedItem.quantity) || 0) * (parseFloat(updatedItem.rate) || 0);
         }
@@ -981,7 +1004,39 @@ const QuotationFormPage = () => {
     }
   };
 
-  const handleSendExistingEmail = async () => {
+  const handleOpenSendEmailModal = (status) => {
+    if (!selectedClient) {
+      errorToast('Please select a client');
+      return;
+    }
+    if (!selectedClient?.email) {
+      errorToast('Client email is required to send quotation');
+      return;
+    }
+    if (items.length === 0) {
+      errorToast('Please add at least one item');
+      return;
+    }
+
+    const hostName = selectedHostCompany?.company_name || 'SP TECHPIONEER';
+    const finalQuoteNo = quotationNo === 'Generating...' ? 'New' : quotationNo;
+    const clientName = selectedClient.company_name;
+
+    // Prefill default email fields
+    const defaultSubject = `Quotation Request [${finalQuoteNo}] from ${hostName} - ${clientName}`;
+    const defaultMessage = `Dear ${clientName},\n\nPlease find the attached quotation [${finalQuoteNo}] for your approved drawings from ${hostName}.\n\nTotal Quotation Value (Incl. GST): ${formatCurrency(summary.totalAmount)}\n\nThe detailed breakdown of items, quantities, and pricing is provided in the attached PDF.\n\nWe look forward to your feedback and approval.\n\nBest regards,\nSales Team\n${hostName}`;
+
+    setEmailModalData({
+      to: selectedClient.email,
+      subject: defaultSubject,
+      message: defaultMessage,
+      attachmentName: `Quotation_${clientName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`
+    });
+    setPendingSaveParams({ status });
+    setShowEmailModal(true);
+  };
+
+  const handleOpenSendExistingEmailModal = () => {
     const idToSend = selectedVersionId || initialData?.id;
     if (!idToSend) {
       errorToast('No quotation ID found to send');
@@ -993,28 +1048,60 @@ const QuotationFormPage = () => {
       return;
     }
 
-    try {
-      setSaving(true);
-      const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/quotation-requests/${idToSend}/send-email`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
+    const hostName = selectedHostCompany?.company_name || 'SP TECHPIONEER';
+    const finalQuoteNo = quotationNo || 'New';
+    const clientName = selectedClient.company_name;
+
+    // Prefill default email fields
+    const defaultSubject = `Quotation Request [${finalQuoteNo}] from ${hostName} - ${clientName}`;
+    const defaultMessage = `Dear ${clientName},\n\nPlease find the attached quotation [${finalQuoteNo}] for your approved drawings from ${hostName}.\n\nTotal Quotation Value (Incl. GST): ${formatCurrency(summary.totalAmount)}\n\nThe detailed breakdown of items, quantities, and pricing is provided in the attached PDF.\n\nWe look forward to your feedback and approval.\n\nBest regards,\nSales Team\n${hostName}`;
+
+    setEmailModalData({
+      to: selectedClient.email,
+      subject: defaultSubject,
+      message: defaultMessage,
+      attachmentName: `Quotation_${clientName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`
+    });
+    setPendingSaveParams({ status: 'EXISTING', id: idToSend });
+    setShowEmailModal(true);
+  };
+
+  const handleModalSend = async (emailData) => {
+    if (pendingSaveParams?.status === 'EXISTING') {
+      const idToSend = pendingSaveParams.id;
+      try {
+        setSaving(true);
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE}/quotation-requests/${idToSend}/send-email`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            to: emailData.to,
+            subject: emailData.subject,
+            message: emailData.message,
+            attachPDF: emailData.attachPDF,
+            customAttachments: emailData.customAttachments
+          })
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || errorData.message || 'Failed to send email');
         }
-      });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || errorData.message || 'Failed to send email');
+        successToast('Quotation sent to client successfully');
+        navigate('/sales/client-quotations');
+      } catch (error) {
+        console.error(error);
+        errorToast(error.message);
+      } finally {
+        setSaving(false);
       }
-
-      successToast('Quotation sent to client successfully');
-      navigate('/sales/client-quotations');
-    } catch (error) {
-      console.error(error);
-      errorToast(error.message);
-    } finally {
-      setSaving(false);
+    } else {
+      await handleSave(pendingSaveParams.status, true, emailData);
     }
   };
 
@@ -1045,7 +1132,7 @@ const QuotationFormPage = () => {
   const summary = calculateSummary();
   console.log('Quotation Items for UI:', sortedItems);
 
-  const handleSave = async (status = 'Draft', sendEmail = null) => {
+  const handleSave = async (status = 'Draft', sendEmail = null, emailData = null) => {
     if (!selectedClient) {
       errorToast('Please select a client');
       return;
@@ -1088,7 +1175,7 @@ const QuotationFormPage = () => {
       const quotationData = {
         clientId: selectedClient.id,
         clientName: selectedClient.company_name,
-        clientEmail: selectedClient.email,
+        clientEmail: emailData ? emailData.to : selectedClient.email,
         clientPhone: selectedClient.phone,
         contactPerson: selectedClient.contact_person,
         clientAddress: selectedClient.address,
@@ -1134,6 +1221,12 @@ const QuotationFormPage = () => {
         notes: notes,
         status: status.toUpperCase(),
         emailRequired: finalSendEmail,
+        ...(finalSendEmail && emailData ? {
+          customSubject: emailData.subject,
+          customMessage: emailData.message,
+          attachPDF: emailData.attachPDF,
+          customAttachments: emailData.customAttachments
+        } : {}),
         quotation_no: quotationNo,
         date: quotationDate,
         version: finalVersion,
@@ -1244,7 +1337,7 @@ const QuotationFormPage = () => {
                     Create Revision
                   </button>
                   <button
-                    onClick={() => handleSave('Revised', true)}
+                    onClick={() => handleOpenSendEmailModal('Revised')}
                     disabled={saving}
                     className="px-4 py-1.5 text-xs  text-white bg-indigo-600 rounded hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100 flex items-center gap-2 disabled:opacity-50"
                   >
@@ -1271,7 +1364,7 @@ const QuotationFormPage = () => {
                     Create Revision
                   </button>
                   <button
-                    onClick={() => handleSave('Revised', true)}
+                    onClick={() => handleOpenSendEmailModal('Revised')}
                     disabled={saving}
                     className="px-4 py-1.5 text-xs  text-white bg-indigo-600 rounded hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100 flex items-center gap-2 disabled:opacity-50"
                   >
@@ -1298,7 +1391,7 @@ const QuotationFormPage = () => {
                     Create Quotation
                   </button>
                   <button
-                    onClick={() => handleSave('Sent', true)}
+                    onClick={() => handleOpenSendEmailModal('Sent')}
                     disabled={saving}
                     className="px-4 py-1.5 text-xs  text-white bg-indigo-600 rounded hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100 flex items-center gap-2 disabled:opacity-50"
                   >
@@ -1323,7 +1416,7 @@ const QuotationFormPage = () => {
 
           {(selectedVersionId || initialData?.id) && isLocked && (
             <button
-              onClick={handleSendExistingEmail}
+              onClick={handleOpenSendExistingEmailModal}
               disabled={saving}
               className="px-4 py-1.5 text-xs  text-white bg-indigo-600 rounded hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100 flex items-center gap-2 disabled:opacity-50"
             >
@@ -1589,7 +1682,7 @@ const QuotationFormPage = () => {
                 </div>
                 <h2 className="text-sm  text-slate-900">Quotation Items</h2>
                 <button
-                  onClick={() => fetchDrawings(selectedClient?.company_name)}
+                  onClick={() => fetchDrawings()}
                   disabled={refreshingDrawings || !selectedClient}
                   className="p-1 text-slate-400 hover:text-indigo-600 transition-colors disabled:opacity-30"
                   title="Refresh costs from Master"
@@ -1660,36 +1753,6 @@ const QuotationFormPage = () => {
                                         <span className="text-xs text-slate-500 font-mono">{(item.drawing_no || 'Manual Item').toUpperCase()}</span>
                                       </div>
                                     </div>
-                                  ) : (item.isManual || mode === 'revise') ? (
-                                    <div className="flex flex-col">
-                                      <textarea
-                                        placeholder="Add item description..."
-                                        value={item.description}
-                                        onChange={(e) => handleItemChange(item.id, 'description', e.target.value)}
-                                        rows="1"
-                                        className="w-full px-0 py-0 text-xs  text-slate-900 border-none focus:ring-0 resize-none bg-transparent placeholder:text-slate-300 "
-                                      />
-                                      <div className="flex items-center gap-2 mt-0.5">
-                                        <input
-                                          type="text"
-                                          placeholder="Drawing No..."
-                                          value={item.drawing_no?.toUpperCase() || ''}
-                                          onChange={(e) => handleItemChange(item.id, 'drawing_no', e.target.value.toUpperCase())}
-                                          className="flex-1 px-0 py-0 text-xs   text-slate-500 border-none focus:ring-0 placeholder:text-slate-300 bg-transparent"
-                                        />
-                                        {(() => {
-                                          const g = (item.item_group || '').toUpperCase();
-                                          const isPart = g.includes('PART');
-                                          return (
-                                            <span className={`px-1.5 py-0.5 rounded text-xs border ${isPart
-                                                ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-blue-100 text-blue-700 border-blue-200'
-                                              }`}>
-                                              {isPart ? 'PART' : 'ASSEMBLY'}
-                                            </span>
-                                          );
-                                        })()}
-                                      </div>
-                                    </div>
                                   ) : (
                                     <div className="flex flex-col">
                                       <textarea
@@ -1702,26 +1765,48 @@ const QuotationFormPage = () => {
                                       <div className="flex items-center gap-2 mt-0.5">
                                         <div className="flex-1">
                                           <SearchableSelect
-                                            options={drawings}
-                                            value={item.drawing_id}
+                                            options={drawings.map(d => ({
+                                              id: String(d.id),
+                                              drawing_no: d.drawing_no,
+                                              description: d.drawing_description || d.description || ''
+                                            }))}
+                                            value={(() => {
+                                              const matchedDwg = drawings.find(d => 
+                                                (item.drawing_id && String(d.id) === String(item.drawing_id)) ||
+                                                (!item.drawing_id && item.drawing_no && String(d.drawing_no).trim().toUpperCase() === String(item.drawing_no).trim().toUpperCase())
+                                              );
+                                              return matchedDwg ? String(matchedDwg.id) : (item.drawing_no || '');
+                                            })()}
                                             disabled={isLocked}
+                                            allowCustom={false}
                                             onChange={(val) => {
-                                              const drw = drawings.find(d => String(d.id) === String(val));
+                                              const actualVal = val && typeof val === 'object' && val.target ? val.target.value : val;
+                                              const drw = drawings.find(d => String(d.id) === String(actualVal));
                                               const updatedItems = items.map(it => {
                                                 if (it.id === item.id) {
                                                   const g = (drw?.item_group || it.item_group || '').toUpperCase();
                                                   const isPart = g.includes('PART');
 
-                                                  const drwRate = parseFloat(drw?.rate || drw?.quotedPrice || drw?.bom_cost || it.rate || 0);
+                                                  // Only update BOM Cost auto-fetch for newly added rows
+                                                  const isNewRow = it.isNew;
+                                                  const drwBomCost = isNewRow
+                                                    ? (drw?.bom_cost && parseFloat(drw.bom_cost) > 0 ? parseFloat(drw.bom_cost) : null)
+                                                    : parseFloat(drw?.rate || drw?.quotedPrice || drw?.bom_cost || it.rate || 0);
+
+                                                  const drwRate = isNewRow
+                                                    ? (drwBomCost !== null ? drwBomCost : parseFloat(drw?.rate || drw?.quotedPrice || 0))
+                                                    : parseFloat(drw?.rate || drw?.quotedPrice || drw?.bom_cost || it.rate || 0);
 
                                                   return {
                                                     ...it,
-                                                    drawing_id: val,
+                                                    drawing_id: actualVal,
                                                     drawing_no: (drw?.drawing_no || '').toUpperCase(),
-                                                    description: drw?.description || '',
+                                                    description: drw?.drawing_description || drw?.description || '',
                                                     rate: drwRate,
-                                                    bom_cost: drwRate,
+                                                    bom_cost: isNewRow ? drwBomCost : drwRate,
+                                                    isBOMCostManuallyEdited: false,
                                                     item_group: drw?.item_group || it.item_group,
+                                                    unit: drw?.unit || it.unit || 'Nos',
                                                     total: (parseFloat(it.quantity) || 0) * drwRate,
                                                     sub_assemblies: g.includes('ASSEMBLY')
                                                       ? ((drw?.sub_assemblies && drw.sub_assemblies.length > 0)
@@ -1745,11 +1830,11 @@ const QuotationFormPage = () => {
                                               });
                                               setItems(updatedItems);
                                             }}
-                                            placeholder="Select Drawing..."
+                                            placeholder="Search Drawing No or Drawing Name..."
                                             labelField="drawing_no"
                                             valueField="id"
                                             subLabelField="description"
-                                            className="border-none p-0 focus-within:ring-0 shadow-none bg-transparent text-xs   text-slate-500 hide-arrow"
+                                            className="border-none p-0 focus-within:ring-0 shadow-none bg-transparent text-xs text-slate-500 hide-arrow"
                                           />
                                         </div>
                                         {(() => {
@@ -1783,9 +1868,18 @@ const QuotationFormPage = () => {
                             </div>
                           </td>
                           <td className="p-2">
-                            <div className="px-2 py-1 text-xs  text-emerald-600 bg-emerald-50 rounded border border-emerald-100/50">
-                              {formatCurrency(item.bom_cost || 0)}
-                            </div>
+                            <input
+                              type="number"
+                              value={item.bom_cost || ''}
+                              readOnly={isLocked}
+                              onChange={(e) => handleItemChange(item.id, 'bom_cost', e.target.value)}
+                              placeholder=""
+                              className={`w-full px-2 py-1 text-xs font-semibold border rounded outline-none transition-all ${
+                                isLocked 
+                                  ? 'bg-transparent border-transparent text-slate-700' 
+                                  : 'bg-white border-slate-200 text-emerald-600 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500'
+                              }`}
+                            />
                           </td>
                           <td className="p-2">
                             <input
@@ -2062,6 +2156,15 @@ const QuotationFormPage = () => {
           </Card>
         </div>
       </div>
+      <SendEmailModal
+        isOpen={showEmailModal}
+        onClose={() => setShowEmailModal(false)}
+        data={emailModalData}
+        onSend={handleModalSend}
+        title="Send Quotation to Client"
+        subTitle={quotationNo === 'Generating...' ? 'New Version' : quotationNo}
+        attachmentName={emailModalData?.attachmentName}
+      />
     </div>
   );
 };

@@ -9,17 +9,31 @@ const SendEmailModal = ({ isOpen, onClose, data, onSend, title, subTitle, attach
     attachPDF: true
   });
   const [loading, setLoading] = useState(false);
+  const [customFiles, setCustomFiles] = useState([]);
 
   useEffect(() => {
-    if (isOpen && data) {
+    if (isOpen) {
       setEmailData({
-        to: data.to || '',
-        subject: data.subject || '',
-        message: data.message || '',
+        to: data?.to || '',
+        subject: data?.subject || '',
+        message: data?.message || '',
         attachPDF: true
       });
+      setCustomFiles([]); // Reset custom attachments on open
     }
   }, [isOpen, data]);
+
+  const readAsBase64 = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => {
+        const base64String = reader.result.split(',')[1];
+        resolve(base64String);
+      };
+      reader.onerror = (error) => reject(error);
+    });
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -30,10 +44,24 @@ const SendEmailModal = ({ isOpen, onClose, data, onSend, title, subTitle, attach
 
     setLoading(true);
     try {
-      await onSend(emailData);
+      const processedAttachments = await Promise.all(
+        customFiles.map(async (file) => {
+          const content = await readAsBase64(file);
+          return {
+            filename: file.name,
+            content: content
+          };
+        })
+      );
+
+      await onSend({
+        ...emailData,
+        customAttachments: processedAttachments
+      });
       onClose();
     } catch (error) {
       console.error('Error sending email:', error);
+      errorToast('Failed to process custom attachments');
     } finally {
       setLoading(false);
     }
@@ -121,6 +149,43 @@ const SendEmailModal = ({ isOpen, onClose, data, onSend, title, subTitle, attach
                 </div>
               </div>
             )}
+
+            <div className="space-y-1.5">
+              <label className="text-xs text-slate-400 ml-1">Additional Attachments</label>
+              <div className="border border-dashed border-slate-200 rounded p-3 text-center bg-slate-50/50 hover:bg-slate-50 cursor-pointer relative group">
+                <input
+                  type="file"
+                  multiple
+                  onChange={(e) => {
+                    const files = Array.from(e.target.files || []);
+                    setCustomFiles(prev => [...prev, ...files]);
+                  }}
+                  className="absolute inset-0 opacity-0 cursor-pointer"
+                />
+                <div className="flex flex-col items-center justify-center gap-1">
+                  <svg className="w-5 h-5 text-slate-400 group-hover:text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                  </svg>
+                  <span className="text-xs font-medium text-slate-600">Click to choose files from your system</span>
+                </div>
+              </div>
+              {customFiles.length > 0 && (
+                <div className="space-y-1.5 mt-2 max-h-32 overflow-y-auto">
+                  {customFiles.map((file, idx) => (
+                    <div key={idx} className="flex items-center justify-between p-2 bg-slate-50 border border-slate-200 rounded text-xs">
+                      <span className="truncate max-w-[80%] font-semibold text-slate-700" title={file.name}>{file.name} ({(file.size / 1024).toFixed(1)} KB)</span>
+                      <button
+                        type="button"
+                        onClick={() => setCustomFiles(prev => prev.filter((_, i) => i !== idx))}
+                        className="text-rose-500 hover:text-rose-700 font-semibold"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="flex gap-2 justify-end pt-2">

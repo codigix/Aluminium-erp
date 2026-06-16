@@ -540,7 +540,7 @@ const sendShipmentStatusEmail = async (shipmentData, status, attachments = []) =
   }
 };
 
-const sendQuotationEmail = async (clientEmail, clientName, items, totalAmount, notes, clientId, quoteNumber, hostCompanyId = null, passedClientDetails = null) => {
+const sendQuotationEmail = async (clientEmail, clientName, items, totalAmount, notes, clientId, quoteNumber, hostCompanyId = null, passedClientDetails = null, customSubject = null, customMessage = null, attachPDF = true, customAttachments = []) => {
   try {
     const transporter = createTransporter();
     const adminCompanyMasterService = require('../services/adminCompanyMasterService');
@@ -589,27 +589,26 @@ const sendQuotationEmail = async (clientEmail, clientName, items, totalAmount, n
       };
     }
 
-    const html = generateQuotationHTML(clientName, items, totalAmount, notes, clientId, quoteNumber, hostCompany, clientDetails);
-    
-    // Generate PDF buffer
+    // Generate PDF buffer only if attachPDF is true
     let pdfBuffer;
-    try {
-      const browser = await puppeteer.launch({
-        headless: 'new',
-        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
-      });
-      const page = await browser.newPage();
-      await page.setContent(html, { waitUntil: 'networkidle0' });
-      pdfBuffer = await page.pdf({ 
-        format: 'A4', 
-        printBackground: true,
-        margin: { top: '20px', bottom: '20px', left: '20px', right: '20px' }
-      });
-      await browser.close();
-    } catch (pdfError) {
-      console.error('[Email Service] PDF generation failed:', pdfError.message);
-      // We will proceed to send email without attachment if PDF fails
-      // Alternatively, we could throw error if PDF is mandatory
+    if (attachPDF) {
+      const html = generateQuotationHTML(clientName, items, totalAmount, notes, clientId, quoteNumber, hostCompany, clientDetails);
+      try {
+        const browser = await puppeteer.launch({
+          headless: 'new',
+          args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+        });
+        const page = await browser.newPage();
+        await page.setContent(html, { waitUntil: 'networkidle0' });
+        pdfBuffer = await page.pdf({ 
+          format: 'A4', 
+          printBackground: true,
+          margin: { top: '20px', bottom: '20px', left: '20px', right: '20px' }
+        });
+        await browser.close();
+      } catch (pdfError) {
+        console.error('[Email Service] PDF generation failed:', pdfError.message);
+      }
     }
     
     const formattedQuoteNumber = quoteNumber ? `[${quoteNumber}]` : '';
@@ -617,8 +616,12 @@ const sendQuotationEmail = async (clientEmail, clientName, items, totalAmount, n
     const mailOptions = {
       from: process.env.EMAIL_USER || process.env.MAIL_FROM_ADDRESS || 'noreply@sptechpioneer.com',
       to: clientEmail,
-      subject: `Quotation Request ${formattedQuoteNumber} from SP TECHPIONEER - ${clientName}`,
-      html: `
+      subject: customSubject || `Quotation Request ${formattedQuoteNumber} from SP TECHPIONEER - ${clientName}`,
+      html: customMessage ? `
+        <div style="font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif; color: #333; line-height: 1.6;">
+          <p>${customMessage.replace(/\n/g, '<br>')}</p>
+        </div>
+      ` : `
         <div style="font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif; color: #333; line-height: 1.6;">
           <h2 style="color: #f26522;">Dear ${clientName},</h2>
           <p>Please find the attached quotation ${formattedQuoteNumber} for your approved drawings from <strong>SP TECHPIONEER PVT. LTD.</strong></p>
@@ -632,12 +635,17 @@ const sendQuotationEmail = async (clientEmail, clientName, items, totalAmount, n
         </div>
       `,
       replyTo: process.env.REPLY_TO_EMAIL || process.env.MAIL_FROM_ADDRESS || 'reactjscodigix@gmail.com',
-      attachments: pdfBuffer ? [
-        {
+      attachments: [
+        ...((attachPDF && pdfBuffer) ? [{
           filename: `Quotation_${clientName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`,
           content: pdfBuffer
-        }
-      ] : []
+        }] : []),
+        ...(customAttachments || []).map(att => ({
+          filename: att.filename,
+          content: att.content,
+          encoding: 'base64'
+        }))
+      ]
     };
 
     const info = await transporter.sendMail(mailOptions);

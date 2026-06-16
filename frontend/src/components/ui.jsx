@@ -94,7 +94,16 @@ export const SearchableSelect = ({
           }}
           onFocus={() => {
             if (onFocus) onFocus();
-            if (!disabled) setIsOpen(true);
+            if (!disabled) {
+              setIsOpen(true);
+              setSearchTerm('');
+            }
+          }}
+          onClick={() => {
+            if (!disabled && !isOpen) {
+              setIsOpen(true);
+              setSearchTerm('');
+            }
           }}
           disabled={disabled}
         />

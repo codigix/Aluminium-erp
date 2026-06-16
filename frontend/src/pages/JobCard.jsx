@@ -5201,8 +5201,7 @@ const JobCard = () => {
             endTime: logData.endTime,
             endAMPM: logData.endAMPM,
             downtimeType: 'Unplanned Downtime',
-            remarks: `Unaccounted time from production log (${qty} units produced)`,
-            day: logData.day
+            remarks: `Unaccounted time from production log (${qty} units produced)`
           });
 
           warningToast(`Recorded Production Log. Remaining ${remainingMins} mins prefilled as Operational Downtime below!`);
@@ -5353,8 +5352,7 @@ const JobCard = () => {
             endTime: logData.endTime,
             endAMPM: logData.endAMPM,
             downtimeType: 'Unplanned Downtime',
-            remarks: `Unaccounted time from updated production log (${qty} units produced)`,
-            day: logData.day
+            remarks: `Unaccounted time from updated production log (${qty} units produced)`
           });
 
           warningToast(`Updated Production Log. Remaining ${remainingMins} mins prefilled as Operational Downtime below!`);

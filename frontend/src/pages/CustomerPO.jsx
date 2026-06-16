@@ -285,7 +285,7 @@ const CustomerPO = ({
   React.useEffect(() => {
     const fetchAllDrawings = async () => {
       try {
-        const data = await apiRequest('/drawings');
+        const data = await apiRequest('/drawings/approved');
         if (data) setAllDrawings(data);
       } catch (error) {
         console.error('Error fetching drawings:', error);
@@ -579,6 +579,38 @@ const CustomerPO = ({
   const handleItemChange = (index, field, value) => {
     const newItems = [...poForm.items]
     newItems[index][field] = value
+
+    if (field === 'drawingNo') {
+      const matchedDwg = allDrawings.find(d => 
+        String(d.drawing_no).trim().toUpperCase() === String(value).trim().toUpperCase()
+      );
+      if (matchedDwg) {
+        newItems[index].description = matchedDwg.drawing_description || matchedDwg.description || '';
+        newItems[index].hsnCode = matchedDwg.hsn_code || '';
+        newItems[index].unit = matchedDwg.unit || 'NOS';
+        if (matchedDwg.bom_cost) {
+          newItems[index].rate = matchedDwg.bom_cost;
+        }
+        if (matchedDwg.delivery_date) {
+          newItems[index].deliveryDate = new Date(matchedDwg.delivery_date).toISOString().split('T')[0];
+        }
+        // Sync sub-assemblies if they exist on the drawing
+        if (matchedDwg.sub_assemblies && matchedDwg.sub_assemblies.length > 0) {
+          newItems[index].sub_assemblies = matchedDwg.sub_assemblies.map(sa => ({
+            drawingNo: sa.drawingNo || sa.drawing_no || '',
+            description: sa.description || '',
+            quantity: sa.quantity || 0,
+            unit: sa.unit || 'NOS',
+            rate: sa.rate || 0,
+            cgstPercent: 0,
+            sgstPercent: 0,
+            igstPercent: 0,
+            hsnCode: sa.hsn_code || sa.hsnCode || matchedDwg.hsn_code || '',
+            deliveryDate: sa.delivery_date || sa.deliveryDate || (matchedDwg.delivery_date ? new Date(matchedDwg.delivery_date).toISOString().split('T')[0] : '')
+          }));
+        }
+      }
+    }
     setPoForm(prev => ({ ...prev, items: newItems }))
   }
 
@@ -1655,12 +1687,17 @@ const CustomerPO = ({
                                     {item.drawingNo?.toUpperCase() || '—'}
                                   </span>
                                 ) : (
-                                  <input
-                                    type="text"
+                                  <SearchableSelect
+                                    options={allDrawings.map(d => ({
+                                      value: d.drawing_no,
+                                      label: `${d.drawing_no} - ${d.drawing_description || d.description || ''}`
+                                    }))}
                                     value={item.drawingNo?.toUpperCase() || ''}
                                     onChange={(e) => handleItemChange(index, 'drawingNo', e.target.value.toUpperCase())}
-                                    placeholder="DRW-101"
-                                    className="w-full bg-slate-50 border border-slate-200 rounded  p-2 text-xs  focus:border-indigo-500 focus:bg-white outline-none transition-all  text-slate-700"
+                                    placeholder="Search Drawing No..."
+                                    allowCustom={true}
+                                    openUpwards={true}
+                                    className="w-full bg-slate-50 border border-slate-200 rounded p-2 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-700"
                                   />
                                 )}
                               </td>
