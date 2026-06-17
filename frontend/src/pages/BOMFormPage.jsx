@@ -1281,16 +1281,33 @@ const BOMFormPage = () => {
         let currentItem = selectedItemRef.current;
 
         // 1. Auto-link drawing to Sales Order Item if needed
-        if (!effectiveId && drawingNoFromUrl && salesOrderIdFromUrl && currentApprovedDrawings.length > 0) {
-          const matchedItem = currentApprovedDrawings.find(d =>
-            String(d.drawing_no) === String(drawingNoFromUrl) &&
-            String(d.sales_order_id) === String(salesOrderIdFromUrl)
-          );
+        if (!effectiveId && drawingNoFromUrl && currentApprovedDrawings.length > 0) {
+          let matchedItem = null;
+          if (salesOrderIdFromUrl) {
+            matchedItem = currentApprovedDrawings.find(d =>
+              String(d.drawing_no) === String(drawingNoFromUrl) &&
+              String(d.sales_order_id) === String(salesOrderIdFromUrl)
+            );
+          }
+          if (!matchedItem) {
+            matchedItem = currentApprovedDrawings.find(d => String(d.drawing_no) === String(drawingNoFromUrl));
+          }
+
           if (matchedItem) {
             console.log(`[fetchData] Auto-linked drawing to item ID: ${matchedItem.id}`);
             currentItem = { ...matchedItem, source: 'order' };
             setSelectedItem(currentItem);
           }
+        }
+
+        // Auto-fill from URL if no item was found
+        if (!currentItem && drawingNoFromUrl) {
+          setProductForm(prev => ({
+            ...prev,
+            drawingNo: drawingNoFromUrl,
+            drawing_id: drawingIdFromUrl || prev.drawing_id,
+            description: params.get('drawing_name') || prev.description
+          }));
         }
 
         // 2. Fetch Item Info if we have an ID but no data
@@ -1438,14 +1455,15 @@ const BOMFormPage = () => {
       setProductForm(prev => ({
         ...prev,
         itemCode: selectedItem.item_code || selectedItem.itemCode || prev.itemCode,
-        description: (isAssembly && isNew) ? (prev.description && prev.itemGroup === 'Assembly' ? prev.description : '') : (cleanDescription || prev.description),
+        description: cleanDescription || prev.description,
         itemGroup: getAutofetchedGroup(selectedItem) || prev.itemGroup,
         drawingNo: (selectedItem.drawing_no && selectedItem.drawing_no !== 'N/A') ? selectedItem.drawing_no : (prev.drawingNo || ''),
         drawing_id: (selectedItem.drawing_id && selectedItem.drawing_id !== 'N/A') ? selectedItem.drawing_id : (prev.drawing_id || ''),
         quantity: selectedItem.quantity || prev.quantity,
         uom: selectedItem.unit || selectedItem.uom || prev.uom,
         revision: selectedItem.revision_no || selectedItem.revision || prev.revision,
-        bom_cost: selectedItem.bom_cost || 0
+        bom_cost: selectedItem.bom_cost || 0,
+        assemblyProductNameId: prev.assemblyProductNameId || `${selectedItem.source || 'order'}_${selectedItem.id}`
       }));
     }
   }, [selectedItem, itemId]);
@@ -2212,11 +2230,12 @@ const BOMFormPage = () => {
                     ? `Create Part Details: ${productForm.drawingNo}`
                     : 'Create Part Details')}
                 {productForm.revision && (
-                  <span className={`p-1 rounded text-xs border  ${selectedItem?.status === 'Approved' ? 'text-emerald-50  ' :
-                    selectedItem?.status === 'Draft' ? 'text-amber-50 ' :
-                      selectedItem?.status === 'Rejected' ? 'text-rose-50 ' :
-                        ' text-blue-600 '
-                    }`}>
+                  <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-medium border ${
+                    selectedItem?.status === 'Approved' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' :
+                    selectedItem?.status === 'Draft' ? 'bg-amber-100 text-amber-700 border-amber-200' :
+                    selectedItem?.status === 'Rejected' ? 'bg-rose-100 text-rose-700 border-rose-200' :
+                    'bg-slate-100 text-slate-600 border-slate-200'
+                  }`}>
                     {selectedItem?.status || 'Pending'}
                   </span>
                 )}
@@ -2237,7 +2256,7 @@ const BOMFormPage = () => {
                   : isReadOnly
                     ? 'Inspecting bill of materials details'
                     : (productForm.description
-                      ? `Drawing: ${productForm.description}${productForm.itemCode ? ` (${productForm.itemCode})` : ''}`
+                      ? <span>Drawing: <span className="text-blue-600">{productForm.description}{productForm.itemCode ? ` (${productForm.itemCode})` : ''}</span></span>
                       : 'Configure bill of materials')}
               </p>
             </div>
@@ -2536,7 +2555,8 @@ const BOMFormPage = () => {
                             drawing_id: (item.drawing_id && item.drawing_id !== 'N/A') ? item.drawing_id : (prev.drawing_id || ''),
                             uom: item.unit || item.uom || 'Kg',
                             revision: item.revision_no || item.revision || '1',
-                            quantity: item.quantity || 1
+                            quantity: item.quantity || 1,
+                            assemblyProductNameId: e.target.value
                           }));
                         }
                       }}

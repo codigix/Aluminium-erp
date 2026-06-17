@@ -1179,6 +1179,11 @@ const QuotationFormPage = () => {
       return sum + (itemTotal * gstPercent / 100);
     }, 0) * discountRatio;
 
+    const roundedBaseAmount = Number(baseAmount.toFixed(2));
+    const cgstRounded = Number((gstAmount / 2).toFixed(2));
+    const sgstRounded = Number((gstAmount / 2).toFixed(2));
+    const totalAmount = Number((roundedBaseAmount + cgstRounded + sgstRounded).toFixed(2));
+
     return {
       bomBaseAmount,
       profitAdded,
@@ -1187,7 +1192,7 @@ const QuotationFormPage = () => {
       discountAmount: discountAmt,
       baseAmount,
       gstAmount,
-      totalAmount: baseAmount + gstAmount
+      totalAmount
     };
   };
 
@@ -2181,8 +2186,12 @@ const QuotationFormPage = () => {
                 <span className="text-slate-900 font-medium">{formatCurrency(summary.baseAmount)}</span>
               </div>
               <div className="flex justify-between items-center text-xs">
-                <span className="text-slate-500 ">GST (18%)</span>
-                <span className="text-slate-900 ">{formatCurrency(summary.gstAmount)}</span>
+                <span className="text-slate-500 ">CGST (9%)</span>
+                <span className="text-slate-900 ">{formatCurrency(summary.gstAmount / 2)}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-slate-500 ">SGST (9%)</span>
+                <span className="text-slate-900 ">{formatCurrency(summary.gstAmount / 2)}</span>
               </div>
 
               <div className="pt-3 mt-3 border-t border-slate-100">

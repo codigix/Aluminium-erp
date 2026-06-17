@@ -126,7 +126,8 @@ const CustomerPO = ({
       if (cleanPath.startsWith('/')) {
         cleanPath = cleanPath.slice(1);
       }
-      cleanPath = `${baseUrl.replace(/\/api$/, '')}/${cleanPath}`;
+      const base = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+      cleanPath = `${base}/${cleanPath}`;
     }
     window.open(cleanPath, '_blank');
   };
