@@ -1302,11 +1302,28 @@ const BOMFormPage = () => {
 
         // Auto-fill from URL if no item was found
         if (!currentItem && drawingNoFromUrl) {
+          const fakeItemName = params.get('drawing_name') || productForm.description || 'Unknown Part';
+          const fakeItem = {
+            id: drawingIdFromUrl || `draft_${Date.now()}`,
+            drawing_no: drawingNoFromUrl,
+            drawing_id: drawingIdFromUrl,
+            description: fakeItemName,
+            material_name: fakeItemName,
+            item_code: `PART-${String(drawingNoFromUrl).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8)}-0001`,
+            item_group: 'Part',
+            source: 'url'
+          };
+          console.log(`[fetchData] Created temporary item from URL:`, fakeItem);
+          currentItem = fakeItem;
+          setSelectedItem(currentItem);
+
           setProductForm(prev => ({
             ...prev,
             drawingNo: drawingNoFromUrl,
             drawing_id: drawingIdFromUrl || prev.drawing_id,
-            description: params.get('drawing_name') || prev.description
+            description: fakeItemName,
+            itemCode: fakeItem.item_code,
+            itemGroup: 'Part'
           }));
         }
 
