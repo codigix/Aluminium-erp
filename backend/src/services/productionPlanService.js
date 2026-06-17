@@ -28,9 +28,12 @@ const listProductionPlans = async () => {
      LEFT JOIN sales_orders so ON pp.sales_order_id = so.id
      LEFT JOIN companies c ON so.company_id = c.id
      LEFT JOIN (
-       SELECT quotation_id, order_no FROM orders 
+       SELECT quotation_id, order_no, source_type FROM orders 
        WHERE quotation_id IS NOT NULL AND id IN (SELECT MAX(id) FROM orders GROUP BY quotation_id)
-     ) o ON o.quotation_id = so.id
+     ) o ON (
+       (o.source_type = 'DRAWING' AND o.quotation_id = so.id) OR
+       (o.source_type = 'DIRECT' AND o.quotation_id = so.customer_po_id)
+     )
      LEFT JOIN orders o_direct ON pp.sales_order_id = o_direct.id AND o_direct.quotation_id IS NULL
      LEFT JOIN companies c_direct ON o_direct.client_id = c_direct.id
      LEFT JOIN (
@@ -102,9 +105,12 @@ const getProductionPlanById = async (id) => {
      LEFT JOIN order_items oi ON ppi.sales_order_item_id = oi.id AND ppi.sales_order_id = oi.order_id AND ppi.item_code = oi.item_code
      LEFT JOIN workstations w ON ppi.workstation_id = w.id
      LEFT JOIN (
-       SELECT quotation_id, order_no FROM orders 
+       SELECT quotation_id, order_no, source_type FROM orders 
        WHERE quotation_id IS NOT NULL AND id IN (SELECT MAX(id) FROM orders GROUP BY quotation_id)
-     ) o ON o.quotation_id = so.id
+     ) o ON (
+       (o.source_type = 'DRAWING' AND o.quotation_id = so.id) OR
+       (o.source_type = 'DIRECT' AND o.quotation_id = so.customer_po_id)
+     )
      LEFT JOIN companies c_direct ON o_direct.client_id = c_direct.id
      WHERE ppi.plan_id = ?`,
     [id]
@@ -525,9 +531,12 @@ const getReadySalesOrderItems = async () => {
       FROM sales_order_items soi
       JOIN sales_orders so ON soi.sales_order_id = so.id
       JOIN (
-        SELECT quotation_id, order_no FROM orders 
+        SELECT quotation_id, order_no, source_type FROM orders 
         WHERE quotation_id IS NOT NULL AND id IN (SELECT MAX(id) FROM orders GROUP BY quotation_id)
-      ) o ON o.quotation_id = so.id
+      ) o ON (
+        (o.source_type = 'DRAWING' AND o.quotation_id = so.id) OR
+        (o.source_type = 'DIRECT' AND o.quotation_id = so.customer_po_id)
+      )
       LEFT JOIN (
         SELECT sales_order_item_id, SUM(planned_qty) as already_planned_qty
         FROM production_plan_items 
@@ -597,37 +606,68 @@ const getProductionReadySalesOrders = async () => {
               c.company_name, 
               o.created_at
        FROM orders o
-       LEFT JOIN sales_orders so ON o.quotation_id = so.id
+       LEFT JOIN sales_orders so ON (
+         (o.source_type = 'DRAWING' AND o.quotation_id = so.id) OR
+         (o.source_type = 'DIRECT' AND o.quotation_id = so.customer_po_id)
+       )
        LEFT JOIN companies c ON o.client_id = c.id
-       LEFT JOIN customer_pos cp ON so.customer_po_id = cp.id
-       WHERE EXISTS (
-         SELECT 1 FROM order_items oi 
-         WHERE oi.order_id = o.id 
-         AND TRIM(UPPER(oi.type)) IN ('FG', 'FINISHED GOODS', 'FINISHED_GOODS', 'ASSEMBLY')
-       ) OR EXISTS (
-         SELECT 1 FROM sales_order_items soi 
-         WHERE soi.sales_order_id = so.id 
-         AND TRIM(UPPER(soi.item_type)) IN ('FG', 'FINISHED GOODS', 'FINISHED_GOODS', 'ASSEMBLY')
+       LEFT JOIN customer_pos cp ON (
+         (o.source_type = 'DIRECT' AND o.quotation_id = cp.id) OR
+         (o.source_type = 'DRAWING' AND so.customer_po_id = cp.id)
        )
-
-       UNION ALL
-
-       SELECT so.id,
-              COALESCE(cp.po_number, CONCAT('REQ-', so.id)) as order_no,
-              COALESCE(so.project_name, c.company_name, '') as project_name,
-              cp.po_number,
-              c.company_name,
-              so.created_at
-       FROM sales_orders so
-       LEFT JOIN companies c ON so.company_id = c.id
-       LEFT JOIN customer_pos cp ON so.customer_po_id = cp.id
-       WHERE so.id NOT IN (SELECT quotation_id FROM orders WHERE quotation_id IS NOT NULL)
-       AND EXISTS (
-         SELECT 1 FROM sales_order_items soi 
-         WHERE soi.sales_order_id = so.id 
-         AND TRIM(UPPER(soi.item_type)) IN ('FG', 'FINISHED GOODS', 'FINISHED_GOODS', 'ASSEMBLY')
-       )
-       AND so.status NOT IN ('REJECTED', 'CANCELLED')
+       WHERE 
+         -- Only show Sales Orders starting with ORD-
+         o.order_no LIKE 'ORD-%'
+         -- 1. Has at least one FG/Assembly item
+         AND (EXISTS (
+           SELECT 1 FROM order_items oi 
+           WHERE oi.order_id = o.id 
+           AND TRIM(UPPER(oi.type)) IN ('FG', 'FINISHED GOODS', 'FINISHED_GOODS', 'ASSEMBLY')
+         ) OR EXISTS (
+           SELECT 1 FROM sales_order_items soi 
+           WHERE soi.sales_order_id = so.id 
+           AND TRIM(UPPER(soi.item_type)) IN ('FG', 'FINISHED GOODS', 'FINISHED_GOODS', 'ASSEMBLY')
+         ))
+         -- 2. Exclude rejected or cancelled sales orders
+         AND (o.quotation_id IS NULL OR so.status NOT IN ('REJECTED', 'CANCELLED'))
+         -- 3. Must have at least one BOM record with cost > 0
+         AND (
+           (o.quotation_id IS NOT NULL AND EXISTS (
+             SELECT 1 FROM sales_order_items soi
+             WHERE soi.sales_order_id = so.id
+               AND soi.bom_cost > 0
+           ))
+           OR
+           (o.quotation_id IS NULL AND EXISTS (
+             SELECT 1 FROM order_items oi
+             JOIN sales_order_items soi ON TRIM(soi.drawing_no) = TRIM(oi.drawing_no)
+             WHERE oi.order_id = o.id
+               AND soi.sales_order_id IS NULL
+               AND soi.bom_cost > 0
+           ))
+         )
+         -- 4. Exclude if any required drawing has no completed BOM
+         AND NOT EXISTS (
+           SELECT 1 FROM order_items oi
+           WHERE oi.order_id = o.id
+             AND TRIM(UPPER(oi.type)) IN ('FG', 'FINISHED GOODS', 'FINISHED_GOODS', 'ASSEMBLY')
+             AND (oi.item_code IS NULL OR (oi.item_code != 'XXX' AND oi.item_code NOT LIKE '%XXX%' AND oi.item_code NOT LIKE '%NO CODE%'))
+             AND (
+               (o.quotation_id IS NOT NULL AND NOT EXISTS (
+                 SELECT 1 FROM sales_order_items soi
+                 WHERE soi.sales_order_id = so.id
+                   AND TRIM(soi.drawing_no) = TRIM(oi.drawing_no)
+                   AND soi.bom_cost > 0
+               ))
+               OR
+               (o.quotation_id IS NULL AND NOT EXISTS (
+                 SELECT 1 FROM sales_order_items soi
+                 WHERE soi.sales_order_id IS NULL
+                   AND TRIM(soi.drawing_no) = TRIM(oi.drawing_no)
+                   AND soi.bom_cost > 0
+               ))
+             )
+         )
     ) AS combined
     GROUP BY combined.id, combined.order_no, combined.project_name, combined.po_number, combined.company_name, combined.created_at
     ORDER BY combined.created_at DESC`
@@ -641,9 +681,15 @@ const getSalesOrderFullDetails = async (id) => {
     `SELECT o.*, c.company_name, cp.po_number, o.order_no, 
             so.id as sales_order_id, so.project_name
      FROM orders o
-     LEFT JOIN sales_orders so ON o.quotation_id = so.id
+     LEFT JOIN sales_orders so ON (
+       (o.source_type = 'DRAWING' AND o.quotation_id = so.id) OR
+       (o.source_type = 'DIRECT' AND o.quotation_id = so.customer_po_id)
+     )
      LEFT JOIN companies c ON o.client_id = c.id
-     LEFT JOIN customer_pos cp ON so.customer_po_id = cp.id
+     LEFT JOIN customer_pos cp ON (
+       (o.source_type = 'DIRECT' AND o.quotation_id = cp.id) OR
+       (o.source_type = 'DRAWING' AND so.customer_po_id = cp.id)
+     )
      WHERE o.id = ?`,
     [id]
   );
@@ -672,7 +718,18 @@ const getSalesOrderFullDetails = async (id) => {
                 COALESCE(planned.already_planned_qty, 0) as already_planned_qty,
                 ROW_NUMBER() OVER (PARTITION BY TRIM(oi.drawing_no), TRIM(oi.item_code) ORDER BY soi.bom_cost DESC, soi.id DESC) as rn
          FROM order_items oi
-         LEFT JOIN sales_order_items soi ON (TRIM(oi.drawing_no) = TRIM(soi.drawing_no) AND soi.sales_order_id = (SELECT quotation_id FROM orders WHERE id = oi.order_id))
+         LEFT JOIN sales_order_items soi ON (
+           TRIM(oi.drawing_no) = TRIM(soi.drawing_no) 
+           AND soi.sales_order_id = (
+             SELECT DISTINCT so.id FROM sales_orders so
+             JOIN orders o ON (
+               (o.source_type = 'DRAWING' AND o.quotation_id = so.id) OR
+               (o.source_type = 'DIRECT' AND o.quotation_id = so.customer_po_id)
+             )
+             WHERE o.id = oi.order_id
+             LIMIT 1
+           )
+         )
          LEFT JOIN (
            SELECT sales_order_id, sales_order_item_id, SUM(planned_qty) as already_planned_qty
            FROM production_plan_items 
@@ -704,9 +761,12 @@ const getSalesOrderFullDetails = async (id) => {
      LEFT JOIN companies c ON so.company_id = c.id
      LEFT JOIN customer_pos cp ON so.customer_po_id = cp.id
      LEFT JOIN (
-       SELECT quotation_id, order_no FROM orders 
+       SELECT quotation_id, order_no, source_type FROM orders 
        WHERE quotation_id IS NOT NULL ORDER BY id DESC
-     ) o ON o.quotation_id = so.id
+     ) o ON (
+       (o.source_type = 'DRAWING' AND o.quotation_id = so.id) OR
+       (o.source_type = 'DIRECT' AND o.quotation_id = so.customer_po_id)
+     )
      WHERE so.id = ?`,
     [id]
   );
@@ -875,10 +935,27 @@ const getItemBOMDetails = async (salesOrderItemId) => {
       const [soMatch] = await pool.query(
         `SELECT soi.id 
          FROM sales_order_items soi
-         LEFT JOIN orders o ON soi.sales_order_id = o.quotation_id
+         LEFT JOIN orders o ON (
+           (o.source_type = 'DRAWING' AND o.quotation_id = soi.sales_order_id) OR
+           (o.source_type = 'DIRECT' AND o.quotation_id = (
+             SELECT customer_po_id FROM sales_orders WHERE id = soi.sales_order_id
+           ))
+         )
          LEFT JOIN sales_order_item_materials som ON soi.id = som.sales_order_item_id
          LEFT JOIN sales_order_item_operations soo ON soi.id = soo.sales_order_item_id
-         WHERE (o.id = ? OR soi.sales_order_id = ? OR soi.sales_order_id = (SELECT quotation_id FROM orders WHERE id = ?)) 
+         WHERE (
+           o.id = ? 
+           OR soi.sales_order_id = ? 
+           OR soi.sales_order_id = (
+             SELECT DISTINCT so.id FROM sales_orders so
+             JOIN orders ord ON (
+               (ord.source_type = 'DRAWING' AND ord.quotation_id = so.id) OR
+               (ord.source_type = 'DIRECT' AND ord.quotation_id = so.customer_po_id)
+             )
+             WHERE ord.id = ?
+             LIMIT 1
+           )
+         ) 
          AND (soi.drawing_no = ? OR soi.item_code = ?) AND soi.drawing_no IS NOT NULL
          GROUP BY soi.id
          ORDER BY 
@@ -1190,13 +1267,18 @@ const getItemBOMDetails = async (salesOrderItemId) => {
           `SELECT id FROM sales_order_items 
            WHERE item_code = ? 
            AND (
-             sales_order_id IN (SELECT sales_order_id FROM sales_order_items WHERE id IN (?))
-             OR sales_order_id IN (SELECT quotation_id FROM orders WHERE id IN (SELECT sales_order_id FROM sales_order_items WHERE id IN (?)))
-             OR sales_order_id IN (SELECT id FROM orders WHERE quotation_id IN (SELECT sales_order_id FROM sales_order_items WHERE id IN (?)))
+             sales_order_id IN (
+               SELECT id FROM sales_orders 
+               WHERE id IN (SELECT sales_order_id FROM sales_order_items WHERE id IN (?))
+               OR (customer_po_id IS NOT NULL AND customer_po_id IN (
+                 SELECT customer_po_id FROM sales_orders 
+                 WHERE id IN (SELECT sales_order_id FROM sales_order_items WHERE id IN (?))
+               ))
+             )
            )
            ORDER BY id DESC
            LIMIT 1`,
-          [compCode, targetIds, targetIds, targetIds]
+          [compCode, targetIds, targetIds]
         );
 
         if (found.length > 0) {

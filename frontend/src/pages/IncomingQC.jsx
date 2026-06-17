@@ -540,6 +540,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
         errorToast(result.message);
       } else {
         successToast('Stock entry created successfully');
+        fetchQCInspections();
       }
     } catch (error) {
       errorToast(error.message);
@@ -750,11 +751,19 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       sortable: true,
       width: '10%',
       className: 'text-center align-middle',
-      render: (val) => (
-        <div className="flex items-center justify-center">
+      render: (val, row) => (
+        <div className="flex flex-col items-center justify-center gap-1">
           <span className={`inline-flex items-center px-2 py-0.5 rounded text-[9px]  border uppercase er ${qcStatusColors[val]?.badge}`}>
             {qcStatusColors[val]?.label || val}
           </span>
+          {row.stock_entry_no && (
+            <span 
+              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-emerald-50 text-emerald-700 text-[8px] border border-emerald-100 rounded" 
+              title={`Stock Entry No: ${row.stock_entry_no}`}
+            >
+              <Database className="w-2 h-2" /> SE Created
+            </span>
+          )}
         </div>
       )
     },
@@ -802,13 +811,15 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
               >
                 <ShoppingCart className="w-3.5 h-3.5" />
               </button>
-              <button 
-                onClick={(e) => { e.stopPropagation(); handleCreateStockEntry(row.id); }} 
-                className="p-1.5 text-blue-500 hover:text-emerald-600 hover:bg-emerald-50 rounded  transition-colors bg-white border border-slate-100"
-                title="Create Stock Entry"
-              >
-                <Database className="w-3.5 h-3.5" />
-              </button>
+              {!row.stock_entry_no && (
+                <button 
+                  onClick={(e) => { e.stopPropagation(); handleCreateStockEntry(row.id); }} 
+                  className="p-1.5 text-blue-500 hover:text-emerald-600 hover:bg-emerald-50 rounded  transition-colors bg-white border border-slate-100"
+                  title="Create Stock Entry"
+                >
+                  <Database className="w-3.5 h-3.5" />
+                </button>
+              )}
               <button 
                 onClick={(e) => { e.stopPropagation(); handleDownloadPdf(row); }} 
                 className="px-2 py-1 text-[10px]  text-orange-600 bg-orange-50 border border-orange-100 rounded hover:bg-orange-100 transition-all active:scale-95"
@@ -817,7 +828,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
               </button>
             </>
           )}
-          {['PASSED', 'ACCEPTED', 'SHORTAGE', 'OVERAGE'].includes(row.status) && activeTab !== 'in-process' && (
+          {['PASSED', 'ACCEPTED', 'SHORTAGE', 'OVERAGE'].includes(row.status) && activeTab !== 'in-process' && !row.stock_entry_no && (
             <>
               <button 
                 onClick={(e) => { e.stopPropagation(); handleCreateStockEntry(row.id); }} 

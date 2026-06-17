@@ -1579,7 +1579,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                     <div className="relative">
                       <SearchableSelect
                         options={productionReadyOrders.map(so => ({
-                          label: `Order: ${so.order_no} - ${so.company_name || 'No Client'}`,
+                          label: `${so.order_no} - ${so.company_name || 'No Client'}`,
                           value: so.id.toString(),
                           order_no: so.order_no
                         }))}

@@ -2090,7 +2090,7 @@ const ClientQuotations = () => {
         tabs={[
           { label: 'Pending Approval', value: 'pending', icon: Clock },
           { label: 'Sent Quotations', value: 'sent', icon: Send },
-          { label: 'Received Quotes', value: 'received', icon: History }
+          { label: 'Finalised Quotes', value: 'received', icon: History }
         ]}
         activeTab={activeTab}
         onTabChange={setActiveTab}

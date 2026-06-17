@@ -1,0 +1,3 @@
+const generateQuotationPDF = async')) {
+        let snippet = text.substring(text.indexOf('const generateQuotationPDF = async'));
+        if (snippet.includes('

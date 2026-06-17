@@ -323,7 +323,8 @@ const QuotationFormPage = () => {
         });
 
       setItems(mappedItems);
-      setNotes(initialData.notes || '');
+      const initialNotes = initialData.notes || '';
+      setNotes(initialNotes.startsWith('Drawing Numbers:') ? '' : initialNotes);
       setDiscountType(initialData.discount_type || initialData.discountType || 'percentage');
       setDiscountValue(parseFloat(initialData.discount_value || initialData.discountValue) || 0);
     } else if (!hasInitialized.current) {
@@ -534,18 +535,7 @@ const QuotationFormPage = () => {
     isBOMUpdateRequest
   ]);
 
-  useEffect(() => {
-    if (items.length > 0) {
-      const drawingNumbers = [...new Set(items.map(item => item.drawing_no).filter(no => !!no))];
-      if (drawingNumbers.length > 0) {
-        const drwNotes = `Drawing Numbers: ${drawingNumbers.join(', ')}`;
-        // Only auto-update if notes is empty or already contains only drawing numbers
-        if (!notes || notes.startsWith('Drawing Numbers:')) {
-          setNotes(drwNotes);
-        }
-      }
-    }
-  }, [items]);
+  // Disabled auto-population of Drawing Numbers into Terms & Conditions field
 
   const fetchClients = async () => {
     try {
@@ -693,7 +683,7 @@ const QuotationFormPage = () => {
       setQuotationNo(`QRT-${String(versionData.id).padStart(4, '0')}`);
       setQuotationDate(versionData.created_at.split('T')[0]);
       setProjectName(versionData.project_name || '');
-      setNotes(versionData.notes || '');
+      setNotes(versionData.notes && versionData.notes.startsWith('Drawing Numbers:') ? '' : (versionData.notes || ''));
       setDiscountType(versionData.discount_type || versionData.discountType || 'percentage');
       setDiscountValue(parseFloat(versionData.discount_value || versionData.discountValue) || 0);
 
@@ -1780,7 +1770,7 @@ const QuotationFormPage = () => {
                     <th className="w-24 p-2 text-xs text-slate-400 border-b border-slate-100">Qty</th>
                     <th className="w-28 p-2 text-xs text-slate-400 border-b border-slate-100">BOM Cost (₹)</th>
                     <th className="w-24 p-2 text-xs text-slate-400 border-b border-slate-100">Profit %</th>
-                    <th className="w-24 p-2 text-xs text-slate-400 border-b border-slate-100">Override %</th>
+                    <th className="w-24 p-2 text-xs text-slate-400 border-b border-slate-100">Overheads %</th>
                     <th className="w-28 p-2 text-xs text-slate-400 border-b border-slate-100">Rate (₹)</th>
                     <th className="w-32 p-2 text-xs text-slate-400 border-b border-slate-100">Total (₹)</th>
                     {!isLocked && <th className="w-16 p-2 text-xs text-slate-400 border-b border-slate-100 text-center">Actions</th>}
@@ -2172,7 +2162,7 @@ const QuotationFormPage = () => {
                 <span className="text-slate-900 ">{formatCurrency(summary.profitAdded)}</span>
               </div>
               <div className="flex justify-between items-center text-xs">
-                <span className="text-slate-500 ">Override Added</span>
+                <span className="text-slate-500 ">Overheads Added</span>
                 <span className="text-slate-900 ">{formatCurrency(summary.overrideAdded)}</span>
               </div>
               {summary.discountAmount > 0 && (
@@ -2292,12 +2282,12 @@ const QuotationFormPage = () => {
 
             <div className="mt-6 space-y-4">
               <div className="space-y-1.5">
-                <label className="text-[9px]  text-slate-400   block">Notes</label>
+                <label className="text-[9px]  text-slate-400   block">Terms & Conditions</label>
                 <textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   readOnly={isLocked}
-                  placeholder={isLocked ? "" : "Additional terms..."}
+                  placeholder={isLocked ? "" : "Enter Terms & Conditions..."}
                   className={`w-full px-3 py-2 border rounded text-xs outline-none transition-all resize-none h-24 ${isLocked ? 'bg-slate-50 border-slate-200 text-slate-600' : 'bg-slate-50/50 border-slate-200 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500'}`}
                 />
               </div>

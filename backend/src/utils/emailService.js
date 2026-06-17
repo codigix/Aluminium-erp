@@ -29,7 +29,21 @@ const createTransporter = () => {
   return nodemailer.createTransport(config);
 };
 
-const generateQuotationHTML = (clientName, items, totalAmount, notes, clientId, quoteNumber, hostCompany = null, clientDetails = null) => {
+const generateQuotationHTML = async (clientName, items, totalAmount, notes, clientId, quoteNumber, hostCompany = null, clientDetails = null) => {
+  for (let item of items) {
+    if (!item.hsn_code) {
+      let hsn = '—';
+      if (item.drawing_no) {
+        const [dRows] = await pool.query('SELECT hsn_code FROM customer_drawings WHERE drawing_no = ?', [item.drawing_no]);
+        if (dRows.length > 0 && dRows[0].hsn_code) hsn = dRows[0].hsn_code;
+      }
+      if (hsn === '—' && item.item_code) {
+        const [iRows] = await pool.query('SELECT hsn_code FROM items WHERE item_code = ?', [item.item_code]);
+        if (iRows.length > 0 && iRows[0].hsn_code) hsn = iRows[0].hsn_code;
+      }
+      item.hsn_code = hsn;
+    }
+  }
   let subTotal = 0;
   let totalTax = 0;
   let totalProfit = 0;
@@ -73,20 +87,21 @@ const generateQuotationHTML = (clientName, items, totalAmount, notes, clientId, 
         `₹${lineTotalWithTax.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
       
       const hasSubs = (item.sub_assemblies || []).length > 0;
-      const borderBottomStyle = hasSubs ? 'border-bottom: hidden;' : 'border-bottom: 1px solid #000;';
+      const borderBottomStyle = hasSubs ? 'border-bottom: hidden;' : 'border-bottom: 1px solid #cbd5e1;';
 
       const mainItemRow = `
       <tr>
-        <td style="padding: 10px; border: 1px solid #000; ${borderBottomStyle} text-align: center;">${idx + 1}</td>
-        <td style="padding: 10px; border: 1px solid #000; ${borderBottomStyle}">
+        <td style="padding: 10px; border: 1px solid #cbd5e1; ${borderBottomStyle} text-align: center;">${idx + 1}</td>
+        <td style="padding: 10px; border: 1px solid #cbd5e1; ${borderBottomStyle}">
           <div style="font-weight: bold; color: #000;">${item.drawing_no || '—'}</div>
           ${item.description ? `<div style="font-weight: bold; color: #000; font-size: 12px; text-transform: uppercase; margin-top: 4px;">${item.description}</div>` : ''}
           ${isRejected ? `<div style="font-size: 10px; color: #dc2626; margin-top: 4px; font-weight: bold;">Reason: ${item.rejection_reason || 'Not specified'}</div>` : ''}
         </td>
-        <td style="padding: 10px; border: 1px solid #000; ${borderBottomStyle} text-align: center;">${quantity}</td>
-        <td style="padding: 10px; border: 1px solid #000; ${borderBottomStyle} text-align: right;">${unitPriceStr}</td>
-        <td style="padding: 10px; border: 1px solid #000; ${borderBottomStyle} text-align: center;">${gstRate}%</td>
-        <td style="padding: 10px; border: 1px solid #000; ${borderBottomStyle} text-align: right; font-weight: bold;">${totalLineStr}</td>
+        <td style="padding: 10px; border: 1px solid #cbd5e1; ${borderBottomStyle} text-align: center;">${item.hsn_code || '—'}</td>
+        <td style="padding: 10px; border: 1px solid #cbd5e1; ${borderBottomStyle} text-align: center;">${quantity}</td>
+        <td style="padding: 10px; border: 1px solid #cbd5e1; ${borderBottomStyle} text-align: right;">${unitPriceStr}</td>
+        <td style="padding: 10px; border: 1px solid #cbd5e1; ${borderBottomStyle} text-align: center;">${gstRate}%</td>
+        <td style="padding: 10px; border: 1px solid #cbd5e1; ${borderBottomStyle} text-align: right; font-weight: bold;">${totalLineStr}</td>
       </tr>
     `;
 
@@ -95,18 +110,19 @@ const generateQuotationHTML = (clientName, items, totalAmount, notes, clientId, 
         const saRate = parseFloat(sa.rate || sa.bom_cost || 0);
         const saTotal = saQty * saRate;
         const isLastSA = saIdx === saArr.length - 1;
-        const saBorderBottomStyle = isLastSA ? 'border-bottom: 1px solid #000;' : 'border-bottom: hidden;';
+        const saBorderBottomStyle = isLastSA ? 'border-bottom: 1px solid #cbd5e1;' : 'border-bottom: hidden;';
         
         return `
         <tr class="sub-assembly-row">
-          <td style="padding: 8px; border: 1px solid #000; border-top: hidden; ${saBorderBottomStyle} text-align: center;"></td>
-          <td style="padding: 8px; border: 1px solid #000; border-top: hidden; ${saBorderBottomStyle} padding-left: 20px;">
+          <td style="padding: 8px; border: 1px solid #cbd5e1; border-top: hidden; ${saBorderBottomStyle} text-align: center;"></td>
+          <td style="padding: 8px; border: 1px solid #cbd5e1; border-top: hidden; ${saBorderBottomStyle} padding-left: 20px;">
             <div style="font-weight: normal; color: #333; font-size: 11px;">${sa.description || 'Sub-assembly'} (${sa.drawing_no || sa.item_code || '—'})</div>
           </td>
-          <td style="padding: 8px; border: 1px solid #000; border-top: hidden; ${saBorderBottomStyle} text-align: center;">${saQty.toFixed(3)}</td>
-          <td style="padding: 8px; border: 1px solid #000; border-top: hidden; ${saBorderBottomStyle} text-align: right;">₹${saTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-          <td style="padding: 8px; border: 1px solid #000; border-top: hidden; ${saBorderBottomStyle} text-align: center;"></td>
-          <td style="padding: 8px; border: 1px solid #000; border-top: hidden; ${saBorderBottomStyle} text-align: center;"></td>
+          <td style="padding: 8px; border: 1px solid #cbd5e1; border-top: hidden; ${saBorderBottomStyle} text-align: center;"></td>
+          <td style="padding: 8px; border: 1px solid #cbd5e1; border-top: hidden; ${saBorderBottomStyle} text-align: center;">${saQty.toFixed(3)}</td>
+          <td style="padding: 8px; border: 1px solid #cbd5e1; border-top: hidden; ${saBorderBottomStyle} text-align: right;">₹${saTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+          <td style="padding: 8px; border: 1px solid #cbd5e1; border-top: hidden; ${saBorderBottomStyle} text-align: center;"></td>
+          <td style="padding: 8px; border: 1px solid #cbd5e1; border-top: hidden; ${saBorderBottomStyle} text-align: center;"></td>
         </tr>
         `;
       }).join('');
@@ -179,39 +195,37 @@ const generateQuotationHTML = (clientName, items, totalAmount, notes, clientId, 
       <style>
         body { font-family: 'roboto', sans-serif; font-size: 12px; color: #000; line-height: 1.4; padding: 20px; }
         .header-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-        .header-table td { padding: 10px; border: 1px solid #000; }
+        .header-table td { padding: 10px; border: 1px solid #cbd5e1; }
         .title { font-size: 24px; font-weight: bold; color: #f26522; text-align: center; }
         .company-name { font-size: 18px; font-weight: bold; text-align: center; margin-top: 5px; }
         .company-info { font-size: 11px; text-align: center; margin-top: 5px; }
         .quote-info { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-        .quote-info td { padding: 8px; border: 1px solid #000; width: 50%; }
+        .quote-info td { padding: 8px; border: 1px solid #cbd5e1; width: 50%; }
         .items-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-        .items-table th { background-color: #f2f2f2; padding: 10px; border: 1px solid #000; text-align: center; font-weight: bold; }
+        .items-table th { background-color: #f8fafc; padding: 10px; border: 1px solid #cbd5e1; text-align: center; font-weight: bold; }
         .totals-table { width: 40%; margin-left: auto; border-collapse: collapse; }
-        .totals-table td { padding: 10px; border: 1px solid #000; }
+        .totals-table td { padding: 10px; border: 1px solid #cbd5e1; }
         .footer { margin-top: 40px; font-size: 11px; }
         .signature-table { width: 100%; margin-top: 60px; border-collapse: collapse; }
         .signature-table td { text-align: center; border: none; font-weight: bold; }
       </style>
     </head>
     <body>
-      <table class="header-table">
-        <tr>
-          ${logoBase64 ? `
-          <td style="width: 20%; text-align: center; vertical-align: middle; border-right: none;">
-            <img src="${logoBase64}" style="max-height: 70px; max-width: 100%; object-fit: contain;" />
-          </td>
-          ` : ''}
-          <td style="${logoBase64 ? 'width: 80%; border-left: none;' : 'width: 100%;'} text-align: center; vertical-align: middle;">
-            <div class="title">QUOTATION</div>
-            <div class="company-name">${hostCompanyName}</div>
-            <div class="company-info">
-              ${hostCompanyAddressHtml}<br>
-              Email: ${hostEmail} | Mobile: ${hostPhone}
-            </div>
-          </td>
-        </tr>
-      </table>
+      <div style="position: relative; border: 1px solid #cbd5e1; padding: 10px; margin-bottom: 20px;">
+        ${logoBase64 ? `
+        <div style="position: absolute; left: 15px; top: 50%; transform: translateY(-50%); display: flex; align-items: center; justify-content: center;">
+          <img src="${logoBase64}" style="max-height: 70px; max-width: 140px; object-fit: contain;" />
+        </div>
+        ` : ''}
+        <div style="width: 100%; text-align: center;">
+          <div class="title">QUOTATION</div>
+          <div class="company-name">${hostCompanyName}</div>
+          <div class="company-info">
+            ${hostCompanyAddressHtml}<br>
+            Email: ${hostEmail} | Mobile: ${hostPhone}
+          </div>
+        </div>
+      </div>
 
       <table class="quote-info">
         <tr>
@@ -219,6 +233,7 @@ const generateQuotationHTML = (clientName, items, totalAmount, notes, clientId, 
             <strong>Quotation For:</strong><br>
             <span style="font-size: 14px; font-weight: bold;">${clientName}</span><br>
             Client ID: ${clientId || 'N/A'}<br>
+            ${clientDetails?.contact_person ? `Contact Person: ${clientDetails.contact_person}<br>` : ''}
             ${clientDetails?.email ? `Email: ${clientDetails.email}<br>` : ''}
             ${clientDetails?.phone ? `Phone: ${clientDetails.phone}<br>` : ''}
             ${clientDetails?.gstin ? `GST No: ${clientDetails.gstin}<br>` : ''}
@@ -235,7 +250,8 @@ const generateQuotationHTML = (clientName, items, totalAmount, notes, clientId, 
         <thead>
           <tr>
             <th style="width: 5%;">Sr. No</th>
-            <th style="width: 45%;">Description / Drawing No</th>
+            <th style="width: 35%;">Description / Drawing No</th>
+            <th style="width: 10%;">HSN Code</th>
             <th style="width: 8%;">Qty</th>
             <th style="width: 15%;">Unit Rate (₹)</th>
             <th style="width: 10%;">GST %</th>
@@ -258,7 +274,7 @@ const generateQuotationHTML = (clientName, items, totalAmount, notes, clientId, 
         </tr>
         ${totalOverride > 0 ? `
         <tr>
-          <td style="color: #4b5563; font-weight: medium;">Total Override</td>
+          <td style="color: #4b5563; font-weight: medium;">Total Overheads</td>
           <td style="text-align: right; color: #1f2937; font-weight: bold;">₹${totalOverride.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
         </tr>
         ` : ''}
@@ -273,12 +289,12 @@ const generateQuotationHTML = (clientName, items, totalAmount, notes, clientId, 
       </table>
 
       ${((notes && !notes.trim().startsWith('Drawing Numbers:')) || hostCompany?.invoice_footer_notes) ? `
-        <div style="margin-top: 20px; border: 1px solid #000; padding: 10px;">
+        <div style="margin-top: 20px; border: 1px solid #cbd5e1; padding: 10px;">
           <strong>Terms & Conditions:</strong><br>
           <p style="white-space: pre-wrap; margin: 5px 0 0 0;">${(notes && !notes.trim().startsWith('Drawing Numbers:')) ? notes : hostCompany.invoice_footer_notes}</p>
         </div>
       ` : `
-        <div style="margin-top: 20px; border: 1px solid #000; padding: 10px;">
+        <div style="margin-top: 20px; border: 1px solid #cbd5e1; padding: 10px;">
           <strong>Terms & Conditions:</strong><br>
           <ol style="margin: 5px 0 0 0; padding-left: 20px; line-height: 1.6;">
             <li>Prices mentioned are inclusive/exclusive of GST as applicable.</li>
@@ -555,15 +571,11 @@ const sendShipmentStatusEmail = async (shipmentData, status, attachments = []) =
       attachments: attachments
     };
 
-    // If DISPATCHED, also CC the driver if they have an email (logic could be added to fetch driver email)
-    // For now, if driver_contact looks like an email, we could try, but usually it's a phone.
-
     const info = await transporter.sendMail(mailOptions);
     console.log(`[Email Service] Shipment ${status} email sent to ${email}:`, info.messageId);
     return { success: true, messageId: info.messageId };
   } catch (error) {
     console.error(`[Email Service] Failed to send shipment ${status} email:`, error.message);
-    // Don't throw, just log to prevent breaking the main flow
   }
 };
 
@@ -619,7 +631,7 @@ const sendQuotationEmail = async (clientEmail, clientName, items, totalAmount, n
     // Generate PDF buffer only if attachPDF is true
     let pdfBuffer;
     if (attachPDF) {
-      const html = generateQuotationHTML(clientName, items, totalAmount, notes, clientId, quoteNumber, hostCompany, clientDetails);
+      const html = await generateQuotationHTML(clientName, items, totalAmount, notes, clientId, quoteNumber, hostCompany, clientDetails);
       try {
         const browser = await puppeteer.launch({
           headless: 'new',
@@ -763,7 +775,7 @@ const generateQuotationPDF = async (clientName, items, totalAmount, notes, clien
     };
   }
 
-  const html = generateQuotationHTML(clientName, items, totalAmount, notes, clientId, quoteNumber, hostCompany, clientDetails);
+  const html = await generateQuotationHTML(clientName, items, totalAmount, notes, clientId, quoteNumber, hostCompany, clientDetails);
   const browser = await puppeteer.launch({
     headless: 'new',
     args: ['--no-sandbox', '--disable-setuid-sandbox']

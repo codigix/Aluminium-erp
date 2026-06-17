@@ -165,6 +165,12 @@ router.post('/:qcId/stock-entry', authenticate, authorize(['QC_EDIT']), async (r
       return res.status(404).json({ message: 'QC Inspection not found' });
     }
     
+    if (qc.stock_entry_id) {
+      return res.status(400).json({ 
+        message: `Stock Entry already exists for this QC inspection (Entry No: ${qc.stock_entry_no})` 
+      });
+    }
+    
     const result = await stockEntryService.autoCreateStockEntryFromGRN(qc.grn_id, req.user.id);
     res.json(result);
   } catch (error) {

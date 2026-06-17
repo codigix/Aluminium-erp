@@ -776,7 +776,7 @@ const generateQuotationPDF = async (quotationId) => {
         }
 
         .header-box {
-          border: 2px solid #1e293b;
+          border: 1px solid #1e293b;
           display: flex;
           align-items: center;
           padding: 10px 15px;
@@ -789,7 +789,7 @@ const generateQuotationPDF = async (quotationId) => {
           display: flex;
           align-items: center;
           justify-content: center;
-          border-right: 2px solid #1e293b;
+          border-right: 1px solid #1e293b;
           padding-right: 15px;
           flex-shrink: 0;
         }
@@ -849,7 +849,7 @@ const generateQuotationPDF = async (quotationId) => {
         }
 
         .info-card {
-          border: 2px solid #1e293b;
+          border: 1px solid #1e293b;
           padding: 10px;
           background: #fff;
           min-height: 95px;
@@ -888,7 +888,7 @@ const generateQuotationPDF = async (quotationId) => {
           font-weight: 700;
           text-transform: uppercase;
           color: #1e293b;
-          border-bottom: 2px solid #1e293b;
+          border-bottom: 1px solid #1e293b;
         }
 
         .amount-col {
@@ -902,14 +902,14 @@ const generateQuotationPDF = async (quotationId) => {
         .summary-block {
           display: grid;
           grid-template-columns: 3fr 2fr;
-          border: 2px solid #1e293b;
+          border: 1px solid #1e293b;
           margin-bottom: 15px;
           background: #fff;
         }
 
         .remarks-container {
           padding: 10px;
-          border-right: 2px solid #1e293b;
+          border-right: 1px solid #1e293b;
         }
 
         .summary-table {
@@ -951,7 +951,7 @@ const generateQuotationPDF = async (quotationId) => {
         }
 
         .section-box {
-          border: 2px solid #1e293b;
+          border: 1px solid #1e293b;
           margin-bottom: 15px;
         }
 
