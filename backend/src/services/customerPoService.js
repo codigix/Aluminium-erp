@@ -4,6 +4,30 @@ const puppeteer = require('puppeteer');
 const pool = require('../config/db');
 const bomService = require('./bomService');
 
+const cleanAddress = (addr) => {
+  if (!addr) return 'N/A';
+  const parts = addr.split(/[\n\r,]+/);
+  const seen = new Set();
+  const uniqueParts = [];
+  
+  for (let part of parts) {
+    const trimmed = part.trim();
+    if (!trimmed) continue;
+    
+    // Filter out standard placeholders
+    const upper = trimmed.toUpperCase();
+    if (upper === 'N/A' || upper === '—' || upper === '-') continue;
+    
+    const lower = trimmed.toLowerCase();
+    if (!seen.has(lower)) {
+      seen.add(lower);
+      uniqueParts.push(trimmed);
+    }
+  }
+  
+  return uniqueParts.join(', ') || 'N/A';
+};
+
 const calculateAmounts = items => {
   let subtotal = 0;
   let taxTotal = 0;
@@ -263,7 +287,7 @@ const getCustomerPoById = async id => {
     billing.state,
     billing.pincode ? `Pincode: ${billing.pincode}` : null
   ].filter(part => part && String(part).trim() !== '' && String(part).toUpperCase() !== 'N/A');
-  po.billing_address = billingAddrParts.join(', ') || 'N/A';
+  po.billing_address = cleanAddress(billingAddrParts.join(', ') || 'N/A');
   po.billing_state = billing.state || 'N/A';
   po.billing_state_code = ''; // Fallback since state_code is missing in schema
 
@@ -275,7 +299,7 @@ const getCustomerPoById = async id => {
     shipping.state,
     shipping.pincode ? `Pincode: ${shipping.pincode}` : null
   ].filter(part => part && String(part).trim() !== '' && String(part).toUpperCase() !== 'N/A');
-  po.shipping_address = shippingAddrParts.join(', ') || po.billing_address;
+  po.shipping_address = cleanAddress(shippingAddrParts.join(', ') || po.billing_address);
   po.shipping_state = shipping.state || po.billing_state;
 
   // Contacts
@@ -331,8 +355,8 @@ const getCustomerPoById = async id => {
         po.contact_person = quotes[0].resolved_contact_person || po.contact_person || '—';
         po.email = quotes[0].resolved_client_email || po.email || '—';
         po.phone = quotes[0].resolved_client_phone || po.phone || '—';
-        po.billing_address = quotes[0].resolved_client_address || po.billing_address || '—';
-        po.shipping_address = quotes[0].resolved_client_address || po.shipping_address || '—';
+        po.billing_address = cleanAddress(quotes[0].resolved_client_address || po.billing_address || '—');
+        po.shipping_address = cleanAddress(quotes[0].resolved_client_address || po.shipping_address || '—');
       }
     }
   } catch (err) {
