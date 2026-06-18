@@ -627,6 +627,315 @@ const deleteCustomerPo = async id => {
   }
 };
 
+const customerPoSummaryTemplate = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>{{poTitle}} - {{po_number}}</title>
+<style>
+  @page {
+    size: A4 portrait;
+    margin: 12mm;
+  }
+
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: Arial, Helvetica, sans-serif;
+  }
+
+  body {
+    background: #fff;
+    color: #1a1a1a;
+    font-size: 11px;
+    line-height: 1.4;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .po-container {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Header Section */
+  .header-section {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    border-bottom: 1.5px solid #000;
+    padding-bottom: 10px;
+    margin-bottom: 15px;
+  }
+
+  .title-block h1 {
+    font-size: 18px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 2px;
+  }
+
+  .title-block p {
+    font-size: 10px;
+    color: #555;
+  }
+
+  .po-meta-table {
+    border-collapse: collapse;
+    font-size: 11px;
+  }
+
+  .po-meta-table td {
+    padding: 2px 4px;
+    vertical-align: top;
+  }
+
+  .po-meta-table td.label {
+    font-weight: bold;
+    text-align: right;
+    width: 70px;
+  }
+
+  /* Address Section */
+  .address-section {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    gap: 20px;
+  }
+
+  .address-box {
+    width: 48%;
+  }
+
+  .address-box h3 {
+    font-size: 10px;
+    font-weight: bold;
+    text-transform: uppercase;
+    border-bottom: 1px solid #ccc;
+    padding-bottom: 4px;
+    margin-bottom: 6px;
+    color: #444;
+  }
+
+  .address-box p {
+    margin-bottom: 3px;
+    line-height: 1.35;
+  }
+
+  /* Items Table */
+  .items-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
+  }
+
+  .items-table th {
+    border-top: 1px solid #000;
+    border-bottom: 1.5px solid #000;
+    padding: 6px 4px;
+    font-size: 10px;
+    font-weight: bold;
+    text-transform: uppercase;
+    text-align: left;
+  }
+
+  .items-table td {
+    border-bottom: 1px solid #ddd;
+    padding: 8px 4px;
+    vertical-align: top;
+  }
+
+  .items-table th.right-align,
+  .items-table td.right-align {
+    text-align: right;
+  }
+
+  .items-table th.center-align,
+  .items-table td.center-align {
+    text-align: center;
+  }
+
+  .item-desc-bold {
+    font-weight: bold;
+    margin-bottom: 2px;
+  }
+
+  .item-desc-sub {
+    font-size: 9.5px;
+    color: #555;
+  }
+
+  /* Summary Footer Section */
+  .footer-section {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-top: 10px;
+    page-break-inside: avoid;
+  }
+
+  .status-box {
+    border: 1px solid #ccc;
+    padding: 8px 12px;
+    border-radius: 4px;
+    background: #fafafa;
+    min-width: 150px;
+  }
+
+  .status-box p {
+    margin-bottom: 2px;
+  }
+
+  .status-box .status-value {
+    font-size: 12px;
+    font-weight: bold;
+    text-transform: uppercase;
+  }
+
+  .totals-table {
+    width: 280px;
+    border-collapse: collapse;
+    font-size: 11px;
+  }
+
+  .totals-table td {
+    padding: 4px 6px;
+  }
+
+  .totals-table td.val {
+    text-align: right;
+  }
+
+  .totals-table tr.grand-total-row td {
+    border-top: 1.5px solid #000;
+    border-bottom: 1.5px solid #000;
+    font-size: 13px;
+    font-weight: bold;
+    padding: 6px 6px;
+  }
+
+  @media print {
+    body {
+      background: #fff !important;
+      -webkit-print-color-adjust: exact !important;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div class="po-container">
+
+  <!-- HEADER -->
+  <div class="header-section">
+    <div class="title-block">
+      <h1>{{poTitle}}</h1>
+      <p>Issued by: {{hostCompanyName}}</p>
+    </div>
+    <div>
+      <table class="po-meta-table">
+        <tr>
+          <td class="label">PO No:</td>
+          <td>{{po_number}}</td>
+        </tr>
+        <tr>
+          <td class="label">PO Date:</td>
+          <td>{{po_date}}</td>
+        </tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- ADDRESSES -->
+  <div class="address-section">
+    <div class="address-box">
+      <h3>Customer</h3>
+      <p><strong>{{vendor_name}}</strong></p>
+      <p>{{{vendor_address_html}}}</p>
+    </div>
+    <div class="address-box">
+      <h3>Dispatch Address</h3>
+      <p>{{{shipping_address_html}}}</p>
+    </div>
+  </div>
+
+  <!-- ITEMS TABLE -->
+  <table class="items-table">
+    <thead>
+      <tr>
+        <th style="width: 5%;" class="center-align">Sr</th>
+        <th style="width: 15%;">Item Code</th>
+        <th style="width: 35%;">Description</th>
+        <th style="width: 10%;" class="center-align">HSN Code</th>
+        <th style="width: 8%;" class="right-align">Qty</th>
+        <th style="width: 11%;" class="right-align">Rate (₹)</th>
+        <th style="width: 11%;" class="right-align">Amount (₹)</th>
+        <th style="width: 10%;" class="center-align">Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{#items}}
+      <tr>
+        <td class="center-align">{{sl_no}}</td>
+        <td>{{item_code}}</td>
+        <td>
+          <div class="item-desc-bold">{{material_name}}</div>
+          {{#description}}
+          <div class="item-desc-sub">{{description}}</div>
+          {{/description}}
+        </td>
+        <td class="center-align">{{hsn_code}}</td>
+        <td class="right-align">{{quantity}}</td>
+        <td class="right-align">{{unit_rate}}</td>
+        <td class="right-align">{{amount}}</td>
+        <td class="center-align">{{dispatch_status_str}}</td>
+      </tr>
+      {{/items}}
+    </tbody>
+  </table>
+
+  <!-- SUMMARY FOOTER -->
+  <div class="footer-section">
+    <div class="status-box">
+      <p style="color: #666; font-size: 9px; font-weight: bold; text-transform: uppercase;">PO Status</p>
+      <div class="status-value">{{status}}</div>
+    </div>
+    
+    <table class="totals-table">
+      <tr>
+        <td>Sub Total</td>
+        <td class="val">₹ {{subtotal}}</td>
+      </tr>
+      {{#cgst_total}}
+      <tr>
+        <td>CGST ({{cgst_rate_summary}}%)</td>
+        <td class="val">₹ {{cgst_total}}</td>
+      </tr>
+      {{/cgst_total}}
+      {{#sgst_total}}
+      <tr>
+        <td>SGST ({{sgst_rate_summary}}%)</td>
+        <td class="val">₹ {{sgst_total}}</td>
+      </tr>
+      {{/sgst_total}}
+      <tr class="grand-total-row">
+        <td>Grand Total</td>
+        <td class="val">₹ {{total_amount}}</td>
+      </tr>
+    </table>
+  </div>
+
+</div>
+
+</body>
+</html>
+`;
+
 const generateCustomerPoPDF = async (poId, currentUser = null, includeDispatchStatus = false, balanceReport = false, sentReport = false) => {
   const po = await getCustomerPoById(poId);
   if (!po) throw new Error('Customer PO not found');
@@ -1615,7 +1924,8 @@ const generateCustomerPoPDF = async (poId, currentUser = null, includeDispatchSt
     empty_rows: Array.from({ length: Math.max(0, 4 - displayedItems.length) }).map(() => ({ includeDispatchStatus }))
   };
 
-  const html = mustache.render(htmlTemplate, viewData);
+  const selectedTemplate = (balanceReport || sentReport) ? customerPoSummaryTemplate : htmlTemplate;
+  const html = mustache.render(selectedTemplate, viewData);
 
   const browser = await puppeteer.launch({
     headless: 'new',
@@ -1623,12 +1933,21 @@ const generateCustomerPoPDF = async (poId, currentUser = null, includeDispatchSt
   });
   const page = await browser.newPage();
   await page.setContent(html, { waitUntil: 'load' });
-  const pdf = await page.pdf({ 
-    format: 'A4', 
-    landscape: true,
-    printBackground: true,
-    margin: { top: '8mm', right: '8mm', bottom: '8mm', left: '8mm' }
-  });
+
+  const pdfOptions = {
+    format: 'A4',
+    printBackground: true
+  };
+
+  if (balanceReport || sentReport) {
+    pdfOptions.landscape = false;
+    pdfOptions.margin = { top: '15mm', right: '15mm', bottom: '15mm', left: '15mm' };
+  } else {
+    pdfOptions.landscape = true;
+    pdfOptions.margin = { top: '8mm', right: '8mm', bottom: '8mm', left: '8mm' };
+  }
+
+  const pdf = await page.pdf(pdfOptions);
   await browser.close();
 
   return pdf;
