@@ -551,23 +551,13 @@ const BOMFormPage = () => {
   });
 
   const [materialForm, setMaterialForm] = useState({ materialName: '', itemCode: '', qty: '1', uom: 'Kg', itemGroup: 'Raw Material', rate: '', warehouse: '', operation: '', parentId: '', description: '', weightPerUnit: '', scrapPercent: '0', length: '', width: '', thickness: '', diameter: '', outer_diameter: '', density: '', shapeId: '', materialId: '' });
-  const [componentForm, setComponentForm] = useState({ componentCode: '', quantity: '1', uom: 'Kg', rate: '', lossPercent: '', notes: '', parentId: '', description: '', weightPerUnit: '', scrapPercent: '0', itemGroup: '', length: '', width: '', thickness: '', diameter: '', outer_diameter: '' });
+  const [componentForm, setComponentForm] = useState({ componentCode: '', quantity: '1', uom: 'Nos', rate: '', lossPercent: '', notes: '', parentId: '', description: '', weightPerUnit: '', scrapPercent: '0', itemGroup: '', length: '', width: '', thickness: '', diameter: '', outer_diameter: '' });
   const [operationForm, setOperationForm] = useState({ operationName: '', workstation: '', cycleTimeMin: '', setupTimeMin: '', hourlyRate: '', operationType: 'In-House', targetWarehouse: '' });
   const [editingOperation, setEditingOperation] = useState(null);
   const [editingMaterial, setEditingMaterial] = useState(null);
   const [editingSectionItem, setEditingSectionItem] = useState(null); // { section: 'materials'|'components'|'operations'|'scrap', id: string|number }
 
   const [scrapForm, setScrapForm] = useState({ itemCode: '', itemName: '', inputQty: '', lossPercent: '', rate: '', parentId: '' });
-
-  const parentLevelName = useMemo(() => {
-    const params = new URLSearchParams(location.search);
-    return productForm.description || 
-           (selectedItem ? (selectedItem.material_name || selectedItem.description) : '') ||
-           params.get('drawing_name') || 
-           params.get('drawing_no') || 
-           productForm.drawingNo || 
-           'None (Top Level)';
-  }, [productForm.description, productForm.drawingNo, selectedItem, location.search]);
   const [approvedDrawings, setApprovedDrawings] = useState([]);
 
   // Preview State
@@ -1727,7 +1717,7 @@ const BOMFormPage = () => {
     setSelectedItem(null);
     setDrawingFilter('');
     setMaterialForm({ materialName: '', itemCode: '', qty: '1', uom: 'Kg', itemGroup: 'Raw Material', rate: '', warehouse: '', operation: '', parentId: '', description: '', weightPerUnit: '', scrapPercent: '0', length: '', width: '', thickness: '', diameter: '', outer_diameter: '', density: '', shapeId: '', materialId: '' });
-    setComponentForm({ componentCode: '', quantity: '1', uom: 'Kg', rate: '', lossPercent: '', notes: '', parentId: '', description: '' });
+    setComponentForm({ componentCode: '', quantity: '1', uom: 'Nos', rate: '', lossPercent: '', notes: '', parentId: '', description: '' });
     setOperationForm({ operationName: '', workstation: '', cycleTimeMin: '', setupTimeMin: '', hourlyRate: '', operationType: 'In-House', targetWarehouse: '' });
     setScrapForm({ itemCode: '', itemName: '', inputQty: '', lossPercent: '', rate: '' });
   };
@@ -2257,12 +2247,11 @@ const BOMFormPage = () => {
                     ? `Create Part Details: ${productForm.drawingNo}`
                     : 'Create Part Details')}
                 {productForm.revision && (
-                  <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-medium border ${
-                    selectedItem?.status === 'Approved' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' :
-                    selectedItem?.status === 'Draft' ? 'bg-amber-100 text-amber-700 border-amber-200' :
-                    selectedItem?.status === 'Rejected' ? 'bg-rose-100 text-rose-700 border-rose-200' :
-                    'bg-slate-100 text-slate-600 border-slate-200'
-                  }`}>
+                  <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-medium border ${selectedItem?.status === 'Approved' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' :
+                      selectedItem?.status === 'Draft' ? 'bg-amber-100 text-amber-700 border-amber-200' :
+                        selectedItem?.status === 'Rejected' ? 'bg-rose-100 text-rose-700 border-rose-200' :
+                          'bg-slate-100 text-slate-600 border-slate-200'
+                    }`}>
                     {selectedItem?.status || 'Pending'}
                   </span>
                 )}
@@ -2761,7 +2750,7 @@ const BOMFormPage = () => {
                               ...componentForm,
                               componentCode: e.target.value,
                               rate: item ? item.rate : componentForm.rate,
-                              uom: item ? item.uom : componentForm.uom,
+                              uom: item ? ({ kg: 'Kg', kilogram: 'Kg', kgs: 'Kg', nos: 'Nos', numbers: 'Nos', number: 'Nos', no: 'Nos', pcs: 'Nos', pc: 'Nos', mtr: 'Mtr', meter: 'Mtr', meters: 'Mtr', m: 'Mtr', 'litre (ltr)': 'Litre (Ltr)', ltr: 'Litre (Ltr)', l: 'Litre (Ltr)' }[String(item.uom || item.unit || '').trim().toLowerCase()] || (item.uom || item.unit)) : componentForm.uom,
                               description: item ? item.description : componentForm.description,
                               weightPerUnit: item ? (item.weight_per_unit || item.weightPerUnit || 0) : '',
                               itemGroup: item ? (item.itemGroup || item.item_group || "") : '',
@@ -2786,7 +2775,7 @@ const BOMFormPage = () => {
                           value={productForm.itemGroup === 'Assembly' ? '' : (componentForm.parentId || '')}
                           onChange={(e) => setComponentForm({ ...componentForm, parentId: e.target.value })}
                         >
-                          <option value="">{parentLevelName}</option>
+                          <option value="">{productForm.description || productForm.drawingNo || new URLSearchParams(location.search).get('drawing_name') || new URLSearchParams(location.search).get('drawing_no') || 'None (Top Level)'}</option>
                           {bomData.components.map(c => (
                             <option key={c.id} value={c.id}>{c.component_code || c.componentCode}</option>
                           ))}
@@ -2810,7 +2799,7 @@ const BOMFormPage = () => {
                         {editingSectionItem?.section === 'components' ? (
                           <div className="flex gap-2">
                             <button
-                              onClick={() => handleUpdateSectionItem('components', componentForm, setComponentForm, { componentCode: '', quantity: '1', uom: 'Kg', rate: '', lossPercent: '', notes: '', parentId: '', description: '', weightPerUnit: '', scrapPercent: '0', itemGroup: '', length: '', width: '', thickness: '', diameter: '', outer_diameter: '', drawingNo: '', drawing_no: '' })}
+                              onClick={() => handleUpdateSectionItem('components', componentForm, setComponentForm, { componentCode: '', quantity: '1', uom: 'Nos', rate: '', lossPercent: '', notes: '', parentId: '', description: '', weightPerUnit: '', scrapPercent: '0', itemGroup: '', length: '', width: '', thickness: '', diameter: '', outer_diameter: '', drawingNo: '', drawing_no: '' })}
                               className="flex-1 py-2 bg-blue-600 text-white rounded  text-xs  hover:bg-blue-700 shadow-lg shadow-blue-100 transition-all active:scale-95 flex items-center justify-center gap-2"
                             >
                               <Save className="w-4 h-4" />
@@ -2825,7 +2814,7 @@ const BOMFormPage = () => {
                           </div>
                         ) : (
                           <button
-                            onClick={() => handleAddSectionItem('components', componentForm, setComponentForm, { componentCode: '', quantity: '1', uom: 'Kg', rate: '', lossPercent: '', notes: '', parentId: '', description: '', weightPerUnit: '', scrapPercent: '0', itemGroup: '', length: '', width: '', thickness: '', diameter: '', outer_diameter: '', drawingNo: '', drawing_no: '' })}
+                            onClick={() => handleAddSectionItem('components', componentForm, setComponentForm, { componentCode: '', quantity: '1', uom: 'Nos', rate: '', lossPercent: '', notes: '', parentId: '', description: '', weightPerUnit: '', scrapPercent: '0', itemGroup: '', length: '', width: '', thickness: '', diameter: '', outer_diameter: '', drawingNo: '', drawing_no: '' })}
                             className="w-full py-2 bg-indigo-600 text-white rounded  text-xs  hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all active:scale-95 flex items-center justify-center gap-2"
                           >
                             <Plus className="w-4 h-4" />
@@ -3171,21 +3160,21 @@ const BOMFormPage = () => {
                       const isWeightOrConsumableGroup = ['RAW MATERIALS', 'RAW MATERIAL', 'RAW_MATERIALS', 'RAW_MATERIAL', 'RM', 'CONSUMABLES', 'CONSUMABLE', 'CON'].includes(groupUpper);
                       const isKg = (materialForm.uom || '').toLowerCase() === 'kg';
                       const isLitre = (materialForm.uom || '').toLowerCase() === 'litre (ltr)';
-                      
+
                       if ((isWeightOrConsumableGroup && isKg) || (['CONSUMABLES', 'CONSUMABLE', 'CON'].includes(groupUpper) && isLitre)) {
                         const selectedShape = (shapes.find(s => String(s.id) === String(materialForm.shapeId))?.name || '').trim();
                         return (
                           <div className="md:col-span-12 grid grid-cols-1 md:grid-cols-12 gap-2 mt-2 p-3 bg-indigo-50/30 rounded border border-indigo-100/50">
                             <div className={isKg ? "md:col-span-6 space-y-1" : "md:col-span-12 space-y-1"}>
                               <label className="text-xs text-slate-500 ml-1">Select Material Type</label>
-                              <select 
+                              <select
                                 className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
                                 value={materialForm.materialId || ''}
                                 onChange={(e) => {
                                   const mId = e.target.value;
                                   const selectedMaterial = materials.find(m => String(m.id) === String(mId));
                                   setMaterialForm({
-                                    ...materialForm, 
+                                    ...materialForm,
                                     materialId: mId,
                                     density: selectedMaterial ? selectedMaterial.density : ''
                                   });
@@ -3203,10 +3192,10 @@ const BOMFormPage = () => {
                             {isKg && (
                               <div className="md:col-span-6 space-y-1">
                                 <label className="text-xs text-slate-500 ml-1">Select Shape Type</label>
-                                <select 
+                                <select
                                   className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
                                   value={materialForm.shapeId || ''}
-                                  onChange={(e) => setMaterialForm({...materialForm, shapeId: e.target.value})}
+                                  onChange={(e) => setMaterialForm({ ...materialForm, shapeId: e.target.value })}
                                 >
                                   <option value="">Select Shape</option>
                                   {shapes.map(s => (
@@ -3227,15 +3216,15 @@ const BOMFormPage = () => {
                                     <>
                                       <div className="space-y-1">
                                         <label className="text-xs text-slate-400 font-medium">Length (mm) *</label>
-                                        <input type="number" step="0.01" className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="0.00" value={materialForm.length || ''} onChange={(e) => setMaterialForm({...materialForm, length: e.target.value})} required />
+                                        <input type="number" step="0.01" className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="0.00" value={materialForm.length || ''} onChange={(e) => setMaterialForm({ ...materialForm, length: e.target.value })} required />
                                       </div>
                                       <div className="space-y-1">
                                         <label className="text-xs text-slate-400 font-medium">Width (mm) *</label>
-                                        <input type="number" step="0.01" className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="0.00" value={materialForm.width || ''} onChange={(e) => setMaterialForm({...materialForm, width: e.target.value})} required />
+                                        <input type="number" step="0.01" className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="0.00" value={materialForm.width || ''} onChange={(e) => setMaterialForm({ ...materialForm, width: e.target.value })} required />
                                       </div>
                                       <div className="space-y-1">
                                         <label className="text-xs text-slate-400 font-medium">Thickness (mm) *</label>
-                                        <input type="number" step="0.01" className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="0.00" value={materialForm.thickness || ''} onChange={(e) => setMaterialForm({...materialForm, thickness: e.target.value})} required />
+                                        <input type="number" step="0.01" className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="0.00" value={materialForm.thickness || ''} onChange={(e) => setMaterialForm({ ...materialForm, thickness: e.target.value })} required />
                                       </div>
                                     </>
                                   )}
@@ -3243,11 +3232,11 @@ const BOMFormPage = () => {
                                     <>
                                       <div className="space-y-1">
                                         <label className="text-xs text-slate-400 font-medium">Diameter (mm) *</label>
-                                        <input type="number" step="0.01" className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="0.00" value={materialForm.diameter || ''} onChange={(e) => setMaterialForm({...materialForm, diameter: e.target.value})} required />
+                                        <input type="number" step="0.01" className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="0.00" value={materialForm.diameter || ''} onChange={(e) => setMaterialForm({ ...materialForm, diameter: e.target.value })} required />
                                       </div>
                                       <div className="space-y-1">
                                         <label className="text-xs text-slate-400 font-medium">Length (mm) *</label>
-                                        <input type="number" step="0.01" className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="0.00" value={materialForm.length || ''} onChange={(e) => setMaterialForm({...materialForm, length: e.target.value})} required />
+                                        <input type="number" step="0.01" className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="0.00" value={materialForm.length || ''} onChange={(e) => setMaterialForm({ ...materialForm, length: e.target.value })} required />
                                       </div>
                                     </>
                                   )}
@@ -3255,15 +3244,15 @@ const BOMFormPage = () => {
                                     <>
                                       <div className="space-y-1">
                                         <label className="text-xs text-slate-400 font-medium">Outer Diameter (mm) *</label>
-                                        <input type="number" step="0.01" className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="0.00" value={materialForm.outer_diameter || ''} onChange={(e) => setMaterialForm({...materialForm, outer_diameter: e.target.value})} required />
+                                        <input type="number" step="0.01" className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="0.00" value={materialForm.outer_diameter || ''} onChange={(e) => setMaterialForm({ ...materialForm, outer_diameter: e.target.value })} required />
                                       </div>
                                       <div className="space-y-1">
                                         <label className="text-xs text-slate-400 font-medium">Thickness (mm) *</label>
-                                        <input type="number" step="0.01" className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="0.00" value={materialForm.thickness || ''} onChange={(e) => setMaterialForm({...materialForm, thickness: e.target.value})} required />
+                                        <input type="number" step="0.01" className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="0.00" value={materialForm.thickness || ''} onChange={(e) => setMaterialForm({ ...materialForm, thickness: e.target.value })} required />
                                       </div>
                                       <div className="space-y-1">
                                         <label className="text-xs text-slate-400 font-medium">Length (mm) *</label>
-                                        <input type="number" step="0.01" className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="0.00" value={materialForm.length || ''} onChange={(e) => setMaterialForm({...materialForm, length: e.target.value})} required />
+                                        <input type="number" step="0.01" className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="0.00" value={materialForm.length || ''} onChange={(e) => setMaterialForm({ ...materialForm, length: e.target.value })} required />
                                       </div>
                                     </>
                                   )}
@@ -3310,7 +3299,7 @@ const BOMFormPage = () => {
                         value={productForm.itemGroup === 'Assembly' ? '' : (materialForm.parentId || '')}
                         onChange={(e) => setMaterialForm({ ...materialForm, parentId: e.target.value })}
                       >
-                        <option value="">{parentLevelName}</option>
+                        <option value="">{productForm.description || productForm.drawingNo || new URLSearchParams(location.search).get('drawing_name') || new URLSearchParams(location.search).get('drawing_no') || 'None (Top Level)'}</option>
                         {bomData.components.map(c => (
                           <option key={c.id} value={c.id}>{c.component_code || c.componentCode}</option>
                         ))}

@@ -690,6 +690,18 @@ const BOMCreation = () => {
         drawingsMap[dwgNo].push(i);
       });
 
+      // Gather all component codes that are linked inside any Assembly BOM
+      const linkedComponentCodes = new Set();
+      items.forEach(i => {
+        if (i.components) {
+          i.components.forEach(c => {
+            if (c.component_code) {
+              linkedComponentCodes.add(c.component_code);
+            }
+          });
+        }
+      });
+
       const drawings = Object.keys(drawingsMap);
 
       drawings.forEach(dwgNo => {
@@ -732,6 +744,9 @@ const BOMCreation = () => {
         if (mainItems.length > 0) {
           mainItems.forEach(latest => {
             if (latest.has_bom || latest.has_master_bom || parseFloat(latest.bom_cost) > 0) {
+              // Exclude if this part is already linked inside any assembly BOM
+              if (linkedComponentCodes.has(latest.item_code)) return;
+
               drawingCost += (parseFloat(latest.bom_cost || 0) * (latest.quantity || 0));
               drawingHasBOM = true;
             }
@@ -742,6 +757,9 @@ const BOMCreation = () => {
             const isFG = (latest.item_group === 'FG' || latest.product_type === 'FG' || (latest.item_group || '').toLowerCase().includes('finished'));
             const isSA = (latest.item_code || '').startsWith('SA-') || (latest.item_group || '').includes('SA') || (latest.item_group || '').toLowerCase().includes('assembly');
             if ((isFG || isSA) && (latest.has_bom || latest.has_master_bom || parseFloat(latest.bom_cost) > 0)) {
+              // Exclude if this part is already linked inside any assembly BOM
+              if (linkedComponentCodes.has(latest.item_code)) return;
+
               drawingCost += (parseFloat(latest.bom_cost || 0) * (latest.quantity || 0));
               drawingHasBOM = true;
             }
@@ -995,7 +1013,21 @@ const BOMCreation = () => {
           return acc;
         }, {});
 
+        // Gather all component codes that are linked inside any Assembly BOM
+        const linkedComponentCodes = new Set();
+        items.forEach(i => {
+          if (i.components) {
+            i.components.forEach(c => {
+              if (c.component_code) {
+                linkedComponentCodes.add(c.component_code);
+              }
+            });
+          }
+        });
+
         let clientTotalCost = 0;
+        let assemblyCost = 0;
+        let partsCost = 0;
 
         Object.entries(drawingsMap).forEach(([dwgNo, dwgItems]) => {
           const drawingType = dwgItems.find(i => i.drawing_type)?.drawing_type || '';
@@ -1042,20 +1074,47 @@ const BOMCreation = () => {
 
           if (mainItems.length > 0) {
             mainItems.forEach(latest => {
-              clientTotalCost += (parseFloat(latest.bom_cost || 0) * (latest.quantity || 0));
+              // Exclude if this part is already linked inside any assembly BOM
+              if (linkedComponentCodes.has(latest.item_code)) return;
+
+              const costVal = parseFloat(latest.bom_cost || 0) * (latest.quantity || 0);
+              if (isAssemblyDrawing) {
+                assemblyCost += costVal;
+              } else {
+                partsCost += costVal;
+              }
+              clientTotalCost += costVal;
             });
           } else {
             latestVersions.forEach(latest => {
               const isFG = (latest.item_group === 'FG' || latest.product_type === 'FG' || (latest.item_group || '').toLowerCase().includes('finished'));
               const isSA = (latest.item_code || '').startsWith('SA-') || (latest.item_group || '').includes('SA') || (latest.item_group || '').toLowerCase().includes('assembly');
               if (isFG || isSA) {
-                clientTotalCost += (parseFloat(latest.bom_cost || 0) * (latest.quantity || 0));
+                // Exclude if this part is already linked inside any assembly BOM
+                if (linkedComponentCodes.has(latest.item_code)) return;
+
+                const costVal = parseFloat(latest.bom_cost || 0) * (latest.quantity || 0);
+                if (isAssemblyDrawing) {
+                  assemblyCost += costVal;
+                } else {
+                  partsCost += costVal;
+                }
+                clientTotalCost += costVal;
               }
             });
           }
         });
 
-        return <span className=" text-slate-900">₹{clientTotalCost.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>;
+        return (
+          <div className="flex flex-col text-[11px] leading-tight text-slate-500 whitespace-nowrap">
+            <span className="text-xs font-semibold text-slate-800">
+              ₹{clientTotalCost.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
+            <span className="text-[10px] text-slate-400 mt-0.5">
+              Asm ₹{assemblyCost.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} | Part ₹{partsCost.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
+          </div>
+        );
       }
     },
     {
