@@ -1217,7 +1217,7 @@ const BOMCreation = () => {
             const parentBOMs = dwgItems.filter(i => i.has_bom || i.has_master_bom);
             const childBOMs = items.filter(i => i.parent_bom_id && dwgItems.some(p => p.id === i.parent_bom_id));
             const allDwgItems = [...dwgItems, ...childBOMs];
-            const allItemsWithBOM = [...parentBOMs];
+            const allItemsWithBOM = [...parentBOMs, ...childBOMs];
 
             // Group all unique items under this drawing to resolve versions
             const latestCosts = allDwgItems.reduce((acc, i) => {
@@ -1369,9 +1369,46 @@ const BOMCreation = () => {
                               return acc;
                             }, {});
 
+                            // Map each item ID in this accordion to its group's latest version
+                            const itemIdToLatest = {};
+                            Object.entries(groupedBOMs).forEach(([groupId, versions]) => {
+                              const sortedVersions = versions.sort((a, b) => {
+                                const vA = a.version || a.revision_no || '';
+                                const vB = b.version || b.revision_no || '';
+                                const comp = compareVersions(vA, vB);
+                                if (comp !== 0) return -comp;
+                                return b.id - a.id;
+                              });
+                              const latest = sortedVersions[0];
+                              versions.forEach(v => {
+                                itemIdToLatest[v.id] = latest;
+                              });
+                            });
+
+                            // Collect all component codes that are nested under other child BOMs
+                            const subComponentCodes = new Set();
+                            Object.values(groupedBOMs).forEach(versions => {
+                              const sortedVersions = versions.sort((a, b) => {
+                                const vA = a.version || a.revision_no || '';
+                                const vB = b.version || b.revision_no || '';
+                                const comp = compareVersions(vA, vB);
+                                if (comp !== 0) return -comp;
+                                return b.id - a.id;
+                              });
+                              const latest = sortedVersions[0];
+                              const isChild = latest.parent_bom_id !== null && latest.parent_bom_id !== undefined;
+                              if (isChild && latest.components) {
+                                latest.components.forEach(c => {
+                                  if (c.component_code) {
+                                    subComponentCodes.add(c.component_code);
+                                  }
+                                });
+                              }
+                            });
+
                             // Separate parents and children
                             const parentGroups = [];
-                            const childGroupsMap = {}; // parentId -> array of child groups
+                            const childGroupsMap = {}; // parentLatestId -> array of child groups
 
                             Object.entries(groupedBOMs).forEach(([groupId, versions]) => {
                               const sortedVersions = versions.sort((a, b) => {
@@ -1382,11 +1419,20 @@ const BOMCreation = () => {
                                 return b.id - a.id;
                               });
                               const latest = sortedVersions[0];
+                              
+                              // If this item code is already displayed/linked through a sub-BOM hierarchy, skip it from being a direct row
+                              if (subComponentCodes.has(latest.item_code)) {
+                                return;
+                              }
+
                               if (latest.parent_bom_id) {
-                                if (!childGroupsMap[latest.parent_bom_id]) {
-                                  childGroupsMap[latest.parent_bom_id] = [];
+                                const parentLatest = itemIdToLatest[latest.parent_bom_id];
+                                const parentLatestId = parentLatest ? parentLatest.id : latest.parent_bom_id;
+
+                                if (!childGroupsMap[parentLatestId]) {
+                                  childGroupsMap[parentLatestId] = [];
                                 }
-                                childGroupsMap[latest.parent_bom_id].push({ groupId, sortedVersions, latest });
+                                childGroupsMap[parentLatestId].push({ groupId, sortedVersions, latest });
                               } else {
                                 parentGroups.push({ groupId, sortedVersions, latest });
                               }
@@ -1397,25 +1443,50 @@ const BOMCreation = () => {
                             parentGroups.forEach(pg => {
                               finalOrderedGroups.push(pg);
                               const childGroups = childGroupsMap[pg.latest.id] || [];
-                              finalOrderedGroups.push(...childGroups);
+                              childGroups.forEach((cg, index) => {
+                                cg.isChild = true;
+                                cg.isLastChild = (index === childGroups.length - 1);
+                                finalOrderedGroups.push(cg);
+                              });
                             });
 
                             // Also append any child groups whose parent was not found in this accordion (fallback)
                             Object.entries(childGroupsMap).forEach(([pId, groups]) => {
                               const parentInList = parentGroups.some(pg => pg.latest.id === parseInt(pId));
                               if (!parentInList) {
-                                finalOrderedGroups.push(...groups);
+                                groups.forEach((cg, index) => {
+                                  cg.isChild = true;
+                                  cg.isLastChild = (index === groups.length - 1);
+                                  finalOrderedGroups.push(cg);
+                                });
                               }
                             });
 
-                            return finalOrderedGroups.map(({ groupId, sortedVersions, latest }) => {
+                            return finalOrderedGroups.map(({ groupId, sortedVersions, latest, isChild, isLastChild }) => {
                               const hasMultiple = sortedVersions.length > 1;
-                              const isChild = latest.parent_bom_id !== null && latest.parent_bom_id !== undefined;
+                              
+                              // Filter components of this item to exclude any component that is already nested under a child BOM of this item
+                              const filteredComponents = (latest.components || []).filter(c => {
+                                const isNestedUnderChild = Object.values(groupedBOMs).some(versions => {
+                                  const y = versions[0];
+                                  const yParentLatest = y.parent_bom_id ? itemIdToLatest[y.parent_bom_id] : null;
+                                  const isChildOfLatest = yParentLatest && (yParentLatest.id === latest.id || yParentLatest.item_code === latest.item_code);
+                                  if (!isChildOfLatest) return false;
+                                  return y.components && y.components.some(yc => yc.component_code === c.component_code);
+                                });
+                                return !isNestedUnderChild;
+                              });
+
                               return (
                                 <React.Fragment key={groupId}>
                                   <tr className="hover:bg-slate-50/50 transition-colors">
                                     <td className="px-4 p-2">
-                                      <div className="flex items-center gap-2">
+                                      <div className="flex items-center gap-2" style={{ paddingLeft: isChild ? '24px' : '0px' }}>
+                                        {isChild && (
+                                          <span className="text-slate-300 font-mono select-none mr-1">
+                                            {isLastChild ? '└──' : '├──'}
+                                          </span>
+                                        )}
                                         <div className="flex flex-col">
                                           <span className="text-xs text-slate-700 flex items-center gap-1 font-medium">
                                             <span>{cleanText(latest.description || latest.material_name || 'BOM Item')}</span>
@@ -1428,6 +1499,32 @@ const BOMCreation = () => {
                                               </span>
                                             )}
                                           </span>
+                                          {filteredComponents.length > 0 && (
+                                            <div className="mt-2 pl-3 border-l-2 border-slate-200 space-y-1">
+                                              <span className="text-[10px] font-semibold text-slate-500 block uppercase tracking-wider">
+                                                Child Components:
+                                              </span>
+                                              {filteredComponents.map((c, idx) => {
+                                                const hasDesc = c.description && c.description.trim() !== '' && c.description !== c.component_code;
+                                                return (
+                                                  <div key={idx} className="text-xs text-slate-600 flex items-center gap-1">
+                                                    <span>•</span>
+                                                    {hasDesc ? (
+                                                      <>
+                                                        <span className="font-medium">{c.description}</span>
+                                                        <span className="text-[10px] text-slate-400">({c.component_code})</span>
+                                                      </>
+                                                    ) : (
+                                                      <>
+                                                        <span className="font-medium">{c.component_code}</span>
+                                                        <span className="text-[10px] text-slate-400">({c.item_group || 'Part'})</span>
+                                                      </>
+                                                    )}
+                                                  </div>
+                                                );
+                                              })}
+                                            </div>
+                                          )}
                                         </div>
                                       </div>
                                     </td>

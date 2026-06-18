@@ -558,6 +558,16 @@ const BOMFormPage = () => {
   const [editingSectionItem, setEditingSectionItem] = useState(null); // { section: 'materials'|'components'|'operations'|'scrap', id: string|number }
 
   const [scrapForm, setScrapForm] = useState({ itemCode: '', itemName: '', inputQty: '', lossPercent: '', rate: '', parentId: '' });
+
+  const parentLevelName = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return productForm.description || 
+           (selectedItem ? (selectedItem.material_name || selectedItem.description) : '') ||
+           params.get('drawing_name') || 
+           params.get('drawing_no') || 
+           productForm.drawingNo || 
+           'None (Top Level)';
+  }, [productForm.description, productForm.drawingNo, selectedItem, location.search]);
   const [approvedDrawings, setApprovedDrawings] = useState([]);
 
   // Preview State
@@ -2776,7 +2786,7 @@ const BOMFormPage = () => {
                           value={productForm.itemGroup === 'Assembly' ? '' : (componentForm.parentId || '')}
                           onChange={(e) => setComponentForm({ ...componentForm, parentId: e.target.value })}
                         >
-                          <option value="">{productForm.description || productForm.drawingNo || new URLSearchParams(location.search).get('drawing_name') || new URLSearchParams(location.search).get('drawing_no') || 'None (Top Level)'}</option>
+                          <option value="">{parentLevelName}</option>
                           {bomData.components.map(c => (
                             <option key={c.id} value={c.id}>{c.component_code || c.componentCode}</option>
                           ))}
@@ -3300,7 +3310,7 @@ const BOMFormPage = () => {
                         value={productForm.itemGroup === 'Assembly' ? '' : (materialForm.parentId || '')}
                         onChange={(e) => setMaterialForm({ ...materialForm, parentId: e.target.value })}
                       >
-                        <option value="">{productForm.description || productForm.drawingNo || new URLSearchParams(location.search).get('drawing_name') || new URLSearchParams(location.search).get('drawing_no') || 'None (Top Level)'}</option>
+                        <option value="">{parentLevelName}</option>
                         {bomData.components.map(c => (
                           <option key={c.id} value={c.id}>{c.component_code || c.componentCode}</option>
                         ))}
