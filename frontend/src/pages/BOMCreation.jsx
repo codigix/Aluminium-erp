@@ -1272,6 +1272,7 @@ const BOMCreation = () => {
             const drawingName = dwgItems[0].drawing_name || dwgItems[0].item_name || dwgItems[0].item_description || 'No Description';
             const drawingId = dwgItems[0].drawing_id;
             const drawingType = dwgItems.find(i => i.drawing_type)?.drawing_type || '';
+            const isAssemblyDrawing = (drawingType || '').toUpperCase().includes('ASSEMBLY');
 
             const parentBOMs = dwgItems.filter(i => i.has_bom || i.has_master_bom);
             const childBOMs = items.filter(i => i.parent_bom_id && dwgItems.some(p => p.id === i.parent_bom_id));
@@ -1300,13 +1301,14 @@ const BOMCreation = () => {
             );
             
             // Sum cost of main items if found, else fallback to sum of all items in latestCosts
-            const totalDisplayCost = drawingMainItems.length > 0
-              ? drawingMainItems.reduce((sum, i) => sum + parseFloat(i.bom_cost || 0), 0)
-              : Object.values(latestCosts).reduce((sum, i) => sum + parseFloat(i.bom_cost || 0), 0);
+            const totalDisplayCost = isAssemblyDrawing
+              ? drawingMainItems.filter(i => !i.parent_bom_id).reduce((sum, i) => sum + parseFloat(i.bom_cost || 0), 0)
+              : (drawingMainItems.length > 0
+                  ? drawingMainItems.reduce((sum, i) => sum + parseFloat(i.bom_cost || 0), 0)
+                  : Object.values(latestCosts).reduce((sum, i) => sum + parseFloat(i.bom_cost || 0), 0));
 
             // Refined status logic
             let dwgStatus = 'PENDING';
-            const isAssemblyDrawing = (drawingType || '').toUpperCase().includes('ASSEMBLY');
 
             if (isAssemblyDrawing) {
               // For Assembly drawings, only show COMPLETED if the assembly item itself has a BOM

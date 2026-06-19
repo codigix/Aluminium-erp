@@ -434,10 +434,32 @@ const getDimensionString = (item) => {
   return `${dimensions.join(' × ')} ${unit}`;
 };
 
+const cleanDwgNo = (dwg) => {
+  if (!dwg) return '';
+  return String(dwg).trim().toUpperCase();
+};
+
 const getAutofetchedGroup = (item) => {
   if (!item) return 'Part';
 
-  // 1. Check item code / name / description prefixes and content (case-insensitive)
+  // 1. Check explicit classification fields (drawing_type, item_type, item_group) first
+  if (item.drawing_type || item.cd_drawing_type) {
+    const dt = String(item.drawing_type || item.cd_drawing_type).trim().toLowerCase();
+    if (dt.includes('assembly')) return 'Assembly';
+    if (dt.includes('part')) return 'Part';
+  }
+  if (item.item_type) {
+    const it = String(item.item_type).trim().toLowerCase();
+    if (it.includes('assembly')) return 'Assembly';
+    if (it.includes('part')) return 'Part';
+  }
+  if (item.item_group || item.itemGroup) {
+    const ig = String(item.item_group || item.itemGroup).trim().toLowerCase();
+    if (ig.includes('assembly')) return 'Assembly';
+    if (ig.includes('part')) return 'Part';
+  }
+
+  // 2. Check item code / name / description prefixes and content (case-insensitive)
   const code = String(item.item_code || item.itemCode || item.component_code || item.componentCode || '').trim().toUpperCase();
   const desc = String(item.description || item.material_name || item.material_type || item.drawing_name || item.name || '').trim().toUpperCase();
 
@@ -452,24 +474,6 @@ const getAutofetchedGroup = (item) => {
     return 'Assembly';
   }
 
-  // 2. Check drawing_type
-  if (item.drawing_type) {
-    const dt = String(item.drawing_type).trim().toLowerCase();
-    if (dt.includes('assembly')) return 'Assembly';
-    return 'Part';
-  }
-  // 3. Check item_type
-  if (item.item_type) {
-    const it = String(item.item_type).trim().toLowerCase();
-    if (it.includes('assembly')) return 'Assembly';
-    return 'Part';
-  }
-  // 4. Check item_group
-  if (item.item_group || item.itemGroup) {
-    const ig = String(item.item_group || item.itemGroup).trim().toLowerCase();
-    if (ig.includes('assembly')) return 'Assembly';
-    return 'Part';
-  }
   return 'Part';
 };
 
@@ -679,7 +683,7 @@ const BOMFormPage = () => {
     }
 
     // Check if we already have it in approvedDrawings AND it contains a valid file path
-    let dwg = approvedDrawings.find(d => d.drawing_no === drawingNo && (d.file_path || d.drawing_pdf));
+    let dwg = approvedDrawings.find(d => cleanDwgNo(d.drawing_no) === cleanDwgNo(drawingNo) && (d.file_path || d.drawing_pdf));
     if (!dwg) {
       // Fetch from backend
       try {
@@ -689,7 +693,7 @@ const BOMFormPage = () => {
         });
         if (response.ok) {
           const drawings = await response.json();
-          dwg = drawings.find(d => d.drawing_no === drawingNo);
+          dwg = drawings.find(d => cleanDwgNo(d.drawing_no) === cleanDwgNo(drawingNo));
         }
       } catch (error) {
         console.error(error);
@@ -851,7 +855,7 @@ const BOMFormPage = () => {
 
       if (!seenCodes.has(item.item_code)) {
         // Find if this item has an approved BOM cost, prioritizing code match then drawing match, and non-zero costs
-        const matchingBOMs = approvedBOMs.filter(b => b.item_code === item.item_code || (b.drawing_no === item.drawing_no && b.drawing_no !== 'N/A'));
+        const matchingBOMs = approvedBOMs.filter(b => b.item_code === item.item_code || (cleanDwgNo(b.drawing_no) === cleanDwgNo(item.drawing_no) && cleanDwgNo(b.drawing_no) !== 'N/A'));
         const bomInfo = matchingBOMs.length > 0 ? matchingBOMs.sort((a, b) => {
           // Prioritize code match
           if (a.item_code === item.item_code && b.item_code !== item.item_code) return -1;
@@ -900,7 +904,7 @@ const BOMFormPage = () => {
       });
       if (response.ok) {
         const drawings = await response.json();
-        const exactMatch = drawings.find(d => d.drawing_no === drawingNo);
+        const exactMatch = drawings.find(d => cleanDwgNo(d.drawing_no) === cleanDwgNo(drawingNo));
         if (exactMatch) {
           const name = exactMatch.description || '';
           setFetchedDrawingName(name);
@@ -972,7 +976,7 @@ const BOMFormPage = () => {
                   ...prev,
                   itemCode: item.item_code || prev.itemCode || '',
                   itemGroup: autofetchedGroup || prev.itemGroup,
-                  description: isAssembly ? '' : (item.drawing_name || item.description || item.item_description || prev.description || ''),
+                  description: item.drawing_name || item.description || item.item_description || prev.description || '',
                   drawingNo: item.drawing_no || dwgParam || prev.drawingNo,
                   drawing_id: item.drawing_id || dwgIdParam || prev.drawing_id
                 }));
@@ -999,14 +1003,14 @@ const BOMFormPage = () => {
           let itemCode = '';
           let matchedItem = null;
 
-          const dwgInfo = approvedDrawings.find(i => i.drawing_no === dwgParam) ||
-            stockItems.find(i => i.drawing_no === dwgParam);
+          const dwgInfo = approvedDrawings.find(i => cleanDwgNo(i.drawing_no) === cleanDwgNo(dwgParam)) ||
+            stockItems.find(i => cleanDwgNo(i.drawing_no) === cleanDwgNo(dwgParam));
 
           if (dwgInfo) {
             matchedItem = dwgInfo;
             dwgName = dwgInfo.material_name || dwgInfo.description || dwgInfo.item_description || '';
             itemCode = dwgInfo.item_code || '';
-            setSelectedItem(prev => prev || { ...dwgInfo, source: approvedDrawings.find(i => i.drawing_no === dwgParam) ? 'order' : 'stock' });
+            setSelectedItem(prev => prev || { ...dwgInfo, source: approvedDrawings.some(i => cleanDwgNo(i.drawing_no) === cleanDwgNo(dwgParam)) ? 'order' : 'stock' });
           }
 
           if (!dwgName) {
@@ -1022,7 +1026,7 @@ const BOMFormPage = () => {
             drawingNo: dwgParam,
             drawing_id: dwgIdParam || prev.drawing_id,
             itemGroup: autofetchedGroup || prev.itemGroup,
-            description: isAssembly ? '' : (cleanText(dwgName) || prev.description),
+            description: cleanText(dwgName) || prev.description,
             itemCode: itemCode || prev.itemCode
           }));
         }
@@ -1285,12 +1289,12 @@ const BOMFormPage = () => {
           let matchedItem = null;
           if (salesOrderIdFromUrl) {
             matchedItem = currentApprovedDrawings.find(d =>
-              String(d.drawing_no) === String(drawingNoFromUrl) &&
+              cleanDwgNo(d.drawing_no) === cleanDwgNo(drawingNoFromUrl) &&
               String(d.sales_order_id) === String(salesOrderIdFromUrl)
             );
           }
           if (!matchedItem) {
-            matchedItem = currentApprovedDrawings.find(d => String(d.drawing_no) === String(drawingNoFromUrl));
+            matchedItem = currentApprovedDrawings.find(d => cleanDwgNo(d.drawing_no) === cleanDwgNo(drawingNoFromUrl));
           }
 
           if (matchedItem) {
@@ -1356,11 +1360,13 @@ const BOMFormPage = () => {
         // 3. Fetch BOM structure
         const itemCodeParam = itemCodeFromUrl || currentItem?.item_code || productForm.itemCode;
         const drawingNoParam = drawingNoFromUrl || currentItem?.drawing_no || productForm.drawingNo;
+        const drawingIdParamVal = drawingIdFromUrl || currentItem?.drawing_id || productForm.drawing_id || productForm.drawingNo;
 
         let bomUrl = `${API_BASE}/bom/items/${effectiveId || 'null'}`;
         const qp = [];
         if (itemCodeParam) qp.push(`itemCode=${encodeURIComponent(itemCodeParam)}`);
         if (drawingNoParam && drawingNoParam !== 'N/A') qp.push(`drawingNo=${encodeURIComponent(drawingNoParam)}`);
+        if (drawingIdParamVal) qp.push(`drawingId=${encodeURIComponent(drawingIdParamVal)}`);
         if (qp.length > 0) bomUrl += `?${qp.join('&')}`;
 
         console.log(`[fetchData] Fetching BOM items: ${bomUrl}`);

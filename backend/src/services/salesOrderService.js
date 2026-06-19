@@ -978,7 +978,7 @@ const getApprovedDrawings = async (companyId = null) => {
       `SELECT soi.id, soi.sales_order_id, soi.bom_id, soi.item_code, soi.item_type, soi.item_group, 
               soi.unit, soi.description, soi.is_active, soi.is_default, soi.quantity, 
               soi.drawing_no, soi.drawing_id, soi.status, soi.created_by, soi.created_at, soi.updated_at,
-              soi.drawing_pdf, cd.file_path,
+              soi.drawing_pdf, soi.drawing_type, cd.file_path, cd.drawing_type as cd_drawing_type,
               cd.contact_person, cd.phone, cd.email,
               (
                 SELECT bom_cost FROM sales_order_items v2 

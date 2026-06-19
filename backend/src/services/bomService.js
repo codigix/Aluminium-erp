@@ -1,6 +1,47 @@
 const pool = require('../config/db');
 
-const getItemMaterials = async (itemId, itemCode = null, drawingNo = null) => {
+const getLatestMasterItemId = async (itemCode, drawingNo, drawingId) => {
+  // Try matching by drawingId (highest priority)
+  if (drawingId) {
+    const [rows] = await pool.query(
+      `SELECT id FROM sales_order_items 
+       WHERE (drawing_id = ? OR drawing_id = (SELECT id FROM customer_drawings WHERE public_id = ?)) 
+       AND sales_order_id IS NULL 
+       ORDER BY id DESC LIMIT 1`,
+      [drawingId, drawingId]
+    );
+    if (rows.length > 0) return rows[0].id;
+  }
+
+  // Try matching by drawingNo (middle priority)
+  if (drawingNo && drawingNo !== '—' && drawingNo !== 'N/A' && drawingNo !== 'NA') {
+    const cleanDwg = String(drawingNo).trim();
+    const [rows] = await pool.query(
+      `SELECT id FROM sales_order_items 
+       WHERE (TRIM(drawing_no) = ? OR TRIM(drawing_no) = ?) 
+       AND sales_order_id IS NULL 
+       ORDER BY id DESC LIMIT 1`,
+      [cleanDwg, cleanDwg]
+    );
+    if (rows.length > 0) return rows[0].id;
+  }
+
+  // Try matching by itemCode (lowest priority)
+  if (itemCode) {
+    const [rows] = await pool.query(
+      `SELECT id FROM sales_order_items 
+       WHERE item_code = ? 
+       AND sales_order_id IS NULL 
+       ORDER BY id DESC LIMIT 1`,
+      [itemCode]
+    );
+    if (rows.length > 0) return rows[0].id;
+  }
+
+  return null;
+};
+
+const getItemMaterials = async (itemId, itemCode = null, drawingNo = null, drawingId = null) => {
   const parsedItemId = (itemId === 'null' || itemId === 'undefined' || !itemId) ? null : itemId;
   let rows = [];
 
@@ -34,7 +75,7 @@ const getItemMaterials = async (itemId, itemCode = null, drawingNo = null) => {
   }
 
   // Fallback to Master/Template if no specific ID data found or NO ID provided
-  if (rows.length === 0 && (itemCode || drawingNo)) {
+  if (rows.length === 0 && (itemCode || drawingNo || drawingId)) {
     // If we have an ID but it's a specific revision, we should NOT fallback to master 
     // because revisions are meant to be historical snapshots. 
     if (parsedItemId) {
@@ -47,31 +88,26 @@ const getItemMaterials = async (itemId, itemCode = null, drawingNo = null) => {
       }
     }
 
-    let query = `SELECT m.*, i.item_code as actual_item_code, i.material_name as actual_item_name,
-                        i.selling_rate as latest_selling_rate, i.valuation_rate as latest_valuation_rate, i.material_type as latest_material_type,
-                        i.length as latest_length, i.width as latest_width, i.thickness as latest_thickness,
-                        i.weight_per_unit as latest_weight_per_unit
-                 FROM sales_order_item_materials m 
-                 LEFT JOIN (
-                   SELECT material_name, MIN(item_code) as item_code,
-                          MAX(selling_rate) as selling_rate, MAX(valuation_rate) as valuation_rate,
-                          MAX(material_type) as material_type,
-                          MAX(length) as length, MAX(width) as width, MAX(thickness) as thickness,
-                          MAX(weight_per_unit) as weight_per_unit
-                   FROM stock_balance 
-                   GROUP BY material_name
-                 ) i ON m.material_name = i.material_name 
-                 WHERE m.sales_order_item_id IN (
-                    SELECT id FROM (
-                       SELECT id FROM sales_order_items 
-                       WHERE (item_code = ? OR drawing_no = ?) 
-                       AND sales_order_id IS NULL 
-                       ORDER BY id DESC LIMIT 1
-                    ) as t
-                 )`;
-    let params = [itemCode, drawingNo];
+    const fallbackId = await getLatestMasterItemId(itemCode, drawingNo, drawingId);
+    if (fallbackId) {
+      let query = `SELECT m.*, i.item_code as actual_item_code, i.material_name as actual_item_name,
+                          i.selling_rate as latest_selling_rate, i.valuation_rate as latest_valuation_rate, i.material_type as latest_material_type,
+                          i.length as latest_length, i.width as latest_width, i.thickness as latest_thickness,
+                          i.weight_per_unit as latest_weight_per_unit
+                   FROM sales_order_item_materials m 
+                   LEFT JOIN (
+                     SELECT material_name, MIN(item_code) as item_code,
+                            MAX(selling_rate) as selling_rate, MAX(valuation_rate) as valuation_rate,
+                            MAX(material_type) as material_type,
+                            MAX(length) as length, MAX(width) as width, MAX(thickness) as thickness,
+                            MAX(weight_per_unit) as weight_per_unit
+                     FROM stock_balance 
+                     GROUP BY material_name
+                   ) i ON m.material_name = i.material_name 
+                   WHERE m.sales_order_item_id = ?`;
 
-    [rows] = await pool.query(query + ' ORDER BY m.created_at ASC', params);
+      [rows] = await pool.query(query + ' ORDER BY m.created_at ASC', [fallbackId]);
+    }
   }
 
   return rows.map(row => ({
@@ -95,7 +131,7 @@ const getItemMaterials = async (itemId, itemCode = null, drawingNo = null) => {
   }));
 };
 
-const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refBatchId = null, refDate = null, version = null) => {
+const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refBatchId = null, refDate = null, version = null, drawingId = null) => {
   let parsedItemId = (itemId === 'null' || itemId === 'undefined' || !itemId) ? null : itemId;
   let rows = [];
 
@@ -240,7 +276,7 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
   }
 
   // Fallback to Master/Template if no specific ID data found or NO ID provided
-  if (rows.length === 0 && (itemCode || drawingNo)) {
+  if (rows.length === 0 && (itemCode || drawingNo || drawingId)) {
     if (parsedItemId) {
       const [itemRow] = await pool.query('SELECT sales_order_id, bom_cost FROM sales_order_items WHERE id = ?', [parsedItemId]);
       if (itemRow.length > 0) {
@@ -250,15 +286,9 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
         }
       }
     }
-    const [latestIdRow] = await pool.query(
-      `SELECT id FROM sales_order_items 
-       WHERE (item_code = ? OR drawing_no = ?) 
-       AND sales_order_id IS NULL 
-       ORDER BY id DESC LIMIT 1`,
-      [itemCode, drawingNo]
-    );
+    const latestMasterId = await getLatestMasterItemId(itemCode, drawingNo, drawingId);
 
-    if (latestIdRow.length > 0) {
+    if (latestMasterId) {
       let query = `SELECT c.*, 
                            COALESCE(i.drawing_no, soi.drawing_no) as drawing_no,
                            COALESCE(soi.description, c.description) as description,
@@ -279,32 +309,77 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
                     ) i ON LOWER(TRIM(COALESCE(c.component_code, c.item_code))) = LOWER(TRIM(i.item_code))
                     WHERE c.sales_order_item_id = ?`;
 
-      [rows] = await pool.query(query + ' ORDER BY c.created_at ASC', [latestIdRow[0].id]);
+      [rows] = await pool.query(query + ' ORDER BY c.created_at ASC', [latestMasterId]);
     }
 
     if (rows.length === 0) {
       // Try to find an item that actually HAS components first to avoid picking wrong entry for same drawing
-      const [componentIdRow] = await pool.query(
-        `SELECT soi.id 
-         FROM sales_order_items soi
-         WHERE (soi.item_code = ? OR soi.drawing_no = ?) 
-         AND soi.bom_cost > 0
-         AND EXISTS (SELECT 1 FROM sales_order_item_components WHERE sales_order_item_id = soi.id)
-         ORDER BY soi.id DESC LIMIT 1`,
-        [itemCode, drawingNo]
-      );
-
-      let fallbackId = componentIdRow.length > 0 ? componentIdRow[0].id : null;
+      let fallbackId = null;
+      if (drawingId) {
+        const [r] = await pool.query(
+          `SELECT id FROM sales_order_items 
+           WHERE (drawing_id = ? OR drawing_id = (SELECT id FROM customer_drawings WHERE public_id = ?)) 
+           AND bom_cost > 0
+           AND EXISTS (SELECT 1 FROM sales_order_item_components WHERE sales_order_item_id = id)
+           ORDER BY id DESC LIMIT 1`,
+          [drawingId, drawingId]
+        );
+        if (r.length > 0) fallbackId = r[0].id;
+      }
+      if (!fallbackId && drawingNo && drawingNo !== '—' && drawingNo !== 'N/A' && drawingNo !== 'NA') {
+        const [r] = await pool.query(
+          `SELECT id FROM sales_order_items 
+           WHERE TRIM(drawing_no) = ? 
+           AND bom_cost > 0
+           AND EXISTS (SELECT 1 FROM sales_order_item_components WHERE sales_order_item_id = id)
+           ORDER BY id DESC LIMIT 1`,
+          [String(drawingNo).trim()]
+        );
+        if (r.length > 0) fallbackId = r[0].id;
+      }
+      if (!fallbackId && itemCode) {
+        const [r] = await pool.query(
+          `SELECT id FROM sales_order_items 
+           WHERE item_code = ? 
+           AND bom_cost > 0
+           AND EXISTS (SELECT 1 FROM sales_order_item_components WHERE sales_order_item_id = id)
+           ORDER BY id DESC LIMIT 1`,
+          [itemCode]
+        );
+        if (r.length > 0) fallbackId = r[0].id;
+      }
 
       if (!fallbackId) {
-        const [looseFallbackRow] = await pool.query(
-          `SELECT id FROM sales_order_items 
-           WHERE (item_code = ? OR drawing_no = ?) 
-           AND bom_cost > 0
-           ORDER BY id DESC LIMIT 1`,
-          [itemCode, drawingNo]
-        );
-        if (looseFallbackRow.length > 0) fallbackId = looseFallbackRow[0].id;
+        if (drawingId) {
+          const [r] = await pool.query(
+            `SELECT id FROM sales_order_items 
+             WHERE (drawing_id = ? OR drawing_id = (SELECT id FROM customer_drawings WHERE public_id = ?)) 
+             AND bom_cost > 0
+             ORDER BY id DESC LIMIT 1`,
+            [drawingId, drawingId]
+          );
+          if (r.length > 0) fallbackId = r[0].id;
+        }
+        if (!fallbackId && drawingNo && drawingNo !== '—' && drawingNo !== 'N/A' && drawingNo !== 'NA') {
+          const [r] = await pool.query(
+            `SELECT id FROM sales_order_items 
+             WHERE TRIM(drawing_no) = ? 
+             AND bom_cost > 0
+             ORDER BY id DESC LIMIT 1`,
+            [String(drawingNo).trim()]
+          );
+          if (r.length > 0) fallbackId = r[0].id;
+        }
+        if (!fallbackId && itemCode) {
+          const [r] = await pool.query(
+            `SELECT id FROM sales_order_items 
+             WHERE item_code = ? 
+             AND bom_cost > 0
+             ORDER BY id DESC LIMIT 1`,
+            [itemCode]
+          );
+          if (r.length > 0) fallbackId = r[0].id;
+        }
       }
 
       if (fallbackId) {
@@ -332,33 +407,60 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
     }
 
     // FINAL FALLBACK: Search standard BOM table if still no rows found
-    if (rows.length === 0 && (itemCode || drawingNo)) {
-      const [bomRows] = await pool.query(
-        `SELECT bi.id as bi_id, bi.component_code, bi.quantity as qty, bi.quantity,
-                i.description, i.uom, i.item_group,
-                i.valuation_rate as latest_valuation_rate, 
-                i.selling_rate as latest_selling_rate,
-                i.weight_per_unit as latest_weight_per_unit,
-                i.length as latest_length, i.width as latest_width, i.thickness as latest_thickness,
-                i.diameter as latest_diameter, i.outer_diameter as latest_outer_diameter,
-                bi.component_code as component_code,
-                NULL as bom_cost, cb.drawing_no
-         FROM bom_items bi
-         JOIN bom b ON bi.bom_id = b.id
-         JOIN items i ON bi.component_code = i.item_code
-         LEFT JOIN bom cb ON cb.item_code = bi.component_code AND cb.id = (
-           SELECT MAX(id) FROM bom WHERE item_code = bi.component_code
-         )
-         WHERE (b.item_code = ? OR (b.drawing_no = ? AND b.drawing_no IS NOT NULL AND b.drawing_no != '—'))
-         AND b.id = (
-           SELECT MAX(id) FROM bom 
-           WHERE (item_code = ? OR (drawing_no = ? AND drawing_no IS NOT NULL AND drawing_no != '—'))
-         )
-         ORDER BY bi.id ASC`,
-        [itemCode, drawingNo, itemCode, drawingNo]
-      );
-      if (bomRows.length > 0) {
-        rows = bomRows;
+    if (rows.length === 0) {
+      let targetBomId = null;
+      if (drawingId) {
+        const [r] = await pool.query(
+          `SELECT id FROM bom 
+           WHERE (drawing_id = ? OR drawing_id = (SELECT id FROM customer_drawings WHERE public_id = ?)) 
+           ORDER BY id DESC LIMIT 1`,
+          [drawingId, drawingId]
+        );
+        if (r.length > 0) targetBomId = r[0].id;
+      }
+      if (!targetBomId && drawingNo && drawingNo !== '—' && drawingNo !== 'N/A' && drawingNo !== 'NA') {
+        const [r] = await pool.query(
+          `SELECT id FROM bom 
+           WHERE TRIM(drawing_no) = ? 
+           ORDER BY id DESC LIMIT 1`,
+          [String(drawingNo).trim()]
+        );
+        if (r.length > 0) targetBomId = r[0].id;
+      }
+      if (!targetBomId && itemCode) {
+        const [r] = await pool.query(
+          `SELECT id FROM bom 
+           WHERE item_code = ? 
+           ORDER BY id DESC LIMIT 1`,
+          [itemCode]
+        );
+        if (r.length > 0) targetBomId = r[0].id;
+      }
+
+      if (targetBomId) {
+        const [bomRows] = await pool.query(
+          `SELECT bi.id as bi_id, bi.component_code, bi.quantity as qty, bi.quantity,
+                  i.description, i.uom, i.item_group,
+                  i.valuation_rate as latest_valuation_rate, 
+                  i.selling_rate as latest_selling_rate,
+                  i.weight_per_unit as latest_weight_per_unit,
+                  i.length as latest_length, i.width as latest_width, i.thickness as latest_thickness,
+                  i.diameter as latest_diameter, i.outer_diameter as latest_outer_diameter,
+                  bi.component_code as component_code,
+                  NULL as bom_cost, cb.drawing_no
+           FROM bom_items bi
+           JOIN bom b ON bi.bom_id = b.id
+           JOIN items i ON bi.component_code = i.item_code
+           LEFT JOIN bom cb ON cb.item_code = bi.component_code AND cb.id = (
+             SELECT MAX(id) FROM bom WHERE item_code = bi.component_code
+           )
+           WHERE b.id = ?
+           ORDER BY bi.id ASC`,
+          [targetBomId]
+        );
+        if (bomRows.length > 0) {
+          rows = bomRows;
+        }
       }
     }
   }
@@ -566,7 +668,7 @@ const getItemComponents = async (itemId, itemCode = null, drawingNo = null, refB
   }));
 };
 
-const getItemOperations = async (itemId, itemCode = null, drawingNo = null) => {
+const getItemOperations = async (itemId, itemCode = null, drawingNo = null, drawingId = null) => {
   const parsedItemId = (itemId === 'null' || itemId === 'undefined' || !itemId) ? null : itemId;
   let rows = [];
 
@@ -578,7 +680,7 @@ const getItemOperations = async (itemId, itemCode = null, drawingNo = null) => {
   }
 
   // Fallback to Master/Template if no specific ID data found or NO ID provided
-  if (rows.length === 0 && (itemCode || drawingNo)) {
+  if (rows.length === 0 && (itemCode || drawingNo || drawingId)) {
     if (parsedItemId) {
       const [itemRow] = await pool.query('SELECT sales_order_id, bom_cost FROM sales_order_items WHERE id = ?', [parsedItemId]);
       if (itemRow.length > 0) {
@@ -588,18 +690,13 @@ const getItemOperations = async (itemId, itemCode = null, drawingNo = null) => {
         }
       }
     }
-    let query = `SELECT * FROM sales_order_item_operations 
-                 WHERE sales_order_item_id IN (
-                    SELECT id FROM (
-                       SELECT id FROM sales_order_items 
-                       WHERE (item_code = ? OR drawing_no = ?) 
-                       AND sales_order_id IS NULL 
-                       ORDER BY id DESC LIMIT 1
-                    ) as t
-                 )`;
-    let params = [itemCode, drawingNo];
-
-    [rows] = await pool.query(query + ' ORDER BY created_at ASC', params);
+    const fallbackId = await getLatestMasterItemId(itemCode, drawingNo, drawingId);
+    if (fallbackId) {
+      [rows] = await pool.query(
+        'SELECT * FROM sales_order_item_operations WHERE sales_order_item_id = ? ORDER BY created_at ASC',
+        [fallbackId]
+      );
+    }
   }
   return rows.map(row => ({
     ...row,
@@ -619,7 +716,7 @@ const getItemOperations = async (itemId, itemCode = null, drawingNo = null) => {
   }));
 };
 
-const getItemScrap = async (itemId, itemCode = null, drawingNo = null) => {
+const getItemScrap = async (itemId, itemCode = null, drawingNo = null, drawingId = null) => {
   const parsedItemId = (itemId === 'null' || itemId === 'undefined' || !itemId) ? null : itemId;
   let rows = [];
 
@@ -631,7 +728,7 @@ const getItemScrap = async (itemId, itemCode = null, drawingNo = null) => {
   }
 
   // Fallback to Master/Template if no specific ID data found or NO ID provided
-  if (rows.length === 0 && (itemCode || drawingNo)) {
+  if (rows.length === 0 && (itemCode || drawingNo || drawingId)) {
     if (parsedItemId) {
       const [itemRow] = await pool.query('SELECT sales_order_id, bom_cost FROM sales_order_items WHERE id = ?', [parsedItemId]);
       if (itemRow.length > 0) {
@@ -641,18 +738,11 @@ const getItemScrap = async (itemId, itemCode = null, drawingNo = null) => {
         }
       }
     }
-    const [latestIdRow] = await pool.query(
-      `SELECT id FROM sales_order_items 
-       WHERE (item_code = ? OR drawing_no = ?) 
-       AND sales_order_id IS NULL 
-       ORDER BY id DESC LIMIT 1`,
-      [itemCode, drawingNo]
-    );
-
-    if (latestIdRow.length > 0) {
+    const fallbackId = await getLatestMasterItemId(itemCode, drawingNo, drawingId);
+    if (fallbackId) {
       [rows] = await pool.query(
         'SELECT * FROM sales_order_item_scrap WHERE sales_order_item_id = ? ORDER BY created_at ASC',
-        [latestIdRow[0].id]
+        [fallbackId]
       );
     }
   }
@@ -980,7 +1070,10 @@ const createBOMRequest = async (bomData) => {
   const bom_cost = costing?.costPerUnit || 0;
   const finalStatus = status || 'Active';
 
-  const effectiveDescription = (notes && notes.trim()) ? notes : description;
+  let effectiveDescription = (notes && notes.trim()) ? notes : description;
+  if (!effectiveDescription || !effectiveDescription.trim()) {
+    effectiveDescription = description || drawingNo || itemCode || 'BOM Item';
+  }
 
   const connection = await pool.getConnection();
   try {

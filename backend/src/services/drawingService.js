@@ -840,6 +840,7 @@ const getApprovedDrawings = async () => {
        MAX(d.description) as drawing_description,
        MAX(d.hsn_code) as hsn_code,
        MAX(d.delivery_date) as delivery_date,
+       MAX(d.drawing_type) as drawing_type,
        MAX(latest_bom.id) as id,
        MAX(latest_bom.bom_cost) as bom_cost, 
        MAX(latest_bom.item_group) as item_group, 
