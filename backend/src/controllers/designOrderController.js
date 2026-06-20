@@ -2,7 +2,8 @@ const designOrderService = require('../services/designOrderService');
 
 const listDesignOrders = async (req, res) => {
   try {
-    const orders = await designOrderService.listDesignOrders();
+    const includeAll = req.query.includeAll === 'true';
+    const orders = await designOrderService.listDesignOrders({ includeAll });
     res.json(orders);
   } catch (error) {
     res.status(500).json({ message: error.message });

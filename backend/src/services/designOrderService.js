@@ -1,6 +1,8 @@
 const pool = require('../config/db');
 
-const listDesignOrders = async () => {
+const listDesignOrders = async (options = {}) => {
+  const { includeAll = false } = options;
+  const whereClause = includeAll ? '1=1' : 'so.request_accepted = 1';
   const [rows] = await pool.query(`
     SELECT 
       do.id,
@@ -38,7 +40,7 @@ const listDesignOrders = async () => {
          AND soi.item_code = poi.item_code 
          AND (soi.drawing_no = poi.drawing_no OR (soi.drawing_no IS NULL AND poi.drawing_no IS NULL))
     LEFT JOIN stock_balance sb ON sb.item_code = soi.item_code
-    WHERE so.request_accepted = 1
+    WHERE ${whereClause}
     ORDER BY do.created_at DESC
   `);
   return rows;

@@ -268,7 +268,7 @@ const BOMCreation = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/design-orders`, {
+      const response = await fetch(`${API_BASE}/design-orders?includeAll=true`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!response.ok) throw new Error('Failed to fetch design orders');
