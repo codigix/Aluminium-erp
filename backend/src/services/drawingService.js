@@ -257,6 +257,24 @@ const updateDrawing = async (id, data) => {
       internalId = rows[0].id;
     }
 
+    // Check if drawing is linked to any sales order that is QUOTATION_SENT or BOM_SUBMITTED
+    const [orders] = await connection.query(
+      `SELECT so.status 
+       FROM sales_order_items soi
+       JOIN sales_orders so ON soi.sales_order_id = so.id
+       WHERE soi.drawing_id = ?`,
+      [internalId]
+    );
+    for (const order of orders) {
+      const statusUpper = (order.status || '').toUpperCase().replace(/_/g, ' ').trim();
+      if (statusUpper === 'QUOTATION SENT') {
+        throw new Error('quotation allready sent now cant update requirement');
+      }
+      if (statusUpper === 'BOM SUBMITTED') {
+        throw new Error('bom allready sent now cant update requirement');
+      }
+    }
+
     // 1. Update customer_drawings
     let query = 'UPDATE customer_drawings SET ';
     const updates = [];
@@ -379,6 +397,24 @@ const updateItemDrawing = async (itemId, data) => {
   try {
     await connection.beginTransaction();
 
+    // Check parent sales order status first
+    const [itemOrder] = await connection.query(
+      `SELECT so.status 
+       FROM sales_order_items soi
+       JOIN sales_orders so ON soi.sales_order_id = so.id
+       WHERE soi.id = ?`,
+      [itemId]
+    );
+    if (itemOrder.length > 0) {
+      const statusUpper = (itemOrder[0].status || '').toUpperCase().replace(/_/g, ' ').trim();
+      if (statusUpper === 'QUOTATION SENT') {
+        throw new Error('quotation allready sent now cant update requirement');
+      }
+      if (statusUpper === 'BOM SUBMITTED') {
+        throw new Error('bom allready sent now cant update requirement');
+      }
+    }
+
     const updates = [];
     const params = [];
 
@@ -443,6 +479,19 @@ const createCustomerDrawing = async (data) => {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
+
+    if (providedSalesOrderId) {
+      const [order] = await connection.query('SELECT status FROM sales_orders WHERE id = ?', [providedSalesOrderId]);
+      if (order.length > 0) {
+        const statusUpper = (order[0].status || '').toUpperCase().replace(/_/g, ' ').trim();
+        if (statusUpper === 'QUOTATION SENT') {
+          throw new Error('quotation allready sent now cant update requirement');
+        }
+        if (statusUpper === 'BOM SUBMITTED') {
+          throw new Error('bom allready sent now cant update requirement');
+        }
+      }
+    }
 
     const drawingPublicId = crypto.randomUUID();
     let salesOrderId = providedSalesOrderId;
@@ -551,6 +600,19 @@ const createBatchCustomerDrawings = async (batchData, batchInfo = {}) => {
     await connection.beginTransaction();
     let count = 0;
     let salesOrderId = batchInfo.salesOrderId || null;
+
+    if (salesOrderId) {
+      const [order] = await connection.query('SELECT status FROM sales_orders WHERE id = ?', [salesOrderId]);
+      if (order.length > 0) {
+        const statusUpper = (order[0].status || '').toUpperCase().replace(/_/g, ' ').trim();
+        if (statusUpper === 'QUOTATION SENT') {
+          throw new Error('quotation allready sent now cant update requirement');
+        }
+        if (statusUpper === 'BOM SUBMITTED') {
+          throw new Error('bom allready sent now cant update requirement');
+        }
+      }
+    }
 
     for (const data of batchData) {
       const {
@@ -705,6 +767,24 @@ const deleteClientDrawings = async (clientName, connection) => {
 };
 
 const internalDeleteDrawing = async (connection, id) => {
+  // Check if drawing is linked to any sales order that is QUOTATION_SENT or BOM_SUBMITTED
+  const [orders] = await connection.query(
+    `SELECT so.status 
+     FROM sales_order_items soi
+     JOIN sales_orders so ON soi.sales_order_id = so.id
+     WHERE soi.drawing_id = ?`,
+    [id]
+  );
+  for (const order of orders) {
+    const statusUpper = (order.status || '').toUpperCase().replace(/_/g, ' ').trim();
+    if (statusUpper === 'QUOTATION SENT') {
+      throw new Error('quotation allready sent now cant update requirement');
+    }
+    if (statusUpper === 'BOM SUBMITTED') {
+      throw new Error('bom allready sent now cant update requirement');
+    }
+  }
+
   // 1. Get all sales_order_item_ids linked to this drawing
   const [soItems] = await connection.query(
     'SELECT id, sales_order_id FROM sales_order_items WHERE drawing_id = ?',

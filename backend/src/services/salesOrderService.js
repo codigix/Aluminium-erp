@@ -1783,6 +1783,18 @@ const deleteSalesOrder = async (salesOrderId) => {
   try {
     await connection.beginTransaction();
 
+    // Check status first
+    const [order] = await connection.query('SELECT status FROM sales_orders WHERE id = ?', [salesOrderId]);
+    if (order.length > 0) {
+      const statusUpper = (order[0].status || '').toUpperCase().replace(/_/g, ' ').trim();
+      if (statusUpper === 'QUOTATION SENT') {
+        throw new Error('quotation allready sent now cant update requirement');
+      }
+      if (statusUpper === 'BOM SUBMITTED') {
+        throw new Error('bom allready sent now cant update requirement');
+      }
+    }
+
     // 1. Delete linked production plans, work orders, job cards
     const [planRows] = await connection.execute('SELECT id FROM production_plans WHERE sales_order_id = ?', [salesOrderId]);
     for (const plan of planRows) {

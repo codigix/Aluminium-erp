@@ -35,6 +35,36 @@ const CustomerDrawing = () => {
   };
   const deptPrefix = getDeptPrefix();
 
+  const checkStatusRestricted = (soIdOrStatus) => {
+    if (!soIdOrStatus) return { restricted: false };
+    
+    // Normalize status string if it looks like one
+    const normalized = String(soIdOrStatus).toUpperCase().replace(/_/g, ' ').trim();
+    if (normalized === 'QUOTATION SENT') {
+      return { restricted: true, message: 'quotation allready sent now cant update requirement' };
+    }
+    if (normalized === 'BOM SUBMITTED') {
+      return { restricted: true, message: 'bom allready sent now cant update requirement' };
+    }
+
+    // Try finding the requirement by ID or public_id
+    const req = requirements.find(r => 
+      String(r.id) === String(soIdOrStatus) || 
+      String(r.public_id) === String(soIdOrStatus)
+    );
+    if (req) {
+      const reqNormalized = String(req.status || '').toUpperCase().replace(/_/g, ' ').trim();
+      if (reqNormalized === 'QUOTATION SENT') {
+        return { restricted: true, message: 'quotation allready sent now cant update requirement' };
+      }
+      if (reqNormalized === 'BOM SUBMITTED') {
+        return { restricted: true, message: 'bom allready sent now cant update requirement' };
+      }
+    }
+
+    return { restricted: false };
+  };
+
   const [drawings, setDrawings] = useState([]);
   const [requirements, setRequirements] = useState([]);
   const [requirementsSearchTerm, setRequirementsSearchTerm] = useState('');
@@ -932,6 +962,16 @@ const CustomerDrawing = () => {
 
   const handleSave = async (e) => {
     e.preventDefault();
+    if (editData.id) {
+      const drawing = drawings.find(d => d.id === editData.id || d.drawing_master_id === editData.id);
+      if (drawing?.sales_order_id) {
+        const check = checkStatusRestricted(drawing.sales_order_id);
+        if (check.restricted) {
+          errorToast(check.message);
+          return;
+        }
+      }
+    }
     try {
       setSaveLoading(true);
       const token = localStorage.getItem('authToken');
@@ -1051,6 +1091,13 @@ const CustomerDrawing = () => {
     validationSchema,
     onSubmit: async (values) => {
       console.log('Submitting Formik values:', values);
+      if (formMode === 'edit' && editingRequirementId) {
+        const check = checkStatusRestricted(editingRequirementId);
+        if (check.restricted) {
+          errorToast(check.message);
+          return;
+        }
+      }
       try {
         let successCount = 0;
         setSubmitting(true);
@@ -1352,11 +1399,25 @@ const CustomerDrawing = () => {
   };
 
   const addManualDrawingRow = () => {
+    if (formMode === 'edit' && editingRequirementId) {
+      const check = checkStatusRestricted(editingRequirementId);
+      if (check.restricted) {
+        errorToast(check.message);
+        return;
+      }
+    }
     const newRow = getEmptyDrawingRow();
     formik.setFieldValue('manualDrawings', [newRow, ...formik.values.manualDrawings]);
   };
 
   const removeManualDrawingRow = (id) => {
+    if (formMode === 'edit' && editingRequirementId) {
+      const check = checkStatusRestricted(editingRequirementId);
+      if (check.restricted) {
+        errorToast(check.message);
+        return;
+      }
+    }
     const drawingToRemove = formik.values.manualDrawings.find(d => d.id === id);
 
     // Track for deletion if it's an existing drawing (not a temp one)
@@ -1374,6 +1435,13 @@ const CustomerDrawing = () => {
   };
 
   const handleManualFileChange = (e, id) => {
+    if (formMode === 'edit' && editingRequirementId) {
+      const check = checkStatusRestricted(editingRequirementId);
+      if (check.restricted) {
+        errorToast(check.message);
+        return;
+      }
+    }
     const selectedFiles = Array.from(e.target.files || []);
     if (selectedFiles.length > 0) {
       const validFiles = [];
@@ -1827,6 +1895,18 @@ const CustomerDrawing = () => {
   };
 
   const handleDelete = async (id) => {
+    let parentIdOrStatus = viewingClient?.status || viewingClient?.requirementId;
+    if (!parentIdOrStatus) {
+      const drawing = drawings.find(d => d.id === id || d.drawing_master_id === id);
+      parentIdOrStatus = drawing?.sales_order_id;
+    }
+    if (parentIdOrStatus) {
+      const check = checkStatusRestricted(parentIdOrStatus);
+      if (check.restricted) {
+        errorToast(check.message);
+        return;
+      }
+    }
     const result = await Swal.fire({
       title: 'Are you sure?',
       text: "You won't be able to revert this!",
@@ -1935,6 +2015,11 @@ const CustomerDrawing = () => {
   };
 
   const handleDeleteProject = async (projectId, projectName) => {
+    const check = checkStatusRestricted(projectId);
+    if (check.restricted) {
+      errorToast(check.message);
+      return;
+    }
     const result = await Swal.fire({
       title: 'Delete Project?',
       text: `This will remove project "${projectName}" and all associated drawings. You won't be able to revert this!`,
@@ -2671,7 +2756,7 @@ const CustomerDrawing = () => {
               )}
             </div>
             <div>
-              <label className="block text-xs  text-slate-700 mb-1">Type *</label>
+              <label className="block text-xs  text-slate-700 mb-1">Type</label>
               <input
                 type="text"
                 name="customer_type"
@@ -2701,7 +2786,7 @@ const CustomerDrawing = () => {
               )}
             </div>
             <div>
-              <label className="block text-xs  text-slate-700 mb-1">City *</label>
+              <label className="block text-xs  text-slate-700 mb-1">City</label>
               <input
                 type="text"
                 name="city"
@@ -2716,7 +2801,7 @@ const CustomerDrawing = () => {
               )}
             </div>
             <div>
-              <label className="block text-xs  text-slate-700 mb-1">State *</label>
+              <label className="block text-xs  text-slate-700 mb-1">State</label>
               <input
                 type="text"
                 name="state"
