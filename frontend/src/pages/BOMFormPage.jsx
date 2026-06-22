@@ -442,7 +442,12 @@ const cleanDwgNo = (dwg) => {
 const getAutofetchedGroup = (item) => {
   if (!item) return 'Part';
 
-  // 1. Check explicit classification fields (drawing_type, item_type, item_group) first
+  // 1. Check explicit classification fields (item_group, drawing_type, item_type) first
+  if (item.item_group || item.itemGroup) {
+    const ig = String(item.item_group || item.itemGroup).trim().toLowerCase();
+    if (ig.includes('assembly')) return 'Assembly';
+    if (ig.includes('part')) return 'Part';
+  }
   if (item.drawing_type || item.cd_drawing_type) {
     const dt = String(item.drawing_type || item.cd_drawing_type).trim().toLowerCase();
     if (dt.includes('assembly')) return 'Assembly';
@@ -452,11 +457,6 @@ const getAutofetchedGroup = (item) => {
     const it = String(item.item_type).trim().toLowerCase();
     if (it.includes('assembly')) return 'Assembly';
     if (it.includes('part')) return 'Part';
-  }
-  if (item.item_group || item.itemGroup) {
-    const ig = String(item.item_group || item.itemGroup).trim().toLowerCase();
-    if (ig.includes('assembly')) return 'Assembly';
-    if (ig.includes('part')) return 'Part';
   }
 
   // 2. Check item code / name / description prefixes and content (case-insensitive)
