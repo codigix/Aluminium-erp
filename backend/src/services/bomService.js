@@ -1514,15 +1514,60 @@ const deleteBOM = async (itemId) => {
   try {
     await connection.beginTransaction();
 
-    // 1. Get sales_order_id before deletion
-    const [itemRows] = await connection.query('SELECT sales_order_id FROM sales_order_items WHERE id = ?', [itemId]);
+    // 1. Get sales_order_id, drawing_no, and item_code before deletion
+    const [itemRows] = await connection.query('SELECT sales_order_id, drawing_no, item_code FROM sales_order_items WHERE id = ?', [itemId]);
     const salesOrderId = itemRows.length > 0 ? itemRows[0].sales_order_id : null;
+    const drawingNo = itemRows.length > 0 ? itemRows[0].drawing_no : null;
+    const itemCode = itemRows.length > 0 ? itemRows[0].item_code : null;
 
-    // 2. Handle references in other tables
-    await connection.execute('UPDATE sales_order_items SET parent_bom_id = NULL WHERE parent_bom_id = ?', [itemId]);
-    await connection.execute('UPDATE quotation_requests SET sales_order_item_id = NULL WHERE sales_order_item_id = ?', [itemId]);
-    await connection.execute('UPDATE production_plan_items SET sales_order_item_id = NULL WHERE sales_order_item_id = ?', [itemId]);
-    await connection.execute('UPDATE work_orders SET sales_order_item_id = NULL WHERE sales_order_item_id = ?', [itemId]);
+    // Find an alternative parent item in sales_order_items (e.g., the original sales order item representation)
+    let altParentId = null;
+    if (itemRows.length > 0) {
+      let altQuery = '';
+      let altParams = [];
+      if (salesOrderId) {
+        altQuery = `
+          SELECT id FROM sales_order_items 
+          WHERE sales_order_id = ? 
+            AND (
+              (drawing_no = ? AND drawing_no IS NOT NULL AND drawing_no != '' AND drawing_no != '—' AND drawing_no != 'N/A' AND drawing_no != 'NA')
+              OR (item_code = ? AND item_code IS NOT NULL AND item_code != '')
+            )
+            AND id != ? 
+          ORDER BY id ASC LIMIT 1
+        `;
+        altParams = [salesOrderId, drawingNo, itemCode, itemId];
+      } else {
+        altQuery = `
+          SELECT id FROM sales_order_items 
+          WHERE sales_order_id IS NULL 
+            AND (
+              (drawing_no = ? AND drawing_no IS NOT NULL AND drawing_no != '' AND drawing_no != '—' AND drawing_no != 'N/A' AND drawing_no != 'NA')
+              OR (item_code = ? AND item_code IS NOT NULL AND item_code != '')
+            )
+            AND id != ? 
+          ORDER BY id ASC LIMIT 1
+        `;
+        altParams = [drawingNo, itemCode, itemId];
+      }
+      const [altRows] = await connection.query(altQuery, altParams);
+      if (altRows.length > 0) {
+        altParentId = altRows[0].id;
+      }
+    }
+
+    // 2. Handle references in other tables (redirect to altParentId if available, otherwise set to NULL)
+    if (altParentId) {
+      await connection.execute('UPDATE sales_order_items SET parent_bom_id = ? WHERE parent_bom_id = ?', [altParentId, itemId]);
+      await connection.execute('UPDATE quotation_requests SET sales_order_item_id = ? WHERE sales_order_item_id = ?', [altParentId, itemId]);
+      await connection.execute('UPDATE production_plan_items SET sales_order_item_id = ? WHERE sales_order_item_id = ?', [altParentId, itemId]);
+      await connection.execute('UPDATE work_orders SET sales_order_item_id = ? WHERE sales_order_item_id = ?', [altParentId, itemId]);
+    } else {
+      await connection.execute('UPDATE sales_order_items SET parent_bom_id = NULL WHERE parent_bom_id = ?', [itemId]);
+      await connection.execute('UPDATE quotation_requests SET sales_order_item_id = NULL WHERE sales_order_item_id = ?', [itemId]);
+      await connection.execute('UPDATE production_plan_items SET sales_order_item_id = NULL WHERE sales_order_item_id = ?', [itemId]);
+      await connection.execute('UPDATE work_orders SET sales_order_item_id = NULL WHERE sales_order_item_id = ?', [itemId]);
+    }
 
     // 2. Delete item-specific BOM entries
     // For components, we might have a hierarchy. To avoid FK issues, we delete from leaf to root or disable checks
