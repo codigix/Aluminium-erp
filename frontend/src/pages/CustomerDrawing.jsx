@@ -4,9 +4,16 @@ import { useFormik } from 'formik';
 import * as Yup from 'yup';
 import { Card, Modal, DataTable, StatusBadge, FormControl, Tabs, Button } from '../components/ui.jsx';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
-import { Plus, Search, RefreshCw, Filter, FileText, Send, Loader2, Check, X, Package, ChevronDown, ChevronUp, Trash2, Edit2, Eye, History } from 'lucide-react';
+import { Plus, Search, RefreshCw, Filter, FileText, Send, Loader2, Check, X, Package, ChevronDown, ChevronUp, Trash2, Edit2, Eye, History, Lock } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast, warningToast, infoToast } from '../utils/toast';
+
+const toast = {
+  error: errorToast,
+  success: successToast,
+  warning: warningToast,
+  info: infoToast
+};
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -21,7 +28,8 @@ const getEmptyDrawingRow = () => ({
   drawing_type: 'Part',
   files: [],
   existingFiles: [],
-  remarks: ''
+  remarks: '',
+  status: 'PENDING'
 });
 
 const CustomerDrawing = () => {
@@ -37,7 +45,7 @@ const CustomerDrawing = () => {
 
   const checkStatusRestricted = (soIdOrStatus) => {
     if (!soIdOrStatus) return { restricted: false };
-    
+
     // Normalize status string if it looks like one
     const normalized = String(soIdOrStatus).toUpperCase().replace(/_/g, ' ').trim();
     if (normalized === 'QUOTATION SENT') {
@@ -48,8 +56,8 @@ const CustomerDrawing = () => {
     }
 
     // Try finding the requirement by ID or public_id
-    const req = requirements.find(r => 
-      String(r.id) === String(soIdOrStatus) || 
+    const req = requirements.find(r =>
+      String(r.id) === String(soIdOrStatus) ||
       String(r.public_id) === String(soIdOrStatus)
     );
     if (req) {
@@ -352,7 +360,7 @@ const CustomerDrawing = () => {
     }
 
     const clientData = approvedGroupedByClient[selectedApprovedClient];
-    
+
     // Find the first priced item and extract its order/project contact person and email
     const firstQuotedItem = selectedApprovedItems.find(item => quotePrices[item.id] && quotePrices[item.id] > 0);
     const contactPerson = firstQuotedItem?.order_contact_person || clientData.contact_person;
@@ -804,7 +812,8 @@ const CustomerDrawing = () => {
           drawing_type: item.drawing_type || 'Part',
           remarks: item.remarks || '',
           files: [],
-          existingFiles: existingFiles
+          existingFiles: existingFiles,
+          status: item.status || 'PENDING'
         };
       });
 
@@ -1029,14 +1038,14 @@ const CustomerDrawing = () => {
   const validationSchema = Yup.object().shape({
     client_name: Yup.string().required('Client Name is required'),
     project_name: Yup.string().required('Project Name is required'),
-    contact_person: Yup.string().nullable(),
+    contact_person: Yup.string().required('Contact Person is required'),
     phone_number: Yup.string()
       .matches(/^[0-9]{10}$/, {
         message: 'Phone number must be exactly 10 digits',
         excludeEmptyString: true
       })
-      .nullable(),
-    email_address: Yup.string().email('Invalid email address').nullable(),
+      .required('Phone number is required'),
+    email_address: Yup.string().email('Invalid email address').required('Email address is required'),
     customer_type: Yup.string().nullable(),
     gstin: Yup.string()
       .matches(/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/, {
@@ -1046,7 +1055,7 @@ const CustomerDrawing = () => {
       .nullable(),
     city: Yup.string().nullable(),
     state: Yup.string().nullable(),
-    billing_address: Yup.string().nullable(),
+    billing_address: Yup.string().required('Billing Address is required'),
     file: Yup.mixed().when('uploadMode', {
       is: 'bulk',
       then: (schema) => schema.required('Excel file is required'),
@@ -1184,7 +1193,7 @@ const CustomerDrawing = () => {
                 formData.append('remarks', drawing.remarks || '');
                 // Append the list of kept existing files as JSON
                 formData.append('existingFiles', JSON.stringify(drawing.existingFiles || []));
-                
+
                 // Append newly uploaded files
                 if (drawing.files && drawing.files.length > 0) {
                   drawing.files.forEach(f => {
@@ -1288,6 +1297,83 @@ const CustomerDrawing = () => {
       }
     },
   });
+
+  const hasRealErrors = () => {
+    const errorKeys = Object.keys(formik.errors);
+    if (errorKeys.length === 0) return false;
+    
+    for (const key of errorKeys) {
+      const errorVal = formik.errors[key];
+      if (Array.isArray(errorVal)) {
+        const hasElementErrors = errorVal.some(item => {
+          if (!item) return false;
+          if (typeof item === 'string') return true;
+          if (typeof item === 'object') {
+            return Object.values(item).some(val => !!val);
+          }
+          return false;
+        });
+        if (hasElementErrors) return true;
+      } else if (errorVal) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  const getFormIncompleteReasons = () => {
+    const reasons = [];
+
+    // 1. Check top-level mandatory fields
+    if (!formik.values.client_name?.trim()) reasons.push('Client Name');
+    if (!formik.values.project_name?.trim()) reasons.push('Project Name');
+    if (!formik.values.contact_person?.trim()) reasons.push('Contact Person');
+    if (!formik.values.phone_number?.trim() || !/^[0-9]{10}$/.test(formik.values.phone_number)) {
+      reasons.push('Phone (10 digits)');
+    }
+    if (!formik.values.email_address?.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formik.values.email_address)) {
+      reasons.push('Email Address');
+    }
+    if (!formik.values.billing_address?.trim()) reasons.push('Billing Address');
+
+    // 2. Check drawing information based on uploadMode
+    if (uploadMode === 'bulk') {
+      if (!formik.values.file) reasons.push('Excel File');
+    } else {
+      if (!formik.values.manualDrawings || formik.values.manualDrawings.length === 0) {
+        reasons.push('Drawing rows');
+      } else {
+        for (let i = 0; i < formik.values.manualDrawings.length; i++) {
+          const drawing = formik.values.manualDrawings[i];
+          if (!drawing.drawing_no?.trim()) reasons.push(`Drawing # (Row ${i + 1})`);
+          if (!drawing.drawing_type?.trim()) reasons.push(`Type (Row ${i + 1})`);
+          
+          // Check if there is at least one file (either new or existing)
+          const newFilesCount = drawing.files?.length || 0;
+          const existingFilesCount = drawing.existingFiles?.length || 0;
+          if (newFilesCount + existingFilesCount === 0) {
+            reasons.push(`Attached File (Row ${i + 1})`);
+          }
+        }
+      }
+    }
+
+    // 3. Check for any validation errors from Formik
+    if (hasRealErrors()) {
+      reasons.push('Input formats');
+    }
+
+    return reasons;
+  };
+
+  const isFormIncomplete = () => {
+    const reasons = getFormIncompleteReasons();
+    if (reasons.length > 0) {
+      console.log('Customer Drawing Form Incomplete Reasons:', reasons);
+      return true;
+    }
+    return false;
+  };
 
   const generateNextProjectName = () => {
     const prefix = 'PRO-';
@@ -1449,9 +1535,9 @@ const CustomerDrawing = () => {
 
       for (const file of selectedFiles) {
         const ext = file.name.toLowerCase().split('.').pop();
-        const isValid = file.type === 'application/pdf' || 
-                        file.type.startsWith('image/') || 
-                        ['pdf', 'jpg', 'jpeg', 'png', 'webp'].includes(ext);
+        const isValid = file.type === 'application/pdf' ||
+          file.type.startsWith('image/') ||
+          ['pdf', 'jpg', 'jpeg', 'png', 'webp'].includes(ext);
         if (isValid) {
           validFiles.push(file);
         } else {
@@ -2133,7 +2219,7 @@ const CustomerDrawing = () => {
             pageSize={10}
             onSearchChange={setRequirementsSearchTerm}
             customFilter={(row, searchLower) => {
-              return row.original_items?.some(item => 
+              return row.original_items?.some(item =>
                 String(item.drawing_no || '').toLowerCase().includes(searchLower)
               );
             }}
@@ -2875,130 +2961,167 @@ const CustomerDrawing = () => {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-slate-200">
-                    {formik.values.manualDrawings.map((drawing, index) => {
-                      const query = requirementsSearchTerm?.trim().toLowerCase();
-                      const isHighlighted = query && drawing.drawing_no && String(drawing.drawing_no).trim().toLowerCase().includes(query);
-                      return (
-                        <tr key={drawing.id} className={isHighlighted ? 'highlighted-drawing-row' : ''}>
-                        <td className="px-2 py-2">
-                          <input
-                            type="text"
-                            name={`manualDrawings[${index}].drawing_no`}
-                            placeholder="DRW-1001"
-                            className={`w-full px-2 py-1 border rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500 ${formik.touched.manualDrawings?.[index]?.drawing_no && formik.errors.manualDrawings?.[index]?.drawing_no ? 'border-red-500' : 'border-slate-300'}`}
-                            value={drawing.drawing_no}
-                            onChange={formik.handleChange}
-                            onBlur={formik.handleBlur}
-                          />
-                        </td>
-                        <td className="px-2 py-2">
-                          <input
-                            type="text"
-                            name={`manualDrawings[${index}].description`}
-                            placeholder="Aluminum Frame"
-                            className="w-full px-2 py-1 border border-slate-300 rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500"
-                            value={drawing.description}
-                            onChange={formik.handleChange}
-                            onBlur={formik.handleBlur}
-                          />
-                        </td>
-                        <td className="px-2 py-2">
-                          <input
-                            type="text"
-                            name={`manualDrawings[${index}].hsn_code`}
-                            placeholder="HSN Code"
-                            className="w-full px-2 py-1 border border-slate-300 rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500"
-                            value={drawing.hsn_code}
-                            onChange={formik.handleChange}
-                            onBlur={formik.handleBlur}
-                          />
-                        </td>
-                        <td className="px-2 py-2">
-                          <input
-                            type="date"
-                            name={`manualDrawings[${index}].delivery_date`}
-                            className="w-full px-2 py-1 border border-slate-300 rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500"
-                            value={drawing.delivery_date}
-                            onChange={formik.handleChange}
-                            onBlur={formik.handleBlur}
-                          />
-                        </td>
-                        <td className="px-2 py-2">
-                          <input
-                            type="text"
-                            name={`manualDrawings[${index}].revision`}
-                            placeholder="A"
-                            className="w-full px-2 py-1 border border-slate-300 rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500 text-center"
-                            value={drawing.revision}
-                            onChange={formik.handleChange}
-                            onBlur={formik.handleBlur}
-                          />
-                        </td>
-                        <td className="px-2 py-2">
-                          <input
-                            type="number"
-                            name={`manualDrawings[${index}].qty`}
-                            min="1"
-                            step="0.01"
-                            className="w-full px-2 py-1 border border-slate-300 rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500 text-center"
-                            value={drawing.qty}
-                            onChange={formik.handleChange}
-                            onBlur={formik.handleBlur}
-                          />
-                        </td>
-                        <td className="px-2 py-2 text-center">
-                          <button
-                            type="button"
-                            onClick={() => setActiveDrawingIdForFiles(drawing.id)}
-                            className="p-1.5 rounded border text-xs font-semibold flex items-center justify-center gap-1 transition-all mx-auto bg-emerald-50 border-emerald-300 text-emerald-700 hover:bg-emerald-100 shadow-sm"
-                            title={((drawing.existingFiles?.length || 0) + (drawing.files?.length || 0)) === 0 ? 'Choose Files' : `${(drawing.existingFiles?.length || 0) + (drawing.files?.length || 0)} File(s)`}
-                          >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                            </svg>
-                            {((drawing.existingFiles?.length || 0) + (drawing.files?.length || 0)) > 0 && (
-                              <span className="text-[10px] bg-emerald-600 text-white rounded-full px-1 min-w-[16px] h-4 flex items-center justify-center font-bold">
-                                {(drawing.existingFiles?.length || 0) + (drawing.files?.length || 0)}
-                              </span>
-                            )}
-                          </button>
-                        </td>
-                        <td className="px-2 py-2">
-                          <select
-                            name={`manualDrawings[${index}].drawing_type`}
-                            className={`w-full px-2 py-1 border rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500 ${(formik.touched.manualDrawings?.[index]?.drawing_type || formik.submitCount > 0) && formik.errors.manualDrawings?.[index]?.drawing_type ? 'border-red-500' : 'border-slate-300'}`}
-                            value={drawing.drawing_type || 'Part'}
-                            onChange={formik.handleChange}
-                            onBlur={formik.handleBlur}
-                          >
-                            <option value="Part">Part</option>
-                            <option value="Assembly">Assembly</option>
-                          </select>
-                        </td>
-                        <td className="px-2 py-2">
-                          <input
-                            type="text"
-                            name={`manualDrawings[${index}].remarks`}
-                            placeholder="Notes..."
-                            className="w-full px-2 py-1 border border-slate-300 rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500"
-                            value={drawing.remarks}
-                            onChange={formik.handleChange}
-                            onBlur={formik.handleBlur}
-                          />
-                        </td>
-                        <td className="px-2 py-2 text-center">
-                          <button
-                            type="button"
-                            onClick={() => removeManualDrawingRow(drawing.id)}
-                            className="text-slate-400 hover:text-red-500 transition-colors"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
+                    {(() => {
+                      const isDesignInReview = formMode === 'edit' && editingRequirementData &&
+                        (editingRequirementData.status || '').toUpperCase().replace(/_/g, ' ').trim() === 'DESIGN IN REVIEW';
+
+                      return formik.values.manualDrawings.map((drawing, index) => {
+                        const query = requirementsSearchTerm?.trim().toLowerCase();
+                        const isHighlighted = query && drawing.drawing_no && String(drawing.drawing_no).trim().toLowerCase().includes(query);
+                        const isRowLocked = isDesignInReview && drawing.status?.toUpperCase() === 'APPROVED';
+
+                        return (
+                          <tr key={drawing.id} className={`${isHighlighted ? 'highlighted-drawing-row' : ''} ${isRowLocked ? 'bg-slate-50/50' : ''}`}>
+                            <td className="px-2 py-2" onClick={isRowLocked ? () => toast.error("Approved drawing cannot be edited.") : undefined}>
+                              <div className="flex flex-col">
+                                <div className="flex items-center gap-1.5">
+                                  {isRowLocked && <Lock className="w-3.5 h-3.5 text-slate-400 shrink-0" title="Approved & Locked" />}
+                                  <input
+                                    type="text"
+                                    disabled={isRowLocked}
+                                    name={`manualDrawings[${index}].drawing_no`}
+                                    placeholder="DRW-1001"
+                                    className={`w-full px-2 py-1 border rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500 ${isRowLocked ? 'bg-slate-100 cursor-not-allowed text-slate-400 border-slate-200' : ((formik.touched.manualDrawings?.[index]?.drawing_no || formik.submitCount > 0) && formik.errors.manualDrawings?.[index]?.drawing_no ? 'border-red-500' : 'border-slate-300')}`}
+                                    value={drawing.drawing_no}
+                                    onChange={formik.handleChange}
+                                    onBlur={formik.handleBlur}
+                                  />
+                                </div>
+                                {((formik.touched.manualDrawings?.[index]?.drawing_no || formik.submitCount > 0) && formik.errors.manualDrawings?.[index]?.drawing_no) && (
+                                  <div className="text-red-500 text-[10px] mt-0.5">{formik.errors.manualDrawings[index].drawing_no}</div>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-2 py-2" onClick={isRowLocked ? () => toast.error("Approved drawing cannot be edited.") : undefined}>
+                              <input
+                                type="text"
+                                disabled={isRowLocked}
+                                name={`manualDrawings[${index}].description`}
+                                placeholder="Aluminum Frame"
+                                className={`w-full px-2 py-1 border rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500 ${isRowLocked ? 'bg-slate-100 cursor-not-allowed text-slate-400 border-slate-200' : 'border-slate-300'}`}
+                                value={drawing.description}
+                                onChange={formik.handleChange}
+                                onBlur={formik.handleBlur}
+                              />
+                            </td>
+                            <td className="px-2 py-2" onClick={isRowLocked ? () => toast.error("Approved drawing cannot be edited.") : undefined}>
+                              <input
+                                type="text"
+                                disabled={isRowLocked}
+                                name={`manualDrawings[${index}].hsn_code`}
+                                placeholder="HSN Code"
+                                className={`w-full px-2 py-1 border rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500 ${isRowLocked ? 'bg-slate-100 cursor-not-allowed text-slate-400 border-slate-200' : 'border-slate-300'}`}
+                                value={drawing.hsn_code}
+                                onChange={formik.handleChange}
+                                onBlur={formik.handleBlur}
+                              />
+                            </td>
+                            <td className="px-2 py-2" onClick={isRowLocked ? () => toast.error("Approved drawing cannot be edited.") : undefined}>
+                              <input
+                                type="date"
+                                disabled={isRowLocked}
+                                name={`manualDrawings[${index}].delivery_date`}
+                                className={`w-full px-2 py-1 border rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500 ${isRowLocked ? 'bg-slate-100 cursor-not-allowed text-slate-400 border-slate-200' : 'border-slate-300'}`}
+                                value={drawing.delivery_date}
+                                onChange={formik.handleChange}
+                                onBlur={formik.handleBlur}
+                              />
+                            </td>
+                            <td className="px-2 py-2" onClick={isRowLocked ? () => toast.error("Approved drawing cannot be edited.") : undefined}>
+                              <input
+                                type="text"
+                                disabled={isRowLocked}
+                                name={`manualDrawings[${index}].revision`}
+                                placeholder="A"
+                                className={`w-full px-2 py-1 border rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500 text-center ${isRowLocked ? 'bg-slate-100 cursor-not-allowed text-slate-400 border-slate-200' : 'border-slate-300'}`}
+                                value={drawing.revision}
+                                onChange={formik.handleChange}
+                                onBlur={formik.handleBlur}
+                              />
+                            </td>
+                            <td className="px-2 py-2" onClick={isRowLocked ? () => toast.error("Approved drawing cannot be edited.") : undefined}>
+                              <input
+                                type="number"
+                                disabled={isRowLocked}
+                                name={`manualDrawings[${index}].qty`}
+                                min="1"
+                                step="0.01"
+                                className={`w-full px-2 py-1 border rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500 text-center ${isRowLocked ? 'bg-slate-100 cursor-not-allowed text-slate-400 border-slate-200' : 'border-slate-300'}`}
+                                value={drawing.qty}
+                                onChange={formik.handleChange}
+                                onBlur={formik.handleBlur}
+                              />
+                            </td>
+                            <td className="px-2 py-2 text-center">
+                              <div className="flex flex-col gap-0.5">
+                                <button
+                                  type="button"
+                                  onClick={() => setActiveDrawingIdForFiles(drawing.id)}
+                                  className={`p-1.5 rounded border text-xs font-semibold flex items-center justify-center gap-1 transition-all mx-auto shadow-sm ${((formik.submitCount > 0 && ((drawing.existingFiles?.length || 0) + (drawing.files?.length || 0)) === 0) ? 'border-red-500 bg-red-50 text-red-700 hover:bg-red-100' : (isRowLocked ? 'bg-slate-100 border-slate-200 text-slate-400' : 'bg-emerald-50 border-emerald-300 text-emerald-700 hover:bg-emerald-100'))}`}
+                                  title={((drawing.existingFiles?.length || 0) + (drawing.files?.length || 0)) === 0 ? 'Choose Files' : `${(drawing.existingFiles?.length || 0) + (drawing.files?.length || 0)} File(s)`}
+                                >
+                                  {isRowLocked ? (
+                                    <Lock className="w-3.5 h-3.5" />
+                                  ) : (
+                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                                    </svg>
+                                  )}
+                                  {((drawing.existingFiles?.length || 0) + (drawing.files?.length || 0)) > 0 && (
+                                    <span className={`text-[10px] rounded-full px-1 min-w-[16px] h-4 flex items-center justify-center font-bold ${isRowLocked ? 'bg-slate-400 text-white' : 'bg-emerald-600 text-white'}`}>
+                                      {(drawing.existingFiles?.length || 0) + (drawing.files?.length || 0)}
+                                    </span>
+                                  )}
+                                </button>
+                                {formik.submitCount > 0 && ((drawing.existingFiles?.length || 0) + (drawing.files?.length || 0)) === 0 && (
+                                  <span className="text-red-500 text-[10px] mt-0.5 block text-center font-medium">Required</span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-2 py-2" onClick={isRowLocked ? () => toast.error("Approved drawing cannot be edited.") : undefined}>
+                              <div className="flex flex-col">
+                                <select
+                                  disabled={isRowLocked}
+                                  name={`manualDrawings[${index}].drawing_type`}
+                                  className={`w-full px-2 py-1 border rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500 ${isRowLocked ? 'bg-slate-100 cursor-not-allowed text-slate-400 border-slate-200' : ((formik.touched.manualDrawings?.[index]?.drawing_type || formik.submitCount > 0) && formik.errors.manualDrawings?.[index]?.drawing_type ? 'border-red-500' : 'border-slate-300')}`}
+                                  value={drawing.drawing_type || 'Part'}
+                                  onChange={formik.handleChange}
+                                  onBlur={formik.handleBlur}
+                                >
+                                  <option value="Part">Part</option>
+                                  <option value="Assembly">Assembly</option>
+                                </select>
+                                {((formik.touched.manualDrawings?.[index]?.drawing_type || formik.submitCount > 0) && formik.errors.manualDrawings?.[index]?.drawing_type) && (
+                                  <div className="text-red-500 text-[10px] mt-0.5">{formik.errors.manualDrawings[index].drawing_type}</div>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-2 py-2" onClick={isRowLocked ? () => toast.error("Approved drawing cannot be edited.") : undefined}>
+                              <input
+                                type="text"
+                                disabled={isRowLocked}
+                                name={`manualDrawings[${index}].remarks`}
+                                placeholder="Notes..."
+                                className={`w-full px-2 py-1 border rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500 ${isRowLocked ? 'bg-slate-100 cursor-not-allowed text-slate-400 border-slate-200' : 'border-slate-300'}`}
+                                value={drawing.remarks}
+                                onChange={formik.handleChange}
+                                onBlur={formik.handleBlur}
+                              />
+                            </td>
+                            <td className="px-2 py-2 text-center">
+                              <button
+                                type="button"
+                                onClick={() => removeManualDrawingRow(drawing.id)}
+                                className="text-slate-400 hover:text-red-500 transition-colors"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      });
+                    })()}
+                  </tbody>
                 </table>
               </div>
             </div>
@@ -3047,54 +3170,64 @@ const CustomerDrawing = () => {
             </div>
           )}
 
-          <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
-            <button
-              type="button"
-              onClick={() => {
-                setShowFormModal(false);
-                formik.resetForm({
-                  values: {
-                    client_name: '',
-                    project_name: '',
-                    contact_person: '',
-                    phone_number: '',
-                    email_address: '',
-                    customer_type: '',
-                    gstin: '',
-                    city: '',
-                    state: '',
-                    billing_address: '',
-                    shipping_address: '',
-                    drawing_no: '',
-                    revision: '',
-                    qty: 1,
-                    description: '',
-                    drawing_type: 'Part',
-                    file: null,
-                    zipFile: null,
-                    remarks: '',
-                    uploadMode: 'bulk',
-                    manualDrawings: [getEmptyDrawingRow()],
-                  }
-                });
-                setClientLocked(false);
-                setFormMode('add');
-                setEditingRequirementId(null);
-                setEditingRequirementData(null);
-              }}
-              className="p-2 text-xs text-slate-600 hover:bg-slate-100 rounded transition-colors"
-            >
-              {formMode === 'edit' ? 'Cancel' : 'Clear Form'}
-            </button>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="px-6 py-2 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700 disabled:opacity-50 transition-colors flex items-center gap-2"
-            >
-              {submitting && <Loader2 className="w-3 h-3 animate-spin" />}
-              <Send className="w-3 h-3" />
-              {formMode === 'edit' ? (submitting ? 'Updating...' : 'Update Requirement') : (uploadMode === 'bulk' ? 'Upload Excel' : 'Add Requirements')}
-            </button>
+          <div className="flex justify-between items-center gap-2 pt-4 border-t border-slate-100">
+            <div className="flex flex-wrap items-center gap-1 max-w-[65%]">
+              {getFormIncompleteReasons().length > 0 && (
+                <div className="text-[10px] text-red-600 bg-red-50 border border-red-100 rounded px-2 py-1 flex items-center gap-1 shadow-sm">
+                  <span className="font-semibold shrink-0">Required:</span>
+                  <span className="text-slate-600 font-medium">{getFormIncompleteReasons().join(', ')}</span>
+                </div>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowFormModal(false);
+                  formik.resetForm({
+                    values: {
+                      client_name: '',
+                      project_name: '',
+                      contact_person: '',
+                      phone_number: '',
+                      email_address: '',
+                      customer_type: '',
+                      gstin: '',
+                      city: '',
+                      state: '',
+                      billing_address: '',
+                      shipping_address: '',
+                      drawing_no: '',
+                      revision: '',
+                      qty: 1,
+                      description: '',
+                      drawing_type: 'Part',
+                      file: null,
+                      zipFile: null,
+                      remarks: '',
+                      uploadMode: 'bulk',
+                      manualDrawings: [getEmptyDrawingRow()],
+                    }
+                  });
+                  setClientLocked(false);
+                  setFormMode('add');
+                  setEditingRequirementId(null);
+                  setEditingRequirementData(null);
+                }}
+                className="p-2 text-xs text-slate-600 hover:bg-slate-100 rounded transition-colors"
+              >
+                {formMode === 'edit' ? 'Cancel' : 'Clear Form'}
+              </button>
+              <button
+                type="submit"
+                disabled={submitting || isFormIncomplete()}
+                className="px-6 py-2 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500 transition-colors flex items-center gap-2"
+              >
+                {submitting && <Loader2 className="w-3 h-3 animate-spin" />}
+                <Send className="w-3 h-3" />
+                {formMode === 'edit' ? (submitting ? 'Updating...' : 'Update Requirement') : (uploadMode === 'bulk' ? 'Upload Excel' : 'Add Requirements')}
+              </button>
+            </div>
           </div>
         </form>
       </Modal>
@@ -3168,7 +3301,11 @@ const CustomerDrawing = () => {
       {activeDrawingIdForFiles && (() => {
         const activeDrawing = formik.values.manualDrawings.find(d => d.id === activeDrawingIdForFiles);
         if (!activeDrawing) return null;
-        
+
+        const isDesignInReview = formMode === 'edit' && editingRequirementData &&
+          (editingRequirementData.status || '').toUpperCase().replace(/_/g, ' ').trim() === 'DESIGN IN REVIEW';
+        const isActiveDrawingLocked = isDesignInReview && activeDrawing && activeDrawing.status?.toUpperCase() === 'APPROVED';
+
         return (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
             <div className="bg-white rounded-xl border border-slate-100 shadow-2xl w-full max-w-xl overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in duration-300">
@@ -3176,9 +3313,13 @@ const CustomerDrawing = () => {
               <div className="bg-slate-50 px-6 py-4 border-b border-slate-100 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                    </svg>
+                    {isActiveDrawingLocked ? (
+                      <Lock className="w-5 h-5 text-slate-500" />
+                    ) : (
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                      </svg>
+                    )}
                   </div>
                   <div>
                     <h3 className="text-base font-bold text-slate-800">Drawing Attachments & Documents</h3>
@@ -3234,11 +3375,15 @@ const CustomerDrawing = () => {
                                 <button
                                   type="button"
                                   onClick={() => {
+                                    if (isActiveDrawingLocked) {
+                                      toast.error("Approved drawing cannot be edited.");
+                                      return;
+                                    }
                                     const updated = activeDrawing.existingFiles.filter((_, idx) => idx !== fileIdx);
                                     handleManualDrawingChange(activeDrawing.id, 'existingFiles', updated);
                                   }}
-                                  className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg transition-all"
-                                  title="Delete Document"
+                                  className={`p-1.5 rounded-lg transition-all ${isActiveDrawingLocked ? 'text-slate-300 hover:bg-transparent cursor-not-allowed' : 'text-rose-500 hover:bg-rose-50'}`}
+                                  title={isActiveDrawingLocked ? "Approved drawing cannot be edited." : "Delete Document"}
                                 >
                                   <Trash2 size={15} />
                                 </button>
@@ -3279,11 +3424,15 @@ const CustomerDrawing = () => {
                                 <button
                                   type="button"
                                   onClick={() => {
+                                    if (isActiveDrawingLocked) {
+                                      toast.error("Approved drawing cannot be edited.");
+                                      return;
+                                    }
                                     const updated = activeDrawing.files.filter((_, idx) => idx !== fileIdx);
                                     handleManualDrawingChange(activeDrawing.id, 'files', updated);
                                   }}
-                                  className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg transition-all"
-                                  title="Remove staged file"
+                                  className={`p-1.5 rounded-lg transition-all ${isActiveDrawingLocked ? 'text-slate-300 hover:bg-transparent cursor-not-allowed' : 'text-rose-500 hover:bg-rose-50'}`}
+                                  title={isActiveDrawingLocked ? "Approved drawing cannot be edited." : "Remove staged file"}
                                 >
                                   <Trash2 size={15} />
                                 </button>
@@ -3309,28 +3458,41 @@ const CustomerDrawing = () => {
                 {/* Upload Section */}
                 <div className="space-y-3">
                   <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Upload New Files</h4>
-                  <div
-                    onClick={() => document.getElementById('attachmentsInput').click()}
-                    onDragOver={handleDragOver}
-                    onDrop={(e) => handleDrop(e, activeDrawing.id)}
-                    className="border-2 border-dashed border-slate-200 hover:border-indigo-400 bg-slate-50/50 hover:bg-indigo-50/10 rounded-xl p-6 text-center cursor-pointer transition-all group"
-                  >
-                    <input
-                      type="file"
-                      id="attachmentsInput"
-                      multiple
-                      accept=".pdf,.jpg,.jpeg,.png,.webp,image/*,application/pdf"
-                      onChange={(e) => handleManualFileChange(e, activeDrawing.id)}
-                      className="hidden"
-                    />
-                    <div className="inline-flex p-3 bg-white text-slate-500 group-hover:text-indigo-500 rounded-lg shadow-sm border border-slate-100 group-hover:scale-105 transition-all mb-3">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                      </svg>
+                  {isActiveDrawingLocked ? (
+                    <div
+                      onClick={() => toast.error("Approved drawing cannot be edited.")}
+                      className="border-2 border-dashed border-slate-200 bg-slate-50 rounded-xl p-6 text-center cursor-not-allowed flex flex-col items-center justify-center"
+                    >
+                      <div className="inline-flex p-3 bg-white text-slate-300 rounded-lg shadow-sm border border-slate-100 mb-3">
+                        <Lock className="w-5 h-5" />
+                      </div>
+                      <p className="text-xs font-semibold text-slate-400">File replacement disabled</p>
+                      <p className="text-[10px] text-slate-400 mt-1">This drawing is approved and its files cannot be changed</p>
                     </div>
-                    <p className="text-xs font-semibold text-slate-700">Drag & drop or click to upload</p>
-                    <p className="text-[10px] text-slate-400 mt-1">Supports PDF drawings and image files up to 10MB each</p>
-                  </div>
+                  ) : (
+                    <div
+                      onClick={() => document.getElementById('attachmentsInput').click()}
+                      onDragOver={handleDragOver}
+                      onDrop={(e) => handleDrop(e, activeDrawing.id)}
+                      className="border-2 border-dashed border-slate-200 hover:border-indigo-400 bg-slate-50/50 hover:bg-indigo-50/10 rounded-xl p-6 text-center cursor-pointer transition-all group"
+                    >
+                      <input
+                        type="file"
+                        id="attachmentsInput"
+                        multiple
+                        accept=".pdf,.jpg,.jpeg,.png,.webp,image/*,application/pdf"
+                        onChange={(e) => handleManualFileChange(e, activeDrawing.id)}
+                        className="hidden"
+                      />
+                      <div className="inline-flex p-3 bg-white text-slate-500 group-hover:text-indigo-500 rounded-lg shadow-sm border border-slate-100 group-hover:scale-105 transition-all mb-3">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                        </svg>
+                      </div>
+                      <p className="text-xs font-semibold text-slate-700">Drag & drop or click to upload</p>
+                      <p className="text-[10px] text-slate-400 mt-1">Supports PDF drawings and image files up to 10MB each</p>
+                    </div>
+                  )}
                 </div>
               </div>
 

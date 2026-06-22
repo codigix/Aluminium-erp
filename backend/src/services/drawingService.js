@@ -275,6 +275,57 @@ const updateDrawing = async (id, data) => {
       }
     }
 
+    // Check if drawing is linked to any sales order that is DESIGN_IN_REVIEW and is approved (soi.status = 'APPROVED')
+    const [approvedItems] = await connection.query(
+      `SELECT soi.status as item_status, so.status as order_status 
+       FROM sales_order_items soi
+       JOIN sales_orders so ON soi.sales_order_id = so.id
+       WHERE soi.drawing_id = ?`,
+      [internalId]
+    );
+
+    for (const item of approvedItems) {
+      const orderStatusUpper = (item.order_status || '').toUpperCase().replace(/_/g, ' ').trim();
+      const itemStatusUpper = (item.item_status || '').toUpperCase().trim();
+      if (orderStatusUpper === 'DESIGN IN REVIEW' && itemStatusUpper === 'APPROVED') {
+        if (
+          description !== undefined ||
+          revisionNo !== undefined ||
+          drawing_type !== undefined ||
+          drawingPdf !== undefined ||
+          qty !== undefined ||
+          drawingNo !== undefined ||
+          hsnCode !== undefined ||
+          deliveryDate !== undefined ||
+          remarks !== undefined
+        ) {
+          const [currentDwg] = await connection.query(
+            'SELECT drawing_no, revision, qty, description, drawing_type, file_path, hsn_code, delivery_date, remarks FROM customer_drawings WHERE id = ?',
+            [internalId]
+          );
+          if (currentDwg.length > 0) {
+            const dwg = currentDwg[0];
+            const currentDelDate = dwg.delivery_date ? new Date(dwg.delivery_date).toISOString().split('T')[0] : null;
+            const newDelDate = deliveryDate ? new Date(deliveryDate).toISOString().split('T')[0] : null;
+            const isDiff =
+              (drawingNo !== undefined && drawingNo !== dwg.drawing_no) ||
+              (revisionNo !== undefined && revisionNo !== dwg.revision) ||
+              (qty !== undefined && Number(qty) !== Number(dwg.qty)) ||
+              (description !== undefined && description !== dwg.description) ||
+              (drawing_type !== undefined && drawing_type !== dwg.drawing_type) ||
+              (drawingPdf !== undefined && drawingPdf !== dwg.file_path) ||
+              (hsnCode !== undefined && hsnCode !== dwg.hsn_code) ||
+              (deliveryDate !== undefined && newDelDate !== currentDelDate) ||
+              (remarks !== undefined && remarks !== dwg.remarks);
+
+            if (isDiff) {
+              throw new Error('Approved drawing cannot be edited.');
+            }
+          }
+        }
+      }
+    }
+
     // 1. Update customer_drawings
     let query = 'UPDATE customer_drawings SET ';
     const updates = [];
@@ -399,7 +450,7 @@ const updateItemDrawing = async (itemId, data) => {
 
     // Check parent sales order status first
     const [itemOrder] = await connection.query(
-      `SELECT so.status 
+      `SELECT so.status, soi.status as item_status 
        FROM sales_order_items soi
        JOIN sales_orders so ON soi.sales_order_id = so.id
        WHERE soi.id = ?`,
@@ -407,11 +458,31 @@ const updateItemDrawing = async (itemId, data) => {
     );
     if (itemOrder.length > 0) {
       const statusUpper = (itemOrder[0].status || '').toUpperCase().replace(/_/g, ' ').trim();
+      const itemStatusUpper = (itemOrder[0].item_status || '').toUpperCase().trim();
       if (statusUpper === 'QUOTATION SENT') {
         throw new Error('quotation allready sent now cant update requirement');
       }
       if (statusUpper === 'BOM SUBMITTED') {
         throw new Error('bom allready sent now cant update requirement');
+      }
+      if (statusUpper === 'DESIGN IN REVIEW' && itemStatusUpper === 'APPROVED') {
+        const [currentSOI] = await connection.query(
+          'SELECT drawing_no, revision_no, description, drawing_pdf, drawing_type FROM sales_order_items WHERE id = ?',
+          [itemId]
+        );
+        if (currentSOI.length > 0) {
+          const soi = currentSOI[0];
+          const isDiff =
+            (drawingNo !== undefined && drawingNo !== soi.drawing_no) ||
+            (revisionNo !== undefined && revisionNo !== soi.revision_no) ||
+            (description !== undefined && description !== soi.description) ||
+            (drawing_type !== undefined && drawing_type !== soi.drawing_type) ||
+            (drawingPdf !== undefined && drawingPdf !== soi.drawing_pdf);
+          
+          if (isDiff) {
+            throw new Error('Approved drawing cannot be edited.');
+          }
+        }
       }
     }
 
