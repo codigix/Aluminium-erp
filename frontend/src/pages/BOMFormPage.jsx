@@ -2214,8 +2214,8 @@ const BOMFormPage = () => {
       const savedCost = parseFloat(String(productForm.bom_cost || 0).replace(/[^0-9.]/g, ''));
       const currentCost = parseFloat(totalBOMCost);
 
-      // Auto-click update for FG and Assembly items - even in read-only mode
-      if ((isFG || isAssembly) && Math.abs(savedCost - currentCost) > 0.01) {
+      // Auto-click update for FG items (excluding Assembly items) - even in read-only mode
+      if (isFG && !isAssembly && Math.abs(savedCost - currentCost) > 0.01) {
         console.log(`[AutoUpdate] Syncing cost mismatch for ${itemId}. Saved: ${savedCost}, Calculated: ${currentCost}`);
         hasAutoUpdated.current = true;
 
