@@ -1047,12 +1047,7 @@ const CustomerDrawing = () => {
       .required('Phone number is required'),
     email_address: Yup.string().email('Invalid email address').required('Email address is required'),
     customer_type: Yup.string().nullable(),
-    gstin: Yup.string()
-      .matches(/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/, {
-        message: 'Invalid GSTIN format',
-        excludeEmptyString: true
-      })
-      .nullable(),
+    gstin: Yup.string().nullable(),
     city: Yup.string().nullable(),
     state: Yup.string().nullable(),
     billing_address: Yup.string().required('Billing Address is required'),
