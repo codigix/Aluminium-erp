@@ -278,11 +278,11 @@ router.post('/inward', authenticate, authorize(['PROD_MANAGE']), async (req, res
         const parentPlannedQty = parseFloat(parentWo[0]?.quantity || 0);
 
         const [childWos] = await connection.query(
-          'SELECT id, quantity FROM work_orders WHERE plan_id = ? AND (parent_wo_id = ? OR source_fg = ?) AND id != ?',
+          'SELECT id, quantity FROM work_orders WHERE plan_id = ? AND (parent_wo_id = ? OR source_fg = ?) AND id != ? AND status NOT IN ("DRAFT", "CANCELLED")',
           [parentPlanId, parentWoId, parentItemCode, parentWoId]
         );
 
-        let minTransferred = parentPlannedQty;
+        let minPossibleQty = parentPlannedQty;
         const childParts = [];
         for (const childWo of childWos) {
           const [finalJc] = await connection.query(
@@ -290,18 +290,19 @@ router.post('/inward', authenticate, authorize(['PROD_MANAGE']), async (req, res
             [childWo.id]
           );
           const transferred = parseFloat(finalJc[0]?.transferred_qty || 0);
+          const reqQty = parseFloat(childWo.quantity);
           childParts.push({
-            required_qty: parseFloat(childWo.quantity),
+            required_qty: reqQty,
             transferred_qty: transferred
           });
-          if (transferred < minTransferred) {
-            minTransferred = transferred;
+          const possible = reqQty > 0 ? (transferred * parentPlannedQty) / reqQty : parentPlannedQty;
+          if (possible < minPossibleQty) {
+            minPossibleQty = possible;
           }
         }
 
-        const assemblyAvailableQty = minTransferred;
-        const hasPendingComponents = childParts.some(cp => cp.transferred_qty < cp.required_qty);
-        const isWaiting = (assemblyAvailableQty === 0 || hasPendingComponents);
+        const assemblyAvailableQty = minPossibleQty;
+        const isWaiting = childParts.some(cp => cp.transferred_qty === 0);
 
         if (targetJcStatus === 'PENDING') {
           if (!isWaiting) {

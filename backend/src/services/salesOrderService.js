@@ -45,14 +45,23 @@ const numberToWords = (num) => {
 };
 
 const listSalesOrders = async (includeWithoutPo = true) => {
-  let whereClause = "WHERE (so.is_sales_order = 1 OR so.status IN ('BOM_SUBMITTED', 'BOM_Approved', 'CREATED', 'DESIGN_QUERY', 'DESIGN_IN_REVIEW', 'QUOTATION_SENT', 'PRODUCTION_COMPLETED', 'READY_FOR_SHIPMENT', 'QC_APPROVED', 'READY_FOR_DISPATCH', 'QC_IN_PROGRESS', 'IN_PRODUCTION', 'MATERIAL_READY', 'QC_REJECTED', 'APPROVED', 'DESIGN_Approved', 'ACTIVE'))";
+  let whereClause = "WHERE (so.is_sales_order = 1 OR so.status IN ('BOM_SUBMITTED', 'BOM_Approved', 'CREATED', 'DESIGN_QUERY', 'DESIGN_IN_REVIEW', 'QUOTATION_SENT', 'PRODUCTION_COMPLETED', 'READY_FOR_SHIPMENT', 'QC_APPROVED', 'READY_FOR_DISPATCH', 'QC_IN_PROGRESS', 'IN_PRODUCTION', 'MATERIAL_READY', 'QC_REJECTED', 'APPROVED', 'DESIGN_Approved', 'ACTIVE', 'COMPLETED'))";
   if (!includeWithoutPo) {
     whereClause += ' AND so.customer_po_id IS NOT NULL';
   }
+  whereClause += " AND (so.so_number IS NULL OR so.so_number NOT LIKE 'ORD-%')";
 
   const [rows] = await pool.query(
     `SELECT so.*, 
-            COALESCE(so.project_name, cp.project_name) as project_name,
+            COALESCE(so.project_name, cp.project_name, (SELECT project_name FROM orders WHERE id = so.id)) as project_name,
+            COALESCE(
+              (SELECT status FROM sales_orders WHERE project_name = so.project_name AND company_id = so.company_id AND so_number LIKE 'ORD-%' ORDER BY id DESC LIMIT 1),
+              so.status
+            ) as status,
+            COALESCE(
+              (SELECT current_department FROM sales_orders WHERE project_name = so.project_name AND company_id = so.company_id AND so_number LIKE 'ORD-%' ORDER BY id DESC LIMIT 1),
+              so.current_department
+            ) as current_department,
             so.target_dispatch_date as delivery_date, c.company_name, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path,
             COALESCE(cd_contact.email, ct.email, "") as email_address, 
             COALESCE(cd_contact.phone, ct.phone, "") as contact_phone,
@@ -100,7 +109,15 @@ const getSalesOrderById = async (id) => {
   const whereClause = isUuid ? 'so.public_id = ?' : 'so.id = ?';
   const [rows] = await pool.query(
     `SELECT so.*, 
-            COALESCE(so.project_name, cp.project_name) as project_name,
+            COALESCE(so.project_name, cp.project_name, (SELECT project_name FROM orders WHERE id = so.id)) as project_name,
+            COALESCE(
+              (SELECT status FROM sales_orders WHERE project_name = so.project_name AND company_id = so.company_id AND so_number LIKE 'ORD-%' ORDER BY id DESC LIMIT 1),
+              so.status
+            ) as status,
+            COALESCE(
+              (SELECT current_department FROM sales_orders WHERE project_name = so.project_name AND company_id = so.company_id AND so_number LIKE 'ORD-%' ORDER BY id DESC LIMIT 1),
+              so.current_department
+            ) as current_department,
             so.target_dispatch_date as delivery_date, c.company_name, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path,
             COALESCE(cd_contact.email, ct.email, cd_client.email, "") as email_address, 
             COALESCE(cd_contact.phone, ct.phone, cd_client.phone, "") as contact_phone,

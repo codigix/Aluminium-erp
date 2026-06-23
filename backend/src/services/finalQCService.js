@@ -38,7 +38,7 @@ const completeFinalQC = async (salesOrderId, inspectionData) => {
       );
 
       if (existingShipment.length === 0) {
-        const [orderRows] = await connection.query(
+        let [orderRows] = await connection.query(
           `SELECT 
             so.company_id, 
             c.company_name,
@@ -58,6 +58,49 @@ const completeFinalQC = async (salesOrderId, inspectionData) => {
           WHERE so.id = ?`,
           [salesOrderId]
         );
+
+        if (orderRows.length === 0) {
+          const [altOrderRows] = await connection.query(
+            `SELECT 
+              o.client_id as company_id, 
+              c.company_name,
+              o.project_name,
+              o.delivery_date as target_dispatch_date,
+              'NORMAL' as production_priority,
+              ct.email as customer_email,
+              ct.phone as customer_phone,
+              (SELECT CONCAT_WS(', ', line1, line2, city, state, pincode) FROM company_addresses WHERE company_id = o.client_id AND address_type = 'SHIPPING' LIMIT 1) as shipping_address,
+              (SELECT CONCAT_WS(', ', line1, line2, city, state, pincode) FROM company_addresses WHERE company_id = o.client_id AND address_type = 'BILLING' LIMIT 1) as billing_address
+            FROM orders o
+            LEFT JOIN companies c ON o.client_id = c.id
+            LEFT JOIN (
+              SELECT company_id, email, phone,
+                     ROW_NUMBER() OVER (PARTITION BY company_id ORDER BY contact_type = 'PRIMARY' DESC, id ASC) as rn
+              FROM contacts
+            ) ct ON ct.company_id = o.client_id AND ct.rn = 1
+            WHERE o.id = ?`,
+            [salesOrderId]
+          );
+
+          if (altOrderRows.length > 0) {
+            const altOrder = altOrderRows[0];
+            console.log(`[updateFinalQC] Found in orders table. Syncing to sales_orders to satisfy foreign key...`);
+            await connection.execute(
+              `INSERT IGNORE INTO sales_orders (id, company_id, so_number, target_dispatch_date, status, current_department, request_accepted, is_sales_order, project_name)
+               VALUES (?, ?, ?, ?, ?, 'SHIPMENT', 1, 1, ?)`,
+              [
+                salesOrderId,
+                altOrder.company_id,
+                `ORD-${String(salesOrderId).padStart(4, '0')}`,
+                altOrder.target_dispatch_date,
+                'READY_FOR_SHIPMENT',
+                altOrder.project_name || null
+              ]
+            );
+            orderRows = altOrderRows;
+          }
+        }
+
         const order = orderRows[0];
 
         const date = new Date();
@@ -147,6 +190,7 @@ const createShipmentOrder = async (salesOrderId) => {
           o.id,
           o.order_no,
           o.client_id as company_id,
+          o.project_name,
           c.company_name,
           ct.email as customer_email,
           ct.phone as customer_phone,
@@ -173,14 +217,15 @@ const createShipmentOrder = async (salesOrderId) => {
         
         // Auto-create entry in sales_orders to satisfy foreign key constraint in shipment_orders
         await connection.execute(
-          `INSERT IGNORE INTO sales_orders (id, company_id, so_number, target_dispatch_date, status, current_department, request_accepted, is_sales_order)
-           VALUES (?, ?, ?, ?, ?, 'SHIPMENT', 1, 1)`,
+          `INSERT IGNORE INTO sales_orders (id, company_id, so_number, target_dispatch_date, status, current_department, request_accepted, is_sales_order, project_name)
+           VALUES (?, ?, ?, ?, ?, 'SHIPMENT', 1, 1, ?)`,
           [
             altOrder.id, 
             altOrder.company_id, 
             altOrder.order_no || `ORD-${String(altOrder.id).padStart(4, '0')}`, 
             altOrder.target_dispatch_date, 
-            'READY_FOR_SHIPMENT'
+            'READY_FOR_SHIPMENT',
+            altOrder.project_name || null
           ]
         );
         

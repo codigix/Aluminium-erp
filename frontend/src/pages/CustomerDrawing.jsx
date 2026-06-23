@@ -1508,6 +1508,15 @@ const CustomerDrawing = () => {
 
     // Track for deletion if it's an existing drawing (not a temp one)
     if (drawingToRemove && drawingToRemove.id && !String(drawingToRemove.id).includes('-')) {
+      const isDesignInReview = formMode === 'edit' && editingRequirementData &&
+        (editingRequirementData.status || '').toUpperCase().replace(/_/g, ' ').trim() === 'DESIGN IN REVIEW';
+      const isRowLocked = isDesignInReview && drawingToRemove.status?.toUpperCase() === 'APPROVED';
+
+      if (isRowLocked) {
+        toast.error("Approved drawing cannot be edited.");
+        return;
+      }
+
       setDeletedDrawingIds(prev => [...prev, drawingToRemove.drawing_id || drawingToRemove.id]);
     }
 

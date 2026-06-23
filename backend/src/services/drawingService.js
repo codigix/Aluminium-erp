@@ -308,15 +308,11 @@ const updateDrawing = async (id, data) => {
             const currentDelDate = dwg.delivery_date ? new Date(dwg.delivery_date).toISOString().split('T')[0] : null;
             const newDelDate = deliveryDate ? new Date(deliveryDate).toISOString().split('T')[0] : null;
             const isDiff =
-              (drawingNo !== undefined && drawingNo !== dwg.drawing_no) ||
-              (revisionNo !== undefined && revisionNo !== dwg.revision) ||
-              (qty !== undefined && Number(qty) !== Number(dwg.qty)) ||
-              (description !== undefined && description !== dwg.description) ||
-              (drawing_type !== undefined && drawing_type !== dwg.drawing_type) ||
-              (drawingPdf !== undefined && drawingPdf !== dwg.file_path) ||
-              (hsnCode !== undefined && hsnCode !== dwg.hsn_code) ||
-              (deliveryDate !== undefined && newDelDate !== currentDelDate) ||
-              (remarks !== undefined && remarks !== dwg.remarks);
+              (drawingNo !== undefined && String(drawingNo).trim() !== String(dwg.drawing_no || '').trim()) ||
+              (description !== undefined && String(description).trim() !== String(dwg.description || '').trim()) ||
+              (revisionNo !== undefined && String(revisionNo).trim() !== String(dwg.revision || '').trim()) ||
+              (qty !== undefined && Number(qty) !== Number(dwg.qty || 0)) ||
+              (drawing_type !== undefined && String(drawing_type).trim() !== String(dwg.drawing_type || '').trim());
 
             if (isDiff) {
               throw new Error('Approved drawing cannot be edited.');
@@ -473,11 +469,10 @@ const updateItemDrawing = async (itemId, data) => {
         if (currentSOI.length > 0) {
           const soi = currentSOI[0];
           const isDiff =
-            (drawingNo !== undefined && drawingNo !== soi.drawing_no) ||
-            (revisionNo !== undefined && revisionNo !== soi.revision_no) ||
-            (description !== undefined && description !== soi.description) ||
-            (drawing_type !== undefined && drawing_type !== soi.drawing_type) ||
-            (drawingPdf !== undefined && drawingPdf !== soi.drawing_pdf);
+            (drawingNo !== undefined && String(drawingNo).trim() !== String(soi.drawing_no || '').trim()) ||
+            (description !== undefined && String(description).trim() !== String(soi.description || '').trim()) ||
+            (revisionNo !== undefined && String(revisionNo).trim() !== String(soi.revision_no || '').trim()) ||
+            (drawing_type !== undefined && String(drawing_type).trim() !== String(soi.drawing_type || '').trim());
           
           if (isDiff) {
             throw new Error('Approved drawing cannot be edited.');

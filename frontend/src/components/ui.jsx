@@ -34,6 +34,8 @@ export const SearchableSelect = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  const [localValue, setLocalValue] = useState(value);
   const containerRef = useRef(null);
 
   const getLabel = (opt) => {
@@ -48,16 +50,22 @@ export const SearchableSelect = ({
     return opt[subLabelField] || '';
   };
 
-  const selectedOption = options.find(opt => String(opt[valueField]) === String(value));
+  const selectedOption = options.find(opt => String(opt[valueField]) === String(localValue));
+
+  useEffect(() => {
+    setLocalValue(value);
+  }, [value]);
 
   useEffect(() => {
     if (!isOpen) {
-      const newVal = selectedOption ? getLabel(selectedOption) : (value || '');
-      if (searchTerm !== newVal) {
-        setSearchTerm(newVal);
-      }
+      setSearchTerm('');
+      setIsSearching(false);
     }
-  }, [value, selectedOption, isOpen]);
+  }, [isOpen]);
+
+  const displayValue = isSearching
+    ? searchTerm
+    : (selectedOption ? getLabel(selectedOption) : (localValue !== undefined && localValue !== null ? String(localValue) : ''));
 
   const safeSearchTerm = String(searchTerm || '').toLowerCase();
   const filteredOptions = options.filter(opt =>
@@ -83,11 +91,12 @@ export const SearchableSelect = ({
           type="text"
           className={`w-full p-2 border border-slate-200 rounded text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-rose-500 ${disabled ? 'bg-slate-50 text-slate-500 cursor-not-allowed' : 'bg-white'} ${className}`}
           placeholder={placeholder}
-          value={searchTerm}
+          value={displayValue}
           onChange={(e) => {
             if (disabled) return;
             setSearchTerm(e.target.value);
             setIsOpen(true);
+            setIsSearching(true);
             if (allowCustom) {
               onChange(e);
             }
@@ -97,12 +106,14 @@ export const SearchableSelect = ({
             if (!disabled) {
               setIsOpen(true);
               setSearchTerm('');
+              setIsSearching(false);
             }
           }}
           onClick={() => {
             if (!disabled && !isOpen) {
               setIsOpen(true);
               setSearchTerm('');
+              setIsSearching(false);
             }
           }}
           disabled={disabled}
@@ -121,10 +132,12 @@ export const SearchableSelect = ({
               filteredOptions.map((opt, idx) => (
                 <div
                   key={idx}
-                  className={`p-2 text-xs cursor-pointer hover:bg-blue-50 ${String(opt[valueField]) === String(value) ? 'bg-blue-50 text-blue-600 ' : 'text-slate-700'}`}
+                  className={`p-2 text-xs cursor-pointer hover:bg-blue-50 ${String(opt[valueField]) === String(localValue) ? 'bg-blue-50 text-blue-600 ' : 'text-slate-700'}`}
                   onClick={() => {
+                    setLocalValue(opt[valueField]);
                     onChange({ target: { value: opt[valueField] } });
                     setSearchTerm(getLabel(opt));
+                    setIsSearching(false);
                     setIsOpen(false);
                   }}
                 >

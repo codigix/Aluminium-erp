@@ -80,13 +80,14 @@ const listJobCards = async () => {
 
   for (const row of rows) {
     const [childWos] = await pool.query(
-      'SELECT id, item_code, item_name, quantity FROM work_orders WHERE plan_id = ? AND (parent_wo_id = ? OR source_fg = ?) AND id != ?',
+      'SELECT id, item_code, item_name, quantity FROM work_orders WHERE plan_id = ? AND (parent_wo_id = ? OR source_fg = ?) AND id != ? AND status NOT IN ("DRAFT", "CANCELLED")',
       [row.plan_id, row.work_order_id, row.item_code, row.work_order_id]
     );
 
     if (childWos.length > 0) {
       row.child_parts = [];
-      let minTransferred = parseFloat(row.wo_quantity || row.planned_qty || 0);
+      let minPossibleQty = parseFloat(row.wo_quantity || row.planned_qty || 0);
+      const parentQty = minPossibleQty;
 
       for (const childWo of childWos) {
         const [finalJc] = await pool.query(
@@ -102,12 +103,14 @@ const listJobCards = async () => {
           transferred_qty: transferred
         });
 
-        if (transferred < minTransferred) {
-          minTransferred = transferred;
+        const reqQty = parseFloat(childWo.quantity);
+        const possible = reqQty > 0 ? (transferred * parentQty) / reqQty : parentQty;
+        if (possible < minPossibleQty) {
+          minPossibleQty = possible;
         }
       }
 
-      row.assembly_available_qty = minTransferred;
+      row.assembly_available_qty = minPossibleQty;
       const [minSeqRow] = await pool.query(
         'SELECT MIN(sequence_no) as min_seq FROM job_cards WHERE work_order_id = ?',
         [row.work_order_id]
@@ -115,7 +118,7 @@ const listJobCards = async () => {
       const isFirstOp = row.sequence_no === minSeqRow[0]?.min_seq;
 
       row.is_first_op = isFirstOp;
-      row.is_assembly_waiting = isFirstOp && (minTransferred === 0 || row.child_parts.some(cp => cp.transferred_qty < cp.required_qty));
+      row.is_assembly_waiting = isFirstOp && row.child_parts.some(cp => cp.transferred_qty === 0);
     } else {
       row.child_parts = null;
       row.assembly_available_qty = parseFloat(row.planned_qty || 0);
@@ -491,12 +494,13 @@ const updateJobCardProgressInternal = async (connection, id, data) => {
     if (jcDetails.length > 0) {
       const jcDetail = jcDetails[0];
       const [childWos] = await connection.query(
-        'SELECT id, item_code, item_name, quantity FROM work_orders WHERE plan_id = ? AND (parent_wo_id = ? OR source_fg = ?) AND id != ?',
+        'SELECT id, item_code, item_name, quantity FROM work_orders WHERE plan_id = ? AND (parent_wo_id = ? OR source_fg = ?) AND id != ? AND status NOT IN ("DRAFT", "CANCELLED")',
         [jcDetail.plan_id, jcDetail.work_order_id, jcDetail.item_code, jcDetail.work_order_id]
       );
 
       if (childWos.length > 0) {
-        let minTransferred = parseFloat(jcDetail.wo_quantity || jcDetail.planned_qty || 0);
+        let minPossibleQty = parseFloat(jcDetail.wo_quantity || jcDetail.planned_qty || 0);
+        const parentQty = minPossibleQty;
         const childParts = [];
 
         for (const childWo of childWos) {
@@ -505,24 +509,26 @@ const updateJobCardProgressInternal = async (connection, id, data) => {
             [childWo.id]
           );
           const transferred = parseFloat(finalJc[0]?.transferred_qty || 0);
+          const reqQty = parseFloat(childWo.quantity);
           childParts.push({
-            required_qty: parseFloat(childWo.quantity),
+            required_qty: reqQty,
             transferred_qty: transferred
           });
 
-          if (transferred < minTransferred) {
-            minTransferred = transferred;
+          const possible = reqQty > 0 ? (transferred * parentQty) / reqQty : parentQty;
+          if (possible < minPossibleQty) {
+            minPossibleQty = possible;
           }
         }
 
-        const assemblyAvailableQty = minTransferred;
+        const assemblyAvailableQty = minPossibleQty;
         const [minSeqRow] = await connection.query(
           'SELECT MIN(sequence_no) as min_seq FROM job_cards WHERE work_order_id = ?',
           [jcDetail.work_order_id]
         );
         const isFirstOp = jcDetail.sequence_no === minSeqRow[0]?.min_seq;
 
-        const isAssemblyWaiting = isFirstOp && (assemblyAvailableQty === 0 || childParts.some(cp => cp.transferred_qty < cp.required_qty));
+        const isAssemblyWaiting = isFirstOp && childParts.some(cp => cp.transferred_qty === 0);
         if (isAssemblyWaiting) {
           if (plannedQty !== undefined) {
             // Bypass the validation blocks during quantity transfer by keeping it PENDING and unassigned
@@ -692,11 +698,11 @@ const updateJobCardProgressInternal = async (connection, id, data) => {
             const parentPlannedQty = parseFloat(parentWo[0]?.quantity || 0);
 
             const [childWos] = await connection.query(
-              'SELECT id, quantity FROM work_orders WHERE plan_id = ? AND (parent_wo_id = ? OR source_fg = ?) AND id != ?',
+              'SELECT id, quantity FROM work_orders WHERE plan_id = ? AND (parent_wo_id = ? OR source_fg = ?) AND id != ? AND status NOT IN ("DRAFT", "CANCELLED")',
               [parentPlanId, parentWoId, parentItemCode, parentWoId]
             );
 
-            let minTransferred = parentPlannedQty;
+            let minPossibleQty = parentPlannedQty;
             const childParts = [];
             for (const childWo of childWos) {
               let transferred = 0;
@@ -709,18 +715,19 @@ const updateJobCardProgressInternal = async (connection, id, data) => {
                 );
                 transferred = parseFloat(finalJc[0]?.transferred_qty || 0);
               }
+              const reqQty = parseFloat(childWo.quantity);
               childParts.push({
-                required_qty: parseFloat(childWo.quantity),
+                required_qty: reqQty,
                 transferred_qty: transferred
               });
-              if (transferred < minTransferred) {
-                minTransferred = transferred;
+              const possible = reqQty > 0 ? (transferred * parentPlannedQty) / reqQty : parentPlannedQty;
+              if (possible < minPossibleQty) {
+                minPossibleQty = possible;
               }
             }
 
-            const assemblyAvailableQty = minTransferred;
-            const hasPendingComponents = childParts.some(cp => cp.transferred_qty < cp.required_qty);
-            const isWaiting = (assemblyAvailableQty === 0 || hasPendingComponents);
+            const assemblyAvailableQty = minPossibleQty;
+            const isWaiting = childParts.some(cp => cp.transferred_qty === 0);
 
             if (targetJcStatus === 'PENDING') {
               if (!isWaiting) {
@@ -926,7 +933,7 @@ const updateJobCardProgressInternal = async (connection, id, data) => {
           );
           const count = existingCount[0].count;
 
-          const [orderRows] = await connection.query(
+          let [orderRows] = await connection.query(
             `SELECT 
               so.company_id, 
               c.company_name,
@@ -946,6 +953,50 @@ const updateJobCardProgressInternal = async (connection, id, data) => {
             WHERE so.id = ?`,
             [salesOrderId]
           );
+
+          if (orderRows.length === 0) {
+            const [altOrderRows] = await connection.query(
+              `SELECT 
+                o.client_id as company_id, 
+                c.company_name,
+                o.project_name,
+                ct.email as customer_email,
+                ct.phone as customer_phone,
+                (SELECT CONCAT_WS(', ', line1, line2, city, state, pincode) FROM company_addresses WHERE company_id = o.client_id AND address_type = 'SHIPPING' LIMIT 1) as shipping_address,
+                (SELECT CONCAT_WS(', ', line1, line2, city, state, pincode) FROM company_addresses WHERE company_id = o.client_id AND address_type = 'BILLING' LIMIT 1) as billing_address,
+                o.delivery_date as target_dispatch_date,
+                'NORMAL' as production_priority,
+                o.status
+              FROM orders o
+              LEFT JOIN companies c ON o.client_id = c.id
+              LEFT JOIN (
+                SELECT company_id, email, phone,
+                       ROW_NUMBER() OVER (PARTITION BY company_id ORDER BY contact_type = 'PRIMARY' DESC, id ASC) as rn
+                FROM contacts
+              ) ct ON ct.company_id = o.client_id AND ct.rn = 1
+              WHERE o.id = ?`,
+              [salesOrderId]
+            );
+
+            if (altOrderRows.length > 0) {
+              const altOrder = altOrderRows[0];
+              console.log(`[jobCardService/updateProgress] Found in orders table. Syncing to sales_orders to satisfy foreign key...`);
+              await connection.execute(
+                `INSERT IGNORE INTO sales_orders (id, company_id, so_number, target_dispatch_date, status, current_department, request_accepted, is_sales_order, project_name)
+                 VALUES (?, ?, ?, ?, ?, 'SHIPMENT', 1, 1, ?)`,
+                [
+                  salesOrderId,
+                  altOrder.company_id,
+                  `ORD-${String(salesOrderId).padStart(4, '0')}`,
+                  altOrder.target_dispatch_date,
+                  'READY_FOR_SHIPMENT',
+                  altOrder.project_name || null
+                ]
+              );
+              orderRows = altOrderRows;
+            }
+          }
+
           const order = orderRows[0];
 
           const date = new Date();
@@ -1130,13 +1181,14 @@ const getJobCardById = async (id) => {
   if (rows.length > 0) {
     const row = rows[0];
     const [childWos] = await pool.query(
-      'SELECT id, item_code, item_name, quantity FROM work_orders WHERE plan_id = ? AND (parent_wo_id = ? OR source_fg = ?) AND id != ?',
+      'SELECT id, item_code, item_name, quantity FROM work_orders WHERE plan_id = ? AND (parent_wo_id = ? OR source_fg = ?) AND id != ? AND status NOT IN ("DRAFT", "CANCELLED")',
       [row.plan_id, row.work_order_id, row.item_code, row.work_order_id]
     );
 
     if (childWos.length > 0) {
       row.child_parts = [];
-      let minTransferred = parseFloat(row.wo_quantity || row.planned_qty || 0);
+      let minPossibleQty = parseFloat(row.wo_quantity || row.planned_qty || 0);
+      const parentQty = minPossibleQty;
 
       for (const childWo of childWos) {
         const [finalJc] = await pool.query(
@@ -1152,12 +1204,14 @@ const getJobCardById = async (id) => {
           transferred_qty: transferred
         });
 
-        if (transferred < minTransferred) {
-          minTransferred = transferred;
+        const reqQty = parseFloat(childWo.quantity);
+        const possible = reqQty > 0 ? (transferred * parentQty) / reqQty : parentQty;
+        if (possible < minPossibleQty) {
+          minPossibleQty = possible;
         }
       }
 
-      row.assembly_available_qty = minTransferred;
+      row.assembly_available_qty = minPossibleQty;
       const [minSeqRow] = await pool.query(
         'SELECT MIN(sequence_no) as min_seq FROM job_cards WHERE work_order_id = ?',
         [row.work_order_id]
@@ -1165,7 +1219,7 @@ const getJobCardById = async (id) => {
       const isFirstOp = row.sequence_no === minSeqRow[0]?.min_seq;
 
       row.is_first_op = isFirstOp;
-      row.is_assembly_waiting = isFirstOp && (minTransferred === 0 || row.child_parts.some(cp => cp.transferred_qty < cp.required_qty));
+      row.is_assembly_waiting = isFirstOp && row.child_parts.some(cp => cp.transferred_qty === 0);
     } else {
       row.child_parts = null;
       row.assembly_available_qty = parseFloat(row.planned_qty || 0);
@@ -1286,12 +1340,13 @@ const addTimeLog = async (data) => {
     if (jcDetails.length > 0) {
       const jcDetail = jcDetails[0];
       const [childWos] = await connection.query(
-        'SELECT id, item_code, item_name, quantity FROM work_orders WHERE plan_id = ? AND (parent_wo_id = ? OR source_fg = ?) AND id != ?',
+        'SELECT id, item_code, item_name, quantity FROM work_orders WHERE plan_id = ? AND (parent_wo_id = ? OR source_fg = ?) AND id != ? AND status NOT IN ("DRAFT", "CANCELLED")',
         [jcDetail.plan_id, jcDetail.work_order_id, jcDetail.item_code, jcDetail.work_order_id]
       );
 
       if (childWos.length > 0) {
-        let minTransferred = parseFloat(jcDetail.wo_quantity || jcDetail.planned_qty || 0);
+        let minPossibleQty = parseFloat(jcDetail.wo_quantity || jcDetail.planned_qty || 0);
+        const parentQty = minPossibleQty;
         const childParts = [];
 
         for (const childWo of childWos) {
@@ -1300,24 +1355,26 @@ const addTimeLog = async (data) => {
             [childWo.id]
           );
           const transferred = parseFloat(finalJc[0]?.transferred_qty || 0);
+          const reqQty = parseFloat(childWo.quantity);
           childParts.push({
-            required_qty: parseFloat(childWo.quantity),
+            required_qty: reqQty,
             transferred_qty: transferred
           });
 
-          if (transferred < minTransferred) {
-            minTransferred = transferred;
+          const possible = reqQty > 0 ? (transferred * parentQty) / reqQty : parentQty;
+          if (possible < minPossibleQty) {
+            minPossibleQty = possible;
           }
         }
 
-        const assemblyAvailableQty = minTransferred;
+        const assemblyAvailableQty = minPossibleQty;
         const [minSeqRow] = await connection.query(
           'SELECT MIN(sequence_no) as min_seq FROM job_cards WHERE work_order_id = ?',
           [jcDetail.work_order_id]
         );
         const isFirstOp = jcDetail.sequence_no === minSeqRow[0]?.min_seq;
 
-        const isAssemblyWaiting = isFirstOp && (assemblyAvailableQty === 0 || childParts.some(cp => cp.transferred_qty < cp.required_qty));
+        const isAssemblyWaiting = isFirstOp && childParts.some(cp => cp.transferred_qty === 0);
         if (isAssemblyWaiting) {
           throw new Error('Cannot add production entry: Assembly is waiting for components.');
         }
@@ -1826,12 +1883,13 @@ const updateJobCard = async (id, data) => {
   if (jcDetails.length > 0) {
     const jcDetail = jcDetails[0];
     const [childWos] = await pool.query(
-      'SELECT id, item_code, item_name, quantity FROM work_orders WHERE plan_id = ? AND (parent_wo_id = ? OR source_fg = ?) AND id != ?',
+      'SELECT id, item_code, item_name, quantity FROM work_orders WHERE plan_id = ? AND (parent_wo_id = ? OR source_fg = ?) AND id != ? AND status NOT IN ("DRAFT", "CANCELLED")',
       [jcDetail.plan_id, jcDetail.work_order_id, jcDetail.item_code, jcDetail.work_order_id]
     );
 
     if (childWos.length > 0) {
-      let minTransferred = parseFloat(jcDetail.wo_quantity || jcDetail.planned_qty || 0);
+      let minPossibleQty = parseFloat(jcDetail.wo_quantity || jcDetail.planned_qty || 0);
+      const parentQty = minPossibleQty;
       const childParts = [];
 
       for (const childWo of childWos) {
@@ -1840,24 +1898,26 @@ const updateJobCard = async (id, data) => {
           [childWo.id]
         );
         const transferred = parseFloat(finalJc[0]?.transferred_qty || 0);
+        const reqQty = parseFloat(childWo.quantity);
         childParts.push({
-          required_qty: parseFloat(childWo.quantity),
+          required_qty: reqQty,
           transferred_qty: transferred
         });
 
-        if (transferred < minTransferred) {
-          minTransferred = transferred;
+        const possible = reqQty > 0 ? (transferred * parentQty) / reqQty : parentQty;
+        if (possible < minPossibleQty) {
+          minPossibleQty = possible;
         }
       }
 
-      const assemblyAvailableQty = minTransferred;
+      const assemblyAvailableQty = minPossibleQty;
       const [minSeqRow] = await pool.query(
         'SELECT MIN(sequence_no) as min_seq FROM job_cards WHERE work_order_id = ?',
         [jcDetail.work_order_id]
       );
       const isFirstOp = jcDetail.sequence_no === minSeqRow[0]?.min_seq;
 
-      const isAssemblyWaiting = isFirstOp && (assemblyAvailableQty === 0 || childParts.some(cp => cp.transferred_qty < cp.required_qty));
+      const isAssemblyWaiting = isFirstOp && childParts.some(cp => cp.transferred_qty === 0);
       if (isAssemblyWaiting) {
         const isAssigning = (workstationId !== undefined && workstationId !== null) || (assignedTo !== undefined && assignedTo !== null);
         const isStartingOrCompleting = (status === 'IN_PROGRESS' || status === 'COMPLETED');
