@@ -16,11 +16,29 @@ const getGRNWithDetails = async (grnId) => {
       v.vendor_name AS vendorName,
       v.location AS vendorAddress,
       COALESCE(
-        (SELECT project_name FROM sales_orders WHERE id = po.sales_order_id),
-        (SELECT so.project_name 
+        (SELECT so.project_name FROM sales_orders so WHERE so.id = po.sales_order_id AND so.is_sales_order = 1),
+        (SELECT o.project_name FROM orders o WHERE o.id = po.sales_order_id AND o.source_type = 'DIRECT'),
+        (SELECT so2.project_name 
          FROM material_requests mr_inner
-         JOIN production_plans pp ON mr_inner.notes LIKE CONCAT('%', pp.plan_code, '%')
-         JOIN sales_orders so ON pp.sales_order_id = so.id
+         JOIN production_plans pp ON mr_inner.plan_id = pp.id
+         LEFT JOIN (
+           SELECT plan_id, sales_order_item_id FROM production_plan_items
+           WHERE id IN (SELECT MIN(id) FROM production_plan_items GROUP BY plan_id)
+         ) ppi ON pp.id = ppi.plan_id
+         LEFT JOIN sales_order_items soi ON ppi.sales_order_item_id = soi.id
+         LEFT JOIN sales_orders so2 ON (
+           (soi.id IS NOT NULL AND soi.sales_order_id = so2.id) OR
+           (soi.id IS NULL AND pp.sales_order_id = so2.id)
+         )
+         WHERE mr_inner.id = po.mr_id LIMIT 1),
+        (SELECT o.project_name 
+         FROM material_requests mr_inner
+         JOIN production_plans pp ON mr_inner.plan_id = pp.id
+         JOIN orders o ON pp.sales_order_id = o.id AND o.source_type = 'DIRECT'
+         WHERE mr_inner.id = po.mr_id LIMIT 1),
+        (SELECT so3.project_name 
+         FROM material_requests mr_inner
+         JOIN sales_orders so3 ON mr_inner.notes LIKE CONCAT('%', so3.project_name, '%')
          WHERE mr_inner.id = po.mr_id LIMIT 1),
         'Stock/Internal'
       ) as projectName,
@@ -53,21 +71,54 @@ const getAllGRNs = async () => {
       v.vendor_name AS vendorName,
       v.location AS vendorAddress,
       COALESCE(
-        (SELECT project_name FROM sales_orders WHERE id = po.sales_order_id),
-        (SELECT so.project_name 
+        (SELECT so.project_name FROM sales_orders so WHERE so.id = po.sales_order_id AND so.is_sales_order = 1),
+        (SELECT o.project_name FROM orders o WHERE o.id = po.sales_order_id AND o.source_type = 'DIRECT'),
+        (SELECT so2.project_name 
          FROM material_requests mr_inner
-         JOIN production_plans pp ON mr_inner.notes LIKE CONCAT('%', pp.plan_code, '%')
-         JOIN sales_orders so ON pp.sales_order_id = so.id
+         JOIN production_plans pp ON mr_inner.plan_id = pp.id
+         LEFT JOIN (
+           SELECT plan_id, sales_order_item_id FROM production_plan_items
+           WHERE id IN (SELECT MIN(id) FROM production_plan_items GROUP BY plan_id)
+         ) ppi ON pp.id = ppi.plan_id
+         LEFT JOIN sales_order_items soi ON ppi.sales_order_item_id = soi.id
+         LEFT JOIN sales_orders so2 ON (
+           (soi.id IS NOT NULL AND soi.sales_order_id = so2.id) OR
+           (soi.id IS NULL AND pp.sales_order_id = so2.id)
+         )
+         WHERE mr_inner.id = po.mr_id LIMIT 1),
+        (SELECT o.project_name 
+         FROM material_requests mr_inner
+         JOIN production_plans pp ON mr_inner.plan_id = pp.id
+         JOIN orders o ON pp.sales_order_id = o.id AND o.source_type = 'DIRECT'
+         WHERE mr_inner.id = po.mr_id LIMIT 1),
+        (SELECT so3.project_name 
+         FROM material_requests mr_inner
+         JOIN sales_orders so3 ON mr_inner.notes LIKE CONCAT('%', so3.project_name, '%')
          WHERE mr_inner.id = po.mr_id LIMIT 1),
         'Stock/Internal'
       ) as projectName,
       COALESCE(
         (SELECT c.company_name FROM companies c JOIN sales_orders so ON c.id = so.company_id WHERE so.id = po.sales_order_id),
-        (SELECT c.company_name 
+        (SELECT c.company_name FROM companies c JOIN orders o ON c.id = o.client_id WHERE o.id = po.sales_order_id AND o.source_type = 'DIRECT'),
+        (SELECT c2.company_name 
          FROM material_requests mr_inner
-         JOIN production_plans pp ON mr_inner.notes LIKE CONCAT('%', pp.plan_code, '%')
-         JOIN sales_orders so ON pp.sales_order_id = so.id
-         JOIN companies c ON c.id = so.company_id
+         JOIN production_plans pp ON mr_inner.plan_id = pp.id
+         LEFT JOIN (
+           SELECT plan_id, sales_order_item_id FROM production_plan_items
+           WHERE id IN (SELECT MIN(id) FROM production_plan_items GROUP BY plan_id)
+         ) ppi ON pp.id = ppi.plan_id
+         LEFT JOIN sales_order_items soi ON ppi.sales_order_item_id = soi.id
+         LEFT JOIN sales_orders so2 ON (
+           (soi.id IS NOT NULL AND soi.sales_order_id = so2.id) OR
+           (soi.id IS NULL AND pp.sales_order_id = so2.id)
+         )
+         LEFT JOIN companies c2 ON so2.company_id = c2.id
+         WHERE mr_inner.id = po.mr_id LIMIT 1),
+        (SELECT c3.company_name 
+         FROM material_requests mr_inner
+         JOIN production_plans pp ON mr_inner.plan_id = pp.id
+         JOIN orders o ON pp.sales_order_id = o.id AND o.source_type = 'DIRECT'
+         JOIN companies c3 ON o.client_id = c3.id
          WHERE mr_inner.id = po.mr_id LIMIT 1),
         'N/A'
       ) as clientName,

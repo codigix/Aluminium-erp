@@ -2321,33 +2321,41 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
     {
       label: 'Origin & Status',
       key: 'order_no',
-      render: (val, row) => (
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-1.5">
+      render: (val, row) => {
+        let displayProject = '-';
+        if (row.project_id) {
+          displayProject = row.project_id;
+        } else if (row.project_name) {
+          displayProject = row.project_name;
+        }
 
-            <span className="text-xs   text-slate-600">{val || 'N/A'}</span>
-          </div>
-          <div className="text-[10px]">
-            <span className={` flex items-center 
-              ${row.status === 'Draft' ? 'text-amber-500 ' :
-                row.status === 'Completed' ? 'text-emerald-500 ' :
-                  'text-indigo-500 '}`}
-            >
-              <span className={`  ${row.status === 'Draft' ? 'text-amber-900' : row.status === 'Completed' ? 'text-emerald-400' : 'text-indigo-400'}`} />
-              {row.status}
-            </span>
-            {row.mr_status && (
-              <span className={`    flex items-center gap-1
-                ${row.mr_status === 'Completed' ? 'text-emerald-900 ' :
-                  row.mr_status === 'Draft' ? 'text-slate-900 ' :
+        return (
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs   text-slate-600">{displayProject}</span>
+            </div>
+            <div className="text-[10px]">
+              <span className={` flex items-center 
+                ${row.status === 'Draft' ? 'text-amber-500 ' :
+                  row.status === 'Completed' ? 'text-emerald-500 ' :
                     'text-indigo-500 '}`}
               >
-                {row.mr_status === 'Completed' ? '✅ Fulfilled' : `MR: ${row.mr_status}`}
+                <span className={`  ${row.status === 'Draft' ? 'text-amber-900' : row.status === 'Completed' ? 'text-emerald-400' : 'text-indigo-400'}`} />
+                {row.status}
               </span>
-            )}
+              {row.mr_status && (
+                <span className={`    flex items-center gap-1
+                  ${row.mr_status === 'Completed' ? 'text-emerald-900 ' :
+                    row.mr_status === 'Draft' ? 'text-slate-900 ' :
+                      'text-indigo-500 '}`}
+                >
+                  {row.mr_status === 'Completed' ? '✅ Fulfilled' : `MR: ${row.mr_status}`}
+                </span>
+              )}
+            </div>
           </div>
-        </div>
-      )
+        );
+      }
     },
     {
       label: 'Timeline',

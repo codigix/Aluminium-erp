@@ -19,7 +19,7 @@ const generateQuoteNumber = async () => {
  */
 const getCorrectItemCode = async (item, connection) => {
   let itemCode = item.item_code || item.drawing_no;
-  
+
   // 0. If we already have a specific item code that exists in stock_balance and matches the name, use it!
   if (itemCode && itemCode !== 'auto-generated') {
     const [existing] = await connection.query(
@@ -47,11 +47,11 @@ const getCorrectItemCode = async (item, connection) => {
        LIMIT 1`,
       [item.material_name, item.material_type, item.material_type]
     );
-    
+
     if (sb.length > 0) {
       return sb[0].item_code;
     }
-    
+
     // 2. If not found, try matching by name only (more flexible)
     const [sbNameOnly] = await connection.query(
       `SELECT item_code FROM stock_balance 
@@ -59,7 +59,7 @@ const getCorrectItemCode = async (item, connection) => {
        LIMIT 1`,
       [item.material_name]
     );
-    
+
     if (sbNameOnly.length > 0) {
       return sbNameOnly[0].item_code;
     }
@@ -152,7 +152,7 @@ const createQuotation = async (payload) => {
         const cgstAmount = Number(((amount * cgstPercent) / 100).toFixed(2));
         const sgstAmount = Number(((amount * sgstPercent) / 100).toFixed(2));
         const totalItemAmount = Number((amount + cgstAmount + sgstAmount).toFixed(2));
-        
+
         totalAmount = Number((totalAmount + amount).toFixed(2));
         totalTaxAmount = Number((totalTaxAmount + cgstAmount + sgstAmount).toFixed(2));
 
@@ -209,19 +209,59 @@ const createQuotation = async (payload) => {
 
 const getQuotations = async (filters = {}) => {
   const { status, vendorId, latestOnly = true, baseQuoteNumber } = filters;
-  
+
   let query = `
     SELECT q.*, v.vendor_name, so.so_number,
            COALESCE(
              so.project_name, 
-             (SELECT so2.project_name FROM sales_orders so2 JOIN production_plans pp ON so2.id = pp.sales_order_id WHERE pp.id = mr.plan_id),
+             (
+               SELECT so2.project_name 
+               FROM production_plans pp
+               LEFT JOIN (
+                 SELECT plan_id, sales_order_item_id FROM production_plan_items
+                 WHERE id IN (SELECT MIN(id) FROM production_plan_items GROUP BY plan_id)
+               ) ppi ON pp.id = ppi.plan_id
+               LEFT JOIN sales_order_items soi ON ppi.sales_order_item_id = soi.id
+               LEFT JOIN sales_orders so2 ON (
+                 (soi.id IS NOT NULL AND soi.sales_order_id = so2.id) OR
+                 (soi.id IS NULL AND pp.sales_order_id = so2.id)
+               )
+               WHERE pp.id = mr.plan_id
+             ),
+             (
+               SELECT o.project_name 
+               FROM production_plans pp
+               JOIN orders o ON pp.sales_order_id = o.id AND o.source_type = 'DIRECT'
+               WHERE pp.id = mr.plan_id
+             ),
              (SELECT so3.project_name FROM sales_orders so3 WHERE mr.notes LIKE CONCAT('%', so3.project_name, '%') LIMIT 1),
              mr.purpose, 
              'General Procurement'
            ) as project_name,
            COALESCE(
              c.company_name,
-             (SELECT c2.company_name FROM companies c2 JOIN sales_orders so2 ON c2.id = so2.company_id JOIN production_plans pp ON so2.id = pp.sales_order_id WHERE pp.id = mr.plan_id),
+             (
+               SELECT c2.company_name 
+               FROM production_plans pp
+               LEFT JOIN (
+                 SELECT plan_id, sales_order_item_id FROM production_plan_items
+                 WHERE id IN (SELECT MIN(id) FROM production_plan_items GROUP BY plan_id)
+               ) ppi ON pp.id = ppi.plan_id
+               LEFT JOIN sales_order_items soi ON ppi.sales_order_item_id = soi.id
+               LEFT JOIN sales_orders so2 ON (
+                 (soi.id IS NOT NULL AND soi.sales_order_id = so2.id) OR
+                 (soi.id IS NULL AND pp.sales_order_id = so2.id)
+               )
+               LEFT JOIN companies c2 ON so2.company_id = c2.id
+               WHERE pp.id = mr.plan_id
+             ),
+             (
+               SELECT c3.company_name 
+               FROM production_plans pp
+               JOIN orders o ON pp.sales_order_id = o.id AND o.source_type = 'DIRECT'
+               JOIN companies c3 ON o.client_id = c3.id
+               WHERE pp.id = mr.plan_id
+             ),
              'Internal'
            ) as company_name,
            mr.mr_number, r.rfq_number
@@ -316,7 +356,7 @@ const handleAutoApproval = async (quotationId, connection) => {
     const { rfq_group_id, rfq_id, sales_order_id, mr_id, base_quote_number } = q[0];
     let whereClause = '';
     let params = [];
-    
+
     if (rfq_group_id) {
       whereClause = 'rfq_group_id = ?';
       params = [rfq_group_id];
@@ -335,7 +375,7 @@ const handleAutoApproval = async (quotationId, connection) => {
 
     if (countRows[0].count === 1) {
       console.log(`[AutoApprove] Single vendor detected for quotation ${quotationId}. Setting status to REVIEWED.`);
-      
+
       await connection.execute(
         'UPDATE quotations SET status = ? WHERE id = ?',
         ['REVIEWED', quotationId]
@@ -444,7 +484,7 @@ const updateQuotationStatus = async (quotationId, status) => {
     }
 
     await connection.commit();
-    
+
     // Get final status (might have changed to REVIEWED via auto-approval)
     const [finalRow] = await connection.query('SELECT status FROM quotations WHERE id = ?', [quotationId]);
     return finalRow[0].status;
@@ -478,7 +518,7 @@ const updateQuotation = async (quotationId, payload) => {
     const oldQuote = current[0];
     const newVersion = (oldQuote.version || 1) + 1;
     const baseQuoteNumber = oldQuote.base_quote_number || oldQuote.quote_number;
-    
+
     // New quote number reflects version
     const newQuoteNumber = `${baseQuoteNumber}-V${newVersion}`;
 
@@ -532,7 +572,7 @@ const updateQuotation = async (quotationId, payload) => {
         const cgstAmount = Number(((amount * cgstPercent) / 100).toFixed(2));
         const sgstAmount = Number(((amount * sgstPercent) / 100).toFixed(2));
         const totalItemAmount = Number((amount + cgstAmount + sgstAmount).toFixed(2));
-        
+
         totalAmount = Number((totalAmount + amount).toFixed(2));
         totalTaxAmount = Number((totalTaxAmount + cgstAmount + sgstAmount).toFixed(2));
 
@@ -621,7 +661,7 @@ const deleteQuotation = async (quotationId) => {
 
     // Delete related items first
     await connection.execute('DELETE FROM quotation_items WHERE quotation_id = ?', [quotationId]);
-    
+
     // Delete the quotation
     await connection.execute('DELETE FROM quotations WHERE id = ?', [quotationId]);
 
@@ -692,9 +732,9 @@ const sendQuotationEmail = async (quotationId, emailData) => {
     }
 
     const emailResult = await emailService.sendEmail(to, finalSubject, message, attachments);
-    
+
     console.log(`[sendQuotationEmail] Email sent successfully to ${to}`);
-    
+
     await pool.execute(
       'UPDATE quotations SET status = ? WHERE id = ?',
       ['SENT', quotationId]
@@ -1180,7 +1220,7 @@ const generateQuotationPDF = async (quotationId) => {
       const cgst = parseFloat(i.cgst_percent || 0);
       const sgst = parseFloat(i.sgst_percent || 0);
       const totalGst = cgst + sgst;
-      
+
       return {
         ...i,
         isRFQ: isRFQVal,
@@ -1220,8 +1260,8 @@ const generateQuotationPDF = async (quotationId) => {
   });
   const page = await browser.newPage();
   await page.setContent(html, { waitUntil: 'networkidle0' });
-  const pdf = await page.pdf({ 
-    format: 'A4', 
+  const pdf = await page.pdf({
+    format: 'A4',
     printBackground: true,
     margin: { top: '20px', right: '20px', bottom: '20px', left: '20px' }
   });
@@ -1237,7 +1277,7 @@ const parseVendorQuotationPDF = async (filePath) => {
   }
 
   const dataBuffer = fs.readFileSync(absolutePath);
-  
+
   // Use mehmet-kozan/pdf-parse (v2.4.5) style
   let pdf;
   try {
@@ -1247,7 +1287,7 @@ const parseVendorQuotationPDF = async (filePath) => {
     console.error('[PDF Parse] Error loading PDF:', e.message);
     throw new Error('Could not load PDF structure: ' + e.message);
   }
-  
+
   let text = '';
   try {
     const result = await pdf.getText();
@@ -1256,9 +1296,9 @@ const parseVendorQuotationPDF = async (filePath) => {
     console.error('[PDF Parse] Error getting text:', e.message);
     throw new Error('Could not extract text from PDF: ' + e.message);
   }
-  
+
   console.log('[PDF Parse] Extracted text length:', text.length);
-  
+
   const items = [];
   const lines = text.split('\n');
 
@@ -1286,7 +1326,7 @@ const parseVendorQuotationPDF = async (filePath) => {
       // More robust numeric extraction: find all parts that look like numbers
       const numericParts = [];
       const parts = line.split(/\s+/);
-      
+
       for (let i = parts.length - 1; i >= 0; i--) {
         const rawVal = parts[i].replace(/[^\d.,]/g, '');
         if (rawVal && !isNaN(parseFloat(rawVal.replace(/,/g, '')))) {
@@ -1299,10 +1339,10 @@ const parseVendorQuotationPDF = async (filePath) => {
         // Amount is usually the last one, Rate is second to last
         const amount = parseFloat(numericParts[0].val);
         const rate = parseFloat(numericParts[1].val);
-        
+
         let qty = 0;
         let unit = '';
-        
+
         if (numericParts.length >= 3) {
           qty = parseFloat(numericParts[2].val);
           const qtyIdx = numericParts[2].index;
@@ -1323,7 +1363,7 @@ const parseVendorQuotationPDF = async (filePath) => {
         } else {
           materialName = parts.slice(0, firstNumericIdx).join(' ');
         }
-        
+
         if (materialName) {
           items.push({
             drawing_no: drawingNo,

@@ -70,8 +70,26 @@ const getRfqsByMrId = async (mrId) => {
     const [rfqs] = await pool.query(
         `SELECT r.*, u.username as requester_name, 
                 COALESCE(
-                  (SELECT so.project_name FROM sales_orders so JOIN production_plans pp ON so.id = pp.sales_order_id WHERE pp.id = mr.plan_id),
-                  (SELECT COALESCE(NULLIF(o.project_name, ''), c.company_name) FROM orders o JOIN production_plans pp ON o.id = pp.sales_order_id JOIN companies c ON o.client_id = c.id WHERE pp.id = mr.plan_id),
+                  (
+                    SELECT so.project_name 
+                    FROM production_plans pp
+                    LEFT JOIN (
+                      SELECT plan_id, sales_order_item_id FROM production_plan_items
+                      WHERE id IN (SELECT MIN(id) FROM production_plan_items GROUP BY plan_id)
+                    ) ppi ON pp.id = ppi.plan_id
+                    LEFT JOIN sales_order_items soi ON ppi.sales_order_item_id = soi.id
+                    LEFT JOIN sales_orders so ON (
+                      (soi.id IS NOT NULL AND soi.sales_order_id = so.id) OR
+                      (soi.id IS NULL AND pp.sales_order_id = so.id)
+                    )
+                    WHERE pp.id = mr.plan_id
+                  ),
+                  (
+                    SELECT o.project_name 
+                    FROM production_plans pp
+                    JOIN orders o ON pp.sales_order_id = o.id AND o.source_type = 'DIRECT'
+                    WHERE pp.id = mr.plan_id
+                  ),
                   mr.purpose, 
                   'General Procurement'
                 ) as project_name 
@@ -121,8 +139,26 @@ const getRfqs = async () => {
     const [rfqs] = await pool.query(
         `SELECT r.*, u.username as requester_name, mr.mr_number, 
                 COALESCE(
-                  (SELECT so.project_name FROM sales_orders so JOIN production_plans pp ON so.id = pp.sales_order_id WHERE pp.id = mr.plan_id),
-                  (SELECT COALESCE(NULLIF(o.project_name, ''), c.company_name) FROM orders o JOIN production_plans pp ON o.id = pp.sales_order_id JOIN companies c ON o.client_id = c.id WHERE pp.id = mr.plan_id),
+                  (
+                    SELECT so.project_name 
+                    FROM production_plans pp
+                    LEFT JOIN (
+                      SELECT plan_id, sales_order_item_id FROM production_plan_items
+                      WHERE id IN (SELECT MIN(id) FROM production_plan_items GROUP BY plan_id)
+                    ) ppi ON pp.id = ppi.plan_id
+                    LEFT JOIN sales_order_items soi ON ppi.sales_order_item_id = soi.id
+                    LEFT JOIN sales_orders so ON (
+                      (soi.id IS NOT NULL AND soi.sales_order_id = so.id) OR
+                      (soi.id IS NULL AND pp.sales_order_id = so.id)
+                    )
+                    WHERE pp.id = mr.plan_id
+                  ),
+                  (
+                    SELECT o.project_name 
+                    FROM production_plans pp
+                    JOIN orders o ON pp.sales_order_id = o.id AND o.source_type = 'DIRECT'
+                    WHERE pp.id = mr.plan_id
+                  ),
                   mr.purpose, 
                   'General Procurement'
                 ) as project_name

@@ -7,6 +7,9 @@ const listProductionPlans = async () => {
             COALESCE(o.order_no, o_direct.order_no) as order_no, 
             COALESCE(so.project_name, c_direct.company_name) as project_name,
             COALESCE(c.company_name, c_direct.company_name) as company_name,
+            so.project_name as so_project_name,
+            o.project_name as o_project_name,
+            o_direct.project_name as o_direct_project_name,
             COALESCE(ppi.item_code, 
               CASE 
                 WHEN o_direct.id IS NOT NULL THEN oi.item_code 
@@ -25,27 +28,51 @@ const listProductionPlans = async () => {
             (SELECT status FROM material_requests WHERE plan_id = pp.id ORDER BY id DESC LIMIT 1) as mr_status
      FROM production_plans pp
      LEFT JOIN users u ON pp.created_by = u.id
-     LEFT JOIN sales_orders so ON pp.sales_order_id = so.id
-     LEFT JOIN companies c ON so.company_id = c.id
-     LEFT JOIN (
-       SELECT quotation_id, order_no, source_type FROM orders 
-       WHERE quotation_id IS NOT NULL AND id IN (SELECT MAX(id) FROM orders GROUP BY quotation_id)
-     ) o ON (
-       (o.source_type = 'DRAWING' AND o.quotation_id = so.id) OR
-       (o.source_type = 'DIRECT' AND o.quotation_id = so.customer_po_id)
-     )
-     LEFT JOIN orders o_direct ON pp.sales_order_id = o_direct.id AND o_direct.quotation_id IS NULL
-     LEFT JOIN companies c_direct ON o_direct.client_id = c_direct.id
      LEFT JOIN (
        SELECT plan_id, item_code, description, sales_order_item_id, sales_order_id
        FROM production_plan_items 
        WHERE id IN (SELECT MIN(id) FROM production_plan_items GROUP BY plan_id)
      ) ppi ON pp.id = ppi.plan_id
-     LEFT JOIN sales_order_items soi ON ppi.sales_order_item_id = soi.id AND ppi.sales_order_id = soi.sales_order_id
+     LEFT JOIN sales_order_items soi ON ppi.sales_order_item_id = soi.id
+     LEFT JOIN sales_orders so ON (
+       (soi.id IS NOT NULL AND soi.sales_order_id = so.id) OR
+       (soi.id IS NULL AND pp.sales_order_id = so.id)
+     )
+     LEFT JOIN companies c ON so.company_id = c.id
+     LEFT JOIN (
+       SELECT quotation_id, order_no, source_type, project_name FROM orders 
+       WHERE quotation_id IS NOT NULL AND id IN (SELECT MAX(id) FROM orders GROUP BY quotation_id)
+     ) o ON (
+       (o.source_type = 'DRAWING' AND o.quotation_id = so.id) OR
+       (o.source_type = 'DIRECT' AND o.quotation_id = so.customer_po_id)
+     )
+     LEFT JOIN orders o_direct ON pp.sales_order_id = o_direct.id AND (soi.id IS NULL OR soi.sales_order_id != pp.sales_order_id)
+     LEFT JOIN companies c_direct ON o_direct.client_id = c_direct.id
      LEFT JOIN order_items oi ON ppi.sales_order_item_id = oi.id AND ppi.sales_order_id = oi.order_id
      ORDER BY pp.created_at DESC`
   );
-  return rows;
+
+  const enrichedRows = rows.map(row => {
+    const candidates = [
+      row.so_project_name,
+      row.o_project_name,
+      row.o_direct_project_name
+    ].filter(Boolean).map(s => s.trim());
+
+    // Find Project ID (starts with PRO-)
+    const projectId = candidates.find(c => c.toUpperCase().startsWith('PRO-')) || null;
+
+    // Find Project Name (does not start with PRO- and is distinct from projectId)
+    const projectName = candidates.find(c => !c.toUpperCase().startsWith('PRO-') && c !== projectId) || null;
+
+    return {
+      ...row,
+      project_id: projectId,
+      project_name: projectName || row.project_name
+    };
+  });
+
+  return enrichedRows;
 };
 
 const getProductionPlanById = async (id) => {
@@ -58,15 +85,19 @@ const getProductionPlanById = async (id) => {
             (SELECT status FROM material_requests WHERE plan_id = pp.id ORDER BY id DESC LIMIT 1) as mr_status
      FROM production_plans pp
      LEFT JOIN users u ON pp.created_by = u.id
-     LEFT JOIN sales_orders so ON pp.sales_order_id = so.id
-     LEFT JOIN companies c ON so.company_id = c.id
-     LEFT JOIN orders o_direct ON pp.sales_order_id = o_direct.id AND o_direct.quotation_id IS NULL
-     LEFT JOIN companies c_direct ON o_direct.client_id = c_direct.id
      LEFT JOIN (
-       SELECT plan_id, item_code, description 
+       SELECT plan_id, item_code, description, sales_order_item_id, sales_order_id
        FROM production_plan_items 
        WHERE id IN (SELECT MIN(id) FROM production_plan_items GROUP BY plan_id)
      ) ppi_first ON pp.id = ppi_first.plan_id
+     LEFT JOIN sales_order_items soi ON ppi_first.sales_order_item_id = soi.id
+     LEFT JOIN sales_orders so ON (
+       (soi.id IS NOT NULL AND soi.sales_order_id = so.id) OR
+       (soi.id IS NULL AND pp.sales_order_id = so.id)
+     )
+     LEFT JOIN companies c ON so.company_id = c.id
+     LEFT JOIN orders o_direct ON pp.sales_order_id = o_direct.id AND o_direct.source_type = 'DIRECT' AND (soi.id IS NULL OR soi.sales_order_id != pp.sales_order_id)
+     LEFT JOIN companies c_direct ON o_direct.client_id = c_direct.id
      WHERE pp.id = ?`,
     [id]
   );
@@ -99,9 +130,12 @@ const getProductionPlanById = async (id) => {
             COALESCE(ppi.uom, soi.unit, 'Nos') as uom,
             COALESCE(o.order_no, o_direct.order_no) as order_no
      FROM production_plan_items ppi
-     LEFT JOIN sales_orders so ON ppi.sales_order_id = so.id
-     LEFT JOIN orders o_direct ON ppi.sales_order_id = o_direct.id AND o_direct.quotation_id IS NULL
-     LEFT JOIN sales_order_items soi ON ppi.sales_order_item_id = soi.id AND ppi.sales_order_id = soi.sales_order_id AND ppi.item_code = soi.item_code
+     LEFT JOIN sales_order_items soi ON ppi.sales_order_item_id = soi.id
+     LEFT JOIN sales_orders so ON (
+       (soi.id IS NOT NULL AND soi.sales_order_id = so.id) OR
+       (soi.id IS NULL AND ppi.sales_order_id = so.id)
+     )
+     LEFT JOIN orders o_direct ON ppi.sales_order_id = o_direct.id AND o_direct.source_type = 'DIRECT' AND (soi.id IS NULL OR soi.sales_order_id != ppi.sales_order_id)
      LEFT JOIN order_items oi ON ppi.sales_order_item_id = oi.id AND ppi.sales_order_id = oi.order_id AND ppi.item_code = oi.item_code
      LEFT JOIN workstations w ON ppi.workstation_id = w.id
      LEFT JOIN (

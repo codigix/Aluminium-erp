@@ -498,7 +498,7 @@ const POMaterialRequest = () => {
             </svg>
           </div>
           <span className="text-xs font-semibold text-slate-700 whitespace-normal break-words leading-relaxed">
-            {val || 'General Project'}
+            {val || '-'}
           </span>
         </div>
       )

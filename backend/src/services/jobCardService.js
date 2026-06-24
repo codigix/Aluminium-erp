@@ -38,7 +38,8 @@ const listJobCards = async () => {
             (SELECT status FROM material_requests WHERE plan_id = wo.plan_id ORDER BY id DESC LIMIT 1) as mr_status,
             COALESCE(soi_parent.description, oi_parent.description, soi_source.description, soi_fallback.description, oi_fallback.description, wo_parent.item_name, wo.source_fg) as source_fg,
             COALESCE(soi.drawing_no, oi.drawing_no, soi_parent.drawing_no, oi_parent.drawing_no, wo.bom_no, wo_parent.bom_no, wo_parent.item_code, wo.item_code) as drawing_no,
-            so.project_name, c.company_name as client_name,
+            COALESCE(so.project_name, o_dir.project_name) as project_name,
+            COALESCE(c.company_name, c_dir.company_name) as client_name,
             COALESCE(o.operation_name, jc.operation_name) as operation_name, 
             COALESCE(NULLIF(jc.std_time, 0), o.std_time, 0) as std_time, 
             COALESCE(NULLIF(jc.cycle_time, 0), CASE WHEN o.time_uom = 'Min' THEN o.std_time ELSE 0 END, 0) as cycle_time,
@@ -67,9 +68,14 @@ const listJobCards = async () => {
      LEFT JOIN sales_order_items soi_source ON (wo.source_fg = soi_source.item_code OR wo.source_fg = soi_source.drawing_no) AND (soi_source.sales_order_id = wo.sales_order_id OR soi_source.sales_order_id IS NULL)
      LEFT JOIN sales_order_items soi_fallback ON (wo_parent.item_code = soi_fallback.item_code OR wo_parent.bom_no = soi_fallback.drawing_no) AND soi_fallback.sales_order_id IS NULL
      LEFT JOIN order_items oi_fallback ON (wo_parent.item_code = oi_fallback.item_code OR wo_parent.bom_no = oi_fallback.drawing_no) AND oi_fallback.order_id = wo_parent.sales_order_id
-     LEFT JOIN sales_orders so ON wo.sales_order_id = so.id
-     LEFT JOIN companies c ON so.company_id = c.id
      LEFT JOIN sales_order_items soi ON wo.sales_order_item_id = soi.id
+     LEFT JOIN sales_orders so ON (
+       (soi.id IS NOT NULL AND soi.sales_order_id = so.id) OR
+       (soi.id IS NULL AND wo.sales_order_id = so.id)
+     )
+     LEFT JOIN companies c ON so.company_id = c.id
+     LEFT JOIN orders o_dir ON wo.sales_order_id = o_dir.id AND o_dir.source_type = 'DIRECT' AND (soi.id IS NULL OR soi.sales_order_id != wo.sales_order_id)
+     LEFT JOIN companies c_dir ON o_dir.client_id = c_dir.id
      LEFT JOIN order_items oi ON wo.sales_order_item_id = oi.id AND wo.sales_order_id = oi.order_id
      LEFT JOIN operations o ON jc.operation_id = o.id
      LEFT JOIN workstations w ON jc.workstation_id = w.id
@@ -918,8 +924,17 @@ const updateJobCardProgressInternal = async (connection, id, data) => {
         'SELECT sales_order_id, sales_order_item_id FROM work_orders WHERE id = ?',
         [workOrderId]
       );
-      const salesOrderId = woRow.length > 0 ? woRow[0].sales_order_id : null;
+      let salesOrderId = woRow.length > 0 ? woRow[0].sales_order_id : null;
       const salesOrderItemId = woRow.length > 0 ? woRow[0].sales_order_item_id : null;
+      if (salesOrderItemId) {
+        const [soiRow] = await connection.query(
+          'SELECT sales_order_id FROM sales_order_items WHERE id = ?',
+          [salesOrderItemId]
+        );
+        if (soiRow.length > 0 && soiRow[0].sales_order_id) {
+          salesOrderId = soiRow[0].sales_order_id;
+        }
+      }
 
       if (salesOrderId) {
         const newDispatchQtyVal = dispatchQty !== undefined ? parseFloat(dispatchQty || 0) : 0;
@@ -1162,17 +1177,24 @@ const getJobCardById = async (id) => {
             COALESCE(jc.time_uom, o.time_uom, 'Min') as time_uom, 
             COALESCE(NULLIF(jc.hourly_rate, 0), o.hourly_rate, 0) as hourly_rate, 
             w.workstation_name, u.username as operator_name, v.vendor_name,
-            so.project_name, c.company_name as client_name, so.shipping_address,
+            COALESCE(so.project_name, o_dir.project_name) as project_name,
+            COALESCE(c.company_name, c_dir.company_name) as client_name,
+            COALESCE(so.shipping_address, (SELECT CONCAT_WS(', ', line1, line2, city, state, pincode) FROM company_addresses WHERE company_id = o_dir.client_id AND address_type = 'SHIPPING' LIMIT 1)) as shipping_address,
             COALESCE(jc.transferred_qty, (SELECT CASE WHEN status = 'PENDING' THEN 0 ELSE GREATEST(COALESCE(planned_qty, 0), COALESCE(accepted_qty, 0)) END FROM job_cards WHERE work_order_id = jc.work_order_id AND sequence_no > jc.sequence_no ORDER BY sequence_no ASC, id ASC LIMIT 1), 0) as transferred_qty
      FROM job_cards jc
      JOIN work_orders wo ON jc.work_order_id = wo.id
-     LEFT JOIN sales_orders so ON wo.sales_order_id = so.id
+     LEFT JOIN sales_order_items soi ON wo.sales_order_item_id = soi.id
+     LEFT JOIN sales_orders so ON (
+       (soi.id IS NOT NULL AND soi.sales_order_id = so.id) OR
+       (soi.id IS NULL AND wo.sales_order_id = so.id)
+     )
      LEFT JOIN companies c ON so.company_id = c.id
+     LEFT JOIN orders o_dir ON wo.sales_order_id = o_dir.id AND o_dir.source_type = 'DIRECT' AND (soi.id IS NULL OR soi.sales_order_id != wo.sales_order_id)
+     LEFT JOIN companies c_dir ON o_dir.client_id = c_dir.id
      LEFT JOIN operations o ON jc.operation_id = o.id
      LEFT JOIN workstations w ON jc.workstation_id = w.id
      LEFT JOIN users u ON jc.assigned_to = u.id
      LEFT JOIN vendors v ON jc.vendor_id = v.id
-     LEFT JOIN sales_order_items soi ON wo.sales_order_item_id = soi.id
      LEFT JOIN order_items oi ON wo.sales_order_item_id = oi.id AND wo.sales_order_id = oi.order_id
      WHERE ${whereClause}`,
     [id]
@@ -2118,15 +2140,21 @@ const getQualityLogFullDetails = async (logId) => {
             jc.job_card_no, jc.planned_qty,
             wo.wo_number, wo.item_name, wo.item_code,
             COALESCE(soi.drawing_no, oi.drawing_no, wo.bom_no, wo.item_code) as drawing_no,
-            so.project_name, c.company_name as client_name,
+            COALESCE(so.project_name, o_dir.project_name) as project_name,
+            COALESCE(c.company_name, c_dir.company_name) as client_name,
             o.operation_name
      FROM job_card_quality_logs ql
      JOIN job_cards jc ON ql.job_card_id = jc.id
      JOIN work_orders wo ON jc.work_order_id = wo.id
-     LEFT JOIN sales_orders so ON wo.sales_order_id = so.id
-     LEFT JOIN companies c ON so.company_id = c.id
-     LEFT JOIN operations o ON jc.operation_id = o.id
      LEFT JOIN sales_order_items soi ON wo.sales_order_item_id = soi.id
+     LEFT JOIN sales_orders so ON (
+       (soi.id IS NOT NULL AND soi.sales_order_id = so.id) OR
+       (soi.id IS NULL AND wo.sales_order_id = so.id)
+     )
+     LEFT JOIN companies c ON so.company_id = c.id
+     LEFT JOIN orders o_dir ON wo.sales_order_id = o_dir.id AND o_dir.source_type = 'DIRECT' AND (soi.id IS NULL OR soi.sales_order_id != wo.sales_order_id)
+     LEFT JOIN companies c_dir ON o_dir.client_id = c_dir.id
+     LEFT JOIN operations o ON jc.operation_id = o.id
      LEFT JOIN order_items oi ON wo.sales_order_item_id = oi.id AND wo.sales_order_id = oi.order_id
      WHERE ql.id = ?`,
     [logId]
@@ -2150,16 +2178,24 @@ const getJobCardDetailAnalysis = async (idOrNo) => {
     const query = `SELECT jc.*, wo.wo_number, wo.item_name, wo.item_code, wo.sales_order_item_id, wo.priority, wo.quantity as wo_total_qty,
             COALESCE(o.operation_name, jc.operation_name) as op_name,
             w.workstation_name, u.username as operator_name,
-            so.project_name, c.company_name as client_name, so.shipping_address,
-            so.target_dispatch_date,
+            COALESCE(so.project_name, o_dir.project_name) as project_name,
+            COALESCE(c.company_name, c_dir.company_name) as client_name,
+            COALESCE(so.shipping_address, (SELECT CONCAT_WS(', ', line1, line2, city, state, pincode) FROM company_addresses WHERE company_id = o_dir.client_id AND address_type = 'SHIPPING' LIMIT 1)) as shipping_address,
+            COALESCE(so.target_dispatch_date, o_dir.delivery_date) as target_dispatch_date,
             (SELECT SUM(produced_qty) FROM job_card_time_logs WHERE job_card_id = jc.id) as actual_produced,
             (SELECT SUM(inspected_qty) FROM job_card_quality_logs WHERE job_card_id = jc.id AND status = 'APPROVED') as actual_accepted,
             (SELECT SUM(rejected_qty) FROM job_card_quality_logs WHERE job_card_id = jc.id AND status = 'APPROVED') as actual_rejected,
             COALESCE((SELECT CASE WHEN status = 'PENDING' THEN 0 ELSE GREATEST(COALESCE(planned_qty, 0), COALESCE(accepted_qty, 0)) END FROM job_cards WHERE work_order_id = jc.work_order_id AND sequence_no > jc.sequence_no ORDER BY sequence_no ASC, id ASC LIMIT 1), 0) as transferred_qty
      FROM job_cards jc
      LEFT JOIN work_orders wo ON jc.work_order_id = wo.id
-     LEFT JOIN sales_orders so ON wo.sales_order_id = so.id
+     LEFT JOIN sales_order_items soi ON wo.sales_order_item_id = soi.id
+     LEFT JOIN sales_orders so ON (
+       (soi.id IS NOT NULL AND soi.sales_order_id = so.id) OR
+       (soi.id IS NULL AND wo.sales_order_id = so.id)
+     )
      LEFT JOIN companies c ON so.company_id = c.id
+     LEFT JOIN orders o_dir ON wo.sales_order_id = o_dir.id AND o_dir.source_type = 'DIRECT' AND (soi.id IS NULL OR soi.sales_order_id != wo.sales_order_id)
+     LEFT JOIN companies c_dir ON o_dir.client_id = c_dir.id
      LEFT JOIN operations o ON jc.operation_id = o.id
      LEFT JOIN workstations w ON jc.workstation_id = w.id
      LEFT JOIN users u ON jc.assigned_to = u.id

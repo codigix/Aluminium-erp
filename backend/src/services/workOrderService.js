@@ -4,7 +4,7 @@ const stockService = require('./stockService');
 
 const listWorkOrders = async () => {
   const [rows] = await pool.query(
-    `SELECT wo.*, so.project_name, w.workstation_name, c.company_name as client_name,
+    `SELECT wo.*, COALESCE(so.project_name, o_dir.project_name) as project_name, w.workstation_name, COALESCE(c.company_name, c_dir.company_name) as client_name,
             COALESCE(soi_parent.description, oi_parent.description, soi_source.description, soi_fallback.description, oi_fallback.description, wo_parent.item_name, wo.source_fg) as source_fg,
             (SELECT COUNT(*) FROM job_cards WHERE work_order_id = wo.id) as total_job_cards,
             (SELECT COUNT(*) FROM job_cards WHERE work_order_id = wo.id AND status = 'COMPLETED') as completed_job_cards,
@@ -20,8 +20,14 @@ const listWorkOrders = async () => {
      LEFT JOIN sales_order_items soi_fallback ON (wo_parent.item_code = soi_fallback.item_code OR wo_parent.bom_no = soi_fallback.drawing_no) AND soi_fallback.sales_order_id IS NULL
      LEFT JOIN order_items oi_fallback ON (wo_parent.item_code = oi_fallback.item_code OR wo_parent.bom_no = oi_fallback.drawing_no) AND oi_fallback.order_id = wo_parent.sales_order_id
      LEFT JOIN sales_order_items soi_source ON (wo.source_fg = soi_source.item_code OR wo.source_fg = soi_source.drawing_no) AND (soi_source.sales_order_id = wo.sales_order_id OR soi_source.sales_order_id IS NULL)
-     LEFT JOIN sales_orders so ON wo.sales_order_id = so.id
+     LEFT JOIN sales_order_items soi ON wo.sales_order_item_id = soi.id
+     LEFT JOIN sales_orders so ON (
+       (soi.id IS NOT NULL AND soi.sales_order_id = so.id) OR
+       (soi.id IS NULL AND wo.sales_order_id = so.id)
+     )
      LEFT JOIN companies c ON so.company_id = c.id
+     LEFT JOIN orders o_dir ON wo.sales_order_id = o_dir.id AND o_dir.source_type = 'DIRECT' AND (soi.id IS NULL OR soi.sales_order_id != wo.sales_order_id)
+     LEFT JOIN companies c_dir ON o_dir.client_id = c_dir.id
      LEFT JOIN workstations w ON wo.workstation_id = w.id
      ORDER BY batch_latest_id DESC, CASE WHEN wo.source_type = 'SA' THEN 0 ELSE 1 END ASC, wo.id ASC`
   );
@@ -214,13 +220,19 @@ const createWorkOrder = async (data) => {
 
 const getWorkOrderById = async (id) => {
   const [rows] = await pool.query(
-    `SELECT wo.*, so.project_name, 
+    `SELECT wo.*, COALESCE(so.project_name, o_dir.project_name) as project_name, 
             COALESCE(soi.item_code, wo.item_code) as item_code, 
             COALESCE(soi.description, wo.item_name) as description, 
             w.workstation_name
      FROM work_orders wo
-     LEFT JOIN sales_orders so ON wo.sales_order_id = so.id
      LEFT JOIN sales_order_items soi ON wo.sales_order_item_id = soi.id
+     LEFT JOIN sales_orders so ON (
+       (soi.id IS NOT NULL AND soi.sales_order_id = so.id) OR
+       (soi.id IS NULL AND wo.sales_order_id = so.id)
+     )
+     LEFT JOIN orders o_dir ON wo.sales_order_id = o_dir.id AND o_dir.source_type = 'DIRECT' AND (soi.id IS NULL OR soi.sales_order_id != wo.sales_order_id) OR
+       (soi.id IS NULL AND wo.sales_order_id = so.id)
+     )
      LEFT JOIN workstations w ON wo.workstation_id = w.id
      WHERE wo.id = ?`,
     [id]
