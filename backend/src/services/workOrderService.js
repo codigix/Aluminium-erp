@@ -23,10 +23,11 @@ const listWorkOrders = async () => {
      LEFT JOIN sales_order_items soi ON wo.sales_order_item_id = soi.id
      LEFT JOIN sales_orders so ON (
        (soi.id IS NOT NULL AND soi.sales_order_id = so.id) OR
-       (soi.id IS NULL AND wo.sales_order_id = so.id)
+       (soi.id IS NULL AND soi_parent.id IS NOT NULL AND soi_parent.sales_order_id = so.id) OR
+       (soi.id IS NULL AND soi_parent.id IS NULL AND wo.sales_order_id = so.id)
      )
      LEFT JOIN companies c ON so.company_id = c.id
-     LEFT JOIN orders o_dir ON wo.sales_order_id = o_dir.id AND o_dir.source_type = 'DIRECT' AND (soi.id IS NULL OR soi.sales_order_id != wo.sales_order_id)
+     LEFT JOIN orders o_dir ON wo.sales_order_id = o_dir.id AND o_dir.source_type = 'DIRECT' AND soi.id IS NULL AND soi_parent.id IS NULL
      LEFT JOIN companies c_dir ON o_dir.client_id = c_dir.id
      LEFT JOIN workstations w ON wo.workstation_id = w.id
      ORDER BY batch_latest_id DESC, CASE WHEN wo.source_type = 'SA' THEN 0 ELSE 1 END ASC, wo.id ASC`
