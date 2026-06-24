@@ -206,34 +206,38 @@ const Challans = () => {
     try {
       const token = localStorage.getItem('authToken');
       
-      const payload = {
-        outwardChallanId: activeTab === 'outward' ? selectedChallan.id : selectedChallan.outward_challan_id,
-        jobCardId: selectedChallan.job_card_id,
-        vendorId: selectedChallan.vendor_id,
-        receivedDate: inwardFormData.receivedDate,
-        vendorInvoiceNo: inwardFormData.remarks,
-        totalReceivedQty: inwardFormData.receivedQty,
-        acceptedQty: inwardFormData.acceptedQty,
-        rejectedQty: inwardFormData.rejectedQty,
-        scrapQty: inwardFormData.scrapQty,
-        notes: inwardFormData.remarks,
-        items: inwardFormData.inwardItems.map(item => ({
-          itemCode: item.item_code,
-          receivedQty: item.release_qty,
-          acceptedQty: item.release_qty,
-          rejectedQty: 0,
-          scrapQty: 0,
-          rate: item.rate
-        }))
-      };
+      const formData = new FormData();
+      formData.append('outwardChallanId', activeTab === 'outward' ? selectedChallan.id : selectedChallan.outward_challan_id);
+      formData.append('jobCardId', selectedChallan.job_card_id);
+      formData.append('vendorId', selectedChallan.vendor_id);
+      formData.append('receivedDate', inwardFormData.receivedDate);
+      formData.append('vendorInvoiceNo', inwardFormData.remarks);
+      formData.append('totalReceivedQty', inwardFormData.receivedQty);
+      formData.append('acceptedQty', inwardFormData.acceptedQty);
+      formData.append('rejectedQty', inwardFormData.rejectedQty);
+      formData.append('scrapQty', inwardFormData.scrapQty);
+      formData.append('notes', inwardFormData.remarks);
+      
+      const itemsPayload = inwardFormData.inwardItems.map(item => ({
+        itemCode: item.item_code,
+        receivedQty: item.release_qty,
+        acceptedQty: item.release_qty,
+        rejectedQty: 0,
+        scrapQty: 0,
+        rate: item.rate
+      }));
+      formData.append('items', JSON.stringify(itemsPayload));
+
+      if (inwardFormData.vendorInvoice) {
+        formData.append('vendorInvoice', inwardFormData.vendorInvoice);
+      }
 
       const response = await fetch(`${API_BASE}/outward-challans/inward`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(payload)
+        body: formData
       });
 
       if (response.ok) {
@@ -242,7 +246,8 @@ const Challans = () => {
         navigate(`${deptPrefix}/sub-contract-challans/outward`);
         fetchChallans();
       } else {
-        errorToast('Failed to record vendor receipt');
+        const errorData = await response.json().catch(() => ({}));
+        errorToast(errorData.message || 'Failed to record vendor receipt');
       }
     } catch (error) {
       console.error('Error recording vendor receipt:', error);

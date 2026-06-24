@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Modal, FormControl, SearchableSelect } from './ui.jsx';
 import { errorToast, successToast } from '../utils/toast';
 
@@ -48,6 +48,33 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
   const [customerSalesOrders, setCustomerSalesOrders] = useState([]);
   const [fullSODetail, setFullSODetail] = useState(null);
   const [fetchingDetail, setFetchingDetail] = useState(false);
+  const [installments, setInstallments] = useState([]);
+  const [fetchingInstallments, setFetchingInstallments] = useState(false);
+
+  const fetchInstallmentHistory = async (soId, source) => {
+    if (!soId) return;
+    try {
+      setFetchingInstallments(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/customer-payments?salesOrderId=${soId}&salesOrderSource=${source}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setInstallments(Array.isArray(data) ? data : []);
+      } else {
+        setInstallments([]);
+      }
+    } catch (error) {
+      console.error('Error fetching installments:', error);
+      setInstallments([]);
+    } finally {
+      setFetchingInstallments(false);
+    }
+  };
 
   useEffect(() => {
     if (isOpen) {
@@ -92,6 +119,7 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
         const source = invoice.sales_order_source || invoice.source || 'SALES_ORDER';
         
         fetchFullSODetail(soId, source);
+        fetchInstallmentHistory(soId, source);
 
         setFormData({
           customerId: custId,
@@ -115,6 +143,7 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
         });
       } else {
         setFullSODetail(null);
+        setInstallments([]);
         setFormData({
           customerId: '',
           salesOrderId: '',
@@ -223,6 +252,7 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
     if (field === 'salesOrderId' && value) {
       const selectedInv = customerInvoices.find(inv => inv.id.toString() === value.toString());
       if (selectedInv) {
+        fetchInstallmentHistory(selectedInv.id, selectedInv.source);
         setFormData(prev => ({ 
           ...prev, 
           [field]: value,
@@ -238,6 +268,7 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
       const selectedSO = customerSalesOrders.find(so => so.id.toString() === id && so.source === source);
       if (selectedSO) {
         fetchFullSODetail(id, source);
+        fetchInstallmentHistory(id, source);
         setFormData(prev => ({ 
           ...prev, 
           [field]: value,
@@ -247,6 +278,7 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
         }));
       } else {
         setFullSODetail(null);
+        setInstallments([]);
         setFormData(prev => ({ ...prev, [field]: value }));
       }
     } else if (field === 'customerId') {
@@ -380,8 +412,34 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
     }
   };
 
-  const currentOutstanding = invoice ? parseFloat(invoice.outstanding || invoice.total_amount || 0) : 
-    (formData.salesOrderId ? parseFloat(customerInvoices.find(inv => inv.id.toString() === formData.salesOrderId.toString())?.outstanding || 0) : null);
+  const lastSalesOrderId = useRef('');
+  useEffect(() => {
+    const currentId = String(formData.salesOrderId || '');
+    if (isOpen && currentId !== lastSalesOrderId.current && (invoice || fullSODetail)) {
+      lastSalesOrderId.current = currentId;
+      const invAmt = parseFloat(fullSODetail?.total_amount || fullSODetail?.grand_total || invoice?.total_amount || invoice?.net_total || 0);
+      const paidAmt = installments.reduce((sum, inst) => sum + (parseFloat(inst.payment_amount) || 0), 0);
+      const outAmt = Math.max(0, invAmt - paidAmt);
+      setFormData(prev => ({
+        ...prev,
+        paymentAmount: outAmt > 0 ? outAmt.toFixed(2) : ''
+      }));
+    }
+  }, [fullSODetail, installments, formData.salesOrderId, invoice, isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      lastSalesOrderId.current = '';
+    }
+  }, [isOpen]);
+
+  const invoiceAmount = parseFloat(fullSODetail?.total_amount || fullSODetail?.grand_total || invoice?.total_amount || invoice?.net_total || 0);
+  const alreadyReceived = installments.reduce((sum, inst) => sum + (parseFloat(inst.payment_amount) || 0), 0);
+  const outstandingAmount = Math.max(0, invoiceAmount - alreadyReceived);
+  const progressPercent = invoiceAmount > 0 ? Math.round((alreadyReceived / invoiceAmount) * 100) : 0;
+  const advanceReceived = installments
+    .filter(inst => (inst.remarks || '').toLowerCase().includes('advance') || (inst.description || '').toLowerCase().includes('advance'))
+    .reduce((sum, inst) => sum + (parseFloat(inst.payment_amount) || 0), 0);
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={invoice ? "Record Payment Received" : "Add Payment Received"} size="5xl">
@@ -439,37 +497,79 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
           {/* Invoice Summary (If invoice passed) */}
           {(invoice || fullSODetail) && (
             <div className="space-y-4">
-              <div className="bg-gradient-to-br from-emerald-50 to-slate-50 border border-emerald-100 rounded  p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className=" text-slate-900 text-xs  tracking-wide">Sales Order Summary</h3>
-                  <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded">READ ONLY</span>
+              <div className="bg-gradient-to-br from-slate-50 to-slate-100/50 border border-slate-200 rounded p-4 space-y-4 shadow-sm">
+                <div className="flex items-center justify-between border-b border-slate-200/80 pb-2">
+                  <div>
+                    <span className="text-[10px] text-slate-400 uppercase font-semibold">Invoice Details</span>
+                    <h3 className="text-slate-900 font-bold text-sm mt-0.5">{fullSODetail?.so_number || fullSODetail?.order_no || invoice?.po_number || invoice?.so_number || 'N/A'}</h3>
+                  </div>
+                  <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded">Collection View</span>
                 </div>
-                <div className="grid grid-cols-2 gap-3 text-xs">
-                  <div>
-                    <span className="text-slate-500 ">SO Number</span>
-                    <p className=" text-slate-900 mt-1 font-semibold">{fullSODetail?.so_number || fullSODetail?.order_no || invoice?.po_number || invoice?.so_number || 'N/A'}</p>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
+                  <div className="col-span-2">
+                    <span className="text-slate-500">Customer</span>
+                    <p className="text-slate-900 font-semibold mt-0.5">{fullSODetail?.company_name || invoice?.customer_name || 'N/A'}</p>
                   </div>
                   <div>
-                    <span className="text-slate-500 ">Customer</span>
-                    <p className=" text-slate-900 mt-1 font-semibold">{fullSODetail?.company_name || invoice?.customer_name || 'N/A'}</p>
+                    <span className="text-slate-500">Project</span>
+                    <p className="text-slate-900 mt-0.5 font-medium truncate">{fullSODetail?.project_name || 'N/A'}</p>
                   </div>
                   <div>
-                    <span className="text-slate-500 ">Project</span>
-                    <p className=" text-slate-900 mt-1 font-semibold truncate">{fullSODetail?.project_name || 'N/A'}</p>
+                    <span className="text-slate-500">Collection Progress</span>
+                    <div className="flex items-center gap-2 mt-1">
+                      <div className="w-20 bg-slate-200 rounded-full h-2 overflow-hidden">
+                        <div 
+                          className="bg-emerald-500 h-2 rounded-full transition-all duration-500" 
+                          style={{ width: `${Math.min(progressPercent, 100)}%` }}
+                        />
+                      </div>
+                      <span className="text-emerald-600 font-bold">{progressPercent}%</span>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-slate-500 ">Total Amount</span>
-                    <p className=" text-slate-900 mt-1 font-semibold">{formatCurrency(fullSODetail?.total_amount || invoice?.total_amount || invoice?.net_total)}</p>
+                  
+                  <div className="border-t border-slate-200/60 pt-2">
+                    <span className="text-slate-500">Invoice Amount</span>
+                    <p className="text-slate-900 text-sm font-bold mt-0.5">{formatCurrency(invoiceAmount)}</p>
                   </div>
-                  <div>
-                    <span className="text-slate-500 ">Already Paid</span>
-                    <p className=" text-emerald-600 mt-1 font-semibold">{formatCurrency(invoice?.already_paid || 0)}</p>
+                  <div className="border-t border-slate-200/60 pt-2">
+                    <span className="text-slate-500">Already Received</span>
+                    <p className="text-emerald-600 text-sm font-bold mt-0.5">{formatCurrency(alreadyReceived)}</p>
                   </div>
-                  <div>
-                    <span className="text-slate-500 ">Outstanding</span>
-                    <p className=" text-rose-600 mt-1 ">{formatCurrency(currentOutstanding)}</p>
+                  <div className="border-t border-slate-200/60 pt-2">
+                    <span className="text-slate-500">Outstanding Amount</span>
+                    <p className="text-rose-600 text-sm font-bold mt-0.5">{formatCurrency(outstandingAmount)}</p>
+                  </div>
+                  <div className="border-t border-slate-200/60 pt-2">
+                    <span className="text-slate-500">Advance Received</span>
+                    <p className="text-indigo-600 text-sm font-bold mt-0.5">{formatCurrency(advanceReceived)}</p>
                   </div>
                 </div>
+              </div>
+
+              {/* Installment History Section */}
+              <div className="bg-white border border-slate-200 rounded p-4 space-y-3 shadow-sm">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                  <h4 className="font-semibold text-slate-800 text-xs">Installment History</h4>
+                  <span className="text-[10px] text-slate-400 font-medium">Recorded Payments</span>
+                </div>
+                {fetchingInstallments ? (
+                  <p className="text-xs text-slate-400 py-4 text-center">Loading payments...</p>
+                ) : installments.length === 0 ? (
+                  <p className="text-xs text-slate-400 py-4 text-center">No payment transactions exist yet.</p>
+                ) : (
+                  <div className="max-h-[200px] overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                    {installments.map((inst, index) => (
+                      <div key={inst.id || index} className="flex justify-between items-center text-xs p-2 bg-slate-50 border border-slate-100 rounded">
+                        <div className="flex flex-col">
+                          <span className="font-semibold text-slate-700">{inst.payment_receipt_no}</span>
+                          <span className="text-[10px] text-slate-400">{formatDate(inst.payment_date)} • {inst.payment_mode?.replace('_', ' ')}</span>
+                          {inst.transaction_ref_no && <span className="text-[9px] text-slate-400">Ref: {inst.transaction_ref_no}</span>}
+                        </div>
+                        <span className="font-medium text-emerald-600">{formatCurrency(inst.payment_amount)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {fullSODetail && (

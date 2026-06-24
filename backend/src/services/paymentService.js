@@ -54,13 +54,13 @@ const processPayment = async (payload) => {
         }
       } else if (jobCardQualityLogId) {
         const [qlRows] = await pool.query(`
-          SELECT jc.job_card_no 
+          SELECT jc.job_card_no, ql.vendor_invoice_no 
           FROM job_card_quality_logs ql
           JOIN job_cards jc ON ql.job_card_id = jc.id
           WHERE ql.id = ?
         `, [jobCardQualityLogId]);
         if (qlRows.length > 0) {
-          referenceNo = qlRows[0].job_card_no;
+          referenceNo = qlRows[0].vendor_invoice_no || qlRows[0].job_card_no;
         }
       }
     }
@@ -166,14 +166,14 @@ const processPayment = async (payload) => {
     if (poId) {
       const [poRows] = await pool.query('SELECT total_amount FROM purchase_orders WHERE id = ?', [poId]);
       const [paymentRows] = await pool.query('SELECT SUM(payment_amount) as total_paid FROM payments WHERE po_id = ? AND status = ?', [poId, 'CONFIRMED']);
-      
+
       if (poRows.length > 0 && paymentRows[0].total_paid >= poRows[0].total_amount) {
         await pool.execute('UPDATE purchase_orders SET status = ? WHERE id = ?', ['PAID', poId]);
       }
     } else if (jobCardQualityLogId) {
       const [qlRows] = await pool.query('SELECT grand_total FROM job_card_quality_logs WHERE id = ?', [jobCardQualityLogId]);
       const [paymentRows] = await pool.query('SELECT SUM(payment_amount) as total_paid FROM payments WHERE job_card_quality_log_id = ? AND status = ?', [jobCardQualityLogId, 'CONFIRMED']);
-      
+
       if (qlRows.length > 0 && paymentRows[0].total_paid >= qlRows[0].grand_total) {
         await pool.execute('UPDATE job_card_quality_logs SET status = ? WHERE id = ?', ['PAID', jobCardQualityLogId]);
       }
@@ -195,7 +195,7 @@ const getPayments = async (filters = {}) => {
   let query = `
     SELECT 
       p.*,
-      COALESCE(po.po_number, jc.job_card_no) as po_number,
+      COALESCE(po.po_number, ql.vendor_invoice_no, jc.job_card_no) as po_number,
       v.vendor_name,
       v.email as vendor_email,
       COALESCE(ba.bank_name, p.manual_bank_account) as bank_name,
@@ -230,6 +230,16 @@ const getPayments = async (filters = {}) => {
     params.push(filters.startDate, filters.endDate);
   }
 
+  if (filters.poId) {
+    query += ' AND p.po_id = ?';
+    params.push(filters.poId);
+  }
+
+  if (filters.jobCardQualityLogId) {
+    query += ' AND p.job_card_quality_log_id = ?';
+    params.push(filters.jobCardQualityLogId);
+  }
+
   query += ' ORDER BY p.created_at DESC';
 
   const [payments] = await pool.query(query, params);
@@ -240,7 +250,7 @@ const getPaymentById = async (paymentId) => {
   const [rows] = await pool.query(
     `SELECT 
       p.*,
-      COALESCE(po.po_number, jc.job_card_no) as po_number,
+      COALESCE(po.po_number, ql.vendor_invoice_no, jc.job_card_no) as po_number,
       v.vendor_name,
       COALESCE(ba.bank_name, p.manual_bank_account) as bank_name,
       ba.account_number
@@ -285,6 +295,7 @@ const getPendingPayments = async () => {
       po.po_number,
       po.total_amount,
       po.created_at,
+      po.invoice_url,
       v.vendor_name,
       v.id as vendor_id,
       'PURCHASE_ORDER' as type,
@@ -292,16 +303,17 @@ const getPendingPayments = async () => {
       (po.total_amount - COALESCE((SELECT SUM(payment_amount) FROM payments WHERE po_id = po.id AND status = 'CONFIRMED'), 0)) as outstanding
     FROM purchase_orders po
     LEFT JOIN vendors v ON po.vendor_id = v.id
-    WHERE po.status IN ('SENT', 'RECEIVED', 'PARTIALLY_RECEIVED', 'APPROVED', 'FULFILLED')
-    HAVING outstanding > 0`
+    WHERE po.status IN ('SENT', 'RECEIVED', 'PARTIALLY_RECEIVED', 'APPROVED', 'FULFILLED', 'PAID')
+    HAVING outstanding >= 0`
   );
 
   const [subconPayments] = await pool.query(
     `SELECT 
       ql.id,
-      jc.job_card_no as po_number,
+      COALESCE(ql.vendor_invoice_no, jc.job_card_no) as po_number,
       ql.grand_total as total_amount,
       ql.check_date as created_at,
+      ql.vendor_invoice as invoice_url,
       v.vendor_name,
       v.id as vendor_id,
       'SUBCONTRACTING' as type,
@@ -311,8 +323,8 @@ const getPendingPayments = async () => {
     JOIN job_cards jc ON ql.job_card_id = jc.id
     JOIN outward_challans oc ON jc.id = oc.job_card_id
     JOIN vendors v ON oc.vendor_id = v.id
-    WHERE ql.status IN ('PROCESSING', 'APPROVED') AND ql.grand_total > 0
-    HAVING outstanding > 0`
+    WHERE ql.status IN ('PROCESSING', 'APPROVED', 'PAID') AND ql.grand_total > 0
+    HAVING outstanding >= 0`
   );
 
   const allPayments = [...poPayments, ...subconPayments].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
@@ -321,7 +333,7 @@ const getPendingPayments = async () => {
 
 const updatePaymentStatus = async (paymentId, status) => {
   const validStatuses = ['PENDING', 'CONFIRMED', 'FAILED'];
-  
+
   if (!validStatuses.includes(status)) {
     const error = new Error('Invalid payment status');
     error.statusCode = 400;
@@ -343,7 +355,7 @@ const deletePayment = async (paymentId) => {
 
 const generatePaymentVoucherPDF = async (paymentId) => {
   const payment = await getPaymentById(paymentId);
-  
+
   const [vendorRows] = await pool.query(
     'SELECT * FROM vendors WHERE id = ?',
     [payment.vendor_id]
@@ -378,7 +390,7 @@ const generatePaymentVoucherPDF = async (paymentId) => {
       const subtotal = itemRows.reduce((sum, item) => sum + ((parseFloat(item.quantity) || 0) * (parseFloat(item.unit_rate || item.rate) || 0)), 0);
       const cgst = itemRows.reduce((sum, item) => sum + (parseFloat(item.cgst_amount) || ((parseFloat(item.quantity) || 0) * (parseFloat(item.unit_rate || item.rate) || 0) * 0.09)), 0);
       const sgst = itemRows.reduce((sum, item) => sum + (parseFloat(item.sgst_amount) || ((parseFloat(item.quantity) || 0) * (parseFloat(item.unit_rate || item.rate) || 0) * 0.09)), 0);
-      
+
       poDetails.subtotal = subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       poDetails.cgst = cgst.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       poDetails.sgst = sgst.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -600,8 +612,8 @@ const generatePaymentVoucherPDF = async (paymentId) => {
   });
   const page = await browser.newPage();
   await page.setContent(html, { waitUntil: 'networkidle0' });
-  const pdf = await page.pdf({ 
-    format: 'A4', 
+  const pdf = await page.pdf({
+    format: 'A4',
     printBackground: true,
     margin: { top: '20px', right: '20px', bottom: '20px', left: '20px' }
   });
@@ -612,7 +624,7 @@ const generatePaymentVoucherPDF = async (paymentId) => {
 
 const sendPaymentVoucherEmail = async (paymentId, emailData = {}) => {
   const payment = await getPaymentById(paymentId);
-  
+
   const [vendorRows] = await pool.query(
     `SELECT vendor_name as company_name, email 
      FROM vendors 
@@ -649,6 +661,405 @@ SPTECHPIONEER PVT LTD`;
   return await emailService.sendEmail(recipientEmail, subject, message, attachments);
 };
 
+function numberToWords(num) {
+  const a = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+  const b = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+
+  function convert(n) {
+    if (n < 20) return a[n];
+    const digit = n % 10;
+    if (n < 100) return b[Math.floor(n / 10)] + (digit ? '-' + a[digit] : '');
+    if (n < 1000) return a[Math.floor(n / 100)] + ' Hundred' + (n % 100 === 0 ? '' : ' and ' + convert(n % 100));
+    return '';
+  }
+
+  const n = Math.floor(num);
+  if (n === 0) return 'Zero';
+
+  let words = '';
+  if (Math.floor(n / 10000000) > 0) {
+    words += convert(Math.floor(n / 10000000)) + ' Crore ';
+  }
+  if (Math.floor((n % 10000000) / 100000) > 0) {
+    words += convert(Math.floor((n % 10000000) / 100000)) + ' Lakh ';
+  }
+  if (Math.floor((n % 100000) / 1000) > 0) {
+    words += convert(Math.floor((n % 100000) / 1000)) + ' Thousand ';
+  }
+  const rem = n % 1000;
+  if (rem > 0) {
+    words += convert(rem);
+  }
+
+  const paise = Math.round((num - n) * 100);
+  if (paise > 0) {
+    return 'Rupees ' + words.trim() + ' and ' + convert(paise) + ' Paise Only';
+  }
+
+  return 'Rupees ' + words.trim() + ' Only';
+}
+
+const generateVendorInvoicePDF = async (id, type) => {
+  const adminCompanyMasterService = require('./adminCompanyMasterService');
+  const activeCompany = await adminCompanyMasterService.getActiveCompany();
+  const hostCompanyName = activeCompany?.company_name || 'SP TECHPIONEER PRIVATE LIMITED';
+  const hostCompanyAddress = activeCompany?.company_address || 'PLOT NO.97, SECTOR NO 07, PCNDTA\nBHOSARI, PUNE-411026';
+  const hostCompanyAddressLines = hostCompanyAddress ? hostCompanyAddress.split('\n') : ['PLOT NO.97, SECTOR NO 07, PCNDTA', 'BHOSARI, PUNE-411026'];
+  const hostGSTIN = activeCompany?.gstin || '27AAPCS1193L1ZQ';
+  const hostPAN = activeCompany?.pan || 'N/A';
+
+  const formatDate = (date) => {
+    if (!date) return '—';
+    return new Date(date).toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
+    });
+  };
+
+  let vendor_name = '';
+  let vendor_address = '';
+  let vendor_gstin = '';
+  let invoice_no = '';
+  let created_at = '';
+  let po_number = '';
+  let po_date = '';
+  let itemsList = [];
+  let subtotal = 0;
+  let cgst_total = 0;
+  let sgst_total = 0;
+  let cgst_rate = 9;
+  let sgst_rate = 9;
+  let net_total = 0;
+
+  if (type === 'SUBCONTRACTING') {
+    const [logRows] = await pool.query(
+      `SELECT ql.*, v.vendor_name, v.gstin as vendor_gstin, v.location as vendor_address,
+              jc.job_card_no, oc.challan_number as outward_challan_no, oc.created_at as outward_challan_date
+       FROM job_card_quality_logs ql
+       JOIN job_cards jc ON ql.job_card_id = jc.id
+       JOIN outward_challans oc ON jc.id = oc.job_card_id
+       JOIN vendors v ON oc.vendor_id = v.id
+       WHERE ql.id = ?`,
+      [id]
+    );
+
+    if (logRows.length === 0) throw new Error('Subcontract quality log not found');
+    const log = logRows[0];
+
+    vendor_name = log.vendor_name;
+    vendor_address = log.vendor_address || 'N/A';
+    vendor_gstin = log.vendor_gstin || 'N/A';
+    invoice_no = log.vendor_invoice_no || `VI-${log.id}`;
+    created_at = formatDate(log.check_date);
+    po_number = log.outward_challan_no || log.job_card_no;
+    po_date = formatDate(log.outward_challan_date);
+
+    subtotal = parseFloat(log.sub_total || 0);
+    const gstTotal = parseFloat(log.gst_amount || 0);
+    cgst_total = (gstTotal / 2);
+    sgst_total = (gstTotal / 2);
+    net_total = parseFloat(log.grand_total || 0);
+
+    const [itemRows] = await pool.query(
+      `SELECT ici.*,
+              COALESCE(
+                (SELECT material_name FROM outward_challan_items WHERE challan_id = oc.id AND material_code = ici.item_code LIMIT 1),
+                (SELECT item_name FROM items_master WHERE item_code = ici.item_code LIMIT 1),
+                ici.item_code
+              ) as description,
+              COALESCE(
+                (SELECT hsn_code FROM items_master WHERE item_code = ici.item_code LIMIT 1),
+                '84790000'
+              ) as hsn_code
+       FROM inward_challan_items ici
+       JOIN inward_challans ic ON ici.inward_challan_id = ic.id
+       JOIN outward_challans oc ON ic.outward_challan_id = oc.id
+       WHERE ici.inward_challan_id = ?`,
+      [log.inward_challan_id]
+    );
+
+    itemsList = itemRows.map((item, idx) => ({
+      index: idx + 1,
+      description: item.description,
+      hsn_code: item.hsn_code,
+      quantity: item.accepted_qty,
+      unit: 'Nos',
+      rate: parseFloat(item.rate || 0).toFixed(2),
+      item_amount: (item.accepted_qty * (item.rate || 0)).toFixed(2)
+    }));
+  } else {
+    const [poRows] = await pool.query(
+      `SELECT po.*, v.vendor_name, v.gstin as vendor_gstin, v.location as vendor_address
+       FROM purchase_orders po
+       LEFT JOIN vendors v ON po.vendor_id = v.id
+       WHERE po.id = ?`,
+      [id]
+    );
+
+    if (poRows.length === 0) throw new Error('Purchase Order not found');
+    const po = poRows[0];
+
+    vendor_name = po.vendor_name;
+    vendor_address = po.vendor_address || 'N/A';
+    vendor_gstin = po.vendor_gstin || 'N/A';
+    invoice_no = po.po_number;
+    created_at = formatDate(po.created_at);
+    po_number = po.po_number;
+    po_date = formatDate(po.created_at);
+
+    const [itemRows] = await pool.query(
+      `SELECT poi.*,
+              COALESCE(
+                (SELECT hsn_code FROM items_master WHERE item_code = poi.material_code LIMIT 1),
+                '84790000'
+              ) as hsn_code
+       FROM purchase_order_items poi
+       WHERE poi.purchase_order_id = ?`,
+      [id]
+    );
+
+    subtotal = itemRows.reduce((sum, item) => sum + (item.quantity * item.unit_rate), 0);
+    cgst_total = itemRows.reduce((sum, item) => sum + parseFloat(item.cgst_amount || 0), 0);
+    sgst_total = itemRows.reduce((sum, item) => sum + parseFloat(item.sgst_amount || 0), 0);
+    net_total = parseFloat(po.total_amount || 0);
+
+    itemsList = itemRows.map((item, idx) => ({
+      index: idx + 1,
+      description: item.material_name || item.material_code,
+      hsn_code: item.hsn_code,
+      quantity: item.quantity,
+      unit: item.unit || 'Nos',
+      rate: parseFloat(item.unit_rate || 0).toFixed(2),
+      item_amount: (item.quantity * (item.unit_rate || 0)).toFixed(2)
+    }));
+  }
+
+  const net_total_words = numberToWords(net_total);
+  const empty_rows = Array(Math.max(0, 5 - itemsList.length)).fill({});
+
+  const htmlTemplate = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        @page { size: A4; margin: 10mm; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #000; line-height: 1.3; margin: 0; font-size: 10px; }
+        .invoice-container { border: 1px solid #000; min-height: 270mm; position: relative; }
+        
+        .tax-invoice-label { text-align: center; border-bottom: 1px solid #000; font-weight: bold; font-size: 14px; padding: 5px; }
+        
+        .header-section { display: flex; border-bottom: 1px solid #000; }
+        .header-left { flex: 1.5; padding: 10px; border-right: 1px solid #000; }
+        .header-right { flex: 1; padding: 10px; }
+        
+        .company-name { font-size: 16px; font-weight: bold; margin-bottom: 5px; }
+        .address-text { font-size: 9px; margin-bottom: 2px; }
+        
+        .info-grid { display: grid; grid-template-columns: 1fr 1fr; width: 100%; border-bottom: 1px solid #000; }
+        .info-box { padding: 8px; border-right: 1px solid #000; min-height: 80px; }
+        .info-box:last-child { border-right: none; }
+        .label { font-weight: bold; text-decoration: underline; margin-bottom: 5px; display: block; font-size: 11px; }
+        
+        .meta-table { width: 100%; border-collapse: collapse; }
+        .meta-table td { padding: 4px; border: 1px solid #000; }
+        .meta-label { font-weight: bold; width: 40%; }
+        
+        .items-table { width: 100%; border-collapse: collapse; border-bottom: 1px solid #000; }
+        .items-table th { border: 1px solid #000; padding: 6px; background: #f0f0f0; font-weight: bold; text-align: center; font-size: 9px; }
+        .items-table td { border-left: 1px solid #000; border-right: 1px solid #000; padding: 6px; vertical-align: top; }
+        .items-table tr.item-row { min-height: 30px; }
+        
+        .total-section { display: flex; border-bottom: 1px solid #000; }
+        .words-section { flex: 1.5; padding: 10px; border-right: 1px solid #000; }
+        .calc-section { flex: 1; }
+        
+        .calc-table { width: 100%; border-collapse: collapse; }
+        .calc-table td { padding: 5px; border-bottom: 1px solid #000; text-align: right; }
+        .calc-table td:first-child { text-align: left; font-weight: bold; border-right: 1px solid #000; }
+        .calc-table tr:last-child td { border-bottom: none; font-size: 12px; font-weight: bold; }
+        
+        .footer-section { display: flex; padding: 20px 10px; border-top: 1px solid #000; position: absolute; bottom: 0; width: 100%; box-sizing: border-box; }
+        .footer-col { flex: 1; text-align: center; }
+        .signature-box { margin-top: 40px; border-top: 1px dashed #000; display: inline-block; min-width: 150px; padding-top: 5px; }
+      </style>
+    </head>
+    <body>
+      <div class="invoice-container">
+        <div class="tax-invoice-label">TAX INVOICE</div>
+        
+        <div class="header-section">
+          <div class="header-left">
+            <div class="company-name">{{vendor_name}}</div>
+            <div class="address-text">{{vendor_address}}</div>
+            {{#vendor_gstin}}<div class="address-text">GSTIN/UIN: {{vendor_gstin}}</div>{{/vendor_gstin}}
+          </div>
+          <div class="header-right">
+            <table class="meta-table">
+              <tr>
+                <td class="meta-label">Invoice No.</td>
+                <td>{{invoice_no}}</td>
+              </tr>
+              <tr>
+                <td class="meta-label">Dated</td>
+                <td>{{created_at}}</td>
+              </tr>
+              <tr>
+                <td class="meta-label">Buyer's Order No.</td>
+                <td>{{po_number}}</td>
+              </tr>
+              <tr>
+                <td class="meta-label">PO Date</td>
+                <td>{{po_date}}</td>
+              </tr>
+            </table>
+          </div>
+        </div>
+        
+        <div class="info-grid">
+          <div class="info-box">
+            <span class="label">Consignee (Ship to)</span>
+            <div style="font-weight: bold; font-size: 11px;">{{hostCompanyName}}</div>
+            {{#hostCompanyAddressLines}}
+            <div class="address-text">{{.}}</div>
+            {{/hostCompanyAddressLines}}
+            <div class="address-text">GSTIN/UIN: {{hostGSTIN}}</div>
+          </div>
+          <div class="info-box">
+            <span class="label">Buyer (Bill to)</span>
+            <div style="font-weight: bold; font-size: 11px;">{{hostCompanyName}}</div>
+            {{#hostCompanyAddressLines}}
+            <div class="address-text">{{.}}</div>
+            {{/hostCompanyAddressLines}}
+            <div class="address-text">GSTIN/UIN: {{hostGSTIN}}</div>
+          </div>
+        </div>
+
+        <table class="items-table">
+          <thead>
+            <tr>
+              <th style="width: 30px;">Sl No.</th>
+              <th>Description of Goods</th>
+              <th style="width: 70px;">HSN/SAC</th>
+              <th style="width: 60px;">Quantity</th>
+              <th style="width: 80px;">Rate</th>
+              <th style="width: 40px;">per</th>
+              <th style="width: 90px;">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{#items}}
+            <tr class="item-row">
+              <td style="text-align: center;">{{index}}</td>
+              <td>
+                <div style="font-weight: bold;">{{description}}</div>
+              </td>
+              <td style="text-align: center;">{{hsn_code}}</td>
+              <td style="text-align: center;">{{quantity}} {{unit}}</td>
+              <td style="text-align: right;">{{rate}}</td>
+              <td style="text-align: center;">{{unit}}</td>
+              <td style="text-align: right; font-weight: bold;">{{item_amount}}</td>
+            </tr>
+            {{/items}}
+            {{#empty_rows}}
+            <tr style="height: 25px;">
+              <td></td><td></td><td></td><td></td><td></td><td></td><td></td>
+            </tr>
+            {{/empty_rows}}
+          </tbody>
+        </table>
+
+        <div class="total-section">
+          <div class="words-section">
+            <div style="font-style: italic; margin-bottom: 10px;">Amount Chargeable (in words)</div>
+            <div style="font-weight: bold; font-size: 11px;">{{net_total_words}}</div>
+          </div>
+          <div class="calc-section">
+            <table class="calc-table">
+              <tr>
+                <td>Total Taxable Value</td>
+                <td>{{subtotal}}</td>
+              </tr>
+              {{#cgst_total}}
+              <tr>
+                <td>CGST @ {{cgst_rate}}%</td>
+                <td>{{cgst_total}}</td>
+              </tr>
+              {{/cgst_total}}
+              {{#sgst_total}}
+              <tr>
+                <td>SGST @ {{sgst_rate}}%</td>
+                <td>{{sgst_total}}</td>
+              </tr>
+              {{/sgst_total}}
+              <tr>
+                <td>Total</td>
+                <td>₹ {{net_total}}</td>
+              </tr>
+            </table>
+          </div>
+        </div>
+
+        <div class="footer-section">
+          <div class="footer-col" style="text-align: left;">
+            <div style="font-weight: bold; margin-bottom: 5px;">Declaration:</div>
+            <div style="font-size: 8px; line-height: 1.2;">We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.</div>
+          </div>
+          <div class="footer-col" style="text-align: right;">
+            <div>For {{vendor_name}}</div>
+            <div class="signature-box">Authorized Signatory</div>
+          </div>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  const browser = await puppeteer.launch({
+    headless: 'new',
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
+  });
+  const page = await browser.newPage();
+
+  const renderedHtml = mustache.render(htmlTemplate, {
+    hostCompanyName,
+    hostCompanyAddressLines,
+    hostGSTIN,
+    hostPAN,
+    vendor_name,
+    vendor_address,
+    vendor_gstin,
+    invoice_no,
+    created_at,
+    po_number,
+    po_date,
+    items: itemsList,
+    subtotal: subtotal.toFixed(2),
+    cgst_total: cgst_total > 0 ? cgst_total.toFixed(2) : null,
+    sgst_total: sgst_total > 0 ? sgst_total.toFixed(2) : null,
+    cgst_rate,
+    sgst_rate,
+    net_total: net_total.toFixed(2),
+    net_total_words,
+    empty_rows
+  });
+
+  await page.setContent(renderedHtml, { waitUntil: 'networkidle0' });
+  const pdfBuffer = await page.pdf({
+    format: 'A4',
+    printBackground: true,
+    margin: {
+      top: '10mm',
+      bottom: '10mm',
+      left: '10mm',
+      right: '10mm'
+    }
+  });
+
+  await browser.close();
+  return pdfBuffer;
+};
+
 module.exports = {
   processPayment,
   getPayments,
@@ -658,5 +1069,6 @@ module.exports = {
   updatePaymentStatus,
   deletePayment,
   generatePaymentVoucherPDF,
-  sendPaymentVoucherEmail
+  sendPaymentVoucherEmail,
+  generateVendorInvoicePDF
 };

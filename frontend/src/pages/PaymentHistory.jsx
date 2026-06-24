@@ -102,6 +102,43 @@ const PaymentHistory = () => {
     }
   };
 
+  const handleDownloadInvoice = async (row) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const targetId = row.po_id || row.job_card_quality_log_id;
+      const targetType = row.po_id ? 'PURCHASE_ORDER' : 'SUBCONTRACTING';
+
+      if (!targetId) {
+        errorToast('Invoice reference ID not found');
+        return;
+      }
+
+      const endpoint = `${API_BASE}/payments/vendor-invoice/${targetId}/pdf?type=${targetType}`;
+
+      const response = await fetch(endpoint, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) throw new Error('Failed to download invoice');
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const fileName = `Invoice_${row.po_number || targetId}.pdf`;
+      link.setAttribute('download', fileName);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading invoice:', error);
+      errorToast('Failed to download invoice');
+    }
+  };
+
   const openEmailModal = (payment) => {
     if (!location.pathname.includes('/email')) {
       navigate(`/payment-history/email?id=${payment.id}`);
@@ -238,6 +275,15 @@ const PaymentHistory = () => {
           >
             <Download className="w-4 h-4 group-hover:scale-110" />
           </button>
+          {(row.po_id || row.job_card_quality_log_id) && (
+            <button
+              onClick={() => handleDownloadInvoice(row)}
+              className="p-2 hover:bg-blue-50 rounded text-slate-400 hover:text-blue-600 transition-all border border-transparent hover:border-blue-100 group shadow-sm"
+              title="Download Invoice Copy"
+            >
+              <FileText className="w-4 h-4 group-hover:scale-110" />
+            </button>
+          )}
         </div>
       )
     }

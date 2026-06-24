@@ -196,7 +196,7 @@ const getPaymentsReceived = async (filters = {}) => {
       cp.*,
       CASE 
         WHEN cp.sales_order_source = 'DIRECT_ORDER' THEN o.order_no
-        ELSE COALESCE(so.so_number, cp_pos.po_number, CAST(so.id AS CHAR))
+        ELSE COALESCE(so.so_number, CONCAT('SO-', LPAD(so.id, 4, '0')))
       END as so_number,
       c.company_name as customer_name,
       con.email as customer_email,
@@ -234,6 +234,16 @@ const getPaymentsReceived = async (filters = {}) => {
     params.push(filters.startDate, filters.endDate);
   }
 
+  if (filters.salesOrderId) {
+    query += ' AND cp.sales_order_id = ?';
+    params.push(filters.salesOrderId);
+  }
+
+  if (filters.salesOrderSource) {
+    query += ' AND cp.sales_order_source = ?';
+    params.push(filters.salesOrderSource);
+  }
+
   query += ' ORDER BY cp.created_at DESC';
 
   const [payments] = await pool.query(query, params);
@@ -246,7 +256,7 @@ const getPaymentReceivedById = async (paymentId) => {
       cp.*,
       CASE 
         WHEN cp.sales_order_source = 'DIRECT_ORDER' THEN o.order_no
-        ELSE COALESCE(so.so_number, cp_pos.po_number, CAST(so.id AS CHAR))
+        ELSE COALESCE(so.so_number, CONCAT('SO-', LPAD(so.id, 4, '0')))
       END as so_number,
       CASE
         WHEN cp.sales_order_source = 'DIRECT_ORDER' THEN o.project_name
@@ -344,7 +354,7 @@ const getOutstandingInvoices = async (customerId) => {
       SELECT 
         so.id,
         so.company_id as company_id,
-        CONVERT(COALESCE(so.so_number, cp_pos.po_number, CAST(so.id AS CHAR)) USING utf8mb4) as so_number,
+        CONVERT(COALESCE(so.so_number, CONCAT('SO-', LPAD(so.id, 4, '0'))) USING utf8mb4) as so_number,
         c.company_name as company_name,
         COALESCE(NULLIF(so.project_name, ''), NULLIF(cp_pos.project_name, ''), 'General Project') as project_name,
         COALESCE(NULLIF(so.net_total, 0), NULLIF(cp_pos.net_total, 0), (SELECT SUM(quantity * rate + tax_value) FROM sales_order_items WHERE sales_order_id = so.id), 0) as total_amount,
@@ -355,7 +365,7 @@ const getOutstandingInvoices = async (customerId) => {
       FROM sales_orders so
       LEFT JOIN customer_pos cp_pos ON so.customer_po_id = cp_pos.id
       LEFT JOIN companies c ON so.company_id = c.id
-      WHERE so.company_id = ? AND so.status NOT IN ('CLOSED', 'CANCELLED', 'PAID')
+      WHERE so.company_id = ? AND so.status IN ('READY_FOR_SHIPMENT', 'SHIPPED', 'PAID')
 
       UNION ALL
 
@@ -373,9 +383,9 @@ const getOutstandingInvoices = async (customerId) => {
         o.created_at
       FROM orders o
       LEFT JOIN companies c ON o.client_id = c.id
-      WHERE o.client_id = ? AND o.status NOT IN ('Closed', 'Cancelled', 'Paid', 'PAID', 'CANCELLED', 'CLOSED')
+      WHERE o.client_id = ? AND o.status NOT IN ('Closed', 'Cancelled', 'CANCELLED', 'CLOSED')
     ) combined
-    WHERE outstanding > 0
+    WHERE outstanding >= 0
     ORDER BY created_at DESC`,
     [customerId, customerId]
   );
@@ -390,7 +400,7 @@ const getAllOutstandingInvoices = async () => {
       SELECT 
         so.id,
         so.company_id as company_id,
-        CONVERT(COALESCE(so.so_number, cp_pos.po_number, CAST(so.id AS CHAR)) USING utf8mb4) as so_number,
+        CONVERT(COALESCE(so.so_number, CONCAT('SO-', LPAD(so.id, 4, '0'))) USING utf8mb4) as so_number,
         c.company_name as company_name,
         COALESCE(NULLIF(so.project_name, ''), NULLIF(cp_pos.project_name, ''), 'General Project') as project_name,
         COALESCE(NULLIF(so.net_total, 0), NULLIF(cp_pos.net_total, 0), (SELECT SUM(quantity * rate + tax_value) FROM sales_order_items WHERE sales_order_id = so.id), 0) as total_amount,
@@ -401,7 +411,7 @@ const getAllOutstandingInvoices = async () => {
       FROM sales_orders so
       LEFT JOIN customer_pos cp_pos ON so.customer_po_id = cp_pos.id
       LEFT JOIN companies c ON so.company_id = c.id
-      WHERE so.status NOT IN ('CLOSED', 'CANCELLED', 'PAID')
+      WHERE so.status IN ('READY_FOR_SHIPMENT', 'SHIPPED', 'PAID')
 
       UNION ALL
 
@@ -419,9 +429,9 @@ const getAllOutstandingInvoices = async () => {
         o.created_at
       FROM orders o
       LEFT JOIN companies c ON o.client_id = c.id
-      WHERE o.status NOT IN ('Closed', 'Cancelled', 'Paid', 'PAID', 'CANCELLED', 'CLOSED')
+      WHERE o.status NOT IN ('Closed', 'Cancelled', 'CANCELLED', 'CLOSED')
     ) combined
-    WHERE outstanding > 0
+    WHERE outstanding >= 0
     ORDER BY created_at DESC`
   );
 

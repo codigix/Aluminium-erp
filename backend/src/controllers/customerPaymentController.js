@@ -23,7 +23,9 @@ const getPaymentsReceived = async (req, res, next) => {
       status: req.query.status,
       paymentMode: req.query.paymentMode,
       startDate: req.query.startDate,
-      endDate: req.query.endDate
+      endDate: req.query.endDate,
+      salesOrderId: req.query.salesOrderId,
+      salesOrderSource: req.query.salesOrderSource
     };
     const payments = await customerPaymentService.getPaymentsReceived(filters);
     res.json(payments);

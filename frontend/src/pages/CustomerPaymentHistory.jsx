@@ -80,6 +80,40 @@ const CustomerPaymentHistory = () => {
     }
   };
 
+  const handleDownloadInvoice = async (row) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      if (!row.sales_order_id) {
+        errorToast('Invoice reference ID not found');
+        return;
+      }
+      
+      const endpoint = row.sales_order_source === 'SALES_ORDER' 
+        ? `${API_BASE}/sales-orders/${row.sales_order_id}/pdf` 
+        : `${API_BASE}/order/${row.sales_order_id}/pdf`;
+
+      const response = await fetch(endpoint, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!response.ok) throw new Error('Failed to generate invoice');
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const fileName = `Invoice_${row.so_number || row.sales_order_id}.pdf`;
+      link.setAttribute('download', fileName);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Error downloading invoice:', err);
+      errorToast('Failed to download invoice');
+    }
+  };
+
   const openEmailModal = (payment) => {
     setSelectedPayment(payment);
     setEmailData({
@@ -211,6 +245,15 @@ const CustomerPaymentHistory = () => {
           >
             <Download className="w-4 h-4 group-hover:scale-110" />
           </button>
+          {row.sales_order_id && (
+            <button
+              onClick={() => handleDownloadInvoice(row)}
+              className="p-2 hover:bg-blue-50 rounded text-slate-400 hover:text-blue-600 transition-all border border-transparent hover:border-blue-100 group shadow-sm"
+              title="Download Invoice Copy"
+            >
+              <FileText className="w-4 h-4 group-hover:scale-110" />
+            </button>
+          )}
         </div>
       )
     }
@@ -227,7 +270,7 @@ const CustomerPaymentHistory = () => {
             <History size={24} />
           </div>
           <div>
-            <h1 className="text-xl   text-slate-900 ">Client Payment History</h1>
+            <h1 className="text-xl   text-slate-900 ">Payment History</h1>
             <div className="flex items-center gap-3 mt-1">
               <span className="text-xs  text-slate-500 flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded bg-slate-400" />

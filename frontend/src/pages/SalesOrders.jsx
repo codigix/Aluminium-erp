@@ -142,7 +142,7 @@ const SalesOrders = () => {
         const primaryContact = company.contacts?.find(ct => ct.contact_type === 'PRIMARY') || company.contacts?.[0];
         const billing = company.addresses?.find(address => address.address_type === 'BILLING') || {};
         const shipping = company.addresses?.find(address => address.address_type === 'SHIPPING') || {};
-        
+
         const billingAddressStr = [billing.line1, billing.line2, billing.city, billing.state, billing.pincode].filter(Boolean).join(', ');
         const shippingAddressStr = [shipping.line1, shipping.line2, shipping.city, shipping.state, shipping.pincode].filter(Boolean).join(', ');
 
@@ -286,7 +286,7 @@ const SalesOrders = () => {
       if (response.ok) {
         const data = await response.json();
         setHostCompanies(data);
-        
+
         // ONLY set default selected host company if it hasn't been set yet (e.g. not in edit/view mode)
         if (!selectedHostId) {
           const active = data.find(c => c.status === 'ACTIVE');
@@ -714,7 +714,7 @@ const SalesOrders = () => {
           customerUpdateFields.customerContactPerson = data.contact_person || '';
           customerUpdateFields.customerBillingAddress = data.billing_address || '';
           customerUpdateFields.customerShippingAddress = data.shipping_address || '';
-          
+
           const company = companies.find(c => String(c.id) === String(data.client_id || data.company_id));
           const billing = company?.addresses?.find(address => address.address_type === 'BILLING') || {};
           customerUpdateFields.customerGstin = company?.gstin || '';
@@ -812,7 +812,8 @@ const SalesOrders = () => {
           successToast('Order has been deleted');
           fetchOrders();
         } else {
-          throw new Error('Failed to delete order');
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(errData.message || errData.error || 'Failed to delete order');
         }
       } catch (err) {
         errorToast(err.message);
@@ -1350,11 +1351,10 @@ const SalesOrders = () => {
                       </div>
                     )}
                     <span className="text-xs font-bold text-slate-800 leading-tight truncate w-full">{selectedHostCompany.company_name}</span>
-                    <span className={`text-[9px] mt-1.5 px-2 py-0.5 rounded-full font-semibold border ${
-                      selectedHostCompany.status === 'ACTIVE'
+                    <span className={`text-[9px] mt-1.5 px-2 py-0.5 rounded-full font-semibold border ${selectedHostCompany.status === 'ACTIVE'
                         ? 'bg-emerald-50 border-emerald-100 text-emerald-600'
                         : 'bg-slate-100 border-slate-200 text-slate-500'
-                    }`}>
+                      }`}>
                       {selectedHostCompany.status === 'ACTIVE' ? 'Active Global Billing' : 'Inactive'}
                     </span>
                   </div>
@@ -1479,7 +1479,7 @@ const SalesOrders = () => {
                     const primaryContact = company?.contacts?.find(ct => ct.contact_type === 'PRIMARY') || company?.contacts?.[0];
                     const billing = company?.addresses?.find(address => address.address_type === 'BILLING') || {};
                     const shipping = company?.addresses?.find(address => address.address_type === 'SHIPPING') || {};
-                    
+
                     const billingAddressStr = [billing.line1, billing.line2, billing.city, billing.state, billing.pincode].filter(Boolean).join(', ');
                     const shippingAddressStr = [shipping.line1, shipping.line2, shipping.city, shipping.state, shipping.pincode].filter(Boolean).join(', ');
 
@@ -1639,7 +1639,7 @@ const SalesOrders = () => {
                   <tbody className="divide-y divide-slate-50">
                     {formData.items.flatMap((item, idx) => {
                       const rows = [];
-                      
+
                       // Main Item Row
                       rows.push(
                         <tr key={`item-${idx}`} className="hover:bg-slate-50/50 transition-colors">
@@ -1666,7 +1666,7 @@ const SalesOrders = () => {
                           const saQty = (parseFloat(sa.quantity || 0) * (parseFloat(item.quantity) || 0));
                           const saRate = parseFloat(sa.rate || 0);
                           const saTotal = saQty * saRate;
-                          
+
                           rows.push(
                             <tr key={`item-${idx}-sa-${saIdx}`} className="bg-slate-50/30">
                               <td className="p-2 border-b border-slate-100">

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { Package, RefreshCw, Plus, Calendar, CreditCard, User, FileText } from 'lucide-react';
+import { Package, RefreshCw, Plus, Calendar, CreditCard, User, FileText, Download } from 'lucide-react';
 import { DataTable, Button } from '../components/ui.jsx';
 import PaymentReceivedModal from '../components/PaymentReceivedModal.jsx';
 import { errorToast } from '../utils/toast';
@@ -89,6 +89,35 @@ const PaymentReceived = () => {
     }
   };
 
+  const handleDownloadInvoice = async (row) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const endpoint = row.source === 'SALES_ORDER' 
+        ? `${API_BASE}/sales-orders/${row.id}/pdf` 
+        : `${API_BASE}/order/${row.id}/pdf`;
+
+      const response = await fetch(endpoint, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!response.ok) throw new Error('Failed to generate invoice');
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const fileName = `Invoice_${row.so_number || row.id}.pdf`;
+      link.setAttribute('download', fileName);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Error downloading invoice:', err);
+      errorToast('Failed to download invoice');
+    }
+  };
+
   const columns = [
     {
       label: 'Order Details',
@@ -96,7 +125,7 @@ const PaymentReceived = () => {
       sortable: true,
       render: (val, row) => (
         <div className="flex flex-col py-1">
-          <span className=" text-rose-600  ">
+          <span className=" text-rose-600 font-semibold ">
             {val}
           </span>
           <div className="flex items-center gap-1 mt-0.5">
@@ -137,20 +166,80 @@ const PaymentReceived = () => {
       )
     },
     {
-      label: 'Outstanding',
+      label: 'Invoice Amount',
+      key: 'total_amount',
+      sortable: true,
+      render: (val) => (
+        <span className="text-slate-900 font-medium">{formatCurrency(val)}</span>
+      )
+    },
+    {
+      label: 'Received Amount',
+      key: 'paid_amount',
+      sortable: true,
+      render: (val) => (
+        <span className="text-emerald-600 font-medium">{formatCurrency(val)}</span>
+      )
+    },
+    {
+      label: 'Outstanding Amount',
       key: 'outstanding',
       sortable: true,
       render: (val) => (
-        <div className="flex flex-col py-1">
-          <div className="flex items-center gap-1  text-slate-900">
-            <span className="text-rose-600">₹</span>
-            <span>{Number(val).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-          </div>
-          <span className="text-[10px] text-amber-600 flex items-center gap-0.5">
-            Awaiting Collection
-          </span>
-        </div>
+        <span className="text-rose-600 font-semibold">{formatCurrency(val)}</span>
       )
+    },
+    {
+      label: 'Payment %',
+      key: 'paid_amount',
+      sortable: true,
+      render: (_, row) => {
+        const total = parseFloat(row.total_amount) || 0;
+        const paid = parseFloat(row.paid_amount) || 0;
+        const percentage = total > 0 ? Math.round((paid / total) * 100) : 0;
+        return (
+          <div className="flex items-center gap-2">
+            <div className="w-12 bg-slate-100 rounded-full h-1.5 overflow-hidden">
+              <div 
+                className="bg-emerald-500 h-1.5 rounded-full" 
+                style={{ width: `${Math.min(percentage, 100)}%` }}
+              />
+            </div>
+            <span className="text-slate-600 font-medium">{percentage}%</span>
+          </div>
+        );
+      }
+    },
+    {
+      label: 'Status',
+      key: 'outstanding',
+      sortable: true,
+      render: (_, row) => {
+        const outstanding = parseFloat(row.outstanding) || 0;
+        const received = parseFloat(row.paid_amount) || 0;
+        if (outstanding === 0) {
+          return (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs bg-emerald-50 text-emerald-700 font-medium border border-emerald-100">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              COMPLETED
+            </span>
+          );
+        } else if (outstanding > 0 && received > 0) {
+          return (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs bg-amber-50 text-amber-700 font-medium border border-amber-100">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+              Partial Paid
+            </span>
+          );
+        } else {
+          return (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs bg-rose-50 text-rose-700 font-medium border border-rose-100">
+              <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+              Pending Payment
+            </span>
+          );
+        }
+      }
     },
     {
       label: 'Actions',
@@ -159,12 +248,21 @@ const PaymentReceived = () => {
       render: (_, row) => (
         <div className="flex justify-end items-center gap-2">
           <button
-            onClick={() => navigate(`/payment-received/record?id=${row.id}`)}
-            className="p-2 hover:bg-emerald-50 rounded text-slate-400 hover:text-emerald-600 transition-all border border-transparent hover:border-emerald-100 group shadow-sm"
-            title="Record Payment"
+            onClick={() => handleDownloadInvoice(row)}
+            className="p-2 hover:bg-rose-50 rounded text-slate-400 hover:text-rose-600 transition-all border border-transparent hover:border-rose-100 group shadow-sm"
+            title="Download Invoice"
           >
-            <CreditCard className="w-4 h-4 group-hover:scale-110" />
+            <Download className="w-4 h-4 group-hover:scale-110" />
           </button>
+          {parseFloat(row.outstanding) > 0 && (
+            <button
+              onClick={() => navigate(`/payment-received/record?id=${row.id}`)}
+              className="p-2 hover:bg-emerald-50 rounded text-slate-400 hover:text-emerald-600 transition-all border border-transparent hover:border-emerald-100 group shadow-sm"
+              title="Record Payment"
+            >
+              <CreditCard className="w-4 h-4 group-hover:scale-110" />
+            </button>
+          )}
         </div>
       )
     }
@@ -181,7 +279,7 @@ const PaymentReceived = () => {
             <Package size={24} />
           </div>
           <div>
-            <h1 className="text-xl   text-slate-900 ">Payments Received</h1>
+            <h1 className="text-xl   text-slate-900 ">Customer Invoices</h1>
             <div className="flex items-center gap-3 mt-1">
               <span className="text-xs  text-slate-500 flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded bg-slate-400" />

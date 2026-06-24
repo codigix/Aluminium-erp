@@ -9,7 +9,7 @@ import {
   FileSpreadsheet, PackageSearch, Calendar, Wrench, FileSignature, Cpu, Activity, 
   FileQuestion, ShoppingBag, ClipboardPlus, ClipboardCheck, Move, BookOpen, Warehouse, 
   ShieldCheck, LogIn, FileBarChart, Receipt, CreditCard, History, CheckCircle2, Contact2,
-  Menu, Monitor
+  Menu, Monitor, ChevronDown, ChevronRight
 } from 'lucide-react'
 import CompanyMaster from './pages/CompanyMaster'
 import AdminCompanyMaster from './pages/AdminCompanyMaster'
@@ -421,6 +421,7 @@ function App() {
   const [loginPassword, setLoginPassword] = useState('')
   const [loginLoading, setLoginLoading] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [openSubMenus, setOpenSubMenus] = useState({})
   const [signupForm, setSignupForm] = useState({
     username: '',
     email: '',
@@ -1266,11 +1267,24 @@ function App() {
     { label: 'QC Reports', moduleId: 'quality-reports', icon: 'file-bar-chart', indent: true, prefix: '/quality' },
 
     { label: 'ACCOUNTS', isGroup: true, groupId: 'accounts-main-group' },
-    { label: 'Vendor Invoices', moduleId: 'invoice-received', icon: 'receipt', indent: true, prefix: '/accounts' },
-    { label: 'Payment Processing', moduleId: 'payment-processing', icon: 'credit-card', indent: true, prefix: '/accounts' },
-    { label: 'Vendor Payment History', moduleId: 'payment-history', icon: 'history', indent: true, prefix: '/accounts' },
-    { label: 'Payment Received', moduleId: 'payment-received', icon: 'check-circle', indent: true, prefix: '/accounts' },
-    { label: 'Client History', moduleId: 'customer-payment-history', icon: 'contact', indent: true, prefix: '/accounts' },
+    {
+      label: 'Vendor Payables',
+      isSubMenu: true,
+      icon: 'credit-card',
+      children: [
+        { label: 'Vendor Invoices', moduleId: 'payment-processing', icon: 'receipt', prefix: '/accounts' },
+        { label: 'Payment History', moduleId: 'payment-history', icon: 'history', prefix: '/accounts' }
+      ]
+    },
+    {
+      label: 'Customer Receivables',
+      isSubMenu: true,
+      icon: 'check-circle',
+      children: [
+        { label: 'Customer Invoices', moduleId: 'payment-received', icon: 'receipt', prefix: '/accounts' },
+        { label: 'Payment History', moduleId: 'customer-payment-history', icon: 'contact', prefix: '/accounts' }
+      ]
+    },
     { label: 'Accounts Report', moduleId: 'accounts-report', icon: 'file-bar-chart', indent: true, deptCode: 'ACCOUNTS', prefix: '/accounts' },
 
     { label: 'SHIPMENT', isGroup: true, groupId: 'shipment-group' },
@@ -1301,60 +1315,105 @@ function App() {
     return mapping[deptCode] === groupId
   }
 
-  const navigationItems = allowedModules ? allNavigationItems.filter((item, index) => {
-    let parentGroup = null
-    if (item.isGroup) {
-      parentGroup = item
-    } else {
-      for (let i = index; i >= 0; i--) {
-        if (allNavigationItems[i].isGroup) {
-          parentGroup = allNavigationItems[i]
-          break
-        }
+  useEffect(() => {
+    if (activeModule) {
+      const parentSubMenu = allNavigationItems.find(item => 
+        item.isSubMenu && item.children?.some(child => child.moduleId === activeModule)
+      );
+      if (parentSubMenu) {
+        setOpenSubMenus(prev => ({ ...prev, [parentSubMenu.label]: true }));
       }
     }
+  }, [activeModule]);
 
-    if (parentGroup) {
-      const isGroupAllowed = parentGroup.groupId === 'general-group' || 
-                             (sidebarDept && isGroupAllowedForDept(parentGroup.groupId, sidebarDept))
-      if (!isGroupAllowed) {
-        return false
-      }
-    }
+  const navigationItems = useMemo(() => {
+    if (!allowedModules) return []
 
     const isAdmin = user?.department_code === 'ADMIN'
-    
-    if (item.isGroup) {
-      const nextGroupIndex = allNavigationItems.findIndex((it, i) => i > index && it.isGroup)
-      const groupItems = allNavigationItems.slice(index + 1, nextGroupIndex === -1 ? undefined : nextGroupIndex)
-      return groupItems.some(child => {
-        if (!child.moduleId) return false
-        const isAllowedModule = allowedModules.includes(child.moduleId)
-        const isCorrectDept = !child.deptCode || isAdmin || user?.department_code === child.deptCode
-        return isAllowedModule && isCorrectDept
-      })
-    }
 
-    const isAllowedModule = !item.moduleId || allowedModules.includes(item.moduleId)
-    let isCorrectDept = !item.deptCode || isAdmin || user?.department_code === item.deptCode
-    
-    // Explicitly hide items from Admin sidebar as requested
-    if (isAdmin) {
-      if (
-        item.moduleId === 'operation-master' || 
-        item.moduleId === 'payment-history' ||
-        item.moduleId === 'customer-payment-history'
-      ) {
-        isCorrectDept = false
+    const processedItems = allNavigationItems.map((item, index) => {
+      let parentGroup = null
+      if (item.isGroup) {
+        parentGroup = item
+      } else {
+        for (let i = index; i >= 0; i--) {
+          if (allNavigationItems[i].isGroup) {
+            parentGroup = allNavigationItems[i]
+            break
+          }
+        }
       }
-      // For suppliers, only show the one in GENERAL section for Admin
-      if (item.moduleId === 'suppliers' && item.deptCode !== 'ADMIN') {
-        isCorrectDept = false
+
+      if (parentGroup) {
+        const isGroupAllowed = parentGroup.groupId === 'general-group' || 
+                               (sidebarDept && isGroupAllowedForDept(parentGroup.groupId, sidebarDept))
+        if (!isGroupAllowed) {
+          return null
+        }
       }
-    }
-    
-    return isAllowedModule && isCorrectDept
-  }) : []
+
+      if (item.isGroup) {
+        return item
+      }
+
+      if (item.isSubMenu) {
+        const filteredChildren = item.children.filter(child => {
+          const isAllowedModule = !child.moduleId || allowedModules.includes(child.moduleId)
+          let isCorrectDept = !child.deptCode || isAdmin || user?.department_code === child.deptCode
+          
+          if (isAdmin) {
+            if (
+              child.moduleId === 'operation-master' || 
+              child.moduleId === 'payment-history' ||
+              child.moduleId === 'customer-payment-history'
+            ) {
+              isCorrectDept = false
+            }
+            if (child.moduleId === 'suppliers' && child.deptCode !== 'ADMIN') {
+              isCorrectDept = false
+            }
+          }
+          return isAllowedModule && isCorrectDept
+        })
+
+        if (filteredChildren.length === 0) {
+          return null
+        }
+
+        return {
+          ...item,
+          children: filteredChildren
+        }
+      }
+
+      const isAllowedModule = !item.moduleId || allowedModules.includes(item.moduleId)
+      let isCorrectDept = !item.deptCode || isAdmin || user?.department_code === item.deptCode
+      
+      if (isAdmin) {
+        if (
+          item.moduleId === 'operation-master' || 
+          item.moduleId === 'payment-history' ||
+          item.moduleId === 'customer-payment-history'
+        ) {
+          isCorrectDept = false
+        }
+        if (item.moduleId === 'suppliers' && item.deptCode !== 'ADMIN') {
+          isCorrectDept = false
+        }
+      }
+
+      return isAllowedModule && isCorrectDept ? item : null
+    }).filter(Boolean)
+
+    return processedItems.filter((item, index) => {
+      if (item.isGroup) {
+        const nextGroupIndex = processedItems.findIndex((it, i) => i > index && it.isGroup)
+        const groupItems = processedItems.slice(index + 1, nextGroupIndex === -1 ? undefined : nextGroupIndex)
+        return groupItems.length > 0
+      }
+      return true
+    })
+  }, [allowedModules, allNavigationItems, user, sidebarDept])
 
   const poDetailItems = Array.isArray(poDetail?.items) ? poDetail.items : []
   const poDetailPdfUrl = poDetail?.pdf_path ? getPoPdfUrl(poDetail.pdf_path) : null
@@ -1653,14 +1712,6 @@ function App() {
             
             <div className="flex-1 overflow-y-auto overflow-x-hidden p-2 space-y-1.5 custom-scrollbar">
               {navigationItems.map((item, index) => {
-                const isActive = item.moduleId ? (
-                  activeModule === item.moduleId || 
-                  (item.moduleId === 'bom-creation' && activeModule === 'bom-form') || 
-                  (item.moduleId === 'client-quotations' && activeModule === 'quotation-form') ||
-                  (item.moduleId === 'production-report' && activeModule === 'work-order-details')
-                ) : Boolean(item.active)
-                const isDisabled = item.isGroup || !item.moduleId
-                
                 if (item.isGroup) {
                   return (
                     <div key={`group-${item.groupId || item.label}-${index}`} className="p-2">
@@ -1668,6 +1719,109 @@ function App() {
                     </div>
                   )
                 }
+
+                if (item.isSubMenu) {
+                  const isOpen = !!openSubMenus[item.label]
+                  const hasActiveChild = item.children?.some(child => {
+                    return activeModule === child.moduleId || 
+                           (child.moduleId === 'bom-creation' && activeModule === 'bom-form') || 
+                           (child.moduleId === 'client-quotations' && activeModule === 'quotation-form') ||
+                           (child.moduleId === 'production-report' && activeModule === 'work-order-details')
+                  })
+                  
+                  return (
+                    <div key={`submenu-${item.label}-${index}`} className="space-y-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOpenSubMenus(prev => ({
+                            ...prev,
+                            [item.label]: !prev[item.label]
+                          }))
+                        }}
+                        className={`flex items-center gap-3 w-full p-2 rounded text-xs transition-all duration-200 group relative ${
+                          hasActiveChild 
+                            ? 'text-rose-600 bg-rose-50/10 font-medium' 
+                            : 'text-slate-500 hover:text-rose-600 hover:bg-rose-50/30'
+                        }`}
+                      >
+                        {iconMap[item.icon] && (() => {
+                          const IconComponent = iconMap[item.icon]
+                          return (
+                            <IconComponent 
+                              className={`w-[18px] h-[18px] flex-shrink-0 transition-transform duration-200 group-hover:scale-110 ${
+                                hasActiveChild ? 'text-rose-600' : 'text-slate-400 group-hover:text-rose-500'
+                              }`} 
+                            />
+                          )
+                        })()}
+                        <span className="flex-1 text-left truncate">{item.label}</span>
+                        {isOpen ? (
+                          <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-rose-500" />
+                        ) : (
+                          <ChevronRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-rose-500" />
+                        )}
+                      </button>
+                      
+                      {isOpen && (
+                        <div className="pl-6 space-y-1 border-l border-slate-100 ml-4">
+                          {item.children.map((child, childIdx) => {
+                            const isChildActive = activeModule === child.moduleId || 
+                                                  (child.moduleId === 'bom-creation' && activeModule === 'bom-form') || 
+                                                  (child.moduleId === 'client-quotations' && activeModule === 'quotation-form') ||
+                                                  (child.moduleId === 'production-report' && activeModule === 'work-order-details')
+                            const isChildDisabled = !child.moduleId
+                            
+                            return (
+                              <button
+                                key={`subchild-${child.moduleId || 'item'}-${childIdx}`}
+                                type="button"
+                                onClick={() => {
+                                  if (child.moduleId) {
+                                    const pathPrefix = child.prefix || ''
+                                    navigate(`${pathPrefix}/${child.moduleId}`)
+                                    setMobileMenuOpen(false)
+                                  }
+                                }}
+                                className={`flex items-center gap-3 w-full p-2 rounded text-xs transition-all duration-200 group relative ${
+                                  isChildActive 
+                                    ? 'bg-rose-50 text-rose-600 shadow-sm' 
+                                    : isChildDisabled 
+                                    ? 'text-slate-300 cursor-not-allowed' 
+                                    : 'text-slate-500 hover:text-rose-600 hover:bg-rose-50/30'
+                                }`}
+                                disabled={isChildDisabled}
+                              >
+                                {iconMap[child.icon] && (() => {
+                                  const IconComponent = iconMap[child.icon]
+                                  return (
+                                    <IconComponent 
+                                      className={`w-[16px] h-[16px] flex-shrink-0 transition-transform duration-200 group-hover:scale-110 ${
+                                        isChildActive ? 'text-rose-600' : 'text-slate-400 group-hover:text-rose-500'
+                                      }`} 
+                                    />
+                                  )
+                                })()}
+                                <span className="flex-1 text-left truncate">{child.label}</span>
+                                {isChildActive && (
+                                  <div className="absolute right-2 w-1.5 h-1.5 rounded bg-rose-500" />
+                                )}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )
+                }
+
+                const isActive = item.moduleId ? (
+                  activeModule === item.moduleId || 
+                  (item.moduleId === 'bom-creation' && activeModule === 'bom-form') || 
+                  (item.moduleId === 'client-quotations' && activeModule === 'quotation-form') ||
+                  (item.moduleId === 'production-report' && activeModule === 'work-order-details')
+                ) : Boolean(item.active)
+                const isDisabled = item.isGroup || !item.moduleId
                 
                 return (
                   <button

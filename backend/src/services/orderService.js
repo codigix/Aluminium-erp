@@ -5,7 +5,7 @@ const bomService = require('./bomService');
 const numberToWords = (num) => {
   const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
   const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
-  
+
   const convert = (n) => {
     if (n < 20) return ones[n];
     if (n < 100) return tens[Math.floor(n / 10)] + (n % 10 !== 0 ? ' ' + ones[n % 10] : '');
@@ -34,7 +34,7 @@ const numberToWords = (num) => {
 
   const amount = Math.floor(num);
   const paisa = Math.round((num - amount) * 100);
-  
+
   let result = 'INR ' + formatWords(amount) + ' Only';
   if (paisa > 0) {
     result = 'INR ' + formatWords(amount) + ' and ' + formatWords(paisa) + ' Paisa Only';
@@ -48,7 +48,7 @@ const generateOrderNo = async () => {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   const dateStr = `${year}${month}${day}`;
-  
+
   const [rows] = await pool.query(
     'SELECT order_no FROM orders WHERE order_no LIKE ? ORDER BY order_no DESC LIMIT 1',
     [`ORD-${dateStr}-%`]
@@ -199,9 +199,9 @@ const getOrderById = async (id) => {
     ) cd_client ON cd_client.client_name = c.company_name
     WHERE o.id = ? OR o.public_id = ?
   `, [id, id]);
-  
+
   if (rows.length === 0) return null;
-  
+
   const order = rows[0];
 
   // Enrich order with Customer PO contact details if it's direct
@@ -226,7 +226,7 @@ const getOrderById = async (id) => {
   }
 
   const [items] = await pool.query('SELECT * FROM order_items WHERE order_id = ?', [order.id]);
-  
+
   const enrichedItems = await Promise.all(items.map(async (item) => {
     // Try to fetch sub-assemblies if linked to a PO
     if (order.customer_po_id || (order.source_type === 'DIRECT' && order.quotation_id)) {
@@ -252,15 +252,15 @@ const getOrderById = async (id) => {
     }
 
     // Fallback to dynamic BOM fetching
-    const isFG = (item.item_code || '').startsWith('FG-') || 
-                 (item.drawing_no && item.drawing_no !== '—');
-    
+    const isFG = (item.item_code || '').startsWith('FG-') ||
+      (item.drawing_no && item.drawing_no !== '—');
+
     if (isFG) {
       try {
         const sub_assemblies = await bomService.getItemComponents(null, item.item_code, item.drawing_no);
         if (sub_assemblies && sub_assemblies.length > 0) {
-          return { 
-            ...item, 
+          return {
+            ...item,
             sub_assemblies: sub_assemblies.map(sa => ({
               drawingNo: sa.drawing_no || sa.component_code,
               description: sa.description,
@@ -278,7 +278,7 @@ const getOrderById = async (id) => {
   }));
 
   order.items = enrichedItems;
-  
+
   return order;
 };
 
@@ -346,7 +346,7 @@ const updateOrder = async (id, orderData) => {
 
     // Update items: Simple delete and re-insert for updates
     await connection.execute('DELETE FROM order_items WHERE order_id = ?', [id]);
-    
+
     if (items && items.length > 0) {
       for (const item of items) {
         await connection.execute(`
@@ -378,7 +378,26 @@ const updateOrder = async (id, orderData) => {
 };
 
 const deleteOrder = async (id) => {
-  await pool.execute('DELETE FROM orders WHERE id = ?', [id]);
+  const [payments] = await pool.query(
+    "SELECT id FROM customer_payments WHERE sales_order_id = ? AND sales_order_source = 'DIRECT_ORDER'",
+    [id]
+  );
+  if (payments.length > 0) {
+    throw new Error("Sales Order cannot be deleted because payment transactions exist against the generated customer invoice.");
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    await connection.execute('DELETE FROM order_items WHERE order_id = ?', [id]);
+    await connection.execute('DELETE FROM orders WHERE id = ?', [id]);
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 };
 
 const getApprovedDrawings = async (companyId = null) => {
@@ -399,17 +418,17 @@ const getApprovedDrawings = async (companyId = null) => {
      WHERE (TRIM(so.status) = 'BOM_Approved' 
         OR so.status IN ('PROCUREMENT_IN_PROGRESS', 'MATERIAL_PURCHASE_IN_PROGRESS', 'MATERIAL_READY', 'IN_PRODUCTION', 'PRODUCTION_COMPLETED', 'QC_IN_PROGRESS', 'QC_APPROVED', 'QC_REJECTED', 'READY_FOR_SHIPMENT'))
         AND so.quotation_id IS NULL AND so.is_sales_order = 0`;
-  
+
   const params = [];
   if (companyId) {
     query += ` AND so.company_id = ?`;
     params.push(companyId);
   }
-  
+
   query += ` ORDER BY so.created_at DESC`;
-  
+
   const [rows] = await pool.query(query, params);
-  
+
   for (const order of rows) {
     const [items] = await pool.query(
       `SELECT soi.*, 
@@ -428,7 +447,7 @@ const getApprovedDrawings = async (companyId = null) => {
     );
     order.items = items;
   }
-  
+
   return rows;
 };
 
@@ -443,7 +462,7 @@ const getStats = async () => {
       SUM(grand_total) as total_amount
     FROM orders
   `);
-  
+
   return {
     total: rows[0].total_orders || 0,
     draft: rows[0].draft_orders || 0,
@@ -529,7 +548,7 @@ const generateOrderPDF = async (orderId) => {
       signatureBase64 = `data:image/png;base64,${fs.readFileSync(signaturePath).toString('base64')}`;
     }
   }
-  
+
   const companyService = require('./companyService');
   let companyDetails = null;
   try {
@@ -544,12 +563,12 @@ const generateOrderPDF = async (orderId) => {
   const billing = companyDetails?.addresses?.find(a => a.address_type === 'BILLING') || {};
   const shipping = companyDetails?.addresses?.find(a => a.address_type === 'SHIPPING') || {};
   const billingContact = companyDetails?.contacts?.find(c => c.contact_type === 'ACCOUNTS') ||
-                         companyDetails?.contacts?.find(c => c.contact_type === 'PRIMARY') ||
-                         companyDetails?.contacts?.[0] || {};
+    companyDetails?.contacts?.find(c => c.contact_type === 'PRIMARY') ||
+    companyDetails?.contacts?.[0] || {};
   const shippingContact = companyDetails?.contacts?.find(c => c.contact_type === 'PURCHASE') ||
-                          companyDetails?.contacts?.find(c => c.contact_type === 'TECHNICAL') ||
-                          companyDetails?.contacts?.find(c => c.contact_type === 'PRIMARY') ||
-                          companyDetails?.contacts?.[0] || {};
+    companyDetails?.contacts?.find(c => c.contact_type === 'TECHNICAL') ||
+    companyDetails?.contacts?.find(c => c.contact_type === 'PRIMARY') ||
+    companyDetails?.contacts?.[0] || {};
 
   // Format billing address
   if (!order.billing_address || order.billing_address === '') {
@@ -618,15 +637,15 @@ const generateOrderPDF = async (orderId) => {
     }
 
     // Fallback to dynamic BOM fetching
-    const isFG = (item.item_code || '').startsWith('FG-') || 
-                 (item.drawing_no && item.drawing_no !== '—');
-    
+    const isFG = (item.item_code || '').startsWith('FG-') ||
+      (item.drawing_no && item.drawing_no !== '—');
+
     if (isFG) {
       try {
         const sub_assemblies = await bomService.getItemComponents(null, item.item_code, item.drawing_no);
         if (sub_assemblies && sub_assemblies.length > 0) {
-          return { 
-            ...item, 
+          return {
+            ...item,
             sub_assemblies: sub_assemblies.map(sa => ({
               drawingNo: sa.drawing_no || sa.component_code,
               description: sa.description,

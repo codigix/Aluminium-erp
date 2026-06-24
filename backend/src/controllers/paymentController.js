@@ -23,7 +23,9 @@ const getPayments = async (req, res, next) => {
       status: req.query.status,
       paymentMode: req.query.paymentMode,
       startDate: req.query.startDate,
-      endDate: req.query.endDate
+      endDate: req.query.endDate,
+      poId: req.query.poId,
+      jobCardQualityLogId: req.query.jobCardQualityLogId
     };
     const payments = await paymentService.getPayments(filters);
     res.json(payments);
@@ -105,6 +107,23 @@ const sendPaymentVoucherEmail = async (req, res, next) => {
   }
 };
 
+const getVendorInvoicePDF = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { type } = req.query;
+    const pdfBuffer = await paymentService.generateVendorInvoicePDF(id, type);
+    
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename=Invoice_${id}.pdf`,
+      'Content-Length': pdfBuffer.length
+    });
+    res.send(pdfBuffer);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   processPayment,
   getPayments,
@@ -113,5 +132,6 @@ module.exports = {
   updatePaymentStatus,
   deletePayment,
   getPaymentVoucherPDF,
-  sendPaymentVoucherEmail
+  sendPaymentVoucherEmail,
+  getVendorInvoicePDF
 };

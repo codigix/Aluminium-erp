@@ -109,12 +109,30 @@ const ensureJobCardColumns = async () => {
         rejected_qty DECIMAL(12, 3) DEFAULT 0,
         scrap_qty DECIMAL(12, 3) DEFAULT 0,
         rejection_reason TEXT,
-        status ENUM('PENDING', 'APPROVED', 'REJECTED') DEFAULT 'PENDING',
+        status ENUM('PENDING', 'APPROVED', 'REJECTED', 'PROCESSING', 'PAID') DEFAULT 'PENDING',
         notes TEXT,
+        inward_challan_id INT NULL,
+        vendor_invoice_no VARCHAR(100) NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (job_card_id) REFERENCES job_cards(id) ON DELETE CASCADE
       )
     `);
+
+    // Ensure columns exist on job_card_quality_logs
+    const [qlColumns] = await connection.query('SHOW COLUMNS FROM job_card_quality_logs');
+    const qlExisting = new Set(qlColumns.map(column => column.Field));
+    const requiredQLColumns = [
+      { name: 'inward_challan_id', definition: 'INT NULL' },
+      { name: 'vendor_invoice_no', definition: 'VARCHAR(100) NULL' }
+    ];
+    const qlMissing = requiredQLColumns.filter(column => !qlExisting.has(column.name));
+    if (qlMissing.length > 0) {
+      const alterSql = `ALTER TABLE job_card_quality_logs ${qlMissing
+        .map(column => `ADD COLUMN \`${column.name}\` ${column.definition}`)
+        .join(', ')};`;
+      await connection.query(alterSql);
+      console.log('job_card_quality_logs columns synchronized');
+    }
 
     await connection.query(`
       CREATE TABLE IF NOT EXISTS job_card_downtime_logs (

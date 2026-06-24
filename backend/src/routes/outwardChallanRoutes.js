@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { authenticate, authorize } = require('../middleware/authMiddleware');
 const pool = require('../config/db');
+const upload = require('../middleware/upload');
 
 // Get all outward challans
 router.get('/', authenticate, async (req, res) => {
@@ -125,14 +126,68 @@ router.post('/', authenticate, authorize(['PROD_MANAGE']), async (req, res) => {
 });
 
 // Create inward challan
-router.post('/inward', authenticate, authorize(['PROD_MANAGE']), async (req, res) => {
+const generateVendorInvoiceNo = async (connection) => {
+  const currentYear = new Date().getFullYear();
+  const [rows] = await connection.execute(
+    `SELECT vendor_invoice_no 
+     FROM job_card_quality_logs 
+     WHERE vendor_invoice_no LIKE ? 
+     ORDER BY id DESC LIMIT 1`,
+    [`VI-${currentYear}-%`]
+  );
+  
+  let nextSeq = 1;
+  if (rows.length > 0) {
+    const lastNo = rows[0].vendor_invoice_no;
+    if (lastNo) {
+      const parts = lastNo.split('-');
+      if (parts.length >= 3) {
+        const lastSeq = parseInt(parts[2], 10);
+        if (!isNaN(lastSeq)) {
+          nextSeq = lastSeq + 1;
+        }
+      }
+    }
+  }
+  
+  return `VI-${currentYear}-${String(nextSeq).padStart(4, '0')}`;
+};
+
+// Create inward challan
+router.post('/inward', authenticate, authorize(['PROD_MANAGE']), upload.single('vendorInvoice'), async (req, res) => {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
-    const { 
-      outwardChallanId, jobCardId, vendorId, receivedDate, 
-      vendorInvoiceNo, totalReceivedQty, acceptedQty, rejectedQty, scrapQty, notes, items 
-    } = req.body;
+
+    const outwardChallanId = parseInt(req.body.outwardChallanId, 10);
+    const jobCardId = parseInt(req.body.jobCardId, 10);
+    const vendorId = parseInt(req.body.vendorId, 10);
+    const receivedDate = req.body.receivedDate;
+    const vendorInvoiceNo = req.body.vendorInvoiceNo;
+    const totalReceivedQty = parseFloat(req.body.totalReceivedQty || 0);
+    const acceptedQty = parseFloat(req.body.acceptedQty || 0);
+    const rejectedQty = parseFloat(req.body.rejectedQty || 0);
+    const scrapQty = parseFloat(req.body.scrapQty || 0);
+    const notes = req.body.notes;
+
+    let items = req.body.items;
+    if (typeof items === 'string') {
+      try {
+        items = JSON.parse(items);
+      } catch (e) {
+        console.error('Error parsing items in inward challan route:', e);
+        items = [];
+      }
+    }
+
+    // Validation: Duplicate check based on outwardChallanId
+    const [existingInward] = await connection.execute(
+      `SELECT id FROM inward_challans WHERE outward_challan_id = ?`,
+      [outwardChallanId]
+    );
+    if (existingInward.length > 0) {
+      throw new Error('An inward challan has already been recorded for this outward challan.');
+    }
 
     // 1. Create Inward Challan Header
     const inwardNumber = `IC-${Date.now()}`;
@@ -146,6 +201,7 @@ router.post('/inward', authenticate, authorize(['PROD_MANAGE']), async (req, res
     const inwardId = result.insertId;
 
     // 2. Create Inward Challan Items
+    let subTotal = 0;
     if (items && items.length > 0) {
       for (const item of items) {
         await connection.execute(
@@ -153,6 +209,60 @@ router.post('/inward', authenticate, authorize(['PROD_MANAGE']), async (req, res
            (inward_challan_id, item_code, received_qty, accepted_qty, rejected_qty, scrap_qty, rate) 
            VALUES (?, ?, ?, ?, ?, ?, ?)`,
           [inwardId, item.itemCode, item.receivedQty, item.acceptedQty, item.rejectedQty, item.scrapQty, item.rate || 0]
+        );
+        const itemQty = parseFloat(item.receivedQty || 0);
+        const itemRate = parseFloat(item.rate || 0);
+        subTotal += itemQty * itemRate;
+      }
+    }
+
+    // Calculate invoice totals
+    const gstAmount = subTotal * 0.18;
+    const grandTotal = subTotal + gstAmount;
+
+    // Generate vendor invoice copy path
+    let vendorInvoicePath = null;
+    if (req.file) {
+      vendorInvoicePath = `uploads/${req.file.filename}`;
+    }
+
+    // Generate auto-generated vendor invoice number (e.g. VI-2026-0001)
+    const generatedInvoiceNo = await generateVendorInvoiceNo(connection);
+
+    // Auto-create Quality Log (Vendor Invoice)
+    const [qlResult] = await connection.execute(
+      `INSERT INTO job_card_quality_logs 
+       (job_card_id, day, check_date, shift, inspected_qty, accepted_qty, rejected_qty, scrap_qty, 
+        rejection_reason, status, notes, vendor_invoice, sub_total, gst_amount, grand_total, 
+        inward_challan_id, vendor_invoice_no) 
+       VALUES (?, 1, ?, NULL, ?, ?, ?, ?, NULL, 'APPROVED', ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        jobCardId,
+        receivedDate || new Date().toISOString().split('T')[0],
+        totalReceivedQty,
+        acceptedQty,
+        rejectedQty,
+        scrapQty,
+        notes || null,
+        vendorInvoicePath,
+        subTotal,
+        gstAmount,
+        grandTotal,
+        inwardId,
+        generatedInvoiceNo
+      ]
+    );
+
+    const qualityLogId = qlResult.insertId;
+
+    // Save inward items rates to job_card_inward_item_rates
+    if (items && items.length > 0) {
+      for (const item of items) {
+        await connection.execute(
+          `INSERT INTO job_card_inward_item_rates 
+           (quality_log_id, item_code, release_qty, rate) 
+           VALUES (?, ?, ?, ?)`,
+          [qualityLogId, item.itemCode, item.receivedQty, item.rate || 0]
         );
       }
     }

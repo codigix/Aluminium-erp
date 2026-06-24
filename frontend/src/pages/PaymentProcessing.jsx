@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { Package, RefreshCw, Eye, FileText, Send, Calendar, Clock, CreditCard } from 'lucide-react';
+import { Package, RefreshCw, Eye, Download, Send, Calendar, Clock, CreditCard } from 'lucide-react';
 import { DataTable, Button } from '../components/ui.jsx';
 import { errorToast, successToast } from '../utils/toast';
 import ProcessPaymentModal from '../components/ProcessPaymentModal.jsx';
@@ -52,9 +52,10 @@ const PaymentProcessing = () => {
             vendor_name: row.vendor_name,
             vendor_id: row.vendor_id,
             total_amount: row.total_amount,
-            outstanding: row.total_amount,
-            already_paid: 0,
-            created_at: row.created_at
+            outstanding: row.outstanding,
+            already_paid: row.already_paid,
+            created_at: row.created_at,
+            type: row.type
           });
           setIsPaymentModalOpen(true);
           setIsEmailModalOpen(false);
@@ -79,7 +80,7 @@ const PaymentProcessing = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/purchase-orders`, {
+      const response = await fetch(`${API_BASE}/payments/pending`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -88,7 +89,7 @@ const PaymentProcessing = () => {
 
       if (!response.ok) throw new Error('Failed to fetch payments');
       const data = await response.json();
-      const pendingPayments = Array.isArray(data) ? data.filter(po => po.invoice_url && po.status !== 'PAID') : [];
+      const pendingPayments = Array.isArray(data) ? data.filter(item => item.invoice_url) : [];
       setPayments(pendingPayments);
     } catch (error) {
       console.error('Error fetching payments:', error);
@@ -139,6 +140,35 @@ const PaymentProcessing = () => {
     }
   };
 
+  const handleDownloadInvoiceCopy = async (row) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const endpoint = `${API_BASE}/payments/vendor-invoice/${row.id}/pdf?type=${row.type}`;
+
+      const response = await fetch(endpoint, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!response.ok) throw new Error('Failed to generate PDF');
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      
+      const fileName = `Invoice_${row.po_number || row.id}.pdf`;
+      
+      link.setAttribute('download', fileName);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Error downloading invoice:', err);
+      errorToast('Failed to download invoice');
+    }
+  };
+
   const columns = [
     {
       label: 'Invoice Details',
@@ -146,12 +176,12 @@ const PaymentProcessing = () => {
       sortable: true,
       render: (val, row) => (
         <div className="flex flex-col py-1">
-          <span className=" text-rose-600  ">
+          <span className=" text-rose-600 font-semibold ">
             {val}
           </span>
           <div className="flex items-center gap-1 mt-0.5">
             <span className="text-[10px] text-slate-400 px-1.5 py-0.5 bg-slate-50 rounded border border-slate-100 ">
-              PURCHASE ORDER
+              {row.type === 'SUBCONTRACTING' ? 'Subcontract Receipt' : 'PURCHASE ORDER'}
             </span>
           </div>
         </div>
@@ -187,31 +217,80 @@ const PaymentProcessing = () => {
       )
     },
     {
-      label: 'Amount Due',
+      label: 'Invoice Amount',
       key: 'total_amount',
       sortable: true,
       render: (val) => (
-        <div className="flex flex-col py-1">
-          <div className="flex items-center gap-1  text-slate-900">
-            <span className="text-rose-600">₹</span>
-            <span>{Number(val).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-          </div>
-          <span className="text-[10px] text-amber-600 flex items-center gap-0.5">
-            Awaiting Payment
-          </span>
-        </div>
+        <span className="text-slate-900 font-medium">{formatCurrency(val)}</span>
       )
     },
     {
-      label: 'Status',
-      key: 'status',
+      label: 'Paid Amount',
+      key: 'already_paid',
+      sortable: true,
       render: (val) => (
-        <div className="flex items-center justify-center">
-          <span className={`px-2 py-0.5 rounded text-[10px]  border bg-amber-50 text-amber-700 border-amber-100`}>
-            {val === 'Sent ' ? 'PENDING' : val}
-          </span>
-        </div>
+        <span className="text-emerald-600 font-medium">{formatCurrency(val)}</span>
       )
+    },
+    {
+      label: 'Outstanding Amount',
+      key: 'outstanding',
+      sortable: true,
+      render: (val) => (
+        <span className="text-rose-600 font-semibold">{formatCurrency(val)}</span>
+      )
+    },
+    {
+      label: 'Payment %',
+      key: 'already_paid',
+      sortable: true,
+      render: (_, row) => {
+        const total = parseFloat(row.total_amount) || 0;
+        const paid = parseFloat(row.already_paid) || 0;
+        const percentage = total > 0 ? Math.round((paid / total) * 100) : 0;
+        return (
+          <div className="flex items-center gap-2">
+            <div className="w-12 bg-slate-100 rounded-full h-1.5 overflow-hidden">
+              <div 
+                className="bg-emerald-500 h-1.5 rounded-full" 
+                style={{ width: `${Math.min(percentage, 100)}%` }}
+              />
+            </div>
+            <span className="text-slate-600 font-medium">{percentage}%</span>
+          </div>
+        );
+      }
+    },
+    {
+      label: 'Status',
+      key: 'outstanding',
+      sortable: true,
+      render: (_, row) => {
+        const outstanding = parseFloat(row.outstanding) || 0;
+        const received = parseFloat(row.already_paid) || 0;
+        if (outstanding === 0) {
+          return (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs bg-emerald-50 text-emerald-700 font-medium border border-emerald-100">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              COMPLETED
+            </span>
+          );
+        } else if (outstanding > 0 && received > 0) {
+          return (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs bg-amber-50 text-amber-700 font-medium border border-amber-100">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+              Partial Paid
+            </span>
+          );
+        } else {
+          return (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs bg-rose-50 text-rose-700 font-medium border border-rose-100">
+              <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+              Pending Payment
+            </span>
+          );
+        }
+      }
     },
     {
       label: 'Actions',
@@ -220,29 +299,28 @@ const PaymentProcessing = () => {
       render: (_, row) => (
         <div className="flex justify-end items-center gap-2">
           <button
-            onClick={() => handleSendEmailClick(row)}
+            onClick={() => navigate(`/accounts/payment-processing/email?id=${row.id}`)}
             className="p-2 hover:bg-rose-50 rounded text-slate-400 hover:text-rose-600 transition-all border border-transparent hover:border-rose-100 group shadow-sm"
             title="Send Receipt to Vendor"
           >
             <Send className="w-4 h-4 group-hover:scale-110" />
           </button>
           <button
-            onClick={() => window.open(`${API_BASE}/${row.invoice_url}`, '_blank')}
+            onClick={() => handleDownloadInvoiceCopy(row)}
             className="p-2 hover:bg-indigo-50 rounded text-slate-400 hover:text-indigo-600 transition-all border border-transparent hover:border-indigo-100 group shadow-sm"
-            title="Review Invoice"
+            title="Download Invoice"
           >
-            <FileText className="w-4 h-4 group-hover:scale-110" />
+            <Download className="w-4 h-4 group-hover:scale-110" />
           </button>
-          <button
-            onClick={() => {
-              setSelectedInvoice(row);
-              setIsPaymentModalOpen(true);
-            }}
-            className="p-2 hover:bg-emerald-50 rounded text-slate-400 hover:text-emerald-600 transition-all border border-transparent hover:border-emerald-100 group shadow-sm"
-            title="Process Payment"
-          >
-            <CreditCard className="w-4 h-4 group-hover:scale-110" />
-          </button>
+          {parseFloat(row.outstanding) > 0 && (
+            <button
+              onClick={() => navigate(`/accounts/payment-processing/record?id=${row.id}`)}
+              className="p-2 hover:bg-emerald-50 rounded text-slate-400 hover:text-emerald-600 transition-all border border-transparent hover:border-emerald-100 group shadow-sm"
+              title="Process Payment"
+            >
+              <CreditCard className="w-4 h-4 group-hover:scale-110" />
+            </button>
+          )}
         </div>
       )
     }
@@ -259,7 +337,7 @@ const PaymentProcessing = () => {
             <Clock size={24} />
           </div>
           <div>
-            <h1 className="text-xl   text-slate-900 ">Payment Processing</h1>
+            <h1 className="text-xl   text-slate-900 ">Vendor Invoices</h1>
             <div className="flex items-center gap-3 mt-1">
               <span className="text-xs  text-slate-500 flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded bg-slate-400" />
@@ -295,20 +373,14 @@ const PaymentProcessing = () => {
 
       <ProcessPaymentModal
         isOpen={isPaymentModalOpen}
-        onClose={() => {
-          setIsPaymentModalOpen(false);
-          setSelectedInvoice(null);
-        }}
+        onClose={() => navigate('/accounts/payment-processing')}
         invoice={selectedInvoice}
         onSuccess={() => fetchPendingPayments()}
       />
 
       <SendEmailModal
         isOpen={isEmailModalOpen}
-        onClose={() => {
-          setIsEmailModalOpen(false);
-          setEmailModalData(null);
-        }}
+        onClose={() => navigate('/accounts/payment-processing')}
         data={emailModalData}
         onSend={handleSendEmail}
         title="Send Receipt to Vendor"

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Truck, CreditCard, Package } from 'lucide-react';
 import { Modal, FormControl, SearchableSelect } from './ui.jsx';
 import { errorToast, successToast } from '../utils/toast';
@@ -43,6 +43,34 @@ const ProcessPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
   const [bankAccounts, setBankAccounts] = useState([]);
   const [fullPODetail, setFullPODetail] = useState(null);
   const [fetchingDetail, setFetchingDetail] = useState(false);
+  const [installments, setInstallments] = useState([]);
+  const [fetchingInstallments, setFetchingInstallments] = useState(false);
+
+  const fetchInstallmentHistory = async (id, type) => {
+    if (!id) return;
+    try {
+      setFetchingInstallments(true);
+      const token = localStorage.getItem('authToken');
+      const param = type === 'SUBCONTRACTING' ? `jobCardQualityLogId=${id}` : `poId=${id}`;
+      const response = await fetch(`${API_BASE}/payments?${param}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setInstallments(Array.isArray(data) ? data : []);
+      } else {
+        setInstallments([]);
+      }
+    } catch (error) {
+      console.error('Error fetching installments:', error);
+      setInstallments([]);
+    } finally {
+      setFetchingInstallments(false);
+    }
+  };
 
   useEffect(() => {
     if (invoice && isOpen) {
@@ -52,8 +80,16 @@ const ProcessPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
         paymentDate: new Date().toISOString().split('T')[0]
       }));
       fetchBankAccounts();
-      fetchFullPODetail(invoice.id);
+      const isSub = invoice.isSubcontracting || invoice.type === 'SUBCONTRACTING';
+      if (isSub) {
+        setFullPODetail(null);
+      } else {
+        fetchFullPODetail(invoice.id);
+      }
+      fetchInstallmentHistory(invoice.id, isSub ? 'SUBCONTRACTING' : 'PURCHASE_ORDER');
       setErrors({});
+    } else if (!isOpen) {
+      setInstallments([]);
     }
   }, [invoice, isOpen]);
 
@@ -207,10 +243,11 @@ const ProcessPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
       setLoading(true);
       const token = localStorage.getItem('authToken');
 
+      const isSub = invoice.isSubcontracting || invoice.type === 'SUBCONTRACTING';
       const paymentPayload = {
-        invoiceId: invoice.isSubcontracting ? null : invoice.id,
-        poId: invoice.isSubcontracting ? null : invoice.id,
-        jobCardQualityLogId: invoice.isSubcontracting ? invoice.id : null,
+        invoiceId: isSub ? null : invoice.id,
+        poId: isSub ? null : invoice.id,
+        jobCardQualityLogId: isSub ? invoice.id : null,
         vendorId: invoice.vendor_id,
         paymentAmount: parseFloat(formData.paymentAmount),
         paymentDate: formData.paymentDate,
@@ -294,48 +331,115 @@ const ProcessPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
     }
   };
 
+  const lastInvoiceId = useRef('');
+  useEffect(() => {
+    const currentId = String(invoice?.id || '');
+    if (isOpen && currentId !== lastInvoiceId.current && invoice) {
+      lastInvoiceId.current = currentId;
+      const invAmt = parseFloat(invoice.total_amount || 0);
+      const paidAmt = installments.reduce((sum, inst) => sum + (parseFloat(inst.payment_amount) || 0), 0);
+      const outAmt = Math.max(0, invAmt - paidAmt);
+      setFormData(prev => ({
+        ...prev,
+        paymentAmount: outAmt > 0 ? outAmt.toFixed(2) : ''
+      }));
+    }
+  }, [installments, invoice, isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      lastInvoiceId.current = '';
+    }
+  }, [isOpen]);
+
   if (!invoice) return null;
 
-  const outstanding = parseFloat(invoice.outstanding || invoice.total_amount || 0);
-  const alreadyPaid = parseFloat(invoice.already_paid || 0);
+  const invoiceAmount = parseFloat(invoice?.total_amount || 0);
+  const alreadyReceived = installments.reduce((sum, inst) => sum + (parseFloat(inst.payment_amount) || 0), 0);
+  const outstandingAmount = Math.max(0, invoiceAmount - alreadyReceived);
+  const progressPercent = invoiceAmount > 0 ? Math.round((alreadyReceived / invoiceAmount) * 100) : 0;
+  const advanceReceived = installments
+    .filter(inst => (inst.remarks || '').toLowerCase().includes('advance') || (inst.description || '').toLowerCase().includes('advance'))
+    .reduce((sum, inst) => sum + (parseFloat(inst.payment_amount) || 0), 0);
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Process Payment" size="5xl">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 overflow-y-auto max-h-[80vh] custom-scrollbar p-1">
         <div className="space-y-4">
           {/* Invoice Summary Section */}
-          <div className="bg-gradient-to-br from-blue-50 to-slate-50 border border-blue-100 rounded p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-slate-900 text-xs tracking-wide">Invoice Summary</h3>
-              <span className="text-xs font-semibold text-blue-600 bg-blue-100 px-2.5 py-1 rounded-md">READ ONLY</span>
+          <div className="bg-gradient-to-br from-slate-50 to-slate-100/50 border border-slate-200 rounded p-4 space-y-4 shadow-sm">
+            <div className="flex items-center justify-between border-b border-slate-200/80 pb-2">
+              <div>
+                <span className="text-[10px] text-slate-400 uppercase font-semibold">Invoice Details</span>
+                <h3 className="text-slate-900 font-bold text-sm mt-0.5">{invoice.po_number || 'N/A'}</h3>
+              </div>
+              <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded">Payment View</span>
             </div>
-            <div className="border-t border-blue-100 pt-3"></div>
-            <div className="grid grid-cols-2 gap-4 text-xs">
-              <div>
-                <span className="text-slate-500 text-xs">Invoice No</span>
-                <p className="text-slate-900 mt-1 font-semibold">{invoice.po_number || 'N/A'}</p>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
+              <div className="col-span-2">
+                <span className="text-slate-500">Supplier</span>
+                <p className="text-slate-900 font-semibold mt-0.5">{invoice.vendor_name || 'N/A'}</p>
               </div>
               <div>
-                <span className="text-slate-500 text-xs">Supplier</span>
-                <p className="text-slate-900 mt-1 font-semibold">{invoice.vendor_name || 'N/A'}</p>
+                <span className="text-slate-500">Invoice Date</span>
+                <p className="text-slate-900 mt-0.5 font-medium">{formatDate(invoice.created_at)}</p>
               </div>
               <div>
-                <span className="text-slate-500 text-xs">Invoice Date</span>
-                <p className="text-slate-900 mt-1 font-semibold">{formatDate(invoice.created_at)}</p>
+                <span className="text-slate-500">Payment Progress</span>
+                <div className="flex items-center gap-2 mt-1">
+                  <div className="w-20 bg-slate-200 rounded-full h-2 overflow-hidden">
+                    <div 
+                      className="bg-emerald-500 h-2 rounded-full transition-all duration-500" 
+                      style={{ width: `${Math.min(progressPercent, 100)}%` }}
+                    />
+                  </div>
+                  <span className="text-emerald-600 font-bold">{progressPercent}%</span>
+                </div>
               </div>
-              <div>
-                <span className="text-slate-500 text-xs">Invoice Amount</span>
-                <p className="text-slate-900 mt-1 font-semibold">{formatCurrency(invoice.total_amount)}</p>
+              
+              <div className="border-t border-slate-200/60 pt-2">
+                <span className="text-slate-500">Invoice Amount</span>
+                <p className="text-slate-900 text-sm font-bold mt-0.5">{formatCurrency(invoiceAmount)}</p>
               </div>
-              <div>
-                <span className="text-slate-500 text-xs">Already Paid</span>
-                <p className="text-emerald-600 mt-1 font-semibold">{formatCurrency(alreadyPaid)}</p>
+              <div className="border-t border-slate-200/60 pt-2">
+                <span className="text-slate-500">Already Paid</span>
+                <p className="text-emerald-600 text-sm font-bold mt-0.5">{formatCurrency(alreadyReceived)}</p>
               </div>
-              <div>
-                <span className="text-slate-500 text-xs">Outstanding</span>
-                <p className="text-rose-600 mt-1  text-sm">{formatCurrency(outstanding)}</p>
+              <div className="border-t border-slate-200/60 pt-2">
+                <span className="text-slate-500">Outstanding Amount</span>
+                <p className="text-rose-600 text-sm font-bold mt-0.5">{formatCurrency(outstandingAmount)}</p>
+              </div>
+              <div className="border-t border-slate-200/60 pt-2">
+                <span className="text-slate-500">Advance Paid</span>
+                <p className="text-indigo-600 text-sm font-bold mt-0.5">{formatCurrency(advanceReceived)}</p>
               </div>
             </div>
+          </div>
+
+          {/* Installment History Section */}
+          <div className="bg-white border border-slate-200 rounded p-4 space-y-3 shadow-sm">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+              <h4 className="font-semibold text-slate-800 text-xs">Installment History</h4>
+              <span className="text-[10px] text-slate-400 font-medium">Recorded Payments</span>
+            </div>
+            {fetchingInstallments ? (
+              <p className="text-xs text-slate-400 py-4 text-center">Loading payments...</p>
+            ) : installments.length === 0 ? (
+              <p className="text-xs text-slate-400 py-4 text-center">No payment transactions exist yet.</p>
+            ) : (
+              <div className="max-h-[200px] overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                {installments.map((inst, index) => (
+                  <div key={inst.id || index} className="flex justify-between items-center text-xs p-2 bg-slate-50 border border-slate-100 rounded">
+                    <div className="flex flex-col">
+                      <span className="font-semibold text-slate-700">{inst.payment_voucher_no}</span>
+                      <span className="text-[10px] text-slate-400">{formatDate(inst.payment_date)} • {inst.payment_mode?.replace('_', ' ')}</span>
+                      {inst.transaction_ref_no && <span className="text-[9px] text-slate-400">Ref: {inst.transaction_ref_no}</span>}
+                    </div>
+                    <span className="font-medium text-emerald-600">{formatCurrency(inst.payment_amount)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {fullPODetail && (
@@ -479,7 +583,7 @@ const ProcessPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                   value={formData.paymentAmount}
                   onChange={(e) => handleInputChange('paymentAmount', e.target.value)}
                   className={`w-full pl-7 pr-3 py-2 border rounded text-sm font-semibold focus:outline-none focus:ring-2 transition-all ${errors.paymentAmount ? 'border-rose-500 focus:ring-rose-500/30 bg-rose-50' : 'border-slate-300 focus:ring-blue-500/30 focus:border-blue-500'}`}
-                  placeholder={`Max: ${formatCurrency(outstanding)}`}
+                  placeholder={`Max: ${formatCurrency(outstandingAmount)}`}
                 />
               </div>
               {errors.paymentAmount && <span className="text-xs text-rose-600 mt-1 block">{errors.paymentAmount}</span>}
