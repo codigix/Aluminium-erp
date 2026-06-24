@@ -362,21 +362,26 @@ const updateDrawing = async (id, data) => {
 
     // 2. Sync with sales_order_items and sales_orders
     const [items] = await connection.query(
-      'SELECT sales_order_id, id as item_id FROM sales_order_items WHERE drawing_id = ?',
+      'SELECT sales_order_id, id as item_id, bom_id, parent_bom_id FROM sales_order_items WHERE drawing_id = ?',
       [internalId]
     );
 
     if (items.length > 0) {
       for (const item of items) {
+        // Skip syncing drawing updates to child BOM items (nested parts/sub-assemblies)
+        if (item.bom_id !== null && item.parent_bom_id !== null) {
+          continue;
+        }
+
         // Update sales_order_items
         const itemUpdates = [];
         const itemParams = [];
         if (drawingNo !== undefined) { itemUpdates.push('drawing_no = ?'); itemParams.push(drawingNo); }
         if (revisionNo !== undefined) { itemUpdates.push('revision_no = ?'); itemParams.push(revisionNo); }
-        if (description !== undefined) { itemUpdates.push('description = ?'); itemParams.push(description); }
+        if (description !== undefined && item.bom_id === null) { itemUpdates.push('description = ?'); itemParams.push(description); }
         if (drawing_type !== undefined) { itemUpdates.push('drawing_type = ?'); itemParams.push(drawing_type); }
         if (drawingPdf !== undefined && drawingPdf !== null) { itemUpdates.push('drawing_pdf = ?'); itemParams.push(drawingPdf); }
-        if (qty !== undefined) { itemUpdates.push('quantity = ?'); itemParams.push(qty); }
+        if (qty !== undefined && item.bom_id === null) { itemUpdates.push('quantity = ?'); itemParams.push(qty); }
         if (deliveryDate !== undefined) { itemUpdates.push('delivery_date = ?'); itemParams.push(deliveryDate || null); }
 
         if (itemUpdates.length > 0) {
