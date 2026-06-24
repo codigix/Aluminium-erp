@@ -125,6 +125,19 @@ const sendCustomerPaymentReceiptEmail = async (req, res, next) => {
   }
 };
 
+const sendCustomerInvoiceEmail = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const result = await customerPaymentService.sendCustomerInvoiceEmail(id, req.body);
+    res.json({
+      message: 'Email sent successfully',
+      data: result
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   recordPaymentReceived,
   getPaymentsReceived,
@@ -135,5 +148,6 @@ module.exports = {
   updatePaymentStatus,
   deletePayment,
   getCustomerPaymentReceiptPDF,
-  sendCustomerPaymentReceiptEmail
+  sendCustomerPaymentReceiptEmail,
+  sendCustomerInvoiceEmail
 };

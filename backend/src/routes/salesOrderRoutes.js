@@ -27,6 +27,6 @@ router.patch('/items/:itemId/status', authorize(['STATUS_CHANGE']), salesOrderCo
 router.get('/:id/items', authorize(['ORDER_VIEW']), salesOrderController.getOrderTimeline);
 router.get('/:id/timeline', authorize(['ORDER_VIEW']), salesOrderController.getOrderTimeline);
 router.get('/:id/pdf', authorize(['ORDER_VIEW']), salesOrderController.generateSalesOrderPDF);
-router.delete('/:id', authorize(['ORDER_EDIT']), salesOrderController.deleteSalesOrder);
+router.delete('/:id', authorize(['ORDER_EDIT', 'PAYMENT_EDIT']), salesOrderController.deleteSalesOrder);
 
 module.exports = router;

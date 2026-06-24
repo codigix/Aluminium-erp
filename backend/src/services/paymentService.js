@@ -764,12 +764,11 @@ const generateVendorInvoicePDF = async (id, type) => {
     const [itemRows] = await pool.query(
       `SELECT ici.*,
               COALESCE(
-                (SELECT material_name FROM outward_challan_items WHERE challan_id = oc.id AND material_code = ici.item_code LIMIT 1),
-                (SELECT item_name FROM items_master WHERE item_code = ici.item_code LIMIT 1),
+                (SELECT description FROM items WHERE item_code = ici.item_code LIMIT 1),
                 ici.item_code
               ) as description,
               COALESCE(
-                (SELECT hsn_code FROM items_master WHERE item_code = ici.item_code LIMIT 1),
+                (SELECT hsn_code FROM stock_balance WHERE item_code = ici.item_code LIMIT 1),
                 '84790000'
               ) as hsn_code
        FROM inward_challan_items ici
@@ -811,7 +810,7 @@ const generateVendorInvoicePDF = async (id, type) => {
     const [itemRows] = await pool.query(
       `SELECT poi.*,
               COALESCE(
-                (SELECT hsn_code FROM items_master WHERE item_code = poi.material_code LIMIT 1),
+                (SELECT hsn_code FROM stock_balance WHERE item_code = poi.item_code LIMIT 1),
                 '84790000'
               ) as hsn_code
        FROM purchase_order_items poi
@@ -834,6 +833,28 @@ const generateVendorInvoicePDF = async (id, type) => {
       item_amount: (item.quantity * (item.unit_rate || 0)).toFixed(2)
     }));
   }
+
+  const [paymentRows] = await pool.query(
+    type === 'SUBCONTRACTING'
+      ? `SELECT COALESCE(SUM(payment_amount), 0) as paid_amount FROM payments WHERE job_card_quality_log_id = ? AND status = 'CONFIRMED'`
+      : `SELECT COALESCE(SUM(payment_amount), 0) as paid_amount FROM payments WHERE po_id = ? AND status = 'CONFIRMED'`,
+    [id]
+  );
+  const paidAmount = Number(paymentRows[0].paid_amount || 0);
+  const balanceAmount = net_total - paidAmount;
+  let paymentStatus = 'Pending';
+  if (balanceAmount <= 0) {
+    paymentStatus = 'Completed';
+  } else if (paidAmount > 0) {
+    paymentStatus = 'Partial';
+  }
+
+  const invoice_summary = {
+    invoice_amount: net_total.toFixed(2),
+    paid_amount: paidAmount.toFixed(2),
+    balance_amount: balanceAmount.toFixed(2),
+    status: paymentStatus !== 'Pending' ? paymentStatus : null
+  };
 
   const net_total_words = numberToWords(net_total);
   const empty_rows = Array(Math.max(0, 5 - itemsList.length)).fill({});
@@ -997,6 +1018,31 @@ const generateVendorInvoicePDF = async (id, type) => {
                 <td>₹ {{net_total}}</td>
               </tr>
             </table>
+            {{#invoice_summary}}
+            <div style="border-top: 1px solid #000; border-bottom: 1px solid #000; padding: 4px 6px; font-size: 8px; font-weight: bold; background: #f5f5f5; text-align: center; text-transform: uppercase; letter-spacing: 0.5px;">
+              Invoice Summary
+            </div>
+            <table class="calc-table" style="border-top: none;">
+              <tr>
+                <td>Invoice Amount</td>
+                <td style="font-weight: bold;">₹ {{invoice_amount}}</td>
+              </tr>
+              <tr>
+                <td>Paid Amount</td>
+                <td style="font-weight: bold; color: #16a34a;">₹ {{paid_amount}}</td>
+              </tr>
+              <tr>
+                <td>Balance Amount</td>
+                <td style="font-weight: bold; color: #dc2626;">₹ {{balance_amount}}</td>
+              </tr>
+              {{#status}}
+              <tr>
+                <td>Status</td>
+                <td style="font-weight: bold; text-transform: uppercase;">{{status}}</td>
+              </tr>
+              {{/status}}
+            </table>
+            {{/invoice_summary}}
           </div>
         </div>
 
@@ -1041,7 +1087,8 @@ const generateVendorInvoicePDF = async (id, type) => {
     sgst_rate,
     net_total: net_total.toFixed(2),
     net_total_words,
-    empty_rows
+    empty_rows,
+    invoice_summary
   });
 
   await page.setContent(renderedHtml, { waitUntil: 'networkidle0' });
@@ -1060,6 +1107,76 @@ const generateVendorInvoicePDF = async (id, type) => {
   return pdfBuffer;
 };
 
+const sendVendorInvoiceEmail = async (id, type, emailData = {}) => {
+  let vendorName = '';
+  let recipientEmail = emailData.to;
+  let invoiceNo = '';
+
+  if (type === 'SUBCONTRACTING') {
+    const [rows] = await pool.query(
+      `SELECT ql.vendor_invoice_no, v.vendor_name, v.email
+       FROM job_card_quality_logs ql
+       JOIN job_cards jc ON ql.job_card_id = jc.id
+       JOIN outward_challans oc ON jc.id = oc.job_card_id
+       JOIN vendors v ON oc.vendor_id = v.id
+       WHERE ql.id = ?`,
+      [id]
+    );
+    if (rows.length > 0) {
+      if (!recipientEmail) recipientEmail = rows[0].email;
+      vendorName = rows[0].vendor_name;
+      invoiceNo = rows[0].vendor_invoice_no || `VI-${id}`;
+    }
+  } else {
+    const [rows] = await pool.query(
+      `SELECT po.po_number, v.vendor_name, v.email
+       FROM purchase_orders po
+       LEFT JOIN vendors v ON po.vendor_id = v.id
+       WHERE po.id = ?`,
+      [id]
+    );
+    if (rows.length > 0) {
+      if (!recipientEmail) recipientEmail = rows[0].email;
+      vendorName = rows[0].vendor_name;
+      invoiceNo = rows[0].po_number;
+    }
+  }
+
+  if (!recipientEmail) {
+    throw new Error('Vendor email address not found');
+  }
+
+  const subject = emailData.subject || `Vendor Invoice - ${invoiceNo}`;
+  const message = emailData.message || `Dear ${vendorName || 'Vendor'},
+  
+Please find attached the vendor invoice ${invoiceNo}.
+
+Best Regards,
+Accounts Department
+SPTECHPIONEER PVT LTD`;
+
+  const attachments = [];
+  if (emailData.attachPDF !== false) {
+    const pdfBuffer = await generateVendorInvoicePDF(id, type);
+    attachments.push({
+      filename: `Invoice-${invoiceNo}.pdf`,
+      content: pdfBuffer
+    });
+  }
+
+  if (emailData.customAttachments && Array.isArray(emailData.customAttachments)) {
+    for (const att of emailData.customAttachments) {
+      attachments.push({
+        filename: att.filename,
+        content: att.content,
+        encoding: 'base64'
+      });
+    }
+  }
+
+  return await emailService.sendEmail(recipientEmail, subject, message, attachments);
+};
+
 module.exports = {
   processPayment,
   getPayments,
@@ -1070,5 +1187,6 @@ module.exports = {
   deletePayment,
   generatePaymentVoucherPDF,
   sendPaymentVoucherEmail,
-  generateVendorInvoicePDF
+  generateVendorInvoicePDF,
+  sendVendorInvoiceEmail
 };

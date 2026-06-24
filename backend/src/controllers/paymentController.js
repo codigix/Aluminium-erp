@@ -124,6 +124,20 @@ const getVendorInvoicePDF = async (req, res, next) => {
   }
 };
 
+const sendVendorInvoiceEmail = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { type } = req.query;
+    const result = await paymentService.sendVendorInvoiceEmail(id, type, req.body);
+    res.json({
+      message: 'Email sent successfully',
+      data: result
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   processPayment,
   getPayments,
@@ -133,5 +147,6 @@ module.exports = {
   deletePayment,
   getPaymentVoucherPDF,
   sendPaymentVoucherEmail,
-  getVendorInvoicePDF
+  getVendorInvoicePDF,
+  sendVendorInvoiceEmail
 };

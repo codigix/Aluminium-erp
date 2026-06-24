@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { Package, RefreshCw, Plus, Calendar, CreditCard, User, FileText, Download } from 'lucide-react';
+import { Package, RefreshCw, Plus, Calendar, CreditCard, User, FileText, Download, Trash2, Send } from 'lucide-react';
 import { DataTable, Button } from '../components/ui.jsx';
 import PaymentReceivedModal from '../components/PaymentReceivedModal.jsx';
-import { errorToast } from '../utils/toast';
+import SendEmailModal from '../components/SendEmailModal.jsx';
+import { errorToast, successToast } from '../utils/toast';
+import Swal from 'sweetalert2';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -31,6 +33,8 @@ const PaymentReceived = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState(null);
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
+  const [emailModalData, setEmailModalData] = useState(null);
 
   // URL Synchronization
   useEffect(() => {
@@ -41,6 +45,7 @@ const PaymentReceived = () => {
     if (segments.includes('add')) {
       setSelectedInvoice(null);
       setIsPaymentModalOpen(true);
+      setIsEmailModalOpen(false);
     } else if (segments.includes('record') && id && payments.length > 0) {
       const row = payments.find(p => p.id === parseInt(id));
       if (row) {
@@ -56,12 +61,65 @@ const PaymentReceived = () => {
           total_amount: row.total_amount
         });
         setIsPaymentModalOpen(true);
+        setIsEmailModalOpen(false);
       }
-    } else if (!path.includes('/add') && !path.includes('/record')) {
+    } else if (segments.includes('email') && id && payments.length > 0) {
+      const row = payments.find(p => p.id === parseInt(id));
+      if (row) {
+        handleSendEmailClick(row);
+        setIsPaymentModalOpen(false);
+      }
+    } else if (!path.includes('/add') && !path.includes('/record') && !path.includes('/email')) {
       setIsPaymentModalOpen(false);
+      setIsEmailModalOpen(false);
       setSelectedInvoice(null);
+      setEmailModalData(null);
     }
   }, [location.pathname, searchParams, payments]);
+
+  const handleSendEmailClick = (row) => {
+    setEmailModalData({
+      to: row.customer_email || '',
+      subject: `Invoice: ${row.so_number}`,
+      message: `Dear ${row.company_name},\n\nPlease find attached the invoice for your order ${row.so_number}.\n\nRegards,\nSPTECHPIONEER Accounts Team`,
+      id: row.id,
+      so_number: row.so_number,
+      company_name: row.company_name,
+      source: row.source
+    });
+    setIsEmailModalOpen(true);
+  };
+
+  const handleSendEmail = async (emailData) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/customer-payments/invoice/${emailModalData.id}/send-email`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          to: emailData.to,
+          subject: emailData.subject,
+          message: emailData.message,
+          attachPDF: emailData.attachPDF,
+          source: emailModalData.source,
+          customAttachments: emailData.customAttachments
+        })
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.message || 'Failed to send email');
+      }
+
+      successToast('Invoice sent successfully');
+    } catch (error) {
+      console.error('Error sending email:', error);
+      errorToast(error.message || 'Failed to send email');
+    }
+  };
 
   useEffect(() => {
     fetchOutstandingInvoices();
@@ -115,6 +173,45 @@ const PaymentReceived = () => {
     } catch (err) {
       console.error('Error downloading invoice:', err);
       errorToast('Failed to download invoice');
+    }
+  };
+
+  const handleDeleteInvoice = async (row) => {
+    const result = await Swal.fire({
+      title: 'Are you sure?',
+      text: `Do you want to delete this invoice (${row.so_number || `ID: ${row.id}`})?`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#3085d6',
+      cancelButtonColor: '#d33',
+      confirmButtonText: 'Yes, delete it!'
+    });
+
+    if (result.isConfirmed) {
+      try {
+        setLoading(true);
+        const token = localStorage.getItem('authToken');
+        const endpoint = row.source === 'SALES_ORDER'
+          ? `${API_BASE}/sales-orders/${row.id}`
+          : `${API_BASE}/order/${row.id}`;
+
+        const response = await fetch(endpoint, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+          successToast('Invoice has been deleted');
+          fetchOutstandingInvoices();
+        } else {
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(errData.message || errData.error || 'Failed to delete invoice');
+        }
+      } catch (err) {
+        errorToast(err.message);
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -248,6 +345,13 @@ const PaymentReceived = () => {
       render: (_, row) => (
         <div className="flex justify-end items-center gap-2">
           <button
+            onClick={() => navigate(`/accounts/payment-received/email?id=${row.id}`)}
+            className="p-2 hover:bg-rose-50 rounded text-slate-400 hover:text-rose-600 transition-all border border-transparent hover:border-rose-100 group shadow-sm"
+            title="Send Invoice Email"
+          >
+            <Send className="w-4 h-4 group-hover:scale-110" />
+          </button>
+          <button
             onClick={() => handleDownloadInvoice(row)}
             className="p-2 hover:bg-rose-50 rounded text-slate-400 hover:text-rose-600 transition-all border border-transparent hover:border-rose-100 group shadow-sm"
             title="Download Invoice"
@@ -263,6 +367,13 @@ const PaymentReceived = () => {
               <CreditCard className="w-4 h-4 group-hover:scale-110" />
             </button>
           )}
+          <button
+            onClick={() => handleDeleteInvoice(row)}
+            className="p-2 hover:bg-rose-50 rounded text-slate-400 hover:text-rose-600 transition-all border border-transparent hover:border-rose-100 group shadow-sm"
+            title="Delete Invoice"
+          >
+            <Trash2 className="w-4 h-4 group-hover:scale-110" />
+          </button>
         </div>
       )
     }
@@ -326,6 +437,16 @@ const PaymentReceived = () => {
         onClose={() => navigate('/accounts/payment-received')}
         invoice={selectedInvoice}
         onSuccess={() => fetchOutstandingInvoices()}
+      />
+
+      <SendEmailModal
+        isOpen={isEmailModalOpen}
+        onClose={() => navigate('/accounts/payment-received')}
+        data={emailModalData}
+        onSend={handleSendEmail}
+        title="Send Invoice to Customer"
+        subTitle={`${emailModalData?.so_number} • ${emailModalData?.company_name}`}
+        attachmentName={`Invoice-${emailModalData?.so_number}.pdf`}
       />
     </div>
   );

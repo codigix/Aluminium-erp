@@ -862,6 +862,31 @@ const generateOrderPDF = async (orderId) => {
                 <td>₹ {{grand_total}}</td>
               </tr>
             </table>
+            {{#invoice_summary}}
+            <div style="border-top: 1px solid #000; border-bottom: 1px solid #000; padding: 4px 6px; font-size: 8px; font-weight: bold; background: #f5f5f5; text-align: center; text-transform: uppercase; letter-spacing: 0.5px;">
+              Invoice Summary
+            </div>
+            <table class="calc-table" style="border-top: none;">
+              <tr>
+                <td>Invoice Amount</td>
+                <td style="font-weight: bold;">₹ {{invoice_amount}}</td>
+              </tr>
+              <tr>
+                <td>Paid Amount</td>
+                <td style="font-weight: bold; color: #16a34a;">₹ {{paid_amount}}</td>
+              </tr>
+              <tr>
+                <td>Balance Amount</td>
+                <td style="font-weight: bold; color: #dc2626;">₹ {{balance_amount}}</td>
+              </tr>
+              {{#status}}
+              <tr>
+                <td>Status</td>
+                <td style="font-weight: bold; text-transform: uppercase;">{{status}}</td>
+              </tr>
+              {{/status}}
+            </table>
+            {{/invoice_summary}}
           </div>
         </div>
 
@@ -952,6 +977,22 @@ const generateOrderPDF = async (orderId) => {
   const cgst_total = Number(order.subtotal || 0) * (Number(order.cgst_rate || 0) / 100);
   const sgst_total = Number(order.subtotal || 0) * (Number(order.sgst_rate || 0) / 100);
 
+  // Fetch paid amount from customer payments
+  const [paymentRows] = await pool.query(
+    `SELECT COALESCE(SUM(payment_amount), 0) as paid_amount 
+     FROM customer_payments 
+     WHERE sales_order_id = ? AND sales_order_source = 'DIRECT_ORDER' AND status = 'CONFIRMED'`,
+    [order.id]
+  );
+  const paidAmount = Number(paymentRows[0].paid_amount || 0);
+  const balanceAmount = Number(order.grand_total || 0) - paidAmount;
+  let paymentStatus = 'Pending';
+  if (balanceAmount <= 0) {
+    paymentStatus = 'Completed';
+  } else if (paidAmount > 0) {
+    paymentStatus = 'Partial';
+  }
+
   const viewData = {
     ...order,
     order_date: formatDate(order.order_date),
@@ -960,6 +1001,12 @@ const generateOrderPDF = async (orderId) => {
     cgst_total: cgst_total > 0 ? formatCurrency(cgst_total) : null,
     sgst_total: sgst_total > 0 ? formatCurrency(sgst_total) : null,
     grand_total: formatCurrency(order.grand_total),
+    invoice_summary: {
+      invoice_amount: formatCurrency(order.grand_total),
+      paid_amount: formatCurrency(paidAmount),
+      balance_amount: formatCurrency(balanceAmount),
+      status: paymentStatus !== 'Pending' ? paymentStatus : null
+    },
     grand_total_words: numberToWords(order.grand_total),
     formattedItems,
     empty_rows: Array.from({ length: Math.max(0, 10 - items.length) }),

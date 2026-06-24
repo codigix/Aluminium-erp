@@ -18,6 +18,6 @@ router.get('/stats', authorize(['PURCHASE_ORDER_VIEW']), purchaseOrderController
 router.get('/', authorize(['PURCHASE_ORDER_VIEW']), purchaseOrderController.getPurchaseOrders);
 router.get('/:poId', authorize(['PURCHASE_ORDER_VIEW']), purchaseOrderController.getPurchaseOrderById);
 router.patch('/:poId', authorize(['PURCHASE_ORDER_EDIT']), purchaseOrderController.updatePurchaseOrder);
-router.delete('/:poId', authorize(['PURCHASE_ORDER_DELETE']), purchaseOrderController.deletePurchaseOrder);
+router.delete('/:poId', authorize(['PURCHASE_ORDER_DELETE', 'PAYMENT_EDIT']), purchaseOrderController.deletePurchaseOrder);
 
 module.exports = router;

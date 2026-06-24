@@ -30,7 +30,7 @@ router.delete('/time-logs/:logId', authorize(['PROD_MANAGE']), jobCardController
 router.get('/quality-logs/:logId/download', authorize(['PROD_VIEW', 'QC_VIEW']), jobCardController.downloadQualityReport);
 router.post('/:id/quality-logs', authorize(['PROD_MANAGE', 'QC_CREATE', 'QC_EDIT']), upload.single('vendorInvoice'), jobCardController.addQualityLog);
 router.put('/quality-logs/:logId', authorize(['PROD_MANAGE', 'QC_EDIT']), jobCardController.updateQualityLog);
-router.delete('/quality-logs/:logId', authorize(['PROD_MANAGE', 'QC_EDIT']), jobCardController.deleteQualityLog);
+router.delete('/quality-logs/:logId', authorize(['PROD_MANAGE', 'QC_EDIT', 'PAYMENT_EDIT']), jobCardController.deleteQualityLog);
 
 router.post('/:id/downtime-logs', authorize(['PROD_MANAGE']), jobCardController.addDowntimeLog);
 router.delete('/downtime-logs/:logId', authorize(['PROD_MANAGE']), jobCardController.deleteDowntimeLog);

@@ -231,20 +231,6 @@ const CustomerPaymentHistory = () => {
       className: 'text-right',
       render: (_, row) => (
         <div className="flex justify-end items-center gap-2">
-          <button
-            onClick={() => openEmailModal(row)}
-            className="p-2 hover:bg-rose-50 rounded text-slate-400 hover:text-rose-600 transition-all border border-transparent hover:border-rose-100 group shadow-sm"
-            title="Send Receipt to Customer"
-          >
-            <Send className="w-4 h-4 group-hover:scale-110" />
-          </button>
-          <button
-            onClick={() => downloadReceipt(row.id, row.payment_receipt_no)}
-            className="p-2 hover:bg-emerald-50 rounded text-slate-400 hover:text-emerald-600 transition-all border border-transparent hover:border-emerald-100 group shadow-sm"
-            title="Download PDF"
-          >
-            <Download className="w-4 h-4 group-hover:scale-110" />
-          </button>
           {row.sales_order_id && (
             <button
               onClick={() => handleDownloadInvoice(row)}

@@ -402,6 +402,7 @@ const getAllOutstandingInvoices = async () => {
         so.company_id as company_id,
         CONVERT(COALESCE(so.so_number, CONCAT('SO-', LPAD(so.id, 4, '0'))) USING utf8mb4) as so_number,
         c.company_name as company_name,
+        con.email as customer_email,
         COALESCE(NULLIF(so.project_name, ''), NULLIF(cp_pos.project_name, ''), 'General Project') as project_name,
         COALESCE(NULLIF(so.net_total, 0), NULLIF(cp_pos.net_total, 0), (SELECT SUM(quantity * rate + tax_value) FROM sales_order_items WHERE sales_order_id = so.id), 0) as total_amount,
         COALESCE((SELECT SUM(payment_amount) FROM customer_payments WHERE sales_order_id = so.id AND sales_order_source = 'SALES_ORDER' AND status = 'CONFIRMED'), 0) as paid_amount,
@@ -411,6 +412,7 @@ const getAllOutstandingInvoices = async () => {
       FROM sales_orders so
       LEFT JOIN customer_pos cp_pos ON so.customer_po_id = cp_pos.id
       LEFT JOIN companies c ON so.company_id = c.id
+      LEFT JOIN contacts con ON con.company_id = c.id AND con.contact_type = 'PRIMARY'
       WHERE so.status IN ('READY_FOR_SHIPMENT', 'SHIPPED', 'PAID')
 
       UNION ALL
@@ -421,6 +423,7 @@ const getAllOutstandingInvoices = async () => {
         o.client_id as company_id,
         CONVERT(o.order_no USING utf8mb4) as so_number,
         c.company_name as company_name,
+        con.email as customer_email,
         COALESCE(NULLIF(o.project_name, ''), 'General Project') as project_name,
         o.grand_total as total_amount,
         COALESCE((SELECT SUM(payment_amount) FROM customer_payments WHERE sales_order_id = o.id AND sales_order_source = 'DIRECT_ORDER' AND status = 'CONFIRMED'), 0) as paid_amount,
@@ -429,6 +432,7 @@ const getAllOutstandingInvoices = async () => {
         o.created_at
       FROM orders o
       LEFT JOIN companies c ON o.client_id = c.id
+      LEFT JOIN contacts con ON con.company_id = c.id AND con.contact_type = 'PRIMARY'
       WHERE o.status NOT IN ('Closed', 'Cancelled', 'CANCELLED', 'CLOSED')
     ) combined
     WHERE outstanding >= 0
@@ -727,6 +731,87 @@ SPTECHPIONEER PVT LTD`;
   return await emailService.sendEmail(recipientEmail, subject, message, attachments);
 };
 
+const sendCustomerInvoiceEmail = async (id, payload = {}) => {
+  const { to, subject, message, attachPDF, source } = payload;
+
+  let recipientEmail = to;
+  let companyName = '';
+  let soNumber = '';
+  
+  if (source === 'DIRECT_ORDER') {
+    const [rows] = await pool.query(
+      `SELECT o.order_no, c.company_name, con.email
+       FROM orders o
+       LEFT JOIN companies c ON o.client_id = c.id
+       LEFT JOIN contacts con ON con.company_id = c.id AND con.contact_type = 'PRIMARY'
+       WHERE o.id = ?`,
+      [id]
+    );
+    if (rows.length > 0) {
+      if (!recipientEmail) recipientEmail = rows[0].email;
+      companyName = rows[0].company_name;
+      soNumber = rows[0].order_no;
+    }
+  } else {
+    // SALES_ORDER
+    const [rows] = await pool.query(
+      `SELECT so.id, COALESCE(so.so_number, CONCAT('SO-', LPAD(so.id, 4, '0'))) as so_number, c.company_name, con.email
+       FROM sales_orders so
+       LEFT JOIN companies c ON so.company_id = c.id
+       LEFT JOIN contacts con ON con.company_id = c.id AND con.contact_type = 'PRIMARY'
+       WHERE so.id = ?`,
+      [id]
+    );
+    if (rows.length > 0) {
+      if (!recipientEmail) recipientEmail = rows[0].email;
+      companyName = rows[0].company_name;
+      soNumber = rows[0].so_number;
+    }
+  }
+
+  if (!recipientEmail) {
+    throw new Error('Customer email address not found');
+  }
+
+  const finalSubject = subject || `Customer Invoice - ${soNumber}`;
+  const finalMessage = message || `Dear ${companyName || 'Customer'},
+  
+Please find attached the customer invoice ${soNumber}.
+
+Best Regards,
+Accounts Department
+SPTECHPIONEER PVT LTD`;
+
+  const attachments = [];
+  if (attachPDF !== false) {
+    let pdfBuffer;
+    if (source === 'DIRECT_ORDER') {
+      const orderService = require('./orderService');
+      pdfBuffer = await orderService.generateOrderPDF(id);
+    } else {
+      const salesOrderService = require('./salesOrderService');
+      pdfBuffer = await salesOrderService.generateSalesOrderPDF(id);
+    }
+    
+    attachments.push({
+      filename: `Invoice-${soNumber}.pdf`,
+      content: pdfBuffer
+    });
+  }
+
+  if (payload.customAttachments && Array.isArray(payload.customAttachments)) {
+    for (const att of payload.customAttachments) {
+      attachments.push({
+        filename: att.filename,
+        content: att.content,
+        encoding: 'base64'
+      });
+    }
+  }
+
+  return await emailService.sendEmail(recipientEmail, finalSubject, finalMessage, attachments);
+};
+
 module.exports = {
   recordPaymentReceived,
   getPaymentsReceived,
@@ -737,5 +822,6 @@ module.exports = {
   updatePaymentStatus,
   deletePayment,
   generateCustomerPaymentReceiptPDF,
-  sendCustomerPaymentReceiptEmail
+  sendCustomerPaymentReceiptEmail,
+  sendCustomerInvoiceEmail
 };

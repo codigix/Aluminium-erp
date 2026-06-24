@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { Package, RefreshCw, Eye, Download, Send, Calendar, Clock, CreditCard } from 'lucide-react';
+import { Package, RefreshCw, Eye, Download, Send, Calendar, Clock, CreditCard, Trash2 } from 'lucide-react';
 import { DataTable, Button } from '../components/ui.jsx';
 import { errorToast, successToast } from '../utils/toast';
 import ProcessPaymentModal from '../components/ProcessPaymentModal.jsx';
 import SendEmailModal from '../components/SendEmailModal.jsx';
+import Swal from 'sweetalert2';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -102,11 +103,12 @@ const PaymentProcessing = () => {
   const handleSendEmailClick = (row) => {
     setEmailModalData({
       to: row.vendor_email || '',
-      subject: `Payment Receipt: ${row.po_number}`,
-      message: `Dear ${row.vendor_name},\n\nPlease find attached the payment receipt for ${row.po_number}.\n\nRegards,\nSPTECHPIONEER Accounts Team`,
+      subject: `Invoice: ${row.po_number}`,
+      message: `Dear ${row.vendor_name},\n\nPlease find attached the invoice ${row.po_number}.\n\nRegards,\nSPTECHPIONEER Accounts Team`,
       po_id: row.id,
       po_number: row.po_number,
-      vendor_name: row.vendor_name
+      vendor_name: row.vendor_name,
+      type: row.type
     });
     setIsEmailModalOpen(true);
   };
@@ -114,7 +116,7 @@ const PaymentProcessing = () => {
   const handleSendEmail = async (emailData) => {
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/purchase-orders/${emailModalData.po_id}/send-email`, {
+      const response = await fetch(`${API_BASE}/payments/vendor-invoice/${emailModalData.po_id}/send-email?type=${emailModalData.type}`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -124,7 +126,8 @@ const PaymentProcessing = () => {
           to: emailData.to,
           subject: emailData.subject,
           message: emailData.message,
-          attachPDF: emailData.attachPDF
+          attachPDF: emailData.attachPDF,
+          customAttachments: emailData.customAttachments
         })
       });
 
@@ -166,6 +169,45 @@ const PaymentProcessing = () => {
     } catch (err) {
       console.error('Error downloading invoice:', err);
       errorToast('Failed to download invoice');
+    }
+  };
+
+  const handleDeleteInvoice = async (row) => {
+    const result = await Swal.fire({
+      title: 'Are you sure?',
+      text: `Do you want to delete this invoice (${row.po_number || `ID: ${row.id}`})?`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#3085d6',
+      cancelButtonColor: '#d33',
+      confirmButtonText: 'Yes, delete it!'
+    });
+
+    if (result.isConfirmed) {
+      try {
+        setLoading(true);
+        const token = localStorage.getItem('authToken');
+        const endpoint = row.type === 'PURCHASE_ORDER'
+          ? `${API_BASE}/purchase-orders/${row.id}`
+          : `${API_BASE}/job-cards/quality-logs/${row.id}`;
+
+        const response = await fetch(endpoint, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+          successToast('Invoice has been deleted');
+          fetchPendingPayments();
+        } else {
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(errData.message || errData.error || 'Failed to delete invoice');
+        }
+      } catch (err) {
+        errorToast(err.message);
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -321,6 +363,13 @@ const PaymentProcessing = () => {
               <CreditCard className="w-4 h-4 group-hover:scale-110" />
             </button>
           )}
+          <button
+            onClick={() => handleDeleteInvoice(row)}
+            className="p-2 hover:bg-rose-50 rounded text-slate-400 hover:text-rose-600 transition-all border border-transparent hover:border-rose-100 group shadow-sm"
+            title="Delete Invoice"
+          >
+            <Trash2 className="w-4 h-4 group-hover:scale-110" />
+          </button>
         </div>
       )
     }

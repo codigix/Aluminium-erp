@@ -1092,21 +1092,13 @@ const SalesOrders = () => {
         const isReadyForShipment = ['READY_FOR_SHIPMENT', 'SHIPPED', 'DELIVERED'].includes(row.status?.toUpperCase());
         return (
           <div className="flex justify-end items-center gap-1.5" onClick={e => e.stopPropagation()}>
-            {isReadyForShipment ? (
+            {isReadyForShipment && (
               <button
                 onClick={() => navigate('/accounts/payment-received')}
                 className="p-2 hover:bg-rose-50 rounded text-slate-400 hover:text-rose-600 transition-all border border-transparent hover:border-rose-100 group shadow-sm"
                 title="Account / Payment"
               >
                 <User className="w-4 h-4 group-hover:scale-110" />
-              </button>
-            ) : (
-              <button
-                onClick={() => handleCreateShipment(row)}
-                className="p-2 hover:bg-blue-50 rounded  text-slate-400 hover:text-blue-600 transition-all border border-transparent hover:border-blue-100 group shadow-sm"
-                title="Ready For Shipment"
-              >
-                <Truck className="w-4 h-4 group-hover:scale-110" />
               </button>
             )}
             <div className="h-4 w-[1px] bg-slate-100 mx-0.5" />
