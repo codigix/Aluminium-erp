@@ -363,7 +363,8 @@ const ProjectAnalysis = () => {
 
     const { 
       projectInfo, productionFlow, workOrders: woDetails, logistics: logData, 
-      supplyChain: scData, stockMovements, inventoryMatrix, machineUtilization, 
+      supplyChain: scData, purchaseOrders = [], grns = [], qcInspections = [],
+      stockMovements, inventoryMatrix, machineUtilization, 
       productionLogs, machineEfficiency, childOrders 
     } = projectDetails;
 
@@ -441,7 +442,7 @@ const ProjectAnalysis = () => {
         {detailTab === 'Overview' && (
           <div className="grid grid-cols-1 xl:grid-cols-4 gap-2">
              <div className="xl:col-span-3 space-y-2">
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
                    <StatCard 
                     title="Completion" 
                     amount={`${projectInfo.total_work_orders > 0 ? Math.round((projectInfo.completed_work_orders / projectInfo.total_work_orders) * 100) : 0}%`} 
@@ -452,6 +453,7 @@ const ProjectAnalysis = () => {
                    <StatCard title="Revenue" amount={formatCurrency(projectInfo.net_total)} subtitle="Confirmed" icon={ShieldCheck} subColor="text-emerald-500" />
                    <StatCard title="Timeline" amount={`${diffDays(projectInfo.target_dispatch_date, new Date())} Days`} subtitle="Remaining" icon={Clock} />
                    <StatCard title="Materials" amount={scData.length} subtitle="Requests Active" icon={Package} subColor="text-indigo-600" />
+                   <StatCard title="Purchase Orders" amount={purchaseOrders.length} subtitle={`${grns.length} GRNs / ${qcInspections.length} QCs`} icon={FileText} subColor="text-amber-500" />
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">
@@ -643,71 +645,79 @@ const ProjectAnalysis = () => {
 
                     {/* Cards Container */}
                     <div className="space-y-2 min-h-[600px]">
-                       {productionFlow
-                         .filter(stage => stage.status === col.id)
-                         .map((stage, idx) => {
-                           const netPct = stage.planned_qty > 0 ? (stage.accepted_qty / stage.planned_qty) * 100 : 0;
-                           const grossPct = stage.planned_qty > 0 ? (stage.produced_qty / stage.planned_qty) * 100 : 0;
-                           const yieldPct = stage.produced_qty > 0 ? (stage.accepted_qty / stage.produced_qty) * 100 : 100;
-                           
-                           return (
-                             <div key={idx} className="bg-white rounded-lg border border-slate-100 p-3 shadow-sm hover:shadow-md transition-all border-l-2 border-l-indigo-400">
-                               <div className="flex justify-between items-start mb-0.5">
+                      {productionFlow.filter(stage => stage.status === col.id).length > 0 ? (
+                        productionFlow
+                          .filter(stage => stage.status === col.id)
+                          .map((stage, idx) => {
+                            const netPct = stage.planned_qty > 0 ? (stage.accepted_qty / stage.planned_qty) * 100 : 0;
+                            const grossPct = stage.planned_qty > 0 ? (stage.produced_qty / stage.planned_qty) * 100 : 0;
+                            const yieldPct = stage.produced_qty > 0 ? (stage.accepted_qty / stage.produced_qty) * 100 : 100;
+                            
+                            return (
+                              <div key={idx} className="bg-white rounded-lg border border-slate-100 p-3 shadow-sm hover:shadow-md transition-all border-l-2 border-l-indigo-400">
+                                <div className="flex justify-between items-start mb-0.5">
+                                    <div>
+                                      <p className="text-[9px] text-slate-400 font-medium">Stage {idx + 1}</p>
+                                      <h4 className="text-[11px] font-bold text-slate-800 mt-0.5 leading-tight">{stage.item_name}</h4>
+                                      <div className="flex items-center gap-1 mt-0.5 text-[9px] text-slate-400">
+                                          <Calendar className="w-2.5 h-2.5 text-slate-300" />
+                                          <span>{formatDate(stage.start_date || stage.created_at)} - {formatDate(stage.target_date)}</span>
+                                      </div>
+                                    </div>
+                                    <div className="text-right">
+                                      <span className={`text-[9px] font-bold ${yieldPct > 90 ? 'text-emerald-500' : 'text-amber-500'}`}>
+                                        {Math.round(yieldPct)}% Yield
+                                      </span>
+                                    </div>
+                                </div>
+
+                                <div className="mt-3">
+                                    <div className="flex justify-between items-center mb-1">
+                                        <span className="text-[8px] text-slate-400 font-bold tracking-wider uppercase">Execution Progress</span>
+                                        <span className="text-[9px] font-bold text-slate-700">
+                                           {Math.round(netPct)}% / {Math.round(grossPct)}%
+                                        </span>
+                                    </div>
+                                    <div className="h-1 w-full bg-slate-100 rounded-full overflow-hidden flex">
+                                        <div className="h-full bg-indigo-500 transition-all duration-1000" style={{ width: `${netPct}%` }} />
+                                        <div className="h-full bg-amber-400 transition-all duration-1000" style={{ width: `${Math.max(0, grossPct - netPct)}%` }} />
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-3 gap-0.5 mt-3 pt-2 border-t border-slate-50">
                                    <div>
-                                     <p className="text-[9px] text-slate-400 font-medium">Stage {idx + 1}</p>
-                                     <h4 className="text-[11px] font-bold text-slate-800 mt-0.5 leading-tight">{stage.item_name}</h4>
-                                     <div className="flex items-center gap-1 mt-0.5 text-[9px] text-slate-400">
-                                         <Calendar className="w-2.5 h-2.5 text-slate-300" />
-                                         <span>{formatDate(stage.start_date || stage.created_at)} - {formatDate(stage.target_date)}</span>
-                                     </div>
+                                      <p className="text-[7px] text-slate-400 font-bold uppercase tracking-tighter">Net: {Math.round(stage.accepted_qty)}</p>
+                                   </div>
+                                   <div className="text-center">
+                                      <p className="text-[7px] text-slate-400 font-bold uppercase tracking-tighter">Gross: {Math.round(stage.produced_qty)}</p>
                                    </div>
                                    <div className="text-right">
-                                     <span className={`text-[9px] font-bold ${yieldPct > 90 ? 'text-emerald-500' : 'text-amber-500'}`}>
-                                       {Math.round(yieldPct)}% Yield
-                                     </span>
+                                      <p className="text-[7px] text-slate-400 font-bold uppercase tracking-tighter">Target: {Math.round(stage.planned_qty)}</p>
                                    </div>
-                               </div>
+                                </div>
 
-                               <div className="mt-3">
-                                   <div className="flex justify-between items-center mb-1">
-                                       <span className="text-[8px] text-slate-400 font-bold tracking-wider uppercase">Execution Progress</span>
-                                       <span className="text-[9px] font-bold text-slate-700">
-                                          {Math.round(netPct)}% / {Math.round(grossPct)}%
-                                       </span>
-                                   </div>
-                                   <div className="h-1 w-full bg-slate-100 rounded-full overflow-hidden flex">
-                                       <div className="h-full bg-indigo-500 transition-all duration-1000" style={{ width: `${netPct}%` }} />
-                                       <div className="h-full bg-amber-400 transition-all duration-1000" style={{ width: `${Math.max(0, grossPct - netPct)}%` }} />
-                                   </div>
-                               </div>
-
-                               <div className="grid grid-cols-3 gap-0.5 mt-3 pt-2 border-t border-slate-50">
-                                  <div>
-                                     <p className="text-[7px] text-slate-400 font-bold uppercase tracking-tighter">Net: {Math.round(stage.accepted_qty)}</p>
+                                <div className="flex items-center justify-between mt-3 pt-2 border-t border-slate-50">
+                                  <div className="flex items-center gap-1.5 text-slate-500 text-[10px] font-medium">
+                                     <Layers className="w-3 h-3 text-slate-400" />
+                                     <span>{stage.completed_job_cards || 0} Active Jobs</span>
                                   </div>
-                                  <div className="text-center">
-                                     <p className="text-[7px] text-slate-400 font-bold uppercase tracking-tighter">Gross: {Math.round(stage.produced_qty)}</p>
-                                  </div>
-                                  <div className="text-right">
-                                     <p className="text-[7px] text-slate-400 font-bold uppercase tracking-tighter">Target: {Math.round(stage.planned_qty)}</p>
-                                  </div>
-                               </div>
-
-                               <div className="flex items-center justify-between mt-3 pt-2 border-t border-slate-50">
-                                 <div className="flex items-center gap-1.5 text-slate-500 text-[10px] font-medium">
-                                    <Layers className="w-3 h-3 text-slate-400" />
-                                    <span>{stage.completed_job_cards || 0} Active Jobs</span>
-                                 </div>
-                                 {stage.rejected_qty > 0 && (
-                                    <div className="flex items-center gap-1 text-rose-500 font-bold text-[10px]">
-                                       <AlertTriangle className="w-3 h-3"/>
-                                       {Math.round(stage.rejected_qty)} Loss
-                                    </div>
-                                 )}
-                               </div>
-                             </div>
-                           );
-                         })}
+                                  {stage.rejected_qty > 0 && (
+                                     <div className="flex items-center gap-1 text-rose-500 font-bold text-[10px]">
+                                        <AlertTriangle className="w-3 h-3"/>
+                                        {Math.round(stage.rejected_qty)} Loss
+                                     </div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })
+                      ) : (
+                        <div className="flex flex-col items-center justify-center p-8 border border-dashed border-slate-200 rounded-lg bg-white/50 text-center min-h-[150px]">
+                           <Clock className="w-6 h-6 text-slate-300 mb-2" />
+                           <p className="text-xs text-slate-500 font-medium">No Operations</p>
+                           <p className="text-[10px] text-slate-400 mt-0.5">No manufacturing steps are currently in {col.label.toLowerCase()} status.</p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -776,7 +786,7 @@ const ProjectAnalysis = () => {
                          </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50">
-                         {woDetails.map((wo, i) => (
+                         {woDetails.length > 0 ? woDetails.map((wo, i) => (
                            <tr key={i} className="hover:bg-slate-50/30 transition-colors">
                               <td className="px-4 py-4">
                                  <p className="text-xs text-slate-900  leading-none">{wo.work_order_no}</p>
@@ -804,7 +814,13 @@ const ProjectAnalysis = () => {
                                  </div>
                               </td>
                            </tr>
-                         ))}
+                         )) : (
+                           <tr>
+                              <td colSpan="6" className="p-20 text-center text-slate-400 italic font-medium">
+                                 No work orders found for this project
+                              </td>
+                           </tr>
+                         )}
                       </tbody>
                    </table>
                 </div>
@@ -894,10 +910,11 @@ const ProjectAnalysis = () => {
         )}
 
         {detailTab === 'Supply Chain' && (
-           <div className="space-y-2">
+           <div className="space-y-4">
+              {/* Material Requests */}
               <div className="bg-white rounded border border-slate-100 p-4 shadow-sm relative overflow-hidden">
                  <div className="flex items-center justify-between mb-8 relative z-10">
-                    <h3 className="text-[11px] text-slate-900   ">Supply Chain Activity</h3>
+                    <h3 className="text-[11px] text-slate-900 font-bold uppercase tracking-wider">Material Requests (MR)</h3>
                     <span className="p-1 bg-indigo-50 text-indigo-600 rounded text-[9px]  border border-indigo-100">{scData.length} Requests</span>
                  </div>
                  <div className="overflow-x-auto">
@@ -912,9 +929,9 @@ const ProjectAnalysis = () => {
                           </tr>
                        </thead>
                        <tbody>
-                          {scData.map((sc, i) => (
-                            <tr key={i} className=" text-slate-900">
-                               <td className="px-2 py-4">{sc.mr_no}</td>
+                          {scData.length > 0 ? scData.map((sc, i) => (
+                            <tr key={i} className=" text-slate-900 hover:bg-slate-50/50">
+                               <td className="px-2 py-4 font-medium text-indigo-600">{sc.mr_no}</td>
                                <td className="px-2 py-4">{sc.department_name}</td>
                                <td className="px-2 py-4">{sc.purpose}</td>
                                <td className="px-2 py-4">
@@ -922,15 +939,146 @@ const ProjectAnalysis = () => {
                                </td>
                                <td className="px-2 py-4 text-slate-400">{formatDate(sc.created_at)}</td>
                             </tr>
-                          ))}
+                          )) : (
+                            <tr>
+                               <td colSpan="5" className="p-8 text-center text-slate-400 italic">No material requests found for this project</td>
+                            </tr>
+                          )}
                        </tbody>
                     </table>
                  </div>
               </div>
 
+              {/* Purchase Orders */}
               <div className="bg-white rounded border border-slate-100 p-4 shadow-sm relative overflow-hidden">
                  <div className="flex items-center justify-between mb-8 relative z-10">
-                    <h3 className="text-[11px] text-slate-900   ">Stock Logistics</h3>
+                    <h3 className="text-[11px] text-slate-900 font-bold uppercase tracking-wider">Purchase Orders (via Customer PO)</h3>
+                    <span className="p-1 bg-amber-50 text-amber-600 rounded text-[9px] border border-amber-100">{purchaseOrders.length} POs</span>
+                 </div>
+                 <div className="overflow-x-auto">
+                    <table className="w-full text-xs text-left">
+                       <thead className="text-slate-400 border-b border-slate-50">
+                          <tr>
+                             <th className="px-2 py-3">PO Number</th>
+                             <th className="px-2 py-3">Vendor</th>
+                             <th className="px-2 py-3">Items</th>
+                             <th className="px-2 py-3 text-right">Total Value</th>
+                             <th className="px-2 py-3">Status</th>
+                             <th className="px-2 py-3">Created Date</th>
+                          </tr>
+                       </thead>
+                       <tbody>
+                          {purchaseOrders.length > 0 ? purchaseOrders.map((po, i) => (
+                            <tr key={i} className="text-slate-900 hover:bg-slate-50/50">
+                               <td className="px-2 py-4 font-medium text-indigo-600">{po.po_number}</td>
+                               <td className="px-2 py-4">{po.vendor_name || 'N/A'}</td>
+                               <td className="px-2 py-4">{po.item_count} items</td>
+                               <td className="px-2 py-4 text-right">{formatCurrency(po.total_value)}</td>
+                               <td className="px-2 py-4">
+                                  <span className={`px-2 py-0.5 rounded text-[8px] font-bold ${po.status === 'COMPLETED' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-amber-50 text-amber-600 border border-amber-100'}`}>{po.status}</span>
+                               </td>
+                               <td className="px-2 py-4 text-slate-400">{formatDate(po.created_at)}</td>
+                            </tr>
+                          )) : (
+                            <tr>
+                               <td colSpan="6" className="p-8 text-center text-slate-400 italic">No purchase orders found for this project</td>
+                            </tr>
+                          )}
+                       </tbody>
+                    </table>
+                 </div>
+              </div>
+
+              {/* GRNs & QC Inspections */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                 {/* GRNs */}
+                 <div className="bg-white rounded border border-slate-100 p-4 shadow-sm relative overflow-hidden">
+                    <div className="flex items-center justify-between mb-8 relative z-10">
+                       <h3 className="text-[11px] text-slate-900 font-bold uppercase tracking-wider">Goods Receipt Notes (GRNs)</h3>
+                       <span className="p-1 bg-emerald-50 text-emerald-600 rounded text-[9px] border border-emerald-100">{grns.length} Receipts</span>
+                    </div>
+                    <div className="overflow-x-auto">
+                       <table className="w-full text-xs text-left">
+                          <thead className="text-slate-400 border-b border-slate-50">
+                             <tr>
+                                <th className="px-2 py-3">GRN ID</th>
+                                <th className="px-2 py-3">Vendor / PO</th>
+                                <th className="px-2 py-3 text-right">Received Qty</th>
+                                <th className="px-2 py-3">Status</th>
+                                <th className="px-2 py-3">Date</th>
+                             </tr>
+                          </thead>
+                          <tbody>
+                             {grns.length > 0 ? grns.map((g, i) => (
+                               <tr key={i} className="text-slate-900 hover:bg-slate-50/50">
+                                  <td className="px-2 py-4 font-medium text-indigo-600">GRN-{g.id.toString().padStart(6, '0')}</td>
+                                  <td className="px-2 py-4">
+                                     <p className="font-medium text-slate-800">{g.vendor_name}</p>
+                                     <p className="text-[10px] text-slate-400">PO: {g.linked_po_number || g.po_number}</p>
+                                  </td>
+                                  <td className="px-2 py-4 text-right">{g.received_quantity}</td>
+                                  <td className="px-2 py-4">
+                                     <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded border border-emerald-100 text-[8px] font-bold">{g.status}</span>
+                                  </td>
+                                  <td className="px-2 py-4 text-slate-400">{formatDate(g.grn_date)}</td>
+                               </tr>
+                             )) : (
+                               <tr>
+                                  <td colSpan="5" className="p-8 text-center text-slate-400 italic">No GRN receipts found for this project</td>
+                               </tr>
+                             )}
+                          </tbody>
+                       </table>
+                    </div>
+                 </div>
+
+                 {/* QC Inspections */}
+                 <div className="bg-white rounded border border-slate-100 p-4 shadow-sm relative overflow-hidden">
+                    <div className="flex items-center justify-between mb-8 relative z-10">
+                       <h3 className="text-[11px] text-slate-900 font-bold uppercase tracking-wider">Incoming Quality Checks</h3>
+                       <span className="p-1 bg-rose-50 text-rose-600 rounded text-[9px] border border-rose-100">{qcInspections.length} Inspections</span>
+                    </div>
+                    <div className="overflow-x-auto">
+                       <table className="w-full text-xs text-left">
+                          <thead className="text-slate-400 border-b border-slate-50">
+                             <tr>
+                                <th className="px-2 py-3">Date</th>
+                                <th className="px-2 py-3">PO Number</th>
+                                <th className="px-2 py-3 text-right font-medium">Received / Pass / Fail</th>
+                                <th className="px-2 py-3">Status</th>
+                             </tr>
+                          </thead>
+                          <tbody>
+                             {qcInspections.length > 0 ? qcInspections.map((qc, i) => (
+                               <tr key={i} className="text-slate-900 hover:bg-slate-50/50">
+                                  <td className="px-2 py-4 text-slate-400">{formatDate(qc.inspection_date)}</td>
+                                  <td className="px-2 py-4 font-medium text-indigo-600">{qc.po_number}</td>
+                                  <td className="px-2 py-4 text-right">
+                                     <span className="text-slate-900">{qc.received_quantity}</span>
+                                     <span className="text-slate-300 mx-1">/</span>
+                                     <span className="text-emerald-600 font-bold">{qc.pass_quantity}</span>
+                                     <span className="text-slate-300 mx-1">/</span>
+                                     <span className="text-rose-600 font-bold">{qc.fail_quantity}</span>
+                                  </td>
+                                  <td className="px-2 py-4">
+                                     <span className={`px-2 py-0.5 rounded text-[8px] font-bold ${qc.status === 'PASSED' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-rose-50 text-rose-600 border border-rose-100'}`}>{qc.status}</span>
+                                  </td>
+                               </tr>
+                             )) : (
+                               <tr>
+                                  <td colSpan="4" className="p-8 text-center text-slate-400 italic">No incoming QC inspections found</td>
+                               </tr>
+                             )}
+                          </tbody>
+                       </table>
+                    </div>
+                 </div>
+              </div>
+
+              {/* Stock Movements */}
+              <div className="bg-white rounded border border-slate-100 p-4 shadow-sm relative overflow-hidden">
+                 <div className="flex items-center justify-between mb-8 relative z-10">
+                    <h3 className="text-[11px] text-slate-900 font-bold uppercase tracking-wider">Stock Logistics</h3>
                     <span className="p-1 bg-emerald-50 text-emerald-600 rounded text-[9px]  border border-emerald-100 ">{stockMovements.length} Movements</span>
                  </div>
                  <div className="overflow-x-auto">
@@ -945,8 +1093,8 @@ const ProjectAnalysis = () => {
                           </tr>
                        </thead>
                        <tbody className="divide-y divide-slate-50">
-                          {stockMovements.map((stk, i) => (
-                            <tr key={i} className=" text-slate-900">
+                          {stockMovements.length > 0 ? stockMovements.map((stk, i) => (
+                            <tr key={i} className=" text-slate-900 hover:bg-slate-50/50">
                                <td className="px-2 py-4">
                                   <p>STK-{stk.id.toString().padStart(6, '0')}</p>
                                </td>
@@ -963,7 +1111,11 @@ const ProjectAnalysis = () => {
                                   <span className="px-2 py-1 bg-emerald-50 text-emerald-600 rounded border border-emerald-100 text-[8px]   ">Approved</span>
                                </td>
                             </tr>
-                          ))}
+                          )) : (
+                            <tr>
+                               <td colSpan="5" className="p-8 text-center text-slate-400 italic">No stock transactions found for this project</td>
+                            </tr>
+                          )}
                        </tbody>
                     </table>
                  </div>
@@ -1089,7 +1241,7 @@ const ProjectAnalysis = () => {
                           </tr>
                        </thead>
                        <tbody className="divide-y divide-slate-50">
-                          {inventoryMatrix.map((item, i) => (
+                          {inventoryMatrix.length > 0 ? inventoryMatrix.map((item, i) => (
                              <tr key={i} className="hover:bg-slate-50/30 transition-colors">
                                 <td className="px-4 py-4  ">
                                    <p className="text-slate-900">{item.item_name}</p>
@@ -1103,7 +1255,11 @@ const ProjectAnalysis = () => {
                                    </span>
                                 </td>
                              </tr>
-                          ))}
+                          )) : (
+                              <tr>
+                                 <td colSpan="4" className="p-8 text-center text-slate-400 italic">No inventory matrix requirements found for this project</td>
+                              </tr>
+                          )}
                        </tbody>
                     </table>
                  </div>
@@ -1131,7 +1287,7 @@ const ProjectAnalysis = () => {
                           </tr>
                        </thead>
                        <tbody className="divide-y divide-slate-50">
-                          {(machineEfficiency || []).map((m, i) => (
+                          {machineEfficiency && machineEfficiency.length > 0 ? machineEfficiency.map((m, i) => (
                              <tr key={i} className="hover:bg-slate-50/30 transition-colors">
                                 <td className="px-4 py-4  ">
                                    <p className="text-slate-900">{m.name}</p>
@@ -1153,7 +1309,11 @@ const ProjectAnalysis = () => {
                                    </span>
                                 </td>
                              </tr>
-                          ))}
+                          )) : (
+                             <tr>
+                                <td colSpan="5" className="p-8 text-center text-slate-400 italic">No workstation data found for this project</td>
+                             </tr>
+                          )}
                        </tbody>
                     </table>
                  </div>
