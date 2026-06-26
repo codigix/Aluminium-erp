@@ -11,7 +11,7 @@ async function getHostCompanyForPO(poIdentifier) {
     if (poNum.includes(' - ')) {
       poNum = poNum.split(' - ')[0].trim();
     }
-    
+
     let query = '';
     let params = [];
     if (typeof poNum === 'number' || (!isNaN(Number(poNum)) && poNum !== '')) {
@@ -41,7 +41,7 @@ async function getHostCompanyForPO(poIdentifier) {
 
 const generatePoPdf = async (data) => {
   const { type = 'receipt', receipt, po, grn, items = [] } = data;
-  
+
   try {
     const isGRNOrReceipt = type === 'grn' || type === 'receipt';
     const templateFileName = isGRNOrReceipt ? 'po-receipt-grn.html' : 'po-receipt.html';
@@ -70,7 +70,7 @@ const generatePoPdf = async (data) => {
     };
 
     const adminCompanyMasterService = require('../services/adminCompanyMasterService');
-    
+
     let hostCompanyId = null;
     if (type === 'grn' && grn) {
       if (grn.po_receipt_id || grn.poReceiptId) {
@@ -118,7 +118,7 @@ const generatePoPdf = async (data) => {
 
     if (!logoBase64) {
       const logoPath = path.join(__dirname, '../../../frontend/src/assets/sptechpioneer logo.png');
-      logoBase64 = fs.existsSync(logoPath) 
+      logoBase64 = fs.existsSync(logoPath)
         ? `data:image/png;base64,${fs.readFileSync(logoPath).toString('base64')}`
         : null;
     }
@@ -138,7 +138,7 @@ const generatePoPdf = async (data) => {
       } else if (type === 'grn' && grn) {
         poIdOrNum = grn.po_number || grn.poNumber;
       }
-      
+
       if (poIdOrNum) {
         try {
           const [poRows] = await pool.query(
@@ -162,7 +162,7 @@ const generatePoPdf = async (data) => {
     let vendorEmail = '—';
     let vendorPhone = '—';
     let vendorGST = '—';
-    
+
     if (poDetail) {
       vendorName = poDetail.vendor_name || '—';
       vendorEmail = poDetail.vendor_email || '—';
@@ -199,7 +199,7 @@ const generatePoPdf = async (data) => {
 
       const cgstPercent = parseFloat(item.cgst_percent || item.cgstPercent || 9);
       const sgstPercent = parseFloat(item.sgst_percent || item.sgstPercent || 9);
-      
+
       if (idx === 0) {
         cgstPercentVal = cgstPercent;
         sgstPercentVal = sgstPercent;
@@ -260,7 +260,7 @@ const generatePoPdf = async (data) => {
         rawId = grn.id;
         notes = grn.notes || '';
       }
-      
+
       const year = new Date(rawDate).getFullYear();
       const receiptId = `GRN-${year}-${String(rawId).padStart(4, '0')}`;
 
@@ -308,9 +308,9 @@ const generatePoPdf = async (data) => {
 
     const pdfFileName = type === 'grn'
       ? `GRN_${grn?.id || Date.now()}.pdf`
-      : type === 'receipt' 
-      ? `PO_Receipt_${receipt?.id || Date.now()}.pdf`
-      : `PO_${po?.po_number || Date.now()}.pdf`;
+      : type === 'receipt'
+        ? `PO_Receipt_${receipt?.id || Date.now()}.pdf`
+        : `PO_${po?.po_number || Date.now()}.pdf`;
 
     const pdfPath = path.join(outputDir, pdfFileName);
 

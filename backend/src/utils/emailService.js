@@ -4,7 +4,7 @@ const pool = require('../config/db');
 
 const createTransporter = () => {
   const isGmail = process.env.MAIL_HOST === 'smtp.gmail.com';
-  
+
   const config = {
     host: process.env.MAIL_HOST,
     port: Number(process.env.MAIL_PORT || 587),
@@ -56,7 +56,7 @@ const generateQuotationHTML = async (clientName, items, totalAmount, notes, clie
       const profitP = parseFloat(item.profit_percentage) || 0;
       const overrideP = parseFloat(item.override_percentage) || 0;
       const gstRate = parseFloat(item.gst_percentage) || 18;
-      
+
       // Calculate rates
       // item.quotedPrice already includes profit (it's the Unit Rate from UI)
       const unitRate = parseFloat(item.quotedPrice) || 0;
@@ -67,25 +67,25 @@ const generateQuotationHTML = async (clientName, items, totalAmount, notes, clie
       if (!isRejected) {
         subTotal += lineTotalBase;
         totalTax += lineTax;
-        
+
         // Calculate profit & override amounts for this line
         const bomCost = parseFloat(item.bom_cost) || 0;
         const itemBomCost = bomCost || (unitRate / (1 + profitP / 100) / (1 + overrideP / 100)) || 0;
         const profitAmount = itemBomCost * (profitP / 100) * quantity;
         const overrideAmount = (itemBomCost * (1 + profitP / 100)) * (overrideP / 100) * quantity;
-        
+
         totalProfit += profitAmount;
         totalOverride += overrideAmount;
       }
 
-      const unitPriceStr = isRejected ? 
-         '<span style="color: #dc2626; font-weight: bold;">REJECTED</span>' : 
+      const unitPriceStr = isRejected ?
+        '<span style="color: #dc2626; font-weight: bold;">REJECTED</span>' :
         `₹${unitRate.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
-      
-      const totalLineStr = isRejected ? 
-        '<span style="color: #dc2626; font-weight: bold;">REJECTED</span>' : 
+
+      const totalLineStr = isRejected ?
+        '<span style="color: #dc2626; font-weight: bold;">REJECTED</span>' :
         `₹${lineTotalWithTax.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
-      
+
       const hasSubs = (item.sub_assemblies || []).length > 0;
       const borderBottomStyle = hasSubs ? 'border-bottom: hidden;' : 'border-bottom: 1px solid #cbd5e1;';
 
@@ -111,7 +111,7 @@ const generateQuotationHTML = async (clientName, items, totalAmount, notes, clie
         const saTotal = saQty * saRate;
         const isLastSA = saIdx === saArr.length - 1;
         const saBorderBottomStyle = isLastSA ? 'border-bottom: 1px solid #cbd5e1;' : 'border-bottom: hidden;';
-        
+
         return `
         <tr class="sub-assembly-row">
           <td style="padding: 8px; border: 1px solid #cbd5e1; border-top: hidden; ${saBorderBottomStyle} text-align: center;"></td>
@@ -152,7 +152,7 @@ const generateQuotationHTML = async (clientName, items, totalAmount, notes, clie
 
   const hostCompanyName = hostCompany?.company_name || 'SP TECHPIONEER PVT. LTD.';
   const hostCompanyAddress = hostCompany?.company_address || 'Plot No. 97, Sector 7, PCNTDA, Bhosari, Pune – 411026';
-  
+
   let hostCompanyAddressHtml = '';
   if (hostCompanyAddress) {
     const parts = hostCompanyAddress.split(/[\r\n,]+/).map(p => p.trim()).filter(Boolean);
@@ -170,7 +170,7 @@ const generateQuotationHTML = async (clientName, items, totalAmount, notes, clie
 
   const hostEmail = hostCompany?.email || hostCompany?.company_email || 'reactjscodigix@gmail.com';
   const hostPhone = hostCompany?.phone || hostCompany?.company_phone || hostCompany?.contact_mobile || '+91 9876543210';
-  
+
   const discountType = (items && items[0]) ? items[0].discount_type || 'percentage' : 'percentage';
   const discountValue = (items && items[0]) ? parseFloat(items[0].discount_value) || 0 : 0;
 
@@ -479,10 +479,10 @@ const generateChallanHTML = (challan) => {
 const sendShipmentStatusEmail = async (shipmentData, status, attachments = []) => {
   try {
     const transporter = createTransporter();
-    const { 
-      snapshot_customer_name, 
-      customer_name, 
-      snapshot_customer_email, 
+    const {
+      snapshot_customer_name,
+      customer_name,
+      snapshot_customer_email,
       customer_email,
       shipment_code,
       driver_name,
@@ -494,16 +494,16 @@ const sendShipmentStatusEmail = async (shipmentData, status, attachments = []) =
 
     const name = snapshot_customer_name || customer_name;
     const email = snapshot_customer_email || customer_email;
-    
+
     // Determine recipients
     let recipients = [];
     if (email) recipients.push(email);
-    
+
     // For DISPATCHED, add driver email to recipients if available
     if (status === 'DISPATCHED' && driver_email) {
       recipients.push(driver_email);
     }
-    
+
     if (recipients.length === 0) {
       console.warn(`[Email Service] No recipients found for shipment ${shipment_code}, skipping notification.`);
       return;
@@ -639,8 +639,8 @@ const sendQuotationEmail = async (clientEmail, clientName, items, totalAmount, n
         });
         const page = await browser.newPage();
         await page.setContent(html, { waitUntil: 'networkidle0' });
-        pdfBuffer = await page.pdf({ 
-          format: 'A4', 
+        pdfBuffer = await page.pdf({
+          format: 'A4',
           printBackground: true,
           margin: { top: '20px', bottom: '20px', left: '20px', right: '20px' }
         });
@@ -649,9 +649,9 @@ const sendQuotationEmail = async (clientEmail, clientName, items, totalAmount, n
         console.error('[Email Service] PDF generation failed:', pdfError.message);
       }
     }
-    
+
     const formattedQuoteNumber = quoteNumber ? `[${quoteNumber}]` : '';
-    
+
     const mailOptions = {
       from: process.env.EMAIL_USER || process.env.MAIL_FROM_ADDRESS || 'noreply@sptechpioneer.com',
       to: clientEmail,
@@ -699,7 +699,7 @@ const sendQuotationEmail = async (clientEmail, clientName, items, totalAmount, n
 const sendReplyEmail = async (to, subject, message, replyToId) => {
   try {
     const transporter = createTransporter();
-    
+
     const mailOptions = {
       from: process.env.EMAIL_USER || process.env.MAIL_FROM_ADDRESS || 'noreply@sptechpioneer.com',
       to: to,

@@ -267,9 +267,7 @@ const updateDrawing = async (id, data) => {
     );
     for (const order of orders) {
       const statusUpper = (order.status || '').toUpperCase().replace(/_/g, ' ').trim();
-      if (statusUpper === 'QUOTATION SENT') {
-        throw new Error('quotation allready sent now cant update requirement');
-      }
+      // QUOTATION SENT: updates are allowed
       if (statusUpper === 'BOM SUBMITTED') {
         throw new Error('bom allready sent now cant update requirement');
       }
@@ -460,9 +458,7 @@ const updateItemDrawing = async (itemId, data) => {
     if (itemOrder.length > 0) {
       const statusUpper = (itemOrder[0].status || '').toUpperCase().replace(/_/g, ' ').trim();
       const itemStatusUpper = (itemOrder[0].item_status || '').toUpperCase().trim();
-      if (statusUpper === 'QUOTATION SENT') {
-        throw new Error('quotation allready sent now cant update requirement');
-      }
+      // QUOTATION SENT: updates are allowed
       if (statusUpper === 'BOM SUBMITTED') {
         throw new Error('bom allready sent now cant update requirement');
       }
@@ -555,9 +551,7 @@ const createCustomerDrawing = async (data) => {
       const [order] = await connection.query('SELECT status FROM sales_orders WHERE id = ?', [providedSalesOrderId]);
       if (order.length > 0) {
         const statusUpper = (order[0].status || '').toUpperCase().replace(/_/g, ' ').trim();
-        if (statusUpper === 'QUOTATION SENT') {
-          throw new Error('quotation allready sent now cant update requirement');
-        }
+        // QUOTATION SENT: updates are allowed
         if (statusUpper === 'BOM SUBMITTED') {
           throw new Error('bom allready sent now cant update requirement');
         }
@@ -676,9 +670,7 @@ const createBatchCustomerDrawings = async (batchData, batchInfo = {}) => {
       const [order] = await connection.query('SELECT status FROM sales_orders WHERE id = ?', [salesOrderId]);
       if (order.length > 0) {
         const statusUpper = (order[0].status || '').toUpperCase().replace(/_/g, ' ').trim();
-        if (statusUpper === 'QUOTATION SENT') {
-          throw new Error('quotation allready sent now cant update requirement');
-        }
+        // QUOTATION SENT: updates are allowed
         if (statusUpper === 'BOM SUBMITTED') {
           throw new Error('bom allready sent now cant update requirement');
         }
@@ -848,9 +840,7 @@ const internalDeleteDrawing = async (connection, id) => {
   );
   for (const order of orders) {
     const statusUpper = (order.status || '').toUpperCase().replace(/_/g, ' ').trim();
-    if (statusUpper === 'QUOTATION SENT') {
-      throw new Error('quotation allready sent now cant update requirement');
-    }
+    // QUOTATION SENT: updates are allowed
     if (statusUpper === 'BOM SUBMITTED') {
       throw new Error('bom allready sent now cant update requirement');
     }

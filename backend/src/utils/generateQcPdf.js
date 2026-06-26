@@ -6,7 +6,7 @@ const pool = require('../config/db');
 
 const generateQcPdf = async (data) => {
   const { qc, items = [] } = data;
-  
+
   try {
     const templatePath = path.join(__dirname, '../../templates/qc-report.html');
     const template = fs.readFileSync(templatePath, 'utf8');
@@ -70,7 +70,7 @@ const generateQcPdf = async (data) => {
 
     if (!logoBase64) {
       const logoPath = path.join(__dirname, '../../../frontend/src/assets/sptechpioneer logo.png');
-      logoBase64 = fs.existsSync(logoPath) 
+      logoBase64 = fs.existsSync(logoPath)
         ? `data:image/png;base64,${fs.readFileSync(logoPath).toString('base64')}`
         : null;
     }
@@ -97,16 +97,16 @@ const generateQcPdf = async (data) => {
       items: items.map((item, idx) => {
         const shortage = Math.max(0, parseFloat(item.ordered_qty || 0) - parseFloat(item.accepted_qty || 0));
         const overage = Math.max(0, parseFloat(item.accepted_qty || 0) - parseFloat(item.ordered_qty || 0));
-        
+
         let itemStatus = 'AVAILABLE';
         let statusColor = '#16a34a'; // Emerald
-        
+
         if (shortage > 0) {
-            itemStatus = 'SHORTAGE';
-            statusColor = '#dc2626'; // Red
+          itemStatus = 'SHORTAGE';
+          statusColor = '#dc2626'; // Red
         } else if (overage > 0) {
-            itemStatus = 'OVERAGE';
-            statusColor = '#2563eb'; // Blue
+          itemStatus = 'OVERAGE';
+          statusColor = '#2563eb'; // Blue
         }
 
         return {

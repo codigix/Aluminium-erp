@@ -10,7 +10,7 @@ const mustache = require('mustache');
  */
 const getCorrectItemCode = async (item, connection) => {
   let itemCode = item.item_code || item.drawing_no;
-  
+
   // 0. If we already have a specific item code that exists in stock_balance and matches the name, use it!
   if (itemCode && itemCode !== 'auto-generated') {
     const [existing] = await connection.query(
@@ -38,11 +38,11 @@ const getCorrectItemCode = async (item, connection) => {
        LIMIT 1`,
       [item.material_name, item.material_type, item.material_type]
     );
-    
+
     if (sb.length > 0) {
       return sb[0].item_code;
     }
-    
+
     // 2. If not found, try matching by name only (more flexible)
     const [sbNameOnly] = await connection.query(
       `SELECT item_code FROM stock_balance 
@@ -50,7 +50,7 @@ const getCorrectItemCode = async (item, connection) => {
        LIMIT 1`,
       [item.material_name]
     );
-    
+
     if (sbNameOnly.length > 0) {
       return sbNameOnly[0].item_code;
     }
@@ -157,10 +157,10 @@ const getQCWithDetails = async (qcId) => {
     WHERE qc.id = ?`,
     [qcId]
   );
-  
+
   if (qcs.length > 0) {
     const qc = qcs[0];
-    
+
     const [qcItems] = await pool.query(
       `SELECT 
         qci.id,
@@ -192,15 +192,15 @@ const getQCWithDetails = async (qcId) => {
        WHERE qci.qc_inspection_id = ?`,
       [qcId]
     );
-    
+
     const orderedQty = qcItems.reduce((sum, item) => sum + (parseFloat(item.po_qty) || 0), 0);
     const acceptedQty = qcItems.reduce((sum, item) => sum + (parseFloat(item.accepted_qty) || 0), 0);
-    
+
     qc.shortage = orderedQty > acceptedQty ? orderedQty - acceptedQty : 0;
     qc.overage = acceptedQty > orderedQty ? acceptedQty - orderedQty : 0;
     qc.items = qcItems.length;
     qc.accepted_quantity = acceptedQty;
-    
+
     qc.items_detail = qcItems.map(item => ({
       id: item.id,
       item_code: item.item_code,
@@ -228,7 +228,7 @@ const getQCWithDetails = async (qcId) => {
       overage: Math.max(0, (parseFloat(item.accepted_qty) || 0) - (parseFloat(item.po_qty) || 0))
     }));
   }
-  
+
   return qcs[0] || null;
 };
 
@@ -320,7 +320,7 @@ const getAllQCs = async () => {
     LEFT JOIN vendors v ON po.vendor_id = v.id
     ORDER BY qc.created_at DESC`
   );
-  
+
   const result = [];
   for (const qc of qcs) {
     const [qcItems] = await pool.query(
@@ -354,10 +354,10 @@ const getAllQCs = async () => {
        WHERE qci.qc_inspection_id = ?`,
       [qc.id]
     );
-    
+
     const orderedQty = qcItems.reduce((sum, item) => sum + (parseFloat(item.po_qty) || 0), 0);
     const acceptedQty = qcItems.reduce((sum, item) => sum + (parseFloat(item.accepted_qty) || 0), 0);
-    
+
     result.push({
       ...qc,
       shortage: orderedQty > acceptedQty ? orderedQty - acceptedQty : 0,
@@ -391,7 +391,7 @@ const getAllQCs = async () => {
       }))
     });
   }
-  
+
   return result;
 };
 
@@ -448,7 +448,7 @@ const createQC = async (grnId, inspectionDate, passQuantity, failQuantity, defec
 
     for (const item of grnItems) {
       const correctedItemCode = await getCorrectItemCode(item, connection);
-      
+
       await connection.execute(
         `INSERT INTO qc_inspection_items 
          (qc_inspection_id, grn_item_id, warehouse_id, item_code, po_qty, received_qty, accepted_qty, rejected_qty, status) 
@@ -469,7 +469,7 @@ const createQC = async (grnId, inspectionDate, passQuantity, failQuantity, defec
 
 const updateQC = async (qcId, updates) => {
   const { inspectionDate, passQuantity, failQuantity, status, defects, remarks, items } = updates;
-  
+
   const setClause = [];
   const values = [];
 
@@ -807,7 +807,7 @@ const getQCStats = async (filters = {}) => {
 const getQCReports = async (filters = {}) => {
   // 1. KPI Stats
   const stats = await getQCStats(filters);
-  
+
   // Calculate Pass Rate and Rejection Rate
   const totalCompleted = (stats.passedQc || 0) + (stats.failedQc || 0);
   const passRate = totalCompleted > 0 ? Math.round((stats.passedQc / totalCompleted) * 100) : 0;
@@ -969,7 +969,7 @@ const sendQCAlertEmail = async (qcId, emailData) => {
     }
 
     const emailResult = await emailService.sendEmail(to, subject, message, attachments);
-    
+
     return {
       id: qcId,
       sent_to: to,
@@ -1125,8 +1125,8 @@ const generateQCInspectionPDF = async (qcId) => {
   });
   const page = await browser.newPage();
   await page.setContent(html, { waitUntil: 'networkidle0' });
-  const pdf = await page.pdf({ 
-    format: 'A4', 
+  const pdf = await page.pdf({
+    format: 'A4',
     printBackground: true,
     margin: { top: '20px', right: '20px', bottom: '20px', left: '20px' }
   });
@@ -1245,11 +1245,11 @@ const getRejectedItems = async (filters = {}) => {
     ORDER BY date DESC`,
     params
   );
-  
+
   return items.map(item => ({
     ...item,
-    reference_number: item.ref_type === 'GRN' 
-      ? `GRN-${String(item.ref_id).padStart(4, '0')}` 
+    reference_number: item.ref_type === 'GRN'
+      ? `GRN-${String(item.ref_id).padStart(4, '0')}`
       : `JC-${String(item.ref_id).padStart(4, '0')}`
   }));
 };
@@ -1304,7 +1304,7 @@ const createShipmentFromQC = async (qcId) => {
     }
 
     const qcData = qcRows[0];
-    
+
     // Determine customer_id and snapshot details
     const salesOrderId = qcData.sales_order_id || null;
     let customerId = qcData.so_customer_id || null;
@@ -1390,9 +1390,9 @@ const generateQcPdfUtil = require('../utils/generateQcPdf');
 const generateQcPdf = async (qcId) => {
   const qc = await getQCWithDetails(qcId);
   if (!qc) throw new Error('QC Inspection not found');
-  
+
   const items = qc.items_detail || [];
-  
+
   return await generateQcPdfUtil({
     qc,
     items

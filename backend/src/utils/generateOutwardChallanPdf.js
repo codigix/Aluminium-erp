@@ -40,7 +40,7 @@ const generateOutwardChallanPdf = async (challan) => {
 
     if (!logoBase64) {
       const logoPath = path.join(__dirname, '../../../frontend/src/assets/sptechpioneer logo.png');
-      logoBase64 = fs.existsSync(logoPath) 
+      logoBase64 = fs.existsSync(logoPath)
         ? `data:image/png;base64,${fs.readFileSync(logoPath).toString('base64')}`
         : null;
     }

@@ -11,7 +11,7 @@ const stockService = require('./stockService');
  */
 const getCorrectItemCode = async (item, connection) => {
   let itemCode = item.item_code || item.drawing_no;
-  
+
   // 0. If we already have a specific item code that exists in stock_balance and matches the name, use it!
   if (itemCode && itemCode !== 'auto-generated') {
     const [existing] = await connection.query(
@@ -39,11 +39,11 @@ const getCorrectItemCode = async (item, connection) => {
        LIMIT 1`,
       [item.material_name, item.material_type, item.material_type]
     );
-    
+
     if (sb.length > 0) {
       return sb[0].item_code;
     }
-    
+
     // 2. If not found, try matching by name only (more flexible)
     const [sbNameOnly] = await connection.query(
       `SELECT item_code FROM stock_balance 
@@ -51,7 +51,7 @@ const getCorrectItemCode = async (item, connection) => {
        LIMIT 1`,
       [item.material_name]
     );
-    
+
     if (sbNameOnly.length > 0) {
       return sbNameOnly[0].item_code;
     }
@@ -71,14 +71,14 @@ const getCorrectItemCode = async (item, connection) => {
 const generatePONumber = async () => {
   const currentYear = new Date().getFullYear();
   const prefix = `PO-${currentYear}-`;
-  
+
   const [result] = await pool.query(
     `SELECT po_number FROM purchase_orders 
      WHERE po_number LIKE ? 
      ORDER BY po_number DESC LIMIT 1`,
     [`${prefix}%`]
   );
-  
+
   let nextNumber = 1;
   if (result.length > 0) {
     const lastNumberStr = result[0].po_number.split('-').pop();
@@ -87,7 +87,7 @@ const generatePONumber = async () => {
       nextNumber = lastNumber + 1;
     }
   }
-  
+
   const paddedCount = String(nextNumber).padStart(4, '0');
   return `${prefix}${paddedCount}`;
 };
@@ -135,7 +135,7 @@ const previewPurchaseOrder = async (quotationId) => {
 
 const createPurchaseOrder = async (data, existingConnection = null) => {
   const { quotationId, mrId: providedMrId, expectedDeliveryDate, notes, poNumber: manualPoNumber, items: manualItems, vendorId, vendor_id } = data;
-  
+
   const connection = existingConnection || await pool.getConnection();
   const shouldManageConnection = !existingConnection;
 
@@ -167,7 +167,7 @@ const createPurchaseOrder = async (data, existingConnection = null) => {
       sales_order_id = quote.sales_order_id;
       actualMrId = providedMrId || quote.mr_id;
       total_amount = parseFloat(quote.grand_total) || parseFloat(quote.total_amount) || 0;
-      
+
       if (!actualExpectedDeliveryDate && quote.valid_until) {
         actualExpectedDeliveryDate = new Date(quote.valid_until).toISOString().split('T')[0];
       }
@@ -207,7 +207,7 @@ const createPurchaseOrder = async (data, existingConnection = null) => {
       // Create PO from Material Request
       const [mr] = await connection.query('SELECT * FROM material_requests WHERE id = ?', [actualMrId]);
       if (!mr.length) throw new Error('Material Request not found');
-      
+
       const mrData = mr[0];
       let planId = null;
       if (mrData.notes && mrData.notes.includes('Generated from Production Plan')) {
@@ -235,7 +235,7 @@ const createPurchaseOrder = async (data, existingConnection = null) => {
         LEFT JOIN (SELECT item_code, MAX(valuation_rate) as valuation_rate FROM stock_balance GROUP BY item_code) sb ON mri.item_code = sb.item_code
         WHERE mri.mr_id = ?
       `, [planId, planId, planId, actualMrId]);
-      
+
       items = mrItems.map(item => {
         const qty = parseFloat(item.quantity) || 0;
         const designQty = parseFloat(item.design_qty) || qty;
@@ -274,14 +274,14 @@ const createPurchaseOrder = async (data, existingConnection = null) => {
           weight_per_unit: item.weight_per_unit || 0
         };
       });
-      
+
       total_amount = items.reduce((sum, item) => Number(sum) + (Number(item.total_amount) || 0), 0);
       // Removed: if (!finalVendorId) throw new Error('Vendor is required for PO from Material Request');
     } else {
       // Manual PO
       if (!finalVendorId) throw new Error('Vendor is required for manual PO');
       if (!manualItems || manualItems.length === 0) throw new Error('Items are required for manual PO');
-      
+
       items = manualItems.map(item => {
         const qty = parseFloat(item.quantity) || 0;
         const designQty = parseFloat(item.design_qty) || qty;
@@ -317,7 +317,7 @@ const createPurchaseOrder = async (data, existingConnection = null) => {
     }
 
     let poNumber = manualPoNumber;
-    
+
     if (!poNumber) {
       poNumber = await generatePONumber();
     }
@@ -343,14 +343,14 @@ const createPurchaseOrder = async (data, existingConnection = null) => {
     );
 
     const poId = result.insertId;
-    
+
     if (actualMrId) {
       await connection.execute(
         'UPDATE material_requests SET linked_po_id = ?, linked_po_number = ?, status = ? WHERE id = ?',
         [poId, poNumber, 'PROCESSING', actualMrId]
       );
     }
-    
+
     let actualTotalAmount = 0;
 
     if (items.length > 0) {
@@ -364,10 +364,10 @@ const createPurchaseOrder = async (data, existingConnection = null) => {
         const sgstPercent = parseFloat(item.sgst_percent) || 0;
         const cgstAmount = parseFloat(item.cgst_amount) || (amount * cgstPercent) / 100;
         const sgstAmount = parseFloat(item.sgst_amount) || (amount * sgstPercent) / 100;
-        
+
         // Force numeric calculation to avoid string concatenation
         const totalItemAmount = Number((amount + cgstAmount + sgstAmount).toFixed(2));
-        
+
         actualTotalAmount = Number((actualTotalAmount + totalItemAmount).toFixed(2));
 
         const correctedItemCode = await getCorrectItemCode(item, connection);
@@ -682,7 +682,7 @@ const getPurchaseOrderById = async (poId) => {
   }
 
   const po = rows[0];
-  
+
   const [items] = await pool.query(
     `SELECT 
       poi.id,
@@ -749,7 +749,7 @@ const getPurchaseOrderById = async (poId) => {
 
 const updatePurchaseOrder = async (poId, payload) => {
   const { status, poNumber, expectedDeliveryDate, notes, items, vendorId } = payload;
-  
+
   const validStatuses = ['PO_REQUEST', 'DRAFT', 'ORDERED', 'SENT', 'ACKNOWLEDGED', 'RECEIVED', 'PARTIALLY_RECEIVED', 'APPROVED', 'PENDING_PAYMENT', 'PAID', 'COMPLETED', 'CLOSED', 'FULFILLED'];
   if (status && !validStatuses.includes(status)) {
     const error = new Error('Invalid status');
@@ -813,14 +813,14 @@ const updatePurchaseOrder = async (poId, payload) => {
         const designQty = parseFloat(item.design_qty) || qty;
         const rate = parseFloat(item.unit_rate) || parseFloat(item.rate) || 0;
         const amount = Number((qty * rate).toFixed(2));
-        
+
         // Default to 18% GST (9% CGST + 9% SGST)
         const cgstPercent = item.cgst_percent || 9;
         const sgstPercent = item.sgst_percent || 9;
         const cgstAmount = Number(((amount * cgstPercent) / 100).toFixed(2));
         const sgstAmount = Number(((amount * sgstPercent) / 100).toFixed(2));
         const totalItemAmount = Number((amount + cgstAmount + sgstAmount).toFixed(2));
-        
+
         totalAmount = Number((totalAmount + totalItemAmount).toFixed(2));
 
         if (item.id) {
@@ -966,7 +966,7 @@ const approvePurchaseOrder = async (poId, userId) => {
 
     const [po] = await connection.query('SELECT mr_id, vendor_id FROM purchase_orders WHERE id = ?', [poId]);
     if (!po.length) throw new Error('Purchase Order not found');
-    
+
     if (!po[0].vendor_id) {
       throw new Error('Cannot approve PO without a vendor. Please edit the PO to assign a vendor first.');
     }
@@ -1079,7 +1079,7 @@ const generatePurchaseOrderPDF = async (poId) => {
 
   const adminCompanyMasterService = require('./adminCompanyMasterService');
   let activeCompany = null;
-  
+
   // 1. If PO is linked to a quotation, check its host_company_id
   if (po.quotation_id) {
     try {
@@ -1103,7 +1103,7 @@ const generatePurchaseOrderPDF = async (poId) => {
       console.error('Error fetching sales order host_company_id:', err);
     }
   }
-  
+
   // 3. Fallback to MR-linked sales order host_company_id
   if (!activeCompany && po.mr_id) {
     try {
@@ -1112,7 +1112,7 @@ const generatePurchaseOrderPDF = async (poId) => {
          FROM material_requests mr 
          JOIN production_plans pp ON mr.plan_id = pp.id 
          JOIN sales_orders so ON pp.sales_order_id = so.id 
-         WHERE mr.id = ? LIMIT 1`, 
+         WHERE mr.id = ? LIMIT 1`,
         [po.mr_id]
       );
       if (mrRow.length > 0 && mrRow[0].host_company_id) {
@@ -1138,7 +1138,7 @@ const generatePurchaseOrderPDF = async (poId) => {
   const hostGSTIN = activeCompany?.gstin || '27AAPCS1193L1ZQ';
   const hostCIN = activeCompany?.cin || 'U29309PN2021PTC201234';
   const hostPAN = activeCompany?.pan || 'N/A';
-  
+
   const fs = require('fs');
   const path = require('path');
   let logoBase64 = null;
@@ -1892,15 +1892,15 @@ const generatePurchaseOrderPDF = async (poId) => {
     const a = ['', 'one ', 'two ', 'three ', 'four ', 'five ', 'six ', 'seven ', 'eight ', 'nine ', 'ten ', 'eleven ', 'twelve ', 'thirteen ', 'fourteen ', 'fifteen ', 'sixteen ', 'seventeen ', 'eighteen ', 'nineteen '];
     const b = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
     const inWords = (num) => {
-        if ((num = num.toString()).length > 9) return 'overflow';
-        let n = ('000000000' + num).substr(-9).match(/^(\d{2})(\d{2})(\d{2})(\d{1})(\d{2})$/);
-        if (!n) return; let str = '';
-        str += (Number(n[1]) != 0) ? (a[Number(n[1])] || b[n[1][0]] + ' ' + a[n[1][1]]) + 'crore ' : '';
-        str += (Number(n[2]) != 0) ? (a[Number(n[2])] || b[n[2][0]] + ' ' + a[n[2][1]]) + 'lakh ' : '';
-        str += (Number(n[3]) != 0) ? (a[Number(n[3])] || b[n[3][0]] + ' ' + a[n[3][1]]) + 'thousand ' : '';
-        str += (Number(n[4]) != 0) ? (a[Number(n[4])] || b[n[4][0]] + ' ' + a[n[4][1]]) + 'hundred ' : '';
-        str += (Number(n[5]) != 0) ? ((str != '') ? 'and ' : '') + (a[Number(n[5])] || b[n[5][0]] + ' ' + a[n[5][1]]) : '';
-        return str.toUpperCase();
+      if ((num = num.toString()).length > 9) return 'overflow';
+      let n = ('000000000' + num).substr(-9).match(/^(\d{2})(\d{2})(\d{2})(\d{1})(\d{2})$/);
+      if (!n) return; let str = '';
+      str += (Number(n[1]) != 0) ? (a[Number(n[1])] || b[n[1][0]] + ' ' + a[n[1][1]]) + 'crore ' : '';
+      str += (Number(n[2]) != 0) ? (a[Number(n[2])] || b[n[2][0]] + ' ' + a[n[2][1]]) + 'lakh ' : '';
+      str += (Number(n[3]) != 0) ? (a[Number(n[3])] || b[n[3][0]] + ' ' + a[n[3][1]]) + 'thousand ' : '';
+      str += (Number(n[4]) != 0) ? (a[Number(n[4])] || b[n[4][0]] + ' ' + a[n[4][1]]) + 'hundred ' : '';
+      str += (Number(n[5]) != 0) ? ((str != '') ? 'and ' : '') + (a[Number(n[5])] || b[n[5][0]] + ' ' + a[n[5][1]]) : '';
+      return str.toUpperCase();
     };
     return inWords(Math.floor(num));
   };
@@ -1958,7 +1958,7 @@ const generatePurchaseOrderPDF = async (poId) => {
       const dQty = parseFloat(i.design_qty);
       const qty = parseFloat(i.quantity);
       const displayQty = (dQty && dQty !== 0) ? dQty : (qty || 0);
-      
+
       return {
         ...i,
         sl_no: idx + 1,
@@ -1996,8 +1996,8 @@ const generatePurchaseOrderPDF = async (poId) => {
   });
   const page = await browser.newPage();
   await page.setContent(html, { waitUntil: 'load' });
-  const pdf = await page.pdf({ 
-    format: 'A4', 
+  const pdf = await page.pdf({
+    format: 'A4',
     landscape: true,
     printBackground: true,
     margin: { top: '8mm', right: '8mm', bottom: '8mm', left: '8mm' }
@@ -2031,7 +2031,7 @@ const sendPurchaseOrderEmail = async (poId, emailData) => {
         const path = require('path');
         const fs = require('fs');
         const absolutePath = path.resolve(process.cwd(), po.invoice_url);
-        
+
         if (fs.existsSync(absolutePath)) {
           const extension = path.extname(po.invoice_url) || '.pdf';
           attachments.push({
@@ -2043,7 +2043,7 @@ const sendPurchaseOrderEmail = async (poId, emailData) => {
     }
 
     const emailResult = await emailService.sendEmail(to, subject, message, attachments);
-    
+
     await pool.execute(
       'UPDATE purchase_orders SET status = ? WHERE id = ?',
       ['SENT', poId]
