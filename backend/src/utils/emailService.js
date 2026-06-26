@@ -84,7 +84,7 @@ const generateQuotationHTML = async (clientName, items, totalAmount, notes, clie
 
       const totalLineStr = isRejected ?
         '<span style="color: #dc2626; font-weight: bold;">REJECTED</span>' :
-        `₹${lineTotalWithTax.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+        `₹${lineTotalBase.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
       
       // PDF: Always use solid border for main rows (child parts are hidden)
       const mainItemRow = `
@@ -160,7 +160,7 @@ const generateQuotationHTML = async (clientName, items, totalAmount, notes, clie
 
   const discountRatio = subTotal > 0 ? (subTotal - discountAmount) / subTotal : 1;
   const finalTax = totalTax * discountRatio;
-  const grandTotal = (subTotal - discountAmount) + finalTax;
+  const grandTotal = subTotal - discountAmount;
 
   const html = `
     <!DOCTYPE html>
@@ -230,7 +230,7 @@ const generateQuotationHTML = async (clientName, items, totalAmount, notes, clie
             <th style="width: 12%;">HSN Code</th>
             <th style="width: 10%;">Qty</th>
             <th style="width: 17%;">Unit Rate (₹)</th>
-            <th style="width: 18%;">Total (Incl. GST)</th>
+            <th style="width: 18%;">Total (₹)</th>
           </tr>
         </thead>
         <tbody>
@@ -240,8 +240,8 @@ const generateQuotationHTML = async (clientName, items, totalAmount, notes, clie
 
       <table class="totals-table">
         <tr style="background-color: #f8fafc; border-top: 2px solid #e2e8f0;">
-          <td style="font-weight: bold; font-size: 14px; color: #1e3a8a;">Grand Total (GST Applied)</td>
-          <td style="text-align: right; font-weight: bold; font-size: 14px; color: #059669;">₹${(subTotal + totalTax).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+          <td style="font-weight: bold; font-size: 14px; color: #1e3a8a;">Grand Total</td>
+          <td style="text-align: right; font-weight: bold; font-size: 14px; color: #059669;">₹${grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
         </tr>
       </table>
 
