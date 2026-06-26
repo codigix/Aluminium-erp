@@ -2112,6 +2112,16 @@ const ClientQuotations = () => {
               handleViewReceived(group);
             }
           }}
+          customFilter={(item, searchLower) => {
+            const clientName = String(item.company_name || '').toLowerCase();
+            const projectName = String(item.project_name || '').toLowerCase();
+            const idStr = String(item.display_id || item.id || '');
+            const qrtNoPadded = `qrt-${idStr.padStart(4, '0')}`;
+            const qrtNoRaw = `qrt-${idStr}`;
+            return clientName.includes(searchLower) ||
+                   projectName.includes(searchLower) ||
+                   (item.type !== 'PENDING' && (qrtNoPadded.includes(searchLower) || qrtNoRaw.includes(searchLower)));
+          }}
           emptyMessage="No quotations found"
           disableRowClickExpansion={true}
           className=""
