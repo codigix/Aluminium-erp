@@ -1537,7 +1537,7 @@ const CustomerDrawing = () => {
         const ext = file.name.toLowerCase().split('.').pop();
         const isValid = file.type === 'application/pdf' ||
           file.type.startsWith('image/') ||
-          ['pdf', 'jpg', 'jpeg', 'png', 'webp'].includes(ext);
+          ['pdf', 'jpg', 'jpeg', 'png', 'webp', 'dxf', 'igs', 'stp', 'htp', 'prk'].includes(ext);
         if (isValid) {
           validFiles.push(file);
         } else {
@@ -1546,7 +1546,7 @@ const CustomerDrawing = () => {
       }
 
       if (invalidFiles.length > 0) {
-        errorToast(`Unsupported file types: ${invalidFiles.join(', ')}. Only PDF and images (.jpg, .jpeg, .png, .webp) are allowed.`);
+        errorToast(`Unsupported file types: ${invalidFiles.join(', ')}. Only PDF, images (.jpg, .jpeg, .png, .webp), and CAD files (.dxf, .igs, .stp, .htp, .prk) are allowed.`);
       }
 
       if (validFiles.length > 0) {
@@ -3480,7 +3480,7 @@ const CustomerDrawing = () => {
                         type="file"
                         id="attachmentsInput"
                         multiple
-                        accept=".pdf,.jpg,.jpeg,.png,.webp,image/*,application/pdf"
+                        accept=".pdf,.jpg,.jpeg,.png,.webp,.dxf,.igs,.stp,.htp,.prk,image/*,application/pdf"
                         onChange={(e) => handleManualFileChange(e, activeDrawing.id)}
                         className="hidden"
                       />
@@ -3490,7 +3490,7 @@ const CustomerDrawing = () => {
                         </svg>
                       </div>
                       <p className="text-xs font-semibold text-slate-700">Drag & drop or click to upload</p>
-                      <p className="text-[10px] text-slate-400 mt-1">Supports PDF drawings and image files up to 10MB each</p>
+                      <p className="text-[10px] text-slate-400 mt-1">Supports PDF drawings, image files, and CAD files up to 10MB each</p>
                     </div>
                   )}
                 </div>

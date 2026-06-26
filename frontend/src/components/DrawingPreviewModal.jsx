@@ -25,7 +25,9 @@ const DrawingPreviewModal = ({ isOpen, onClose, drawing }) => {
     type = 'image';
   } else if (serverFileType === 'PDF' || extension === 'pdf') {
     type = 'pdf';
-  } else if (['DXF', 'DWG'].includes(serverFileType) || ['dxf', 'dwg'].includes(extension)) {
+  } else if (['DXF', 'IGS', 'STP', 'HTP', 'PRK'].includes(serverFileType) || ['dxf', 'igs', 'stp', 'htp', 'prk'].includes(extension)) {
+    type = 'nonPreviewableCad';
+  } else if (serverFileType === 'DWG' || extension === 'dwg') {
     type = 'cad';
   }
 
@@ -197,6 +199,26 @@ const DrawingPreviewModal = ({ isOpen, onClose, drawing }) => {
                   <div className="bg-white/90 backdrop-blur p-1.5 rounded  shadow-lg border border-slate-200 pointer-events-auto">
                     <p className="text-xs  text-slate-500">CAD Preview by ShareCAD. <a href={previewFile.url} download className="text-indigo-600 underline">Download File</a></p>
                   </div>
+                </div>
+              </div>
+            ) : previewFile.type === 'nonPreviewableCad' ? (
+              <div className="w-full h-full flex items-center justify-center p-6 text-center">
+                <div className="max-w-md p-6 bg-white rounded border border-slate-200 shadow-sm">
+                  <div className="w-12 h-12 bg-indigo-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <FileText className="w-6 h-6 text-indigo-600" />
+                  </div>
+                  <h3 className="text-slate-900 font-bold text-sm mb-2">CAD File Preview</h3>
+                  <p className="text-slate-600 text-xs mb-6 leading-relaxed">
+                    This CAD file cannot be previewed in the browser. Please download the file and open it using compatible CAD software (such as AutoCAD, SolidWorks, Creo, CATIA, or similar) on a suitable workstation.
+                  </p>
+                  <a
+                    href={previewFile.url}
+                    download
+                    className="inline-flex items-center gap-2 px-6 py-2 bg-indigo-600 text-white rounded text-xs font-semibold hover:bg-indigo-700 transition-all shadow-md active:scale-95"
+                  >
+                    <Download size={14} />
+                    Download File
+                  </a>
                 </div>
               </div>
             ) : (
