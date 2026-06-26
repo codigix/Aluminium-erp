@@ -17,9 +17,9 @@ const DrawingPreviewModal = ({ isOpen, onClose, drawing }) => {
   const activeFilePath = files[activeIdx] || '';
   const fileUrl = getFileUrl(activeFilePath);
   const extension = activeFilePath.split('?')[0].toLowerCase().split('.').pop();
-  
+
   const serverFileType = (drawing.file_type || '').toUpperCase();
-  
+
   let type = 'other';
   if (['JPG', 'JPEG', 'PNG', 'GIF', 'WEBP', 'BMP'].includes(serverFileType) || ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(extension)) {
     type = 'image';
@@ -50,7 +50,7 @@ const DrawingPreviewModal = ({ isOpen, onClose, drawing }) => {
 
   // PDF Viewer URL (Google Docs viewer for better compatibility)
   const pdfViewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(previewFile.url)}&embedded=true`;
-  
+
   // CAD Viewer (ShareCAD.org free viewer)
   const cadViewerUrl = `https://sharecad.org/cadframe/load?url=${encodeURIComponent(previewFile.url)}`;
 
@@ -80,31 +80,31 @@ const DrawingPreviewModal = ({ isOpen, onClose, drawing }) => {
           </div>
 
           <div className="grid grid-cols-1 gap-2">
-            <DetailItem 
-              icon={Package} 
-              label="Description" 
-              value={drawing.description} 
+            <DetailItem
+              icon={Package}
+              label="Description"
+              value={drawing.description}
             />
-            <DetailItem 
-              icon={User} 
-              label="Client / Vendor" 
-              value={drawing.client_name} 
+            <DetailItem
+              icon={User}
+              label="Client / Vendor"
+              value={drawing.client_name}
             />
-            <DetailItem 
-              icon={Hash} 
-              label="Quantity" 
-              value={drawing.qty} 
+            <DetailItem
+              icon={Hash}
+              label="Quantity"
+              value={drawing.qty}
             />
-            <DetailItem 
-              icon={Calendar} 
-              label="Updated On" 
-              value={new Date(drawing.updated_at || drawing.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })} 
+            <DetailItem
+              icon={Calendar}
+              label="Updated On"
+              value={new Date(drawing.updated_at || drawing.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
             />
           </div>
 
           <div className="mt-auto pt-2 flex flex-col gap-2">
-            <a 
-              href={previewFile.url} 
+            <a
+              href={previewFile.url}
               target="_blank"
               rel="noopener noreferrer"
               className="w-full flex items-center justify-center gap-2 py-2 bg-slate-900 text-white rounded  text-xs  hover:bg-slate-800 transition-all shadow-sm"
@@ -112,9 +112,9 @@ const DrawingPreviewModal = ({ isOpen, onClose, drawing }) => {
               <ExternalLink size={12} />
               Open New Tab
             </a>
-            <a 
-              href={previewFile.url} 
-              download 
+            <a
+              href={previewFile.url}
+              download
               className="w-full flex items-center justify-center gap-2 py-2 bg-white border border-slate-200 text-indigo-600 rounded  text-xs  hover:bg-slate-50 transition-all"
             >
               <Download size={12} />
@@ -136,11 +136,10 @@ const DrawingPreviewModal = ({ isOpen, onClose, drawing }) => {
                     key={idx}
                     type="button"
                     onClick={() => setActiveIdx(idx)}
-                    className={`px-2 py-0.5 text-[10px] rounded transition-all truncate max-w-[150px] font-medium border ${
-                      isActive
+                    className={`px-2 py-0.5 text-[10px] rounded transition-all truncate max-w-[150px] font-medium border ${isActive
                         ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm font-semibold'
                         : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                    }`}
+                      }`}
                     title={name}
                   >
                     {name}
@@ -149,88 +148,88 @@ const DrawingPreviewModal = ({ isOpen, onClose, drawing }) => {
               })}
             </div>
           )}
-          
+
           <div className="flex-1 relative w-full h-full overflow-hidden">
             {previewFile.type === 'image' ? (
-            <div className="w-full h-full flex items-center justify-center p-2">
-              <img 
-                src={previewFile.url} 
-                alt={previewFile.name} 
-                crossOrigin="anonymous"
-                className="max-w-full max-h-full object-contain shadow-lg rounded transition-transform duration-500 group-hover:scale-[1.01]"
-                onError={(e) => {
-                  console.error('Image preview error:', e);
-                  e.target.onerror = null;
-                  e.target.style.display = 'none';
-                }}
-              />
-            </div>
-          ) : previewFile.type === 'pdf' ? (
-            <div className="w-full h-full relative">
-              <object
-                data={previewFile.url}
-                type="application/pdf"
-                className="w-full h-full border-0 bg-white"
-              >
-                <iframe 
-                  src={pdfViewerUrl} 
-                  key={previewFile.url}
-                  title={previewFile.name}
-                  className="w-full h-full border-0 bg-white"
-                  loading="lazy"
+              <div className="w-full h-full flex items-center justify-center p-2">
+                <img
+                  src={previewFile.url}
+                  alt={previewFile.name}
+                  crossOrigin="anonymous"
+                  className="max-w-full max-h-full object-contain shadow-lg rounded transition-transform duration-500 group-hover:scale-[1.01]"
+                  onError={(e) => {
+                    console.error('Image preview error:', e);
+                    e.target.onerror = null;
+                    e.target.style.display = 'none';
+                  }}
                 />
-              </object>
-              <div className="absolute inset-0 pointer-events-none  group-hover:opacity-100 transition-opacity flex items-end justify-center pb-2">
-                 <div className="bg-white/90 backdrop-blur p-1.5 rounded  shadow-lg border border-slate-200 pointer-events-auto">
-                    <p className="text-xs  text-slate-500">PDF issue? <a href={previewFile.url} target="_blank" rel="noreferrer" className="text-indigo-600 underline">Open directly</a></p>
-                 </div>
               </div>
-            </div>
-          ) : previewFile.type === 'cad' ? (
-            <div className="w-full h-full relative">
-               <iframe 
+            ) : previewFile.type === 'pdf' ? (
+              <div className="w-full h-full relative">
+                <object
+                  data={previewFile.url}
+                  type="application/pdf"
+                  className="w-full h-full border-0 bg-white"
+                >
+                  <iframe
+                    src={pdfViewerUrl}
+                    key={previewFile.url}
+                    title={previewFile.name}
+                    className="w-full h-full border-0 bg-white"
+                    loading="lazy"
+                  />
+                </object>
+                <div className="absolute inset-0 pointer-events-none  group-hover:opacity-100 transition-opacity flex items-end justify-center pb-2">
+                  <div className="bg-white/90 backdrop-blur p-1.5 rounded  shadow-lg border border-slate-200 pointer-events-auto">
+                    <p className="text-xs  text-slate-500">PDF issue? <a href={previewFile.url} target="_blank" rel="noreferrer" className="text-indigo-600 underline">Open directly</a></p>
+                  </div>
+                </div>
+              </div>
+            ) : previewFile.type === 'cad' ? (
+              <div className="w-full h-full relative">
+                <iframe
                   src={cadViewerUrl}
                   title={previewFile.name}
                   className="w-full h-full border-0 bg-white"
                   loading="lazy"
                 />
                 <div className="absolute inset-0 pointer-events-none  group-hover:opacity-100 transition-opacity flex items-end justify-center pb-2">
-                 <div className="bg-white/90 backdrop-blur p-1.5 rounded  shadow-lg border border-slate-200 pointer-events-auto">
+                  <div className="bg-white/90 backdrop-blur p-1.5 rounded  shadow-lg border border-slate-200 pointer-events-auto">
                     <p className="text-xs  text-slate-500">CAD Preview by ShareCAD. <a href={previewFile.url} download className="text-indigo-600 underline">Download File</a></p>
-                 </div>
-              </div>
-            </div>
-          ) : (
-            <div className="w-full h-full flex items-center justify-center p-2">
-              <div className="text-center p-2 bg-white rounded border border-slate-100 shadow-sm max-w-xs">
-                <div className="w-5 h-5 bg-indigo-50 rounded  flex items-center justify-center mx-auto mb-4">
-                  <FileText className="w-3 h-3 text-indigo-500 opacity-60" />
+                  </div>
                 </div>
-                <h3 className="text-slate-900  text-sm mb-1">Preview Not Available</h3>
-                <p className="text-slate-500 text-xs mb-4 leading-relaxed">Format (.{previewFile.extension}) cannot be rendered directly.</p>
-                <a 
-                  href={previewFile.url} 
-                  download 
-                  className="inline-flex items-center gap-2 px-6 py-2 bg-indigo-600 text-white rounded  text-xs  hover:bg-indigo-700 transition-all  shadow-indigo-100"
-                >
-                  <Download size={14} />
-                  Download
-                </a>
               </div>
-            </div>
-          )}
+            ) : (
+              <div className="w-full h-full flex items-center justify-center p-2">
+                <div className="text-center p-2 bg-white rounded border border-slate-100 shadow-sm max-w-xs">
+                  <div className="w-5 h-5 bg-indigo-50 rounded  flex items-center justify-center mx-auto mb-4">
+                    <FileText className="w-3 h-3 text-indigo-500 opacity-60" />
+                  </div>
+                  <h3 className="text-slate-900  text-sm mb-1">Preview Not Available</h3>
+                  <p className="text-slate-500 text-xs mb-4 leading-relaxed">Format (.{previewFile.extension}) cannot be rendered directly.</p>
+                  <a
+                    href={previewFile.url}
+                    download
+                    className="inline-flex items-center gap-2 px-6 py-2 bg-indigo-600 text-white rounded  text-xs  hover:bg-indigo-700 transition-all  shadow-indigo-100"
+                  >
+                    <Download size={14} />
+                    Download
+                  </a>
+                </div>
+              </div>
+            )}
 
-          <div className="absolute top-2 right-2 flex gap-2  group-hover:opacity-100 transition-opacity duration-300">
-             <button
+            <div className="absolute top-2 right-2 flex gap-2  group-hover:opacity-100 transition-opacity duration-300">
+              <button
                 onClick={onClose}
                 className="p-1.5 bg-white/80 backdrop-blur-md text-slate-600 rounded  hover:bg-white  transition-all"
                 title="Close Preview"
-             >
+              >
                 <X size={14} />
-             </button>
+              </button>
+            </div>
           </div>
         </div>
-      </div>
       </div>
     </Modal>
   );

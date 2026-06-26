@@ -63,7 +63,7 @@ const updateDrawing = async (req, res, next) => {
       delivery_date,
       existingFiles
     } = req.body;
-    
+
     // Support both multiple files (upload.fields) and single file (upload.single)
     const filesArray = req.files?.drawing_pdf || (req.file ? [req.file] : []);
     const newFilePaths = filesArray.map(f => `uploads/${f.filename}`);
@@ -155,9 +155,9 @@ const createDrawing = async (req, res, next) => {
 
     // Use absolute path for reading the file with XLSX
     const absoluteExcelPath = fileName ? path.join(uploadsPath, fileName) : null;
-    
+
     const isExcel = fileName && (fileType === 'XLSX' || fileType === 'XLS');
-    
+
     let dbFilePath = null;
     let finalFileType = fileType;
 
@@ -166,7 +166,7 @@ const createDrawing = async (req, res, next) => {
     } else {
       const filePaths = filesArray.map(f => `uploads/${f.filename}`);
       dbFilePath = filePaths.join(',') || '';
-      
+
       if (filesArray.length === 1) {
         finalFileType = path.extname(excelFile.filename).replace('.', '').toUpperCase();
       } else if (filesArray.length > 1) {
@@ -292,10 +292,10 @@ const createDrawing = async (req, res, next) => {
       salesOrderId: salesOrderId ? parseInt(salesOrderId) : null
     });
 
-    res.status(201).json({ 
-      message: 'Customer drawing uploaded successfully', 
-      id: result.drawingId, 
-      salesOrderId: result.salesOrderId 
+    res.status(201).json({
+      message: 'Customer drawing uploaded successfully',
+      id: result.drawingId,
+      salesOrderId: result.salesOrderId
     });
   } catch (error) {
     next(error);

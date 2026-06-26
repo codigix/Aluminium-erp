@@ -1043,7 +1043,12 @@ const CustomerDrawing = () => {
       .required('Phone number is required'),
     email_address: Yup.string().email('Invalid email address').required('Email address is required'),
     customer_type: Yup.string().nullable(),
-    gstin: Yup.string().nullable(),
+    gstin: Yup.string()
+      .matches(/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/, {
+        message: 'Invalid GSTIN format',
+        excludeEmptyString: true
+      })
+      .nullable(),
     city: Yup.string().nullable(),
     state: Yup.string().nullable(),
     billing_address: Yup.string().required('Billing Address is required'),
@@ -1292,7 +1297,7 @@ const CustomerDrawing = () => {
   const hasRealErrors = () => {
     const errorKeys = Object.keys(formik.errors);
     if (errorKeys.length === 0) return false;
-    
+
     for (const key of errorKeys) {
       const errorVal = formik.errors[key];
       if (Array.isArray(errorVal)) {
@@ -1338,7 +1343,7 @@ const CustomerDrawing = () => {
           const drawing = formik.values.manualDrawings[i];
           if (!drawing.drawing_no?.trim()) reasons.push(`Drawing # (Row ${i + 1})`);
           if (!drawing.drawing_type?.trim()) reasons.push(`Type (Row ${i + 1})`);
-          
+
           // Check if there is at least one file (either new or existing)
           const newFilesCount = drawing.files?.length || 0;
           const existingFilesCount = drawing.existingFiles?.length || 0;
@@ -1347,11 +1352,6 @@ const CustomerDrawing = () => {
           }
         }
       }
-    }
-
-    // 3. Check for any validation errors from Formik
-    if (hasRealErrors()) {
-      reasons.push('Input formats');
     }
 
     return reasons;
