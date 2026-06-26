@@ -86,48 +86,24 @@ const generateQuotationHTML = async (clientName, items, totalAmount, notes, clie
         '<span style="color: #dc2626; font-weight: bold;">REJECTED</span>' : 
         `₹${lineTotalWithTax.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
       
-      const hasSubs = (item.sub_assemblies || []).length > 0;
-      const borderBottomStyle = hasSubs ? 'border-bottom: hidden;' : 'border-bottom: 1px solid #cbd5e1;';
-
+      // PDF: Always use solid border for main rows (child parts are hidden)
       const mainItemRow = `
       <tr>
-        <td style="padding: 10px; border: 1px solid #cbd5e1; ${borderBottomStyle} text-align: center;">${idx + 1}</td>
-        <td style="padding: 10px; border: 1px solid #cbd5e1; ${borderBottomStyle}">
+        <td style="padding: 10px; border: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; text-align: center;">${idx + 1}</td>
+        <td style="padding: 10px; border: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1;">
           <div style="font-weight: bold; color: #000;">${item.drawing_no || '—'}</div>
           ${item.description ? `<div style="font-weight: bold; color: #000; font-size: 12px; text-transform: uppercase; margin-top: 4px;">${item.description}</div>` : ''}
           ${isRejected ? `<div style="font-size: 10px; color: #dc2626; margin-top: 4px; font-weight: bold;">Reason: ${item.rejection_reason || 'Not specified'}</div>` : ''}
         </td>
-        <td style="padding: 10px; border: 1px solid #cbd5e1; ${borderBottomStyle} text-align: center;">${item.hsn_code || '—'}</td>
-        <td style="padding: 10px; border: 1px solid #cbd5e1; ${borderBottomStyle} text-align: center;">${quantity}</td>
-        <td style="padding: 10px; border: 1px solid #cbd5e1; ${borderBottomStyle} text-align: right;">${unitPriceStr}</td>
-        <td style="padding: 10px; border: 1px solid #cbd5e1; ${borderBottomStyle} text-align: center;">${gstRate}%</td>
-        <td style="padding: 10px; border: 1px solid #cbd5e1; ${borderBottomStyle} text-align: right; font-weight: bold;">${totalLineStr}</td>
+        <td style="padding: 10px; border: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; text-align: center;">${item.hsn_code || '—'}</td>
+        <td style="padding: 10px; border: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; text-align: center;">${quantity}</td>
+        <td style="padding: 10px; border: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; text-align: right;">${unitPriceStr}</td>
+        <td style="padding: 10px; border: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; text-align: right; font-weight: bold;">${totalLineStr}</td>
       </tr>
     `;
 
-      const subAssembliesHTML = (item.sub_assemblies || []).map((sa, saIdx, saArr) => {
-        const saQty = (parseFloat(sa.quantity || 0) * (parseFloat(item.quantity) || 1));
-        const saRate = parseFloat(sa.rate || sa.bom_cost || 0);
-        const saTotal = saQty * saRate;
-        const isLastSA = saIdx === saArr.length - 1;
-        const saBorderBottomStyle = isLastSA ? 'border-bottom: 1px solid #cbd5e1;' : 'border-bottom: hidden;';
-        
-        return `
-        <tr class="sub-assembly-row">
-          <td style="padding: 8px; border: 1px solid #cbd5e1; border-top: hidden; ${saBorderBottomStyle} text-align: center;"></td>
-          <td style="padding: 8px; border: 1px solid #cbd5e1; border-top: hidden; ${saBorderBottomStyle} padding-left: 20px;">
-            <div style="font-weight: normal; color: #333; font-size: 11px;">${sa.description || 'Sub-assembly'} (${sa.drawing_no || sa.item_code || '—'})</div>
-          </td>
-          <td style="padding: 8px; border: 1px solid #cbd5e1; border-top: hidden; ${saBorderBottomStyle} text-align: center;"></td>
-          <td style="padding: 8px; border: 1px solid #cbd5e1; border-top: hidden; ${saBorderBottomStyle} text-align: center;">${saQty.toFixed(3)}</td>
-          <td style="padding: 8px; border: 1px solid #cbd5e1; border-top: hidden; ${saBorderBottomStyle} text-align: right;">₹${saTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-          <td style="padding: 8px; border: 1px solid #cbd5e1; border-top: hidden; ${saBorderBottomStyle} text-align: center;"></td>
-          <td style="padding: 8px; border: 1px solid #cbd5e1; border-top: hidden; ${saBorderBottomStyle} text-align: center;"></td>
-        </tr>
-        `;
-      }).join('');
-
-      return mainItemRow + subAssembliesHTML;
+      // Child part rows are hidden in the PDF (internal use only)
+      return mainItemRow;
     })
     .join('');
 
@@ -250,12 +226,11 @@ const generateQuotationHTML = async (clientName, items, totalAmount, notes, clie
         <thead>
           <tr>
             <th style="width: 5%;">Sr. No</th>
-            <th style="width: 35%;">Description / Drawing No</th>
-            <th style="width: 10%;">HSN Code</th>
-            <th style="width: 8%;">Qty</th>
-            <th style="width: 15%;">Unit Rate (₹)</th>
-            <th style="width: 10%;">GST %</th>
-            <th style="width: 17%;">Total (Incl. GST)</th>
+            <th style="width: 38%;">Description / Drawing No</th>
+            <th style="width: 12%;">HSN Code</th>
+            <th style="width: 10%;">Qty</th>
+            <th style="width: 17%;">Unit Rate (₹)</th>
+            <th style="width: 18%;">Total (Incl. GST)</th>
           </tr>
         </thead>
         <tbody>
@@ -264,26 +239,8 @@ const generateQuotationHTML = async (clientName, items, totalAmount, notes, clie
       </table>
 
       <table class="totals-table">
-        <tr>
-          <td style="font-weight: bold; color: #334155;">Sub Total (Before Tax)</td>
-          <td style="text-align: right; font-weight: bold; color: #1e293b;">₹${subTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-        </tr>
-        <tr>
-          <td style="color: #2563eb; font-weight: medium;">Total Profit</td>
-          <td style="text-align: right; color: #1e40af; font-weight: bold;">₹${totalProfit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-        </tr>
-        ${totalOverride > 0 ? `
-        <tr>
-          <td style="color: #4b5563; font-weight: medium;">Total Overheads</td>
-          <td style="text-align: right; color: #1f2937; font-weight: bold;">₹${totalOverride.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-        </tr>
-        ` : ''}
-        <tr>
-          <td style="color: #64748b;">Tax (GST)</td>
-          <td style="text-align: right; color: #334155;">₹${totalTax.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-        </tr>
         <tr style="background-color: #f8fafc; border-top: 2px solid #e2e8f0;">
-          <td style="font-weight: bold; font-size: 14px; color: #1e3a8a;">Grand Total</td>
+          <td style="font-weight: bold; font-size: 14px; color: #1e3a8a;">Grand Total (GST Applied)</td>
           <td style="text-align: right; font-weight: bold; font-size: 14px; color: #059669;">₹${(subTotal + totalTax).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
         </tr>
       </table>
