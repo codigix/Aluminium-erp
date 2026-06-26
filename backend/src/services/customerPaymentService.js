@@ -37,7 +37,7 @@ const recordPaymentReceived = async (payload) => {
   } = payload;
 
   const receiptNo = await generatePaymentReceiptNo();
-  
+
   // Logic to handle bank account: either a numeric ID from bank_accounts or a manual string
   let bankAccountId = null;
   let actualManualBankAccount = null;
@@ -463,7 +463,7 @@ const deletePayment = async (paymentId) => {
 
 const generateCustomerPaymentReceiptPDF = async (paymentId) => {
   const payment = await getPaymentReceivedById(paymentId);
-  
+
   const [customerRows] = await pool.query(
     `SELECT 
       c.*,
@@ -681,8 +681,8 @@ const generateCustomerPaymentReceiptPDF = async (paymentId) => {
   });
   const page = await browser.newPage();
   await page.setContent(html, { waitUntil: 'networkidle0' });
-  const pdf = await page.pdf({ 
-    format: 'A4', 
+  const pdf = await page.pdf({
+    format: 'A4',
     printBackground: true,
     margin: { top: '20px', right: '20px', bottom: '20px', left: '20px' }
   });
@@ -693,7 +693,7 @@ const generateCustomerPaymentReceiptPDF = async (paymentId) => {
 
 const sendCustomerPaymentReceiptEmail = async (paymentId, emailData = {}) => {
   const payment = await getPaymentReceivedById(paymentId);
-  
+
   const [customerRows] = await pool.query(
     `SELECT c.company_name, con.email 
      FROM companies c 
@@ -737,7 +737,7 @@ const sendCustomerInvoiceEmail = async (id, payload = {}) => {
   let recipientEmail = to;
   let companyName = '';
   let soNumber = '';
-  
+
   if (source === 'DIRECT_ORDER') {
     const [rows] = await pool.query(
       `SELECT o.order_no, c.company_name, con.email
@@ -792,7 +792,7 @@ SPTECHPIONEER PVT LTD`;
       const salesOrderService = require('./salesOrderService');
       pdfBuffer = await salesOrderService.generateSalesOrderPDF(id);
     }
-    
+
     attachments.push({
       filename: `Invoice-${soNumber}.pdf`,
       content: pdfBuffer

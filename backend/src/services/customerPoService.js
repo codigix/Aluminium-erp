@@ -9,22 +9,22 @@ const cleanAddress = (addr) => {
   const parts = addr.split(/[\n\r,]+/);
   const seen = new Set();
   const uniqueParts = [];
-  
+
   for (let part of parts) {
     const trimmed = part.trim();
     if (!trimmed) continue;
-    
+
     // Filter out standard placeholders
     const upper = trimmed.toUpperCase();
     if (upper === 'N/A' || upper === '—' || upper === '-') continue;
-    
+
     const lower = trimmed.toLowerCase();
     if (!seen.has(lower)) {
       seen.add(lower);
       uniqueParts.push(trimmed);
     }
   }
-  
+
   return uniqueParts.join(', ') || 'N/A';
 };
 
@@ -49,7 +49,7 @@ const calculateAmounts = items => {
 const numberToWords = (num) => {
   const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
   const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
-  
+
   const convert = (n) => {
     if (n < 20) return ones[n];
     if (n < 100) return tens[Math.floor(n / 10)] + (n % 10 !== 0 ? ' ' + ones[n % 10] : '');
@@ -78,7 +78,7 @@ const numberToWords = (num) => {
 
   const amount = Math.floor(num);
   const paisa = Math.round((num - amount) * 100);
-  
+
   let result = 'INR ' + formatWords(amount) + ' Only';
   if (paisa > 0) {
     result = 'INR ' + formatWords(amount) + ' and ' + formatWords(paisa) + ' Paisa Only';
@@ -272,12 +272,12 @@ const getCustomerPoById = async id => {
   const billing = companyDetails?.addresses?.find(a => a.address_type === 'BILLING') || {};
   const shipping = companyDetails?.addresses?.find(a => a.address_type === 'SHIPPING') || {};
   const billingContact = companyDetails?.contacts?.find(c => c.contact_type === 'ACCOUNTS') ||
-                         companyDetails?.contacts?.find(c => c.contact_type === 'PRIMARY') ||
-                         companyDetails?.contacts?.[0] || {};
+    companyDetails?.contacts?.find(c => c.contact_type === 'PRIMARY') ||
+    companyDetails?.contacts?.[0] || {};
   const shippingContact = companyDetails?.contacts?.find(c => c.contact_type === 'PURCHASE') ||
-                          companyDetails?.contacts?.find(c => c.contact_type === 'TECHNICAL') ||
-                          companyDetails?.contacts?.find(c => c.contact_type === 'PRIMARY') ||
-                          companyDetails?.contacts?.[0] || {};
+    companyDetails?.contacts?.find(c => c.contact_type === 'TECHNICAL') ||
+    companyDetails?.contacts?.find(c => c.contact_type === 'PRIMARY') ||
+    companyDetails?.contacts?.[0] || {};
 
   // Format billing address
   let billingAddrParts = [
@@ -429,9 +429,9 @@ const getCustomerPoById = async id => {
 
     // 2. Fallback to dynamic BOM fetching ONLY for legacy records that have NO stored sub-assemblies
     // and are clearly Finished Goods.
-    const isFG = (item.item_code || '').startsWith('FG-') || 
-                 (item.drawing_no && item.drawing_no !== '—');
-    
+    const isFG = (item.item_code || '').startsWith('FG-') ||
+      (item.drawing_no && item.drawing_no !== '—');
+
     if (isFG && storedSA.length === 0) {
       // Check if we already have some sub-assemblies for other items in this PO. 
       // If we do, it means this is a modern record and we should NOT fallback.
@@ -445,8 +445,8 @@ const getCustomerPoById = async id => {
       }
 
       const sub_assemblies = await bomService.getItemComponents(null, item.item_code, item.drawing_no);
-      return { 
-        ...item, 
+      return {
+        ...item,
         dispatched_qty,
         sub_assemblies: sub_assemblies.map(sa => ({
           drawingNo: sa.drawing_no || sa.component_code,
@@ -610,7 +610,7 @@ const deleteCustomerPo = async id => {
 
     // Delete items first
     await connection.execute('DELETE FROM customer_po_items WHERE customer_po_id = ?', [id]);
-    
+
     // Unlink sales orders instead of deleting them (which would cascade delete quotation requests, drawings, BOMs, etc.)
     await connection.execute('UPDATE sales_orders SET customer_po_id = NULL WHERE customer_po_id = ?', [id]);
 
@@ -952,7 +952,7 @@ const generateCustomerPoPDF = async (poId, currentUser = null, includeDispatchSt
       const remainingQty = Math.max(originalQty - dispatched, 0);
       const rate = parseFloat(item.rate) || 0;
       const basicAmount = remainingQty * rate;
-      
+
       const cgstAmount = basicAmount * ((parseFloat(item.cgst_percent) || 0) / 100);
       const sgstAmount = basicAmount * ((parseFloat(item.sgst_percent) || 0) / 100);
       const igstAmount = basicAmount * ((parseFloat(item.igst_percent) || 0) / 100);
@@ -1802,15 +1802,15 @@ const generateCustomerPoPDF = async (poId, currentUser = null, includeDispatchSt
     const a = ['', 'one ', 'two ', 'three ', 'four ', 'five ', 'six ', 'seven ', 'eight ', 'nine ', 'ten ', 'eleven ', 'twelve ', 'thirteen ', 'fourteen ', 'fifteen ', 'sixteen ', 'seventeen ', 'eighteen ', 'nineteen '];
     const b = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
     const inWords = (num) => {
-        if ((num = num.toString()).length > 9) return 'overflow';
-        let n = ('000000000' + num).substr(-9).match(/^(\d{2})(\d{2})(\d{2})(\d{1})(\d{2})$/);
-        if (!n) return; let str = '';
-        str += (Number(n[1]) != 0) ? (a[Number(n[1])] || b[n[1][0]] + ' ' + a[n[1][1]]) + 'crore ' : '';
-        str += (Number(n[2]) != 0) ? (a[Number(n[2])] || b[n[2][0]] + ' ' + a[n[2][1]]) + 'lakh ' : '';
-        str += (Number(n[3]) != 0) ? (a[Number(n[3])] || b[n[3][0]] + ' ' + a[n[3][1]]) + 'thousand ' : '';
-        str += (Number(n[4]) != 0) ? (a[Number(n[4])] || b[n[4][0]] + ' ' + a[n[4][1]]) + 'hundred ' : '';
-        str += (Number(n[5]) != 0) ? ((str != '') ? 'and ' : '') + (a[Number(n[5])] || b[n[5][0]] + ' ' + a[n[5][1]]) : '';
-        return str.toUpperCase();
+      if ((num = num.toString()).length > 9) return 'overflow';
+      let n = ('000000000' + num).substr(-9).match(/^(\d{2})(\d{2})(\d{2})(\d{1})(\d{2})$/);
+      if (!n) return; let str = '';
+      str += (Number(n[1]) != 0) ? (a[Number(n[1])] || b[n[1][0]] + ' ' + a[n[1][1]]) + 'crore ' : '';
+      str += (Number(n[2]) != 0) ? (a[Number(n[2])] || b[n[2][0]] + ' ' + a[n[2][1]]) + 'lakh ' : '';
+      str += (Number(n[3]) != 0) ? (a[Number(n[3])] || b[n[3][0]] + ' ' + a[n[3][1]]) + 'thousand ' : '';
+      str += (Number(n[4]) != 0) ? (a[Number(n[4])] || b[n[4][0]] + ' ' + a[n[4][1]]) + 'hundred ' : '';
+      str += (Number(n[5]) != 0) ? ((str != '') ? 'and ' : '') + (a[Number(n[5])] || b[n[5][0]] + ' ' + a[n[5][1]]) : '';
+      return str.toUpperCase();
     };
     return inWords(Math.floor(num));
   };
@@ -1870,7 +1870,7 @@ const generateCustomerPoPDF = async (poId, currentUser = null, includeDispatchSt
     hostState: activeCompany?.state || 'Maharashtra',
     items: displayedItems.map((i, idx) => {
       const has_sub_assemblies = i.sub_assemblies && i.sub_assemblies.length > 0;
-      
+
       const ordered = parseFloat(i.original_quantity || i.quantity) || 0;
       const dispatched = parseFloat(i.dispatched_qty) || 0;
       const dispFormatted = dispatched % 1 === 0 ? parseInt(dispatched) : dispatched;

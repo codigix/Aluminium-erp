@@ -1804,9 +1804,7 @@ const deleteSalesOrder = async (salesOrderId) => {
     const [order] = await connection.query('SELECT status FROM sales_orders WHERE id = ?', [salesOrderId]);
     if (order.length > 0) {
       const statusUpper = (order[0].status || '').toUpperCase().replace(/_/g, ' ').trim();
-      if (statusUpper === 'QUOTATION SENT') {
-        throw new Error('quotation allready sent now cant update requirement');
-      }
+      // QUOTATION SENT: updates are allowed
       if (statusUpper === 'BOM SUBMITTED') {
         throw new Error('bom allready sent now cant update requirement');
       }

@@ -5,13 +5,13 @@ const mustache = require('mustache');
 
 const generateJobCardQcPdf = async (data) => {
   const { log } = data;
-  
+
   try {
     const templatePath = path.join(__dirname, '../../templates/job-card-qc-report.html');
-    
+
     // Create template if not exists
     if (!fs.existsSync(templatePath)) {
-        const defaultTemplate = `<!DOCTYPE html>
+      const defaultTemplate = `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8" />
@@ -350,9 +350,9 @@ const generateJobCardQcPdf = async (data) => {
   </div>
 </body>
 </html>`;
-        const templateDir = path.dirname(templatePath);
-        if (!fs.existsSync(templateDir)) fs.mkdirSync(templateDir, { recursive: true });
-        fs.writeFileSync(templatePath, defaultTemplate);
+      const templateDir = path.dirname(templatePath);
+      if (!fs.existsSync(templateDir)) fs.mkdirSync(templateDir, { recursive: true });
+      fs.writeFileSync(templatePath, defaultTemplate);
     }
 
     const template = fs.readFileSync(templatePath, 'utf8');

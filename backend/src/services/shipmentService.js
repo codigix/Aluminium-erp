@@ -41,7 +41,7 @@ const getShipmentOrders = async () => {
     LEFT JOIN customer_pos cp ON so.customer_po_id = cp.id
     ORDER BY s.created_at DESC
   `);
-  
+
   for (const row of rows) {
     if (row.shipment_code && row.shipment_code.includes('-QC')) {
       const match = row.shipment_code.match(/-QC(\d+)$/);
@@ -104,13 +104,13 @@ const getShipmentOrderById = async (id) => {
   const shipment = rows[0];
 
   let items = [];
-  
+
   if (shipment.shipment_code && shipment.shipment_code.includes('-QC')) {
     // Extract QC ID from shipment_code (e.g. SHP-202602-QC0007)
     const match = shipment.shipment_code.match(/-QC(\d+)$/);
     if (match) {
       const qcId = parseInt(match[1], 10);
-      
+
       // Fetch items from QC Inspection Items
       const [qcItems] = await pool.query(`
         SELECT 
@@ -144,7 +144,7 @@ const getShipmentOrderById = async (id) => {
         LEFT JOIN companies c ON so.company_id = c.id
         WHERE qc.id = ?
       `, [qcId]);
-      
+
       if (poRows.length > 0) {
         const poData = poRows[0];
         shipment.po_number = poData.po_number;
@@ -181,13 +181,13 @@ const getShipmentOrderById = async (id) => {
     queryStr += ` GROUP BY soi.id, w.warehouse_name HAVING quantity > 0 `;
 
     const [dispatchedItems] = await pool.query(queryStr, queryParams);
-    
+
     if (shipment.job_card_id && shipment.quantity !== null && shipment.quantity !== undefined) {
       for (const item of dispatchedItems) {
         item.quantity = shipment.quantity;
       }
     }
-    
+
     if (dispatchedItems.length > 0) {
       items = dispatchedItems;
     } else if (shipment.shipment_code && shipment.shipment_code.includes('-ORD')) {
@@ -221,7 +221,7 @@ const getShipmentOrderById = async (id) => {
       const [orderItems] = await pool.query(ordQueryStr, ordQueryParams);
       items = orderItems;
     }
-    
+
     shipment.po_number = shipment.customer_po_number;
     shipment.so_number = shipment.customer_po_number || (shipment.so_id ? `SO-${String(shipment.so_id).padStart(4, '0')}` : null);
     shipment.company_name = shipment.customer_name;
@@ -254,12 +254,12 @@ const updateShipmentStatus = async (shipmentOrderId, status) => {
 
     // 3. Handle specific status transitions
     if (status === 'ACCEPTED') {
-       if (shipment.sales_order_id) {
-         await connection.execute(
-           "UPDATE sales_orders SET status = 'READY_FOR_SHIPMENT', updated_at = NOW() WHERE id = ?",
-           [shipment.sales_order_id]
-         );
-       }
+      if (shipment.sales_order_id) {
+        await connection.execute(
+          "UPDATE sales_orders SET status = 'READY_FOR_SHIPMENT', updated_at = NOW() WHERE id = ?",
+          [shipment.sales_order_id]
+        );
+      }
     } else if (status === 'DISPATCHED') {
       // Start Dispatch - Reduce stock
       // We need the items for this shipment
@@ -313,7 +313,7 @@ const updateShipmentStatus = async (shipmentOrderId, status) => {
         queryStr += ` GROUP BY soi.id, w.warehouse_name HAVING quantity > 0 `;
 
         const [soItems] = await connection.query(queryStr, queryParams);
-        
+
         if (soItems.length > 0) {
           items = soItems;
         } else if (shipment.shipment_code && shipment.shipment_code.includes('-ORD')) {
@@ -377,7 +377,7 @@ const updateShipmentStatus = async (shipmentOrderId, status) => {
       const [maxChallanRows] = await connection.query('SELECT MAX(id) as max_id FROM delivery_challans');
       const nextId = (maxChallanRows[0].max_id || 0) + 1;
       const challanNumber = `DC-${new Date().getFullYear()}-${String(nextId).padStart(5, '0')}`;
-      
+
       const [challanResult] = await connection.execute(
         'INSERT INTO delivery_challans (challan_number, shipment_id, customer_id, delivery_status, dispatch_time) VALUES (?, ?, ?, ?, NOW())',
         [challanNumber, shipmentOrderId, shipment.customer_id, 'DRAFT']
@@ -395,8 +395,8 @@ const updateShipmentStatus = async (shipmentOrderId, status) => {
       // 5. Trigger DISPATCHED Email
       // We do this after commit or here? Better after commit to be safe, but we need connection data.
       // Let's gather data and send after commit.
-      connection._emailToTrigger = { 
-        status: 'DISPATCHED', 
+      connection._emailToTrigger = {
+        status: 'DISPATCHED',
         shipment,
         challan: {
           challan_number: challanNumber,
@@ -419,13 +419,13 @@ const updateShipmentStatus = async (shipmentOrderId, status) => {
     } else if (status === 'OUT_FOR_DELIVERY') {
       connection._emailToTrigger = { status: 'OUT_FOR_DELIVERY', shipment };
     } else if (status === 'DELIVERED') {
-       // Logic for auto-creating Delivery Challan could go here
-       // For now just update the date
-       await connection.execute(
-         'UPDATE shipment_orders SET actual_delivery_date = NOW(), updated_at = NOW() WHERE id = ?',
-         [shipmentOrderId]
-       );
-       connection._emailToTrigger = { status: 'DELIVERED', shipment };
+      // Logic for auto-creating Delivery Challan could go here
+      // For now just update the date
+      await connection.execute(
+        'UPDATE shipment_orders SET actual_delivery_date = NOW(), updated_at = NOW() WHERE id = ?',
+        [shipmentOrderId]
+      );
+      connection._emailToTrigger = { status: 'DELIVERED', shipment };
     }
 
     await connection.commit();
@@ -433,7 +433,7 @@ const updateShipmentStatus = async (shipmentOrderId, status) => {
     // 6. Async Email Sending (Outside transaction)
     if (connection._emailToTrigger) {
       const { status: emailStatus, shipment: sData, challan } = connection._emailToTrigger;
-      
+
       (async () => {
         try {
           let attachments = [];
@@ -445,13 +445,13 @@ const updateShipmentStatus = async (shipmentOrderId, status) => {
             });
             const page = await browser.newPage();
             await page.setContent(html, { waitUntil: 'networkidle0' });
-            const pdfBuffer = await page.pdf({ 
-              format: 'A4', 
+            const pdfBuffer = await page.pdf({
+              format: 'A4',
               printBackground: true,
               margin: { top: '10mm', bottom: '10mm', left: '10mm', right: '10mm' }
             });
             await browser.close();
-            
+
             attachments.push({
               filename: `Delivery_Challan_${challan.challan_number}.pdf`,
               content: pdfBuffer

@@ -48,9 +48,7 @@ const CustomerDrawing = () => {
 
     // Normalize status string if it looks like one
     const normalized = String(soIdOrStatus).toUpperCase().replace(/_/g, ' ').trim();
-    if (normalized === 'QUOTATION SENT') {
-      return { restricted: true, message: 'quotation allready sent now cant update requirement' };
-    }
+    // QUOTATION SENT: updates are allowed
     if (normalized === 'BOM SUBMITTED') {
       return { restricted: true, message: 'bom allready sent now cant update requirement' };
     }
@@ -62,9 +60,7 @@ const CustomerDrawing = () => {
     );
     if (req) {
       const reqNormalized = String(req.status || '').toUpperCase().replace(/_/g, ' ').trim();
-      if (reqNormalized === 'QUOTATION SENT') {
-        return { restricted: true, message: 'quotation allready sent now cant update requirement' };
-      }
+      // QUOTATION SENT: updates are allowed
       if (reqNormalized === 'BOM SUBMITTED') {
         return { restricted: true, message: 'bom allready sent now cant update requirement' };
       }
