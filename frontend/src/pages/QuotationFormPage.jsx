@@ -1172,7 +1172,7 @@ const QuotationFormPage = () => {
     const roundedBaseAmount = Number(baseAmount.toFixed(2));
     const cgstRounded = Number((gstAmount / 2).toFixed(2));
     const sgstRounded = Number((gstAmount / 2).toFixed(2));
-    const totalAmount = Number((roundedBaseAmount + cgstRounded + sgstRounded).toFixed(2));
+    const totalAmount = roundedBaseAmount;
 
     return {
       bomBaseAmount,
@@ -2095,12 +2095,12 @@ const QuotationFormPage = () => {
                   {(() => {
                     const prevVersion = versionHistory.find(v => v.version === version - 1);
                     if (!prevVersion) return null;
-                    const diff = summary.totalAmount - (parseFloat(prevVersion.received_amount) || parseFloat(prevVersion.total_amount) * 1.18);
+                    const diff = summary.totalAmount - (parseFloat(prevVersion.total_amount) || 0);
                     return (
                       <div className="space-y-1">
                         <div className="flex justify-between text-xs">
                           <span className="text-slate-500">Previous (V{version - 1})</span>
-                          <span className="text-slate-700 ">{formatCurrency(parseFloat(prevVersion.received_amount) || parseFloat(prevVersion.total_amount) * 1.18)}</span>
+                          <span className="text-slate-700 ">{formatCurrency(parseFloat(prevVersion.total_amount) || 0)}</span>
                         </div>
                         <div className="flex justify-between text-xs">
                           <span className="text-slate-500">Net Change</span>
@@ -2175,19 +2175,11 @@ const QuotationFormPage = () => {
                 <span className="text-slate-500 font-medium">Subtotal (Pre-Tax)</span>
                 <span className="text-slate-900 font-medium">{formatCurrency(summary.baseAmount)}</span>
               </div>
-              <div className="flex justify-between items-center text-xs">
-                <span className="text-slate-500 ">CGST (9%)</span>
-                <span className="text-slate-900 ">{formatCurrency(summary.gstAmount / 2)}</span>
-              </div>
-              <div className="flex justify-between items-center text-xs">
-                <span className="text-slate-500 ">SGST (9%)</span>
-                <span className="text-slate-900 ">{formatCurrency(summary.gstAmount / 2)}</span>
-              </div>
 
               <div className="pt-3 mt-3 border-t border-slate-100">
                 <div className="flex justify-between items-end">
                   <div>
-                    <p className="text-[9px]  text-slate-400   mb-0.5">Total Amount</p>
+                    <p className="text-[9px]  text-slate-400   mb-0.5">Grand Total</p>
                     <p className="text-xl  text-indigo-600 ">{formatCurrency(summary.totalAmount)}</p>
                   </div>
                 </div>
@@ -2224,7 +2216,7 @@ const QuotationFormPage = () => {
                             </span>
                             <StatusBadge status={v.status} size="xs" />
                           </div>
-                          <span className="text-xs   text-slate-900">{formatCurrency(parseFloat(v.received_amount) || parseFloat(v.total_amount) * 1.18)}</span>
+                          <span className="text-xs   text-slate-900">{formatCurrency(parseFloat(v.total_amount) || 0)}</span>
                         </div>
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-1.5 text-[9px] text-slate-400">
