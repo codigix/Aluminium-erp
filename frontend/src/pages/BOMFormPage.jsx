@@ -760,6 +760,11 @@ const BOMFormPage = () => {
         return true;
       }
 
+      // Show Bought Out items as well
+      if (t === 'bo' || t.includes('bought out') || t.includes('bought_out') || c.startsWith('BO-')) {
+        return true;
+      }
+
       // EXCLUDE assemblies, finished goods, and sub-assemblies
       if (c.startsWith('SA-') || c.startsWith('SFG-') || c.startsWith('FG-') || c.startsWith('ASSEMBLY-') || c.startsWith('ASSY-')) {
         return false;
