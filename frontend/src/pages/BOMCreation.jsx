@@ -1606,7 +1606,7 @@ const BOMCreation = () => {
                                     </td>
                                     <td className="px-4 p-2 text-center">
                                       <span className="text-xs  text-slate-700">
-                                        {latest.total_quantity || latest.quantity} <span className="text-xs  text-slate-400 font-normal">{latest.unit || 'NOS'}</span>
+                                        {parseFloat(latest.total_quantity || latest.quantity || 0)} <span className="text-xs  text-slate-400 font-normal">{latest.unit || 'NOS'}</span>
                                       </span>
                                     </td>
                                     <td className="px-4 p-2 text-center">
@@ -1916,7 +1916,7 @@ const BOMCreation = () => {
                                 <div className="flex gap-6 text-center">
                                   <div>
                                     <p className="text-xs  text-slate-400   mb-1">Order Qty</p>
-                                    <p className="text-xs  text-slate-700">{item.quantity} <span className="text-xs  font-normal text-slate-400">{item.unit || 'Nos'}</span></p>
+                                    <p className="text-xs  text-slate-700">{parseFloat(item.quantity || 0)} <span className="text-xs  font-normal text-slate-400">{item.unit || 'Nos'}</span></p>
                                   </div>
                                   <div>
                                     <p className="text-xs  text-slate-400   mb-1">Material Cost</p>
@@ -1966,7 +1966,7 @@ const BOMCreation = () => {
                                           <div key={idx} className="bg-white p-2 rounded border border-slate-100 flex justify-between items-center group hover:border-indigo-200 transition-colors">
                                             <div>
                                               <p className="text-xs  text-slate-700">{m.material_name}</p>
-                                              <p className="text-xs  text-slate-400 ">{m.qty_per_pc} @ ₹{parseFloat(m.rate || 0).toLocaleString('en-IN')}</p>
+                                              <p className="text-xs  text-slate-400 ">{parseFloat(m.qty_per_pc || 0)} @ ₹{parseFloat(m.rate || 0).toLocaleString('en-IN')}</p>
                                             </div>
                                             <p className="text-xs  text-slate-600">₹{(parseFloat(m.qty_per_pc || 0) * parseFloat(item.quantity) * parseFloat(m.rate || 0)).toLocaleString('en-IN')}</p>
                                           </div>
@@ -1990,7 +1990,7 @@ const BOMCreation = () => {
                                           <div key={idx} className="bg-white p-2 rounded border border-slate-100 flex justify-between items-center hover:border-blue-200 transition-colors">
                                             <div>
                                               <p className="text-xs  text-slate-700">{c.description || c.component_code}</p>
-                                              <p className="text-xs  text-slate-400 ">{c.quantity} @ ₹{parseFloat(c.rate || 0).toLocaleString('en-IN')}</p>
+                                              <p className="text-xs  text-slate-400 ">{parseFloat(c.quantity || 0)} @ ₹{parseFloat(c.rate || 0).toLocaleString('en-IN')}</p>
                                             </div>
                                             <p className="text-xs  text-slate-600">₹{(parseFloat(c.quantity || 0) * parseFloat(item.quantity) * parseFloat(c.rate || 0)).toLocaleString('en-IN')}</p>
                                           </div>

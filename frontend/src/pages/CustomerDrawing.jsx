@@ -801,7 +801,7 @@ const CustomerDrawing = () => {
           drawing_id: item.drawing_id || item.drawing_master_id,
           drawing_no: item.drawing_no || '',
           revision: item.revision || item.revision_no || '',
-          qty: item.quantity || item.qty || 1,
+          qty: (item.quantity || item.qty) ? parseFloat(item.quantity || item.qty) : 1,
           description: item.description || '',
           hsn_code: item.hsn_code || '',
           delivery_date: item.delivery_date ? new Date(item.delivery_date).toISOString().split('T')[0] : '',
@@ -943,7 +943,7 @@ const CustomerDrawing = () => {
       shipping_address: drawing.shipping_address || shippingAddressLine,
       hsn_code: drawing.hsn_code || '',
       delivery_date: drawing.delivery_date ? new Date(drawing.delivery_date).toISOString().split('T')[0] : '',
-      qty: drawing.qty || 1,
+      qty: drawing.qty ? parseFloat(drawing.qty) : 1,
       remarks: drawing.remarks || '',
       drawing_pdf: null,
       file_path: drawing.file_path || drawing.drawing_pdf || ''
@@ -3045,7 +3045,7 @@ const CustomerDrawing = () => {
                                 disabled={isRowLocked}
                                 name={`manualDrawings[${index}].qty`}
                                 min="1"
-                                step="0.01"
+                                step="any"
                                 className={`w-full px-2 py-1 border rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500 text-center ${isRowLocked ? 'bg-slate-100 cursor-not-allowed text-slate-400 border-slate-200' : 'border-slate-300'}`}
                                 value={drawing.qty}
                                 onChange={formik.handleChange}

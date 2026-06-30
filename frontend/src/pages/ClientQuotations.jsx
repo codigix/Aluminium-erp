@@ -1134,7 +1134,7 @@ const ClientQuotations = () => {
                               </td>
                               <td className="px-4 p-2 text-center">
                                 <span className="text-xs  text-slate-900">
-                                  {item.item_qty || item.design_qty}
+                                  {parseFloat(item.item_qty || item.design_qty || 0)}
                                 </span>
                                 <span className="text-xs  text-slate-400 ml-1 ">{item.item_unit || item.unit || 'Nos'}</span>
                               </td>
@@ -1276,7 +1276,7 @@ const ClientQuotations = () => {
                               </td>
                               <td className="px-4 p-2 text-center">
                                 <span className="text-[11px] text-slate-500">
-                                  {(parseFloat(sa.quantity || sa.qty || 0) * parseFloat(item.item_qty || item.design_qty || 0)).toFixed(2)}
+                                  {parseFloat((parseFloat(sa.quantity || sa.qty || 0) * parseFloat(item.item_qty || item.design_qty || 0)).toFixed(2))}
                                 </span>
                               </td>
                               <td className="px-4 p-2">
