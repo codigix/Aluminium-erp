@@ -540,7 +540,8 @@ const CustomerPO = ({
     return customerPos.filter(po => {
       const matchesSearch =
         po.po_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        po.company_name?.toLowerCase().includes(searchTerm.toLowerCase());
+        po.company_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        po.project_name?.toLowerCase().includes(searchTerm.toLowerCase());
 
       const matchesStatus = statusFilter === 'ALL' || po.status === statusFilter;
 
@@ -1182,7 +1183,7 @@ const CustomerPO = ({
           <Search className="w-5 h-5 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
-            placeholder="Search by PO number or client name..."
+            placeholder="Search by PO number, client name, or project name..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-11 pr-4 p-2 bg-white border border-slate-200 rounded text-xs focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all  "
