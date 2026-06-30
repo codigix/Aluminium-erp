@@ -1858,7 +1858,18 @@ const Quotations = () => {
         rowId="uniqueKey"
         loading={loading}
         pageSize={5}
-        searchPlaceholder="Search quote number, vendor..."
+        searchPlaceholder="Search quote number, client, project, drawing..."
+        customFilter={(row, searchLower) => {
+          const matchesQuoteNo = String(row.quote_number || '').toLowerCase().includes(searchLower);
+          const matchesVendor = getVendorName(row.vendor_id).toLowerCase().includes(searchLower);
+          const matchesProject = String(row.project_name || '').toLowerCase().includes(searchLower);
+          const matchesCompany = String(row.company_name || '').toLowerCase().includes(searchLower);
+          const matchesItems = (row.items || []).some(item =>
+            String(item.drawing_no || item.item_code || '').toLowerCase().includes(searchLower) ||
+            String(item.description || '').toLowerCase().includes(searchLower)
+          );
+          return matchesQuoteNo || matchesVendor || matchesProject || matchesCompany || matchesItems;
+        }}
         actions={
           <div className="flex items-center gap-2">
             <select

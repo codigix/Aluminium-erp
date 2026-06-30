@@ -2118,9 +2118,18 @@ const ClientQuotations = () => {
             const idStr = String(item.display_id || item.id || '');
             const qrtNoPadded = `qrt-${idStr.padStart(4, '0')}`;
             const qrtNoRaw = `qrt-${idStr}`;
+            const matchesDrawings = (item.quotes || []).some(q =>
+              String(q.drawing_no || '').toLowerCase().includes(searchLower) ||
+              String(q.description || q.item_description || '').toLowerCase().includes(searchLower) ||
+              (q.sub_assemblies || []).some(sa =>
+                String(sa.drawing_no || sa.component_code || '').toLowerCase().includes(searchLower) ||
+                String(sa.description || '').toLowerCase().includes(searchLower)
+              )
+            );
             return clientName.includes(searchLower) ||
                    projectName.includes(searchLower) ||
-                   (item.type !== 'PENDING' && (qrtNoPadded.includes(searchLower) || qrtNoRaw.includes(searchLower)));
+                   (item.type !== 'PENDING' && (qrtNoPadded.includes(searchLower) || qrtNoRaw.includes(searchLower))) ||
+                   matchesDrawings;
           }}
           emptyMessage="No quotations found"
           disableRowClickExpansion={true}

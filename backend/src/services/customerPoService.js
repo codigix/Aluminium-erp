@@ -244,7 +244,34 @@ const listCustomerPos = async (filters = {}) => {
   query += ' ORDER BY cp.created_at DESC';
 
   const [rows] = await pool.query(query, params);
-  return rows;
+  if (rows.length === 0) return [];
+
+  const poIds = rows.map(r => r.id);
+  const [items] = await pool.query(
+    `SELECT id, customer_po_id, drawing_no, description FROM customer_po_items WHERE customer_po_id IN (?)`,
+    [poIds]
+  );
+
+  let subassemblies = [];
+  const parentItemIds = items.map(item => item.id);
+  if (parentItemIds.length > 0) {
+    const [saRows] = await pool.query(
+      `SELECT po_item_id, drawing_no, drawing_no as drawingNo, description FROM customer_po_item_subassemblies WHERE po_item_id IN (?)`,
+      [parentItemIds]
+    );
+    subassemblies = saRows;
+  }
+
+  return rows.map(r => {
+    const rItems = items.filter(item => item.customer_po_id === r.id);
+    return {
+      ...r,
+      items: rItems.map(item => ({
+        ...item,
+        sub_assemblies: subassemblies.filter(sa => sa.po_item_id === item.id)
+      }))
+    };
+  });
 };
 
 const getCustomerPoById = async id => {
@@ -417,7 +444,7 @@ const getCustomerPoById = async id => {
 
     // 1. Try to fetch stored sub-assemblies first (as a snapshot)
     const [storedSA] = await pool.query(
-      `SELECT drawing_no as drawingNo, description, quantity, unit, rate, hsn_code, delivery_date 
+      `SELECT drawing_no, drawing_no as drawingNo, description, quantity, unit, rate, hsn_code, delivery_date 
        FROM customer_po_item_subassemblies 
        WHERE po_item_id = ?`,
       [item.id]

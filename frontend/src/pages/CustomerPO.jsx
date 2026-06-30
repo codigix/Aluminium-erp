@@ -538,10 +538,20 @@ const CustomerPO = ({
 
   const filteredPOs = useMemo(() => {
     return customerPos.filter(po => {
+      const matchesItems = (po.items || []).some(item =>
+        (item.drawingNo || item.drawing_no || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (item.sub_assemblies || []).some(sa =>
+          (sa.drawingNo || sa.drawing_no || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+          sa.description?.toLowerCase().includes(searchTerm.toLowerCase())
+        )
+      );
+
       const matchesSearch =
         po.po_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         po.company_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        po.project_name?.toLowerCase().includes(searchTerm.toLowerCase());
+        po.project_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        matchesItems;
 
       const matchesStatus = statusFilter === 'ALL' || po.status === statusFilter;
 
@@ -714,7 +724,7 @@ const CustomerPO = ({
                 return true;
               }).map(sa => ({
                 ...sa,
-                drawingNo: (sa.drawing_no || sa.component_code || sa.item_code || '').toUpperCase(),
+                drawingNo: (sa.drawing_no || sa.drawingNo || sa.component_code || sa.item_code || '').toUpperCase(),
                 description: sa.description || `Sub-assembly`,
                 hsnCode: sa.hsn_code || '',
                 deliveryDate: sa.delivery_date ? new Date(sa.delivery_date).toISOString().split('T')[0] : '',
@@ -1183,7 +1193,7 @@ const CustomerPO = ({
           <Search className="w-5 h-5 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
-            placeholder="Search by PO number, client name, or project name..."
+            placeholder="Search by PO number, client, project, or drawing..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-11 pr-4 p-2 bg-white border border-slate-200 rounded text-xs focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all  "

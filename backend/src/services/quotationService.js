@@ -208,7 +208,7 @@ const createQuotation = async (payload) => {
 };
 
 const getQuotations = async (filters = {}) => {
-  const { status, vendorId, latestOnly = true, baseQuoteNumber } = filters;
+  const { status, vendorId, latestOnly = true, baseQuoteNumber, search } = filters;
 
   let query = `
     SELECT q.*, v.vendor_name, so.so_number,
@@ -290,6 +290,23 @@ const getQuotations = async (filters = {}) => {
   if (baseQuoteNumber) {
     query += ' AND q.base_quote_number = ?';
     params.push(baseQuoteNumber);
+  }
+
+  if (search) {
+    const searchLike = `%${search}%`;
+    query += ` AND (
+      q.quote_number LIKE ? 
+      OR v.vendor_name LIKE ? 
+      OR so.project_name LIKE ? 
+      OR c.company_name LIKE ? 
+      OR mr.mr_number LIKE ? 
+      OR EXISTS (
+        SELECT 1 FROM quotation_items qi 
+        WHERE qi.quotation_id = q.id 
+        AND (qi.drawing_no LIKE ? OR qi.description LIKE ?)
+      )
+    )`;
+    params.push(searchLike, searchLike, searchLike, searchLike, searchLike, searchLike, searchLike);
   }
 
   query += ' ORDER BY q.created_at DESC';
