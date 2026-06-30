@@ -4,22 +4,28 @@ import { errorToast, successToast } from '../utils/toast';
 const SendEmailModal = ({ isOpen, onClose, data, onSend, title, subTitle, attachmentName }) => {
   const [emailData, setEmailData] = useState({
     to: '',
+    cc: '',
+    bcc: '',
     subject: '',
     message: '',
     attachPDF: true
   });
   const [loading, setLoading] = useState(false);
   const [customFiles, setCustomFiles] = useState([]);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       setEmailData({
         to: data?.to || '',
+        cc: data?.cc || '',
+        bcc: data?.bcc || '',
         subject: data?.subject || '',
         message: data?.message || '',
         attachPDF: true
       });
       setCustomFiles([]); // Reset custom attachments on open
+      setShowConfirm(false);
     }
   }, [isOpen, data]);
 
@@ -35,13 +41,17 @@ const SendEmailModal = ({ isOpen, onClose, data, onSend, title, subTitle, attach
     });
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
     if (!emailData.to) {
       errorToast('Recipient email is required');
       return;
     }
+    setShowConfirm(true);
+  };
 
+  const handleConfirmSend = async () => {
+    setShowConfirm(false);
     setLoading(true);
     try {
       const processedAttachments = await Promise.all(
@@ -103,6 +113,28 @@ const SendEmailModal = ({ isOpen, onClose, data, onSend, title, subTitle, attach
                 placeholder="recipient@example.com"
                 className="w-full p-2  bg-slate-50 border border-slate-200 rounded text-xs  text-slate-700 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                 required
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs  text-slate-400   ml-1">CC Email (Optional)</label>
+              <input
+                type="text"
+                value={emailData.cc}
+                onChange={(e) => setEmailData({...emailData, cc: e.target.value})}
+                placeholder="cc@example.com"
+                className="w-full p-2  bg-slate-50 border border-slate-200 rounded text-xs  text-slate-700 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs  text-slate-400   ml-1">BCC Email (Optional)</label>
+              <input
+                type="text"
+                value={emailData.bcc}
+                onChange={(e) => setEmailData({...emailData, bcc: e.target.value})}
+                placeholder="bcc@example.com"
+                className="w-full p-2  bg-slate-50 border border-slate-200 rounded text-xs  text-slate-700 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
               />
             </div>
 
@@ -216,6 +248,33 @@ const SendEmailModal = ({ isOpen, onClose, data, onSend, title, subTitle, attach
           </div>
         </form>
       </div>
+
+      {showConfirm && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6 animate-in fade-in zoom-in duration-150 border border-slate-100">
+            <h3 className="text-lg font-semibold text-slate-800 mb-2">Confirm Send Email</h3>
+            <p className="text-sm text-slate-600 mb-6">
+              Are you sure you want to send this quotation email to the selected recipient(s)?
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowConfirm(false)}
+                className="px-4 py-2 border border-slate-200 text-slate-600 rounded text-sm hover:bg-slate-50 transition-all font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmSend}
+                className="px-4 py-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 transition-all font-medium shadow-md shadow-blue-100"
+              >
+                Yes, Send Email
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

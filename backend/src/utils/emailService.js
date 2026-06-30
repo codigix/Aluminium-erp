@@ -536,7 +536,7 @@ const sendShipmentStatusEmail = async (shipmentData, status, attachments = []) =
   }
 };
 
-const sendQuotationEmail = async (clientEmail, clientName, items, totalAmount, notes, clientId, quoteNumber, hostCompanyId = null, passedClientDetails = null, customSubject = null, customMessage = null, attachPDF = true, customAttachments = []) => {
+const sendQuotationEmail = async (clientEmail, clientName, items, totalAmount, notes, clientId, quoteNumber, hostCompanyId = null, passedClientDetails = null, customSubject = null, customMessage = null, attachPDF = true, customAttachments = [], cc = null, bcc = null) => {
   try {
     const transporter = createTransporter();
     const adminCompanyMasterService = require('../services/adminCompanyMasterService');
@@ -612,6 +612,8 @@ const sendQuotationEmail = async (clientEmail, clientName, items, totalAmount, n
     const mailOptions = {
       from: process.env.EMAIL_USER || process.env.MAIL_FROM_ADDRESS || 'noreply@sptechpioneer.com',
       to: clientEmail,
+      ...(cc ? { cc } : {}),
+      ...(bcc ? { bcc } : {}),
       subject: customSubject || `Quotation Request ${formattedQuoteNumber} from SP TECHPIONEER - ${clientName}`,
       html: customMessage ? `
         <div style="font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif; color: #333; line-height: 1.6;">

@@ -2008,7 +2008,7 @@ const generatePurchaseOrderPDF = async (poId) => {
 };
 
 const sendPurchaseOrderEmail = async (poId, emailData) => {
-  const { to, subject, message, attachPDF } = emailData;
+  const { to, subject, message, attachPDF, cc, bcc } = emailData;
 
   const po = await getPurchaseOrderById(poId);
 
@@ -2042,7 +2042,7 @@ const sendPurchaseOrderEmail = async (poId, emailData) => {
       }
     }
 
-    const emailResult = await emailService.sendEmail(to, subject, message, attachments);
+    const emailResult = await emailService.sendEmail(to, subject, message, attachments, cc, bcc);
 
     await pool.execute(
       'UPDATE purchase_orders SET status = ? WHERE id = ?',

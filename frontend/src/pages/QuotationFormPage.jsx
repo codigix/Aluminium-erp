@@ -1091,6 +1091,8 @@ const QuotationFormPage = () => {
           },
           body: JSON.stringify({
             to: emailData.to,
+            cc: emailData.cc,
+            bcc: emailData.bcc,
             subject: emailData.subject,
             message: emailData.message,
             attachPDF: emailData.attachPDF,
@@ -1285,7 +1287,9 @@ const QuotationFormPage = () => {
           customSubject: emailData.subject,
           customMessage: emailData.message,
           attachPDF: emailData.attachPDF,
-          customAttachments: emailData.customAttachments
+          customAttachments: emailData.customAttachments,
+          cc: emailData.cc,
+          bcc: emailData.bcc
         } : {}),
         quotation_no: quotationNo,
         date: quotationDate,

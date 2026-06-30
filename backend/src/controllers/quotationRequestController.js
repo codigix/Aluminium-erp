@@ -490,7 +490,9 @@ const sendQuotationViaEmail = async (req, res, next) => {
       customSubject,
       customMessage,
       attachPDF,
-      customAttachments
+      customAttachments,
+      cc,
+      bcc
     } = req.body;
 
     if (!resolvedClientId || !items || items.length === 0) {
@@ -738,7 +740,9 @@ const sendQuotationViaEmail = async (req, res, next) => {
           customSubject,
           customMessage,
           attachPDF !== undefined ? attachPDF : true,
-          customAttachments || []
+          customAttachments || [],
+          cc,
+          bcc
         );
         emailSent = true;
         emailMessageId = emailResult.messageId;
@@ -1280,7 +1284,7 @@ const requestQuotationUpdateFromBOM = async (req, res, next) => {
 const sendExistingQuotationEmail = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { to, subject, message, attachPDF, customAttachments } = req.body;
+    const { to, subject, message, attachPDF, customAttachments, cc, bcc } = req.body;
 
     // 1. Fetch the representative quotation to get client info and timestamp
     // Corrected SQL query to fetch client email from contacts table
@@ -1385,7 +1389,9 @@ const sendExistingQuotationEmail = async (req, res, next) => {
       subject,
       message,
       attachPDF !== undefined ? attachPDF : true,
-      customAttachments || []
+      customAttachments || [],
+      cc,
+      bcc
     );
 
     const emailMessageId = emailResult?.messageId || null;

@@ -22,7 +22,7 @@ const createTransporter = () => {
   return nodemailer.createTransport(config);
 };
 
-const sendEmail = async (to, subject, message, attachments = []) => {
+const sendEmail = async (to, subject, message, attachments = [], cc = null, bcc = null) => {
   try {
     const transporter = createTransporter();
 
@@ -34,6 +34,8 @@ const sendEmail = async (to, subject, message, attachments = []) => {
     const mailOptions = {
       from: process.env.EMAIL_USER || process.env.MAIL_FROM_ADDRESS || 'noreply@sptechpioneer.com',
       to,
+      ...(cc ? { cc } : {}),
+      ...(bcc ? { bcc } : {}),
       subject,
       text: message,
       html: `<p>${message.replace(/\n/g, '<br>')}</p>`,
