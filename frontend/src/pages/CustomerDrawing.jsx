@@ -652,7 +652,9 @@ const CustomerDrawing = () => {
     fetchDrawings(searchTerm);
     fetchCompanies();
     fetchRequirements(true);
+  }, []);
 
+  useEffect(() => {
     // Initial check on mount or path change
     const path = window.location.pathname;
     const historyState = window.history.state;
@@ -724,8 +726,6 @@ const CustomerDrawing = () => {
         setFormMode('add');
         setEditingRequirementId(null);
         setEditingRequirementData(null);
-        fetchDrawings(searchTerm);
-        fetchRequirements();
       } else if (currentPath.includes(`${deptPrefix}/customer-drawing/addclient`)) {
         setFormMode('add');
         setEditingRequirementId(null);

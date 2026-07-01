@@ -11,7 +11,7 @@ const getAllDrawings = async () => {
   return rows;
 };
 
-const listDrawings = async (search = '', onlyShared = false, clientName = null) => {
+const listDrawings = async (search = '', onlyShared = false, clientName = null, summary = false) => {
   let query = `
     SELECT 
       d.id as drawing_master_id,
@@ -97,12 +97,74 @@ const listDrawings = async (search = '', onlyShared = false, clientName = null) 
     soi.id DESC`;
   const [rows] = await pool.query(query, params);
 
+  if (summary) {
+    return rows.map(row => ({
+      ...row,
+      sub_assemblies: [],
+      id: row.sales_order_item_id ? `soi_${row.sales_order_item_id}` : row.drawing_master_id
+    }));
+  }
+
+  // Batch fetch components for non-summary requests
+  const allItemIds = rows.map(row => row.sales_order_item_id).filter(Boolean);
+  let batchComponents = [];
+  if (allItemIds.length > 0) {
+    const [compRows] = await pool.query(
+      `SELECT c.*, 
+              COALESCE(i.drawing_no, soi.drawing_no) as drawing_no,
+              COALESCE(soi.description, c.description) as description,
+              COALESCE(c.component_code, c.item_code) as item_code,
+              i.selling_rate as latest_selling_rate, i.valuation_rate as latest_valuation_rate, i.weight_per_unit as latest_weight_per_unit,
+              COALESCE(i.current_balance, 0) as available_stock
+       FROM sales_order_item_components c
+       LEFT JOIN (
+         SELECT item_code, drawing_no, description
+         FROM sales_order_items 
+         WHERE id IN (
+           SELECT MAX(id) 
+           FROM sales_order_items 
+           WHERE sales_order_id IS NULL
+           GROUP BY item_code
+         )
+       ) soi ON LOWER(TRIM(COALESCE(c.component_code, c.item_code))) = LOWER(TRIM(soi.item_code))
+       LEFT JOIN (
+         SELECT item_code, MAX(selling_rate) as selling_rate, MAX(valuation_rate) as valuation_rate, MAX(weight_per_unit) as weight_per_unit, MAX(drawing_no) as drawing_no, SUM(current_balance) as current_balance
+         FROM stock_balance 
+         GROUP BY item_code
+       ) i ON LOWER(TRIM(COALESCE(c.component_code, c.item_code))) = LOWER(TRIM(i.item_code))
+       WHERE c.sales_order_item_id IN (?) 
+       ORDER BY c.created_at ASC`,
+      [allItemIds]
+    );
+    batchComponents = compRows;
+  }
+
+  const componentsMap = {};
+  for (const row of batchComponents) {
+    if (!componentsMap[row.sales_order_item_id]) {
+      componentsMap[row.sales_order_item_id] = [];
+    }
+    componentsMap[row.sales_order_item_id].push({
+      ...row,
+      qty: row.quantity || row.qty,
+      quantity: row.quantity || row.qty,
+      rate: parseFloat(row.rate || 0),
+      bom_cost: parseFloat(row.bom_cost || 0),
+      pending_bom_cost: row.pending_bom_cost ? parseFloat(row.pending_bom_cost) : null,
+      is_cost_frozen: true,
+      available_stock: parseFloat(row.available_stock || 0)
+    });
+  }
+
   // Enrich with sub-assemblies for items with BOM structure
   const enrichedRows = await Promise.all(rows.map(async (row) => {
     // We attempt to fetch components if we have an item ID OR identifying info for fallback (FG or SA)
     if (row.sales_order_item_id || row.item_code || row.drawing_no) {
       try {
-        const components = await bomService.getItemComponents(row.sales_order_item_id, row.item_code, row.drawing_no);
+        const components = componentsMap[row.sales_order_item_id] !== undefined
+          ? componentsMap[row.sales_order_item_id]
+          : await bomService.getItemComponents(row.sales_order_item_id, row.item_code, row.drawing_no);
+
         const g = (row.item_group || '').toUpperCase();
         const isAssembly = g.includes('ASSEMBLY');
         const sub_assemblies = isAssembly
@@ -474,7 +536,7 @@ const updateItemDrawing = async (itemId, data) => {
             (description !== undefined && String(description).trim() !== String(soi.description || '').trim()) ||
             (revisionNo !== undefined && String(revisionNo).trim() !== String(soi.revision_no || '').trim()) ||
             (drawing_type !== undefined && String(drawing_type).trim() !== String(soi.drawing_type || '').trim());
-          
+
           if (isDiff) {
             throw new Error('Approved drawing cannot be edited.');
           }

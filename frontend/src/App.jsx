@@ -459,6 +459,8 @@ function App() {
   const [quotationRequestsLoading, setQuotationRequestsLoading] = useState(false)
   const [customerPos, setCustomerPos] = useState([])
   const [customerPosLoading, setCustomerPosLoading] = useState(false)
+  const [salesOrders, setSalesOrders] = useState([])
+  const [salesOrdersLoading, setSalesOrdersLoading] = useState(false)
   const [poQuotePrices, setPoQuotePrices] = useState({})
   const [poDetailDrawerOpen, setPoDetailDrawerOpen] = useState(false)
   const [poDetailLoading, setPoDetailLoading] = useState(false)
@@ -520,12 +522,12 @@ function App() {
   }, [apiRequest])
 
   useEffect(() => {
-    if (token && user) {
+    if (token && user && !accessRules) {
       loadAccessDashboard().catch(() => null)
-    } else {
+    } else if (!token || !user) {
       setAccessRules(null)
     }
-  }, [token, user, loadAccessDashboard])
+  }, [token, user, accessRules, loadAccessDashboard])
 
   const performLogin = useCallback(async (email, password) => {
     setLoginLoading(true)
@@ -722,22 +724,22 @@ function App() {
   }, [])
 
   useEffect(() => {
-    if (token && user) {
+    if (token && user && companies.length === 0) {
       loadCompanies().catch(() => null)
     }
-  }, [loadCompanies, token, user])
+  }, [loadCompanies, token, user, companies])
 
   useEffect(() => {
-    if (token && user) {
+    if (token && user && salesOrders.length === 0) {
       loadSalesOrders().catch(() => null)
     }
-  }, [loadSalesOrders, token, user])
+  }, [loadSalesOrders, token, user, salesOrders])
 
   useEffect(() => {
-    if (token && user) {
+    if (token && user && customerPos.length === 0) {
       loadCustomerPos().catch(() => null)
     }
-  }, [loadCustomerPos, token, user])
+  }, [loadCustomerPos, token, user, customerPos])
 
   useEffect(() => {
     if (activeModule === 'customer-po') {

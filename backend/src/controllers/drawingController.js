@@ -7,8 +7,8 @@ const { uploadsPath } = require('../config/uploadConfig');
 
 const listDrawings = async (req, res, next) => {
   try {
-    const { search, onlyShared, clientName } = req.query;
-    const drawings = await drawingService.listDrawings(search, onlyShared === 'true', clientName);
+    const { search, onlyShared, clientName, summary } = req.query;
+    const drawings = await drawingService.listDrawings(search, onlyShared === 'true', clientName, summary === 'true');
     res.json(drawings);
   } catch (error) {
     next(error);

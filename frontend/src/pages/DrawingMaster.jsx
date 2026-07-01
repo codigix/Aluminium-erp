@@ -75,6 +75,7 @@ const DrawingMaster = () => {
       const token = localStorage.getItem('authToken');
       const params = new URLSearchParams();
       params.append('onlyShared', 'true');
+      params.append('summary', 'true');
       if (search) params.append('search', search);
 
       const url = `${API_BASE}/drawings?${params.toString()}`;
