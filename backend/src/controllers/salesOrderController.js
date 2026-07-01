@@ -35,12 +35,12 @@ const getIncomingOrders = async (req, res, next) => {
     const departmentCode = req.user?.department_code || req.query.department;
     const includeAccepted = req.query.includeAccepted === 'true';
     console.log(`[getIncomingOrders] User:`, req.user?.email, `| Final departmentCode: "${departmentCode}" | includeAccepted: ${includeAccepted}`);
-    
+
     if (!departmentCode) {
       console.error('[getIncomingOrders] ERROR: No department code provided');
       return res.status(400).json({ error: 'Department code is required' });
     }
-    
+
     console.log(`[getIncomingOrders] Calling service...`);
     const rows = await salesOrderService.getIncomingOrders(departmentCode, includeAccepted);
     console.log(`[getIncomingOrders] Service returned ${rows.length} orders`);

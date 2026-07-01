@@ -87,13 +87,105 @@ const getQuotationRequests = async (req, res, next) => {
 
     const [rows] = await pool.query(query, params);
 
+    // Fetch all components for all requested batches
+    const batchIds = [...new Set(rows.map(r => r.batch_id).filter(Boolean))];
+    let batchComponents = [];
+    if (batchIds.length > 0) {
+      const [compRows] = await pool.query(
+        `SELECT qr.id, qr.batch_id, qr.rejection_reason, qr.version,
+                COALESCE(soi.drawing_no, qr.drawing_no, qr.item_code) as drawing_no, 
+                COALESCE(soi.description, qr.description) as description, 
+                qr.item_unit as unit, qr.item_qty as quantity,
+                qr.item_group, qr.bom_cost, qr.received_amount as rate, qr.item_code, qr.pending_bom_cost,
+                1 as is_cost_frozen,
+                COALESCE(sb.current_balance, 0) as available_stock
+         FROM quotation_requests qr
+         LEFT JOIN (
+           SELECT item_code, drawing_no, description
+           FROM sales_order_items 
+           WHERE id IN (
+             SELECT MAX(id) 
+             FROM sales_order_items 
+             WHERE sales_order_id IS NULL
+             GROUP BY item_code
+           )
+         ) soi ON LOWER(TRIM(qr.item_code)) = LOWER(TRIM(soi.item_code))
+         LEFT JOIN (
+           SELECT item_code, SUM(current_balance) as current_balance
+           FROM stock_balance
+           GROUP BY item_code
+         ) sb ON LOWER(TRIM(qr.item_code)) = LOWER(TRIM(sb.item_code))
+         WHERE qr.batch_id IN (?) AND qr.status = 'COMPONENT'`,
+        [batchIds]
+      );
+      batchComponents = compRows.map(row => ({
+        ...row,
+        qty: row.quantity || row.qty,
+        quantity: row.quantity || row.qty,
+        rate: parseFloat(row.rate || 0),
+        bom_cost: parseFloat(row.bom_cost || 0),
+        pending_bom_cost: row.pending_bom_cost ? parseFloat(row.pending_bom_cost) : null,
+        is_cost_frozen: true,
+        available_stock: parseFloat(row.available_stock || 0)
+      }));
+    }
+
+    const batchComponentsMap = {};
+    for (const r of rows) {
+      const bId = r.batch_id;
+      if (!bId) continue;
+
+      if (!batchComponentsMap[bId]) {
+        const parentsInBatch = rows.filter(p => p.batch_id === bId);
+        const compsInBatch = batchComponents.filter(c => c.batch_id === bId);
+
+        batchComponentsMap[bId] = {
+          parents: parentsInBatch,
+          components: compsInBatch
+        };
+      }
+    }
+
     // Enrich with sub-assemblies for items with BOM structure
     const enrichedRows = await Promise.all(rows.map(async (row) => {
-      // Fetch components for items that might have a BOM (ASSEMBLY or PART)
-      // Use direct identifiers from QR if available as they are more reliable for the specific version
       const itemCode = row.item_code || null;
       const drawingNo = (row.drawing_no && row.drawing_no !== '—') ? row.drawing_no : null;
       const soiId = row.sales_order_item_id || null;
+
+      const g = (row.item_group || '').toUpperCase();
+      const isAssembly = g.includes('ASSEMBLY');
+
+      if (!isAssembly) {
+        return { ...row, sub_assemblies: [] };
+      }
+
+      if (row.batch_id && batchComponentsMap[row.batch_id]) {
+        const { parents, components } = batchComponentsMap[row.batch_id];
+        const matchingParents = parents.filter(p => 
+          (p.item_code === itemCode && p.item_code !== null) ||
+          (p.drawing_no === drawingNo && p.drawing_no !== null && p.drawing_no !== '—' && p.drawing_no !== 'NA')
+        );
+
+        const parentIds = matchingParents.map(p => String(p.id || p.qr_id || p.parent_id));
+        const parentDrawings = matchingParents.map(p => p.drawing_no).filter(d => d && d !== '—' && d !== 'NA');
+        const parentDescs = matchingParents.map(p => p.description || p.item_description).filter(Boolean);
+
+        const matchCandidates = new Set([
+          ...parentIds,
+          ...parentDrawings,
+          ...parentDescs,
+          drawingNo
+        ]);
+
+        const matchedComponents = components.filter(c => 
+          (row.version === undefined || c.version === row.version) &&
+          matchCandidates.has(String(c.rejection_reason))
+        );
+
+        if (matchedComponents.length > 0) {
+          return { ...row, sub_assemblies: matchedComponents };
+        }
+      }
 
       if (soiId || itemCode || drawingNo) {
         try {
@@ -105,10 +197,7 @@ const getQuotationRequests = async (req, res, next) => {
             row.created_at,
             row.version
           );
-          const g = (row.item_group || '').toUpperCase();
-          const isAssembly = g.includes('ASSEMBLY');
-          const isPart = g.includes('PART');
-          const sub_assemblies = isAssembly ? components : [];
+          const sub_assemblies = components;
           return { ...row, sub_assemblies };
         } catch (err) {
           console.error(`Error fetching sub-assemblies for QR ${row.id}:`, err);
