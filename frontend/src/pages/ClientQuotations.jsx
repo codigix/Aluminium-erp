@@ -71,7 +71,9 @@ const compareVersions = (a, b) => {
 
 const ClientQuotations = () => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('pending'); // 'pending', 'sent', or 'received'
+  const [activeTab, setActiveTab] = useState(() => {
+    return sessionStorage.getItem('clientQuotations_activeTab') || 'pending';
+  }); // 'pending', 'sent', or 'received'
   const [groupedByClient, setGroupedByClient] = useState({});
   const [sentQuotations, setSentQuotations] = useState([]);
   const [receivedQuotations, setReceivedQuotations] = useState([]);
@@ -587,6 +589,10 @@ const ClientQuotations = () => {
     ]);
     setLoading(false);
   };
+
+  useEffect(() => {
+    sessionStorage.setItem('clientQuotations_activeTab', activeTab);
+  }, [activeTab]);
 
   useEffect(() => {
     fetchUnreadCounts();
