@@ -4,6 +4,87 @@ const stockService = require('./stockService');
 const getAllStockEntries = async (filters = {}) => {
   let query = `
     SELECT se.*, 
+           COALESCE(
+             (
+               SELECT pp_inner.bom_no 
+               FROM grns g_inner
+               JOIN purchase_orders po_inner ON g_inner.po_number = po_inner.po_number
+               JOIN material_requests mr_inner ON po_inner.mr_id = mr_inner.id
+               JOIN production_plans pp_inner ON mr_inner.plan_id = pp_inner.id 
+               WHERE g_inner.id = se.grn_id 
+               LIMIT 1
+             ),
+             (
+               SELECT soi_inner.drawing_no 
+               FROM grns g_inner
+               JOIN purchase_orders po_inner ON g_inner.po_number = po_inner.po_number
+               JOIN sales_order_items soi_inner ON po_inner.sales_order_id = soi_inner.sales_order_id
+               WHERE g_inner.id = se.grn_id 
+               LIMIT 1
+             )
+           ) as drawing_no,
+           COALESCE(
+             (
+               SELECT ppi_inner.description 
+               FROM grns g_inner
+               JOIN purchase_orders po_inner ON g_inner.po_number = po_inner.po_number
+               JOIN material_requests mr_inner ON po_inner.mr_id = mr_inner.id
+               JOIN production_plans pp_inner ON mr_inner.plan_id = pp_inner.id 
+               JOIN production_plan_items ppi_inner ON pp_inner.id = ppi_inner.plan_id 
+               WHERE g_inner.id = se.grn_id 
+               LIMIT 1
+             ),
+             (
+               SELECT soi_inner.description 
+               FROM grns g_inner
+               JOIN purchase_orders po_inner ON g_inner.po_number = po_inner.po_number
+               JOIN sales_order_items soi_inner ON po_inner.sales_order_id = soi_inner.sales_order_id
+               WHERE g_inner.id = se.grn_id 
+               LIMIT 1
+             )
+           ) as finished_good,
+           (
+             SELECT po_inner.po_number 
+             FROM grns g_inner 
+             JOIN purchase_orders po_inner ON g_inner.po_number = po_inner.po_number 
+             WHERE g_inner.id = se.grn_id 
+             LIMIT 1
+           ) as po_number,
+           (
+             SELECT v.vendor_name 
+             FROM grns g_inner 
+             JOIN purchase_orders po_inner ON g_inner.po_number = po_inner.po_number 
+             JOIN vendors v ON po_inner.vendor_id = v.id
+             WHERE g_inner.id = se.grn_id 
+             LIMIT 1
+           ) as vendor_name,
+           (
+             SELECT COALESCE(
+               (SELECT so.project_name FROM sales_orders so WHERE so.id = po_inner.sales_order_id AND so.is_sales_order = 1),
+               (SELECT o.project_name FROM orders o WHERE o.id = po_inner.sales_order_id AND o.source_type = 'DIRECT'),
+               'Stock/Internal'
+             )
+             FROM grns g_inner 
+             JOIN purchase_orders po_inner ON g_inner.po_number = po_inner.po_number 
+             WHERE g_inner.id = se.grn_id 
+             LIMIT 1
+           ) as project_name,
+           (
+             SELECT COALESCE(
+               (SELECT c.company_name FROM companies c JOIN sales_orders so ON c.id = so.company_id WHERE so.id = po_inner.sales_order_id),
+               (SELECT c.company_name FROM companies c JOIN orders o ON c.id = o.client_id WHERE o.id = po_inner.sales_order_id AND o.source_type = 'DIRECT'),
+               'Internal'
+             )
+             FROM grns g_inner 
+             JOIN purchase_orders po_inner ON g_inner.po_number = po_inner.po_number 
+             WHERE g_inner.id = se.grn_id 
+             LIMIT 1
+           ) as client_name,
+           (
+             SELECT GROUP_CONCAT(sei.item_code) 
+             FROM stock_entry_items sei 
+             WHERE sei.stock_entry_id = se.id
+           ) as material_ids,
            fw.warehouse_name as from_warehouse_name,
            tw.warehouse_name as to_warehouse_name,
            u.username as creator_name
@@ -48,6 +129,87 @@ const getAllStockEntries = async (filters = {}) => {
 const getStockEntryById = async (id) => {
   const [rows] = await pool.query(
     `SELECT se.*, 
+            COALESCE(
+              (
+                SELECT pp_inner.bom_no 
+                FROM grns g_inner
+                JOIN purchase_orders po_inner ON g_inner.po_number = po_inner.po_number
+                JOIN material_requests mr_inner ON po_inner.mr_id = mr_inner.id
+                JOIN production_plans pp_inner ON mr_inner.plan_id = pp_inner.id 
+                WHERE g_inner.id = se.grn_id 
+                LIMIT 1
+              ),
+              (
+                SELECT soi_inner.drawing_no 
+                FROM grns g_inner
+                JOIN purchase_orders po_inner ON g_inner.po_number = po_inner.po_number
+                JOIN sales_order_items soi_inner ON po_inner.sales_order_id = soi_inner.sales_order_id
+                WHERE g_inner.id = se.grn_id 
+                LIMIT 1
+              )
+            ) as drawing_no,
+            COALESCE(
+              (
+                SELECT ppi_inner.description 
+                FROM grns g_inner
+                JOIN purchase_orders po_inner ON g_inner.po_number = po_inner.po_number
+                JOIN material_requests mr_inner ON po_inner.mr_id = mr_inner.id
+                JOIN production_plans pp_inner ON mr_inner.plan_id = pp_inner.id 
+                JOIN production_plan_items ppi_inner ON pp_inner.id = ppi_inner.plan_id 
+                WHERE g_inner.id = se.grn_id 
+                LIMIT 1
+              ),
+              (
+                SELECT soi_inner.description 
+                FROM grns g_inner
+                JOIN purchase_orders po_inner ON g_inner.po_number = po_inner.po_number
+                JOIN sales_order_items soi_inner ON po_inner.sales_order_id = soi_inner.sales_order_id
+                WHERE g_inner.id = se.grn_id 
+                LIMIT 1
+              )
+            ) as finished_good,
+            (
+              SELECT po_inner.po_number 
+              FROM grns g_inner 
+              JOIN purchase_orders po_inner ON g_inner.po_number = po_inner.po_number 
+              WHERE g_inner.id = se.grn_id 
+              LIMIT 1
+            ) as po_number,
+            (
+              SELECT v.vendor_name 
+              FROM grns g_inner 
+              JOIN purchase_orders po_inner ON g_inner.po_number = po_inner.po_number 
+              JOIN vendors v ON po_inner.vendor_id = v.id
+              WHERE g_inner.id = se.grn_id 
+              LIMIT 1
+            ) as vendor_name,
+            (
+              SELECT COALESCE(
+                (SELECT so.project_name FROM sales_orders so WHERE so.id = po_inner.sales_order_id AND so.is_sales_order = 1),
+                (SELECT o.project_name FROM orders o WHERE o.id = po_inner.sales_order_id AND o.source_type = 'DIRECT'),
+                'Stock/Internal'
+              )
+              FROM grns g_inner 
+              JOIN purchase_orders po_inner ON g_inner.po_number = po_inner.po_number 
+              WHERE g_inner.id = se.grn_id 
+              LIMIT 1
+            ) as project_name,
+            (
+              SELECT COALESCE(
+                (SELECT c.company_name FROM companies c JOIN sales_orders so ON c.id = so.company_id WHERE so.id = po_inner.sales_order_id),
+                (SELECT c.company_name FROM companies c JOIN orders o ON c.id = o.client_id WHERE o.id = po_inner.sales_order_id AND o.source_type = 'DIRECT'),
+                'Internal'
+              )
+              FROM grns g_inner 
+              JOIN purchase_orders po_inner ON g_inner.po_number = po_inner.po_number 
+              WHERE g_inner.id = se.grn_id 
+              LIMIT 1
+            ) as client_name,
+            (
+              SELECT GROUP_CONCAT(sei.item_code) 
+              FROM stock_entry_items sei 
+              WHERE sei.stock_entry_id = se.id
+            ) as material_ids,
             fw.warehouse_name as from_warehouse_name,
             tw.warehouse_name as to_warehouse_name,
             u.username as creator_name

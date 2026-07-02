@@ -486,10 +486,16 @@ const GRNProcessing = () => {
   };
 
   const filteredGrns = grns.filter(grn => {
+    const grnCode = `GRN-${String(grn.id).padStart(4, '0')}`;
     const matchesSearch = 
       String(grn.id).toLowerCase().includes(searchTerm.toLowerCase()) ||
+      grnCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
       grn.poNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      grn.vendorName?.toLowerCase().includes(searchTerm.toLowerCase());
+      grn.vendorName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      grn.drawing_no?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      grn.finished_good?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      grn.projectName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      grn.clientName?.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesStatus = statusFilter === 'all' || grn.status === statusFilter;
     
@@ -498,28 +504,45 @@ const GRNProcessing = () => {
 
   const columns = [
     { 
-      label: 'GRN Number', 
+      label: 'GRN No.', 
       key: 'id', 
       sortable: true, 
-      render: (val) => <span className="   text-slate-900">GRN-{String(val).padStart(4, '0')}</span> 
+      render: (val) => <span className="text-slate-900 font-medium">GRN-{String(val).padStart(4, '0')}</span> 
     },
     { 
-      label: 'PO Number', 
+      label: 'PO No.', 
       key: 'poNumber', 
       sortable: true,
-      render: (val) => <span className="text-slate-600 ">{val || '—'}</span>
+      render: (val) => <span className="text-slate-600 font-medium">{val || '—'}</span>
+    },
+    {
+      label: 'Drawing',
+      key: 'drawing_no',
+      sortable: true,
+      render: (val, row) => (
+        <div className="flex flex-col">
+          <span className="text-xs font-semibold text-[#111827] leading-[16px]">
+            {row.drawing_no || '—'}
+          </span>
+          {row.finished_good && (
+            <span className="text-[10px] text-[#6B7280] leading-[14px] mt-0.5">
+              {row.finished_good}
+            </span>
+          )}
+        </div>
+      )
     },
     { 
       label: 'Client', 
       key: 'clientName', 
       sortable: true,
-      render: (val) => <span className="text-slate-700 text-xs truncate max-w-[120px] block" title={val}>{val || '—'}</span>
+      render: (val) => <span className="text-slate-700 text-xs font-medium truncate max-w-[120px] block" title={val}>{val || '—'}</span>
     },
     { 
-      label: 'Project Name', 
+      label: 'Project', 
       key: 'projectName', 
       sortable: true,
-      render: (val) => <span className="text-slate-600 text-[11px] truncate max-w-[150px] block italic" title={val}>{val || '—'}</span>
+      render: (val) => <span className="text-slate-700 text-xs font-semibold truncate max-w-[150px] block" title={val}>{val || '—'}</span>
     },
     { 
       label: 'Supplier', 
@@ -708,7 +731,7 @@ const GRNProcessing = () => {
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
-            placeholder="Search GRN, PO, or Supplier..."
+            placeholder="Search by Drawing No., Finished Good, GRN No., PO No., Project No., Client, or Supplier..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded  text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:bg-white transition-all"

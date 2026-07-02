@@ -490,12 +490,17 @@ export const Badge = ({ children, variant = 'default', className = '' }) => {
 export const Modal = ({ isOpen, onClose, title, children, className = '', size = '4xl', overlayClassName = 'z-50' }) => {
   useEffect(() => {
     if (isOpen) {
+      // Measure scrollbar width before hiding it, compensate to prevent layout shift
+      const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
       document.body.style.overflow = 'hidden';
+      document.body.style.paddingRight = `${scrollbarWidth}px`;
     } else {
-      document.body.style.overflow = 'unset';
+      document.body.style.overflow = '';
+      document.body.style.paddingRight = '';
     }
     return () => {
-      document.body.style.overflow = 'unset';
+      document.body.style.overflow = '';
+      document.body.style.paddingRight = '';
     };
   }, [isOpen]);
 
@@ -522,14 +527,14 @@ export const Modal = ({ isOpen, onClose, title, children, className = '', size =
 
   return (
     <div className={`fixed inset-0 flex flex-col items-center justify-start bg-black/60 backdrop-blur-sm overflow-y-auto py-4 sm:py-8 ${overlayClassName}`} onClick={onClose}>
-      <div className={`rounded  shadow-2xl ${maxWidth} w-full ${isFull ? 'min-h-full mx-0 rounded-none !my-0' : 'mx-4 h-fit max-h-[85vh] flex flex-col overflow-hidden'} border ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} ${className}`} onClick={(e) => e.stopPropagation()}>
-        <div className={`sticky top-0 z-10 border-b p-2 flex items-center justify-between ${isDark ? 'bg-slate-900/95 border-slate-800 text-white' : 'bg-white/95 border-slate-100 text-slate-900 '}`}>
+      <div className={`rounded  shadow-2xl ${maxWidth} w-full ${isFull ? 'min-h-full mx-0 rounded-none !my-0' : 'mx-4 max-h-[90vh] flex flex-col'} border ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'} ${className}`} onClick={(e) => e.stopPropagation()}>
+        <div className={`sticky top-0 z-10 border-b p-2 flex items-center justify-between flex-shrink-0 ${isDark ? 'bg-slate-900/95 border-slate-800 text-white' : 'bg-white/95 border-slate-100 text-slate-900 '}`}>
           <h2 className="text-lg  ">{title}</h2>
           <button onClick={onClose} className={`p-2 rounded  transition-colors ${isDark ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-slate-100 text-slate-600'}`}>
             <X className="w-3 h-3" />
           </button>
         </div>
-        <div className="p-2 overflow-y-auto flex-1">
+        <div className="overflow-y-auto flex-1">
           {children}
         </div>
       </div>

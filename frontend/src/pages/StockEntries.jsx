@@ -333,8 +333,17 @@ const StockEntries = () => {
   };
 
   const filteredEntries = entries.filter(entry => {
+    const grnCode = entry.grn_id ? `GRN-${String(entry.grn_id).padStart(4, '0')}` : '';
     const matchesSearch = 
       entry.entry_no.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      grnCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (entry.po_number && entry.po_number.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (entry.drawing_no && entry.drawing_no.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (entry.finished_good && entry.finished_good.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (entry.project_name && entry.project_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (entry.client_name && entry.client_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (entry.vendor_name && entry.vendor_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (entry.material_ids && entry.material_ids.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (entry.purpose && entry.purpose.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (entry.from_warehouse_name && entry.from_warehouse_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (entry.to_warehouse_name && entry.to_warehouse_name.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -391,7 +400,7 @@ const StockEntries = () => {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input 
               type="text" 
-              placeholder="Search by ID, No, or warehouse..." 
+              placeholder="Search by Drawing No., Finished Good, Entry No., GRN No., PO No., Project No., Material ID, or Warehouse..." 
               className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded  text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
@@ -436,9 +445,10 @@ const StockEntries = () => {
           <table className="w-full text-sm">
             <thead className="bg-slate-50 border-y border-slate-200 text-slate-500   text-xs ">
               <tr>
-                <th className="p-2  text-left">Entry No</th>
+                <th className="p-2  text-left">Entry No.</th>
+                <th className="p-2  text-left">Drawing</th>
                 <th className="p-2  text-left">Type & Purpose</th>
-                <th className="p-2  text-left">Warehouse (Source → Dest)</th>
+                <th className="p-2  text-left">Warehouse</th>
                 <th className="p-2  text-left">Status</th>
                 <th className="p-2  text-left">Date</th>
                 <th className="p-2  text-left text-center">Items</th>
@@ -448,22 +458,34 @@ const StockEntries = () => {
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan="7" className="px-4 p-2 text-center text-slate-400">
+                  <td colSpan="8" className="px-4 p-2 text-center text-slate-400">
                     <RotateCw className="w-3 h-3 animate-spin mx-auto mb-2" />
                     Loading stock entries...
                   </td>
                 </tr>
               ) : filteredEntries.length === 0 ? (
                 <tr>
-                  <td colSpan="7" className="px-4 p-2 text-center text-slate-400">
+                  <td colSpan="8" className="px-4 p-2 text-center text-slate-400">
                     No entries found matching filters
                   </td>
                 </tr>
               ) : filteredEntries.map(entry => (
                 <tr key={entry.id} className="hover:bg-slate-50 transition-colors group">
                   <td className="p-2 ">
-                    <div className=" text-slate-900">{entry.entry_no}</div>
+                    <div className=" text-slate-900 font-semibold">{entry.entry_no}</div>
                     <div className="text-xs text-slate-400  er">ID: {entry.id}</div>
+                  </td>
+                  <td className="p-2 ">
+                    <div className="flex flex-col">
+                      <span className="text-xs font-semibold text-[#111827] leading-[16px]">
+                        {entry.drawing_no || '—'}
+                      </span>
+                      {entry.finished_good && (
+                        <span className="text-[10px] text-[#6B7280] leading-[14px] mt-0.5">
+                          {entry.finished_good}
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="p-2 ">
                     <div className="flex items-center gap-2   text-slate-700">
@@ -478,11 +500,11 @@ const StockEntries = () => {
                   </td>
                   <td className="p-2 ">
                     <div className="flex items-center gap-2  text-slate-600">
-                      <span className={entry.from_warehouse_name ? "text-slate-900 " : "text-slate-400 italic"}>
+                      <span className={entry.from_warehouse_name ? "text-slate-900 font-semibold" : "text-slate-400 italic"}>
                         {entry.from_warehouse_name || 'N/A'}
                       </span>
                       <ArrowRight className="w-3 h-3 text-slate-300" />
-                      <span className={entry.to_warehouse_name ? "text-slate-900 " : "text-slate-400 italic"}>
+                      <span className={entry.to_warehouse_name ? "text-slate-900 font-semibold" : "text-slate-400 italic"}>
                         {entry.to_warehouse_name || 'N/A'}
                       </span>
                     </div>
@@ -493,7 +515,7 @@ const StockEntries = () => {
                     </Badge>
                   </td>
                   <td className="p-2  text-slate-600">
-                    {new Date(entry.entry_date).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                    {new Date(entry.entry_date).toLocaleDateString('en-GB')}
                   </td>
                   <td className="p-2  text-center  text-slate-700">
                     {entry.item_count}

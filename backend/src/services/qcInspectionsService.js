@@ -249,6 +249,37 @@ const getAllQCs = async () => {
       (SELECT id FROM stock_entries WHERE grn_id = qc.grn_id LIMIT 1) AS stock_entry_id,
       (SELECT entry_no FROM stock_entries WHERE grn_id = qc.grn_id LIMIT 1) AS stock_entry_no,
       g.po_number,
+      COALESCE(
+        (
+          SELECT pp_inner.bom_no 
+          FROM material_requests mr_inner 
+          JOIN production_plans pp_inner ON mr_inner.plan_id = pp_inner.id 
+          WHERE mr_inner.id = po.mr_id 
+          LIMIT 1
+        ),
+        (
+          SELECT soi_inner.drawing_no 
+          FROM sales_order_items soi_inner 
+          WHERE soi_inner.sales_order_id = po.sales_order_id 
+          LIMIT 1
+        )
+      ) as drawing_no,
+      COALESCE(
+        (
+          SELECT ppi_inner.description 
+          FROM material_requests mr_inner 
+          JOIN production_plans pp_inner ON mr_inner.plan_id = pp_inner.id 
+          JOIN production_plan_items ppi_inner ON pp_inner.id = ppi_inner.plan_id 
+          WHERE mr_inner.id = po.mr_id 
+          LIMIT 1
+        ),
+        (
+          SELECT soi_inner.description 
+          FROM sales_order_items soi_inner 
+          WHERE soi_inner.sales_order_id = po.sales_order_id 
+          LIMIT 1
+        )
+      ) as finished_good,
       po.vendor_id,
       v.vendor_name AS vendor_name,
       v.email AS vendor_email,

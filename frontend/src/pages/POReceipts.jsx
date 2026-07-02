@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Card, DataTable, StatusBadge, Modal, FormControl } from '../components/ui.jsx';
+import { Card, DataTable, StatusBadge, Modal, FormControl, SearchableSelect } from '../components/ui.jsx';
 import { 
   Plus, 
   Search, 
@@ -672,68 +672,67 @@ const POReceipts = () => {
   const columns = [
     {
       key: 'id',
-      label: 'GRN Number',
+      label: 'GRN No',
       sortable: true,
       width: '12%',
       render: (val, row) => (
-        <span className=" text-slate-900 text-xs ">{`GRN-${String(row.id).padStart(4, '0')}`}</span>
+        <span className=" text-slate-900 text-xs font-medium">{`GRN-${String(row.id).padStart(4, '0')}`}</span>
+      )
+    },
+    {
+      label: 'Drawing',
+      key: 'drawing_no',
+      sortable: true,
+      width: '18%',
+      render: (val, row) => (
+        <div className="flex flex-col">
+          <span className="text-xs font-semibold text-[#111827] leading-[16px]">
+            {row.drawing_no || '—'}
+          </span>
+          {row.finished_good && (
+            <span className="text-[10px] text-[#6B7280] leading-[14px] mt-0.5">
+              {row.finished_good}
+            </span>
+          )}
+        </div>
       )
     },
     {
       key: 'po_number',
-      label: 'PO Number',
+      label: 'PO No',
       sortable: true,
       width: '12%',
       render: (val) => (
-        <span className="text-xs  text-slate-600 bg-slate-50 px-2 rounded border border-slate-100  ">#{val || 'Direct'}</span>
+        <span className="text-xs text-slate-600 bg-slate-50 px-2 py-0.5 rounded border border-slate-100 font-medium">#{val || 'Direct'}</span>
       )
     },
     { 
       key: 'vendor_name', 
       label: 'Supplier', 
       sortable: true,
-      width: '20%',
+      width: '15%',
       render: (val) => (
-        <div className="flex flex-col">
-          <span className=" text-slate-900 text-xs ">{val}</span>
-        </div>
+        <span className="text-slate-900 text-xs font-medium">{val}</span>
       )
     },
     {
       key: 'project_name',
       label: 'Project / Customer',
       sortable: true,
-      width: '30%',
+      width: '23%',
       className: 'whitespace-normal',
-      render: (val, row) => {
-        if (!val) return '—';
-        // Intelligent split: break at " for " (case insensitive) to keep drawing numbers on top line
-        const parts = val.split(/\s+for\s+/i);
-        return (
-          <div className="flex flex-col min-w-[150px] max-w-[320px]">
-            <div className="flex flex-col">
-              <span className="text-slate-900  text-[13px] leading-tight break-words">
-                {parts[0]}
-              </span>
-              {parts.length > 1 && (
-                <span className="text-[11px] text-slate-600  leading-relaxed mt-0.5 break-words">
-                  for {parts.slice(1).join(' for ')}
-                </span>
-              )}
-            </div>
-            {row.company_name && (
-              <div className="flex items-center gap-2 mt-1.5 pt-1 border-t border-slate-100/80">
-                <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-600 text-[9px]  rounded border border-indigo-100 shrink-0 uppercase tracking-wider">
-                  Client
-                </span>
-                <span className="text-[11px] text-slate-500  italic truncate" title={row.company_name}>
-                  {row.company_name}
-                </span>
-              </div>
-            )}
-          </div>
-        );
-      }
+      render: (val, row) => (
+        <div className="flex flex-col py-1">
+          <span className="text-xs font-semibold text-slate-800 leading-[16px]">
+            {val || '—'}
+          </span>
+          {row.company_name && (
+            <span className="text-[10px] text-slate-500 font-medium leading-[14px] mt-0.5">
+              {row.company_name}
+            </span>
+          )}
+        </div>
+      )
     },
     {
       key: 'receipt_date',
@@ -949,7 +948,7 @@ const POReceipts = () => {
         <div className="relative flex-1">
           <input 
             type="text" 
-            placeholder="Search by GRN #, PO #, or Supplier..."
+            placeholder="Search by Drawing No., Finished Good, GRN No., PO No., Project No., or Supplier..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-11 pr-4 py-2.5 bg-white border border-slate-200 rounded  text-xs focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all "
@@ -983,10 +982,15 @@ const POReceipts = () => {
           <DataTable
             columns={columns}
             data={receipts.filter(r => {
+              const grnCode = `GRN-${String(r.id).padStart(4, '0')}`;
               const matchesSearch = !searchTerm || 
                 String(r.id).includes(searchTerm) ||
+                grnCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 r.po_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                r.vendor_name?.toLowerCase().includes(searchTerm.toLowerCase());
+                r.vendor_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                r.drawing_no?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                r.finished_good?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                r.project_name?.toLowerCase().includes(searchTerm.toLowerCase());
               const matchesStatus = statusFilter === 'ALL' || r.status === statusFilter;
               return matchesSearch && matchesStatus;
             })}
@@ -1279,19 +1283,17 @@ const POReceipts = () => {
                   />
                 </FormControl>
 
-                <FormControl label="Purchase Order">
-                  <select
-                    value={formData.poId}
+                <FormControl label="Select Drawing *">
+                  <SearchableSelect
+                    options={purchaseOrders.filter(po => po.drawing_no).map(po => ({
+                      label: `${po.drawing_no} - ${po.finished_good || 'No description'}`,
+                      value: String(po.id)
+                    }))}
+                    value={formData.poId || ''}
                     onChange={(e) => handlePoChange(e.target.value)}
-                    className="w-full p-2 bg-white border border-slate-200 rounded text-xs  text-slate-900 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all appearance-none cursor-pointer"
-                  >
-                    <option value="">Select PO (Optional)</option>
-                    {purchaseOrders.map(po => (
-                      <option key={po.id} value={po.id}>
-                        {po.po_number} - {po.vendor_name}
-                      </option>
-                    ))}
-                  </select>
+                    placeholder="Search & Select Drawing No..."
+                    allowCustom={false}
+                  />
                 </FormControl>
 
                 <FormControl label="Receipt Date *">
@@ -1307,43 +1309,64 @@ const POReceipts = () => {
 
               <div className="pt-6 border-t border-slate-100">
                 <div className="flex items-center gap-2 mb-4">
-                  <div className="w-5 h-5 bg-slate-100 rounded  flex items-center justify-center text-slate-500">
-                    <User className="w-5 h-5" />
+                  <div className="w-5 h-5 bg-slate-100 rounded flex items-center justify-center text-slate-500">
+                    <ClipboardCheck className="w-4 h-4 text-slate-500" />
                   </div>
                   <div>
-                    <h4 className="text-xs  text-slate-800  ">Supplier Info</h4>
-                    <p className="text-[8px] text-slate-400   er">Verified supplier details</p>
+                    <h4 className="text-xs font-semibold text-slate-800">Drawing & PO Info</h4>
+                    <p className="text-[8px] text-slate-400">Auto-fetched drawing context</p>
                   </div>
                 </div>
                 
-                <div className="p-2 bg-slate-50 rounded  border border-slate-100 space-y-3 ">
-                  {formData.vendorName ? (
-                    <>
-                      <div>
-                        <p className="text-xs text-slate-500   ">Selected Supplier</p>
-                        <p className="text-xs  text-slate-900 mt-0.5">{formData.vendorName}</p>
-                      </div>
-                      {formData.project_name && (
+                <div className="p-2.5 bg-slate-50 rounded border border-slate-100 space-y-3">
+                  {formData.poId ? (() => {
+                    const poDetails = purchaseOrders.find(po => String(po.id) === String(formData.poId));
+                    const orderedQty = formData.items.reduce((sum, item) => sum + parseFloat(item.quantity || 0), 0);
+                    const receivedQty = formData.items.reduce((sum, item) => sum + parseFloat(item.received_qty || 0), 0);
+                    const pendingQty = Math.max(0, orderedQty - receivedQty);
+                    
+                    return (
+                      <div className="space-y-2 text-xs animate-in fade-in duration-300">
                         <div>
-                          <p className="text-xs text-slate-500   ">Project</p>
-                          <p className="text-xs  text-slate-900 mt-0.5 ">{formData.project_name}</p>
+                          <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block">Drawing No.</span>
+                          <span className="text-xs font-bold text-slate-800">{poDetails?.drawing_no || '—'}</span>
                         </div>
-                      )}
-                      {formData.company_name && (
                         <div>
-                          <p className="text-xs text-slate-500   ">Customer</p>
-                          <p className="text-xs  text-slate-900 mt-0.5">{formData.company_name}</p>
+                          <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block">Finished Good</span>
+                          <span className="text-xs font-medium text-slate-700 block whitespace-normal leading-normal">{poDetails?.finished_good || '—'}</span>
                         </div>
-                      )}
-                      <div>
-                        <p className="text-xs text-slate-500   ">Supplier ID</p>
-                        <p className="text-xs  text-blue-600 mt-0.5 ">#{formData.vendorId || 'N/A'}</p>
+                        <div>
+                          <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block">PO Number</span>
+                          <span className="text-xs font-semibold text-slate-700">{poDetails?.po_number || '—'}</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block">Supplier</span>
+                          <span className="text-xs font-bold text-slate-850">{formData.vendorName || '—'}</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block">Project No.</span>
+                          <span className="text-xs font-semibold text-slate-700">{formData.project_name || '—'}</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-200">
+                          <div>
+                            <span className="text-[9px] text-slate-400 font-semibold uppercase block">Ordered</span>
+                            <span className="text-[11px] font-semibold text-slate-700">{orderedQty}</span>
+                          </div>
+                          <div>
+                            <span className="text-[9px] text-slate-400 font-semibold uppercase block">Received</span>
+                            <span className="text-[11px] font-semibold text-emerald-600">{receivedQty}</span>
+                          </div>
+                          <div>
+                            <span className="text-[9px] text-slate-400 font-semibold uppercase block">Pending</span>
+                            <span className="text-[11px] font-semibold text-rose-600">{pendingQty}</span>
+                          </div>
+                        </div>
                       </div>
-                    </>
-                  ) : (
-                    <div className="text-center py-2">
-                      <p className="text-sm  text-slate-400 italic">No Supplier Linked</p>
-                      <p className="text-xs text-slate-400 mt-1   ">Link a PO above</p>
+                    );
+                  })() : (
+                    <div className="text-center py-4">
+                      <p className="text-xs text-slate-400 italic">No Drawing Selected</p>
+                      <p className="text-[9px] text-slate-400 mt-1">Select a drawing above to fetch details</p>
                     </div>
                   )}
                 </div>
@@ -1431,31 +1454,32 @@ const POReceipts = () => {
                 </button>
               </div>
 
-              <div className="bg-white border border-slate-100 rounded overflow-hidden ">
+              <div className="bg-white border border-slate-100 rounded overflow-hidden">
                 <table className="w-full text-left">
                   <thead className="bg-slate-50/80">
-                    <tr className="text-xs  text-slate-500   border-b border-slate-200">
-                      <th className="p-2 ">Item Details</th>
-                      <th className="p-2 ">Warehouse</th>
-                      <th className="p-2  text-center">Design Qty</th>
-                      <th className="p-2  text-center">Required</th>
-                      <th className="p-2  text-center">Receiving Qty</th>
-                      <th className="p-2  text-center">Rate</th>
-                      <th className="p-2  text-center">Amount</th>
-                      <th className="p-2  text-center">Action</th>
+                    <tr className="text-xs text-slate-500 border-b border-slate-200">
+                      <th className="p-2 pl-4">Item ID</th>
+                      <th className="p-2">Material Name & Dimensions</th>
+                      <th className="p-2 text-center w-24">Ordered Qty</th>
+                      <th className="p-2 text-center w-24">Receiving Qty</th>
+                      <th className="p-2 text-center w-28">Rate</th>
+                      <th className="p-2 text-right pr-4 w-32">Amount</th>
+                      <th className="p-2 text-center w-12"></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
                     {formData.items.map((item, idx) => (
                       <tr key={idx} className="group hover:bg-slate-50/30 transition-all">
-                        <td className="p-2 ">
+                        <td className="p-2 pl-4">
                           <div className="flex flex-col">
                             {item.poId || formData.poId ? (
                               <div className="flex flex-col">
-                                <span className=" text-slate-900 text-xs">{item.material_name || item.item_code || 'Select Item.'}</span>
-                                <span className="text-xs text-slate-500   mt-0.5 ">
-                                  {item.item_code ? `Code: ${item.item_code}` : 'Manual entry item'}
-                                </span>
+                                <span className="text-slate-900 text-xs font-semibold">{item.item_code || '—'}</span>
+                                {item.description && (
+                                  <span className="text-[10px] text-slate-400 mt-0.5 leading-normal max-w-[200px] break-words">
+                                    {item.description}
+                                  </span>
+                                )}
                               </div>
                             ) : (
                               <select 
@@ -1470,88 +1494,83 @@ const POReceipts = () => {
                                     handleItemChange(idx, 'rate', selectedItem.valuation_rate || 0);
                                   }
                                 }}
-                                className="bg-transparent  text-slate-900 text-xs w-full outline-none focus:text-blue-600 transition-colors appearance-none cursor-pointer"
+                                className="bg-transparent text-slate-900 text-xs w-full outline-none focus:text-blue-600 transition-colors appearance-none cursor-pointer font-semibold"
                               >
                                 <option value="">Select Item.</option>
                                 {stockItems.map(si => (
-                                  <option key={si.id} value={si.item_code}>{si.item_code} - {si.material_name}</option>
+                                  <option key={si.id} value={si.item_code}>{si.item_code}</option>
                                 ))}
                               </select>
                             )}
-                            {item.description && item.description !== item.material_name && (
-                              <p className="text-xs text-slate-500  mt-0.5 truncate max-w-[150px] italic">
-                                {item.description}
-                              </p>
-                            )}
+                          </div>
+                        </td>
+                        <td className="p-2">
+                          <div className="flex flex-col gap-1 min-w-[200px]">
+                            <span className="text-xs text-slate-700 font-medium">{item.material_name || '—'}</span>
                             {(item.length > 0 || item.width > 0 || item.thickness > 0 || item.diameter > 0) && (
-                              <div className="flex flex-wrap gap-x-2 gap-y-1 mt-1">
-                                {item.length > 0 && <span className="text-xs  text-slate-400">L: {item.length}</span>}
-                                {item.width > 0 && <span className="text-xs  text-slate-400">W: {item.width}</span>}
-                                {item.thickness > 0 && <span className="text-xs  text-slate-400">T: {item.thickness}</span>}
-                                {item.diameter > 0 && <span className="text-xs  text-slate-400">Dia: {item.diameter}</span>}
-                                {item.outer_diameter > 0 && <span className="text-xs  text-slate-400">OD: {item.outer_diameter}</span>}
+                              <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] text-slate-400">
+                                {item.length > 0 && <span>L: {item.length}</span>}
+                                {item.width > 0 && <span>W: {item.width}</span>}
+                                {item.thickness > 0 && <span>T: {item.thickness}</span>}
+                                {item.diameter > 0 && <span>Dia: {item.diameter}</span>}
+                                {item.outer_diameter > 0 && <span>OD: {item.outer_diameter}</span>}
                               </div>
                             )}
+                            <div className="mt-1 flex items-center gap-1.5">
+                              <span className="text-[9px] font-semibold text-slate-400 uppercase">Store:</span>
+                              <select
+                                value={item.warehouse}
+                                onChange={(e) => handleItemChange(idx, 'warehouse', e.target.value)}
+                                className="bg-transparent text-xs text-slate-600 outline-none border-b border-slate-200 cursor-pointer font-medium pb-0.5"
+                              >
+                                {warehouses.length > 0 ? (
+                                  warehouses.map(w => (
+                                    <option key={w.id} value={w.warehouse_code}>{w.warehouse_name || w.warehouse_code}</option>
+                                  ))
+                                ) : (
+                                  <option value="main">Main Warehouse</option>
+                                )}
+                              </select>
+                            </div>
                           </div>
                         </td>
-                        <td className="p-2 ">
-                          <select
-                            value={item.warehouse}
-                            onChange={(e) => handleItemChange(idx, 'warehouse', e.target.value)}
-                            className="bg-white border border-slate-200 rounded  text-xs  py-2 px-3 outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all  min-w-[120px]"
-                          >
-                            {warehouses.length > 0 ? (
-                              warehouses.map(w => (
-                                <option key={w.id} value={w.warehouse_code}>{w.warehouse_name || w.warehouse_code}</option>
-                              ))
-                            ) : (
-                              <option value="main">main</option>
-                            )}
-                          </select>
-                        </td>
-                        <td className="p-2  text-center  text-slate-500 text-xs">
+                        <td className="p-2 text-center text-xs">
                           <div className="flex flex-col items-center">
-                            <span className=" text-slate-700">{Number(item.design_qty || 0).toFixed(3)}</span>
-                            <span className="text-xs  text-slate-400 uppercase tracking-wider">{item.unit || 'NOS'}</span>
+                            <span className="text-slate-800 font-semibold">{Number(item.quantity || 0).toFixed(0)}</span>
+                            <span className="text-[10px] text-slate-400 uppercase tracking-wider">{item.unit || 'NOS'}</span>
                           </div>
                         </td>
-                        <td className="p-2  text-center  text-slate-500 text-xs">
-                          <div className="flex flex-col items-center">
-                            <span className=" text-blue-600">{Number(item.required_qty || item.quantity || 0).toFixed(3)}</span>
-                            <span className="text-xs  text-slate-400 uppercase tracking-wider">{item.unit || 'NOS'}</span>
-                          </div>
-                        </td>
-                        <td className="p-2 ">
+                        <td className="p-2">
                           <div className="flex justify-center">
                             <input
                               type="number"
                               value={item.received_qty}
                               onChange={(e) => handleItemChange(idx, 'received_qty', e.target.value)}
-                              className="w-24 p-2 bg-slate-50 border border-slate-200 rounded  text-center text-xs  text-blue-600 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all "
+                              className="w-20 p-1.5 bg-white border border-slate-200 rounded text-center text-xs text-blue-600 font-semibold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                             />
                           </div>
                         </td>
-                        <td className="p-2 ">
+                        <td className="p-2">
                           <div className="flex justify-center">
                             <input
                               type="number"
                               value={item.rate}
                               onChange={(e) => handleItemChange(idx, 'rate', e.target.value)}
-                              className="w-24 p-2 bg-slate-50 border border-slate-200 rounded  text-center text-xs  text-emerald-600 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all "
+                              className="w-20 p-1.5 bg-white border border-slate-200 rounded text-center text-xs text-emerald-600 font-semibold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                             />
                           </div>
                         </td>
-                        <td className="p-2  text-center">
-                          <div className="flex flex-col items-center">
-                            <span className=" text-slate-900 text-xs">{formatCurrency(item.amount || 0)}</span>
-                            <span className="text-xs text-slate-400 font-normal">Incl. 18% GST: {formatCurrency((item.amount || 0) * 1.18)}</span>
+                        <td className="p-2 text-right pr-4">
+                          <div className="flex flex-col items-end">
+                            <span className="text-slate-900 text-xs font-bold">{formatCurrency(item.amount || 0)}</span>
+                            <span className="text-[9px] text-slate-400 font-normal">Incl. 18% GST</span>
                           </div>
                         </td>
-                        <td className="p-2  text-center">
+                        <td className="p-2 text-center">
                           <button
                             type="button"
                             onClick={() => handleRemoveItem(idx)}
-                            className="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded  transition-all  group-hover:opacity-100"
+                            className="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded transition-all group-hover:opacity-100"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>

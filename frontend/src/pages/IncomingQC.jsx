@@ -673,24 +673,42 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
 
   const columns = [
     {
-      label: 'GRN #',
+      label: 'GRN No',
       key: 'grn_id',
       sortable: true,
       width: '8%',
       render: (val) => (
-        <span className="text-indigo-600 ">
+        <span className="text-indigo-600 font-medium">
           {val ? `GRN-${String(val).padStart(4, '0')}` : '—'}
         </span>
       )
     },
     {
-      label: 'PO #',
+      label: 'Drawing',
+      key: 'drawing_no',
+      sortable: true,
+      width: '18%',
+      render: (val, row) => (
+        <div className="flex flex-col">
+          <span className="text-xs font-semibold text-[#111827] leading-[16px]">
+            {row.drawing_no || '—'}
+          </span>
+          {row.finished_good && (
+            <span className="text-[10px] text-[#6B7280] leading-[14px] mt-0.5">
+              {row.finished_good}
+            </span>
+          )}
+        </div>
+      )
+    },
+    {
+      label: 'PO No',
       key: 'po_number',
       sortable: true,
       width: '12%',
       render: (val, row) => (
         <div className="flex flex-col">
-          <div className="text-slate-900  text-[11px]">{val || '—'}</div>
+          <div className="text-slate-900 font-medium text-[11px]">{val || '—'}</div>
           <div className="text-[10px] text-slate-500 truncate max-w-[120px]" title={row.vendor_name}>{row.vendor_name || '—'}</div>
         </div>
       )
@@ -699,37 +717,20 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       label: 'Project / Customer',
       key: 'project_name',
       sortable: true,
-      width: '25%',
+      width: '22%',
       className: 'whitespace-normal',
-      render: (val, row) => {
-        if (!val) return '—';
-        // Intelligent split: break at " for " (case insensitive) to keep drawing numbers on top line
-        const parts = val.split(/\s+for\s+/i);
-        return (
-          <div className="flex flex-col py-0.5 pr-2 max-w-[250px]">
-            <div className="flex flex-col">
-              <span className="text-slate-900  text-[11px] leading-tight">
-                {parts[0]}
-              </span>
-              {parts.length > 1 && (
-                <span className="text-[10px] text-slate-500  leading-tight mt-0.5">
-                  for {parts.slice(1).join(' for ')}
-                </span>
-              )}
-            </div>
-            {row.company_name && (
-              <div className="flex items-center gap-1.5 mt-1 pt-1 border-t border-slate-100/50">
-                <span className="px-1 py-0.5 bg-slate-100 text-slate-600 text-[7px]  rounded uppercase er">
-                  CLIENT
-                </span>
-                <span className="text-[9px] text-slate-400  italic truncate max-w-[150px]" title={row.company_name}>
-                  {row.company_name}
-                </span>
-              </div>
-            )}
-          </div>
-        );
-      }
+      render: (val, row) => (
+        <div className="flex flex-col py-1">
+          <span className="text-xs font-semibold text-slate-800 leading-[16px]">
+            {val || '—'}
+          </span>
+          {row.company_name && (
+            <span className="text-[10px] text-slate-500 font-medium leading-[14px] mt-0.5">
+              {row.company_name}
+            </span>
+          )}
+        </div>
+      )
     },
     {
       label: 'Pass/Fail',
@@ -1124,7 +1125,17 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
                 columns={columns}
                 data={pendingInspections}
                 loading={loading}
-                searchPlaceholder="Search by GRN or PO..."
+                searchPlaceholder="Search by Drawing No., Finished Good, GRN No., PO No., Project No., or Supplier..."
+                customFilter={(row, searchLower) => {
+                  const grnCode = `GRN-${String(row.grn_id).padStart(4, '0')}`;
+                  const matchesGrn = grnCode.toLowerCase().includes(searchLower) || String(row.grn_id || '').toLowerCase().includes(searchLower);
+                  const matchesPo = String(row.po_number || '').toLowerCase().includes(searchLower);
+                  const matchesSupplier = String(row.vendor_name || '').toLowerCase().includes(searchLower);
+                  const matchesProject = String(row.project_name || '').toLowerCase().includes(searchLower);
+                  const matchesDrawing = String(row.drawing_no || '').toLowerCase().includes(searchLower);
+                  const matchesFinishedGood = String(row.finished_good || '').toLowerCase().includes(searchLower);
+                  return matchesGrn || matchesPo || matchesSupplier || matchesProject || matchesDrawing || matchesFinishedGood;
+                }}
               />
             </Card>
           </div>
@@ -1152,7 +1163,17 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
                 columns={columns}
                 data={inProgressInspections}
                 loading={loading}
-                searchPlaceholder="Search by GRN or PO..."
+                searchPlaceholder="Search by Drawing No., Finished Good, GRN No., PO No., Project No., or Supplier..."
+                customFilter={(row, searchLower) => {
+                  const grnCode = `GRN-${String(row.grn_id).padStart(4, '0')}`;
+                  const matchesGrn = grnCode.toLowerCase().includes(searchLower) || String(row.grn_id || '').toLowerCase().includes(searchLower);
+                  const matchesPo = String(row.po_number || '').toLowerCase().includes(searchLower);
+                  const matchesSupplier = String(row.vendor_name || '').toLowerCase().includes(searchLower);
+                  const matchesProject = String(row.project_name || '').toLowerCase().includes(searchLower);
+                  const matchesDrawing = String(row.drawing_no || '').toLowerCase().includes(searchLower);
+                  const matchesFinishedGood = String(row.finished_good || '').toLowerCase().includes(searchLower);
+                  return matchesGrn || matchesPo || matchesSupplier || matchesProject || matchesDrawing || matchesFinishedGood;
+                }}
               />
             </Card>
           </div>
@@ -1184,7 +1205,17 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
                   columns={columns}
                   data={finalInspections}
                   loading={loading}
-                  searchPlaceholder="Search by GRN or PO..."
+                  searchPlaceholder="Search by Drawing No., Finished Good, GRN No., PO No., Project No., or Supplier..."
+                  customFilter={(row, searchLower) => {
+                    const grnCode = `GRN-${String(row.grn_id).padStart(4, '0')}`;
+                    const matchesGrn = grnCode.toLowerCase().includes(searchLower) || String(row.grn_id || '').toLowerCase().includes(searchLower);
+                    const matchesPo = String(row.po_number || '').toLowerCase().includes(searchLower);
+                    const matchesSupplier = String(row.vendor_name || '').toLowerCase().includes(searchLower);
+                    const matchesProject = String(row.project_name || '').toLowerCase().includes(searchLower);
+                    const matchesDrawing = String(row.drawing_no || '').toLowerCase().includes(searchLower);
+                    const matchesFinishedGood = String(row.finished_good || '').toLowerCase().includes(searchLower);
+                    return matchesGrn || matchesPo || matchesSupplier || matchesProject || matchesDrawing || matchesFinishedGood;
+                  }}
                 />
               </Card>
             )}
@@ -1224,30 +1255,68 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       >
         {selectedQC && (
           <div className="space-y-2 p-2">
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-              <div className="p-2 bg-white rounded  border border-slate-100 ">
-                <p className="text-xs  text-slate-400   mb-1.5">Status</p>
-                <span className={`inline-flex items-center p-2  rounded text-xs    border ${qcStatusColors[selectedQC.status]?.badge}`}>
+            <div className="bg-slate-50/50 p-2.5 rounded border border-slate-100 flex items-center justify-between">
+              <div className="flex flex-wrap items-center gap-6">
+                 <div className="flex flex-col">
+                    <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">GRN No.</span>
+                    <span className="text-xs font-semibold text-indigo-600">GRN-{String(selectedQC?.grn_id).padStart(4, '0')}</span>
+                 </div>
+                 <div className="h-8 w-px bg-slate-200"></div>
+                 <div className="flex flex-col">
+                    <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">PO No.</span>
+                    <span className="text-xs font-semibold text-slate-700">{selectedQC?.po_number || '—'}</span>
+                 </div>
+                 <div className="h-8 w-px bg-slate-200"></div>
+                 <div className="flex flex-col">
+                    <span className="text-[10px] text-slate-500 font-medium">Drawing No.</span>
+                    <span className="text-xs font-bold text-slate-900">{selectedQC?.drawing_no || '—'}</span>
+                 </div>
+                 <div className="h-8 w-px bg-slate-200"></div>
+                 <div className="flex flex-col">
+                    <span className="text-[10px] text-slate-500 font-medium">Finished Good</span>
+                    <span className="text-xs font-medium text-slate-800">{selectedQC?.finished_good || '—'}</span>
+                 </div>
+                 {selectedQC?.host_company_name && (
+                   <>
+                     <div className="h-8 w-px bg-slate-200"></div>
+                     <div className="flex flex-col">
+                        <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Host Company</span>
+                        <span className="text-xs font-semibold text-slate-800">{selectedQC.host_company_name}</span>
+                     </div>
+                   </>
+                 )}
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                 <div className="w-5 h-5 bg-white rounded flex items-center justify-center text-slate-400 border border-slate-100 ">
+                    <Clock className="w-5 h-5" />
+                 </div>
+                 <div className="text-right">
+                    <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Inspection Date</p>
+                    <p className="text-xs font-semibold text-slate-950">{new Date(selectedQC?.inspection_date || new Date()).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                 </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 pt-2">
+              <div className="p-2 bg-white rounded border border-slate-100">
+                <p className="text-xs text-slate-400 mb-1.5">Status</p>
+                <span className={`inline-flex items-center px-2.5 py-1 rounded text-xs border ${qcStatusColors[selectedQC.status]?.badge}`}>
                   {qcStatusColors[selectedQC.status]?.label || selectedQC.status}
                 </span>
               </div>
-              <div className="p-2 bg-white rounded  border border-slate-100 ">
-                <p className="text-xs  text-slate-400   mb-1.5">Host Company</p>
-                <p className="text-xs font-semibold text-slate-800 truncate mt-1" title={selectedQC.host_company_name}>{selectedQC.host_company_name || '—'}</p>
+              <div className="p-2 bg-white rounded border border-slate-100">
+                <p className="text-xs text-slate-400 mb-1.5">Project Name</p>
+                <p className="text-xs font-semibold text-slate-800 truncate mt-1">{selectedQC.project_name || '—'}</p>
               </div>
-              <div className="p-2 bg-white rounded  border border-slate-100 ">
-                <p className="text-xs  text-slate-400   mb-1.5">PO Number</p>
-                <p className="text-xs  text-slate-900 mt-1">{selectedQC.po_number || '—'}</p>
-              </div>
-              <div className="p-2 bg-white rounded  border border-slate-100 ">
-                <p className="text-xs  text-emerald-500   mb-1.5">Pass Quantity</p>
-                <p className="text-sm  text-emerald-600 mt-1">
+              <div className="p-2 bg-white rounded border border-slate-100">
+                <p className="text-xs text-emerald-500 mb-1.5">Pass Quantity</p>
+                <p className="text-sm font-semibold text-emerald-600 mt-1">
                   {selectedQC.status === 'PENDING' ? 'Pending' : parseFloat(selectedQC.pass_quantity || selectedQC.accepted_quantity || 0).toFixed(3)}
                 </p>
               </div>
-              <div className="p-2 bg-white rounded  border border-slate-100 ">
-                <p className="text-xs  text-rose-500   mb-1.5">Fail Quantity</p>
-                <p className="text-sm  text-rose-600 mt-1">{parseFloat(selectedQC.fail_quantity || 0).toFixed(3)}</p>
+              <div className="p-2 bg-white rounded border border-slate-100">
+                <p className="text-xs text-rose-500 mb-1.5">Fail Quantity</p>
+                <p className="text-sm font-semibold text-rose-600 mt-1">{parseFloat(selectedQC.fail_quantity || 0).toFixed(3)}</p>
               </div>
             </div>
 
@@ -1348,34 +1417,44 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       >
         <form onSubmit={handleUpdateQC} className="space-y-2 p-2">
           {/* Top Info */}
-          <div className="bg-slate-50/50 p-2 rounded  border border-slate-100 flex items-center justify-between">
-            <div className="flex items-center gap-6">
+          <div className="bg-slate-50/50 p-2.5 rounded border border-slate-100 flex items-center justify-between">
+            <div className="flex flex-wrap items-center gap-6">
                <div className="flex flex-col">
-                  <span className="text-xs  text-slate-400  ">GRN Number</span>
-                  <span className="text-xs  text-indigo-600">GRN-{String(selectedQC?.grn_id).padStart(4, '0')}</span>
+                  <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">GRN No.</span>
+                  <span className="text-xs font-semibold text-indigo-600">GRN-{String(selectedQC?.grn_id).padStart(4, '0')}</span>
                </div>
                <div className="h-8 w-px bg-slate-200"></div>
                <div className="flex flex-col">
-                  <span className="text-xs  text-slate-400  ">PO Number</span>
-                  <span className="text-xs  text-slate-700">{selectedQC?.po_number || '—'}</span>
+                  <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">PO No.</span>
+                  <span className="text-xs font-semibold text-slate-700">{selectedQC?.po_number || '—'}</span>
+               </div>
+               <div className="h-8 w-px bg-slate-200"></div>
+               <div className="flex flex-col">
+                  <span className="text-[10px] text-slate-500 font-medium">Drawing No.</span>
+                  <span className="text-xs font-bold text-slate-900">{selectedQC?.drawing_no || '—'}</span>
+               </div>
+               <div className="h-8 w-px bg-slate-200"></div>
+               <div className="flex flex-col">
+                  <span className="text-[10px] text-slate-500 font-medium">Finished Good</span>
+                  <span className="text-xs font-medium text-slate-800">{selectedQC?.finished_good || '—'}</span>
                </div>
                {selectedQC?.host_company_name && (
                  <>
                    <div className="h-8 w-px bg-slate-200"></div>
                    <div className="flex flex-col">
-                      <span className="text-xs  text-slate-400  ">Host Company</span>
+                      <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Host Company</span>
                       <span className="text-xs font-semibold text-slate-800">{selectedQC.host_company_name}</span>
                    </div>
                  </>
                )}
             </div>
-            <div className="flex items-center gap-2">
-               <div className="w-5 h-5 bg-white rounded  flex items-center justify-center text-slate-400 border border-slate-100 ">
+            <div className="flex items-center gap-2 shrink-0">
+               <div className="w-5 h-5 bg-white rounded flex items-center justify-center text-slate-400 border border-slate-100 ">
                   <Clock className="w-5 h-5" />
                </div>
                <div className="text-right">
-                  <p className="text-xs  text-slate-400  ">Inspection Date</p>
-                  <p className="text-xs  text-slate-900">{new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                  <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Inspection Date</p>
+                  <p className="text-xs font-semibold text-slate-950">{new Date(selectedQC?.inspection_date || new Date()).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
                </div>
             </div>
           </div>

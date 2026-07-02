@@ -1036,6 +1036,23 @@ const PurchaseOrders = () => {
       )
     },
     {
+      label: 'Drawing',
+      key: 'drawing_no',
+      sortable: true,
+      render: (val, row) => (
+        <div className="flex flex-col">
+          <span className="text-xs font-semibold text-[#111827] leading-[16px]">
+            {row.drawing_no || '—'}
+          </span>
+          {row.finished_good && (
+            <span className="text-[10px] text-[#6B7280] leading-[14px] mt-0.5">
+              {row.finished_good}
+            </span>
+          )}
+        </div>
+      )
+    },
+    {
       label: 'Project / Customer',
       key: 'project_name',
       sortable: true,
@@ -1235,7 +1252,10 @@ const PurchaseOrders = () => {
   const filteredPOs = pos.filter(po => {
     const matchesSearch = !searchTerm || 
       po.po_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      po.vendor_name?.toLowerCase().includes(searchTerm.toLowerCase());
+      po.vendor_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      po.drawing_no?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      po.finished_good?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      po.project_name?.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesStatus = statusFilter === 'ALL' || po.status === statusFilter;
     
@@ -1340,7 +1360,7 @@ const PurchaseOrders = () => {
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-rose-500 transition-colors" size={18} />
             <input 
               type="text" 
-              placeholder="Search by PO # or supplier..."
+              placeholder="Search by PO #, supplier, drawing or project..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-11 pr-4 py-2 bg-slate-50 border border-slate-200 rounded text-sm focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none transition-all"
@@ -1401,53 +1421,83 @@ const PurchaseOrders = () => {
                   </div>
                   <h3 className="text-sm  text-slate-700">Basic Information</h3>
                 </div>
-                <div className="p-2 grid grid-cols-1 md:grid-cols-3 gap-2">
-                  <div className="space-y-1.5">
-                    <label className="text-xs  text-slate-400   ml-1">Select Quote No. *</label>
-                    <select
-                      value={manualFormData.quotationId}
-                      onChange={(e) => handleManualQuotationChange(e.target.value)}
-                      className="w-full p-2  bg-slate-50 border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                      required
-                    >
-                      <option value="">Select Approved Quote</option>
-                      {quotations.map(q => (
-                        <option key={q.id} value={q.id}>{q.quote_number} - {q.vendor_name}</option>
-                      ))}
-                    </select>
+                <div className="p-3 space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-1.5 md:col-span-2">
+                      <label className="text-xs font-semibold text-slate-700 ml-1">Select Drawing *</label>
+                      <SearchableSelect
+                        options={quotations.filter(q => q.drawing_no).map(q => ({
+                          label: `${q.drawing_no} - ${q.finished_good || 'No description'}`,
+                          value: q.id
+                        }))}
+                        value={manualFormData.quotationId || ''}
+                        onChange={(e) => handleManualQuotationChange(e.target.value)}
+                        placeholder="Search & Select Drawing..."
+                        allowCustom={false}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-slate-700 ml-1">Supplier *</label>
+                      <select
+                        value={manualFormData.vendorId}
+                        onChange={(e) => setManualFormData({ ...manualFormData, vendorId: e.target.value })}
+                        className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                        required
+                        disabled={!!manualFormData.quotationId}
+                      >
+                        <option value="">Select Supplier</option>
+                        {vendors.map(v => (
+                          <option key={v.id} value={v.id}>{v.vendor_name}</option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs  text-slate-400   ml-1">Supplier *</label>
-                    <select
-                      value={manualFormData.vendorId}
-                      onChange={(e) => setManualFormData({ ...manualFormData, vendorId: e.target.value })}
-                      className="w-full p-2  bg-slate-50 border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                      required
-                    >
-                      <option value="">Select Supplier</option>
-                      {vendors.map(v => (
-                        <option key={v.id} value={v.id}>{v.vendor_name}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs  text-slate-400   ml-1">Order Date *</label>
-                    <input
-                      type="date"
-                      defaultValue={new Date().toISOString().split('T')[0]}
-                      className="w-full p-2  bg-slate-50 border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs  text-slate-400   ml-1">Expected Delivery *</label>
-                    <input
-                      type="date"
-                      value={manualFormData.expectedDeliveryDate}
-                      onChange={(e) => setManualFormData({ ...manualFormData, expectedDeliveryDate: e.target.value })}
-                      className="w-full p-2  bg-slate-50 border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                      required
-                    />
+
+                  {(() => {
+                    const selectedQuoteDetails = quotations.find(q => String(q.id) === String(manualFormData.quotationId));
+                    if (!selectedQuoteDetails) return null;
+                    return (
+                      <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 grid grid-cols-2 md:grid-cols-4 gap-3 text-xs animate-in fade-in duration-300">
+                        <div>
+                          <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block">Project No.</span>
+                          <span className="text-xs font-semibold text-slate-700">{selectedQuoteDetails.project_name || '—'}</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block">Approved RFQ No.</span>
+                          <span className="text-xs font-semibold text-slate-700">{selectedQuoteDetails.quote_number || '—'}</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block">Supplier</span>
+                          <span className="text-xs font-bold text-slate-700">{selectedQuoteDetails.vendor_name || '—'}</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block">Finished Good</span>
+                          <span className="text-xs text-slate-600 truncate block" title={selectedQuoteDetails.finished_good}>{selectedQuoteDetails.finished_good || '—'}</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-slate-700 ml-1">Order Date *</label>
+                      <input
+                        type="date"
+                        defaultValue={new Date().toISOString().split('T')[0]}
+                        className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-slate-700 ml-1">Expected Delivery *</label>
+                      <input
+                        type="date"
+                        value={manualFormData.expectedDeliveryDate}
+                        onChange={(e) => setManualFormData({ ...manualFormData, expectedDeliveryDate: e.target.value })}
+                        className="w-full p-2 bg-slate-50 border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                        required
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1473,40 +1523,59 @@ const PurchaseOrders = () => {
                 <div className="p-0 overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="text-xs  text-slate-400   border-b border-slate-100">
-                        <th className="px-4 p-2 text-left">Item Details</th>
-                        <th className="px-4 p-2 text-center w-24">DESIGN QTY</th>
+                      <tr className="text-xs text-slate-400 border-b border-slate-100">
+                        <th className="px-4 p-2 text-left">Item ID</th>
+                        <th className="px-4 p-2 text-left">Material Name & Dimensions</th>
+                        <th className="px-4 p-2 text-center w-24">Design Qty</th>
                         <th className="px-4 p-2 text-center w-24">UOM</th>
-                        <th className="px-4 p-2 text-center w-32">RATE</th>
-                        <th className="px-4 p-2 text-right w-32">AMOUNT</th>
+                        <th className="px-4 p-2 text-center w-32">Rate</th>
+                        <th className="px-4 p-2 text-right w-32">Amount</th>
                         <th className="px-4 p-2 text-center w-12"></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
                       {manualFormData.items.map((item, idx) => (
                         <tr key={idx} className="group hover:bg-slate-50/50 transition-all">
+                          <td className="px-4 p-2 w-[220px]">
+                            <div className="flex flex-col gap-1">
+                              <select
+                                value={item.item_code}
+                                onChange={(e) => handleManualItemChange(idx, 'item_code', e.target.value)}
+                                className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs text-slate-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all cursor-pointer font-semibold"
+                              >
+                                <option value="">Select Item</option>
+                                {stockItems.map(si => (
+                                  <option key={si.id} value={si.item_code}>
+                                    {si.item_code}
+                                  </option>
+                                ))}
+                              </select>
+                              {item.description && (
+                                <span className="text-[10px] text-slate-400 font-medium px-1 leading-normal break-words max-w-[210px] block">
+                                  {item.description}
+                                </span>
+                              )}
+                            </div>
+                          </td>
                           <td className="px-4 p-2">
-                            <select
-                              value={item.item_code}
-                              onChange={(e) => handleManualItemChange(idx, 'item_code', e.target.value)}
-                              className="w-full p-2 bg-white border border-slate-200 rounded text-xs text-slate-700 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all appearance-none cursor-pointer"
-                            >
-                              <option value="">Select Item</option>
-                              {stockItems.map(si => (
-                                <option key={si.id} value={si.item_code}>
-                                  {si.item_code} - {si.item_description || si.material_name}
-                                </option>
-                              ))}
-                            </select>
-                            {(item.length > 0 || item.width > 0 || item.thickness > 0 || item.diameter > 0) && (
-                              <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1 px-1">
-                                {item.length > 0 && <span className="text-xs  text-slate-400">L: {item.length}</span>}
-                                {item.width > 0 && <span className="text-xs  text-slate-400">W: {item.width}</span>}
-                                {item.thickness > 0 && <span className="text-xs  text-slate-400">T: {item.thickness}</span>}
-                                {item.diameter > 0 && <span className="text-xs  text-slate-400">Dia: {item.diameter}</span>}
-                                {item.outer_diameter > 0 && <span className="text-xs  text-slate-400">OD: {item.outer_diameter}</span>}
-                              </div>
-                            )}
+                            <div className="flex flex-col gap-1">
+                              <input
+                                type="text"
+                                value={item.material_name || item.description || ''}
+                                onChange={(e) => handleManualItemChange(idx, 'material_name', e.target.value)}
+                                className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs text-slate-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                placeholder="Material Name"
+                              />
+                              {(item.length > 0 || item.width > 0 || item.thickness > 0 || item.diameter > 0) && (
+                                <div className="flex flex-wrap gap-x-2 gap-y-0.5 px-1 text-[10px] text-slate-400">
+                                  {item.length > 0 && <span>L: {item.length}</span>}
+                                  {item.width > 0 && <span>W: {item.width}</span>}
+                                  {item.thickness > 0 && <span>T: {item.thickness}</span>}
+                                  {item.diameter > 0 && <span>Dia: {item.diameter}</span>}
+                                  {item.outer_diameter > 0 && <span>OD: {item.outer_diameter}</span>}
+                                </div>
+                              )}
+                            </div>
                           </td>
                           <td className="px-4 p-2">
                             <input

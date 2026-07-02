@@ -16,6 +16,37 @@ const getGRNWithDetails = async (grnId) => {
       v.vendor_name AS vendorName,
       v.location AS vendorAddress,
       COALESCE(
+        (
+          SELECT pp_inner.bom_no 
+          FROM material_requests mr_inner 
+          JOIN production_plans pp_inner ON mr_inner.plan_id = pp_inner.id 
+          WHERE mr_inner.id = po.mr_id 
+          LIMIT 1
+        ),
+        (
+          SELECT soi_inner.drawing_no 
+          FROM sales_order_items soi_inner 
+          WHERE soi_inner.sales_order_id = po.sales_order_id 
+          LIMIT 1
+        )
+      ) as drawing_no,
+      COALESCE(
+        (
+          SELECT ppi_inner.description 
+          FROM material_requests mr_inner 
+          JOIN production_plans pp_inner ON mr_inner.plan_id = pp_inner.id 
+          JOIN production_plan_items ppi_inner ON pp_inner.id = ppi_inner.plan_id 
+          WHERE mr_inner.id = po.mr_id 
+          LIMIT 1
+        ),
+        (
+          SELECT soi_inner.description 
+          FROM sales_order_items soi_inner 
+          WHERE soi_inner.sales_order_id = po.sales_order_id 
+          LIMIT 1
+        )
+      ) as finished_good,
+      COALESCE(
         (SELECT so.project_name FROM sales_orders so WHERE so.id = po.sales_order_id AND so.is_sales_order = 1),
         (SELECT o.project_name FROM orders o WHERE o.id = po.sales_order_id AND o.source_type = 'DIRECT'),
         (SELECT so2.project_name 
@@ -70,6 +101,37 @@ const getAllGRNs = async () => {
       po.vendor_id AS vendorId,
       v.vendor_name AS vendorName,
       v.location AS vendorAddress,
+      COALESCE(
+        (
+          SELECT pp_inner.bom_no 
+          FROM material_requests mr_inner 
+          JOIN production_plans pp_inner ON mr_inner.plan_id = pp_inner.id 
+          WHERE mr_inner.id = po.mr_id 
+          LIMIT 1
+        ),
+        (
+          SELECT soi_inner.drawing_no 
+          FROM sales_order_items soi_inner 
+          WHERE soi_inner.sales_order_id = po.sales_order_id 
+          LIMIT 1
+        )
+      ) as drawing_no,
+      COALESCE(
+        (
+          SELECT ppi_inner.description 
+          FROM material_requests mr_inner 
+          JOIN production_plans pp_inner ON mr_inner.plan_id = pp_inner.id 
+          JOIN production_plan_items ppi_inner ON pp_inner.id = ppi_inner.plan_id 
+          WHERE mr_inner.id = po.mr_id 
+          LIMIT 1
+        ),
+        (
+          SELECT soi_inner.description 
+          FROM sales_order_items soi_inner 
+          WHERE soi_inner.sales_order_id = po.sales_order_id 
+          LIMIT 1
+        )
+      ) as finished_good,
       COALESCE(
         (SELECT so.project_name FROM sales_orders so WHERE so.id = po.sales_order_id AND so.is_sales_order = 1),
         (SELECT o.project_name FROM orders o WHERE o.id = po.sales_order_id AND o.source_type = 'DIRECT'),
