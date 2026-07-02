@@ -6,6 +6,8 @@ const materialRequestController = {
     try {
       const [rows] = await pool.query(`
         SELECT mr.*, CONCAT(u.first_name, ' ', u.last_name) as requester_name,
+        pp.bom_no as drawing_no,
+        ppi.description as finished_good,
         COALESCE(
           (
             SELECT so.project_name 
@@ -45,6 +47,11 @@ const materialRequestController = {
         ) as availability
         FROM material_requests mr
         LEFT JOIN users u ON mr.requested_by = u.id
+        LEFT JOIN production_plans pp ON mr.plan_id = pp.id
+        LEFT JOIN (
+          SELECT plan_id, description FROM production_plan_items
+          WHERE id IN (SELECT MIN(id) FROM production_plan_items GROUP BY plan_id)
+        ) ppi ON pp.id = ppi.plan_id
         ORDER BY mr.created_at DESC
       `);
       res.json(rows);
@@ -59,6 +66,8 @@ const materialRequestController = {
       const { warehouse } = req.query;
       const [requests] = await pool.query(`
         SELECT mr.*, CONCAT(u.first_name, ' ', u.last_name) as requester_name,
+        pp.bom_no as drawing_no,
+        ppi.description as finished_good,
         COALESCE(
           (
             SELECT so.project_name 
@@ -88,6 +97,11 @@ const materialRequestController = {
         ) as project_name
         FROM material_requests mr
         LEFT JOIN users u ON mr.requested_by = u.id
+        LEFT JOIN production_plans pp ON mr.plan_id = pp.id
+        LEFT JOIN (
+          SELECT plan_id, description FROM production_plan_items
+          WHERE id IN (SELECT MIN(id) FROM production_plan_items GROUP BY plan_id)
+        ) ppi ON pp.id = ppi.plan_id
         WHERE mr.id = ?
       `, [id]);
 

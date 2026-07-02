@@ -213,6 +213,24 @@ const getQuotations = async (filters = {}) => {
   let query = `
     SELECT q.*, v.vendor_name, so.so_number,
            COALESCE(
+             pp.bom_no,
+             (
+               SELECT soi.drawing_no 
+               FROM sales_order_items soi 
+               WHERE soi.sales_order_id = q.sales_order_id 
+               LIMIT 1
+             )
+           ) as drawing_no,
+           COALESCE(
+             ppi.description,
+             (
+               SELECT soi.description 
+               FROM sales_order_items soi 
+               WHERE soi.sales_order_id = q.sales_order_id 
+               LIMIT 1
+             )
+           ) as finished_good,
+           COALESCE(
              so.project_name, 
              (
                SELECT so2.project_name 
@@ -271,6 +289,11 @@ const getQuotations = async (filters = {}) => {
     LEFT JOIN companies c ON c.id = so.company_id
     LEFT JOIN material_requests mr ON mr.id = q.mr_id
     LEFT JOIN procurement_rfqs r ON r.id = q.rfq_id
+    LEFT JOIN production_plans pp ON mr.plan_id = pp.id
+    LEFT JOIN (
+      SELECT plan_id, description FROM production_plan_items
+      WHERE id IN (SELECT MIN(id) FROM production_plan_items GROUP BY plan_id)
+    ) ppi ON pp.id = ppi.plan_id
     WHERE 1=1
   `;
   const params = [];
@@ -328,6 +351,24 @@ const getQuotationById = async (quotationId) => {
   const [rows] = await pool.query(
     `SELECT q.*, mr.mr_number, so.so_number,
             COALESCE(
+              pp.bom_no,
+              (
+                SELECT soi.drawing_no 
+                FROM sales_order_items soi 
+                WHERE soi.sales_order_id = q.sales_order_id 
+                LIMIT 1
+              )
+            ) as drawing_no,
+            COALESCE(
+              ppi.description,
+              (
+                SELECT soi.description 
+                FROM sales_order_items soi 
+                WHERE soi.sales_order_id = q.sales_order_id 
+                LIMIT 1
+              )
+            ) as finished_good,
+            COALESCE(
               so.project_name, 
               (SELECT so2.project_name FROM sales_orders so2 JOIN production_plans pp ON so2.id = pp.sales_order_id WHERE pp.id = mr.plan_id),
               (SELECT so3.project_name FROM sales_orders so3 WHERE mr.notes LIKE CONCAT('%', so3.project_name, '%') LIMIT 1),
@@ -345,6 +386,11 @@ const getQuotationById = async (quotationId) => {
      LEFT JOIN sales_orders so ON so.id = q.sales_order_id
      LEFT JOIN companies c ON c.id = so.company_id
      LEFT JOIN procurement_rfqs r ON r.id = q.rfq_id
+     LEFT JOIN production_plans pp ON mr.plan_id = pp.id
+     LEFT JOIN (
+       SELECT plan_id, description FROM production_plan_items
+       WHERE id IN (SELECT MIN(id) FROM production_plan_items GROUP BY plan_id)
+     ) ppi ON pp.id = ppi.plan_id
      WHERE q.id = ?`,
     [quotationId]
   );

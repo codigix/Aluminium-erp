@@ -69,6 +69,8 @@ const createRfq = async (payload) => {
 const getRfqsByMrId = async (mrId) => {
     const [rfqs] = await pool.query(
         `SELECT r.*, u.username as requester_name, 
+                pp.bom_no as drawing_no,
+                ppi.description as finished_good,
                 COALESCE(
                   (
                     SELECT so.project_name 
@@ -96,6 +98,11 @@ const getRfqsByMrId = async (mrId) => {
          FROM procurement_rfqs r 
          LEFT JOIN users u ON r.requested_by = u.id 
          LEFT JOIN material_requests mr ON r.mr_id = mr.id
+         LEFT JOIN production_plans pp ON mr.plan_id = pp.id
+         LEFT JOIN (
+           SELECT plan_id, description FROM production_plan_items
+           WHERE id IN (SELECT MIN(id) FROM production_plan_items GROUP BY plan_id)
+         ) ppi ON pp.id = ppi.plan_id
          WHERE r.mr_id = ? 
          ORDER BY r.created_at DESC`,
         [mrId]
@@ -138,6 +145,8 @@ const getRfqsByMrId = async (mrId) => {
 const getRfqs = async () => {
     const [rfqs] = await pool.query(
         `SELECT r.*, u.username as requester_name, mr.mr_number, 
+                pp.bom_no as drawing_no,
+                ppi.description as finished_good,
                 COALESCE(
                   (
                     SELECT so.project_name 
@@ -165,6 +174,11 @@ const getRfqs = async () => {
          FROM procurement_rfqs r 
          LEFT JOIN users u ON r.requested_by = u.id 
          LEFT JOIN material_requests mr ON r.mr_id = mr.id 
+         LEFT JOIN production_plans pp ON mr.plan_id = pp.id
+         LEFT JOIN (
+           SELECT plan_id, description FROM production_plan_items
+           WHERE id IN (SELECT MIN(id) FROM production_plan_items GROUP BY plan_id)
+         ) ppi ON pp.id = ppi.plan_id
          ORDER BY r.created_at DESC`
     );
 

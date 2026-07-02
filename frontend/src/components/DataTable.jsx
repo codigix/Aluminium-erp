@@ -10,7 +10,8 @@ const DataTable = ({
   onRowClick,
   emptyMessage = "No entries found",
   showSearch = true,
-  showPagination = true
+  showPagination = true,
+  customFilter
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -20,6 +21,10 @@ const DataTable = ({
   const filteredData = useMemo(() => {
     if (!searchTerm) return data || [];
     
+    if (customFilter) {
+      return (data || []).filter(row => customFilter(row, searchTerm.toLowerCase()));
+    }
+    
     return (data || []).filter(row => {
       return columns.some(col => {
         const value = row[col.key];
@@ -27,7 +32,7 @@ const DataTable = ({
         return String(value).toLowerCase().includes(searchTerm.toLowerCase());
       });
     });
-  }, [data, searchTerm, columns]);
+  }, [data, searchTerm, columns, customFilter]);
 
   // Pagination logic
   const totalPages = Math.ceil(filteredData.length / pageSize);

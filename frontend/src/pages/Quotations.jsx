@@ -1552,6 +1552,23 @@ const Quotations = () => {
         )
       },
       {
+        key: 'drawing_no',
+        label: 'Drawing',
+        sortable: true,
+        render: (val, q) => (
+          <div className="flex flex-col">
+            <span className="text-xs font-semibold text-[#111827] leading-[16px]">
+              {q.drawing_no || '—'}
+            </span>
+            {q.finished_good && (
+              <span className="text-[10px] text-[#6B7280] leading-[14px] mt-0.5">
+                {q.finished_good}
+              </span>
+            )}
+          </div>
+        )
+      },
+      {
         key: 'project_name',
         label: 'Project / Customer',
         sortable: true,
@@ -1868,7 +1885,9 @@ const Quotations = () => {
             String(item.drawing_no || item.item_code || '').toLowerCase().includes(searchLower) ||
             String(item.description || '').toLowerCase().includes(searchLower)
           );
-          return matchesQuoteNo || matchesVendor || matchesProject || matchesCompany || matchesItems;
+          const matchesDrawing = String(row.drawing_no || '').toLowerCase().includes(searchLower) ||
+                                 String(row.finished_good || '').toLowerCase().includes(searchLower);
+          return matchesQuoteNo || matchesVendor || matchesProject || matchesCompany || matchesItems || matchesDrawing;
         }}
         actions={
           <div className="flex items-center gap-2">
@@ -2030,38 +2049,23 @@ const Quotations = () => {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs  text-slate-700 mb-1">Select Project (Optional)</label>
-                      <select
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Select Drawing *</label>
+                      <SearchableSelect
+                        options={materialRequests.filter(mr => mr.drawing_no).map(mr => ({
+                          label: `${mr.drawing_no} - ${mr.finished_good || 'No description'}`,
+                          value: `MR-${mr.id}`
+                        }))}
                         value={formData.salesOrderId || ''}
                         onChange={handleSalesOrderChange}
-                        className="w-full p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                        <option value="">Select Project/MR to Load Requirements</option>
-
-                        {salesOrders.length > 0 && (
-                          <optgroup label="Projects (Sales Orders)">
-                            {salesOrders.map(so => (
-                              <option key={so.id} value={so.id}>{so.project_name || `SO-${so.id}`}</option>
-                            ))}
-                          </optgroup>
-                        )}
-
-                        {materialRequests.length > 0 && (
-                          <optgroup label="Material Requests">
-                            {materialRequests.map(mr => (
-                              <option key={`mr-${mr.id}`} value={`MR-${mr.id}`}>
-                                {mr.project_name || mr.mr_number} ({mr.mr_number})
-                              </option>
-                            ))}
-                          </optgroup>
-                        )}
-                      </select>
+                        placeholder="Search & Select Drawing No..."
+                        allowCustom={false}
+                      />
                     </div>
 
                     <div>
-                      <label className="block text-xs  text-slate-700 mb-1">Vendor *</label>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Vendor *</label>
                       <MultiSelect
                         options={vendors}
                         value={formData.vendorIds}
@@ -2073,6 +2077,31 @@ const Quotations = () => {
                       />
                     </div>
                   </div>
+
+                  {(() => {
+                    const selectedMRDetails = materialRequests.find(mr => `MR-${mr.id}` === formData.salesOrderId);
+                    if (!selectedMRDetails) return null;
+                    return (
+                      <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 grid grid-cols-2 md:grid-cols-4 gap-3 text-xs animate-in fade-in duration-300">
+                        <div>
+                          <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block">Project No.</span>
+                          <span className="text-xs font-semibold text-slate-700">{selectedMRDetails.project_name || '—'}</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block">Material Request</span>
+                          <span className="text-xs font-semibold text-slate-700">{selectedMRDetails.mr_number || '—'}</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block">Drawing No.</span>
+                          <span className="text-xs font-bold text-indigo-600">{selectedMRDetails.drawing_no || '—'}</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block">Finished Good</span>
+                          <span className="text-xs text-slate-600 truncate block" title={selectedMRDetails.finished_good}>{selectedMRDetails.finished_good || '—'}</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   <div className="w-1/2">
                     <label className="block text-xs  text-slate-700 mb-1">Valid Until</label>
@@ -2103,7 +2132,7 @@ const Quotations = () => {
                     ) : (
                       <div className="space-y-2">
                         <div className="grid grid-cols-12 gap-2 pb-2 border-b border-slate-100 text-xs text-slate-500">
-                          <div className="col-span-2">Drawing No</div>
+                          <div className="col-span-2">Item ID</div>
                           <div className="col-span-4">Material Name & Dimensions</div>
                           <div className="col-span-1">Type</div>
                           <div className="col-span-2 text-center">Design Qty</div>
@@ -2118,18 +2147,8 @@ const Quotations = () => {
                                 placeholder="Drawing No"
                                 value={item.drawing_no}
                                 onChange={(e) => handleItemChange(idx, 'drawing_no', e.target.value)}
-                                className="w-full p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 pr-7"
+                                className="w-full p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                               />
-                              {item.drawing_no && (
-                                <button
-                                  type="button"
-                                  onClick={() => handlePreviewByNo(item.drawing_no)}
-                                  className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-indigo-600 transition-colors"
-                                  title="Preview Drawing"
-                                >
-                                  <Eye className="w-3.5 h-3.5" />
-                                </button>
-                              )}
                             </div>
                             <div className="col-span-4 space-y-1">
                               <input
@@ -2205,38 +2224,23 @@ const Quotations = () => {
                 </>
               ) : (
                 <>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs  text-slate-700 mb-1">Select Project/MR</label>
-                      <select
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Select Drawing *</label>
+                      <SearchableSelect
+                        options={materialRequests.filter(mr => mr.drawing_no).map(mr => ({
+                          label: `${mr.drawing_no} - ${mr.finished_good || 'No description'}`,
+                          value: `MR-${mr.id}`
+                        }))}
                         value={recordData.projectId || ''}
                         onChange={(e) => handleRecordProjectChange(e.target.value)}
-                        className="w-full p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                        <option value="">-- Select Project/MR to Filter Quotes --</option>
-
-                        {salesOrders.length > 0 && (
-                          <optgroup label="Projects (Sales Orders)">
-                            {salesOrders.map(so => (
-                              <option key={so.id} value={so.id}>{so.project_name || `SO-${so.id}`}</option>
-                            ))}
-                          </optgroup>
-                        )}
-
-                        {materialRequests.length > 0 && (
-                          <optgroup label="Material Requests">
-                            {materialRequests.map(mr => (
-                              <option key={`mr-rec-${mr.id}`} value={`MR-${mr.id}`}>
-                                {mr.project_name || mr.mr_number} ({mr.mr_number})
-                              </option>
-                            ))}
-                          </optgroup>
-                        )}
-                      </select>
+                        placeholder="Search & Select Drawing No..."
+                        allowCustom={false}
+                      />
                     </div>
 
                     <div>
-                      <label className="block text-xs  text-slate-700 mb-1">Vendor *</label>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Vendor *</label>
                       <select
                         value={recordData.vendorId || ''}
                         onChange={(e) => handleRecordVendorChange(e.target.value)}
@@ -2251,6 +2255,31 @@ const Quotations = () => {
                       </select>
                     </div>
                   </div>
+
+                  {(() => {
+                    const selectedMRDetails = materialRequests.find(mr => `MR-${mr.id}` === recordData.projectId);
+                    if (!selectedMRDetails) return null;
+                    return (
+                      <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 grid grid-cols-2 md:grid-cols-4 gap-3 text-xs animate-in fade-in duration-300">
+                        <div>
+                          <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block">Project No.</span>
+                          <span className="text-xs font-semibold text-slate-700">{selectedMRDetails.project_name || '—'}</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block">Material Request</span>
+                          <span className="text-xs font-semibold text-slate-700">{selectedMRDetails.mr_number || '—'}</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block">Drawing No.</span>
+                          <span className="text-xs font-bold text-indigo-600">{selectedMRDetails.drawing_no || '—'}</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block">Finished Good</span>
+                          <span className="text-xs text-slate-600 truncate block" title={selectedMRDetails.finished_good}>{selectedMRDetails.finished_good || '—'}</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
                   <div className="grid grid-cols-2 gap-2">
                     <div className="grid grid-cols-3 gap-2">
                       <div className="bg-slate-50 p-2 rounded  border border-slate-200">
@@ -2338,7 +2367,7 @@ const Quotations = () => {
                       <table className="w-full text-xs text-left">
                         <thead className="bg-slate-50 border-b border-slate-200">
                           <tr>
-                            <th className="p-2  text-slate-600" style={{ width: '150px' }}>ITEM CODE / DRAWING NO</th>
+                            <th className="p-2  text-slate-600" style={{ width: '150px' }}>ITEM ID</th>
                             <th className="p-2  text-slate-600">MATERIAL NAME</th>
                             <th className="p-2  text-slate-600" style={{ width: '100px' }}>TYPE</th>
                             <th className="p-2 text-center  text-slate-600" style={{ width: '80px' }}>Design Qty</th>
@@ -2364,19 +2393,9 @@ const Quotations = () => {
                                       type="text"
                                       value={item.drawing_no || item.item_code || ''}
                                       onChange={(e) => handleRecordItemChange(idx, 'drawing_no', e.target.value)}
-                                      className="w-full px-2 py-1 border border-transparent hover:border-slate-200 focus:border-blue-500 rounded outline-none transition-all pr-7"
+                                      className="w-full px-2 py-1 border border-transparent hover:border-slate-200 focus:border-blue-500 rounded outline-none transition-all"
                                       placeholder="Drawing..."
                                     />
-                                    {(item.drawing_no || item.item_code) && (
-                                      <button
-                                        type="button"
-                                        onClick={() => handlePreviewByNo(item.drawing_no || item.item_code)}
-                                        className="absolute right-1 top-1/2 -translate-y-1/2 text-slate-400 hover:text-indigo-600 transition-colors"
-                                        title="Preview Drawing"
-                                      >
-                                        <Eye className="w-3.5 h-3.5" />
-                                      </button>
-                                    )}
                                   </div>
                                 </td>
                                 <td className="p-2">
