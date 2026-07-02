@@ -561,7 +561,9 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
         setSelectedOrderId(data.sales_order_id?.toString() || '');
         setSelectedBomId(data.bom_no?.toString() || '');
 
-        if (data.items && data.items.length > 0) {
+        if (data.sales_order_id) {
+          fetchOrderDetails(data.sales_order_id, data.bom_no?.toString());
+        } else if (data.items && data.items.length > 0) {
           const boms = data.items.map(item => ({
             id: item.sales_order_item_id,
             item_code: item.item_code,
@@ -643,6 +645,9 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
 
         setSelectedOrderId(data.sales_order_id?.toString() || '');
         setSelectedBomId(data.bom_no?.toString() || '');
+        if (data.sales_order_id) {
+          fetchOrderDetails(data.sales_order_id, data.bom_no?.toString());
+        }
         setIsViewing(false);
         setIsCreating(true);
       }
@@ -666,18 +671,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
     navigate(`${deptPrefix}/production-plan/view/${id}`);
   };
 
-  const handleOrderSelect = async (orderId) => {
-    setSelectedOrderId(orderId);
-    setSelectedBomId('');
-    setAvailableBoms([]);
-    setDesignOrderItems([]);
-    setIsViewing(false);
-
-    if (!orderId) {
-      setSelectedOrderDetails(null);
-      return;
-    }
-
+  const fetchOrderDetails = async (orderId, targetBomIdToSelect = null) => {
     try {
       const token = localStorage.getItem('authToken');
 
@@ -726,10 +720,71 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
         });
         setAvailableBoms(filteredBoms);
 
-        // If only one BOM, auto-select it
-        if (filteredBoms.length === 1 && filteredBoms[0]) {
+        if (targetBomIdToSelect) {
+          setSelectedBomId(targetBomIdToSelect);
+          const itemInReady = (filteredBoms || []).find(item => {
+            if (!item) return false;
+            const itemId = (item.id || item.sales_order_item_id || item.order_item_id)?.toString();
+            const itemDrawing = (item.drawing_no || item.bom_no)?.toString();
+            return itemId === String(targetBomIdToSelect) || itemDrawing === String(targetBomIdToSelect);
+          }) || (readyItems || []).find(item => {
+            if (!item) return false;
+            const itemId = (item.id || item.sales_order_item_id || item.order_item_id)?.toString();
+            const itemDrawing = (item.drawing_no || item.bom_no)?.toString();
+            return itemId === String(targetBomIdToSelect) || itemDrawing === String(targetBomIdToSelect);
+          });
+
+          if (itemInReady) {
+            const designItem = designData.find(d =>
+              String(d.item_code).trim() === String(itemInReady.item_code).trim() &&
+              (String(d.drawing_no || '').trim() === String(itemInReady.drawing_no || '').trim())
+            );
+
+            const designQty = designItem ? parseFloat(designItem.qty || 0) : parseFloat(itemInReady.total_qty || itemInReady.quantity || 1);
+            const salesOrderItemId = itemInReady.id || itemInReady.sales_order_item_id || itemInReady.order_item_id;
+            const orderNo = itemInReady.order_no || data.order_no;
+            const projectName = itemInReady.project_name || data.project_name;
+
+            let bomDetails = { materials: [], components: [], operations: [] };
+            try {
+              const bomResp = await fetch(`${API_BASE}/production-plans/item-bom/${salesOrderItemId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+              });
+              if (bomResp.ok) {
+                const bomData = await bomResp.json();
+                if (bomData) bomDetails = bomData;
+              }
+            } catch (error) {
+              console.error('Error fetching BOM details:', error);
+            }
+
+            setNewPlan(prev => ({
+              ...prev,
+              targetQuantity: designQty,
+              items: [{
+                salesOrderId: itemInReady.sales_order_id,
+                salesOrderItemId: salesOrderItemId,
+                projectName: projectName,
+                orderNo: orderNo,
+                itemCode: itemInReady.item_code,
+                description: itemInReady.description,
+                plannedQty: designQty,
+                totalQty: parseFloat(itemInReady.total_qty || itemInReady.quantity || 0),
+                designQty: designQty,
+                alreadyPlannedQty: parseFloat(itemInReady.already_planned_qty || 0),
+                bom_no: itemInReady.drawing_no || itemInReady.bom_no || 'BOM-' + (salesOrderItemId || 'REF'),
+                workstationId: '',
+                plannedStartDate: prev.startDate,
+                plannedEndDate: prev.endDate,
+                materials: bomDetails.materials || [],
+                components: bomDetails.components || [],
+                operations: bomDetails.operations || []
+              }]
+            }));
+          }
+        } else if (filteredBoms.length === 1 && filteredBoms[0]) {
           const firstBom = filteredBoms[0];
-          const singleBomId = (firstBom.id || firstBom.sales_order_item_id || firstBom.order_item_id)?.toString();
+          const singleBomId = firstBom.drawing_no || firstBom.bom_no || (firstBom.id || firstBom.sales_order_item_id || firstBom.order_item_id)?.toString();
           if (singleBomId) {
             setSelectedBomId(singleBomId);
             handleBomSelect(singleBomId, filteredBoms, designData);
@@ -742,12 +797,36 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
     }
   };
 
+  const handleOrderSelect = async (orderId) => {
+    setSelectedOrderId(orderId);
+    setSelectedBomId('');
+    setAvailableBoms([]);
+    setDesignOrderItems([]);
+    setIsViewing(false);
+
+    if (!orderId) {
+      setSelectedOrderDetails(null);
+      setNewPlan(prev => ({
+        ...prev,
+        targetQuantity: 0,
+        items: []
+      }));
+      return;
+    }
+
+    await fetchOrderDetails(orderId);
+  };
+
   const handleBomSelect = (bomId, itemsOverride = null, designItemsOverride = null) => {
     const finalBomId = bomId?.toString();
     setSelectedBomId(finalBomId);
     setIsViewing(false);
     if (!finalBomId) {
-      setNewPlan(prev => ({ ...prev, items: [] }));
+      setNewPlan(prev => ({
+        ...prev,
+        targetQuantity: 0,
+        items: []
+      }));
       return;
     }
 
@@ -756,12 +835,20 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
     const itemsToSearch = itemsOverride || selectedOrderDetails?.items || readyItems || [];
     const itemInReady = itemsToSearch.find(item => {
       if (!item) return false;
-      const itemId = (item.id || item.sales_order_item_id || item.order_item_id);
-      if (itemId === null || itemId === undefined) return false;
-      return String(itemId) === finalBomId;
+      const itemId = (item.id || item.sales_order_item_id || item.order_item_id)?.toString();
+      const itemDrawing = (item.drawing_no || item.bom_no)?.toString();
+      return itemId === finalBomId || itemDrawing === finalBomId;
     });
 
     if (itemInReady) {
+      const itemOrderId = itemInReady.sales_order_id;
+      if (itemOrderId && String(itemOrderId) !== String(selectedOrderId)) {
+        // User selected the Drawing first: perform bidirectional sync
+        setSelectedOrderId(String(itemOrderId));
+        fetchOrderDetails(itemOrderId, finalBomId);
+        return;
+      }
+
       const designItemsToSearch = designItemsOverride || designOrderItems;
       // Find matching design order item to get quantity
       const designItem = designItemsToSearch.find(d =>
@@ -1546,49 +1633,45 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                  <FormControl label="Plan Identity *">
-                    <input
-                      type="text"
-                      value="Auto Generated"
-                      disabled
-                      className="w-full p-2 .5 bg-slate-50 border border-slate-200 rounded  text-xs text-slate-500  cursor-not-allowed"
-                    />
-                  </FormControl>
-                  <FormControl label="Naming Series">
-                    <input
-                      type="text"
-                      value={newPlan.namingSeries}
-                      onChange={(e) => setNewPlan(prev => ({ ...prev, namingSeries: e.target.value }))}
-                      disabled={isViewing}
-                      className={`w-full p-2 .5 bg-white border border-slate-200 rounded  text-xs  focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all ${isViewing ? 'bg-slate-50 cursor-not-allowed' : ''}`}
-                    />
-                  </FormControl>
-                  <FormControl label="Operational Status">
-                    <select
-                      value={newPlan.operationalStatus}
-                      onChange={(e) => setNewPlan(prev => ({ ...prev, operationalStatus: e.target.value }))}
-                      disabled={isViewing}
-                      className={`w-full p-2 .5 bg-white border border-slate-200 rounded  text-xs  focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all appearance-none ${isViewing ? 'bg-slate-50 cursor-not-allowed' : ''}`}
-                    >
-                      <option value="Draft">Draft</option>
-                      <option value="In Progress">In Progress</option>
-                      <option value="Completed">Completed</option>
-                    </select>
-                  </FormControl>
                   <FormControl label="Source Sales Order *">
                     <div className="relative">
-                      <SearchableSelect
-                        options={productionReadyOrders.map(so => ({
-                          label: `${so.order_no} - ${so.company_name || 'No Client'}`,
-                          value: so.id.toString(),
-                          order_no: so.order_no
-                        }))}
-                        value={selectedOrderId}
-                        onChange={(e) => handleOrderSelect(e.target.value)}
-                        placeholder="Search and select sales order..."
-                        allowCustom={false}
-                        disabled={isViewing}
-                      />
+                      {(() => {
+                        const soOptions = [...productionReadyOrders];
+                        if (selectedOrderId && !soOptions.some(so => String(so.id) === String(selectedOrderId))) {
+                          let orderNo = selectedOrderDetails?.order_no || selectedOrderDetails?.orderNo;
+                          let companyName = selectedOrderDetails?.company_name || selectedOrderDetails?.client_name || selectedOrderDetails?.companyName;
+
+                          if (!orderNo || !companyName) {
+                            const matchedItem = (readyItems || []).find(item => String(item.sales_order_id || item.order_id) === String(selectedOrderId));
+                            if (matchedItem) {
+                              orderNo = matchedItem.order_no;
+                              companyName = matchedItem.company_name || matchedItem.client_name;
+                            }
+                          }
+
+                          if (orderNo) {
+                            soOptions.push({
+                              id: selectedOrderId,
+                              order_no: orderNo,
+                              company_name: companyName || 'Active Order'
+                            });
+                          }
+                        }
+                        return (
+                          <SearchableSelect
+                            options={soOptions.map(so => ({
+                              label: `${so.order_no} - ${so.company_name || 'No Client'}`,
+                              value: so.id.toString(),
+                              order_no: so.order_no
+                            }))}
+                            value={selectedOrderId}
+                            onChange={(e) => handleOrderSelect(e.target.value)}
+                            placeholder="Search and select sales order..."
+                            allowCustom={false}
+                            disabled={isViewing}
+                          />
+                        );
+                      })()}
                       {selectedOrderId && !isViewing && (
                         <button
                           onClick={() => handleOrderSelect('')}
@@ -1599,27 +1682,58 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                       )}
                     </div>
                   </FormControl>
-                  <FormControl label="Select BOM">
+                  <FormControl label="Drawing No. / Part No. *">
                     <div className="relative">
-                      <select
-                        className={`w-full p-2 .5 bg-white border border-slate-200 rounded  text-xs  focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all appearance-none ${isViewing ? 'bg-slate-50 cursor-not-allowed' : ''}`}
-                        value={selectedBomId}
-                        onChange={(e) => handleBomSelect(e.target.value)}
-                        disabled={isViewing}
-                      >
-                        <option value="">{availableBoms.length === 0 ? (selectedOrderId ? 'No BOMs Available' : 'Select Order First') : 'Select BOM...'}</option>
-                        {availableBoms && availableBoms.length > 0 && availableBoms.map((bom, idx) => {
-                          const id = (bom.id || bom.sales_order_item_id || bom.order_item_id || idx)?.toString();
-                          return (
-                            <option key={id} value={id}>
-                              {bom.item_code || 'No Code'} - {bom.description || 'No Description'} {bom.bom_no ? `(BOM: ${bom.bom_no})` : ''}
-                            </option>
-                          );
-                        })}
-                      </select>
-                      <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
-                      </div>
+                      {(() => {
+                        const bomOptions = [...(selectedOrderId ? (availableBoms || []) : (readyItems || []))].filter(bom => {
+                          if (!bom) return false;
+                          const code = (bom.item_code || bom.itemCode || '').toUpperCase().trim();
+                          const desc = (bom.description || '').toUpperCase().trim();
+                          if (!code || code === 'XXX' || code === 'NO CODE' || code.includes('NO CODE') || desc.includes('NO CODE')) return false;
+                          return true;
+                        });
+
+                        // If a drawing is selected, but not found in the list (e.g., loading or already planned),
+                        // append it dynamically using details from newPlan.items[0]
+                        if (selectedBomId && !bomOptions.some(bom => String(bom.drawing_no || bom.bom_no || bom.id || bom.sales_order_item_id) === String(selectedBomId))) {
+                          const activeItem = newPlan.items?.[0];
+                          if (activeItem) {
+                            bomOptions.push({
+                              id: activeItem.salesOrderItemId,
+                              bom_no: activeItem.bom_no || selectedBomId,
+                              drawing_no: activeItem.bom_no || selectedBomId,
+                              description: activeItem.description || 'Selected Drawing'
+                            });
+                          }
+                        }
+
+                        return (
+                          <SearchableSelect
+                            options={bomOptions.map((bom, idx) => {
+                              const id = (bom.id || bom.sales_order_item_id || bom.order_item_id || idx)?.toString();
+                              const optionValue = bom.drawing_no || bom.bom_no || id;
+                              const drawingNo = bom.drawing_no || bom.bom_no || bom.item_code || bom.itemCode || 'No Code';
+                              return {
+                                label: `${drawingNo} - ${bom.description || 'No Description'}`,
+                                value: optionValue
+                              };
+                            })}
+                            value={selectedBomId}
+                            onChange={(e) => handleBomSelect(e.target.value)}
+                            placeholder={selectedOrderId ? (availableBoms.length === 0 ? 'No Drawing No. / Part No. Available' : 'Search & Select Drawing No. / Part No...') : (readyItems.length === 0 ? 'No Drawing No. / Part No. Available' : 'Search & Select Drawing No. / Part No...')}
+                            allowCustom={false}
+                            disabled={isViewing}
+                          />
+                        );
+                      })()}
+                      {selectedBomId && !isViewing && (
+                        <button
+                          onClick={() => handleBomSelect('')}
+                          className="absolute right-8 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                      )}
                     </div>
                   </FormControl>
                   <FormControl label="Target Quantity *">
@@ -2290,129 +2404,118 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
 
   const columns = [
     {
-      label: 'Plan ID',
+      label: 'Production Plan',
       key: 'plan_code',
       sortable: true,
       render: (val, row) => (
-        <div className="flex items-start gap-2">
-          <div>
-            <div className="text-xs  text-slate-800 ">{row.company_name || row.project_name || 'Global Manufacturing'}</div>
-            <div className="text-xs  text-slate-400 ">
-              {val}
-            </div>
-          </div>
+        <div className="flex flex-col">
+          <span className="text-xs font-semibold text-slate-800">{val}</span>
+          <span className="text-[10px] text-slate-400 mt-0.5">
+            {row.plan_date ? new Date(row.plan_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+          </span>
         </div>
       )
     },
     {
-      label: 'Finished Good',
-      key: 'item_description',
+      label: 'Sales Order',
+      key: 'order_no',
       sortable: true,
       render: (val, row) => (
-        <div className="flex items-center gap-2">
-
-          <div className="flex flex-col">
-            <div className="text-xs  text-slate-800 ">{val || '---'}</div>
-            <div className="text-[10px] text-slate-500 line-clamp-1">{row.item_code || '---'}</div>
-          </div>
+        <div className="flex flex-col">
+          <span className="text-xs font-semibold text-slate-800">{val || 'Direct Order'}</span>
+          {row.project_id && (
+            <span className="text-[10px] text-slate-500 font-medium mt-0.5">
+              {row.project_id}
+            </span>
+          )}
+          <span className="text-[9px] text-slate-400 mt-0.5 truncate max-w-[180px]">
+            {row.company_name || row.project_name || '—'}
+          </span>
         </div>
       )
     },
     {
-      label: 'Origin & Status',
-      key: 'order_no',
+      label: 'Drawing / Finished Good',
+      key: 'bom_no',
+      sortable: true,
+      render: (val, row) => (
+        <div className="flex flex-col">
+          <span className="text-xs font-medium text-indigo-600">{val || 'No Drawing'}</span>
+          <span className="text-[10px] text-slate-500 mt-0.5 line-clamp-1 max-w-[220px]">
+            {row.item_description || row.description || '—'}
+          </span>
+        </div>
+      )
+    },
+    {
+      label: 'Qty',
+      key: 'target_qty',
       render: (val, row) => {
-        let displayProject = '-';
-        if (row.project_id) {
-          displayProject = row.project_id;
-        } else if (row.project_name) {
-          displayProject = row.project_name;
-        }
-
+        const target = parseFloat(val || 0);
+        const totalOps = row.total_ops || 0;
+        const completedOps = row.completed_ops || 0;
+        const ratio = totalOps > 0 ? (completedOps / totalOps) : (row.status === 'Completed' ? 1 : 0);
+        const produced = Math.round(target * ratio);
+        const balance = Math.max(0, target - produced);
         return (
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs   text-slate-600">{displayProject}</span>
-            </div>
-            <div className="text-[10px]">
-              <span className={` flex items-center 
-                ${row.status === 'Draft' ? 'text-amber-500 ' :
-                  row.status === 'Completed' ? 'text-emerald-500 ' :
-                    'text-indigo-500 '}`}
-              >
-                <span className={`  ${row.status === 'Draft' ? 'text-amber-900' : row.status === 'Completed' ? 'text-emerald-400' : 'text-indigo-400'}`} />
-                {row.status}
-              </span>
-              {row.mr_status && (
-                <span className={`    flex items-center gap-1
-                  ${row.mr_status === 'Completed' ? 'text-emerald-900 ' :
-                    row.mr_status === 'Draft' ? 'text-slate-900 ' :
-                      'text-indigo-500 '}`}
-                >
-                  {row.mr_status === 'Completed' ? '✅ Fulfilled' : `MR: ${row.mr_status}`}
-                </span>
-              )}
+          <div className="flex flex-col">
+            <span className="text-xs font-semibold text-slate-800">Planned: {target}</span>
+            <div className="text-[10px] text-slate-400 mt-0.5 space-x-1.5">
+              <span className="text-emerald-600 font-medium">Produced: {produced}</span>
+              <span className="text-slate-300">|</span>
+              <span className="text-amber-600 font-medium">Balance: {balance}</span>
             </div>
           </div>
         );
       }
     },
     {
-      label: 'Timeline',
-      key: 'start_date',
-      render: (val, row) => (
-        <div className="flex items-center gap-2">
-
-          <div>
-            <div className="text-xs   text-slate-600">
-              {val ? new Date(val).toLocaleDateString() : '-'}
-            </div>
-            <div className="text-xs  text-slate-400">
-              {row.wo_count > 0 ? `${row.wo_count} Active Work Orders` : 'No work orders'}
-            </div>
+      label: 'Status',
+      key: 'status',
+      render: (val, row) => {
+        const statusColor = val === 'Draft' ? 'text-amber-600 bg-amber-50 border-amber-100' :
+                            val === 'Completed' ? 'text-emerald-600 bg-emerald-50 border-emerald-100' :
+                            'text-indigo-600 bg-indigo-50 border-indigo-100';
+        const mrColor = row.mr_status === 'Completed' ? 'text-emerald-600' : 'text-slate-400';
+        const mrLabel = row.mr_status === 'Completed' ? 'MR: Fulfilled' : (row.mr_status ? `MR: ${row.mr_status}` : 'MR: Pending');
+        return (
+          <div className="flex flex-col items-start gap-1">
+            <span className={`px-2 py-0.5 rounded text-[10px] border font-medium ${statusColor}`}>
+              {val}
+            </span>
+            <span className={`text-[10px] font-medium ${mrColor}`}>
+              {mrLabel}
+            </span>
           </div>
-        </div>
-      )
+        );
+      }
     },
     {
-      label: 'Production Progress',
-      key: 'progress',
+      label: 'Progress',
+      key: 'completed_ops',
       render: (_, row) => {
         const total = row.total_ops || 0;
-        const woCount = row.wo_count || 0;
+        const completed = row.completed_ops || 0;
         const status = (row.status || '').toUpperCase();
-
         let progress = 0;
-        if (total > 0) progress = Math.round((row.completed_ops / total) * 100);
-        else if (woCount > 0) progress = 80;
-        else if (status === 'Completed') progress = 50;
-
+        if (total > 0) progress = Math.round((completed / total) * 100);
+        else if (status === 'COMPLETED') progress = 100;
+        
         return (
-          <div className="w-40">
+          <div className="w-28 flex flex-col">
             <div className="flex items-center justify-between mb-1">
-              <span className="text-xs  text-slate-400 ">{progress}% Complete</span>
-              <span className="text-xs   text-slate-900  ">
-                {row.completed_ops}/{row.total_ops} OPS
-              </span>
+              <span className="text-[10px] font-semibold text-slate-700">{progress}%</span>
+              <span className="text-[10px] text-slate-400">{completed} / {total} WO</span>
             </div>
-            <div className="h-1.5 w-full text-slate-100  overflow-hidden">
+            <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
               <div
-                className="h-full text-indigo-500  transition-all duration-500"
+                className="h-full bg-indigo-500 rounded-full transition-all duration-500"
                 style={{ width: `${progress}%` }}
               />
             </div>
           </div>
         );
       }
-    },
-    {
-      label: 'Operations',
-      key: 'total_ops',
-      render: (val) => (
-        <div className="p-1 w-4 h-4  border-2 border-white bg-indigo-50 flex items-center justify-center text-indigo-600 text-xs   ring-1 ring-indigo-100 shadow-sm">
-          {val}
-        </div>
-      )
     },
     {
       label: 'Actions',

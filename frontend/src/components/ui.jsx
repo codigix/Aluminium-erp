@@ -68,11 +68,14 @@ export const SearchableSelect = ({
     : (selectedOption ? getLabel(selectedOption) : (localValue !== undefined && localValue !== null ? String(localValue) : ''));
 
   const safeSearchTerm = String(searchTerm || '').toLowerCase();
-  const filteredOptions = options.filter(opt =>
-    String(getLabel(opt) || '').toLowerCase().includes(safeSearchTerm) ||
-    String(opt[valueField] || '').toLowerCase().includes(safeSearchTerm) ||
-    String(getSublabel(opt) || '').toLowerCase().includes(safeSearchTerm)
-  );
+  const filteredOptions = options.filter(opt => {
+    if (localValue && !isSearching) {
+      return String(opt[valueField]) === String(localValue);
+    }
+    return String(getLabel(opt) || '').toLowerCase().includes(safeSearchTerm) ||
+           String(opt[valueField] || '').toLowerCase().includes(safeSearchTerm) ||
+           String(getSublabel(opt) || '').toLowerCase().includes(safeSearchTerm);
+  });
 
   useEffect(() => {
     const handleClickOutside = (event) => {
