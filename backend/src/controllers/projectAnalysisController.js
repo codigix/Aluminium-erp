@@ -28,8 +28,30 @@ const getMaterialConsumption = async (req, res, next) => {
   }
 };
 
+const getProjectDrawings = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const drawings = await projectAnalysisService.getProjectDrawings(id);
+    res.json(drawings);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getProjectDetailByDrawing = async (req, res, next) => {
+  try {
+    const { id, drawingNo } = req.params;
+    const details = await projectAnalysisService.getProjectDetailByDrawing(id, decodeURIComponent(drawingNo));
+    res.json(details);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getProjectAnalysis,
   getProjectDetail,
-  getMaterialConsumption
+  getMaterialConsumption,
+  getProjectDrawings,
+  getProjectDetailByDrawing
 };
