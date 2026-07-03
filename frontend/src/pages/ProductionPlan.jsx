@@ -1778,7 +1778,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                     renderExpanded={(item) => renderOperationsAccordion(item.itemCode || item.item_code, operationsToDisplay)}
                     expandedRows={expandedRows}
                     onExpandedChange={setExpandedRows}
-                    rowIdProp="rowId"
+                    rowId="rowId"
                     hideHeader
                   />
                   {newPlan.items.length === 0 && (
@@ -2202,6 +2202,18 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
     if (newPlan.items.length === 0) {
       errorToast('Please select at least one item');
       return;
+    }
+
+    if (!newPlan.id && selectedOrderId && selectedBomId) {
+      const duplicateExists = plans.some(plan => 
+        String(plan.sales_order_id) === String(selectedOrderId) && 
+        String(plan.bom_no).trim().toLowerCase() === String(selectedBomId).trim().toLowerCase()
+      );
+
+      if (duplicateExists) {
+        errorToast('Production Plan already exists for the selected Sales Order and Drawing. Duplicate Production Plans are not allowed.');
+        return;
+      }
     }
 
     try {

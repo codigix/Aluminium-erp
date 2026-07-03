@@ -207,6 +207,16 @@ const createProductionPlan = async (planData, createdBy) => {
     const finalBomNo = bomNo || (bom && bom.bomNo) || null;
     const finalTargetQty = targetQty || targetQuantity || (bom && bom.targetQty) || 0;
 
+    if (finalSalesOrderId && finalBomNo) {
+      const [existing] = await connection.query(
+        'SELECT id FROM production_plans WHERE sales_order_id = ? AND TRIM(LOWER(bom_no)) = TRIM(LOWER(?))',
+        [finalSalesOrderId, finalBomNo]
+      );
+      if (existing.length > 0) {
+        throw new Error('Production Plan already exists for the selected Sales Order and Drawing. Duplicate Production Plans are not allowed.');
+      }
+    }
+
     // Fix empty date values to be null
     const safeStartDate = startDate || null;
     const safeEndDate = endDate || null;
@@ -579,7 +589,6 @@ const getReadySalesOrderItems = async () => {
       ) planned ON soi.id = planned.sales_order_item_id
       WHERE (soi.status IS NULL OR TRIM(UPPER(soi.status)) NOT IN ('REJECTED', 'CANCELLED')) 
       AND (TRIM(UPPER(soi.item_type)) IN ('FG', 'FINISHED GOODS', 'FINISHED_GOODS', 'ASSEMBLY'))
-      AND (COALESCE(planned.already_planned_qty, 0) < soi.quantity)
       AND soi.parent_bom_id IS NULL
       AND soi.item_code != 'XXX'
       AND soi.item_code IS NOT NULL
@@ -617,7 +626,6 @@ const getReadySalesOrderItems = async () => {
       ) planned ON oi.id = planned.sales_order_item_id
       WHERE o.quotation_id IS NULL 
       AND (TRIM(UPPER(oi.type)) IN ('FG', 'FINISHED GOODS', 'FINISHED_GOODS', 'ASSEMBLY'))
-      AND (COALESCE(planned.already_planned_qty, 0) < oi.quantity)
       AND (soi.parent_bom_id IS NULL)
       AND oi.item_code != 'XXX'
       AND oi.item_code IS NOT NULL
