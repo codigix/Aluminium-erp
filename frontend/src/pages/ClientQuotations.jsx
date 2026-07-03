@@ -1824,9 +1824,8 @@ const ClientQuotations = () => {
           projectName: group.project_name || '',
           mode: 'revise',
           items: latestQuotes.map(q => {
-            const bCost = q.bom_cost || 0;
-            // Favor BOM cost for revisions to ensure Rate == BOM Cost consistency
-            const rRate = bCost || q.unit_rate || (parseFloat(q.total_amount) / (parseFloat(q.item_qty) || 1));
+            const bCost = parseFloat(q.bom_cost) || 0;
+            const rRate = parseFloat(q.unit_rate || q.rate || (parseFloat(q.total_amount) / (parseFloat(q.item_qty) || 1))) || 0;
 
             return {
               id: Date.now() + Math.random(),
@@ -1839,7 +1838,9 @@ const ClientQuotations = () => {
               quantity: q.item_qty,
               unit: q.item_unit || q.uom || 'Nos',
               rate: rRate,
-              bom_cost: bCost || rRate,
+              bom_cost: bCost,
+              profit_percentage: parseFloat(q.profit_percentage) || 0,
+              override_percentage: parseFloat(q.override_percentage) || 0,
               gst_percentage: q.gst_percentage || 18,
               item_group: q.item_group,
               status: 'PENDING',

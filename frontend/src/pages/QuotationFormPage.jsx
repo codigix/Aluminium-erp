@@ -273,17 +273,6 @@ const QuotationFormPage = () => {
           let bomCost = parseFloat(item.bom_cost || 0);
           let drwRate = parseFloat(item.quotedPrice || item.rate || bomCost || 0);
 
-          // Force sync for revisions and new quotes to ensure Rate == BOM Cost
-          if (bomCost > 0) {
-            drwRate = bomCost;
-          }
-
-          if (item.sub_assemblies && item.sub_assemblies.length > 0) {
-            // NEVER recalculate FG/Assembly from child parts
-            drwRate = parseFloat(item.bom_cost || drwRate || 0);
-            bomCost = drwRate;
-          }
-
           return {
             ...item,
             id: item.id || Date.now() + Math.random(),
@@ -435,8 +424,8 @@ const QuotationFormPage = () => {
             newItem.bom_cost = drwRate;
             changed = true;
 
-            // Update rate to new BOM cost if it was 0, matched old cost, OR we are in a mode that allows auto-update
-            if (currentRate === 0 || rateMatchesCost || mode === 'revise' || mode === 'create') {
+            // Update rate to new BOM cost if it was 0 or matched old cost
+            if (currentRate === 0 || rateMatchesCost) {
               const profit = parseFloat(newItem.profit_percentage) || 0;
               const override = parseFloat(newItem.override_percentage) || 0;
               const calculatedRate = drwRate * (1 + profit / 100) * (1 + override / 100);
@@ -868,6 +857,19 @@ const QuotationFormPage = () => {
     } catch (error) {
       errorToast(error.message);
     }
+  };
+
+  const handleCreateRevisionFromRejected = (selectedV) => {
+    const maxHistVer = versionHistory.length > 0 ? Math.max(...versionHistory.map(vh => vh.version)) : version;
+    setVersion(maxHistVer + 1);
+    setMode('revise');
+    setSelectedVersionId(null);
+    setItems(prevItems => prevItems.map(item => ({
+      ...item,
+      id: Date.now() + Math.random(),
+      status: 'PENDING'
+    })));
+    successToast(`Created new revision V${maxHistVer + 1}`);
   };
 
   const handleDeleteVersion = async (v) => {
@@ -2251,8 +2253,37 @@ const QuotationFormPage = () => {
                 {(() => {
                   const selectedV = versionHistory.find(v => v.id === selectedVersionId || (selectedVersionId === null && v.version === version));
                   const sStatus = selectedV?.status?.toUpperCase();
-                  // Hide actions if selected is approved/rejected, OR if the latest version is already approved
-                  if (!selectedV || sStatus === 'APPROVED' || sStatus === 'REJECTED' || isLatestApproved) return null;
+                  if (!selectedV) return null;
+
+                  if (sStatus === 'APPROVED') {
+                    return (
+                      <div className="flex justify-center mt-4 pt-4 border-t border-slate-100">
+                        <button
+                          onClick={() => handleRejectVersion(selectedV)}
+                          className="flex items-center justify-center gap-2 px-3 py-2 bg-rose-50 text-rose-600 rounded text-xs  border border-rose-100 hover:bg-rose-100 transition-all shadow-sm shadow-rose-50 w-full"
+                        >
+                          <XCircle size={14} />
+                          Reject V{selectedV.version}
+                        </button>
+                      </div>
+                    );
+                  }
+
+                  if (sStatus === 'REJECTED') {
+                    return (
+                      <div className="flex justify-center mt-4 pt-4 border-t border-slate-100">
+                        <button
+                          onClick={() => handleCreateRevisionFromRejected(selectedV)}
+                          className="flex items-center justify-center gap-2 px-3 py-2 bg-amber-50 text-amber-600 rounded text-xs  border border-amber-100 hover:bg-amber-100 transition-all shadow-sm shadow-amber-50 w-full animate-pulse"
+                        >
+                          <GitBranch size={14} />
+                          Create Revision
+                        </button>
+                      </div>
+                    );
+                  }
+
+                  if (isLatestApproved) return null;
 
                   return (
                     <div className="grid grid-cols-2 gap-2 mt-4 pt-4 border-t border-slate-100">
