@@ -640,7 +640,48 @@ const CustomerDrawing = () => {
         return acc;
       }, {});
 
-      setRequirements(Object.values(grouped));
+      // Hide duplicate child orders/rows for the same project
+      const groupedList = Object.values(grouped);
+      const projectGroups = {};
+      
+      groupedList.forEach(req => {
+        const projName = req.project_name || 'General';
+        if (!projectGroups[projName]) {
+          projectGroups[projName] = [];
+        }
+        projectGroups[projName].push(req);
+      });
+
+      const finalFiltered = [];
+      Object.keys(projectGroups).forEach(projName => {
+        const group = projectGroups[projName];
+        if (group.length === 1) {
+          finalFiltered.push(group[0]);
+        } else {
+          // Sort to find the primary parent project row
+          group.sort((a, b) => {
+            const aStatus = (a.status || '').toUpperCase().trim();
+            const bStatus = (b.status || '').toUpperCase().trim();
+            const aIsCreated = aStatus === 'CREATED' || aStatus === 'PENDING';
+            const bIsCreated = bStatus === 'CREATED' || bStatus === 'PENDING';
+            
+            if (aIsCreated !== bIsCreated) {
+              return aIsCreated ? 1 : -1; // Prefer status that is not CREATED
+            }
+            
+            const aQty = a.drawing_count || 0;
+            const bQty = b.drawing_count || 0;
+            if (aQty !== bQty) {
+              return bQty - aQty; // Prefer highest drawing count
+            }
+            
+            return b.id - a.id; // Prefer highest id
+          });
+          finalFiltered.push(group[0]); // Only keep the primary parent project row
+        }
+      });
+
+      setRequirements(finalFiltered);
     } catch (error) {
       console.error(error);
     } finally {

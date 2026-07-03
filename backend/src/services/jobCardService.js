@@ -155,10 +155,7 @@ const getActiveAllocations = async () => {
 
 
 const checkSequenceOverlap = async (id, workOrderId, startDateTime, endDateTime) => {
-  if (!workOrderId || !startDateTime || !endDateTime) return null;
-
-  const startStr = startDateTime.replace('T', ' ').slice(0, 19);
-  const endStr = endDateTime.replace('T', ' ').slice(0, 19);
+  return null; // Disabled to allow flexible scheduling of operations on the same day/times
 
   const currentStart = new Date(startStr.replace(' ', 'T'));
   const currentEnd = new Date(endStr.replace(' ', 'T'));

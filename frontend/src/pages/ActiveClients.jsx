@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { 
-  Users, Search, Filter, Download, ChevronRight, 
-  ArrowLeft, Calendar, Building2, 
+import {
+  Users, Search, Filter, Download, ChevronRight,
+  ArrowLeft, Calendar, Building2,
   User, Phone, Mail, MapPin, Briefcase,
   FileText, CheckCircle2, TrendingUp, Layers
 } from 'lucide-react';
@@ -18,7 +18,7 @@ const ActiveClients = () => {
   const handleBack = () => {
     const segments = location.pathname.split('/').filter(Boolean);
     const prefix = segments[0] || 'sales';
-    
+
     if (window.history.state && window.history.state.idx > 0) {
       navigate(-1);
     } else {
@@ -46,10 +46,10 @@ const ActiveClients = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
-      
+
       // Using the logic from CustomerDrawing.jsx to get detailed client/project info
       const response = await fetch(`${API_BASE}/sales-orders?includeWithoutPo=true`, {
-        headers: { 
+        headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
@@ -57,16 +57,16 @@ const ActiveClients = () => {
 
       if (!response.ok) throw new Error('Failed to fetch clients data');
       const rawData = await response.json();
-      
+
       const filtered = rawData.filter(so => {
         // Broaden the definition of "Active" to include anything currently in the system 
         // that isn't explicitly cancelled or completed in a way that makes it "Inactive"
         const activeStatuses = [
-          'ACTIVE', 'CREATED', 'DESIGN_Approved', 'BOM_Approved', 
+          'ACTIVE', 'CREATED', 'DESIGN_Approved', 'BOM_Approved',
           'BOM_SUBMITTED', 'IN_PRODUCTION', 'PRODUCTION_COMPLETED',
           'READY_FOR_SHIPMENT', 'QC_APPROVED', 'DESIGN_IN_REVIEW', 'DESIGN_QUERY'
         ];
-        
+
         return (
           so.project_name?.includes('Design Review') ||
           ['DESIGN_ENG', 'SALES', 'PROCUREMENT', 'PRODUCTION', 'QUALITY', 'QC', 'SHIPMENT'].includes(so.current_department) ||
@@ -80,10 +80,10 @@ const ActiveClients = () => {
       const grouped = filtered.reduce((acc, so) => {
         const clientName = so.company_name || so.client_name || so.client || 'Unassigned';
         const key = clientName;
-        
+
         if (!acc[key]) {
           const firstDrawingWithContact = so.items?.find(item => item.contact_person || item.phone || item.email);
-          
+
           acc[key] = {
             ...so,
             client_name: clientName,
@@ -103,14 +103,14 @@ const ActiveClients = () => {
 
         // Count unique drawings for this client across all their projects
         const items = so.items?.filter(item => item.drawing_no || item.drawing_id) || [];
-        
+
         // Add unique drawings to the count if we haven't seen them for this client
         if (!acc[key].seen_drawings) acc[key].seen_drawings = new Set();
         items.forEach(item => {
           const drawingKey = item.drawing_no || item.drawing_id;
           if (drawingKey) acc[key].seen_drawings.add(drawingKey);
         });
-        
+
         acc[key].drawing_count = acc[key].seen_drawings.size;
 
         // If this entry has a cleaner project name (not a design review snippet), use it
@@ -149,7 +149,7 @@ const ActiveClients = () => {
       return ['ACTIVE', 'CREATED', 'DESIGN_APPROVED', 'BOM_APPROVED', 'IN_PRODUCTION', 'PRODUCTION_COMPLETED', 'QC_APPROVED'].includes(s);
     }).map(d => d.client_name)).size;
     const totalDrawings = data.reduce((sum, d) => sum + (d.drawing_count || 0), 0);
-    
+
     // Count new clients added this month
     const now = new Date();
     const thisMonthAdded = new Set(data.filter(d => {
@@ -256,7 +256,7 @@ const ActiveClients = () => {
       {/* Main Table Card */}
       <Card className="bg-white border border-slate-200 shadow-sm overflow-hidden rounded-xl">
         <div className="p-0">
-          <DataTable 
+          <DataTable
             columns={columns}
             data={filteredData}
             loading={loading}

@@ -814,6 +814,8 @@ const updateSalesOrderItemStatus = async (itemId, status, reason) => {
       [status, status === 'REJECTED' ? reason : null, itemId]
     );
 
+
+
     // Get sales_order_id for this item
     const [itemRows] = await connection.query('SELECT sales_order_id FROM sales_order_items WHERE id = ?', [itemId]);
     if (itemRows.length > 0) {
@@ -1992,6 +1994,8 @@ const bulkUpdateItemStatus = async (itemIds, status, reason) => {
       `UPDATE sales_order_items SET status = ?, rejection_reason = ?, updated_at = NOW() WHERE id IN (${placeholders})`,
       [status, status === 'REJECTED' ? reason : null, ...itemIds]
     );
+
+
 
     const [items] = await connection.query(`SELECT DISTINCT sales_order_id FROM sales_order_items WHERE id IN (${placeholders})`, itemIds);
 

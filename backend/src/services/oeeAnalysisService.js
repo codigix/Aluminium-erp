@@ -1,6 +1,6 @@
 const pool = require('../config/db');
 
-const getOEEMetrics = async (timeRange = 'Weekly') => {
+const getOEEMetrics = async (timeRange = 'Weekly', drawingNo = null, salesOrderId = null) => {
   // Define date filters based on range
   let tlFilter = '';
   let jcFilter = '';
@@ -19,13 +19,71 @@ const getOEEMetrics = async (timeRange = 'Weekly') => {
     jcFilter = 'AND jc.updated_at >= DATE_SUB(NOW(), INTERVAL 1 YEAR)';
   }
 
+  // --- Drawing-specific workstation filter ---
+  let workstationFilter = '';
+  let drawingWorkOrderIds = [];
+
+  if (drawingNo && salesOrderId) {
+    // 1. Find the production plan for this drawing
+    let [[drawingPlan]] = await pool.query(
+      `SELECT id FROM production_plans pp
+       WHERE (pp.sales_order_id = ? OR pp.sales_order_id IN (SELECT id FROM sales_orders WHERE parent_id = ?))
+         AND pp.bom_no = ?
+       LIMIT 1`,
+      [salesOrderId, salesOrderId, drawingNo]
+    );
+
+    if (!drawingPlan) {
+      const [[globalPlan]] = await pool.query(
+        `SELECT id FROM production_plans pp
+         WHERE pp.bom_no = ?
+         ORDER BY pp.id DESC
+         LIMIT 1`,
+        [drawingNo]
+      );
+      if (globalPlan) {
+        drawingPlan = globalPlan;
+      }
+    }
+
+    const planId = drawingPlan?.id;
+
+    if (planId) {
+      // 2. Get all work order IDs for this plan
+      const [woRows] = await pool.query(
+        `SELECT id FROM work_orders WHERE plan_id = ?`,
+        [planId]
+      );
+      drawingWorkOrderIds = woRows.map(r => r.id);
+    }
+
+    if (drawingWorkOrderIds.length > 0) {
+      // 3. Find all workstation IDs used by job cards in these work orders
+      const [wsRows] = await pool.query(
+        `SELECT DISTINCT jc.workstation_id
+         FROM job_cards jc
+         WHERE jc.work_order_id IN (?) AND jc.workstation_id IS NOT NULL`,
+        [drawingWorkOrderIds]
+      );
+      const wsIds = wsRows.map(r => r.workstation_id);
+      if (wsIds.length > 0) {
+        workstationFilter = `AND w.id IN (${wsIds.join(',')})`;
+      } else {
+        // Drawing exists but no job cards assigned to workstations yet
+        workstationFilter = 'AND 1=0';
+      }
+    } else {
+      // Drawing has no plan or work orders yet
+      workstationFilter = 'AND 1=0';
+    }
+  }
+
   // 1. Get detailed workstation stats with real OEE components
   const [workstationStats] = await pool.query(`
     SELECT 
       w.id,
       w.workstation_code,
       w.workstation_name,
-      -- Availability: (Actual Running Time / Total Planned Time)
       COALESCE(
         (SELECT (SUM(TIMESTAMPDIFF(MINUTE, tl.start_time, COALESCE(tl.end_time, NOW()))) / 
           CASE 
@@ -39,8 +97,6 @@ const getOEEMetrics = async (timeRange = 'Weekly') => {
          WHERE tl.workstation_id = w.id AND tl.start_time IS NOT NULL ${tlFilter}),
         0
       ) as availability,
-      
-      -- Performance: (Actual Output / Theoretical Output)
       COALESCE(
         (SELECT 
           CASE 
@@ -53,8 +109,6 @@ const getOEEMetrics = async (timeRange = 'Weekly') => {
          WHERE tl.workstation_id = w.id ${tlFilter}),
         0
       ) as performance,
-      
-      -- Quality: (Accepted / Produced)
       COALESCE(
         (SELECT (SUM(jc.accepted_qty) / NULLIF(SUM(jc.produced_qty), 0)) * 100 
          FROM job_cards jc 
@@ -63,7 +117,7 @@ const getOEEMetrics = async (timeRange = 'Weekly') => {
       ) as quality,
       (SELECT COUNT(*) FROM job_cards WHERE workstation_id = w.id AND status = 'IN_PROGRESS') as active_jobs
     FROM workstations w
-    WHERE w.status = 'Active'
+    WHERE w.status = 'Active' ${workstationFilter}
     GROUP BY w.id
   `);
 
@@ -73,15 +127,10 @@ const getOEEMetrics = async (timeRange = 'Weekly') => {
     const p = parseFloat(ws.performance || 0);
     const q = parseFloat(ws.quality || 0);
     const activeJobs = parseInt(ws.active_jobs || 0);
-    
-    // Check if there is ANY real activity log OR an active job for this workstation
     const hasActivity = a > 0 || p > 0 || activeJobs > 0;
-
-    // Apply fallbacks for active machines with no data yet
     const finalA = (a < 5) && hasActivity ? 85.0 : a;
     const finalP = (p < 5) && hasActivity ? 78.0 : p;
     const finalQ = (q < 5) && hasActivity ? 100.0 : q;
-    
     const oee = (finalA * finalP * finalQ) / 10000;
 
     return {
@@ -95,9 +144,7 @@ const getOEEMetrics = async (timeRange = 'Weekly') => {
     };
   });
 
-  // Calculate Overall Averages based ONLY on workstations with REAL logs
   const activeWS = processedWS.filter(ws => ws.hasActivity);
-  
   const avg = (key) => activeWS.length ? parseFloat((activeWS.reduce((sum, ws) => sum + parseFloat(ws[key]), 0) / activeWS.length).toFixed(1)) : 0;
 
   const overall = {
@@ -108,7 +155,11 @@ const getOEEMetrics = async (timeRange = 'Weekly') => {
     utilization: parseFloat((avg('availability') * 0.9).toFixed(1))
   };
 
-  // 2. Recent Floor Operations
+  // 2. Recent Floor Operations — filtered by drawing's work orders when applicable
+  const woFilter = drawingWorkOrderIds.length > 0
+    ? `AND jc.work_order_id IN (${drawingWorkOrderIds.join(',')})`
+    : '';
+
   const [recentOperations] = await pool.query(`
     SELECT 
       jc.job_card_no as identifier,
@@ -139,19 +190,18 @@ const getOEEMetrics = async (timeRange = 'Weekly') => {
     LEFT JOIN sales_orders so ON wo.sales_order_id = so.id
     LEFT JOIN sales_order_items soi ON wo.sales_order_item_id = soi.id
     LEFT JOIN order_items oi ON wo.sales_order_item_id = oi.id AND wo.sales_order_id = oi.order_id
-    WHERE 1=1 ${jcFilter}
+    WHERE 1=1 ${jcFilter} ${woFilter}
     ORDER BY jc.updated_at DESC
   `);
 
   // 3. Loss Category Distribution
-  // Calculate loss based on actual averages, NOT the inverse of overall (which is an average of OEEs)
   const lossDistribution = [
     { name: 'Availability Loss', value: Math.max(0, 100 - parseFloat(overall.availability)).toFixed(1) },
     { name: 'Performance Loss', value: Math.max(0, 100 - parseFloat(overall.performance)).toFixed(1) },
     { name: 'Quality Loss', value: Math.max(0, 100 - parseFloat(overall.quality)).toFixed(1) }
   ];
 
-  // 4. Bottleneck Analysis - Only consider active machines for bottlenecks
+  // 4. Bottleneck Analysis
   const bottlenecks = [...activeWS]
     .sort((a, b) => parseFloat(a.performance) - parseFloat(b.performance))
     .slice(0, 5)
@@ -167,6 +217,7 @@ const getOEEMetrics = async (timeRange = 'Weekly') => {
     recentOperations,
     lossDistribution,
     bottlenecks,
+    drawingNo: drawingNo || null,
     insights: [
       { text: `Overall OEE is currently ${overall.oee}%. Performance is the primary constraint.`, type: "performance" },
       { text: `Availability at ${overall.availability}% indicates idle time across the floor.`, type: "availability" },
@@ -176,8 +227,7 @@ const getOEEMetrics = async (timeRange = 'Weekly') => {
       { label: 'Total Workstations', value: workstationStats.length, status: 'Active' },
       { label: 'Live Machines', value: activeWS.length, status: 'Running' },
       { label: 'Idle Machines', value: workstationStats.length - activeWS.length, status: 'Idle' },
-      { label: 'Critical Alerts', value: bottlenecks.length, status: 'Action Required' },
-      { label: 'Data Accuracy', value: '98.7%', status: 'This Week' }
+      { label: 'Critical Alerts', value: bottlenecks.length, status: 'Action Required' }
     ]
   };
 };

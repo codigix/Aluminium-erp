@@ -44,68 +44,42 @@ const getProjectAnalysisStats = async () => {
     ) as aggregated_projects
   `);
 
-  // 2. Project List (Matrix Table - Grouped by Parent)
+  // 2. Project List (Matrix Table - Grouped by Project Name)
   const [projectList] = await pool.query(`
     SELECT 
-      so.id,
-      COALESCE(
-        NULLIF(TRIM(so.project_name), ''), 
-        (SELECT project_name FROM orders WHERE id = so.id LIMIT 1),
-        CONCAT('Project #', LPAD(so.id, 6, '0'))
-      ) as project_name,
+      MAX(so.id) as id,
+      so.project_name,
       (
         SELECT GROUP_CONCAT(DISTINCT drawing_no SEPARATOR ', ') 
-        FROM (
-          SELECT drawing_no FROM sales_order_items WHERE sales_order_id = so.id
-          UNION
-          SELECT drawing_no FROM sales_order_items WHERE sales_order_id IN (SELECT id FROM sales_orders WHERE parent_id = so.id)
-        ) d_combined
+        FROM sales_order_items 
+        WHERE sales_order_id IN (
+          SELECT id FROM sales_orders WHERE project_name = so.project_name OR parent_id IN (SELECT id FROM sales_orders WHERE project_name = so.project_name)
+        )
       ) as drawing_nos,
-      c.company_name,
-      COALESCE(
-        (SELECT 
-          CASE 
-            WHEN COUNT(*) = 0 THEN NULL
-            WHEN COUNT(*) = SUM(CASE WHEN status IN ('SHIPPED', 'CLOSED', 'COMPLETED') THEN 1 ELSE 0 END) THEN 'COMPLETED'
-            WHEN SUM(CASE WHEN status = 'READY_FOR_SHIPMENT' THEN 1 ELSE 0 END) > 0 THEN 'READY_FOR_SHIPMENT'
-            WHEN SUM(CASE WHEN status = 'QC_APPROVED' THEN 1 ELSE 0 END) > 0 THEN 'QC_APPROVED'
-            WHEN SUM(CASE WHEN status = 'PRODUCTION_COMPLETED' THEN 1 ELSE 0 END) > 0 THEN 'PRODUCTION_COMPLETED'
-            WHEN SUM(CASE WHEN status = 'IN_PRODUCTION' THEN 1 ELSE 0 END) > 0 THEN 'IN_PRODUCTION'
-            WHEN SUM(CASE WHEN status = 'PROCUREMENT' THEN 1 ELSE 0 END) > 0 THEN 'PROCUREMENT'
-            WHEN SUM(CASE WHEN status = 'BOM_SUBMITTED' THEN 1 ELSE 0 END) > 0 THEN 'BOM_SUBMITTED'
-            WHEN SUM(CASE WHEN status = 'DESIGN_ENG' THEN 1 ELSE 0 END) > 0 THEN 'DESIGN_ENG'
-            ELSE MAX(status)
-          END
-         FROM sales_orders WHERE parent_id = so.id AND status != 'CANCELLED'
-        ),
-        so.status
+      MAX(c.company_name) as company_name,
+      (
+        SELECT status FROM sales_orders WHERE id = MAX(so.id)
       ) as status,
-      COALESCE(so.target_dispatch_date, (SELECT delivery_date FROM orders WHERE id = so.id LIMIT 1)) as target_dispatch_date,
-      DATEDIFF(COALESCE(so.target_dispatch_date, (SELECT delivery_date FROM orders WHERE id = so.id LIMIT 1)), CURRENT_DATE) as daysRemaining,
-      COALESCE(
+      MAX(COALESCE(so.target_dispatch_date, (SELECT delivery_date FROM orders WHERE id = so.id LIMIT 1))) as target_dispatch_date,
+      MIN(DATEDIFF(COALESCE(so.target_dispatch_date, (SELECT delivery_date FROM orders WHERE id = so.id LIMIT 1)), CURRENT_DATE)) as daysRemaining,
+      SUM(COALESCE(
         NULLIF(so.net_total, 0), 
         (SELECT grand_total FROM orders WHERE id = so.id LIMIT 1),
         cp.net_total, 
         0
-      ) as revenue,
+      )) as revenue,
       (
         SELECT COUNT(*) 
         FROM work_orders 
-        WHERE (
-          sales_order_id = so.id 
-          OR sales_order_id IN (SELECT id FROM sales_orders WHERE parent_id = so.id)
-          OR sales_order_id IN (SELECT id FROM orders WHERE id = so.id OR order_no = so.so_number) 
-          OR plan_id IN (SELECT id FROM production_plans WHERE sales_order_id = so.id OR sales_order_id IN (SELECT id FROM sales_orders WHERE parent_id = so.id) OR sales_order_id IN (SELECT id FROM orders WHERE id = so.id OR order_no = so.so_number))
+        WHERE sales_order_id IN (
+          SELECT id FROM sales_orders WHERE project_name = so.project_name
         ) AND status = 'COMPLETED'
       ) as completedJobs,
       (
         SELECT COUNT(*) 
         FROM work_orders 
-        WHERE (
-          sales_order_id = so.id 
-          OR sales_order_id IN (SELECT id FROM sales_orders WHERE parent_id = so.id)
-          OR sales_order_id IN (SELECT id FROM orders WHERE id = so.id OR order_no = so.so_number) 
-          OR plan_id IN (SELECT id FROM production_plans WHERE sales_order_id = so.id OR sales_order_id IN (SELECT id FROM sales_orders WHERE parent_id = so.id) OR sales_order_id IN (SELECT id FROM orders WHERE id = so.id OR order_no = so.so_number))
+        WHERE sales_order_id IN (
+          SELECT id FROM sales_orders WHERE project_name = so.project_name
         )
       ) as totalJobs,
       (SELECT COUNT(*) FROM workstations WHERE status = 'Active') as resourcesCount,
@@ -114,25 +88,18 @@ const getProjectAnalysisStats = async () => {
          FROM job_cards 
          WHERE work_order_id IN (
            SELECT id FROM work_orders 
-           WHERE sales_order_id = so.id 
-           OR sales_order_id IN (SELECT id FROM sales_orders WHERE parent_id = so.id)
-           OR sales_order_id IN (SELECT id FROM orders WHERE id = so.id OR order_no = so.so_number)
-           OR plan_id IN (SELECT id FROM production_plans WHERE sales_order_id = so.id OR sales_order_id IN (SELECT id FROM sales_orders WHERE parent_id = so.id) OR sales_order_id IN (SELECT id FROM orders WHERE id = so.id OR order_no = so.so_number))
+           WHERE sales_order_id IN (
+             SELECT id FROM sales_orders WHERE project_name = so.project_name
+           )
          )),
         100
       ) as yield
     FROM sales_orders so
     LEFT JOIN companies c ON so.company_id = c.id
     LEFT JOIN customer_pos cp ON so.customer_po_id = cp.id
-    WHERE so.parent_id IS NULL 
-    AND so.status != 'CANCELLED'
-    -- Also filter out implicit children that mention another SO in their name
-    AND NOT EXISTS (
-      SELECT 1 FROM sales_orders so2 
-      WHERE so.project_name LIKE CONCAT('%', so2.so_number, '%')
-      AND so2.id != so.id
-    )
-    ORDER BY so.created_at DESC
+    WHERE so.status != 'CANCELLED' AND so.project_name IS NOT NULL AND so.project_name != ''
+    GROUP BY so.project_name
+    ORDER BY MAX(so.created_at) DESC
     LIMIT 25
   `);
 
@@ -253,6 +220,21 @@ const getProjectAnalysisStats = async () => {
     ORDER BY month_list.month ASC
   `);
 
+  // 7. Get all Parent Drawings across all active sales orders for the dropdown search
+  const [allDrawings] = await pool.query(`
+    SELECT DISTINCT
+      soi.drawing_no,
+      soi.description,
+      so.project_name
+    FROM sales_order_items soi
+    JOIN sales_orders so ON soi.sales_order_id = so.id
+    WHERE so.status != 'CANCELLED'
+      AND soi.parent_bom_id IS NULL
+      AND soi.drawing_no IS NOT NULL AND soi.drawing_no != ''
+      AND soi.item_code IS NOT NULL AND soi.item_code != '' AND soi.item_code != 'XXX' AND soi.item_code NOT LIKE '%NO CODE%'
+    ORDER BY soi.drawing_no ASC
+  `);
+
   return {
     kpis: {
       totalProjects: kpiStats.totalProjects || 0,
@@ -267,6 +249,7 @@ const getProjectAnalysisStats = async () => {
     oeeMetrics,
     statusBreakdown,
     timelineData,
+    allDrawings,
     insights: [
       { text: `${kpiStats.totalProjects} Projects currently active in the ecosystem.`, type: 'info' },
       { text: `${kpiStats.atRiskProjects} Projects are currently behind schedule and need attention.`, type: kpiStats.atRiskProjects > 0 ? 'warning' : 'success' },
@@ -600,44 +583,79 @@ const getProjectDetailAnalysis = async (salesOrderId) => {
 const getMaterialConsumptionStats = async () => {
   const [projectList] = await pool.query(`
     SELECT 
-      so.id,
-      so.project_name,
-      c.company_name,
-      so.status,
-      (SELECT GROUP_CONCAT(DISTINCT drawing_no SEPARATOR ', ') FROM sales_order_items WHERE sales_order_id = so.id) as drawing_nos,
-      (SELECT GROUP_CONCAT(DISTINCT description SEPARATOR ', ') FROM sales_order_items WHERE sales_order_id = so.id) as item_descriptions,
+      drawing_nos,
+      item_descriptions,
+      project_name,
+      id,
+      company_name,
+      project_status,
+      item_code,
       (
         SELECT SUM(mri.quantity) 
         FROM material_request_items mri 
         JOIN material_requests mr ON mri.mr_id = mr.id
         LEFT JOIN production_plans pp ON mr.plan_id = pp.id
-        WHERE (pp.sales_order_id = so.id OR mr.notes LIKE CONCAT('%', so.project_name, '%') OR mr.purpose LIKE CONCAT('%', so.project_name, '%'))
-        AND mr.status NOT IN ('CANCELLED', 'REJECTED')
+        WHERE mr.status NOT IN ('CANCELLED', 'REJECTED')
+          AND (
+            pp.bom_no = drawing_nos
+            OR pp.bom_no IN (
+              SELECT sub_soi.drawing_no 
+              FROM sales_order_items sub_soi 
+              WHERE sub_soi.parent_bom_id = item_id
+            )
+          )
       ) as allocated_qty,
       (
         SELECT SUM(mri.quantity) 
         FROM material_request_items mri 
         JOIN material_requests mr ON mri.mr_id = mr.id
         LEFT JOIN production_plans pp ON mr.plan_id = pp.id
-        WHERE (pp.sales_order_id = so.id OR mr.notes LIKE CONCAT('%', so.project_name, '%') OR mr.purpose LIKE CONCAT('%', so.project_name, '%'))
-        AND mr.status IN ('COMPLETED', 'FULFILLED')
+        WHERE mr.status IN ('COMPLETED', 'FULFILLED')
+          AND (
+            pp.bom_no = drawing_nos
+            OR pp.bom_no IN (
+              SELECT sub_soi.drawing_no 
+              FROM sales_order_items sub_soi 
+              WHERE sub_soi.parent_bom_id = item_id
+            )
+          )
       ) as consumed_qty,
       COALESCE(
         (SELECT (SUM(accepted_qty) / NULLIF(SUM(produced_qty), 0)) * 100 
          FROM job_cards 
-         WHERE work_order_id IN (SELECT id FROM work_orders WHERE sales_order_id = so.id)),
+         WHERE work_order_id IN (
+           SELECT id FROM work_orders 
+           WHERE sales_order_item_id = item_id OR sales_order_item_id IN (
+             SELECT id FROM sales_order_items WHERE parent_bom_id = item_id
+           )
+         )),
         100
       ) as yield
-    FROM sales_orders so
-    LEFT JOIN companies c ON so.company_id = c.id
-    WHERE so.status != 'CANCELLED' 
-    AND so.parent_id IS NULL
-    AND NOT EXISTS (
-      SELECT 1 FROM sales_orders so2 
-      WHERE so.project_name LIKE CONCAT('%', so2.so_number, '%')
-      AND so2.id != so.id
-    )
-    ORDER BY so.created_at DESC
+    FROM (
+      SELECT 
+        soi.drawing_no as drawing_nos,
+        MAX(soi.description) as item_descriptions,
+        so.project_name,
+        MAX(soi.id) as item_id,
+        MAX(so.id) as id,
+        MAX(c.company_name) as company_name,
+        MAX(so.status) as project_status,
+        MAX(soi.item_code) as item_code,
+        MAX(so.created_at) as created_at
+      FROM sales_order_items soi
+      JOIN sales_orders so ON soi.sales_order_id = so.id
+      LEFT JOIN companies c ON so.company_id = c.id
+      WHERE so.status != 'CANCELLED'
+        AND soi.parent_bom_id IS NULL
+        AND soi.drawing_no IS NOT NULL AND soi.drawing_no != ''
+        AND (soi.item_code IS NULL OR (soi.item_code != 'XXX' AND soi.item_code NOT LIKE '%NO CODE%'))
+        AND soi.status != 'REJECTED'
+        AND (so.customer_po_id IS NULL OR soi.drawing_no IN (
+          SELECT drawing_no FROM customer_po_items WHERE customer_po_id = so.customer_po_id
+        ))
+      GROUP BY so.project_name, soi.drawing_no
+    ) as grouped_items
+    ORDER BY created_at DESC, drawing_nos ASC
   `);
 
   return {
@@ -653,7 +671,7 @@ const getMaterialConsumptionStats = async () => {
 
 // ─── NEW: Get all drawings for a project ───────────────────────────────────
 const getProjectDrawings = async (salesOrderId) => {
-  // Pull drawings from production_plans (bom_no) linked to this sales order
+  // Pull drawings from production_plans (bom_no) linked to this sales order, filtering to only Parent BOM Drawings (parent_bom_id IS NULL, valid item_code)
   const [ppDrawings] = await pool.query(`
     SELECT DISTINCT
       pp.bom_no as drawing_no,
@@ -666,32 +684,62 @@ const getProjectDrawings = async (salesOrderId) => {
         pp.target_qty
       ) as design_qty,
       pp.id as plan_id,
-      pp.status
+      COALESCE(pp.status, 'CREATED') as status,
+      COALESCE(
+        (SELECT 
+           CASE 
+             WHEN SUM(quantity) > 0 THEN (SUM((SELECT COALESCE(SUM(produced_qty), 0) FROM job_cards WHERE work_order_id = wo.id)) / SUM(quantity)) * 100
+             ELSE 0 
+           END 
+         FROM work_orders wo 
+         WHERE wo.plan_id = pp.id),
+        0
+      ) as progress
     FROM production_plans pp
+    JOIN sales_order_items soi ON (pp.sales_order_id = soi.sales_order_id OR soi.sales_order_id IN (SELECT id FROM sales_orders WHERE parent_id = pp.sales_order_id)) AND pp.bom_no = soi.drawing_no
+    JOIN sales_orders so ON pp.sales_order_id = so.id
     WHERE (pp.sales_order_id = ? OR pp.sales_order_id IN (SELECT id FROM sales_orders WHERE parent_id = ?))
       AND pp.bom_no IS NOT NULL AND pp.bom_no != ''
+      AND soi.parent_bom_id IS NULL
+      AND soi.status != 'REJECTED'
+      AND (so.customer_po_id IS NULL OR pp.bom_no IN (
+        SELECT drawing_no FROM customer_po_items WHERE customer_po_id = so.customer_po_id
+      ))
+      AND (soi.item_code IS NULL OR (soi.item_code != 'XXX' AND soi.item_code NOT LIKE '%NO CODE%'))
     ORDER BY pp.id ASC
   `, [salesOrderId, salesOrderId]);
 
-  // Also get from sales_order_items as fallback
+  // Also get from sales_order_items as fallback (searching both parent and child sales orders, keeping only parent BOMs with valid item codes)
   const [soiDrawings] = await pool.query(`
     SELECT DISTINCT
       soi.drawing_no,
       soi.description,
       soi.quantity as design_qty,
       NULL as plan_id,
-      NULL as status
+      'CREATED' as status,
+      0 as progress
     FROM sales_order_items soi
-    WHERE soi.sales_order_id = ?
+    JOIN sales_orders so ON soi.sales_order_id = so.id
+    WHERE (soi.sales_order_id = ? OR soi.sales_order_id IN (SELECT id FROM sales_orders WHERE parent_id = ?))
       AND soi.drawing_no IS NOT NULL AND soi.drawing_no != ''
-  `, [salesOrderId]);
+      AND soi.parent_bom_id IS NULL
+      AND soi.status != 'REJECTED'
+      AND (so.customer_po_id IS NULL OR soi.drawing_no IN (
+        SELECT drawing_no FROM customer_po_items WHERE customer_po_id = so.customer_po_id
+      ))
+      AND (soi.item_code IS NULL OR (soi.item_code != 'XXX' AND soi.item_code NOT LIKE '%NO CODE%'))
+  `, [salesOrderId, salesOrderId]);
 
   // Merge, preferring pp-sourced entries
   const ppNos = new Set(ppDrawings.map(d => d.drawing_no));
   const merged = [
     ...ppDrawings,
     ...soiDrawings.filter(d => !ppNos.has(d.drawing_no))
-  ];
+  ].map(d => ({
+    ...d,
+    status: d.status || 'CREATED',
+    progress: Math.min(100, Math.round(parseFloat(d.progress || 0)))
+  }));
 
   return merged;
 };
@@ -699,7 +747,7 @@ const getProjectDrawings = async (salesOrderId) => {
 // ─── NEW: Get all tab data filtered for a specific drawing ─────────────────
 const getProjectDetailByDrawing = async (salesOrderId, drawingNo) => {
   // Get the production plan for this drawing
-  const [[drawingPlan]] = await pool.query(`
+  let [[drawingPlan]] = await pool.query(`
     SELECT pp.*, 
       COALESCE(
         (SELECT ppi.description FROM production_plan_items ppi WHERE ppi.plan_id = pp.id LIMIT 1),
@@ -719,16 +767,44 @@ const getProjectDetailByDrawing = async (salesOrderId, drawingNo) => {
     LIMIT 1
   `, [salesOrderId, salesOrderId, drawingNo]);
 
+  // Fallback: if no production plan for this project, find the most recent plan for this drawing globally
+  if (!drawingPlan) {
+    const [[globalPlan]] = await pool.query(`
+      SELECT pp.*, 
+        COALESCE(
+          (SELECT ppi.description FROM production_plan_items ppi WHERE ppi.plan_id = pp.id LIMIT 1),
+          pp.bom_no
+        ) as description,
+        COALESCE(
+          (SELECT ppi.design_qty FROM production_plan_items ppi WHERE ppi.plan_id = pp.id LIMIT 1),
+          pp.target_qty
+        ) as design_qty,
+        COALESCE(
+          (SELECT ppi.uom FROM production_plan_items ppi WHERE ppi.plan_id = pp.id LIMIT 1),
+          'Nos'
+        ) as uom
+      FROM production_plans pp
+      WHERE pp.bom_no = ?
+      ORDER BY pp.id DESC
+      LIMIT 1
+    `, [drawingNo]);
+    if (globalPlan) {
+      drawingPlan = globalPlan;
+    }
+  }
+
+  const querySalesOrderId = drawingPlan?.sales_order_id || salesOrderId;
+
   // Also get the SO item for the drawing as fallback
   const [[soItem]] = await pool.query(`
     SELECT drawing_no, description, quantity as design_qty, status
     FROM sales_order_items
-    WHERE sales_order_id = ? AND drawing_no = ?
+    WHERE (sales_order_id = ? OR sales_order_id IN (SELECT id FROM sales_orders WHERE parent_id = ?)) AND drawing_no = ?
     LIMIT 1
-  `, [salesOrderId, drawingNo]);
+  `, [querySalesOrderId, querySalesOrderId, drawingNo]);
 
   const planId = drawingPlan?.id || null;
-  const drawingInfo = drawingPlan || {};
+  const drawingInfo = drawingPlan || soItem || {};
 
   // Work orders linked to this drawing's production plan
   const [workOrderRows] = planId ? await pool.query(`
@@ -744,24 +820,21 @@ const getProjectDetailByDrawing = async (salesOrderId, drawingNo) => {
   // Production Flow (job cards for these WOs)
   const [productionFlow] = linkedWoIds.length > 0 ? await pool.query(`
     SELECT 
+      jc.id,
       jc.operation_name as item_name,
-      CASE 
-        WHEN SUM(CASE WHEN jc.status = 'COMPLETED' THEN 1 ELSE 0 END) = COUNT(*) THEN 'COMPLETED'
-        WHEN SUM(CASE WHEN jc.status = 'PENDING' THEN 1 ELSE 0 END) = COUNT(*) THEN 'PENDING'
-        ELSE 'IN_PROGRESS'
-      END as status,
-      SUM(jc.planned_qty) as planned_qty,
-      SUM(jc.produced_qty) as produced_qty,
-      SUM(jc.accepted_qty) as accepted_qty,
-      SUM(jc.rejected_qty) as rejected_qty,
-      MAX(jc.end_time) as target_date,
-      COUNT(*) as total_job_cards,
-      SUM(CASE WHEN jc.status = 'COMPLETED' THEN 1 ELSE 0 END) as completed_job_cards,
-      COALESCE((SUM(jc.accepted_qty) / NULLIF(SUM(jc.produced_qty), 0)) * 100, 100) as yield
+      jc.status,
+      jc.planned_qty,
+      jc.produced_qty,
+      jc.accepted_qty,
+      jc.rejected_qty,
+      jc.end_time as target_date,
+      1 as total_job_cards,
+      CASE WHEN jc.status = 'COMPLETED' THEN 1 ELSE 0 END as completed_job_cards,
+      COALESCE((jc.accepted_qty / NULLIF(jc.produced_qty, 0)) * 100, 100) as yield,
+      jc.sequence_no
     FROM job_cards jc
     WHERE jc.work_order_id IN (?)
-    GROUP BY jc.operation_name
-    ORDER BY MIN(jc.sequence_no)
+    ORDER BY jc.sequence_no ASC, jc.id ASC
   `, [linkedWoIds]) : [[]];
 
   // Material Requests linked to this plan
@@ -834,12 +907,13 @@ const getProjectDetailByDrawing = async (salesOrderId, drawingNo) => {
 
   // Inventory Matrix
   const [inventoryMatrix] = mrIds.length > 0 ? await pool.query(`
-    SELECT sb.material_name as item_name, sb.item_code, sb.unit, sb.current_balance as available_qty,
+    SELECT sb.material_name as item_name, sb.item_code, sb.unit, SUM(sb.current_balance) as available_qty,
       (SELECT SUM(quantity) FROM material_request_items WHERE mr_id IN (?) AND item_code = sb.item_code) as required_qty
     FROM stock_balance sb
     WHERE sb.item_code IN (
       SELECT DISTINCT item_code FROM material_request_items WHERE mr_id IN (?)
     )
+    GROUP BY sb.item_code, sb.material_name, sb.unit
   `, [mrIds, mrIds]) : [[]];
 
   // Machine Utilization

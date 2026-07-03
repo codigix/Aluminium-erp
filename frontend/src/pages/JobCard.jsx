@@ -573,81 +573,8 @@ const JobCard = () => {
 
 
   const calculateModalOverlapAlert = () => {
-    // 1. Validate dependent operations sequence constraint for the same Work Order
-    if (formData.startDate && formData.startTime && formData.endTime && formData.workOrderId) {
-      const formStartStr = formData.startDate + 'T' + to24h(formData.startTime, formData.startAMPM) + ':00';
-      const formEndStr = formData.endDate + 'T' + to24h(formData.endTime, formData.endAMPM) + ':00';
+    // 1. Validate dependent operations sequence constraint for the same Work Order (Disabled to allow flexible scheduling of operations on the same day/times)
 
-      const currentStart = new Date(formStartStr);
-      const currentEnd = new Date(formEndStr);
-
-      if (!isNaN(currentStart.getTime()) && !isNaN(currentEnd.getTime())) {
-        // Find current item's details (item_code and drawing_no)
-        let currentItemCode = '';
-        let currentDrawingNo = '';
-        let currentSequenceNo = 0;
-
-        const currentWO = workOrders.find(wo => String(wo.id) === String(formData.workOrderId));
-        if (currentWO) {
-          currentItemCode = currentWO.item_code || '';
-          currentDrawingNo = currentWO.bom_no || currentWO.item_code || '';
-        }
-
-        if (formData.id) {
-          const activeJC = jobCards.find(j => String(j.id) === String(formData.id));
-          if (activeJC) {
-            currentSequenceNo = parseInt(activeJC.sequence_no || 0);
-          }
-        } else {
-          const woJCs = jobCards.filter(jc => {
-            if (String(jc.work_order_id) !== String(formData.workOrderId)) return false;
-            const otherItemCode = jc.item_code || '';
-            return otherItemCode === currentItemCode;
-          });
-          const maxSeq = woJCs.reduce((max, jc) => Math.max(max, parseInt(jc.sequence_no || 0)), 0);
-          currentSequenceNo = maxSeq + 1;
-        }
-
-        // Filter other active job cards of the same work order
-        const otherJCs = jobCards.filter(jc => {
-          if (String(jc.work_order_id) !== String(formData.workOrderId)) return false;
-          if (String(jc.id) === String(formData.id)) return false;
-          if (jc.status === 'CANCELLED') return false;
-          if (!jc.start_time || !jc.end_time) return false;
-
-          const otherItemCode = jc.item_code || '';
-          return otherItemCode === currentItemCode;
-        });
-
-        for (const other of otherJCs) {
-          const otherStart = new Date(String(other.start_time).replace(' ', 'T'));
-          const otherEnd = new Date(String(other.end_time).replace(' ', 'T'));
-
-          if (isNaN(otherStart.getTime()) || isNaN(otherEnd.getTime())) continue;
-
-          const otherSeq = parseInt(other.sequence_no || 0);
-
-          // Check direct time overlap
-          const isOverlap = currentStart < otherEnd && currentEnd > otherStart;
-          if (isOverlap) {
-            return "Time slot already assigned for this Work Order.";
-          }
-
-          // Check sequence ordering
-          if (otherSeq < currentSequenceNo) {
-            // current is AFTER other, so currentStart must be >= otherEnd
-            if (currentStart < otherEnd) {
-              return "Time slot already assigned for this Work Order.";
-            }
-          } else if (otherSeq > currentSequenceNo) {
-            // current is BEFORE other, so currentEnd must be <= otherStart
-            if (currentEnd > otherStart) {
-              return "Time slot already assigned for this Work Order.";
-            }
-          }
-        }
-      }
-    }
 
     if (formData.executionMode === 'Outsource') return null;
     if (!formData.workstationId) return null;
