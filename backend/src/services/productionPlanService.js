@@ -617,16 +617,36 @@ const getReadySalesOrderItems = async () => {
       FROM order_items oi
       JOIN orders o ON oi.order_id = o.id
       JOIN companies c ON o.client_id = c.id
-      LEFT JOIN sales_order_items soi ON (TRIM(oi.drawing_no) = TRIM(soi.drawing_no) AND soi.sales_order_id = o.quotation_id)
+      LEFT JOIN sales_order_items soi ON (
+        TRIM(oi.drawing_no) = TRIM(soi.drawing_no) 
+        AND soi.sales_order_id = (
+          SELECT DISTINCT so.id FROM sales_orders so
+          JOIN orders ord ON (
+            (ord.source_type = 'DRAWING' AND ord.quotation_id = so.id) OR
+            (ord.source_type = 'DIRECT' AND ord.quotation_id = so.customer_po_id)
+          )
+          WHERE ord.id = oi.order_id
+          LIMIT 1
+        )
+      )
       LEFT JOIN (
         SELECT sales_order_item_id, SUM(planned_qty) as already_planned_qty
         FROM production_plan_items 
         WHERE status != 'CANCELLED'
         GROUP BY sales_order_item_id
       ) planned ON oi.id = planned.sales_order_item_id
-      WHERE o.quotation_id IS NULL 
-      AND (TRIM(UPPER(oi.type)) IN ('FG', 'FINISHED GOODS', 'FINISHED_GOODS', 'ASSEMBLY'))
-      AND (soi.parent_bom_id IS NULL)
+      WHERE (
+        (SELECT DISTINCT so.id FROM sales_orders so
+         JOIN orders ord ON (
+           (ord.source_type = 'DRAWING' AND ord.quotation_id = so.id) OR
+           (ord.source_type = 'DIRECT' AND ord.quotation_id = so.customer_po_id)
+         )
+         WHERE ord.id = oi.order_id
+         LIMIT 1
+        ) IS NULL
+      )
+      AND (TRIM(UPPER(oi.type)) IN ('FG', 'FINISHED GOODS', 'FINISHED_GOODS', 'ASSEMBLY', 'PART', 'STANDARD') OR oi.drawing_no IS NOT NULL)
+      AND (soi.parent_bom_id IS NULL OR soi.id IS NULL)
       AND oi.item_code != 'XXX'
       AND oi.item_code IS NOT NULL
       AND oi.item_code != ''
