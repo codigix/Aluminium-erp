@@ -842,7 +842,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
 
     if (itemInReady) {
       const itemOrderId = itemInReady.sales_order_id;
-      if (itemOrderId && String(itemOrderId) !== String(selectedOrderId)) {
+      if (!selectedOrderId && itemOrderId && String(itemOrderId) !== String(selectedOrderId)) {
         // User selected the Drawing first: perform bidirectional sync
         setSelectedOrderId(String(itemOrderId));
         fetchOrderDetails(itemOrderId, finalBomId);

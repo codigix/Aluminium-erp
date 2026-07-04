@@ -208,12 +208,37 @@ const createProductionPlan = async (planData, createdBy) => {
     const finalTargetQty = targetQty || targetQuantity || (bom && bom.targetQty) || 0;
 
     if (finalSalesOrderId && finalBomNo) {
-      const [existing] = await connection.query(
-        'SELECT id FROM production_plans WHERE sales_order_id = ? AND TRIM(LOWER(bom_no)) = TRIM(LOWER(?))',
-        [finalSalesOrderId, finalBomNo]
+      // Find all related sales order IDs (both design and execution orders)
+      const [relatedIdsRows] = await connection.query(
+        `SELECT DISTINCT id FROM (
+          SELECT ? as id
+          UNION
+          SELECT so.id FROM sales_orders so
+          JOIN orders o ON (
+            (o.source_type = 'DRAWING' AND o.quotation_id = so.id) OR
+            (o.source_type = 'DIRECT' AND o.quotation_id = so.customer_po_id)
+          )
+          WHERE o.id = ?
+          UNION
+          SELECT o.id FROM orders o
+          JOIN sales_orders so ON (
+            (o.source_type = 'DRAWING' AND o.quotation_id = so.id) OR
+            (o.source_type = 'DIRECT' AND o.quotation_id = so.customer_po_id)
+          )
+          WHERE so.id = ?
+        ) as tmp WHERE id IS NOT NULL`,
+        [finalSalesOrderId, finalSalesOrderId, finalSalesOrderId]
       );
-      if (existing.length > 0) {
-        throw new Error('Production Plan already exists for the selected Sales Order and Drawing. Duplicate Production Plans are not allowed.');
+      const relatedIds = relatedIdsRows.map(r => r.id);
+
+      if (relatedIds.length > 0) {
+        const [existing] = await connection.query(
+          'SELECT id FROM production_plans WHERE sales_order_id IN (?) AND TRIM(LOWER(bom_no)) = TRIM(LOWER(?))',
+          [relatedIds, finalBomNo]
+        );
+        if (existing.length > 0) {
+          throw new Error('Production Plan already exists for the selected Sales Order and Drawing. Duplicate Production Plans are not allowed.');
+        }
       }
     }
 
@@ -786,12 +811,15 @@ const getSalesOrderFullDetails = async (id) => {
              )
            )
          )
-         LEFT JOIN (
-           SELECT sales_order_id, sales_order_item_id, SUM(planned_qty) as already_planned_qty
-           FROM production_plan_items 
-           WHERE status != 'CANCELLED'
-           GROUP BY sales_order_id, sales_order_item_id
-         ) planned ON oi.order_id = planned.sales_order_id AND oi.id = planned.sales_order_item_id
+          LEFT JOIN (
+            SELECT sales_order_id, TRIM(item_code) as item_code, SUM(planned_qty) as already_planned_qty
+            FROM production_plan_items 
+            WHERE status != 'CANCELLED'
+            GROUP BY sales_order_id, TRIM(item_code)
+          ) planned ON (
+            (planned.sales_order_id = oi.order_id OR (soi.sales_order_id IS NOT NULL AND planned.sales_order_id = soi.sales_order_id))
+            AND TRIM(planned.item_code) = TRIM(oi.item_code)
+          )
          WHERE oi.order_id = ? 
          AND (TRIM(UPPER(oi.type)) IN ('FG', 'FINISHED GOODS', 'FINISHED_GOODS', 'ASSEMBLY', 'PART', 'STANDARD') OR oi.drawing_no IS NOT NULL)
          AND (soi.status IS NULL OR TRIM(UPPER(soi.status)) NOT IN ('REJECTED', 'CANCELLED'))
