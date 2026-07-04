@@ -643,7 +643,7 @@ const getProductionReadySalesOrders = async () => {
     `SELECT combined.* FROM (
       SELECT o.id, 
               o.order_no, 
-              COALESCE(so.project_name, c.company_name, '') as project_name, 
+              COALESCE(o.project_name, so.project_name, c.company_name, '') as project_name, 
               cp.po_number, 
               c.company_name, 
               o.created_at
@@ -660,54 +660,35 @@ const getProductionReadySalesOrders = async () => {
        WHERE 
          -- Only show Sales Orders starting with ORD-
          o.order_no LIKE 'ORD-%'
-         -- 1. Has at least one FG/Assembly item
+         -- 1. Has at least one FG/Assembly/Part item
          AND (EXISTS (
            SELECT 1 FROM order_items oi 
            WHERE oi.order_id = o.id 
-           AND TRIM(UPPER(oi.type)) IN ('FG', 'FINISHED GOODS', 'FINISHED_GOODS', 'ASSEMBLY')
+           AND (TRIM(UPPER(oi.type)) IN ('FG', 'FINISHED GOODS', 'FINISHED_GOODS', 'ASSEMBLY', 'PART', 'STANDARD') OR oi.drawing_no IS NOT NULL)
          ) OR EXISTS (
            SELECT 1 FROM sales_order_items soi 
            WHERE soi.sales_order_id = so.id 
-           AND TRIM(UPPER(soi.item_type)) IN ('FG', 'FINISHED GOODS', 'FINISHED_GOODS', 'ASSEMBLY')
+           AND (TRIM(UPPER(soi.item_type)) IN ('FG', 'FINISHED GOODS', 'FINISHED_GOODS', 'ASSEMBLY', 'PART') OR soi.drawing_no IS NOT NULL)
          ))
          -- 2. Exclude rejected or cancelled sales orders
-         AND (o.quotation_id IS NULL OR so.status NOT IN ('REJECTED', 'CANCELLED'))
+         AND (o.quotation_id IS NULL OR so.status IS NULL OR so.status NOT IN ('REJECTED', 'CANCELLED'))
          -- 3. Must have at least one BOM record with cost > 0
-         AND (
-           (o.quotation_id IS NOT NULL AND EXISTS (
-             SELECT 1 FROM sales_order_items soi
-             WHERE soi.sales_order_id = so.id
-               AND soi.bom_cost > 0
-           ))
-           OR
-           (o.quotation_id IS NULL AND EXISTS (
-             SELECT 1 FROM order_items oi
-             JOIN sales_order_items soi ON TRIM(soi.drawing_no) = TRIM(oi.drawing_no)
-             WHERE oi.order_id = o.id
-               AND soi.sales_order_id IS NULL
-               AND soi.bom_cost > 0
-           ))
+         AND EXISTS (
+           SELECT 1 FROM order_items oi
+           JOIN sales_order_items soi ON TRIM(soi.drawing_no) = TRIM(oi.drawing_no)
+           WHERE oi.order_id = o.id
+             AND soi.bom_cost > 0
          )
          -- 4. Exclude if any required drawing has no completed BOM
          AND NOT EXISTS (
            SELECT 1 FROM order_items oi
            WHERE oi.order_id = o.id
-             AND TRIM(UPPER(oi.type)) IN ('FG', 'FINISHED GOODS', 'FINISHED_GOODS', 'ASSEMBLY')
+             AND (TRIM(UPPER(oi.type)) IN ('FG', 'FINISHED GOODS', 'FINISHED_GOODS', 'ASSEMBLY', 'PART', 'STANDARD') OR oi.drawing_no IS NOT NULL)
              AND (oi.item_code IS NULL OR (oi.item_code != 'XXX' AND oi.item_code NOT LIKE '%XXX%' AND oi.item_code NOT LIKE '%NO CODE%'))
-             AND (
-               (o.quotation_id IS NOT NULL AND NOT EXISTS (
-                 SELECT 1 FROM sales_order_items soi
-                 WHERE soi.sales_order_id = so.id
-                   AND TRIM(soi.drawing_no) = TRIM(oi.drawing_no)
-                   AND soi.bom_cost > 0
-               ))
-               OR
-               (o.quotation_id IS NULL AND NOT EXISTS (
-                 SELECT 1 FROM sales_order_items soi
-                 WHERE soi.sales_order_id IS NULL
-                   AND TRIM(soi.drawing_no) = TRIM(oi.drawing_no)
-                   AND soi.bom_cost > 0
-               ))
+             AND NOT EXISTS (
+               SELECT 1 FROM sales_order_items soi
+               WHERE TRIM(soi.drawing_no) = TRIM(oi.drawing_no)
+                 AND soi.bom_cost > 0
              )
          )
     ) AS combined
@@ -762,14 +743,27 @@ const getSalesOrderFullDetails = async (id) => {
          FROM order_items oi
          LEFT JOIN sales_order_items soi ON (
            TRIM(oi.drawing_no) = TRIM(soi.drawing_no) 
-           AND soi.sales_order_id = (
-             SELECT DISTINCT so.id FROM sales_orders so
-             JOIN orders o ON (
-               (o.source_type = 'DRAWING' AND o.quotation_id = so.id) OR
-               (o.source_type = 'DIRECT' AND o.quotation_id = so.customer_po_id)
+           AND (
+             soi.sales_order_id = (
+               SELECT DISTINCT so.id FROM sales_orders so
+               JOIN orders o ON (
+                 (o.source_type = 'DRAWING' AND o.quotation_id = so.id) OR
+                 (o.source_type = 'DIRECT' AND o.quotation_id = so.customer_po_id)
+               )
+               WHERE o.id = oi.order_id
+               LIMIT 1
              )
-             WHERE o.id = oi.order_id
-             LIMIT 1
+             OR (
+               (SELECT DISTINCT so.id FROM sales_orders so
+                JOIN orders o ON (
+                  (o.source_type = 'DRAWING' AND o.quotation_id = so.id) OR
+                  (o.source_type = 'DIRECT' AND o.quotation_id = so.customer_po_id)
+                )
+                WHERE o.id = oi.order_id
+                LIMIT 1
+               ) IS NULL
+               AND soi.bom_cost > 0
+             )
            )
          )
          LEFT JOIN (
@@ -779,8 +773,7 @@ const getSalesOrderFullDetails = async (id) => {
            GROUP BY sales_order_id, sales_order_item_id
          ) planned ON oi.order_id = planned.sales_order_id AND oi.id = planned.sales_order_item_id
          WHERE oi.order_id = ? 
-         AND (TRIM(UPPER(oi.type)) IN ('FG', 'FINISHED GOODS', 'FINISHED_GOODS', 'ASSEMBLY') 
-              OR TRIM(UPPER(soi.item_type)) IN ('FG', 'FINISHED GOODS', 'FINISHED_GOODS', 'ASSEMBLY'))
+         AND (TRIM(UPPER(oi.type)) IN ('FG', 'FINISHED GOODS', 'FINISHED_GOODS', 'ASSEMBLY', 'PART', 'STANDARD') OR oi.drawing_no IS NOT NULL)
          AND (soi.status IS NULL OR TRIM(UPPER(soi.status)) NOT IN ('REJECTED', 'CANCELLED'))
          AND (soi.parent_bom_id IS NULL)
          AND oi.item_code != 'XXX'
