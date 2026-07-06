@@ -672,6 +672,15 @@ const ItemsMaster = () => {
           if (row.outer_diameter) dims.push(`OD:${parseFloat(row.outer_diameter)}mm`);
           if (row.thickness) dims.push(`${parseFloat(row.thickness)}mm`);
           if (row.length) dims.push(`${parseFloat(row.length)}mm`);
+        } else if (shapeName.includes('square tube')) {
+          if (row.width) dims.push(`Side:${parseFloat(row.width)}mm`);
+          if (row.thickness) dims.push(`T:${parseFloat(row.thickness)}mm`);
+          if (row.length) dims.push(`${parseFloat(row.length)}mm`);
+        } else if (shapeName.includes('rectangular tube')) {
+          if (row.width) dims.push(`W:${parseFloat(row.width)}mm`);
+          if (row.outer_diameter) dims.push(`H:${parseFloat(row.outer_diameter)}mm`);
+          if (row.thickness) dims.push(`T:${parseFloat(row.thickness)}mm`);
+          if (row.length) dims.push(`${parseFloat(row.length)}mm`);
         } else {
           // Fallback for other shapes
           if (row.length) dims.push(`${parseFloat(row.length)}mm`);
@@ -850,6 +859,17 @@ const ItemsMaster = () => {
         if (id >= 0) {
           calculatedWeight = (Math.PI * (Math.pow(od, 2) - Math.pow(id, 2)) / 4 * l * density) / 1000000;
         }
+      } else if (shape.includes('square tube')) {
+        const a = parseFloat(itemFormData.width) || 0;
+        const t = parseFloat(itemFormData.thickness) || 0;
+        const l = parseFloat(itemFormData.length) || 0;
+        calculatedWeight = ((a * a - Math.pow(a - 2 * t, 2)) * l * density) / 1000000;
+      } else if (shape.includes('rectangular tube')) {
+        const b = parseFloat(itemFormData.width) || 0;
+        const h = parseFloat(itemFormData.outerDiameter) || 0;
+        const t = parseFloat(itemFormData.thickness) || 0;
+        const l = parseFloat(itemFormData.length) || 0;
+        calculatedWeight = ((b * h - (b - 2 * t) * (h - 2 * t)) * l * density) / 1000000;
       }
     }
 
@@ -1174,6 +1194,42 @@ const ItemsMaster = () => {
                                 </div>
                                 <div className="space-y-1.5">
                                   <label className="text-xs    font-semibold text-slate-400">Length (mm) *</label>
+                                  <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.length} onChange={(e) => setItemFormData({...itemFormData, length: e.target.value})} required />
+                                </div>
+                              </>
+                            )}
+                            {selectedShape.toLowerCase().includes('square tube') && (
+                              <>
+                                <div className="space-y-1.5">
+                                  <label className="text-xs font-semibold text-slate-400">Outside Side (A) (mm) *</label>
+                                  <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.width} onChange={(e) => setItemFormData({...itemFormData, width: e.target.value})} required />
+                                </div>
+                                <div className="space-y-1.5">
+                                  <label className="text-xs font-semibold text-slate-400">Wall Thickness (T) (mm) *</label>
+                                  <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.thickness} onChange={(e) => setItemFormData({...itemFormData, thickness: e.target.value})} required />
+                                </div>
+                                <div className="space-y-1.5">
+                                  <label className="text-xs font-semibold text-slate-400">Length (L) (mm) *</label>
+                                  <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.length} onChange={(e) => setItemFormData({...itemFormData, length: e.target.value})} required />
+                                </div>
+                              </>
+                            )}
+                            {selectedShape.toLowerCase().includes('rectangular tube') && (
+                              <>
+                                <div className="space-y-1.5">
+                                  <label className="text-xs font-semibold text-slate-400">Width (B) (mm) *</label>
+                                  <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.width} onChange={(e) => setItemFormData({...itemFormData, width: e.target.value})} required />
+                                </div>
+                                <div className="space-y-1.5">
+                                  <label className="text-xs font-semibold text-slate-400">Height (H) (mm) *</label>
+                                  <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.outerDiameter} onChange={(e) => setItemFormData({...itemFormData, outerDiameter: e.target.value})} required />
+                                </div>
+                                <div className="space-y-1.5">
+                                  <label className="text-xs font-semibold text-slate-400">Wall Thickness (T) (mm) *</label>
+                                  <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.thickness} onChange={(e) => setItemFormData({...itemFormData, thickness: e.target.value})} required />
+                                </div>
+                                <div className="space-y-1.5">
+                                  <label className="text-xs font-semibold text-slate-400">Length (L) (mm) *</label>
                                   <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.length} onChange={(e) => setItemFormData({...itemFormData, length: e.target.value})} required />
                                 </div>
                               </>
