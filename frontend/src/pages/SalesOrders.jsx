@@ -52,6 +52,7 @@ const SalesOrders = () => {
   const [selectedHostId, setSelectedHostId] = useState('');
   const [selectedHostCompany, setSelectedHostCompany] = useState(null);
   const [allCustomerPos, setAllCustomerPos] = useState([]);
+  const [allDrawings, setAllDrawings] = useState([]);
 
   useEffect(() => {
     if (selectedHostId && hostCompanies.length > 0) {
@@ -77,6 +78,12 @@ const SalesOrders = () => {
     customerBillingAddress: '',
     customerShippingAddress: '',
     customerPoId: '',
+    drawingId: '',
+    drawingNo: '',
+    finishedGoodName: '',
+    designQty: '',
+    poNumber: '',
+    clientName: '',
     orderQuantity: 1,
     warehouse: '',
     status: 'Draft',
@@ -99,11 +106,13 @@ const SalesOrders = () => {
       fetchCompanies();
       fetchHostCompanies();
       fetchAllCustomerPos();
+      fetchDrawings();
       if (parsedUser.department_code === 'ADMIN' || parsedUser.department_code === 'DESIGN_ENG' || parsedUser.department_code === 'SALES') {
         fetchBoms();
       }
     } else {
       fetchBoms();
+      fetchDrawings();
     }
 
     // URL-based Navigation
@@ -277,6 +286,98 @@ const SalesOrders = () => {
     }
   };
 
+  const fetchDrawings = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/drawings`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setAllDrawings(Array.isArray(data) ? data : []);
+      }
+    } catch (err) {
+      console.error('Error fetching drawings:', err);
+    }
+  };
+
+  const handleDrawingChange = async (drawingId) => {
+    if (!drawingId || isNaN(Number(drawingId))) return;
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/drawings/${drawingId}/autofetch-details`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const details = await response.json();
+        if (details.poId) {
+          // Load the entire customer PO
+          await handleCustomerPoChange(`PO_${details.poId}`);
+          // Set the selected drawing values
+          setFormData(prev => ({
+            ...prev,
+            drawingId: details.drawingId,
+            drawingNo: details.drawingNo,
+            finishedGoodName: details.finishedGoodName,
+            designQty: details.designQty
+          }));
+        } else {
+          const subTotalVal = (details.items || []).reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+          const avgProfit = (details.items || []).reduce((sum, item) => sum + (Number(item.profit_percentage) || 0), 0) / (details.items.length || 1);
+          const avgGst = (details.items || []).reduce((sum, item) => sum + (Number(item.cgst_percent || 0) + Number(item.sgst_percent || 0) + Number(item.igst_percent || 0)), 0) / (details.items.length || 1);
+          const profitMarginVal = Number(avgProfit) || 0;
+          const totalProfitVal = subTotalVal * (profitMarginVal / 100);
+          const costWithProfit = subTotalVal + totalProfitVal;
+          const gstAmount = costWithProfit * (avgGst / 100);
+          const grandTotal = costWithProfit + gstAmount;
+
+          setFormData(prev => ({
+            ...prev,
+            drawingId: details.drawingId,
+            drawingNo: details.drawingNo,
+            finishedGoodName: details.finishedGoodName,
+            designQty: details.designQty,
+            customerPoId: '',
+            poNumber: '—',
+            projectName: details.projectName || '—',
+            customerId: details.companyId ? String(details.companyId) : '',
+            clientName: details.clientName,
+            customerContactPerson: details.contactPerson || '—',
+            customerEmail: details.email || '—',
+            customerPhone: details.phone || '—',
+            customerType: details.customerType || 'REGULAR',
+            customerGstin: details.gstin || '—',
+            customerCity: details.city || '',
+            customerState: details.state || '',
+            customerBillingAddress: details.billingAddress || '—',
+            customerShippingAddress: details.shippingAddress || '—',
+            items: details.items || [],
+            profitMargin: parseFloat(avgProfit.toFixed(2)) || 0,
+            totalProfit: parseFloat(totalProfitVal.toFixed(2)) || 0,
+            cgstRate: parseFloat((avgGst / 2).toFixed(2)) || 9,
+            sgstRate: parseFloat((avgGst / 2).toFixed(2)) || 9,
+            subtotal: parseFloat(costWithProfit.toFixed(2)) || 0,
+            gst: parseFloat(gstAmount.toFixed(2)) || 0,
+            grand_total: parseFloat(grandTotal.toFixed(2)) || 0,
+            sourceType: 'DRAWING'
+          }));
+        }
+
+        if (details.hostCompanyId) {
+          setSelectedHostId(String(details.hostCompanyId));
+        }
+      } else {
+        errorToast('Failed to fetch drawing details');
+      }
+    } catch (err) {
+      console.error('Error fetching drawing details:', err);
+      errorToast('Error fetching drawing details');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const fetchHostCompanies = async () => {
     try {
       const token = localStorage.getItem('authToken');
@@ -423,6 +524,7 @@ const SalesOrders = () => {
     let projectName = '';
     let finalHostId = null;
     let customerUpdateFields = {};
+    let poNumber = group.po_number || '';
 
     if (group.isCustomerPo) {
       try {
@@ -436,6 +538,7 @@ const SalesOrders = () => {
           sourceType = 'DIRECT';
           projectName = poData.project_name || poData.remarks || `Order for ${poData.company_name}`;
           finalHostId = poData.host_company_id || null;
+          poNumber = poData.po_number || group.po_number || '';
 
           if (poData.company_id) {
             const company = companies.find(c => String(c.id) === String(poData.company_id));
@@ -540,6 +643,7 @@ const SalesOrders = () => {
     setFormData(prev => ({
       ...prev,
       customerPoId: uniqueKey,
+      poNumber: poNumber || '',
       items,
       profitMargin: parseFloat(avgProfit.toFixed(2)),
       totalProfit: parseFloat(totalProfitVal.toFixed(2)),
@@ -1344,8 +1448,8 @@ const SalesOrders = () => {
                     )}
                     <span className="text-xs font-bold text-slate-800 leading-tight truncate w-full">{selectedHostCompany.company_name}</span>
                     <span className={`text-[9px] mt-1.5 px-2 py-0.5 rounded-full font-semibold border ${selectedHostCompany.status === 'ACTIVE'
-                        ? 'bg-emerald-50 border-emerald-100 text-emerald-600'
-                        : 'bg-slate-100 border-slate-200 text-slate-500'
+                      ? 'bg-emerald-50 border-emerald-100 text-emerald-600'
+                      : 'bg-slate-100 border-slate-200 text-slate-500'
                       }`}>
                       {selectedHostCompany.status === 'ACTIVE' ? 'Active Global Billing' : 'Inactive'}
                     </span>
@@ -1435,18 +1539,27 @@ const SalesOrders = () => {
           {/* Customer Details */}
           <Card title="Customer Details" className='bg-white border border-slate-200 rounded-xl' subtitle="Customer contact information">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-3 p-2">
-              <FormControl label="Select Customer PO">
+              <FormControl label="Select Drawing *">
+                <SearchableSelect
+                  options={allDrawings.map(d => ({
+                    value: d.drawing_master_id || d.id,
+                    label: `${d.drawing_no} - ${d.drawing_description || d.description || 'No Description'}`
+                  }))}
+                  value={formData.drawingId}
+                  onChange={(e) => handleDrawingChange(e.target.value)}
+                  placeholder="Select Drawing..."
+                  disabled={formMode === 'view'}
+                  allowCustom={false}
+                />
+              </FormControl>
+
+              <FormControl label="Customer PO">
                 <div className="flex gap-2">
                   <div className="flex-1">
-                    <SearchableSelect
-                      options={allCustomerPos.map(q => ({
-                        value: q.uniqueKey,
-                        label: `PO: ${q.po_number} - ${q.company_name} - ${q.status}`
-                      }))}
-                      value={formData.customerPoId}
-                      onChange={(e) => handleCustomerPoChange(e.target.value)}
-                      placeholder="Select Customer PO..."
-                      disabled={formMode === 'view'}
+                    <input
+                      className="w-full p-2 border border-slate-200 rounded text-xs bg-slate-50 text-slate-500"
+                      value={formData.poNumber || ''}
+                      disabled
                     />
                   </div>
                   {formData.customerPoId && String(formData.customerPoId).startsWith('PO_') && (
@@ -1462,46 +1575,26 @@ const SalesOrders = () => {
                 </div>
               </FormControl>
 
-              <FormControl label="Customer *">
-                <SearchableSelect
-                  options={companies.map(c => ({ value: c.id, label: c.company_name }))}
-                  value={formData.customerId}
-                  onChange={(e) => {
-                    const company = companies.find(c => String(c.id) === String(e.target.value));
-                    const primaryContact = company?.contacts?.find(ct => ct.contact_type === 'PRIMARY') || company?.contacts?.[0];
-                    const billing = company?.addresses?.find(address => address.address_type === 'BILLING') || {};
-                    const shipping = company?.addresses?.find(address => address.address_type === 'SHIPPING') || {};
+              <FormControl label="Project No.">
+                <input
+                  className="w-full p-2 border border-slate-200 rounded text-xs bg-slate-50 text-slate-500"
+                  value={formData.projectName || ''}
+                  disabled
+                />
+              </FormControl>
 
-                    const billingAddressStr = [billing.line1, billing.line2, billing.city, billing.state, billing.pincode].filter(Boolean).join(', ');
-                    const shippingAddressStr = [shipping.line1, shipping.line2, shipping.city, shipping.state, shipping.pincode].filter(Boolean).join(', ');
-
-                    setFormData({
-                      ...formData,
-                      customerId: e.target.value,
-                      customerEmail: primaryContact?.email || company?.contact_email || '',
-                      customerPhone: primaryContact?.phone || company?.contact_mobile || '',
-                      customerContactPerson: primaryContact?.name || company?.contact_person || '',
-                      customerType: company?.customer_type || 'REGULAR',
-                      customerGstin: company?.gstin || '',
-                      customerCity: billing?.city || '',
-                      customerState: billing?.state || '',
-                      customerBillingAddress: billingAddressStr || '',
-                      customerShippingAddress: shippingAddressStr || '',
-                      customerPoId: ''
-                    });
-                    if (e.target.value) {
-                      fetchApprovedQuotations(e.target.value);
-                    }
-                  }}
-                  placeholder="Select customer..."
-                  disabled={formMode === 'view'}
+              <FormControl label="Customer">
+                <input
+                  className="w-full p-2 border border-slate-200 rounded text-xs bg-slate-50 text-slate-500"
+                  value={companies.find(c => String(c.id) === String(formData.customerId))?.company_name || formData.clientName || ''}
+                  disabled
                 />
               </FormControl>
 
               <FormControl label="Contact Person">
                 <input
                   className="w-full p-2 border border-slate-200 rounded text-xs bg-slate-50 text-slate-500"
-                  value={formData.customerContactPerson}
+                  value={formData.customerContactPerson || ''}
                   disabled
                 />
               </FormControl>
@@ -1509,7 +1602,7 @@ const SalesOrders = () => {
               <FormControl label="Phone">
                 <input
                   className="w-full p-2 border border-slate-200 rounded text-xs bg-slate-50 text-slate-500"
-                  value={formData.customerPhone}
+                  value={formData.customerPhone || ''}
                   disabled
                 />
               </FormControl>
@@ -1517,7 +1610,16 @@ const SalesOrders = () => {
               <FormControl label="Email">
                 <input
                   className="w-full p-2 border border-slate-200 rounded text-xs bg-slate-50 text-slate-500"
-                  value={formData.customerEmail}
+                  value={formData.customerEmail || ''}
+                  disabled
+                />
+              </FormControl>
+
+
+              <FormControl label="Design Qty">
+                <input
+                  className="w-full p-2 border border-slate-200 rounded text-xs bg-slate-50 text-slate-500"
+                  value={formData.designQty ? `${formData.designQty} Nos` : ''}
                   disabled
                 />
               </FormControl>
@@ -1525,7 +1627,7 @@ const SalesOrders = () => {
               <FormControl label="Type">
                 <input
                   className="w-full p-2 border border-slate-200 rounded text-xs bg-slate-50 text-slate-500"
-                  value={formData.customerType}
+                  value={formData.customerType || ''}
                   disabled
                 />
               </FormControl>
@@ -1533,7 +1635,7 @@ const SalesOrders = () => {
               <FormControl label="GSTIN">
                 <input
                   className="w-full p-2 border border-slate-200 rounded text-xs bg-slate-50 text-slate-500"
-                  value={formData.customerGstin}
+                  value={formData.customerGstin || ''}
                   disabled
                 />
               </FormControl>
@@ -1541,7 +1643,7 @@ const SalesOrders = () => {
               <FormControl label="City">
                 <input
                   className="w-full p-2 border border-slate-200 rounded text-xs bg-slate-50 text-slate-500"
-                  value={formData.customerCity}
+                  value={formData.customerCity || ''}
                   disabled
                 />
               </FormControl>
@@ -1549,7 +1651,7 @@ const SalesOrders = () => {
               <FormControl label="State">
                 <input
                   className="w-full p-2 border border-slate-200 rounded text-xs bg-slate-50 text-slate-500"
-                  value={formData.customerState}
+                  value={formData.customerState || ''}
                   disabled
                 />
               </FormControl>
@@ -1559,7 +1661,7 @@ const SalesOrders = () => {
               <FormControl label="Billing Address">
                 <textarea
                   className="w-full p-2 border border-slate-200 rounded text-xs bg-slate-50 text-slate-500 min-h-[50px]"
-                  value={formData.customerBillingAddress}
+                  value={formData.customerBillingAddress || ''}
                   disabled
                 />
               </FormControl>
@@ -1567,7 +1669,7 @@ const SalesOrders = () => {
               <FormControl label="Shipping Address">
                 <textarea
                   className="w-full p-2 border border-slate-200 rounded text-xs bg-slate-50 text-slate-500 min-h-[50px]"
-                  value={formData.customerShippingAddress}
+                  value={formData.customerShippingAddress || ''}
                   disabled
                 />
               </FormControl>

@@ -50,7 +50,7 @@ async function runMigrations() {
       } catch (err) {
         console.error(`Error applying migration ${file}:`, err.message);
         // If it's a "duplicate" error, we might want to skip it or handle it
-        if (err.code === 'ER_DUP_ENTRY' || err.code === 'ER_TABLE_EXISTS_ERROR' || err.code === 'ER_DUP_KEYNAME') {
+        if (err.code === 'ER_DUP_ENTRY' || err.code === 'ER_TABLE_EXISTS_ERROR' || err.code === 'ER_DUP_KEYNAME' || err.code === 'ER_DUP_FIELDNAME') {
             console.log(`Migration ${file} seems partially applied or conflicting but it's okay, marking as done.`);
             await connection.query("INSERT INTO migrations (file_name) VALUES (?)", [file]);
         } else {

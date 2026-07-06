@@ -159,8 +159,12 @@ const createQuotation = async (payload) => {
         const correctedItemCode = await getCorrectItemCode(item, connection);
 
         await connection.execute(
-          `INSERT INTO quotation_items (quotation_id, item_code, description, material_name, material_type, drawing_no, quantity, design_qty, planned_qty, unit, unit_rate, amount, cgst_percent, cgst_amount, sgst_percent, sgst_amount, total_amount)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          `INSERT INTO quotation_items (
+            quotation_id, item_code, description, material_name, material_type, drawing_no, 
+            quantity, design_qty, planned_qty, unit, unit_rate, amount, 
+            cgst_percent, cgst_amount, sgst_percent, sgst_amount, total_amount,
+            length, width, thickness, diameter, outer_diameter, density, weight_per_unit
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
           ,
           [
             quotationId,
@@ -179,7 +183,14 @@ const createQuotation = async (payload) => {
             cgstAmount,
             sgstPercent,
             sgstAmount,
-            totalItemAmount
+            totalItemAmount,
+            parseFloat(item.length || (item.dimensions && item.dimensions.length)) || 0,
+            parseFloat(item.width || (item.dimensions && item.dimensions.width)) || 0,
+            parseFloat(item.thickness || (item.dimensions && item.dimensions.thickness)) || 0,
+            parseFloat(item.diameter || (item.dimensions && item.dimensions.diameter)) || 0,
+            parseFloat(item.outer_diameter || (item.dimensions && item.dimensions.outer_diameter)) || 0,
+            parseFloat(item.density || (item.dimensions && item.dimensions.density)) || 0,
+            parseFloat(item.weight_per_unit || (item.dimensions && item.dimensions.weight_per_unit)) || 0
           ]
         );
       }
@@ -339,7 +350,29 @@ const getQuotations = async (filters = {}) => {
   if (quotations.length === 0) return [];
 
   const quotationIds = quotations.map(q => q.id);
-  const [items] = await pool.query('SELECT * FROM quotation_items WHERE quotation_id IN (?)', [quotationIds]);
+  const [items] = await pool.query(
+    `SELECT qi.*, 
+            COALESCE(NULLIF(qi.length, 0), mri.length, sb.length, 0) as length,
+            COALESCE(NULLIF(qi.width, 0), mri.width, sb.width, 0) as width,
+            COALESCE(NULLIF(qi.thickness, 0), mri.thickness, sb.thickness, 0) as thickness,
+            COALESCE(NULLIF(qi.diameter, 0), mri.diameter, sb.diameter, 0) as diameter,
+            COALESCE(NULLIF(qi.outer_diameter, 0), mri.outer_diameter, sb.outer_diameter, 0) as outer_diameter,
+            COALESCE(NULLIF(qi.density, 0), mri.density, sb.density, 0) as density,
+            COALESCE(NULLIF(qi.weight_per_unit, 0), mri.weight_per_unit, sb.weight_per_unit, 0) as weight_per_unit
+     FROM quotation_items qi
+     LEFT JOIN quotations q ON qi.quotation_id = q.id
+     LEFT JOIN material_request_items mri ON q.mr_id = mri.mr_id AND qi.item_code = mri.item_code AND ABS(qi.quantity - mri.quantity) < 0.01
+     LEFT JOIN (
+       SELECT item_code, 
+              MAX(length) as length, MAX(width) as width, MAX(thickness) as thickness, 
+              MAX(diameter) as diameter, MAX(outer_diameter) as outer_diameter,
+              MAX(density) as density, MAX(weight_per_unit) as weight_per_unit
+       FROM stock_balance 
+       GROUP BY item_code
+     ) sb ON qi.item_code = sb.item_code
+     WHERE qi.quotation_id IN (?)`,
+    [quotationIds]
+  );
 
   return quotations.map(q => ({
     ...q,
@@ -402,7 +435,26 @@ const getQuotationById = async (quotationId) => {
   }
 
   const [items] = await pool.query(
-    'SELECT * FROM quotation_items WHERE quotation_id = ?',
+    `SELECT qi.*, 
+            COALESCE(NULLIF(qi.length, 0), mri.length, sb.length, 0) as length,
+            COALESCE(NULLIF(qi.width, 0), mri.width, sb.width, 0) as width,
+            COALESCE(NULLIF(qi.thickness, 0), mri.thickness, sb.thickness, 0) as thickness,
+            COALESCE(NULLIF(qi.diameter, 0), mri.diameter, sb.diameter, 0) as diameter,
+            COALESCE(NULLIF(qi.outer_diameter, 0), mri.outer_diameter, sb.outer_diameter, 0) as outer_diameter,
+            COALESCE(NULLIF(qi.density, 0), mri.density, sb.density, 0) as density,
+            COALESCE(NULLIF(qi.weight_per_unit, 0), mri.weight_per_unit, sb.weight_per_unit, 0) as weight_per_unit
+     FROM quotation_items qi
+     LEFT JOIN quotations q ON qi.quotation_id = q.id
+     LEFT JOIN material_request_items mri ON q.mr_id = mri.mr_id AND qi.item_code = mri.item_code AND ABS(qi.quantity - mri.quantity) < 0.01
+     LEFT JOIN (
+       SELECT item_code, 
+              MAX(length) as length, MAX(width) as width, MAX(thickness) as thickness, 
+              MAX(diameter) as diameter, MAX(outer_diameter) as outer_diameter,
+              MAX(density) as density, MAX(weight_per_unit) as weight_per_unit
+       FROM stock_balance 
+       GROUP BY item_code
+     ) sb ON qi.item_code = sb.item_code
+     WHERE qi.quotation_id = ?`,
     [quotationId]
   );
 
@@ -616,8 +668,9 @@ const updateQuotation = async (quotationId, payload) => {
           `INSERT INTO quotation_items (
             quotation_id, item_code, description, material_name, material_type, 
             drawing_no, quantity, design_qty, planned_qty, unit, unit_rate, 
-            amount, cgst_percent, cgst_amount, sgst_percent, sgst_amount, total_amount
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            amount, cgst_percent, cgst_amount, sgst_percent, sgst_amount, total_amount,
+            length, width, thickness, diameter, outer_diameter, density, weight_per_unit
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             newQuotationId,
             correctedItemCode,
@@ -635,7 +688,14 @@ const updateQuotation = async (quotationId, payload) => {
             cgstAmount,
             sgstPercent,
             sgstAmount,
-            totalItemAmount
+            totalItemAmount,
+            parseFloat(item.length || (item.dimensions && item.dimensions.length)) || 0,
+            parseFloat(item.width || (item.dimensions && item.dimensions.width)) || 0,
+            parseFloat(item.thickness || (item.dimensions && item.dimensions.thickness)) || 0,
+            parseFloat(item.diameter || (item.dimensions && item.dimensions.diameter)) || 0,
+            parseFloat(item.outer_diameter || (item.dimensions && item.dimensions.outer_diameter)) || 0,
+            parseFloat(item.density || (item.dimensions && item.dimensions.density)) || 0,
+            parseFloat(item.weight_per_unit || (item.dimensions && item.dimensions.weight_per_unit)) || 0
           ]
         );
       }
@@ -1123,21 +1183,21 @@ const generateQuotationPDF = async (quotationId) => {
             <tr>
               <th style="width: 5%; text-align: center;">Sr. No</th>
               <th style="width: 25%">Item Code</th>
-              <th style="width: 30%">Material Name</th>
-              <th style="width: 25%">Specification</th>
-              <th style="width: 7%; text-align: center;">Qty</th>
-              <th style="width: 8%; text-align: center;">Unit</th>
+              <th style="width: 40%">Material Name</th>
+              <th style="width: 15%; text-align: center;">Design Qty</th>
+              <th style="width: 15%; text-align: center;">Required Weight</th>
             </tr>
             {{/isRFQ}}
             {{^isRFQ}}
             <tr>
               <th style="width: 5%; text-align: center;">Sr. No</th>
-              <th style="width: 25%">Drawing No / Item Code</th>
-              <th style="width: 30%">Description / Material Name</th>
-              <th style="width: 12%; text-align: center;">Qty</th>
-              <th style="width: 12%; text-align: right;">Unit Rate (₹)</th>
-              <th style="width: 8%; text-align: center;">GST %</th>
-              <th style="width: 13%; text-align: right;">Total (Incl. GST)</th>
+              <th style="width: 20%">Drawing No / Item Code</th>
+              <th style="width: 32%">Description / Material Name</th>
+              <th style="width: 10%; text-align: center;">Design Qty</th>
+              <th style="width: 10%; text-align: center;">Required Weight</th>
+              <th style="width: 11%; text-align: right;">Unit Rate (₹)</th>
+              <th style="width: 5%; text-align: center;">GST %</th>
+              <th style="width: 12%; text-align: right;">Total (Incl. GST)</th>
             </tr>
             {{/isRFQ}}
           </thead>
@@ -1146,18 +1206,17 @@ const generateQuotationPDF = async (quotationId) => {
             <tr>
               <td class="center-col">{{sr}}</td>
               <td style="font-family: monospace; font-weight: 500;">{{drawing_no}}</td>
-              {{#isRFQ}}
-              <td><strong>{{material_name}}</strong></td>
-              <td>{{specification}}</td>
-              <td class="center-col"><strong>{{quantity}}</strong></td>
-              <td class="center-col">{{unit}}</td>
-              {{/isRFQ}}
-              {{^isRFQ}}
               <td>
                 <strong>{{material_name}}</strong>
                 {{#material_description}}<br><span style="font-size: 8px; color: #64748b;">{{material_description}}</span>{{/material_description}}
               </td>
-              <td class="center-col"><strong>{{quantity}}</strong> {{unit}}</td>
+              {{#isRFQ}}
+              <td class="center-col"><strong>{{design_qty_str}}</strong></td>
+              <td class="center-col"><strong>{{required_weight_str}}</strong></td>
+              {{/isRFQ}}
+              {{^isRFQ}}
+              <td class="center-col"><strong>{{design_qty_str}}</strong></td>
+              <td class="center-col"><strong>{{required_weight_str}}</strong></td>
               <td class="amount-col">{{unit_rate}}</td>
               <td class="center-col">{{gst_percent}}</td>
               <td class="amount-col">{{amount}}</td>
@@ -1255,14 +1314,58 @@ const generateQuotationPDF = async (quotationId) => {
       const sgst = parseFloat(i.sgst_percent || 0);
       const totalGst = cgst + sgst;
 
+      const len = parseFloat(i.length || 0);
+      const wid = parseFloat(i.width || 0);
+      const thk = parseFloat(i.thickness || 0);
+      const dia = parseFloat(i.diameter || 0);
+      const od = parseFloat(i.outer_diameter || 0);
+
+      let dimsSpec = '';
+      if (len > 0 || wid > 0 || thk > 0 || dia > 0 || od > 0) {
+        let parts = [];
+        if (len > 0) parts.push(`L:${len.toFixed(0)}`);
+        if (wid > 0) parts.push(`W:${wid.toFixed(0)}`);
+        if (thk > 0) parts.push(`T:${thk.toFixed(1)}`);
+        
+        let base = parts.join(' × ');
+        if (base) {
+          base += ' mm';
+        }
+        
+        if (od > 0) {
+          if (base) {
+            base += ` (OD ${od.toFixed(0)})`;
+          } else {
+            base += `OD ${od.toFixed(0)}`;
+          }
+        }
+        
+        if (dia > 0) {
+          if (base) base += ' × ';
+          base += `Dia ${dia.toFixed(0)}`;
+          if (!base.endsWith('mm')) {
+            base += ' mm';
+          }
+        }
+        dimsSpec = base;
+      }
+
+      const designQtyVal = parseFloat(i.planned_qty || i.design_qty || 0);
+      const isRaw = (i.material_type === 'RAW_MATERIAL') || (i.item_code || '').startsWith('RM-');
+      
+      const design_qty_str = isRaw ? `${designQtyVal.toFixed(0)} Nos` : `${qty.toFixed(0)} ${i.unit || 'Nos'}`;
+      const required_weight_str = isRaw ? `${qty.toFixed(3)} Kg` : '—';
+
       return {
         ...i,
         isRFQ: isRFQVal,
         sr: idx + 1,
         drawing_no: i.drawing_no || i.item_code || '—',
         material_name: i.material_name || i.description || '—',
-        material_description: i.material_name ? i.description : null,
-        specification: i.material_name ? i.description : '—',
+        material_description: dimsSpec || null,
+        specification: dimsSpec || '—',
+        design_qty_str,
+        required_weight_str,
         material_type: i.material_type || '—',
         quantity: qty.toFixed(3),
         unit: i.unit || 'NOS',

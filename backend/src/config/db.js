@@ -1942,6 +1942,27 @@ const ensureMaterialRequestTables = async () => {
     if (!existingItemCols.has('unit_rate')) {
       await connection.query('ALTER TABLE material_request_items ADD COLUMN unit_rate DECIMAL(12, 2) DEFAULT 0 AFTER quantity');
     }
+    if (!existingItemCols.has('length')) {
+      await connection.query('ALTER TABLE material_request_items ADD COLUMN length DECIMAL(12, 4) DEFAULT 0');
+    }
+    if (!existingItemCols.has('width')) {
+      await connection.query('ALTER TABLE material_request_items ADD COLUMN width DECIMAL(12, 4) DEFAULT 0');
+    }
+    if (!existingItemCols.has('thickness')) {
+      await connection.query('ALTER TABLE material_request_items ADD COLUMN thickness DECIMAL(12, 4) DEFAULT 0');
+    }
+    if (!existingItemCols.has('diameter')) {
+      await connection.query('ALTER TABLE material_request_items ADD COLUMN diameter DECIMAL(12, 4) DEFAULT 0');
+    }
+    if (!existingItemCols.has('outer_diameter')) {
+      await connection.query('ALTER TABLE material_request_items ADD COLUMN outer_diameter DECIMAL(12, 4) DEFAULT 0');
+    }
+    if (!existingItemCols.has('density')) {
+      await connection.query('ALTER TABLE material_request_items ADD COLUMN density DECIMAL(12, 8) DEFAULT 0');
+    }
+    if (!existingItemCols.has('weight_per_unit')) {
+      await connection.query('ALTER TABLE material_request_items ADD COLUMN weight_per_unit DECIMAL(12, 4) DEFAULT 0');
+    }
 
     console.log('Material Request tables synchronized');
   } catch (error) {

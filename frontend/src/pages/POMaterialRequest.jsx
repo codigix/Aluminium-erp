@@ -6,6 +6,45 @@ import { successToast, errorToast } from '../utils/toast';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
+const formatDimensions = (item) => {
+  const len = parseFloat(item.length || 0);
+  const wid = parseFloat(item.width || 0);
+  const thk = parseFloat(item.thickness || 0);
+  const dia = parseFloat(item.diameter || 0);
+  const od = parseFloat(item.outer_diameter || 0);
+
+  if (len > 0 || wid > 0 || thk > 0 || dia > 0 || od > 0) {
+    let parts = [];
+    if (len > 0) parts.push(`L:${len.toFixed(0)}`);
+    if (wid > 0) parts.push(`W:${wid.toFixed(0)}`);
+    if (thk > 0) parts.push(`T:${thk.toFixed(1)}`);
+    
+    let base = parts.join(' × ');
+    if (base) {
+      base += ' mm';
+    }
+    
+    if (od > 0) {
+      if (base) {
+        base += ` (OD ${od.toFixed(0)})`;
+      } else {
+        base += `OD ${od.toFixed(0)}`;
+      }
+    }
+    
+    if (dia > 0) {
+      if (base) base += ' × ';
+      base += `Dia ${dia.toFixed(0)}`;
+      if (!base.endsWith('mm')) {
+        base += ' mm';
+      }
+    }
+    
+    return base;
+  }
+  return '';
+};
+
 const POMaterialRequest = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -1176,13 +1215,9 @@ const POMaterialRequest = () => {
                             <div>
                               <p className="text-xs font-semibold text-slate-900 group-hover:text-indigo-600 transition-colors">{item.item_code}</p>
                               <p className="text-sm  text-slate-600 mt-0.5">{item.name}</p>
-                              {(item.length || item.width || item.thickness || item.diameter || item.outer_diameter) && (
-                                <div className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5">
-                                  {item.length > 0 && <span className="text-xs  text-slate-400">L: {item.length}</span>}
-                                  {item.width > 0 && <span className="text-xs  text-slate-400">W: {item.width}</span>}
-                                  {item.thickness > 0 && <span className="text-xs  text-slate-400">T: {item.thickness}</span>}
-                                  {item.diameter > 0 && <span className="text-xs  text-slate-400">Dia: {item.diameter}</span>}
-                                  {item.outer_diameter > 0 && <span className="text-xs  text-slate-400">OD: {item.outer_diameter}</span>}
+                              {formatDimensions(item) && (
+                                <div className="mt-1 text-xs text-slate-400 font-mono">
+                                  {formatDimensions(item)}
                                 </div>
                               )}
                             </div>
@@ -1281,14 +1316,10 @@ const POMaterialRequest = () => {
                               {rfq.items.filter(it => selectedRequest.items.some(si => si.item_code === it.item_code)).map((it, iidx) => (
                                 <div key={iidx} className="flex justify-between items-start text-xs">
                                   <div className="flex-1 min-w-0 pr-2">
-                                    <p className=" text-slate-700 truncate">{it.material_name || it.item_code}</p>
-                                    {(it.length || it.width || it.thickness || it.diameter || it.outer_diameter) && (
-                                      <p className="text-[9px] text-slate-400 flex flex-wrap gap-x-1">
-                                        {it.length > 0 && <span>L: {it.length}</span>}
-                                        {it.width > 0 && <span>W: {it.width}</span>}
-                                        {it.thickness > 0 && <span>T: {it.thickness}</span>}
-                                        {it.diameter > 0 && <span>Dia: {it.diameter}</span>}
-                                        {it.outer_diameter > 0 && <span>OD: {it.outer_diameter}</span>}
+                                    <p className="text-slate-700 truncate">{it.material_name || it.item_code}</p>
+                                    {formatDimensions(it) && (
+                                      <p className="text-[9px] text-slate-400 font-mono">
+                                        {formatDimensions(it)}
                                       </p>
                                     )}
                                   </div>

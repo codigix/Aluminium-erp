@@ -1105,6 +1105,251 @@ const getApprovedDrawings = async () => {
   return enrichedRows;
 };
 
+const getDrawingAutofetchDetails = async (id) => {
+  const [drawingRows] = await pool.query(
+    'SELECT * FROM customer_drawings WHERE id = ?',
+    [id]
+  );
+  if (drawingRows.length === 0) return null;
+  const drawing = drawingRows[0];
+
+  // Find matched company
+  let companyId = null;
+  if (drawing.client_name) {
+    const [companyRows] = await pool.query(
+      'SELECT id FROM companies WHERE TRIM(UPPER(company_name)) = TRIM(UPPER(?)) LIMIT 1',
+      [drawing.client_name]
+    );
+    if (companyRows.length > 0) {
+      companyId = companyRows[0].id;
+    }
+  }
+
+  // Find matched customer PO
+  let poId = null;
+  let poNumber = '';
+  let projectName = drawing.project_name || '';
+  let hostCompanyId = null;
+
+  if (drawing.drawing_no) {
+    let [poRows] = await pool.query(
+      `SELECT cp.id, cp.po_number, cp.project_name, cp.host_company_id
+       FROM customer_po_items cpi
+       JOIN customer_pos cp ON cpi.customer_po_id = cp.id
+       WHERE TRIM(UPPER(cpi.drawing_no)) = TRIM(UPPER(?)) OR TRIM(UPPER(cpi.item_code)) = TRIM(UPPER(?))
+       ORDER BY cp.id DESC LIMIT 1`,
+      [drawing.drawing_no, drawing.drawing_no]
+    );
+
+    if (poRows.length === 0) {
+      [poRows] = await pool.query(
+        `SELECT cp.id, cp.po_number, cp.project_name, cp.host_company_id
+         FROM customer_po_item_subassemblies cpis
+         JOIN customer_po_items cpi ON cpis.po_item_id = cpi.id
+         JOIN customer_pos cp ON cpi.customer_po_id = cp.id
+         WHERE TRIM(UPPER(cpis.drawing_no)) = TRIM(UPPER(?))
+         ORDER BY cp.id DESC LIMIT 1`,
+        [drawing.drawing_no]
+      );
+    }
+
+    if (poRows.length > 0) {
+      poId = poRows[0].id;
+      poNumber = poRows[0].po_number;
+      projectName = poRows[0].project_name || projectName;
+      hostCompanyId = poRows[0].host_company_id || null;
+    }
+  }
+
+  // Retrieve customer contact details
+  let contactPerson = drawing.contact_person || '';
+  let email = drawing.email || '';
+  let phone = drawing.phone || '';
+  let customerType = drawing.customer_type || '';
+  let gstin = drawing.gstin || '';
+  let city = drawing.city || '';
+  let state = drawing.state || '';
+  let billingAddress = drawing.billing_address || '';
+  let shippingAddress = drawing.shipping_address || '';
+
+  // If drawing doesn't have these details, load them from company if companyId exists
+  if (companyId && (!contactPerson || !email || !phone || !billingAddress)) {
+    const [companyDetails] = await pool.query(
+      'SELECT * FROM companies WHERE id = ?',
+      [companyId]
+    );
+    if (companyDetails.length > 0) {
+      const company = companyDetails[0];
+      customerType = customerType || company.customer_type || 'REGULAR';
+      gstin = gstin || company.gstin || '';
+      email = email || company.contact_email || '';
+      phone = phone || company.contact_mobile || '';
+      contactPerson = contactPerson || company.contact_person || '';
+
+      const [contacts] = await pool.query('SELECT * FROM contacts WHERE company_id = ?', [companyId]);
+      const primaryContact = contacts.find(ct => ct.contact_type === 'PRIMARY') || contacts[0];
+      if (primaryContact) {
+        contactPerson = contactPerson || primaryContact.name || '';
+        email = email || primaryContact.email || '';
+        phone = phone || primaryContact.phone || '';
+      }
+
+      const [addresses] = await pool.query('SELECT * FROM company_addresses WHERE company_id = ?', [companyId]);
+      const billing = addresses.find(addr => addr.address_type === 'BILLING') || {};
+      const shipping = addresses.find(addr => addr.address_type === 'SHIPPING') || {};
+
+      const billingAddressStr = [billing.line1, billing.line2, billing.city, billing.state, billing.pincode].filter(Boolean).join(', ');
+      const shippingAddressStr = [shipping.line1, shipping.line2, shipping.city, shipping.state, shipping.pincode].filter(Boolean).join(', ');
+
+      billingAddress = billingAddress || billingAddressStr || '';
+      shippingAddress = shippingAddress || shippingAddressStr || '';
+      city = city || billing.city || '';
+      state = state || billing.state || '';
+    }
+  }
+
+  // Get items
+  let items = [];
+  let rate = 0;
+  let sub_assemblies = [];
+  let cgst_percent = 9;
+  let sgst_percent = 9;
+  let igst_percent = 0;
+  let hsn_code = drawing.hsn_code || '';
+  let delivery_date = drawing.delivery_date ? (drawing.delivery_date instanceof Date ? drawing.delivery_date.toISOString().split('T')[0] : drawing.delivery_date) : '';
+  let bomId = null;
+
+  const [bomRows] = await pool.query(
+    `SELECT id FROM bom 
+     WHERE TRIM(UPPER(drawing_no)) = TRIM(UPPER(?)) 
+     ORDER BY id DESC LIMIT 1`,
+    [drawing.drawing_no]
+  );
+  if (bomRows.length > 0) {
+    bomId = bomRows[0].id;
+  }
+
+  const [soiRows] = await pool.query(
+    `SELECT bom_cost FROM sales_order_items 
+     WHERE TRIM(UPPER(drawing_no)) = TRIM(UPPER(?)) AND bom_cost > 0
+     ORDER BY id DESC LIMIT 1`,
+    [drawing.drawing_no]
+  );
+  if (soiRows.length > 0) {
+    rate = Number(soiRows[0].bom_cost) || 0;
+  }
+
+  if (poId) {
+    const [poItemRows] = await pool.query(
+      `SELECT * FROM customer_po_items 
+       WHERE customer_po_id = ? AND (TRIM(UPPER(drawing_no)) = TRIM(UPPER(?)) OR TRIM(UPPER(item_code)) = TRIM(UPPER(?)))
+       LIMIT 1`,
+      [poId, drawing.drawing_no, drawing.drawing_no]
+    );
+    if (poItemRows.length > 0) {
+      const poItem = poItemRows[0];
+      rate = Number(poItem.rate) || rate;
+      cgst_percent = Number(poItem.cgst_percent) || cgst_percent;
+      sgst_percent = Number(poItem.sgst_percent) || sgst_percent;
+      igst_percent = Number(poItem.igst_percent) || igst_percent;
+      hsn_code = poItem.hsn_code || hsn_code;
+      if (poItem.delivery_date) {
+        delivery_date = poItem.delivery_date instanceof Date ? poItem.delivery_date.toISOString().split('T')[0] : poItem.delivery_date;
+      }
+      
+      const [storedSA] = await pool.query(
+        `SELECT drawing_no, drawing_no as drawingNo, description, quantity, unit, rate, hsn_code, delivery_date 
+         FROM customer_po_item_subassemblies 
+         WHERE po_item_id = ?`,
+         [poItem.id]
+      );
+      sub_assemblies = storedSA.map(sa => ({
+        ...sa,
+        quantity: Number(sa.quantity) || 0,
+        rate: Number(sa.rate) || 0
+      }));
+    } else {
+      const [poSaRows] = await pool.query(
+        `SELECT cpis.*, cpi.cgst_percent, cpi.sgst_percent, cpi.igst_percent
+         FROM customer_po_item_subassemblies cpis
+         JOIN customer_po_items cpi ON cpis.po_item_id = cpi.id
+         WHERE cpi.customer_po_id = ? AND TRIM(UPPER(cpis.drawing_no)) = TRIM(UPPER(?))
+         LIMIT 1`,
+        [poId, drawing.drawing_no]
+      );
+      if (poSaRows.length > 0) {
+        const poSa = poSaRows[0];
+        rate = Number(poSa.rate) || rate;
+        cgst_percent = Number(poSa.cgst_percent) || cgst_percent;
+        sgst_percent = Number(poSa.sgst_percent) || sgst_percent;
+        igst_percent = Number(poSa.igst_percent) || igst_percent;
+        hsn_code = poSa.hsn_code || hsn_code;
+        if (poSa.delivery_date) {
+          delivery_date = poSa.delivery_date instanceof Date ? poSa.delivery_date.toISOString().split('T')[0] : poSa.delivery_date;
+        }
+      }
+    }
+  }
+
+  if (sub_assemblies.length === 0 && bomId) {
+    try {
+      const components = await bomService.getItemComponents(null, null, drawing.drawing_no);
+      if (components && components.length > 0) {
+        sub_assemblies = components.map(c => ({
+          drawingNo: c.drawing_no || c.component_code || c.item_code || '',
+          description: c.description || 'Sub-assembly',
+          quantity: Number(c.quantity) || 0,
+          unit: c.unit || c.uom || 'NOS',
+          rate: Number(c.rate || c.bom_cost || 0),
+          hsn_code: c.hsn_code || '',
+          delivery_date: c.delivery_date || ''
+        }));
+      }
+    } catch (err) {
+      console.error('Error fetching BOM components for auto-fetch:', err);
+    }
+  }
+
+  items.push({
+    item_code: drawing.drawing_no,
+    drawing_no: drawing.drawing_no,
+    description: drawing.description || drawing.project_name || 'Finished Good',
+    type: drawing.drawing_type || 'Finished Good',
+    quantity: Number(drawing.qty) || 1,
+    rate,
+    amount: rate * (Number(drawing.qty) || 1),
+    cgst_percent,
+    sgst_percent,
+    igst_percent,
+    hsn_code,
+    delivery_date,
+    sub_assemblies
+  });
+
+  return {
+    drawingId: drawing.id,
+    drawingNo: drawing.drawing_no,
+    finishedGoodName: drawing.description || drawing.project_name || '',
+    designQty: drawing.qty || 1,
+    poId,
+    poNumber,
+    projectName,
+    companyId,
+    clientName: drawing.client_name,
+    contactPerson,
+    email,
+    phone,
+    customerType,
+    gstin,
+    city,
+    state,
+    billingAddress,
+    shippingAddress,
+    hostCompanyId,
+    items
+  };
+};
+
 module.exports = {
   getAllDrawings,
   listDrawings,
@@ -1120,5 +1365,6 @@ module.exports = {
   deleteClientDrawings,
   shareWithDesign,
   shareDrawingsBulk,
-  getApprovedDrawings
+  getApprovedDrawings,
+  getDrawingAutofetchDetails
 };

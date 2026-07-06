@@ -116,7 +116,13 @@ const materialRequestController = {
                COALESCE(mri.item_name, sb.material_name, sb.item_description, mri.item_code) as name, 
                COALESCE(mri.uom, sb.unit) as uom,
                COALESCE(mri.item_type, sb.material_type) as material_type,
-               sb.length, sb.width, sb.thickness, sb.diameter, sb.outer_diameter, sb.density, sb.weight_per_unit
+               COALESCE(NULLIF(mri.length, 0), sb.length, 0) as length,
+               COALESCE(NULLIF(mri.width, 0), sb.width, 0) as width,
+               COALESCE(NULLIF(mri.thickness, 0), sb.thickness, 0) as thickness,
+               COALESCE(NULLIF(mri.diameter, 0), sb.diameter, 0) as diameter,
+               COALESCE(NULLIF(mri.outer_diameter, 0), sb.outer_diameter, 0) as outer_diameter,
+               COALESCE(NULLIF(mri.density, 0), sb.density, 0) as density,
+               COALESCE(NULLIF(mri.weight_per_unit, 0), sb.weight_per_unit, 0) as weight_per_unit
         FROM material_request_items mri
         LEFT JOIN (
           SELECT item_code, 
@@ -345,11 +351,18 @@ const materialRequestController = {
           item.quantity,
           item.unit_rate || 0,
           item.uom || 'pcs',
-          item.warehouse || null
+          item.warehouse || null,
+          item.length || 0,
+          item.width || 0,
+          item.thickness || 0,
+          item.diameter || 0,
+          item.outer_diameter || 0,
+          item.density || 0,
+          item.weight_per_unit || 0
         ]);
 
         await connection.query(
-          'INSERT INTO material_request_items (mr_id, item_code, item_name, item_type, design_qty, quantity, unit_rate, uom, warehouse) VALUES ?',
+          'INSERT INTO material_request_items (mr_id, item_code, item_name, item_type, design_qty, quantity, unit_rate, uom, warehouse, length, width, thickness, diameter, outer_diameter, density, weight_per_unit) VALUES ?',
           [itemValues]
         );
       }

@@ -222,7 +222,7 @@ const createPurchaseOrder = async (data, existingConnection = null) => {
 
       const [mrItems] = await connection.query(`
         SELECT mri.*, sb.valuation_rate,
-               sb.length, sb.width, sb.thickness, sb.diameter, sb.outer_diameter, sb.density, sb.weight_per_unit,
+               mri.length, mri.width, mri.thickness, mri.diameter, mri.outer_diameter, mri.density, mri.weight_per_unit,
                COALESCE(
                  (SELECT MAX(bom_cost) FROM sales_order_items soi WHERE (soi.item_code = mri.item_code OR soi.drawing_no = mri.item_code) AND soi.bom_cost > 0),
                  (SELECT MAX(rate) FROM production_plan_materials ppm WHERE ppm.plan_id = ? AND ppm.item_code = mri.item_code AND ppm.rate > 0),

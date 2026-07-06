@@ -58,6 +58,45 @@ const formatCurrency = (value) => {
   }).format(value);
 };
 
+const formatDimensions = (item) => {
+  const len = parseFloat(item.length || 0);
+  const wid = parseFloat(item.width || 0);
+  const thk = parseFloat(item.thickness || 0);
+  const dia = parseFloat(item.diameter || 0);
+  const od = parseFloat(item.outer_diameter || 0);
+
+  if (len > 0 || wid > 0 || thk > 0 || dia > 0 || od > 0) {
+    let parts = [];
+    if (len > 0) parts.push(`L:${len.toFixed(0)}`);
+    if (wid > 0) parts.push(`W:${wid.toFixed(0)}`);
+    if (thk > 0) parts.push(`T:${thk.toFixed(1)}`);
+    
+    let base = parts.join(' × ');
+    if (base) {
+      base += ' mm';
+    }
+    
+    if (od > 0) {
+      if (base) {
+        base += ` (OD ${od.toFixed(0)})`;
+      } else {
+        base += `OD ${od.toFixed(0)}`;
+      }
+    }
+    
+    if (dia > 0) {
+      if (base) base += ' × ';
+      base += `Dia ${dia.toFixed(0)}`;
+      if (!base.endsWith('mm')) {
+        base += ' mm';
+      }
+    }
+    
+    return base;
+  }
+  return '';
+};
+
 const getCorrectMaterialType = (itemCode, currentType) => {
   const code = (itemCode || '').toUpperCase().trim();
   if (code.startsWith('RM-') || code.startsWith('RM ') || code.startsWith('RM_')) return 'RAW_MATERIAL';
@@ -2299,13 +2338,9 @@ const Quotations = () => {
                                 onChange={(e) => handleItemChange(idx, 'material_name', e.target.value)}
                                 className="w-full p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                               />
-                              {(item.length > 0 || item.width > 0 || item.thickness > 0 || item.diameter > 0) && (
-                                <div className="flex flex-wrap gap-x-2 gap-y-1 px-1">
-                                  {item.length > 0 && <span className="text-xs  text-slate-500">L: {item.length}</span>}
-                                  {item.width > 0 && <span className="text-xs  text-slate-500">W: {item.width}</span>}
-                                  {item.thickness > 0 && <span className="text-xs  text-slate-500">T: {item.thickness}</span>}
-                                  {item.diameter > 0 && <span className="text-xs  text-slate-500">Dia: {item.diameter}</span>}
-                                  {item.outer_diameter > 0 && <span className="text-xs  text-slate-500">OD: {item.outer_diameter}</span>}
+                              {formatDimensions(item) && (
+                                <div className="flex flex-wrap gap-x-2 gap-y-1 px-1 font-mono text-[10px] text-slate-500">
+                                  {formatDimensions(item)}
                                 </div>
                               )}
                             </div>
@@ -2560,6 +2595,11 @@ const Quotations = () => {
                                   {item.item_code && item.item_code !== item.drawing_no && (
                                     <div className="px-2 text-xs text-slate-400   truncate max-w-[150px]">
                                       Code: {item.item_code}
+                                    </div>
+                                  )}
+                                  {formatDimensions(item) && (
+                                    <div className="px-2 text-[10px] text-slate-500 mt-0.5 font-mono">
+                                      {formatDimensions(item)}
                                     </div>
                                   )}
                                 </td>
@@ -2967,13 +3007,9 @@ const Quotations = () => {
                                 }}
                                 className="w-full p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                               />
-                              {(item.length > 0 || item.width > 0 || item.thickness > 0 || item.diameter > 0 || item.outer_diameter > 0) && (
-                                <div className="flex flex-wrap gap-x-2 gap-y-1 mt-1 opacity-70">
-                                  {item.length > 0 && <span className="text-xs  text-slate-400 font-mono">L:{item.length}</span>}
-                                  {item.width > 0 && <span className="text-xs  text-slate-400 font-mono">W:{item.width}</span>}
-                                  {item.thickness > 0 && <span className="text-xs  text-slate-400 font-mono">T:{item.thickness}</span>}
-                                  {item.diameter > 0 && <span className="text-xs  text-slate-400 font-mono">D:{item.diameter}</span>}
-                                  {item.outer_diameter > 0 && <span className="text-xs  text-slate-400 font-mono">OD:{item.outer_diameter}</span>}
+                              {formatDimensions(item) && (
+                                <div className="flex flex-wrap gap-x-2 gap-y-1 mt-1 opacity-70 font-mono text-[10px] text-slate-500">
+                                  {formatDimensions(item)}
                                 </div>
                               )}
                             </div>
@@ -3039,13 +3075,9 @@ const Quotations = () => {
                                 }}
                                 className="w-full p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                               />
-                              {(item.length > 0 || item.width > 0 || item.thickness > 0 || item.diameter > 0 || item.outer_diameter > 0) && (
-                                <div className="flex flex-wrap gap-x-2 gap-y-1 mt-1 opacity-70">
-                                  {item.length > 0 && <span className="text-xs  text-slate-400 font-mono">L:{item.length}</span>}
-                                  {item.width > 0 && <span className="text-xs  text-slate-400 font-mono">W:{item.width}</span>}
-                                  {item.thickness > 0 && <span className="text-xs  text-slate-400 font-mono">T:{item.thickness}</span>}
-                                  {item.diameter > 0 && <span className="text-xs  text-slate-400 font-mono">D:{item.diameter}</span>}
-                                  {item.outer_diameter > 0 && <span className="text-xs  text-slate-400 font-mono">OD:{item.outer_diameter}</span>}
+                              {formatDimensions(item) && (
+                                <div className="flex flex-wrap gap-x-2 gap-y-1 mt-1 opacity-70 font-mono text-[10px] text-slate-500">
+                                  {formatDimensions(item)}
                                 </div>
                               )}
                             </div>
@@ -3518,7 +3550,12 @@ const Quotations = () => {
                       <tr key={idx} className="border-b border-slate-50 hover:bg-slate-50/50">
                         <td className="p-2 text-slate-800 font-medium">{item.item_code || item.drawing_no || '—'}</td>
                         <td className="p-2 text-slate-500 truncate max-w-[200px]" title={item.description || item.material_name}>
-                          {item.description || item.material_name || '—'}
+                          <div>{item.description || item.material_name || '—'}</div>
+                          {formatDimensions(item) && (
+                            <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                              {formatDimensions(item)}
+                            </div>
+                          )}
                         </td>
                         <td className="p-2 text-center text-slate-700">{Number(item.quantity || 0).toFixed(3)}</td>
                         <td className="p-2 text-right text-slate-700">{formatCurrency(item.unit_rate)}</td>

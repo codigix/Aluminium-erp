@@ -735,6 +735,13 @@ model material_request_items {
   uom                String?           @db.VarChar(20)
   allocated_quantity Decimal?          @default(0.000) @db.Decimal(12, 3)
   warehouse          String?           @db.VarChar(100)
+  length             Decimal?          @default(0.0000) @db.Decimal(12, 4)
+  width              Decimal?          @default(0.0000) @db.Decimal(12, 4)
+  thickness          Decimal?          @default(0.0000) @db.Decimal(12, 4)
+  diameter           Decimal?          @default(0.0000) @db.Decimal(12, 4)
+  outer_diameter     Decimal?          @default(0.0000) @db.Decimal(12, 4)
+  density            Decimal?          @default(0.00000000) @db.Decimal(12, 8)
+  weight_per_unit    Decimal?          @default(0.0000) @db.Decimal(12, 4)
   material_requests  material_requests @relation(fields: [mr_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "material_request_items_ibfk_1")
 
   @@index([mr_id], map: "mr_id")

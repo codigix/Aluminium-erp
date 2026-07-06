@@ -355,6 +355,18 @@ const getApprovedDrawings = async (req, res, next) => {
   }
 };
 
+const getDrawingAutofetchDetails = async (req, res, next) => {
+  try {
+    const details = await drawingService.getDrawingAutofetchDetails(req.params.id);
+    if (!details) {
+      return res.status(404).json({ message: 'Drawing details not found' });
+    }
+    res.json(details);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   listDrawings,
   getDrawingById,
@@ -366,5 +378,6 @@ module.exports = {
   deleteDrawingsBulk,
   shareDrawing,
   shareDrawingsBulk,
-  getApprovedDrawings
+  getApprovedDrawings,
+  getDrawingAutofetchDetails
 };

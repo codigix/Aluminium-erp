@@ -210,6 +210,42 @@ const generatePoPdf = async (data) => {
 
       const uom = item.unit || item.uom || 'Nos';
 
+      const len = parseFloat(item.length || 0);
+      const wid = parseFloat(item.width || 0);
+      const thk = parseFloat(item.thickness || 0);
+      const dia = parseFloat(item.diameter || 0);
+      const od = parseFloat(item.outer_diameter || 0);
+
+      let dimsSpec = '';
+      if (len > 0 || wid > 0 || thk > 0 || dia > 0 || od > 0) {
+        let parts = [];
+        if (len > 0) parts.push(`L:${len.toFixed(0)}`);
+        if (wid > 0) parts.push(`W:${wid.toFixed(0)}`);
+        if (thk > 0) parts.push(`T:${thk.toFixed(1)}`);
+        
+        let base = parts.join(' × ');
+        if (base) {
+          base += ' mm';
+        }
+        
+        if (od > 0) {
+          if (base) {
+            base += ` (OD ${od.toFixed(0)})`;
+          } else {
+            base += `OD ${od.toFixed(0)}`;
+          }
+        }
+        
+        if (dia > 0) {
+          if (base) base += ' × ';
+          base += `Dia ${dia.toFixed(0)}`;
+          if (!base.endsWith('mm')) {
+            base += ' mm';
+          }
+        }
+        dimsSpec = base;
+      }
+
       return {
         sr: idx + 1,
         itemCode: itemCode || '—',
@@ -220,7 +256,8 @@ const generatePoPdf = async (data) => {
         qty: isReceiptOrGrn ? displayQty.toFixed(3) : `${displayQty.toFixed(3)} ${uom}`.trim(),
         unit: uom,
         rate: formatCurrency(rate),
-        amount: formatCurrency(amountVal)
+        amount: formatCurrency(amountVal),
+        dimsSpec
       };
     });
 
