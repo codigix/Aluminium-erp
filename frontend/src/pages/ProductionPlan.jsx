@@ -255,21 +255,28 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
   const renderDimensions = (dims) => {
     if (!dims) return null;
     const parts = [];
-    if (parseFloat(dims.diameter) > 0) parts.push(`Ø${Number(dims.diameter).toFixed(1)}mm`);
-    if (parseFloat(dims.outer_diameter) > 0) parts.push(`OD:Ø${Number(dims.outer_diameter).toFixed(1)}mm`);
-    if (parseFloat(dims.thickness) > 0) parts.push(`T:${Number(dims.thickness).toFixed(1)}mm`);
-    if (parseFloat(dims.width) > 0) parts.push(`${Number(dims.width).toFixed(1)}mm`);
-    if (parseFloat(dims.length) > 0) parts.push(`${Number(dims.length).toFixed(1)}mm`);
+    const length = parseFloat(dims.length) || parseFloat(dims.dimensions?.length) || 0;
+    const width = parseFloat(dims.width) || parseFloat(dims.dimensions?.width) || 0;
+    const thickness = parseFloat(dims.thickness) || parseFloat(dims.dimensions?.thickness) || 0;
+    const diameter = parseFloat(dims.diameter) || parseFloat(dims.dimensions?.diameter) || 0;
+    const outer_diameter = parseFloat(dims.outer_diameter) || parseFloat(dims.dimensions?.outer_diameter) || 0;
+
+    if (length > 0) parts.push(`${length}`);
+    if (width > 0) parts.push(`${width}`);
+    if (thickness > 0) parts.push(`${thickness}`);
+    if (diameter > 0) parts.push(`Ø${diameter}`);
+    if (outer_diameter > 0) parts.push(`OD${outer_diameter}`);
 
     if (parts.length === 0) return null;
     return (
-      <div className="flex flex-wrap items-center gap-1 mt-0.5 text-xs text-slate-500 ">
+      <div className="flex flex-wrap items-center gap-1 mt-0.5 text-xs text-slate-500">
         {parts.map((p, i) => (
           <React.Fragment key={i}>
             <span>{p}</span>
             {i < parts.length - 1 && <span className="text-slate-300">×</span>}
           </React.Fragment>
         ))}
+        <span className="ml-0.5 text-slate-400">mm</span>
       </div>
     );
   };
@@ -978,7 +985,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
 
       (item.materials || []).forEach(mat => {
         const itemCode = mat.item_code || mat.material_code || mat.itemCode || '';
-        const matName = mat.material_name || mat.materialName || mat.item || '';
+        const matName = mat.description || mat.material_name || mat.materialName || mat.item || '';
         const matCat = mat.material_category || ((mat.depth <= 1) ? 'CORE' : 'EXPLODED');
 
         const weightMultiplier = mat.is_kg_material ? (parseFloat(mat.total_wt) || 1) : 1;
@@ -986,8 +993,13 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
         const itemPlannedQty = parseFloat(item.plannedQty || newPlan.targetQuantity || 1);
         const plannedQty = baseQty * itemPlannedQty;
 
-        // Use a key that represents the material identity - de-duplicate by name and unit
-        const mKey = `${matName.toLowerCase().trim()}-${(mat.uom || mat.unit || '').toLowerCase().trim()}`;
+        // Use a key that represents the material identity - de-duplicate by name, unit, and dimensions
+        const len = Number(mat.length || (mat.dimensions && mat.dimensions.length)) || 0;
+        const wid = Number(mat.width || (mat.dimensions && mat.dimensions.width)) || 0;
+        const thk = Number(mat.thickness || (mat.dimensions && mat.dimensions.thickness)) || 0;
+        const dia = Number(mat.diameter || (mat.dimensions && mat.dimensions.diameter)) || 0;
+        const od = Number(mat.outer_diameter || (mat.dimensions && mat.dimensions.outer_diameter)) || 0;
+        const mKey = `${matName.toLowerCase().trim()}-${(mat.uom || mat.unit || '').toLowerCase().trim()}-${len}-${wid}-${thk}-${dia}-${od}`;
 
         // If this is a material and we've already processed this identity from this SO Item,
         // we might be double-counting if the recursion hits it multiple times.
@@ -1458,7 +1470,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
           <div>
             <div className="text-slate-800 text-xs ">{val}</div>
             <div className="text-[10px] text-slate-500 mt-0.5">
-              {renderDimensions(mat.dimensions) || (mat.description || mat.item_code || mat.itemCode || 'Direct Material')}
+              {renderDimensions(mat) || (mat.description || mat.item_code || mat.itemCode || 'Direct Material')}
             </div>
           </div>
         )
@@ -1951,9 +1963,9 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                         {(isViewing ? materialsToDisplay.filter(m => m.material_category === 'CORE') : coreMaterials).map((mat, idx) => (
                           <tr key={idx} className="hover:bg-slate-50/50">
                             <td className="p-2 ">
-                              <div className=" text-slate-800 text-xs ">{mat.material_name}</div>
+                              <div className=" text-slate-800 text-xs ">{mat.description || mat.material_name}</div>
                               <div className="text-xs text-slate-500 flex items-center gap-1.5 flex-wrap">
-                                {renderDimensions(mat.dimensions) || (
+                                {renderDimensions(mat) || (
                                   <span>{mat.description || mat.item_code || mat.itemCode || 'Direct Material'}</span>
                                 )}
                               </div>
@@ -2022,17 +2034,9 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                         {(isViewing ? materialsToDisplay.filter(m => m.material_category === 'EXPLODED') : explodedMaterials).map((mat, idx) => (
                           <tr key={idx} className="hover:bg-slate-50/50">
                             <td className="p-2 ">
-                              <div className=" text-slate-800 text-xs ">{mat.material_name || mat.materialName}</div>
+                              <div className=" text-slate-800 text-xs ">{mat.description || mat.material_name || mat.materialName}</div>
                               <div className="text-xs text-slate-500 flex items-center gap-1.5 flex-wrap">
-                                {mat.dimensions ? (
-                                  <>
-                                    {mat.dimensions.length > 0 && <span>L: {mat.dimensions.length}</span>}
-                                    {mat.dimensions.width > 0 && <span>W: {mat.dimensions.width}</span>}
-                                    {mat.dimensions.thickness > 0 && <span>T: {mat.dimensions.thickness}</span>}
-                                    {mat.dimensions.diameter > 0 && <span>Dia: {mat.dimensions.diameter}</span>}
-                                    {mat.dimensions.outer_diameter > 0 && <span>OD: {mat.dimensions.outer_diameter}</span>}
-                                  </>
-                                ) : (
+                                {renderDimensions(mat) || (
                                   <span>{mat.item_code || mat.itemCode}</span>
                                 )}
                               </div>
@@ -2317,7 +2321,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
         <div className="flex flex-col">
           <span className="text-xs  text-slate-800">{val}</span>
           <span className="text-[10px] text-slate-400 uppercase er">{row.item_code}</span>
-          {renderDimensions(row.dimensions)}
+          {renderDimensions(row)}
         </div>
       )
     },

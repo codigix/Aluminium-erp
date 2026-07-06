@@ -1270,9 +1270,14 @@ const getItemBOMDetails = async (salesOrderItemId) => {
 
       const baseQtyPerFG = isKgMaterial ? ((parseFloat(m.qty_per_pc) || 1) * total_wt) : (parseFloat(m.qty_per_pc) || 1);
 
-      const matName = m.material_name || m.name || m.item || 'Unknown Material';
+      const matName = m.description || m.material_name || m.name || m.item || 'Unknown Material';
       const matCode = m.material_code || m.item_code || m.itemCode || '';
-      const mKey = `${matName}-${matCode}`;
+      const len = Number(m.length) || 0;
+      const wid = Number(m.width) || 0;
+      const thk = Number(m.thickness) || 0;
+      const dia = Number(m.diameter) || 0;
+      const od = Number(m.outer_diameter) || 0;
+      const mKey = `${matName}-${matCode}-${len}-${wid}-${thk}-${dia}-${od}`;
 
       const existing = materialMap.get(mKey);
       const reqQty = baseQtyPerFG * qtyMultiplier;
@@ -1513,7 +1518,12 @@ const getMaterialRequestItemsForPlan = async (planId) => {
     if (!itemCode && !name) return;
 
     const code = (itemCode || name).trim();
-    const key = code.toUpperCase();
+    const len = Number(dimensions?.length) || 0;
+    const wid = Number(dimensions?.width) || 0;
+    const thk = Number(dimensions?.thickness) || 0;
+    const dia = Number(dimensions?.diameter) || 0;
+    const od = Number(dimensions?.outer_diameter) || 0;
+    const key = `${code.toUpperCase()}-${len}-${wid}-${thk}-${dia}-${od}`;
 
     // Skip SFG, FG and PART items from material request
     const c = code.toUpperCase();
@@ -1603,7 +1613,7 @@ const getMaterialRequestItemsForPlan = async (planId) => {
             MAX(outer_diameter) as outer_diameter
         FROM stock_balance 
         GROUP BY material_name
-    ) actual_sb ON ppm.material_name = actual_sb.material_name OR ppm.item_code = actual_sb.item_code
+    ) actual_sb ON ppm.material_name = actual_sb.material_name OR (ppm.item_code = actual_sb.item_code AND ppm.item_code NOT LIKE 'PART-%' AND ppm.item_code NOT LIKE 'SA-%' AND ppm.item_code NOT LIKE 'FG-%' AND ppm.item_code NOT LIKE 'SFG-%' AND ppm.item_code NOT LIKE 'ASSEMBLY%')
     LEFT JOIN (
     SELECT 
         mii.item_code, 
@@ -1615,7 +1625,7 @@ const getMaterialRequestItemsForPlan = async (planId) => {
     WHERE wo.plan_id = ?
     GROUP BY mii.item_code, mii.material_name
 ) issued 
-ON (ppm.item_code = issued.item_code OR ppm.material_name = issued.material_name)
+ON (ppm.material_name = issued.material_name) OR (ppm.item_code = issued.item_code AND ppm.item_code NOT LIKE 'PART-%' AND ppm.item_code NOT LIKE 'SA-%' AND ppm.item_code NOT LIKE 'FG-%' AND ppm.item_code NOT LIKE 'SFG-%' AND ppm.item_code NOT LIKE 'ASSEMBLY%')
     LEFT JOIN (
         SELECT 
             LOWER(TRIM(mri.item_code)) as join_item_code,
@@ -1633,15 +1643,21 @@ ON (ppm.item_code = issued.item_code OR ppm.material_name = issued.material_name
         WHERE mr.plan_id = ? OR mr.notes LIKE ?
         GROUP BY join_item_code, join_item_name
     ) mr_data ON (
-        (ppm.item_code IS NOT NULL AND LOWER(TRIM(ppm.item_code)) = mr_data.join_item_code) OR 
-        (ppm.material_name IS NOT NULL AND LOWER(TRIM(ppm.material_name)) = mr_data.join_item_name)
+        (ppm.material_name IS NOT NULL AND LOWER(TRIM(ppm.material_name)) = mr_data.join_item_name) OR 
+        (ppm.item_code IS NOT NULL AND LOWER(TRIM(ppm.item_code)) = mr_data.join_item_code AND ppm.item_code NOT LIKE 'PART-%' AND ppm.item_code NOT LIKE 'SA-%' AND ppm.item_code NOT LIKE 'FG-%' AND ppm.item_code NOT LIKE 'SFG-%' AND ppm.item_code NOT LIKE 'ASSEMBLY%')
     )
     WHERE ppm.plan_id = ?
   `, [planId, planId, `%${planCode}%`, planId]);
 
   for (const mat of materials) {
-    const code = (mat.actual_item_code || mat.item_code || '').toUpperCase();
-    if (code.startsWith('PART-') || code.startsWith('SA-') || code.startsWith('FG-') || code.startsWith('SFG-') || code.startsWith('ASSEMBLY')) continue;
+    let code = (mat.actual_item_code || '').toUpperCase();
+    if (!code || code.startsWith('PART-') || code.startsWith('SA-') || code.startsWith('FG-') || code.startsWith('SFG-') || code.startsWith('ASSEMBLY')) {
+      code = (mat.material_name || '').trim().toUpperCase();
+    }
+
+    if (!code || code.startsWith('PART-') || code.startsWith('SA-') || code.startsWith('FG-') || code.startsWith('SFG-') || code.startsWith('ASSEMBLY')) {
+      continue;
+    }
 
     // If material request is fulfilled or completed, show full quantity as available
     const isFulfilled = (mat.status_rank || 0) >= 4;
@@ -1651,7 +1667,7 @@ ON (ppm.item_code = issued.item_code OR ppm.material_name = issued.material_name
       : Number(mat.current_balance) + Number(mat.issued_qty);
 
     addToMap(
-      mat.actual_item_code,
+      code,
       mat.required_qty,
       mat.uom,
       mat.material_name,
