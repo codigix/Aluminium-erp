@@ -1174,6 +1174,17 @@ const BOMFormPage = () => {
         if (id >= 0) {
           calculatedWeight = (Math.PI * (Math.pow(od, 2) - Math.pow(id, 2)) / 4 * l * density) / 1000000;
         }
+      } else if (shape.includes('square tube')) {
+        const a = parseFloat(materialForm.width) || 0;
+        const t = parseFloat(materialForm.thickness) || 0;
+        const l = parseFloat(materialForm.length) || 0;
+        calculatedWeight = ((a * a - Math.pow(a - 2 * t, 2)) * l * density) / 1000000;
+      } else if (shape.includes('rectangular tube')) {
+        const b = parseFloat(materialForm.width) || 0;
+        const h = parseFloat(materialForm.outer_diameter) || 0;
+        const t = parseFloat(materialForm.thickness) || 0;
+        const l = parseFloat(materialForm.length) || 0;
+        calculatedWeight = ((b * h - (b - 2 * t) * (h - 2 * t)) * l * density) / 1000000;
       }
     }
 
@@ -3263,6 +3274,42 @@ const BOMFormPage = () => {
                                       </div>
                                       <div className="space-y-1">
                                         <label className="text-xs text-slate-400 font-medium">Length (mm) *</label>
+                                        <input type="number" step="0.01" className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="0.00" value={materialForm.length || ''} onChange={(e) => setMaterialForm({ ...materialForm, length: e.target.value })} required />
+                                      </div>
+                                    </>
+                                  )}
+                                  {selectedShape.toLowerCase().includes('square tube') && (
+                                    <>
+                                      <div className="space-y-1">
+                                        <label className="text-xs text-slate-400 font-medium">Outside Side (A) (mm) *</label>
+                                        <input type="number" step="0.01" className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="0.00" value={materialForm.width || ''} onChange={(e) => setMaterialForm({ ...materialForm, width: e.target.value })} required />
+                                      </div>
+                                      <div className="space-y-1">
+                                        <label className="text-xs text-slate-400 font-medium">Wall Thickness (T) (mm) *</label>
+                                        <input type="number" step="0.01" className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="0.00" value={materialForm.thickness || ''} onChange={(e) => setMaterialForm({ ...materialForm, thickness: e.target.value })} required />
+                                      </div>
+                                      <div className="space-y-1">
+                                        <label className="text-xs text-slate-400 font-medium">Length (L) (mm) *</label>
+                                        <input type="number" step="0.01" className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="0.00" value={materialForm.length || ''} onChange={(e) => setMaterialForm({ ...materialForm, length: e.target.value })} required />
+                                      </div>
+                                    </>
+                                  )}
+                                  {selectedShape.toLowerCase().includes('rectangular tube') && (
+                                    <>
+                                      <div className="space-y-1">
+                                        <label className="text-xs text-slate-400 font-medium">Width (B) (mm) *</label>
+                                        <input type="number" step="0.01" className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="0.00" value={materialForm.width || ''} onChange={(e) => setMaterialForm({ ...materialForm, width: e.target.value })} required />
+                                      </div>
+                                      <div className="space-y-1">
+                                        <label className="text-xs text-slate-400 font-medium">Height (H) (mm) *</label>
+                                        <input type="number" step="0.01" className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="0.00" value={materialForm.outer_diameter || ''} onChange={(e) => setMaterialForm({ ...materialForm, outer_diameter: e.target.value })} required />
+                                      </div>
+                                      <div className="space-y-1">
+                                        <label className="text-xs text-slate-400 font-medium">Wall Thickness (T) (mm) *</label>
+                                        <input type="number" step="0.01" className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="0.00" value={materialForm.thickness || ''} onChange={(e) => setMaterialForm({ ...materialForm, thickness: e.target.value })} required />
+                                      </div>
+                                      <div className="space-y-1">
+                                        <label className="text-xs text-slate-400 font-medium">Length (L) (mm) *</label>
                                         <input type="number" step="0.01" className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="0.00" value={materialForm.length || ''} onChange={(e) => setMaterialForm({ ...materialForm, length: e.target.value })} required />
                                       </div>
                                     </>
