@@ -201,6 +201,15 @@ const parseReceivedQuotationPDF = async (req, res, next) => {
   }
 };
 
+const approveComparedQuotations = async (req, res, next) => {
+  try {
+    const result = await quotationService.approveComparedQuotations(req.body);
+    res.json({ message: 'Compared quotations approved and POs created', data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   createQuotation,
   getQuotations,
@@ -214,5 +223,6 @@ module.exports = {
   uploadVendorResponse,
   parseQuotationPDF,
   getReceivedQuotationPDF,
-  parseReceivedQuotationPDF
+  parseReceivedQuotationPDF,
+  approveComparedQuotations
 };

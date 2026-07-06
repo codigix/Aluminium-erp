@@ -40,7 +40,7 @@ const rfqStatusColors = {
   REVIEWED: { bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-600', badge: 'bg-purple-100 text-purple-700', label: 'Approved' },
   CLOSED: { bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-600', badge: 'bg-slate-100 text-slate-700', label: 'Closed' },
   PENDING: { bg: 'bg-yellow-50', border: 'border-yellow-200', text: 'text-yellow-600', badge: 'bg-yellow-100 text-yellow-700', label: 'Pending' },
-  REJECTED: { bg: 'bg-rose-50', border: 'border-rose-200', text: 'text-rose-600', badge: 'bg-rose-100 text-rose-700', label: 'REJECTED (Another Vendor Selected)' },
+  REJECTED: { bg: 'bg-rose-50', border: 'border-rose-200', text: 'text-rose-600', badge: 'bg-rose-100 text-rose-700', label: 'REJECTED' },
 };
 
 const formatDate = (date) => {
@@ -145,8 +145,12 @@ const Quotations = () => {
 
   const [selectedQuotes, setSelectedQuotes] = useState([]);
   const [selectedMR, setSelectedMR] = useState('');
+  const [selectedAwards, setSelectedAwards] = useState({});
   const [showCompareModal, setShowCompareModal] = useState(false);
   const [compareData, setCompareData] = useState([]);
+  const [showApprovalModal, setShowApprovalModal] = useState(false);
+  const [approvalModalQuote, setApprovalModalQuote] = useState(null);
+  const [approvalModalItems, setApprovalModalItems] = useState([]);
 
   const [showUploadAttachmentsModal, setShowUploadAttachmentsModal] = useState(false);
   const [uploadModalFiles, setUploadModalFiles] = useState([]);
@@ -161,6 +165,31 @@ const Quotations = () => {
     setSelectedQuotes([]);
     setSelectedMR('');
   }, [activeTab, filterStatus]);
+
+  useEffect(() => {
+    if (showCompareModal && compareData.length > 0) {
+      const initialAwards = {};
+      const uniqueItemCodes = Array.from(new Set(compareData.flatMap(q => (q.items || []).map(item => item.item_code || item.drawing_no))));
+      
+      uniqueItemCodes.forEach(itemCode => {
+        let cheapestQuoteId = null;
+        let cheapestRate = Infinity;
+        
+        compareData.forEach(q => {
+          const item = (q.items || []).find(it => (it.item_code || it.drawing_no) === itemCode);
+          if (item && parseFloat(item.unit_rate) < cheapestRate) {
+            cheapestRate = parseFloat(item.unit_rate);
+            cheapestQuoteId = q.id;
+          }
+        });
+        
+        if (cheapestQuoteId) {
+          initialAwards[itemCode] = cheapestQuoteId;
+        }
+      });
+      setSelectedAwards(initialAwards);
+    }
+  }, [showCompareModal, compareData]);
 
   // Preview State
   const [showPreviewModal, setShowPreviewModal] = useState(false);
@@ -549,6 +578,40 @@ const Quotations = () => {
     }
   };
 
+  const getAvailableVendors = () => {
+    if (formData.vendorIds && formData.vendorIds.length > 0) {
+      return vendors.filter(v => formData.vendorIds.map(String).includes(String(v.id)));
+    }
+    return vendors;
+  };
+
+  useEffect(() => {
+    const selectedIds = formData.vendorIds || [];
+    if (selectedIds.length === 0) return;
+
+    let changed = false;
+    const updatedItems = (formData.items || []).map(item => {
+      const currentItemVendors = item.vendorIds || [];
+      let nextItemVendors = currentItemVendors.filter(vId => selectedIds.map(String).includes(String(vId)));
+      
+      if (nextItemVendors.length === 0 && selectedIds.length > 0) {
+        nextItemVendors = [...selectedIds];
+      } else if (selectedIds.length === 1 && (nextItemVendors.length !== 1 || String(nextItemVendors[0]) !== String(selectedIds[0]))) {
+        nextItemVendors = [...selectedIds];
+      }
+
+      if (JSON.stringify(currentItemVendors.map(String).sort()) !== JSON.stringify(nextItemVendors.map(String).sort())) {
+        changed = true;
+        return { ...item, vendorIds: nextItemVendors };
+      }
+      return item;
+    });
+
+    if (changed) {
+      setFormData(prev => ({ ...prev, items: updatedItems }));
+    }
+  }, [formData.vendorIds, formData.items]);
+
   const handleRemoveItem = (index) => {
     setFormData({
       ...formData,
@@ -860,7 +923,21 @@ const Quotations = () => {
   const handleCreateQuotation = async (e, forcedStatus = null) => {
     if (e) e.preventDefault();
 
-    if (!formData.vendorIds || formData.vendorIds.length === 0) {
+    const headerVendorIds = formData.vendorIds || [];
+    const itemVendorIds = [];
+    (formData.items || []).forEach(item => {
+      if (item.vendorIds) {
+        item.vendorIds.forEach(vId => {
+          if (vId && !itemVendorIds.includes(String(vId))) {
+            itemVendorIds.push(String(vId));
+          }
+        });
+      }
+    });
+
+    const allVendorIds = Array.from(new Set([...headerVendorIds.map(String), ...itemVendorIds]));
+
+    if (allVendorIds.length === 0) {
       errorToast('At least one vendor is required');
       return;
     }
@@ -871,14 +948,25 @@ const Quotations = () => {
 
       const rfqGroupId = `GRP-${Date.now()}`;
 
-      // Creation sequentiallly to avoid DB deadlocks
-      for (const vId of formData.vendorIds) {
+      // Creation sequentially to avoid DB deadlocks
+      for (const vId of allVendorIds) {
+        const vendorItems = (formData.items || []).filter(item => {
+          const itemVendors = item.vendorIds || [];
+          if (itemVendors.length > 0) {
+            return itemVendors.map(String).includes(String(vId));
+          }
+          return headerVendorIds.map(String).includes(String(vId));
+        });
+
+        if (vendorItems.length === 0) continue;
+
         const payload = {
           ...formData,
           vendorId: parseInt(vId),
           validUntil: formData.validUntil || null,
           status: forcedStatus || 'SENT',
-          rfq_group_id: rfqGroupId
+          rfq_group_id: rfqGroupId,
+          items: vendorItems
         };
 
         // Handle MR vs Sales Order
@@ -905,7 +993,7 @@ const Quotations = () => {
         }
       }
 
-      successToast(`Successfully created RFQs for ${formData.vendorIds.length} vendor(s)`);
+      successToast(`Successfully created RFQs for ${allVendorIds.length} vendor(s)`);
       navigate(`${deptPrefix}/quotations`);
       setFormData({
         vendorId: '',
@@ -1041,22 +1129,25 @@ const Quotations = () => {
     }
   };
 
-  const handleApproveQuote = async (quotationId) => {
-    const q = displayQuotations.find(item => item.id === quotationId);
-
-    if (!q?.is_single_vendor) {
-      const result = await Swal.fire({
-        title: 'Approve Quote?',
-        text: 'This will enable PO creation for this quotation',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonText: 'Approve',
-        cancelButtonText: 'Cancel'
+  const handleApproveQuoteClick = async (quotationId) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/quotations/${quotationId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
       });
-
-      if (!result.isConfirmed) return;
+      if (!response.ok) throw new Error('Failed to fetch quotation details');
+      
+      const qData = await response.json();
+      setApprovalModalQuote(qData);
+      setApprovalModalItems(qData.items || []);
+      setShowApprovalModal(true);
+    } catch (error) {
+      errorToast(error.message || 'Could not load quotation details');
+      console.error(error);
     }
+  };
 
+  const handleApprovalAction = async (quotationId, action) => {
     try {
       const token = localStorage.getItem('authToken');
       const response = await fetch(`${API_BASE}/quotations/${quotationId}/status`, {
@@ -1065,16 +1156,65 @@ const Quotations = () => {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ status: 'REVIEWED' })
+        body: JSON.stringify({ status: action })
       });
 
-      if (!response.ok) throw new Error('Failed to approve quote');
+      if (!response.ok) throw new Error(`Failed to update status to ${action}`);
 
-      successToast('Quote approved successfully');
+      successToast(`Quote ${action === 'REVIEWED' ? 'approved' : 'rejected'} successfully`);
+      setShowApprovalModal(false);
       fetchQuotations();
       fetchStats();
     } catch (error) {
-      errorToast(error.message || 'Failed to approve quote');
+      errorToast(error.message || 'Failed to update quote status');
+    }
+  };
+
+  const handleBulkApproveCompared = async () => {
+    const result = await Swal.fire({
+      title: 'Approve Selected Awards?',
+      text: 'This will approve the selected vendors for each item and automatically generate Purchase Orders.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Approve & Create POs',
+      cancelButtonText: 'Cancel'
+    });
+
+    if (!result.isConfirmed) return;
+
+    try {
+      const token = localStorage.getItem('authToken');
+      const quotationIds = compareData.map(q => q.id);
+      
+      const awards = Object.entries(selectedAwards).map(([itemCode, quotationId]) => ({
+        itemCode,
+        quotationId
+      }));
+
+      const response = await fetch(`${API_BASE}/quotations/compare/approve`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          quotationIds,
+          awards
+        })
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || 'Failed to approve comparison');
+      }
+
+      successToast('Comparison approved and Purchase Orders created successfully!');
+      setShowCompareModal(false);
+      fetchQuotations();
+      fetchStats();
+    } catch (error) {
+      console.error('Bulk Approve Error:', error);
+      errorToast(error.message || 'Failed to approve comparison');
     }
   };
 
@@ -1694,9 +1834,9 @@ const Quotations = () => {
               <>
                 {q.status === 'RECEIVED' && (
                   <button
-                    onClick={(e) => { e.stopPropagation(); handleApproveQuote(q.id); }}
+                    onClick={(e) => { e.stopPropagation(); handleApproveQuoteClick(q.id); }}
                     className="p-2 text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded  transition-all border border-emerald-100"
-                    title="Approve Quote"
+                    title="Approve / Review Quote"
                   >
                     <Check className="w-4 h-4" />
                   </button>
@@ -1774,7 +1914,7 @@ const Quotations = () => {
     }
 
     return baseCols;
-  }, [activeTab, selectedQuotes, displayQuotations, vendors, quotations, getVendorName, handleApproveQuote, handleDeleteQuotation, openEmailModal]);
+  }, [activeTab, selectedQuotes, displayQuotations, vendors, quotations, getVendorName, handleApproveQuoteClick, handleDeleteQuotation, openEmailModal]);
 
   return (
     <div className="space-y-2">
@@ -2133,9 +2273,10 @@ const Quotations = () => {
                       <div className="space-y-2">
                         <div className="grid grid-cols-12 gap-2 pb-2 border-b border-slate-100 text-xs text-slate-500">
                           <div className="col-span-2">Item ID</div>
-                          <div className="col-span-4">Material Name & Dimensions</div>
+                          <div className="col-span-3">Material Name & Dimensions</div>
+                          <div className="col-span-2">Vendor</div>
                           <div className="col-span-1">Type</div>
-                          <div className="col-span-2 text-center">Design Qty</div>
+                          <div className="col-span-1 text-center">Design Qty</div>
                           <div className="col-span-2 text-center">Required</div>
                           <div className="col-span-1"></div>
                         </div>
@@ -2150,7 +2291,7 @@ const Quotations = () => {
                                 className="w-full p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                               />
                             </div>
-                            <div className="col-span-4 space-y-1">
+                            <div className="col-span-3 space-y-1">
                               <input
                                 type="text"
                                 placeholder="Material Name"
@@ -2168,6 +2309,16 @@ const Quotations = () => {
                                 </div>
                               )}
                             </div>
+                            <div className="col-span-2">
+                              <MultiSelect
+                                options={getAvailableVendors()}
+                                value={item.vendorIds || []}
+                                onChange={(e) => handleItemChange(idx, 'vendorIds', e.target.value)}
+                                placeholder="Select Vendors..."
+                                labelField="vendor_name"
+                                valueField="id"
+                              />
+                            </div>
                             <input
                               type="text"
                               placeholder="Type"
@@ -2175,7 +2326,7 @@ const Quotations = () => {
                               onChange={(e) => handleItemChange(idx, 'material_type', e.target.value)}
                               className="col-span-1 p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
-                            <div className="col-span-2 flex flex-col items-center">
+                            <div className="col-span-1 flex flex-col items-center">
                               <div className="text-xs  text-slate-400 mb-0.5">
                                 {Number(item.planned_qty || 0).toFixed(3)} {item.uom || 'Kg'}
                               </div>
@@ -3210,6 +3361,7 @@ const Quotations = () => {
                 <tr className="bg-slate-50/50text-xs    text-slate-400">
                   <th className="p-2 border sticky left-0 bg-slate-50/50 z-10"></th>
                   <th className="p-2 border"></th>
+                  <th className="p-2 border"></th>
                   {compareData.map((_, idx) => (
                     <React.Fragment key={idx}>
                       <th className="p-2 border text-right">Unit Rate</th>
@@ -3240,8 +3392,19 @@ const Quotations = () => {
                         const item = (q.items || []).find(it => (it.item_code || it.drawing_no) === itemCode);
                         return (
                           <React.Fragment key={qIdx}>
-                            <td className="p-2 border text-right text-slate-600  ">
-                              {item ? formatCurrency(item.unit_rate) : '—'}
+                            <td className="p-2 border text-right text-slate-600">
+                              {item ? (
+                                <div className="flex items-center justify-end gap-1.5">
+                                  <input
+                                    type="radio"
+                                    name={`award-${itemCode}`}
+                                    checked={selectedAwards[itemCode] === q.id}
+                                    onChange={() => setSelectedAwards(prev => ({ ...prev, [itemCode]: q.id }))}
+                                    className="w-3.5 h-3.5 text-emerald-600 focus:ring-emerald-500 border-slate-300 cursor-pointer"
+                                  />
+                                  <span>{formatCurrency(item.unit_rate)}</span>
+                                </div>
+                              ) : '—'}
                             </td>
                             <td className={`p-2 border text-right   ${item ? 'text-indigo-600 ' : 'text-slate-300'}`}>
                               {item ? formatCurrency(item.amount || (item.unit_rate * (item.quantity || 0))) : '—'}
@@ -3262,32 +3425,151 @@ const Quotations = () => {
                     </td>
                   ))}
                 </tr>
-                <tr>
-                  <td className="p-2 border text-right sticky left-0 bg-white z-10" colSpan="3">Actions</td>
-                  {compareData.map((q, idx) => (
-                    <td key={idx} className="p-2 border text-center" colSpan="2">
-                      {q.status === 'REVIEWED' ? (
-                        <span className="text-xs font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded">APPROVED</span>
-                      ) : q.status === 'REJECTED' ? (
-                        <span className="text-xs font-bold text-rose-600 bg-rose-50 border border-rose-200 px-2 py-1 rounded">REJECTED</span>
-                      ) : (
-                        <Button
-                          variant="success"
-                          size="sm"
-                          disabled={q.status !== 'RECEIVED' || compareData.some(item => item.status === 'REVIEWED')}
-                          onClick={() => {
-                            handleApproveQuote(q.id);
-                            setShowCompareModal(false);
-                          }}
-                        >
-                          Approve this Quote
-                        </Button>
-                      )}
-                    </td>
-                  ))}
+                <tr className="bg-white">
+                  <td className="p-2 border text-right sticky left-0 bg-white z-10 font-semibold" colSpan="3">Award Selection Summary</td>
+                  <td className="p-2 border text-left" colSpan={compareData.length * 2}>
+                    <div className="flex flex-col gap-1.5 p-2 bg-emerald-50/50 rounded-lg border border-emerald-100 max-w-xl">
+                      <span className="font-semibold text-emerald-800">Awarded Items Grouping:</span>
+                      {Object.entries(selectedAwards).map(([itemCode, qId]) => {
+                        const quote = compareData.find(q => q.id === qId);
+                        return (
+                          <div key={itemCode} className="flex justify-between items-center text-xs text-slate-700 font-medium">
+                            <span className="font-semibold">{itemCode}</span>
+                            <span className="text-emerald-700 font-bold">→ {getVendorName(quote?.vendor_id)} ({quote?.quote_number})</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </td>
                 </tr>
               </tfoot>
             </table>
+          </div>
+          <div className="flex justify-end gap-2 pt-4 border-t mt-4 sticky bottom-0 bg-white z-20">
+            <button
+              type="button"
+              onClick={() => setShowCompareModal(false)}
+              className="p-2 border border-slate-200 rounded text-xs hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+            <Button
+              variant="success"
+              onClick={handleBulkApproveCompared}
+              disabled={Object.keys(selectedAwards).length === 0}
+            >
+              Approve Awards & Create Purchase Orders
+            </Button>
+          </div>
+        </Modal>
+      )}
+
+      {showApprovalModal && approvalModalQuote && (
+        <Modal
+          isOpen={showApprovalModal}
+          onClose={() => setShowApprovalModal(false)}
+          title="Approve Vendor Quotation"
+          size="3xl"
+        >
+          <div className="space-y-6 text-sm">
+            {/* Vendor Details Section */}
+            <div className="bg-slate-50 p-4 rounded-lg border border-slate-100">
+              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Vendor Details</h3>
+              <div className="grid grid-cols-2 gap-y-2 gap-x-4 text-xs text-slate-700">
+                <div>
+                  <span className="text-slate-400">Vendor:</span>{' '}
+                  <span className="font-semibold">{getVendorName(approvalModalQuote.vendor_id)}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400">Quotation No.:</span>{' '}
+                  <span className="font-semibold">{approvalModalQuote.quote_number}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400">Material Request:</span>{' '}
+                  <span className="font-semibold">{approvalModalQuote.mr_id || '—'}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400">Project:</span>{' '}
+                  <span className="font-semibold">{approvalModalQuote.project_details || '—'}</span>
+                </div>
+                <div className="col-span-2 mt-1">
+                  <span className="text-slate-400">Valid Until:</span>{' '}
+                  <span className="font-semibold text-indigo-600">{formatDate(approvalModalQuote.valid_until)}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Quoted Items Section */}
+            <div>
+              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Quoted Items</h3>
+              <div className="max-h-[220px] overflow-y-auto border border-slate-100 rounded-lg">
+                <table className="w-full border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-slate-50/75 border-b border-slate-100 text-slate-600 text-left">
+                      <th className="p-2 font-semibold">Item</th>
+                      <th className="p-2 font-semibold">Description</th>
+                      <th className="p-2 font-semibold text-center">Qty</th>
+                      <th className="p-2 font-semibold text-right">Unit Rate</th>
+                      <th className="p-2 font-semibold text-right">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {approvalModalItems.map((item, idx) => (
+                      <tr key={idx} className="border-b border-slate-50 hover:bg-slate-50/50">
+                        <td className="p-2 text-slate-800 font-medium">{item.item_code || item.drawing_no || '—'}</td>
+                        <td className="p-2 text-slate-500 truncate max-w-[200px]" title={item.description || item.material_name}>
+                          {item.description || item.material_name || '—'}
+                        </td>
+                        <td className="p-2 text-center text-slate-700">{Number(item.quantity || 0).toFixed(3)}</td>
+                        <td className="p-2 text-right text-slate-700">{formatCurrency(item.unit_rate)}</td>
+                        <td className="p-2 text-right font-medium text-slate-900">
+                          {formatCurrency(item.amount || (item.unit_rate * (item.quantity || 0)))}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex justify-end items-center gap-2 mt-3 pr-2 text-xs">
+                <span className="text-slate-500 font-semibold uppercase">Grand Total:</span>
+                <span className="text-sm font-bold text-indigo-700">
+                  {formatCurrency(approvalModalQuote.grand_total || approvalModalQuote.total_amount)}
+                </span>
+              </div>
+            </div>
+
+            {/* Confirmation Alert Box */}
+            <div className="bg-amber-50/50 border border-amber-100 rounded-lg p-3 text-xs text-amber-800 space-y-1">
+              <p className="font-semibold">Are you sure you want to approve this vendor quotation?</p>
+              <p className="text-amber-700/95">This action will enable Purchase Order creation for the approved items.</p>
+            </div>
+
+            {/* Footer Buttons */}
+            <div className="flex justify-between items-center pt-4 border-t mt-4">
+              <div>
+                <Button
+                  variant="danger"
+                  onClick={() => handleApprovalAction(approvalModalQuote.id, 'REJECTED')}
+                >
+                  Reject Quote
+                </Button>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowApprovalModal(false)}
+                  className="px-3 py-1.5 border border-slate-200 rounded text-xs hover:bg-slate-50 font-medium text-slate-700"
+                >
+                  Cancel
+                </button>
+                <Button
+                  variant="success"
+                  onClick={() => handleApprovalAction(approvalModalQuote.id, 'REVIEWED')}
+                >
+                  Approve Quote
+                </Button>
+              </div>
+            </div>
           </div>
         </Modal>
       )}

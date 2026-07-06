@@ -305,7 +305,7 @@ export const Button = ({
     default: 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 shadow-sm',
     primary: 'bg-emerald-500 text-white border-emerald-600 hover:bg-emerald-600 shadow-md shadow-emerald-100',
     secondary: 'bg-sky-500 text-white border-sky-600 hover:bg-sky-600 shadow-md shadow-sky-100',
-    success: 'text-emerald-500 text-white border-emerald-600 hover:bg-emerald-600 shadow-md shadow-emerald-100',
+    success: 'bg-emerald-600 text-white border-emerald-700 hover:bg-emerald-700 shadow-md shadow-emerald-100',
     danger: 'bg-rose-500 text-white border-rose-600 hover:bg-rose-600 shadow-md shadow-rose-100',
     warning: 'bg-amber-500 text-white border-amber-600 hover:bg-amber-600 shadow-md shadow-amber-100',
     info: 'bg-blue-500 text-white border-blue-600 hover:bg-blue-600 shadow-md shadow-blue-100',

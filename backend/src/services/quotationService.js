@@ -486,36 +486,7 @@ const updateQuotationStatus = async (quotationId, status) => {
       [status, quotationId]
     );
 
-    // If status is REVIEWED (Approved), reject all other active quotations for the same MR / RFQ
-    if (status === 'REVIEWED') {
-      const [currentQ] = await connection.query(
-        'SELECT rfq_group_id, rfq_id, mr_id, sales_order_id FROM quotations WHERE id = ?',
-        [quotationId]
-      );
-      if (currentQ.length > 0) {
-        const { rfq_group_id, rfq_id, mr_id, sales_order_id } = currentQ[0];
-        let rejectQuery = '';
-        let rejectParams = [];
-
-        if (rfq_group_id) {
-          rejectQuery = 'UPDATE quotations SET status = ? WHERE rfq_group_id = ? AND id != ? AND status != ?';
-          rejectParams = ['REJECTED', rfq_group_id, quotationId, 'SUPERSEDED'];
-        } else if (rfq_id) {
-          rejectQuery = 'UPDATE quotations SET status = ? WHERE rfq_id = ? AND id != ? AND status != ?';
-          rejectParams = ['REJECTED', rfq_id, quotationId, 'SUPERSEDED'];
-        } else if (mr_id) {
-          rejectQuery = 'UPDATE quotations SET status = ? WHERE mr_id = ? AND id != ? AND status != ?';
-          rejectParams = ['REJECTED', mr_id, quotationId, 'SUPERSEDED'];
-        } else if (sales_order_id) {
-          rejectQuery = 'UPDATE quotations SET status = ? WHERE sales_order_id = ? AND id != ? AND status != ?';
-          rejectParams = ['REJECTED', sales_order_id, quotationId, 'SUPERSEDED'];
-        }
-
-        if (rejectQuery) {
-          await connection.execute(rejectQuery, rejectParams);
-        }
-      }
-    }
+    // Auto-rejection of other quotations is disabled to allow many-to-many / individual item selection without rejecting competing quotes.
 
     // If status is RECEIVED, check for auto-approval
     if (status === 'RECEIVED') {
@@ -1446,6 +1417,84 @@ const parseVendorQuotationPDF = async (filePath) => {
   return items;
 };
 
+const approveComparedQuotations = async (data) => {
+  const { quotationIds, awards } = data;
+
+  if (!Array.isArray(quotationIds) || quotationIds.length === 0) {
+    const error = new Error('Quotation IDs are required');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // 1. Reset is_selected = 0 for all items in the involved quotations
+    await connection.query(
+      'UPDATE quotation_items SET is_selected = 0 WHERE quotation_id IN (?)',
+      [quotationIds]
+    );
+
+    // 2. Mark the awarded items as is_selected = 1
+    if (Array.isArray(awards) && awards.length > 0) {
+      for (const award of awards) {
+        const { quotationId, itemCode } = award;
+        if (!quotationId || !itemCode) continue;
+
+        await connection.execute(
+          `UPDATE quotation_items 
+           SET is_selected = 1 
+           WHERE quotation_id = ? AND (item_code = ? OR drawing_no = ?)`,
+          [quotationId, itemCode, itemCode]
+        );
+      }
+    }
+
+    // 3. Update the parent quotations' statuses
+    const approvedQuotationIds = [];
+
+    for (const qId of quotationIds) {
+      const [rows] = await connection.query(
+        'SELECT COUNT(*) as count FROM quotation_items WHERE quotation_id = ? AND is_selected = 1',
+        [qId]
+      );
+      const hasSelectedItems = rows[0].count > 0;
+
+      if (hasSelectedItems) {
+        await connection.execute(
+          "UPDATE quotations SET status = 'REVIEWED' WHERE id = ?",
+          [qId]
+        );
+        approvedQuotationIds.push(qId);
+      } else {
+        // Do not auto-reject non-awarded quotations, let them remain as is (e.g. RECEIVED)
+        console.log(`Quotation ${qId} has no selected items, keeping status unchanged`);
+      }
+    }
+
+    // 4. Create Purchase Orders for each approved quotation (vendor)
+    const purchaseOrderService = require('./purchaseOrderService');
+    const createdPOs = [];
+
+    for (const qId of approvedQuotationIds) {
+      const poResult = await purchaseOrderService.createPurchaseOrder({ quotationId: qId }, connection);
+      createdPOs.push(poResult);
+    }
+
+    await connection.commit();
+    return {
+      approvedQuotationIds,
+      createdPOs
+    };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+};
+
 module.exports = {
   createQuotation,
   getQuotations,
@@ -1456,5 +1505,6 @@ module.exports = {
   getQuotationStats,
   sendQuotationEmail,
   generateQuotationPDF,
-  parseVendorQuotationPDF
+  parseVendorQuotationPDF,
+  approveComparedQuotations
 };

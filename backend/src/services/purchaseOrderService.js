@@ -176,7 +176,7 @@ const createPurchaseOrder = async (data, existingConnection = null) => {
         `SELECT qi.*, soi.status as sales_order_item_status 
          FROM quotation_items qi
          LEFT JOIN sales_order_items soi ON (qi.drawing_no = soi.drawing_no OR qi.item_code = soi.item_code) AND soi.sales_order_id = ?
-         WHERE qi.quotation_id = ?`,
+         WHERE qi.quotation_id = ? AND qi.is_selected = 1`,
         [quote.sales_order_id, quotationId]
       );
       items = quoteItems.map(item => {
@@ -203,6 +203,7 @@ const createPurchaseOrder = async (data, existingConnection = null) => {
           weight_per_unit: item.weight_per_unit || 0
         };
       });
+      total_amount = items.reduce((sum, item) => Number(sum) + (Number(item.total_amount) || 0), 0);
     } else if (actualMrId) {
       // Create PO from Material Request
       const [mr] = await connection.query('SELECT * FROM material_requests WHERE id = ?', [actualMrId]);
