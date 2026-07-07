@@ -13,10 +13,8 @@ async function checkStock() {
     const connection = await mysql.createConnection(config);
 
     try {
-        const itemCodes = ['CON-INDUSTRIAL-0001', 'MRO-MRO-0001', 'BOU-PREMOLDEDP-0001', 'RM-STAINLESSS-0002', 'CON-WELDINGROD-0002', 'RM-POWDERCOAT-0001'];
         const [rows] = await connection.query(
-            'SELECT item_code, material_name, current_balance, warehouse FROM stock_balance WHERE item_code IN (?)',
-            [itemCodes]
+            "SELECT item_code, material_name, material_type, drawing_no, current_balance, warehouse FROM stock_balance WHERE material_name LIKE '%aluminum%' OR material_name LIKE '%tube%' OR item_code LIKE '%aluminum%'"
         );
         console.log(JSON.stringify(rows, null, 2));
     } catch (error) {

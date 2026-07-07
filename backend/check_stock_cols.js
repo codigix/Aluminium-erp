@@ -4,12 +4,12 @@ async function run() {
     host: '127.0.0.1',
     user: 'aluminium_user',
     password: 'C0digix$309',
-    database: 'sales_erp',
+    database: 'spTech_prod',
     port: 3307
   });
   try {
-    const [rows] = await pool.query('SHOW COLUMNS FROM stock_balance');
-    console.log(rows.map(r => r.Field));
+    const [rows] = await pool.query("SELECT item_code, material_name, material_type, drawing_no, current_balance, warehouse FROM stock_balance WHERE material_name LIKE '%aluminum%' OR material_name LIKE '%tube%' OR item_code LIKE '%aluminum%'");
+    console.log(JSON.stringify(rows, null, 2));
   } catch (err) {
     console.error(err);
   } finally {

@@ -1149,6 +1149,22 @@ const BOMFormPage = () => {
     }
   }, []);
 
+  const fetchStockItemsOnly = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      if (!token) return;
+      const response = await fetch(`${API_BASE}/stock/balance?includeAll=true`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setStockItems(data);
+      }
+    } catch (error) {
+      console.error('Failed to refetch stock items on focus:', error);
+    }
+  }, []);
+
   // Auto-calculate Weight per Unit for materialForm
   useEffect(() => {
     const shapeObj = shapes.find(s => String(s.id) === String(materialForm.shapeId));
@@ -2763,6 +2779,7 @@ const BOMFormPage = () => {
                         <label className="text-xs  text-slate-500 ml-1">Component Selection <span className="text-rose-500">*</span></label>
                         <SearchableSelect
                           placeholder="Select assembly or part..."
+                          onFocus={fetchStockItemsOnly}
                           options={componentOptions}
                           value={componentForm.componentCode}
                           onChange={(e) => {
@@ -3004,6 +3021,7 @@ const BOMFormPage = () => {
                       <label className="text-xs  text-slate-500 ml-1">Material Selection <span className="text-rose-500">*</span></label>
                       <SearchableSelect
                         placeholder="Select material..."
+                        onFocus={fetchStockItemsOnly}
                         options={stockItems
                           .filter(item => {
                             // FG and Sub-assembly check
@@ -3043,18 +3061,8 @@ const BOMFormPage = () => {
                               }
                             }
 
-                            if (showAllDrawings) return true;
-
-                            const productDrawing = (selectedItem?.drawing_no || productForm.drawingNo || '').trim();
-                            const itemDrawing = (item.drawing_no || '').trim();
-
-                            if (!productDrawing) return true;
-
-                            // If item has no drawing or N/A, it's a generic raw material/consumable - ALWAYS show it
-                            if (!itemDrawing || itemDrawing === 'N/A') return true;
-
-                            // Otherwise, it must match the product drawing
-                            return itemDrawing === productDrawing;
+                            // Raw Materials/Consumables do not need to match the product drawing number
+                            return true;
                           })
                           .map(item => {
                             const dims = getDimensionString(item);
@@ -3789,6 +3797,7 @@ const BOMFormPage = () => {
                       <label className="text-xs  text-slate-500 ml-1">Scrap Material *</label>
                       <SearchableSelect
                         placeholder="Select scrap item..."
+                        onFocus={fetchStockItemsOnly}
                         options={stockItems
                           .filter(item => {
                             if (showAllDrawings) return true;
