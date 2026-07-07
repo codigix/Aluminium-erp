@@ -6,7 +6,7 @@ import {
   ChevronLeft, Loader2, Calculator, RefreshCw,
   Building2, Mail, Phone, MapPin,
   GitBranch, Clock, AlertCircle, ArrowUpRight,
-  Check, XCircle
+  Check, XCircle, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { Card, StatusBadge, SearchableSelect } from '../components/ui.jsx';
 import { successToast, errorToast } from '../utils/toast';
@@ -75,6 +75,156 @@ const QuotationFormPage = () => {
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [emailModalData, setEmailModalData] = useState(null);
   const [pendingSaveParams, setPendingSaveParams] = useState(null);
+
+  const [expandedBreakdowns, setExpandedBreakdowns] = useState({});
+  const [breakdownData, setBreakdownData] = useState({});
+
+  const handleToggleBreakdown = async (item) => {
+    const itemId = item.id;
+    const isExpanded = !expandedBreakdowns[itemId];
+    setExpandedBreakdowns(prev => ({ ...prev, [itemId]: isExpanded }));
+
+    if (isExpanded && !breakdownData[itemId]) {
+      setBreakdownData(prev => ({ ...prev, [itemId]: { loading: true, rows: [] } }));
+      try {
+        const token = localStorage.getItem('authToken');
+        
+        // 1. Fetch parent BOM
+        const bomId = item.sales_order_item_id || item.drawing_id || 'bom-form';
+        const parentRes = await fetch(`${API_BASE}/bom/items/${bomId}?drawingNo=${encodeURIComponent(item.drawing_no || '')}&drawingId=${item.drawing_id || ''}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (!parentRes.ok) throw new Error('Failed to fetch parent BOM');
+        const parentBOM = await parentRes.json();
+        
+        // 2. We will build the breakdown rows
+        const rows = [];
+        
+        const calculateMaterialCost = (m) => {
+          const qty = parseFloat(m.qty_per_pc || m.quantity || 0);
+          const rate = parseFloat(m.rate || 0);
+          const weightPerUnit = parseFloat(m.weight_per_unit || 0);
+          const scrapPercent = parseFloat(m.scrap_percent || 0);
+          
+          if (weightPerUnit > 0) {
+            const sP = scrapPercent > 1 ? scrapPercent / 100 : scrapPercent;
+            return qty * weightPerUnit * (1 + sP) * rate;
+          }
+          return qty * rate;
+        };
+
+        const parseOperations = (operationsList) => {
+          const ops = { cnc: 0, milling: 0, vmc: 0, drilling: 0, tapping: 0, grinding: 0, laser: 0, sparking: 0, finish: 0, qc: 0, packing: 0 };
+          (operationsList || []).forEach(op => {
+            const name = (op.operation_name || '').toLowerCase();
+            const hourlyRate = parseFloat(op.hourly_rate || 0);
+            const setupTime = parseFloat(op.setup_time_min || 0);
+            const cycleTime = parseFloat(op.cycle_time_min || 0);
+            const totalOpCost = ((cycleTime + setupTime) / 60) * hourlyRate;
+            
+            if (name.includes('laser')) ops.laser += totalOpCost;
+            else if (name.includes('cnc') || name.includes('turn')) ops.cnc += totalOpCost;
+            else if (name.includes('vmc')) ops.vmc += totalOpCost;
+            else if (name.includes('drill')) ops.drilling += totalOpCost;
+            else if (name.includes('tap')) ops.tapping += totalOpCost;
+            else if (name.includes('grind')) ops.grinding += totalOpCost;
+            else if (name.includes('spark')) ops.sparking += totalOpCost;
+            else if (name.includes('qc') || name.includes('inspect')) ops.qc += totalOpCost;
+            else if (name.includes('pack')) ops.packing += totalOpCost;
+            else if (name.includes('mill') || name.includes('cut')) ops.milling += totalOpCost;
+            else if (name.includes('finish') || name.includes('powder') || name.includes('anodiz') || name.includes('paint') || name.includes('weld')) ops.finish += totalOpCost;
+            else {
+              ops.finish += totalOpCost;
+            }
+          });
+          return ops;
+        };
+
+        if ((!parentBOM.components || parentBOM.components.length === 0) && 
+            ((parentBOM.materials && parentBOM.materials.length > 0) || (parentBOM.operations && parentBOM.operations.length > 0))) {
+          // Parent item is a PART itself, build a single row
+          const matCost = (parentBOM.materials || []).reduce((sum, m) => sum + calculateMaterialCost(m), 0);
+          const ops = parseOperations(parentBOM.operations);
+          const totalOpsCost = Object.values(ops).reduce((a, b) => a + b, 0);
+          
+          const profitPercent = parseFloat(item.profit_percentage) || 0;
+          const profit = (matCost + totalOpsCost) * (profitPercent / 100);
+          const unitRate = matCost + totalOpsCost + profit;
+          
+          rows.push({
+            name: item.description || item.drawing_no,
+            materialCost: matCost,
+            ...ops,
+            profit,
+            unitRate,
+            qtyPerParent: 1,
+            qty: parseFloat(item.quantity) || 1,
+            total: unitRate * (parseFloat(item.quantity) || 1)
+          });
+        } else {
+          // Parent item is an ASSEMBLY, fetch child BOMs for components in parallel
+          const components = parentBOM.components || [];
+          
+          const childBOMs = await Promise.all(
+            components.map(async (c) => {
+              try {
+                const childRes = await fetch(`${API_BASE}/bom/items/bom-form?itemCode=${encodeURIComponent(c.component_code)}`, {
+                  headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (childRes.ok) {
+                  return await childRes.json();
+                }
+              } catch (e) {
+                console.error(e);
+              }
+              return null;
+            })
+          );
+          
+          components.forEach((c, idx) => {
+            const childBOM = childBOMs[idx];
+            let matCost = 0;
+            let ops = { cnc: 0, milling: 0, vmc: 0, drilling: 0, tapping: 0, grinding: 0, laser: 0, sparking: 0, finish: 0, qc: 0, packing: 0 };
+            
+            if (childBOM && ((childBOM.materials && childBOM.materials.length > 0) || (childBOM.operations && childBOM.operations.length > 0))) {
+              matCost = (childBOM.materials || []).reduce((sum, m) => sum + calculateMaterialCost(m), 0);
+              ops = parseOperations(childBOM.operations);
+            } else {
+              matCost = parseFloat(c.rate || 0);
+            }
+            
+            const totalOpsCost = Object.values(ops).reduce((a, b) => a + b, 0);
+            const profitPercent = parseFloat(item.profit_percentage) || 0;
+            const profit = (matCost + totalOpsCost) * (profitPercent / 100);
+            const unitRate = matCost + totalOpsCost + profit;
+            
+            rows.push({
+              name: c.description || c.component_code,
+              materialCost: matCost,
+              ...ops,
+              profit,
+              unitRate,
+              qtyPerParent: parseFloat(c.quantity || 0),
+              qty: parseFloat(c.quantity || 0) * (parseFloat(item.quantity) || 1),
+              total: unitRate * parseFloat(c.quantity || 0) * (parseFloat(item.quantity) || 1)
+            });
+          });
+        }
+        
+        setBreakdownData(prev => ({
+          ...prev,
+          [itemId]: { loading: false, rows }
+        }));
+      } catch (err) {
+        console.error('Error loading breakdown:', err);
+        setBreakdownData(prev => ({
+          ...prev,
+          [itemId]: { loading: false, error: err.message, rows: [] }
+        }));
+      }
+    }
+  };
 
   // Locking logic: Only the latest version can be edited, and only if it's NOT approved.
   const maxVersion = Math.max(
@@ -1805,6 +1955,15 @@ const QuotationFormPage = () => {
                                     <div className="flex flex-col">
                                       <div className="flex items-center gap-2 mb-0.5">
                                         <span className="text-sm text-slate-900">{item.description || 'No Description'}</span>
+                                        {item.drawing_no && (
+                                          <button
+                                            onClick={(e) => { e.preventDefault(); handleToggleBreakdown(item); }}
+                                            className="px-1.5 py-0.5 text-[10px] text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 rounded transition-all flex items-center gap-0.5 font-medium"
+                                          >
+                                            {expandedBreakdowns[item.id] ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
+                                            Cost Breakdown
+                                          </button>
+                                        )}
                                       </div>
                                       <div className="flex items-center gap-2">
                                         <span className="text-xs text-slate-500 font-mono">{(item.drawing_no || 'Manual Item').toUpperCase()}</span>
@@ -1812,13 +1971,24 @@ const QuotationFormPage = () => {
                                     </div>
                                   ) : (
                                     <div className="flex flex-col">
-                                      <textarea
-                                        placeholder="Add item description..."
-                                        value={item.description}
-                                        onChange={(e) => handleItemChange(item.id, 'description', e.target.value)}
-                                        rows="1"
-                                        className="w-full px-0 py-0 text-xs  text-slate-900 border-none focus:ring-0 resize-none bg-transparent placeholder:text-slate-300 "
-                                      />
+                                      <div className="flex items-center justify-between gap-2">
+                                        <textarea
+                                          placeholder="Add item description..."
+                                          value={item.description}
+                                          onChange={(e) => handleItemChange(item.id, 'description', e.target.value)}
+                                          rows="1"
+                                          className="w-full px-0 py-0 text-xs  text-slate-900 border-none focus:ring-0 resize-none bg-transparent placeholder:text-slate-300 "
+                                        />
+                                        {item.drawing_no && (
+                                          <button
+                                            onClick={(e) => { e.preventDefault(); handleToggleBreakdown(item); }}
+                                            className="px-1.5 py-0.5 text-[10px] text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 rounded transition-all flex items-center gap-0.5 font-medium whitespace-nowrap self-start"
+                                          >
+                                            {expandedBreakdowns[item.id] ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
+                                            Cost Breakdown
+                                          </button>
+                                        )}
+                                      </div>
                                       <div className="flex items-center gap-2 mt-0.5">
                                         <div className="flex-1">
                                           <SearchableSelect
@@ -2002,6 +2172,106 @@ const QuotationFormPage = () => {
                           )}
                         </tr>
                       );
+
+                      // Cost Breakdown Table Row
+                      if (expandedBreakdowns[item.id]) {
+                        rows.push(
+                          <tr key={`${item.id}-breakdown`} className="bg-slate-50/70">
+                            <td colSpan={isLocked ? 9 : 10} className="p-3 border-b border-slate-200">
+                              {breakdownData[item.id]?.loading ? (
+                                <div className="flex items-center gap-2 text-slate-500 text-xs py-4 pl-4 bg-white rounded-lg border border-slate-100 shadow-sm">
+                                  <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
+                                  <span>Loading Cost Breakdown...</span>
+                                </div>
+                              ) : breakdownData[item.id]?.error ? (
+                                <div className="text-rose-500 text-xs py-4 pl-4 bg-white rounded-lg border border-slate-100 shadow-sm">
+                                  Failed to load cost breakdown: {breakdownData[item.id].error}
+                                </div>
+                              ) : (
+                                <div className="bg-white p-3 rounded-lg border border-slate-100 shadow-sm space-y-2.5">
+                                  <div className="flex items-center gap-1.5 pb-2 border-b border-slate-100">
+                                    <span className="w-1.5 h-3 bg-indigo-600 rounded-sm"></span>
+                                    <span className="text-xs font-bold text-slate-800">Cost Breakdown ({item.drawing_no})</span>
+                                  </div>
+                                  <div className="overflow-x-auto border border-slate-150 rounded-lg max-w-full">
+                                    <table className="w-full text-left border-collapse text-[10px] min-w-[1550px] table-auto">
+                                      <thead>
+                                        <tr className="border-b border-slate-200 bg-slate-50 text-slate-500 font-semibold">
+                                          <th className="whitespace-nowrap text-center" style={{ minWidth: '45px', width: '45px', padding: '10px' }}>Sr</th>
+                                          <th className="whitespace-nowrap sticky left-0 z-10 bg-slate-50" style={{ minWidth: '220px', width: '220px', padding: '10px', boxShadow: '2px 0 5px -2px rgba(0,0,0,0.1)' }}>Component</th>
+                                          <th className="whitespace-nowrap text-right" style={{ minWidth: '110px', width: '110px', padding: '10px' }}>Material (₹)</th>
+                                          <th className="whitespace-nowrap text-right" style={{ minWidth: '95px', width: '95px', padding: '10px' }}>CNC (₹)</th>
+                                          <th className="whitespace-nowrap text-right" style={{ minWidth: '95px', width: '95px', padding: '10px' }}>Milling (₹)</th>
+                                          <th className="whitespace-nowrap text-right" style={{ minWidth: '95px', width: '95px', padding: '10px' }}>VMC (₹)</th>
+                                          <th className="whitespace-nowrap text-right" style={{ minWidth: '95px', width: '95px', padding: '10px' }}>Drilling (₹)</th>
+                                          <th className="whitespace-nowrap text-right" style={{ minWidth: '95px', width: '95px', padding: '10px' }}>Tapping (₹)</th>
+                                          <th className="whitespace-nowrap text-right" style={{ minWidth: '95px', width: '95px', padding: '10px' }}>Grinding (₹)</th>
+                                          <th className="whitespace-nowrap text-right" style={{ minWidth: '95px', width: '95px', padding: '10px' }}>Laser (₹)</th>
+                                          <th className="whitespace-nowrap text-right" style={{ minWidth: '95px', width: '95px', padding: '10px' }}>Sparking (₹)</th>
+                                          <th className="whitespace-nowrap text-right" style={{ minWidth: '95px', width: '95px', padding: '10px' }}>Finish (₹)</th>
+                                          <th className="whitespace-nowrap text-right" style={{ minWidth: '95px', width: '95px', padding: '10px' }}>QC (₹)</th>
+                                          <th className="whitespace-nowrap text-right" style={{ minWidth: '95px', width: '95px', padding: '10px' }}>Packing (₹)</th>
+                                          <th className="whitespace-nowrap text-right" style={{ minWidth: '95px', width: '95px', padding: '10px' }}>Profit (₹)</th>
+                                          <th className="whitespace-nowrap text-right" style={{ minWidth: '110px', width: '110px', padding: '10px' }}>Unit Rate (₹)</th>
+                                          <th className="whitespace-nowrap text-center" style={{ minWidth: '70px', width: '70px', padding: '10px' }}>Qty</th>
+                                          <th className="whitespace-nowrap text-right" style={{ minWidth: '120px', width: '120px', padding: '10px' }}>Total (₹)</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody className="divide-y divide-slate-100 text-slate-600">
+                                        {(breakdownData[item.id]?.rows || []).map((row, idx) => (
+                                          <tr key={idx} className="hover:bg-slate-50/50 bg-white">
+                                            <td className="whitespace-nowrap text-slate-400 text-center" style={{ padding: '10px' }}>{idx + 1}</td>
+                                            <td className="whitespace-nowrap sticky left-0 z-5 bg-white font-medium text-slate-800 truncate" style={{ padding: '10px', boxShadow: '2px 0 5px -2px rgba(0,0,0,0.1)' }} title={row.name}>{row.name}</td>
+                                            <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(row.materialCost)}</td>
+                                            <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(row.cnc)}</td>
+                                            <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(row.milling)}</td>
+                                            <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(row.vmc)}</td>
+                                            <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(row.drilling)}</td>
+                                            <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(row.tapping)}</td>
+                                            <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(row.grinding)}</td>
+                                            <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(row.laser)}</td>
+                                            <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(row.sparking)}</td>
+                                            <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(row.finish)}</td>
+                                            <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(row.qc)}</td>
+                                            <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(row.packing)}</td>
+                                            <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(row.profit)}</td>
+                                            <td className="whitespace-nowrap text-right font-medium text-slate-800" style={{ padding: '10px' }}>{formatCurrency(row.unitRate)}</td>
+                                            <td className="whitespace-nowrap text-center font-mono" style={{ padding: '10px' }}>{row.qty}</td>
+                                            <td className="whitespace-nowrap text-right font-semibold text-slate-900" style={{ padding: '10px' }}>{formatCurrency(row.total)}</td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                      <tfoot>
+                                        <tr className="border-t border-slate-200 bg-slate-50 font-semibold text-slate-700">
+                                          <td colSpan={2} className="whitespace-nowrap sticky left-0 z-5 bg-slate-50 text-left font-bold text-slate-800" style={{ padding: '10px', boxShadow: '2px 0 5px -2px rgba(0,0,0,0.1)' }}>Breakdown Total</td>
+                                          <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency((breakdownData[item.id]?.rows || []).reduce((sum, r) => sum + r.materialCost * r.qtyPerParent, 0))}</td>
+                                          <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency((breakdownData[item.id]?.rows || []).reduce((sum, r) => sum + r.cnc * r.qtyPerParent, 0))}</td>
+                                          <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency((breakdownData[item.id]?.rows || []).reduce((sum, r) => sum + r.milling * r.qtyPerParent, 0))}</td>
+                                          <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency((breakdownData[item.id]?.rows || []).reduce((sum, r) => sum + r.vmc * r.qtyPerParent, 0))}</td>
+                                          <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency((breakdownData[item.id]?.rows || []).reduce((sum, r) => sum + r.drilling * r.qtyPerParent, 0))}</td>
+                                          <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency((breakdownData[item.id]?.rows || []).reduce((sum, r) => sum + r.tapping * r.qtyPerParent, 0))}</td>
+                                          <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency((breakdownData[item.id]?.rows || []).reduce((sum, r) => sum + r.grinding * r.qtyPerParent, 0))}</td>
+                                          <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency((breakdownData[item.id]?.rows || []).reduce((sum, r) => sum + r.laser * r.qtyPerParent, 0))}</td>
+                                          <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency((breakdownData[item.id]?.rows || []).reduce((sum, r) => sum + r.sparking * r.qtyPerParent, 0))}</td>
+                                          <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency((breakdownData[item.id]?.rows || []).reduce((sum, r) => sum + r.finish * r.qtyPerParent, 0))}</td>
+                                          <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency((breakdownData[item.id]?.rows || []).reduce((sum, r) => sum + r.qc * r.qtyPerParent, 0))}</td>
+                                          <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency((breakdownData[item.id]?.rows || []).reduce((sum, r) => sum + r.packing * r.qtyPerParent, 0))}</td>
+                                          <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency((breakdownData[item.id]?.rows || []).reduce((sum, r) => sum + r.profit * r.qtyPerParent, 0))}</td>
+                                          <td className="whitespace-nowrap text-right font-bold text-slate-900" style={{ padding: '10px' }}>{formatCurrency((breakdownData[item.id]?.rows || []).reduce((sum, r) => sum + r.unitRate * r.qtyPerParent, 0))}</td>
+                                          <td className="whitespace-nowrap text-center font-mono font-bold" style={{ padding: '10px' }}>{(parseFloat(item.quantity) || 1)}</td>
+                                          <td className="whitespace-nowrap text-right text-indigo-600 font-bold text-xs" style={{ padding: '10px' }}>
+                                            {formatCurrency((breakdownData[item.id]?.rows || []).reduce((sum, r) => sum + r.total, 0))}
+                                          </td>
+                                        </tr>
+                                      </tfoot>
+                                    </table>
+                                  </div>
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      }
 
                       // Sub-Assembly Rows
                       if (item.sub_assemblies && item.sub_assemblies.length > 0) {

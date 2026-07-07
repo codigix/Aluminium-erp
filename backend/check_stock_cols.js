@@ -8,8 +8,8 @@ async function run() {
     port: 3307
   });
   try {
-    const [rows] = await pool.query("SELECT item_code, material_name, material_type, drawing_no, current_balance, warehouse FROM stock_balance WHERE material_name LIKE '%aluminum%' OR material_name LIKE '%tube%' OR item_code LIKE '%aluminum%'");
-    console.log(JSON.stringify(rows, null, 2));
+    const [matRows] = await pool.query("SELECT * FROM sales_order_item_materials WHERE sales_order_item_id = 870");
+    console.log('materials (870):', matRows);
   } catch (err) {
     console.error(err);
   } finally {
