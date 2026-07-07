@@ -11,6 +11,9 @@ router.post('/', authorize(['PO_EDIT']), quotationRequestController.sendQuotatio
 router.get('/versions/:id', authorize(['PO_VIEW']), quotationRequestController.getQuotationVersionHistory);
 router.get('/version-details/:id', authorize(['PO_VIEW']), quotationRequestController.getQuotationVersionDetails);
 router.get('/download-pdf/:id', authorize(['PO_VIEW']), quotationRequestController.downloadQuotationPDF);
+router.get('/export-cost-breakdown/:id', authorize(['PO_VIEW']), quotationRequestController.exportQuotationCostBreakdown);
+router.get('/export-cost-breakdown-pdf/:id', authorize(['PO_VIEW']), quotationRequestController.exportQuotationCostBreakdownPDF);
+router.get('/cost-breakdown-details/:id', authorize(['PO_VIEW']), quotationRequestController.getQuotationCostBreakdownDetails);
 router.post('/send', authorize(['PO_EDIT']), quotationRequestController.sendQuotationViaEmail);
 router.post('/:id/send-email', authorize(['PO_EDIT']), quotationRequestController.sendExistingQuotationEmail);
 router.post('/batch-approve', authorize(['PO_EDIT']), upload.single('reply_pdf'), quotationRequestController.batchApproveQuotationRequests);

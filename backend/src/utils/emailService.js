@@ -99,6 +99,7 @@ const generateQuotationHTML = async (clientName, items, totalAmount, notes, clie
         <td style="padding: 10px; border: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; text-align: center;">${quantity}</td>
         <td style="padding: 10px; border: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; text-align: right;">${unitPriceStr}</td>
         <td style="padding: 10px; border: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; text-align: right; font-weight: bold;">${totalLineStr}</td>
+        <td style="padding: 10px; border: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; text-align: left;">${item.item_notes || '—'}</td>
       </tr>
     `;
 
@@ -226,11 +227,12 @@ const generateQuotationHTML = async (clientName, items, totalAmount, notes, clie
         <thead>
           <tr>
             <th style="width: 5%;">Sr. No</th>
-            <th style="width: 38%;">Description / Drawing No</th>
-            <th style="width: 12%;">HSN Code</th>
-            <th style="width: 10%;">Qty</th>
-            <th style="width: 17%;">Unit Rate (₹)</th>
-            <th style="width: 18%;">Total (₹)</th>
+            <th style="width: 32%;">Description / Drawing No</th>
+            <th style="width: 10%;">HSN Code</th>
+            <th style="width: 8%;">Qty</th>
+            <th style="width: 15%;">Unit Rate (₹)</th>
+            <th style="width: 15%;">Total (₹)</th>
+            <th style="width: 15%;">Notes</th>
           </tr>
         </thead>
         <tbody>
@@ -750,10 +752,208 @@ const generateQuotationPDF = async (clientName, items, totalAmount, notes, clien
   return pdf;
 };
 
+const generateCostBreakdownPDF = async (clientName, quoteNumber, projectName, dataRows) => {
+  const headers = dataRows[0];
+  const rows = dataRows.slice(1);
+
+  const formattedRowsHtml = rows.map(r => {
+    const isGrandTotal = r[0] === "Grand Total";
+    const isChild = typeof r[0] === 'string' && r[0].startsWith('↳');
+    const isAssembly = r[3] === 'ASM';
+    
+    let rowClass = '';
+    if (isGrandTotal) rowClass = 'bg-slate-100 font-bold';
+    else if (isChild) rowClass = 'child-row bg-slate-50';
+    else if (isAssembly) rowClass = 'font-bold bg-slate-50';
+
+    return `
+      <tr class="${rowClass}">
+        <td class="text-center" style="border: 1px solid #cbd5e1; padding: 4px 3px;">${r[0] || ''}</td>
+        <td class="${isChild ? 'pl-4' : 'font-bold'}" style="border: 1px solid #cbd5e1; padding: 4px 3px;">${r[1] || ''}</td>
+        <td style="border: 1px solid #cbd5e1; padding: 4px 3px; max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${r[2] || ''}</td>
+        <td class="text-center font-bold" style="border: 1px solid #cbd5e1; padding: 4px 3px; color: ${isAssembly ? '#2563eb' : '#475569'};">${r[3] || ''}</td>
+        <td class="text-right" style="border: 1px solid #cbd5e1; padding: 4px 3px;">${(r[4] !== undefined && r[4] !== null && r[4] !== '') ? '₹' + Number(r[4]).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '₹0.00'}</td>
+        <td class="text-right" style="border: 1px solid #cbd5e1; padding: 4px 3px;">${(r[5] !== undefined && r[5] !== null && r[5] !== '') ? '₹' + Number(r[5]).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '₹0.00'}</td>
+        <td class="text-right" style="border: 1px solid #cbd5e1; padding: 4px 3px;">${(r[6] !== undefined && r[6] !== null && r[6] !== '') ? '₹' + Number(r[6]).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '₹0.00'}</td>
+        <td class="text-right" style="border: 1px solid #cbd5e1; padding: 4px 3px;">${(r[7] !== undefined && r[7] !== null && r[7] !== '') ? '₹' + Number(r[7]).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '₹0.00'}</td>
+        <td class="text-right" style="border: 1px solid #cbd5e1; padding: 4px 3px;">${(r[8] !== undefined && r[8] !== null && r[8] !== '') ? '₹' + Number(r[8]).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '₹0.00'}</td>
+        <td class="text-right" style="border: 1px solid #cbd5e1; padding: 4px 3px;">${(r[9] !== undefined && r[9] !== null && r[9] !== '') ? '₹' + Number(r[9]).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '₹0.00'}</td>
+        <td class="text-right" style="border: 1px solid #cbd5e1; padding: 4px 3px;">${(r[10] !== undefined && r[10] !== null && r[10] !== '') ? '₹' + Number(r[10]).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '₹0.00'}</td>
+        <td class="text-right" style="border: 1px solid #cbd5e1; padding: 4px 3px;">${(r[11] !== undefined && r[11] !== null && r[11] !== '') ? '₹' + Number(r[11]).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '₹0.00'}</td>
+        <td class="text-right" style="border: 1px solid #cbd5e1; padding: 4px 3px;">${(r[12] !== undefined && r[12] !== null && r[12] !== '') ? '₹' + Number(r[12]).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '₹0.00'}</td>
+        <td class="text-right" style="border: 1px solid #cbd5e1; padding: 4px 3px;">${(r[13] !== undefined && r[13] !== null && r[13] !== '') ? '₹' + Number(r[13]).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '₹0.00'}</td>
+        <td class="text-right" style="border: 1px solid #cbd5e1; padding: 4px 3px;">${(r[14] !== undefined && r[14] !== null && r[14] !== '') ? '₹' + Number(r[14]).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '₹0.00'}</td>
+        <td class="text-center font-bold" style="border: 1px solid #cbd5e1; padding: 4px 3px;">${r[15] !== undefined ? r[15] : ''}</td>
+        <td class="text-right font-semibold" style="border: 1px solid #cbd5e1; padding: 4px 3px;">${(r[16] !== undefined && r[16] !== null && r[16] !== '') ? '₹' + Number(r[16]).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''}</td>
+        <td class="text-right font-bold text-indigo-750" style="border: 1px solid #cbd5e1; padding: 4px 3px;">${(r[17] !== undefined && r[17] !== null && r[17] !== '') ? '₹' + Number(r[17]).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''}</td>
+      </tr>
+    `;
+  }).join('');
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <title>Cost Breakdown - ${quoteNumber}</title>
+      <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        
+        @page {
+          size: A3 landscape;
+          margin: 10mm;
+        }
+
+        body {
+          font-family: 'Inter', sans-serif;
+          margin: 0;
+          padding: 0;
+          color: #1e293b;
+          font-size: 9.5px;
+          background-color: #ffffff;
+          -webkit-print-color-adjust: exact;
+        }
+        .container {
+          width: 100%;
+        }
+        .header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          border-bottom: 2px solid #2563eb;
+          padding-bottom: 8px;
+          margin-bottom: 12px;
+        }
+        .company-title {
+          font-size: 18px;
+          font-weight: 700;
+          color: #1e3a8a;
+          margin: 0;
+        }
+        .doc-title {
+          font-size: 13px;
+          font-weight: 600;
+          color: #475569;
+          margin: 3px 0 0 0;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+        .metadata-box {
+          text-align: right;
+          font-size: 10px;
+          color: #475569;
+          line-height: 1.4;
+        }
+        .metadata-row {
+          margin-bottom: 2px;
+        }
+        .metadata-label {
+          font-weight: 600;
+          color: #1e293b;
+        }
+        table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-top: 5px;
+        }
+        th {
+          background-color: #f1f5f9;
+          color: #1e293b;
+          font-weight: 700;
+          text-align: center;
+          border: 1px solid #94a3b8;
+          padding: 5px 3px;
+          font-size: 9px;
+        }
+        .text-right {
+          text-align: right;
+        }
+        .text-center {
+          text-align: center;
+        }
+        .font-bold {
+          font-weight: 700;
+        }
+        .pl-4 {
+          padding-left: 12px !important;
+        }
+        .bg-slate-50 {
+          background-color: #f8fafc;
+        }
+        .bg-slate-100 {
+          background-color: #e2e8f0;
+        }
+        .child-row {
+          color: #475569;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <div>
+            <h1 class="company-title">${clientName}</h1>
+            <h2 class="doc-title">Quotation Cost Breakdown Sheet</h2>
+          </div>
+          <div class="metadata-box">
+            <div class="metadata-row"><span class="metadata-label">Quotation No:</span> ${quoteNumber}</div>
+            <div class="metadata-row"><span class="metadata-label">Project:</span> ${projectName || '—'}</div>
+            <div class="metadata-row"><span class="metadata-label">Date:</span> ${new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
+          </div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 45px;">Sr No</th>
+              <th style="text-align: left; width: 180px;">Component Number</th>
+              <th style="text-align: left; width: 250px;">Description</th>
+              <th style="width: 60px;">Type</th>
+              <th class="text-right" style="width: 85px;">Material Cost</th>
+              <th class="text-right" style="width: 85px;">CNC/Turning</th>
+              <th class="text-right" style="width: 85px;">Milling/Cutting</th>
+              <th class="text-right" style="width: 85px;">VMC</th>
+              <th class="text-right" style="width: 85px;">Drilling</th>
+              <th class="text-right" style="width: 85px;">Tapping</th>
+              <th class="text-right" style="width: 85px;">Grinding</th>
+              <th class="text-right" style="width: 100px;">Laser Cutting</th>
+              <th class="text-right" style="width: 85px;">Sparking</th>
+              <th class="text-right" style="width: 85px;">Finish</th>
+              <th class="text-right" style="width: 100px;">Profit & Overheads</th>
+              <th style="width: 45px;">Qty</th>
+              <th class="text-right" style="width: 85px;">Unit Price</th>
+              <th class="text-right" style="width: 95px;">Total Price</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${formattedRowsHtml}
+          </tbody>
+        </table>
+      </div>
+    </body>
+    </html>
+  `;
+
+  const browser = await puppeteer.launch({
+    headless: 'new',
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
+  });
+  const page = await browser.newPage();
+  await page.setContent(html, { waitUntil: 'networkidle0' });
+  const pdf = await page.pdf({
+    format: 'A3',
+    landscape: true,
+    margin: { top: '10mm', bottom: '10mm', left: '10mm', right: '10mm' },
+    printBackground: true
+  });
+  await browser.close();
+  return pdf;
+};
+
 module.exports = {
   sendQuotationEmail,
   generateQuotationHTML,
   generateQuotationPDF,
+  generateCostBreakdownPDF,
   sendReplyEmail,
   sendShipmentStatusEmail,
   generateChallanHTML

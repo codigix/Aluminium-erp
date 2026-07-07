@@ -6,7 +6,7 @@ import {
   ChevronLeft, Loader2, Calculator, RefreshCw,
   Building2, Mail, Phone, MapPin,
   GitBranch, Clock, AlertCircle, ArrowUpRight,
-  Check, XCircle
+  Check, XCircle, ChevronDown, ChevronUp, FileSpreadsheet
 } from 'lucide-react';
 import { Card, StatusBadge, SearchableSelect } from '../components/ui.jsx';
 import { successToast, errorToast } from '../utils/toast';
@@ -75,6 +75,37 @@ const QuotationFormPage = () => {
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [emailModalData, setEmailModalData] = useState(null);
   const [pendingSaveParams, setPendingSaveParams] = useState(null);
+
+  const [showGlobalBreakdown, setShowGlobalBreakdown] = useState(false);
+  const [globalBreakdownData, setGlobalBreakdownData] = useState({ loading: false, rows: [], error: null });
+
+  const handleToggleBreakdown = async () => {
+    const isExpanded = !showGlobalBreakdown;
+    setShowGlobalBreakdown(isExpanded);
+
+    if (isExpanded && globalBreakdownData.rows.length === 0 && !globalBreakdownData.loading) {
+      // Use the first saved quotation item id (must be a saved DB id, not a temp local id)
+      const savedItem = items.find(i => i.id && typeof i.id === 'number' && i.drawing_no);
+      const itemId = savedItem?.id || (selectedVersionId ? null : null);
+      if (!itemId) {
+        setGlobalBreakdownData({ loading: false, rows: [], error: 'Please save the quotation first to view Cost Breakdown.' });
+        return;
+      }
+      setGlobalBreakdownData({ loading: true, rows: [], error: null });
+      try {
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE}/quotation-requests/cost-breakdown-details/${itemId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!response.ok) throw new Error('Failed to fetch Cost Breakdown');
+        const rows = await response.json();
+        setGlobalBreakdownData({ loading: false, rows, error: null });
+      } catch (err) {
+        console.error('Error loading breakdown:', err);
+        setGlobalBreakdownData({ loading: false, rows: [], error: err.message });
+      }
+    }
+  };
 
   // Locking logic: Only the latest version can be edited, and only if it's NOT approved.
   const maxVersion = Math.max(
@@ -993,6 +1024,40 @@ const QuotationFormPage = () => {
     }
   };
 
+  const handleDownloadCostBreakdownPDF = async (itemId) => {
+    const idToDownload = itemId || selectedVersionId || initialData?.id;
+    if (!idToDownload) {
+      errorToast('Please save the quotation first to download Cost Breakdown');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/quotation-requests/export-cost-breakdown-pdf/${idToDownload}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!response.ok) throw new Error('Failed to download Cost Breakdown PDF');
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Cost_Breakdown_${quotationNo || 'Quotation'}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      successToast('PDF download started');
+    } catch (error) {
+      console.error(error);
+      errorToast(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleViewPDF = async (versionId) => {
     if (!versionId) return;
 
@@ -1259,6 +1324,7 @@ const QuotationFormPage = () => {
           quotedPrice: parseFloat(item.rate) || 0,
           gst_percentage: parseFloat(item.gst_percentage) || 18,
           item_group: item.item_group || null,
+          item_notes: item.item_notes || null,
           status: status.toUpperCase() === 'REVISED' ? 'REVISED' : (item.status || 'SENT'),
           profit_percentage: parseFloat(item.profit_percentage) || 0,
           override_percentage: parseFloat(item.override_percentage) || 0,
@@ -1755,15 +1821,28 @@ const QuotationFormPage = () => {
                   <RefreshCw size={14} className={refreshingDrawings ? 'animate-spin' : ''} />
                 </button>
               </div>
-              {!isLocked && (
+              <div className="flex items-center gap-2">
                 <button
-                  onClick={handleAddItem}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white rounded text-xs  hover:bg-indigo-700 transition-all shadow-sm"
+                  onClick={handleToggleBreakdown}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-all shadow-sm border ${
+                    showGlobalBreakdown
+                      ? 'bg-indigo-600 text-white border-indigo-700 hover:bg-indigo-700'
+                      : 'bg-indigo-50 text-indigo-600 border-indigo-200 hover:bg-indigo-100'
+                  }`}
                 >
-                  <Plus size={14} />
-                  Add Item
+                  {showGlobalBreakdown ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                  Cost Breakdown
                 </button>
-              )}
+                {!isLocked && (
+                  <button
+                    onClick={handleAddItem}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white rounded text-xs  hover:bg-indigo-700 transition-all shadow-sm"
+                  >
+                    <Plus size={14} />
+                    Add Item
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="overflow-x-auto">
@@ -1779,13 +1858,14 @@ const QuotationFormPage = () => {
                     <th className="w-24 p-2 text-xs text-slate-400 border-b border-slate-100">Overheads %</th>
                     <th className="w-28 p-2 text-xs text-slate-400 border-b border-slate-100">Rate (₹)</th>
                     <th className="w-32 p-2 text-xs text-slate-400 border-b border-slate-100">Total (₹)</th>
+                    <th className="w-48 p-2 text-xs text-slate-400 border-b border-slate-100">Notes</th>
                     {!isLocked && <th className="w-16 p-2 text-xs text-slate-400 border-b border-slate-100 text-center">Actions</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
                   {sortedItems.length === 0 ? (
                     <tr>
-                      <td colSpan={isLocked ? "9" : "10"} className="p-2 text-center text-slate-400 text-xs italic">
+                      <td colSpan={isLocked ? "10" : "11"} className="p-2 text-center text-slate-400 text-xs italic">
                         {isLocked ? "No items in this version." : "No items added yet. Click \"Add Item\" to begin."}
                       </td>
                     </tr>
@@ -1812,13 +1892,15 @@ const QuotationFormPage = () => {
                                     </div>
                                   ) : (
                                     <div className="flex flex-col">
-                                      <textarea
-                                        placeholder="Add item description..."
-                                        value={item.description}
-                                        onChange={(e) => handleItemChange(item.id, 'description', e.target.value)}
-                                        rows="1"
-                                        className="w-full px-0 py-0 text-xs  text-slate-900 border-none focus:ring-0 resize-none bg-transparent placeholder:text-slate-300 "
-                                      />
+                                      <div className="flex items-center justify-between gap-2">
+                                        <textarea
+                                          placeholder="Add item description..."
+                                          value={item.description}
+                                          onChange={(e) => handleItemChange(item.id, 'description', e.target.value)}
+                                          rows="1"
+                                          className="w-full px-0 py-0 text-xs  text-slate-900 border-none focus:ring-0 resize-none bg-transparent placeholder:text-slate-300 "
+                                        />
+                                      </div>
                                       <div className="flex items-center gap-2 mt-0.5">
                                         <div className="flex-1">
                                           <SearchableSelect
@@ -1990,6 +2072,16 @@ const QuotationFormPage = () => {
                               <span className="text-xs  text-slate-400 font-normal">Base Amount</span>
                             </div>
                           </td>
+                          <td className="p-2 align-top">
+                            <textarea
+                              placeholder="Item notes..."
+                              value={item.item_notes || ''}
+                              onChange={(e) => handleItemChange(item.id, 'item_notes', e.target.value)}
+                              rows="1"
+                              disabled={isLocked}
+                              className={`w-full px-2 py-1 text-xs border rounded outline-none transition-all resize-y ${isLocked ? 'bg-transparent border-transparent text-slate-700' : 'bg-white border-slate-200 text-slate-700 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500'}`}
+                            />
+                          </td>
                           {!isLocked && (
                             <td className="p-2 text-center">
                               <button
@@ -2004,6 +2096,7 @@ const QuotationFormPage = () => {
                       );
 
                       // Sub-Assembly Rows
+
                       if (item.sub_assemblies && item.sub_assemblies.length > 0) {
                         const uniqueSubAssemblies = item.sub_assemblies.filter(
                           (sa, index, self) => index === self.findIndex(
@@ -2079,6 +2172,126 @@ const QuotationFormPage = () => {
                 </tbody>
               </table>
             </div>
+
+            {/* ─── Single Unified Cost Breakdown Panel ─────────────────────────── */}
+            {showGlobalBreakdown && (
+              <div className="border-t border-slate-200 bg-slate-50/60 p-3">
+                {globalBreakdownData.loading ? (
+                  <div className="flex items-center gap-2 text-slate-500 text-xs py-4 pl-4 bg-white rounded-lg border border-slate-100 shadow-sm">
+                    <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
+                    <span>Loading Cost Breakdown...</span>
+                  </div>
+                ) : globalBreakdownData.error ? (
+                  <div className="text-rose-500 text-xs py-4 pl-4 bg-white rounded-lg border border-slate-100 shadow-sm">
+                    {globalBreakdownData.error}
+                  </div>
+                ) : (
+                  <div className="bg-white p-3 rounded-lg border border-slate-100 shadow-sm space-y-2.5">
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-1.5 h-3 bg-indigo-600 rounded-sm"></span>
+                        <span className="text-xs font-bold text-slate-800">Complete Quotation Cost Breakdown</span>
+                      </div>
+                      <button
+                        onClick={() => handleDownloadCostBreakdownPDF(items.find(i => i.id && typeof i.id === 'number' && i.drawing_no)?.id)}
+                        disabled={loading}
+                        className="px-2 py-1 text-[10px] text-rose-600 bg-rose-50 border border-rose-100 rounded hover:bg-rose-100 transition-all flex items-center gap-1 disabled:opacity-50"
+                      >
+                        {loading ? <Loader2 size={12} className="animate-spin" /> : <FileText size={12} />}
+                        Download PDF Cost Breakdown
+                      </button>
+                    </div>
+                    <div className="overflow-x-auto border border-slate-150 rounded-lg max-w-full">
+                      <table className="w-full text-left border-collapse text-[10px] min-w-[1850px] table-auto">
+                        <thead>
+                          <tr className="border-b border-slate-200 bg-slate-50 text-slate-500 font-semibold">
+                            <th className="whitespace-nowrap text-center" style={{ minWidth: '45px', width: '45px', padding: '10px' }}>Sr</th>
+                            <th className="whitespace-nowrap sticky left-0 z-10 bg-slate-50" style={{ minWidth: '180px', width: '180px', padding: '10px', boxShadow: '2px 0 5px -2px rgba(0,0,0,0.1)' }}>Component Number</th>
+                            <th className="whitespace-nowrap" style={{ minWidth: '220px', width: '220px', padding: '10px' }}>Description</th>
+                            <th className="whitespace-nowrap text-center" style={{ minWidth: '60px', width: '60px', padding: '10px' }}>Type</th>
+                            <th className="whitespace-nowrap text-right" style={{ minWidth: '110px', width: '110px', padding: '10px' }}>Material (₹)</th>
+                            <th className="whitespace-nowrap text-right" style={{ minWidth: '95px', width: '95px', padding: '10px' }}>CNC (₹)</th>
+                            <th className="whitespace-nowrap text-right" style={{ minWidth: '95px', width: '95px', padding: '10px' }}>Milling (₹)</th>
+                            <th className="whitespace-nowrap text-right" style={{ minWidth: '95px', width: '95px', padding: '10px' }}>VMC (₹)</th>
+                            <th className="whitespace-nowrap text-right" style={{ minWidth: '95px', width: '95px', padding: '10px' }}>Drilling (₹)</th>
+                            <th className="whitespace-nowrap text-right" style={{ minWidth: '95px', width: '95px', padding: '10px' }}>Tapping (₹)</th>
+                            <th className="whitespace-nowrap text-right" style={{ minWidth: '95px', width: '95px', padding: '10px' }}>Grinding (₹)</th>
+                            <th className="whitespace-nowrap text-right" style={{ minWidth: '95px', width: '95px', padding: '10px' }}>Laser (₹)</th>
+                            <th className="whitespace-nowrap text-right" style={{ minWidth: '95px', width: '95px', padding: '10px' }}>Sparking (₹)</th>
+                            <th className="whitespace-nowrap text-right" style={{ minWidth: '95px', width: '95px', padding: '10px' }}>Finish (₹)</th>
+                            <th className="whitespace-nowrap text-right" style={{ minWidth: '95px', width: '95px', padding: '10px' }}>QC (₹)</th>
+                            <th className="whitespace-nowrap text-right" style={{ minWidth: '95px', width: '95px', padding: '10px' }}>Packing (₹)</th>
+                            <th className="whitespace-nowrap text-right" style={{ minWidth: '95px', width: '95px', padding: '10px' }}>Profit (₹)</th>
+                            <th className="whitespace-nowrap text-right" style={{ minWidth: '110px', width: '110px', padding: '10px' }}>Unit Price (₹)</th>
+                            <th className="whitespace-nowrap text-center" style={{ minWidth: '70px', width: '70px', padding: '10px' }}>Qty</th>
+                            <th className="whitespace-nowrap text-right" style={{ minWidth: '120px', width: '120px', padding: '10px' }}>Total (₹)</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 text-slate-600">
+                          {(globalBreakdownData.rows || []).map((row, idx) => (
+                            <tr key={idx} className={`hover:bg-slate-50/50 ${row.sr.includes('↳') ? 'bg-slate-50/30 text-slate-500' : 'bg-white font-medium text-slate-800'}`}>
+                              <td className="whitespace-nowrap text-slate-400 text-center" style={{ padding: '10px' }}>{row.sr}</td>
+                              <td className="whitespace-nowrap sticky left-0 z-5 bg-white font-medium truncate" style={{ padding: '10px', boxShadow: '2px 0 5px -2px rgba(0,0,0,0.1)' }} title={row.drawing_no}>{row.drawing_no}</td>
+                              <td className="whitespace-nowrap truncate" style={{ padding: '10px', maxWidth: '220px' }} title={row.description}>{row.description}</td>
+                              <td className="whitespace-nowrap text-center font-bold" style={{ padding: '10px', color: row.type === 'ASM' ? '#2563eb' : '#475569' }}>{row.type}</td>
+                              <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(row.materialCost)}</td>
+                              <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(row.cnc)}</td>
+                              <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(row.milling)}</td>
+                              <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(row.vmc)}</td>
+                              <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(row.drilling)}</td>
+                              <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(row.tapping)}</td>
+                              <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(row.grinding)}</td>
+                              <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(row.laser)}</td>
+                              <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(row.sparking)}</td>
+                              <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(row.finish)}</td>
+                              <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(row.qc)}</td>
+                              <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(row.packing)}</td>
+                              <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(row.profit)}</td>
+                              <td className="whitespace-nowrap text-right font-medium" style={{ padding: '10px' }}>{formatCurrency(row.unitRate)}</td>
+                              <td className="whitespace-nowrap text-center font-mono" style={{ padding: '10px' }}>{row.qty}</td>
+                              <td className="whitespace-nowrap text-right font-semibold" style={{ padding: '10px' }}>{row.total > 0 ? formatCurrency(row.total) : '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          {(() => {
+                            const parentRows = (globalBreakdownData.rows || []).filter(r => !r.sr.includes('↳'));
+                            const totalSum = parentRows.reduce((sum, r) => sum + (parseFloat(r.total) || 0), 0);
+                            return (
+                              <tr className="border-t border-slate-200 bg-slate-50 font-semibold text-slate-700">
+                                <td colSpan={4} className="whitespace-nowrap sticky left-0 z-5 bg-slate-50 text-left font-bold text-slate-800" style={{ padding: '10px', boxShadow: '2px 0 5px -2px rgba(0,0,0,0.1)' }}>Quotation Grand Total</td>
+                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + r.materialCost * r.qty, 0))}</td>
+                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + r.cnc * r.qty, 0))}</td>
+                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + r.milling * r.qty, 0))}</td>
+                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + r.vmc * r.qty, 0))}</td>
+                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + r.drilling * r.qty, 0))}</td>
+                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + r.tapping * r.qty, 0))}</td>
+                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + r.grinding * r.qty, 0))}</td>
+                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + r.laser * r.qty, 0))}</td>
+                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + r.sparking * r.qty, 0))}</td>
+                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + r.finish * r.qty, 0))}</td>
+                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + r.qc * r.qty, 0))}</td>
+                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + r.packing * r.qty, 0))}</td>
+                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + r.profit * r.qty, 0))}</td>
+                                <td className="whitespace-nowrap text-right font-bold text-slate-900" style={{ padding: '10px' }}>
+                                  {formatCurrency(totalSum / (parentRows.reduce((sum, r) => sum + r.qty, 0) || 1))}
+                                </td>
+                                <td className="whitespace-nowrap text-center font-mono font-bold" style={{ padding: '10px' }}>
+                                  {parentRows.reduce((sum, r) => sum + r.qty, 0)}
+                                </td>
+                                <td className="whitespace-nowrap text-right text-indigo-650 font-bold text-xs" style={{ padding: '10px' }}>
+                                  {formatCurrency(totalSum)}
+                                </td>
+                              </tr>
+                            );
+                          })()}
+                        </tfoot>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </Card>
         </div>
 
