@@ -700,8 +700,8 @@ const sendQuotationViaEmail = async (req, res, next) => {
              version, parent_id, drawing_no, description, item_unit,
              project_name, batch_id, item_group, bom_cost, item_code, host_company_id,
              client_email, client_phone, contact_person, client_address,
-             discount_type, discount_value
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             discount_type, discount_value, item_notes
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             salesOrderId,
             salesOrderItemId,
@@ -731,7 +731,8 @@ const sendQuotationViaEmail = async (req, res, next) => {
             finalContactPerson,
             finalClientAddress,
             req.body.discount_type || 'percentage',
-            parseFloat(req.body.discount_value) || 0
+            parseFloat(req.body.discount_value) || 0,
+            item.item_notes || null
           ]
         );
 
@@ -1031,6 +1032,7 @@ const downloadQuotationPDF = async (req, res, next) => {
         bom_cost: parseFloat(q.bom_cost) || 0,
         gst_percentage: q.gst_percentage || 18,
         status: q.status,
+        item_notes: q.item_notes || null,
         sub_assemblies: components.map(sa => ({
           drawing_no: sa.drawing_no,
           description: sa.description,
@@ -1198,6 +1200,7 @@ const getQuotationVersionDetails = async (req, res, next) => {
         gst_percentage: row.gst_percentage,
         item_group: row.item_group,
         status: row.status,
+        item_notes: row.item_notes,
         sub_assemblies: []
       };
 

@@ -99,6 +99,7 @@ const generateQuotationHTML = async (clientName, items, totalAmount, notes, clie
         <td style="padding: 10px; border: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; text-align: center;">${quantity}</td>
         <td style="padding: 10px; border: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; text-align: right;">${unitPriceStr}</td>
         <td style="padding: 10px; border: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; text-align: right; font-weight: bold;">${totalLineStr}</td>
+        <td style="padding: 10px; border: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; text-align: left;">${item.item_notes || '—'}</td>
       </tr>
     `;
 
@@ -226,11 +227,12 @@ const generateQuotationHTML = async (clientName, items, totalAmount, notes, clie
         <thead>
           <tr>
             <th style="width: 5%;">Sr. No</th>
-            <th style="width: 38%;">Description / Drawing No</th>
-            <th style="width: 12%;">HSN Code</th>
-            <th style="width: 10%;">Qty</th>
-            <th style="width: 17%;">Unit Rate (₹)</th>
-            <th style="width: 18%;">Total (₹)</th>
+            <th style="width: 32%;">Description / Drawing No</th>
+            <th style="width: 10%;">HSN Code</th>
+            <th style="width: 8%;">Qty</th>
+            <th style="width: 15%;">Unit Rate (₹)</th>
+            <th style="width: 15%;">Total (₹)</th>
+            <th style="width: 15%;">Notes</th>
           </tr>
         </thead>
         <tbody>

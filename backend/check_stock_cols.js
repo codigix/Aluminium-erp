@@ -8,8 +8,8 @@ async function run() {
     port: 3307
   });
   try {
-    const [matRows] = await pool.query("SELECT * FROM sales_order_item_materials WHERE sales_order_item_id = 870");
-    console.log('materials (870):', matRows);
+    const [cols] = await pool.query("SHOW COLUMNS FROM quotation_requests");
+    console.log('quotation_requests columns:', cols.map(c => c.Field));
   } catch (err) {
     console.error(err);
   } finally {

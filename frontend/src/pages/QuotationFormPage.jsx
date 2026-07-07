@@ -1409,6 +1409,7 @@ const QuotationFormPage = () => {
           quotedPrice: parseFloat(item.rate) || 0,
           gst_percentage: parseFloat(item.gst_percentage) || 18,
           item_group: item.item_group || null,
+          item_notes: item.item_notes || null,
           status: status.toUpperCase() === 'REVISED' ? 'REVISED' : (item.status || 'SENT'),
           profit_percentage: parseFloat(item.profit_percentage) || 0,
           override_percentage: parseFloat(item.override_percentage) || 0,
@@ -1929,13 +1930,14 @@ const QuotationFormPage = () => {
                     <th className="w-24 p-2 text-xs text-slate-400 border-b border-slate-100">Overheads %</th>
                     <th className="w-28 p-2 text-xs text-slate-400 border-b border-slate-100">Rate (₹)</th>
                     <th className="w-32 p-2 text-xs text-slate-400 border-b border-slate-100">Total (₹)</th>
+                    <th className="w-48 p-2 text-xs text-slate-400 border-b border-slate-100">Notes</th>
                     {!isLocked && <th className="w-16 p-2 text-xs text-slate-400 border-b border-slate-100 text-center">Actions</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
                   {sortedItems.length === 0 ? (
                     <tr>
-                      <td colSpan={isLocked ? "9" : "10"} className="p-2 text-center text-slate-400 text-xs italic">
+                      <td colSpan={isLocked ? "10" : "11"} className="p-2 text-center text-slate-400 text-xs italic">
                         {isLocked ? "No items in this version." : "No items added yet. Click \"Add Item\" to begin."}
                       </td>
                     </tr>
@@ -2160,6 +2162,16 @@ const QuotationFormPage = () => {
                               <span className="text-xs  text-slate-400 font-normal">Base Amount</span>
                             </div>
                           </td>
+                          <td className="p-2 align-top">
+                            <textarea
+                              placeholder="Item notes..."
+                              value={item.item_notes || ''}
+                              onChange={(e) => handleItemChange(item.id, 'item_notes', e.target.value)}
+                              rows="1"
+                              disabled={isLocked}
+                              className={`w-full px-2 py-1 text-xs border rounded outline-none transition-all resize-y ${isLocked ? 'bg-transparent border-transparent text-slate-700' : 'bg-white border-slate-200 text-slate-700 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500'}`}
+                            />
+                          </td>
                           {!isLocked && (
                             <td className="p-2 text-center">
                               <button
@@ -2177,7 +2189,7 @@ const QuotationFormPage = () => {
                       if (expandedBreakdowns[item.id]) {
                         rows.push(
                           <tr key={`${item.id}-breakdown`} className="bg-slate-50/70">
-                            <td colSpan={isLocked ? 9 : 10} className="p-3 border-b border-slate-200">
+                            <td colSpan={isLocked ? 10 : 11} className="p-3 border-b border-slate-200">
                               {breakdownData[item.id]?.loading ? (
                                 <div className="flex items-center gap-2 text-slate-500 text-xs py-4 pl-4 bg-white rounded-lg border border-slate-100 shadow-sm">
                                   <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
