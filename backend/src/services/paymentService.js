@@ -65,9 +65,22 @@ const processPayment = async (payload) => {
       }
     }
 
-    const isNumericId = !isNaN(parseInt(bankAccount)) && isFinite(bankAccount);
-    const bankAccountId = isNumericId ? parseInt(bankAccount) : null;
-    const manualBankAccount = isNumericId ? null : bankAccount;
+    let bankAccountId = null;
+    let manualBankAccount = null;
+
+    if (bankAccount) {
+      const isNumericId = !isNaN(parseInt(bankAccount)) && isFinite(bankAccount);
+      if (isNumericId) {
+        const [banks] = await pool.query('SELECT id FROM bank_accounts WHERE id = ?', [parseInt(bankAccount)]);
+        if (banks.length > 0) {
+          bankAccountId = parseInt(bankAccount);
+        } else {
+          manualBankAccount = bankAccount;
+        }
+      } else {
+        manualBankAccount = bankAccount;
+      }
+    }
 
     const [result] = await pool.execute(
       `INSERT INTO payments (
