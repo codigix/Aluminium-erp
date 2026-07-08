@@ -47,6 +47,84 @@ const CustomerPO = ({
   const [attachments, setAttachments] = useState([])
   const [existingAttachments, setExistingAttachments] = useState([])
   const [localError, setLocalError] = useState('')
+  const [quotationDrawings, setQuotationDrawings] = useState([])
+  const [selectedDrawingVal, setSelectedDrawingVal] = useState('')
+
+  const allQuotationDrawings = useMemo(() => {
+    return quotationRequests.filter(q => {
+      const isApproved = (q.status || '').trim().toUpperCase() === 'APPROVED';
+      const isComponent = (q.status || '').trim().toUpperCase() === 'COMPONENT';
+      return isApproved && !isComponent && q.drawing_no;
+    });
+  }, [quotationRequests]);
+
+  const drawingOptions = useMemo(() => {
+    if (selectedQuoteId) {
+      return [
+        { value: '', label: 'Select a drawing...' },
+        ...quotationDrawings.map((d) => ({
+          value: String(d.id),
+          label: `${d.drawingNo || 'No Drawing No'} - ${d.description || 'No Description'}`
+        }))
+      ];
+    } else {
+      return [
+        { value: '', label: 'Select a drawing...' },
+        ...allQuotationDrawings.map((q) => ({
+          value: String(q.id),
+          label: `${q.drawing_no} - ${q.item_description || q.description || ''} (QRT-${String(q.parent_id || q.id).padStart(4, '0')})`
+        }))
+      ];
+    }
+  }, [selectedQuoteId, quotationDrawings, allQuotationDrawings]);
+
+  const handleDrawingSelect = async (value) => {
+    if (!value) {
+      setSelectedDrawingVal('');
+      return;
+    }
+    setSelectedDrawingVal(value);
+
+    const quoteRequestId = parseInt(value);
+    if (!selectedQuoteId) {
+      const selectedQuoteItem = allQuotationDrawings.find(q => q.id === quoteRequestId);
+      if (selectedQuoteItem) {
+        await fetchAndApplyQuotation(selectedQuoteItem.id, selectedQuoteItem);
+      }
+    } else {
+      const selectedDwg = quotationDrawings.find(d => d.id === quoteRequestId);
+      if (!selectedDwg) return;
+
+      const isEmptyFirstItem = poForm.items.length === 1 && 
+        !poForm.items[0].drawingNo && 
+        !poForm.items[0].description && 
+        !poForm.items[0].quantity;
+
+      const newItem = {
+        drawingNo: selectedDwg.drawingNo || '',
+        description: selectedDwg.description || '',
+        hsnCode: selectedDwg.hsnCode || '',
+        deliveryDate: selectedDwg.deliveryDate || '',
+        quantity: selectedDwg.quantity || '',
+        unit: selectedDwg.unit || 'NOS',
+        rate: selectedDwg.rate || '',
+        cgstPercent: selectedDwg.cgstPercent || 0,
+        sgstPercent: selectedDwg.sgstPercent || 0,
+        igstPercent: selectedDwg.igstPercent || 0,
+        sub_assemblies: selectedDwg.sub_assemblies || []
+      };
+
+      setPoForm(prev => {
+        const newItems = isEmptyFirstItem ? [newItem] : [...prev.items, newItem];
+        return {
+          ...prev,
+          items: newItems
+        };
+      });
+
+      showToast(`Added drawing ${selectedDwg.drawingNo} as a Purchase Item.`);
+    }
+  };
 
   const quotationOptions = useMemo(() => {
     const grouped = {};
@@ -304,7 +382,7 @@ const CustomerPO = ({
     let changed = false;
     const updatedItems = poForm.items.map(item => {
       let itemChanged = false;
-      const matchedDwg = allDrawings.find(d => 
+      const matchedDwg = allDrawings.find(d =>
         String(d.drawing_no).trim().toUpperCase() === String(item.drawingNo).trim().toUpperCase()
       );
 
@@ -325,7 +403,7 @@ const CustomerPO = ({
       if (item.sub_assemblies && item.sub_assemblies.length > 0) {
         const updatedSAs = item.sub_assemblies.map(sa => {
           let saChanged = false;
-          const matchedSaDwg = allDrawings.find(d => 
+          const matchedSaDwg = allDrawings.find(d =>
             String(d.drawing_no).trim().toUpperCase() === String(sa.drawingNo).trim().toUpperCase()
           );
 
@@ -364,7 +442,7 @@ const CustomerPO = ({
     if (changed) {
       setPoForm(prev => ({ ...prev, items: updatedItems }));
     }
-  }, [allDrawings, poForm.items]); 
+  }, [allDrawings, poForm.items]);
 
   // Auto-generate PO Number when form opens
   React.useEffect(() => {
@@ -397,19 +475,29 @@ const CustomerPO = ({
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  const handleQuotationSelect = async (quoteId) => {
-    if (quoteId === 'clear' || !quoteId) {
-      setSelectedQuoteId('');
-      setSelectedQuoteContact(null);
-      return;
-    }
-    setSelectedQuoteId(quoteId);
-
+  const fetchAndApplyQuotation = async (quoteId, selectedQuoteItem = null) => {
     try {
       setPoFormLoading(true);
+      let targetQuoteId = quoteId;
+      
+      // Resolve option value in quotationOptions to ensure correct highlight in dropdown
+      const hasDirectOption = quotationOptions.some(opt => opt.value === String(quoteId));
+      if (!hasDirectOption) {
+        const basicQuote = quotationRequests.find(q => q.id === parseInt(quoteId));
+        if (basicQuote) {
+          const rootId = basicQuote.parent_id || basicQuote.id;
+          const prefix = `QRT-${String(rootId).padStart(4, '0')}`;
+          const foundOpt = quotationOptions.find(opt => opt.label.startsWith(prefix));
+          if (foundOpt) {
+            targetQuoteId = parseInt(foundOpt.value);
+          }
+        }
+      }
+      setSelectedQuoteId(String(targetQuoteId));
+
       // Fetch full details including sub-assemblies from the version history endpoint
       const versions = await apiRequest(`/quotation-requests/versions/${quoteId}`);
-      
+
       // The version history endpoint returns an array of version groups. 
       // We need the specific version that matches our selected quoteId.
       let quote = null;
@@ -459,56 +547,52 @@ const CustomerPO = ({
       relatedItems
         .filter(item => (item.item_group || item.item_type || '').toUpperCase() !== 'SA')
         .forEach(item => {
-        // Handle different property names between list view and version details
-        const qty = parseFloat(item.item_qty || item.quantity) || 0;
-        const totalAmount = parseFloat(item.total_amount || item.total) || 0;
-        const unitRate = qty > 0 ? (totalAmount / qty) : totalAmount;
-        const gst = item.gst_percentage || 18;
+          // Handle different property names between list view and version details
+          const qty = parseFloat(item.item_qty || item.quantity) || 0;
+          const totalAmount = parseFloat(item.total_amount || item.total) || 0;
+          const unitRate = qty > 0 ? (totalAmount / qty) : totalAmount;
+          const gst = item.gst_percentage || 18;
 
-        const parentHsn = item.hsn_code || item.hsnCode || '';
-        const parentDelivery = item.delivery_date || item.deliveryDate ? new Date(item.delivery_date || item.deliveryDate).toISOString().split('T')[0] : '';
+          const parentHsn = item.hsn_code || item.hsnCode || '';
+          const parentDelivery = item.delivery_date || item.deliveryDate ? new Date(item.delivery_date || item.deliveryDate).toISOString().split('T')[0] : '';
 
-        // Add the main FG item with its sub-assemblies nested
-        items.push({
-          drawingNo: (item.drawing_no || item.drawingNo || '') !== '—' ? (item.drawing_no || item.drawingNo || '').toUpperCase() : '',
-          description: item.item_description || item.description,
-          hsnCode: parentHsn,
-          deliveryDate: parentDelivery,
-          quantity: qty,
-          unit: item.item_unit || item.unit || 'NOS',
-          rate: unitRate.toFixed(2),
-          cgstPercent: gst / 2,
-          sgstPercent: gst / 2,
-          igstPercent: 0,
-          item_group: item.item_group,
-          sub_assemblies: (() => {
-            const seen = new Set();
-            return (item.sub_assemblies || []).filter(sa => {
-              const code = String(sa.component_code || sa.item_code || sa.drawing_no || sa.drawingNo || sa.description || '').trim().toLowerCase();
-              if (seen.has(code)) return false;
-              seen.add(code);
-              return true;
-            }).map(sa => ({
-              ...sa,
-              drawingNo: (sa.drawing_no || sa.component_code || sa.item_code || '').toUpperCase(),
-              description: sa.description || `Sub-assembly`,
-              hsnCode: sa.hsn_code || sa.hsnCode || parentHsn,
-              deliveryDate: (sa.delivery_date || sa.deliveryDate) ? new Date(sa.delivery_date || sa.deliveryDate).toISOString().split('T')[0] : parentDelivery,
-              quantity: parseFloat(sa.quantity || sa.qty || 0),
-              unit: sa.uom || sa.unit || 'NOS',
-              rate: parseFloat(sa.rate || sa.bom_cost || 0).toFixed(2),
-              item_group: sa.item_group || 'SA'
-            }));
-          })()
+          // Add the main FG item with its sub-assemblies nested
+          items.push({
+            id: item.id || item.qr_id,
+            drawingNo: (item.drawing_no || item.drawingNo || '') !== '—' ? (item.drawing_no || item.drawingNo || '').toUpperCase() : '',
+            description: item.item_description || item.description,
+            hsnCode: parentHsn,
+            deliveryDate: parentDelivery,
+            quantity: qty,
+            unit: item.item_unit || item.unit || 'NOS',
+            rate: unitRate.toFixed(2),
+            cgstPercent: gst / 2,
+            sgstPercent: gst / 2,
+            igstPercent: 0,
+            item_group: item.item_group,
+            sub_assemblies: (() => {
+              const seen = new Set();
+              return (item.sub_assemblies || []).filter(sa => {
+                const code = String(sa.component_code || sa.item_code || sa.drawing_no || sa.drawingNo || sa.description || '').trim().toLowerCase();
+                if (seen.has(code)) return false;
+                seen.add(code);
+                return true;
+              }).map(sa => ({
+                ...sa,
+                drawingNo: (sa.drawing_no || sa.component_code || sa.item_code || '').toUpperCase(),
+                description: sa.description || `Sub-assembly`,
+                hsnCode: sa.hsn_code || sa.hsnCode || parentHsn,
+                deliveryDate: (sa.delivery_date || sa.deliveryDate) ? new Date(sa.delivery_date || sa.deliveryDate).toISOString().split('T')[0] : parentDelivery,
+                quantity: parseFloat(sa.quantity || sa.qty || 0),
+                unit: sa.uom || sa.unit || 'NOS',
+                rate: parseFloat(sa.rate || sa.bom_cost || 0).toFixed(2),
+                item_group: sa.item_group || 'SA'
+              }));
+            })()
+          });
         });
-      });
 
-      setPoForm(prev => ({
-        ...prev,
-        companyId: quote.company_id,
-        projectName: quote.project_name || '',
-        items: items.length > 0 ? items : prev.items
-      }));
+      setQuotationDrawings(items);
 
       // Pre-select host company from quotation if saved, or fall back to active global company
       const hostId = quote.host_company_id || quote.hostCompanyId || null;
@@ -527,13 +611,61 @@ const CustomerPO = ({
         }
       }
 
-      showToast(`Loaded ${items.length} items from quotation QRT-${String(quoteId).padStart(4, '0')}`);
+      let targetItems = [];
+      if (selectedQuoteItem) {
+        const matchedDwg = items.find(it => 
+          String(it.drawingNo).trim().toUpperCase() === String(selectedQuoteItem.drawing_no).trim().toUpperCase()
+        );
+        if (matchedDwg) {
+          targetItems = [matchedDwg];
+        } else {
+          const qty = parseFloat(selectedQuoteItem.item_qty || selectedQuoteItem.quantity) || 0;
+          const totalAmount = parseFloat(selectedQuoteItem.total_amount || selectedQuoteItem.total) || 0;
+          const unitRate = qty > 0 ? (totalAmount / qty) : totalAmount;
+          const gst = selectedQuoteItem.gst_percentage || 18;
+          targetItems = [{
+            drawingNo: (selectedQuoteItem.drawing_no || '').toUpperCase(),
+            description: selectedQuoteItem.item_description || selectedQuoteItem.description || '',
+            hsnCode: selectedQuoteItem.hsn_code || '',
+            deliveryDate: selectedQuoteItem.delivery_date ? new Date(selectedQuoteItem.delivery_date).toISOString().split('T')[0] : '',
+            quantity: qty,
+            unit: selectedQuoteItem.item_unit || 'NOS',
+            rate: unitRate.toFixed(2),
+            cgstPercent: gst / 2,
+            sgstPercent: gst / 2,
+            igstPercent: 0,
+            sub_assemblies: []
+          }];
+        }
+      } else {
+        targetItems = items;
+      }
+
+      setPoForm(prev => ({
+        ...prev,
+        companyId: quote.company_id,
+        projectName: quote.project_name || '',
+        items: targetItems.length > 0 ? targetItems : prev.items
+      }));
+
+      showToast(`Loaded details from quotation QRT-${String(quoteId).padStart(4, '0')}`);
     } catch (error) {
       console.error('Error fetching quotation details:', error);
       showToast('Failed to fetch full quotation details');
     } finally {
       setPoFormLoading(false);
     }
+  };
+
+  const handleQuotationSelect = async (quoteId) => {
+    if (quoteId === 'clear' || !quoteId) {
+      setSelectedQuoteId('');
+      setSelectedQuoteContact(null);
+      setQuotationDrawings([]);
+      setSelectedDrawingVal('');
+      return;
+    }
+    await fetchAndApplyQuotation(quoteId, null);
   };
 
   const filteredPOs = useMemo(() => {
@@ -593,7 +725,7 @@ const CustomerPO = ({
     newItems[index][field] = value
 
     if (field === 'drawingNo') {
-      const matchedDwg = allDrawings.find(d => 
+      const matchedDwg = allDrawings.find(d =>
         String(d.drawing_no).trim().toUpperCase() === String(value).trim().toUpperCase()
       );
       if (matchedDwg) {
@@ -638,6 +770,8 @@ const CustomerPO = ({
     }
     setSelectedQuoteId('')
     setSelectedQuoteContact(null)
+    setQuotationDrawings([])
+    setSelectedDrawingVal('')
     setSelectedHostId('')
     setSelectedHostCompany(null)
     setPoForm({
@@ -737,8 +871,8 @@ const CustomerPO = ({
           }))
         });
         const hasContact = (data.contact_person && data.contact_person !== '—') ||
-                            (data.email && data.email !== '—') ||
-                            (data.phone && data.phone !== '—');
+          (data.email && data.email !== '—') ||
+          (data.phone && data.phone !== '—');
         if (hasContact) {
           setSelectedQuoteContact({
             contactPerson: data.contact_person || '—',
@@ -749,6 +883,52 @@ const CustomerPO = ({
           });
         } else {
           setSelectedQuoteContact(null);
+        }
+
+        // Auto-populate Drawing and Quotation fields for VIEW/EDIT modes
+        if (data.items && data.items.length > 0) {
+          const firstItem = data.items[0];
+          const matchedDwg = allQuotationDrawings.find(q => 
+            String(q.drawing_no).trim().toUpperCase() === String(firstItem.drawing_no || firstItem.drawingNo).trim().toUpperCase()
+          );
+          if (matchedDwg) {
+            setSelectedDrawingVal(String(matchedDwg.id));
+            setSelectedQuoteId(String(matchedDwg.id));
+            try {
+              const versions = await apiRequest(`/quotation-requests/versions/${matchedDwg.id}`);
+              let quote = null;
+              for (const vGroup of versions) {
+                const match = vGroup.items?.find(it => it.id === matchedDwg.id);
+                if (match) { quote = vGroup; break; }
+              }
+              if (quote && quote.items) {
+                const items = quote.items.filter(it => (it.item_group || it.item_type || '').toUpperCase() !== 'SA').map(item => {
+                  const qty = parseFloat(item.item_qty || item.quantity) || 0;
+                  const totalAmount = parseFloat(item.total_amount || item.total) || 0;
+                  const unitRate = qty > 0 ? (totalAmount / qty) : totalAmount;
+                  const gst = item.gst_percentage || 18;
+                  return {
+                    id: item.id || item.qr_id,
+                    drawingNo: (item.drawing_no || item.drawingNo || '') !== '—' ? (item.drawing_no || item.drawingNo || '').toUpperCase() : '',
+                    description: item.item_description || item.description,
+                    hsnCode: item.hsn_code || item.hsnCode || '',
+                    deliveryDate: item.delivery_date || item.deliveryDate ? new Date(item.delivery_date || item.deliveryDate).toISOString().split('T')[0] : '',
+                    quantity: qty,
+                    unit: item.item_unit || item.unit || 'NOS',
+                    rate: unitRate.toFixed(2),
+                    cgstPercent: gst / 2,
+                    sgstPercent: gst / 2,
+                    igstPercent: 0,
+                    item_group: item.item_group,
+                    sub_assemblies: []
+                  };
+                });
+                setQuotationDrawings(items);
+              }
+            } catch (err) {
+              console.error('Error fetching version details for VIEW/EDIT modes:', err);
+            }
+          }
         }
       } catch (error) {
         showToast(error.message || 'Failed to fetch PO details');
@@ -937,14 +1117,14 @@ const CustomerPO = ({
         const basicAmount = ordered * (parseFloat(item.rate) || 0);
         const taxPercent = (parseFloat(item.cgstPercent) || 0) + (parseFloat(item.sgstPercent) || 0) + (parseFloat(item.igstPercent) || 0);
         const totalAmount = basicAmount * (1 + taxPercent / 100);
-        
+
         let status = 'Pending Dispatch';
         if (dispatched >= ordered && ordered > 0) {
           status = 'Fully Dispatched';
         } else if (dispatched > 0) {
           status = 'Partially Dispatched';
         }
-        
+
         return [
           item.drawingNo || '',
           item.description || '',
@@ -959,7 +1139,7 @@ const CustomerPO = ({
           status
         ];
       });
-      
+
       poForm.items.forEach(item => {
         if (item.sub_assemblies && item.sub_assemblies.length > 0) {
           item.sub_assemblies.forEach(sa => {
@@ -982,7 +1162,7 @@ const CustomerPO = ({
       });
 
       const csvContent = [headers.join(','), ...rows.map(e => e.map(val => `"${String(val).replace(/"/g, '""')}"`).join(','))].join('\n');
-      
+
       const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -1016,7 +1196,7 @@ const CustomerPO = ({
   const handleOpenEmailModal = (row) => {
     const company = companies.find(c => String(c.id) === String(row.company_id));
     const clientName = row.company_name || company?.company_name || 'Client';
-    
+
     // Fallback chain for email address
     const primaryContact = company?.contacts?.find(c => c.contact_type === 'PRIMARY') || company?.contacts?.[0];
     const recipientEmail = row.company_email || primaryContact?.email || company?.email || '';
@@ -1275,7 +1455,7 @@ const CustomerPO = ({
                         const rawName = file.split('/').pop() || file.split('\\').pop() || '';
                         const parts = rawName.split('-');
                         const fileName = parts.length > 1 ? parts.slice(1).join('-') : rawName;
-                        
+
                         return (
                           <div key={idx} className="flex items-center justify-between p-2 bg-slate-50 border border-slate-100 rounded-lg hover:bg-slate-100/70 transition-all">
                             <div className="flex items-center gap-2 overflow-hidden mr-2">
@@ -1447,11 +1627,10 @@ const CustomerPO = ({
                             </div>
                           )}
                           <span className="text-xs font-bold text-slate-800 leading-tight truncate w-full">{selectedHostCompany.company_name}</span>
-                          <span className={`text-[9px] mt-1.5 px-2 py-0.5 rounded-full font-semibold border ${
-                            selectedHostCompany.status === 'ACTIVE'
+                          <span className={`text-[9px] mt-1.5 px-2 py-0.5 rounded-full font-semibold border ${selectedHostCompany.status === 'ACTIVE'
                               ? 'bg-emerald-50 border-emerald-100 text-emerald-600'
                               : 'bg-slate-100 border-slate-200 text-slate-500'
-                          }`}>
+                            }`}>
                             {selectedHostCompany.status === 'ACTIVE' ? 'Active Global Billing' : 'Inactive'}
                           </span>
                         </div>
@@ -1515,20 +1694,31 @@ const CustomerPO = ({
                     <h3 className="text-sm  text-slate-800  ">General Information</h3>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {formMode === 'CREATE' && (
-                      <div className="space-y-2">
-                        <label className="text-xs  text-slate-400   ml-1">Quotation No (Fetch Details)</label>
-                        <SearchableSelect
-                          options={quotationOptions}
-                          value={selectedQuoteId}
-                          onChange={(e) => handleQuotationSelect(e.target.value)}
-                          placeholder="Search or Select Quotation..."
-                          allowCustom={false}
-                          className="w-full bg-slate-50 border-2 border-slate-100 rounded p-2 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-700"
-                        />
-                      </div>
-                    )}
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-xs  text-slate-400   ml-1">Drawing No / Drawing Name (Fetch Details)</label>
+                      <SearchableSelect
+                        options={drawingOptions}
+                        value={selectedDrawingVal}
+                        onChange={(e) => handleDrawingSelect(e.target.value)}
+                        placeholder="Search or Select Drawing..."
+                        allowCustom={false}
+                        disabled={formMode !== 'CREATE'}
+                        className="w-full bg-slate-50 border-2 border-slate-100 rounded p-2 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-700"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs  text-slate-400   ml-1">Quotation No (Fetch Details)</label>
+                      <SearchableSelect
+                        options={quotationOptions}
+                        value={selectedQuoteId}
+                        onChange={(e) => handleQuotationSelect(e.target.value)}
+                        placeholder="Search or Select Quotation..."
+                        allowCustom={false}
+                        disabled={formMode !== 'CREATE'}
+                        className="w-full bg-slate-50 border-2 border-slate-100 rounded p-2 text-xs focus:border-indigo-500 focus:bg-white outline-none transition-all text-slate-700"
+                      />
+                    </div>
                     <div className="space-y-2">
                       <label className="text-xs  text-slate-400   ml-1">Project Name</label>
                       <input
@@ -1562,7 +1752,7 @@ const CustomerPO = ({
                         <User className="w-3.5 h-3.5 text-indigo-500" />
                         <span className="text-[11px] font-semibold text-slate-700">Customer Details</span>
                       </div>
-                      
+
                       <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
                         <div className="space-y-0.5 min-w-0">
                           <p className="text-[10px] text-slate-400 font-medium">Contact Person</p>
@@ -1772,31 +1962,31 @@ const CustomerPO = ({
                                 )}
                               </td>
                               <td className="p-2 text-center align-middle min-w-[120px]">
-                                 {(() => {
-                                   const ordered = parseFloat(item.quantity) || 0;
-                                   const dispatched = parseFloat(item.dispatched_qty) || 0;
-                                   const percent = ordered > 0 ? Math.min(Math.round((dispatched / ordered) * 100), 100) : 0;
-                                   
-                                   return (
-                                     <div className="flex flex-col w-full px-1 max-w-[140px] mx-auto">
-                                       <div className="flex justify-between items-center text-[11px] font-semibold text-slate-700 leading-tight">
-                                         <span>
-                                           {dispatched % 1 === 0 ? parseInt(dispatched) : dispatched}/{ordered % 1 === 0 ? parseInt(ordered) : ordered}
-                                         </span>
-                                         <span className="text-blue-600">
-                                           {percent}%
-                                         </span>
-                                       </div>
-                                       <div className="w-full bg-slate-100 rounded-full h-1 mt-1 overflow-hidden">
-                                         <div 
-                                           className="bg-blue-600 h-1 rounded-full transition-all duration-350" 
-                                           style={{ width: `${percent}%` }}
-                                         />
-                                       </div>
-                                     </div>
-                                   );
-                                 })()}
-                               </td>
+                                {(() => {
+                                  const ordered = parseFloat(item.quantity) || 0;
+                                  const dispatched = parseFloat(item.dispatched_qty) || 0;
+                                  const percent = ordered > 0 ? Math.min(Math.round((dispatched / ordered) * 100), 100) : 0;
+
+                                  return (
+                                    <div className="flex flex-col w-full px-1 max-w-[140px] mx-auto">
+                                      <div className="flex justify-between items-center text-[11px] font-semibold text-slate-700 leading-tight">
+                                        <span>
+                                          {dispatched % 1 === 0 ? parseInt(dispatched) : dispatched}/{ordered % 1 === 0 ? parseInt(ordered) : ordered}
+                                        </span>
+                                        <span className="text-blue-600">
+                                          {percent}%
+                                        </span>
+                                      </div>
+                                      <div className="w-full bg-slate-100 rounded-full h-1 mt-1 overflow-hidden">
+                                        <div
+                                          className="bg-blue-600 h-1 rounded-full transition-all duration-350"
+                                          style={{ width: `${percent}%` }}
+                                        />
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
+                              </td>
                               <td className="p-2 text-center align-middle">
                                 {formMode === 'VIEW' ? (
                                   <span className="text-xs text-slate-600 font-medium block text-center px-1">{item.unit || 'Nos'}</span>
@@ -1958,10 +2148,10 @@ const CustomerPO = ({
 
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 border-b border-slate-100 pb-4">
-                     <div className="p-2 bg-slate-50 text-slate-600 rounded ">
-                       <AlertCircle className="w-5 h-5" />
-                     </div>
-                     <h3 className="text-sm  text-slate-800  ">Additional Notes</h3>
+                    <div className="p-2 bg-slate-50 text-slate-600 rounded ">
+                      <AlertCircle className="w-5 h-5" />
+                    </div>
+                    <h3 className="text-sm  text-slate-800  ">Additional Notes</h3>
                   </div>
                   <textarea
                     value={poForm.remarks}
@@ -1998,7 +2188,7 @@ const CustomerPO = ({
                       <div className="flex flex-col items-center justify-center gap-1.5">
                         <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600 group-hover:bg-indigo-100 transition-all">
                           <Upload className="w-5.5 h-5.5" />
-                         </div>
+                        </div>
                         <p className="text-xs font-semibold text-slate-700">Click or drag files here to upload PO / Documents</p>
                         <p className="text-[10px] text-slate-400">PDF, PNG, JPG, JPEG (Multiple files allowed)</p>
                       </div>
