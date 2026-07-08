@@ -97,20 +97,40 @@ const createOrder = async (orderData) => {
     host_company_id
   } = orderData;
 
-  // Check if any drawing in the items list already has an associated sales order
+  // Check if any drawing in the items list already has an associated sales order under the same customer PO/quotation
   if (items && items.length > 0) {
     for (const item of items) {
       if (item.drawing_no) {
-        const [exists] = await pool.query(
-          `SELECT oi.id 
-           FROM order_items oi
-           JOIN orders o ON oi.order_id = o.id
-           WHERE TRIM(UPPER(oi.drawing_no)) = TRIM(UPPER(?)) AND o.status != 'Cancelled'
-           LIMIT 1`,
-          [item.drawing_no]
-        );
+        let exists = [];
+        if (source_type === 'DIRECT' && quotation_id) {
+          // If linked to a specific Customer PO, check that combination
+          [exists] = await pool.query(
+            `SELECT oi.id 
+             FROM order_items oi
+             JOIN orders o ON oi.order_id = o.id
+             WHERE TRIM(UPPER(oi.drawing_no)) = TRIM(UPPER(?)) 
+               AND o.quotation_id = ? 
+               AND o.source_type = 'DIRECT'
+               AND o.status != 'Cancelled'
+             LIMIT 1`,
+            [item.drawing_no, quotation_id]
+          );
+        } else {
+          // Default fallback check (pure drawing check for standalone drawings)
+          [exists] = await pool.query(
+            `SELECT oi.id 
+             FROM order_items oi
+             JOIN orders o ON oi.order_id = o.id
+             WHERE TRIM(UPPER(oi.drawing_no)) = TRIM(UPPER(?)) 
+               AND o.status != 'Cancelled'
+               AND (o.quotation_id IS NULL OR o.source_type != 'DIRECT')
+             LIMIT 1`,
+            [item.drawing_no]
+          );
+        }
+
         if (exists.length > 0) {
-          const err = new Error('Sales Order already exists for the selected Drawing.');
+          const err = new Error('Sales Order already exists for the selected Drawing and Customer PO combination.');
           err.statusCode = 400;
           throw err;
         }
@@ -248,26 +268,48 @@ const getOrderById = async (id) => {
 
   const [items] = await pool.query('SELECT * FROM order_items WHERE order_id = ?', [order.id]);
 
-  const enrichedItems = await Promise.all(items.map(async (item) => {
-    // Try to fetch sub-assemblies if linked to a PO
-    if (order.customer_po_id || (order.source_type === 'DIRECT' && order.quotation_id)) {
-      const poId = order.customer_po_id || order.quotation_id;
-      // Find matching PO item to get its sub-assemblies
-      const [poItems] = await pool.query(
-        `SELECT id FROM customer_po_items 
-         WHERE customer_po_id = ? AND (drawing_no = ? OR item_code = ?)`,
-        [poId, item.drawing_no, item.item_code]
-      );
+  let allPoItems = [];
+  let allSubAssemblies = [];
+  const poId = order.customer_po_id || (order.source_type === 'DIRECT' ? order.quotation_id : null);
 
-      if (poItems.length > 0) {
-        const [storedSA] = await pool.query(
-          `SELECT drawing_no as drawingNo, description, quantity, unit, rate, hsn_code, delivery_date 
+  if (poId && items.length > 0) {
+    const drawingNos = items.map(item => item.drawing_no).filter(Boolean);
+    const itemCodes = items.map(item => item.item_code).filter(Boolean);
+    
+    if (drawingNos.length > 0 || itemCodes.length > 0) {
+      // 1. Fetch matching PO items in a single query
+      const [poItemRows] = await pool.query(
+        `SELECT id, customer_po_id, drawing_no, item_code FROM customer_po_items 
+         WHERE customer_po_id = ? AND (drawing_no IN (?) OR item_code IN (?))`,
+        [poId, drawingNos.length > 0 ? drawingNos : [''], itemCodes.length > 0 ? itemCodes : ['']]
+      );
+      allPoItems = poItemRows;
+
+      // 2. Fetch all sub-assemblies in a single query
+      const poItemIds = allPoItems.map(p => p.id);
+      if (poItemIds.length > 0) {
+        const [saRows] = await pool.query(
+          `SELECT po_item_id, drawing_no as drawingNo, description, quantity, unit, rate, hsn_code, delivery_date 
            FROM customer_po_item_subassemblies 
-           WHERE po_item_id = ?`,
-          [poItems[0].id]
+           WHERE po_item_id IN (?)`,
+          [poItemIds]
         );
-        if (storedSA.length > 0) {
-          return { ...item, sub_assemblies: storedSA };
+        allSubAssemblies = saRows;
+      }
+    }
+  }
+
+  const enrichedItems = await Promise.all(items.map(async (item) => {
+    // Check if we have pre-loaded PO sub-assemblies
+    if (poId) {
+      const matchedPoItem = allPoItems.find(p => 
+        (item.drawing_no && String(p.drawing_no).trim().toUpperCase() === String(item.drawing_no).trim().toUpperCase()) ||
+        (item.item_code && String(p.item_code).trim().toUpperCase() === String(item.item_code).trim().toUpperCase())
+      );
+      if (matchedPoItem) {
+        const matchedSAs = allSubAssemblies.filter(sa => sa.po_item_id === matchedPoItem.id);
+        if (matchedSAs.length > 0) {
+          return { ...item, sub_assemblies: matchedSAs };
         }
       }
     }
@@ -299,7 +341,6 @@ const getOrderById = async (id) => {
   }));
 
   order.items = enrichedItems;
-
   return order;
 };
 

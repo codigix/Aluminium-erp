@@ -937,9 +937,44 @@ const CustomerPO = ({
         setPoFormLoading(false);
       }
     } else {
-      setShowPoForm(true);
-      setExistingAttachments([]);
+      // Full reset so CREATE mode always opens a blank form
+      setEditingPoId(null);
+      setSelectedQuoteId('');
+      setSelectedQuoteContact(null);
+      setQuotationDrawings([]);
+      setSelectedDrawingVal('');
+      setSelectedHostId('');
+      setSelectedHostCompany(null);
       setAttachments([]);
+      setExistingAttachments([]);
+      setLocalError('');
+      setPoForm({
+        companyId: '',
+        projectName: '',
+        poNumber: '',
+        poDate: new Date().toISOString().split('T')[0],
+        poVersion: '1.0',
+        orderType: 'STANDARD',
+        currency: 'INR',
+        paymentTerms: '',
+        creditDays: '',
+        remarks: '',
+        items: [
+          {
+            drawingNo: '',
+            description: '',
+            hsnCode: '',
+            deliveryDate: '',
+            quantity: '',
+            unit: 'NOS',
+            rate: '',
+            cgstPercent: 0,
+            sgstPercent: 0,
+            igstPercent: 0
+          }
+        ]
+      });
+      setShowPoForm(true);
       if (window.location.pathname !== '/sales/customer-po/new-po') {
         window.history.pushState({}, '', '/sales/customer-po/new-po');
       }
@@ -1302,6 +1337,93 @@ const CustomerPO = ({
           >
             <Send className="w-4 h-4" />
           </button>
+          <button
+            onClick={async () => {
+              // Pre-fill form from the row details
+              setFormMode('CREATE');
+              setEditingPoId(null);
+              setSelectedQuoteId('');
+              setSelectedQuoteContact(null);
+              setQuotationDrawings([]);
+              setSelectedDrawingVal('');
+              setAttachments([]);
+              setExistingAttachments([]);
+              setLocalError('');
+
+              if (row.host_company_id) {
+                setSelectedHostId(String(row.host_company_id));
+              } else {
+                const active = hostCompanies.find(c => c.status === 'ACTIVE');
+                if (active) {
+                  setSelectedHostId(String(active.id));
+                  setSelectedHostCompany(active);
+                } else if (hostCompanies.length > 0) {
+                  setSelectedHostId(String(hostCompanies[0].id));
+                  setSelectedHostCompany(hostCompanies[0]);
+                }
+              }
+
+              // Fetch details of the selected PO to populate items correctly
+              setPoFormLoading(true);
+              setShowPoForm(true);
+              try {
+                const data = await apiRequest(`/customer-pos/${row.id}`);
+                const year = new Date().getFullYear();
+                const count = (customerPos?.length || 0) + 1;
+                const autoPo = `PO-${year}-${count.toString().padStart(3, '0')}`;
+
+                setPoForm({
+                  companyId: data.company_id || '',
+                  projectName: data.project_name || '',
+                  poNumber: autoPo, // Generate and set fresh PO number here
+                  poDate: new Date().toISOString().split('T')[0],
+                  poVersion: '1.0',
+                  orderType: data.order_type || 'STANDARD',
+                  currency: data.currency || 'INR',
+                  paymentTerms: data.payment_terms || '',
+                  creditDays: data.credit_days || '',
+                  remarks: data.remarks || '',
+                  items: (data.items || []).map(item => ({
+                    drawingNo: item.drawing_no || '',
+                    description: item.description || '',
+                    hsnCode: item.hsn_code || '',
+                    deliveryDate: item.delivery_date ? new Date(item.delivery_date).toISOString().split('T')[0] : '',
+                    quantity: item.quantity || '',
+                    unit: item.unit || 'NOS',
+                    rate: item.rate || '',
+                    cgstPercent: item.cgst_percent || 0,
+                    sgstPercent: item.sgst_percent || 0,
+                    igstPercent: item.igst_percent || 0,
+                    sub_assemblies: (item.sub_assemblies || []).map(sa => ({
+                      drawingNo: sa.drawing_no || sa.drawingNo || '',
+                      description: sa.description || '',
+                      hsnCode: sa.hsn_code || sa.hsnCode || '',
+                      deliveryDate: sa.delivery_date ? new Date(sa.delivery_date).toISOString().split('T')[0] : '',
+                      quantity: sa.quantity || 0,
+                      unit: sa.unit || 'NOS',
+                      rate: sa.rate || 0,
+                      item_group: sa.item_group || 'SA'
+                    }))
+                  }))
+                });
+              } catch (error) {
+                console.error('Error pre-filling PO items:', error);
+                showToast('Failed to load item details for creation');
+              } finally {
+                setPoFormLoading(false);
+              }
+
+              if (window.location.pathname !== '/sales/customer-po/new-po') {
+                window.history.pushState({}, '', '/sales/customer-po/new-po');
+              }
+            }}
+            className="inline-flex items-center gap-1 px-2 py-1 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white text-[10px] font-semibold rounded shadow-sm shadow-indigo-200 transition-all duration-200 active:scale-95 border border-indigo-500/30"
+            title="Create New Purchase Order"
+          >
+            <Plus className="w-3 h-3 stroke-[3]" />
+            Create PO
+          </button>
+
           <button
             onClick={() => handleDeletePo(row.id)}
             className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-all border border-transparent hover:border-rose-100"

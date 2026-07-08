@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Card, DataTable, FormControl, StatusBadge, Badge, SearchableSelect, Tabs, Button } from '../components/ui.jsx';
 import { Truck, User } from 'lucide-react';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
@@ -39,6 +39,7 @@ const warehouseOptions = [
 
 const SalesOrders = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [viewMode, setViewMode] = useState('list'); // 'list' or 'form'
   const [formMode, setFormMode] = useState('create'); // 'create', 'edit', 'view'
   const [loading, setLoading] = useState(false);
@@ -53,6 +54,8 @@ const SalesOrders = () => {
   const [selectedHostCompany, setSelectedHostCompany] = useState(null);
   const [allCustomerPos, setAllCustomerPos] = useState([]);
   const [allDrawings, setAllDrawings] = useState([]);
+
+  const [extraLoading, setExtraLoading] = useState(false);
 
   useEffect(() => {
     if (selectedHostId && hostCompanies.length > 0) {
@@ -96,6 +99,47 @@ const SalesOrders = () => {
   };
 
   const [formData, setFormData] = useState(initialFormState);
+
+  const memoizedPoOptions = React.useMemo(() => {
+    // Find currently selected drawing details
+    const selectedDwgObj = allDrawings.find(d => String(d.drawing_master_id || d.id) === String(formData.drawingId));
+    const targetDrawingNo = selectedDwgObj?.drawing_no;
+
+    // Filter PO items to match selected drawing
+    let filteredPos = allCustomerPos;
+    if (targetDrawingNo) {
+      filteredPos = allCustomerPos.map(po => ({
+        ...po,
+        items: po.items.filter(item => 
+          String(item.drawing_no || '').trim().toUpperCase() === String(targetDrawingNo).trim().toUpperCase()
+        )
+      })).filter(po => po.items.length > 0);
+    }
+
+    return (
+      <>
+        {filteredPos
+          .filter(po => po.items && po.items.length > 0)
+          .flatMap(po =>
+            po.items.map((item, idx) => (
+              <option
+                key={`${po.uniqueKey}_item_${idx}`}
+                value={po.uniqueKey}
+              >
+                ({po.po_number || '—'}) {item.drawing_no || '—'} — {item.description || '—'}
+              </option>
+            ))
+          )}
+        {!targetDrawingNo && filteredPos
+          .filter(po => !po.items || po.items.length === 0)
+          .map(po => (
+            <option key={po.uniqueKey} value={po.uniqueKey}>
+              {po.po_number} — {po.company_name || ''}
+            </option>
+          ))}
+      </>
+    );
+  }, [formData.drawingId, allDrawings, allCustomerPos]);
 
   useEffect(() => {
     const storedUser = localStorage.getItem('authUser');
@@ -266,6 +310,7 @@ const SalesOrders = () => {
       });
       if (response.ok) {
         const data = await response.json();
+        // Store items from the API response (the list endpoint already includes items)
         const poOptions = (Array.isArray(data) ? data : []).map(po => ({
           id: po.id,
           dbId: po.id,
@@ -277,7 +322,7 @@ const SalesOrders = () => {
           company_name: po.company_name,
           host_company_id: po.host_company_id || po.hostCompanyId || null,
           isCustomerPo: true,
-          items: []
+          items: Array.isArray(po.items) ? po.items : []
         }));
         setAllCustomerPos(poOptions);
       }
@@ -853,12 +898,12 @@ const SalesOrders = () => {
           items: formattedItems,
           ...customerUpdateFields
         });
+
         if (data.host_company_id) {
           setSelectedHostId(String(data.host_company_id));
           const matchedHost = hostCompanies.find(h => String(h.id) === String(data.host_company_id));
           setSelectedHostCompany(matchedHost || null);
         } else {
-          // Fallback to active host company
           const active = hostCompanies.find(c => c.status === 'ACTIVE');
           if (active) {
             setSelectedHostId(String(active.id));
@@ -868,15 +913,48 @@ const SalesOrders = () => {
             setSelectedHostCompany(hostCompanies[0]);
           }
         }
-        const companyId = data.client_id || data.company_id;
-        if (companyId) {
-          fetchApprovedQuotations(companyId);
-        }
+
         setFormMode('edit');
         setViewMode('form');
-
-        // Update URL behavior
         window.history.pushState({}, '', '/sales/sales-order/edit-order');
+
+        // Async Background fetch for PO details & quotations without blocking the render
+        const companyId = data.client_id || data.company_id;
+        if (companyId) {
+          fetchApprovedQuotations(companyId).catch(() => null);
+        }
+
+        if (data.source_type === 'DIRECT' && data.customer_po_id) {
+          (async () => {
+            try {
+              setExtraLoading(true);
+              const poResponse = await fetch(`${API_BASE}/customer-pos/${data.customer_po_id}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+              });
+              if (poResponse.ok) {
+                const poData = await poResponse.json();
+                const company = companies.find(c => String(c.id) === String(poData.company_id));
+                const billing = company?.addresses?.find(address => address.address_type === 'BILLING') || {};
+                setFormData(prev => ({
+                  ...prev,
+                  customerEmail: (poData.email && poData.email !== '—') ? poData.email : (poData.company_email || prev.customerEmail || ''),
+                  customerPhone: (poData.phone && poData.phone !== '—') ? poData.phone : (poData.billing_contact_phone || poData.shipping_contact_phone || prev.customerPhone || ''),
+                  customerContactPerson: (poData.contact_person && poData.contact_person !== '—') ? poData.contact_person : (poData.billing_contact_name || poData.shipping_contact_name || prev.customerContactPerson || ''),
+                  customerBillingAddress: (poData.billing_address && poData.billing_address !== '—') ? poData.billing_address : prev.customerBillingAddress || '',
+                  customerShippingAddress: (poData.shipping_address && poData.shipping_address !== '—') ? poData.shipping_address : prev.customerShippingAddress || '',
+                  customerGstin: poData.gstin || prev.customerGstin || '',
+                  customerType: poData.customer_type || prev.customerType || 'REGULAR',
+                  customerCity: billing?.city || prev.customerCity || '',
+                  customerState: billing?.state || prev.customerState || ''
+                }));
+              }
+            } catch (err) {
+              console.error('Error fetching background PO details:', err);
+            } finally {
+              setExtraLoading(false);
+            }
+          })();
+        }
       }
     } catch (err) {
       console.error('Error fetching order details:', err);
@@ -1539,6 +1617,7 @@ const SalesOrders = () => {
           {/* Customer Details */}
           <Card title="Customer Details" className='bg-white border border-slate-200 rounded-xl' subtitle="Customer contact information">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-3 p-2">
+              {/* Select Drawing — restored as original */}
               <FormControl label="Select Drawing *">
                 <SearchableSelect
                   options={allDrawings.map(d => ({
@@ -1553,14 +1632,23 @@ const SalesOrders = () => {
                 />
               </FormControl>
 
+              {/* Customer PO — now a dropdown showing all POs separately */}
               <FormControl label="Customer PO">
                 <div className="flex gap-2">
                   <div className="flex-1">
-                    <input
-                      className="w-full p-2 border border-slate-200 rounded text-xs bg-slate-50 text-slate-500"
-                      value={formData.poNumber || ''}
-                      disabled
-                    />
+                    <select
+                      className="w-full p-2 border border-slate-200 rounded text-xs text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-rose-500 disabled:bg-slate-50 disabled:text-slate-500"
+                      value={formData.customerPoId || ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (!val) return;
+                        handleCustomerPoChange(val);
+                      }}
+                      disabled={formMode === 'view'}
+                    >
+                      <option value="">-- Select PO --</option>
+                      {memoizedPoOptions}
+                    </select>
                   </div>
                   {formData.customerPoId && String(formData.customerPoId).startsWith('PO_') && (
                     <button
