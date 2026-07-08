@@ -3538,10 +3538,14 @@ const BOMFormPage = () => {
                         value={operationForm.workstation}
                         onChange={(e) => {
                           const ws = workstations.find(w => w.workstation_code === e.target.value);
+                          const op = operationsList.find(o => o.operation_name === operationForm.operationName);
+                          const opHourlyRate = op ? parseFloat(op.hourly_rate) : 0;
+                          const wsHourlyRate = ws ? parseFloat(ws.hourly_rate) : 0;
+                          
                           setOperationForm({
                             ...operationForm,
                             workstation: e.target.value,
-                            hourlyRate: ws ? ws.hourly_rate : operationForm.hourlyRate
+                            hourlyRate: wsHourlyRate > 0 ? wsHourlyRate : (opHourlyRate > 0 ? opHourlyRate : operationForm.hourlyRate)
                           });
                         }}
                       >
