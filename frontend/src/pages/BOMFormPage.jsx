@@ -1201,6 +1201,10 @@ const BOMFormPage = () => {
         const t = parseFloat(materialForm.thickness) || 0;
         const l = parseFloat(materialForm.length) || 0;
         calculatedWeight = ((b * h - (b - 2 * t) * (h - 2 * t)) * l * density) / 1000000;
+      } else if (shape === 'hexagonal bar') {
+        const af = parseFloat(materialForm.width) || 0;
+        const l = parseFloat(materialForm.length) || 0;
+        calculatedWeight = ((Math.sqrt(3) / 2) * af * af * l * density) / 1000000;
       }
     }
 
@@ -3315,6 +3319,18 @@ const BOMFormPage = () => {
                                       <div className="space-y-1">
                                         <label className="text-xs text-slate-400 font-medium">Wall Thickness (T) (mm) *</label>
                                         <input type="number" step="0.01" className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="0.00" value={materialForm.thickness || ''} onChange={(e) => setMaterialForm({ ...materialForm, thickness: e.target.value })} required />
+                                      </div>
+                                      <div className="space-y-1">
+                                        <label className="text-xs text-slate-400 font-medium">Length (L) (mm) *</label>
+                                        <input type="number" step="0.01" className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="0.00" value={materialForm.length || ''} onChange={(e) => setMaterialForm({ ...materialForm, length: e.target.value })} required />
+                                      </div>
+                                    </>
+                                  )}
+                                  {selectedShape.toLowerCase() === 'hexagonal bar' && (
+                                    <>
+                                      <div className="space-y-1">
+                                        <label className="text-xs text-slate-400 font-medium">Across Flats (AF) (mm) *</label>
+                                        <input type="number" step="0.01" className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="0.00" value={materialForm.width || ''} onChange={(e) => setMaterialForm({ ...materialForm, width: e.target.value })} required />
                                       </div>
                                       <div className="space-y-1">
                                         <label className="text-xs text-slate-400 font-medium">Length (L) (mm) *</label>

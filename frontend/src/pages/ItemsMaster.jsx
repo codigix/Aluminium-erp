@@ -870,6 +870,10 @@ const ItemsMaster = () => {
         const t = parseFloat(itemFormData.thickness) || 0;
         const l = parseFloat(itemFormData.length) || 0;
         calculatedWeight = ((b * h - (b - 2 * t) * (h - 2 * t)) * l * density) / 1000000;
+      } else if (shape === 'hexagonal bar') {
+        const af = parseFloat(itemFormData.width) || 0;
+        const l = parseFloat(itemFormData.length) || 0;
+        calculatedWeight = ((Math.sqrt(3) / 2) * af * af * l * density) / 1000000;
       }
     }
 
@@ -1227,6 +1231,18 @@ const ItemsMaster = () => {
                                 <div className="space-y-1.5">
                                   <label className="text-xs font-semibold text-slate-400">Wall Thickness (T) (mm) *</label>
                                   <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.thickness} onChange={(e) => setItemFormData({...itemFormData, thickness: e.target.value})} required />
+                                </div>
+                                <div className="space-y-1.5">
+                                  <label className="text-xs font-semibold text-slate-400">Length (L) (mm) *</label>
+                                  <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.length} onChange={(e) => setItemFormData({...itemFormData, length: e.target.value})} required />
+                                </div>
+                              </>
+                            )}
+                            {selectedShape.toLowerCase() === 'hexagonal bar' && (
+                              <>
+                                <div className="space-y-1.5">
+                                  <label className="text-xs font-semibold text-slate-400">Across Flats (AF) (mm) *</label>
+                                  <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.width} onChange={(e) => setItemFormData({...itemFormData, width: e.target.value})} required />
                                 </div>
                                 <div className="space-y-1.5">
                                   <label className="text-xs font-semibold text-slate-400">Length (L) (mm) *</label>
