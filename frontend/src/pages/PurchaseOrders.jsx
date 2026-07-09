@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { 
-  Plus, Search, RefreshCw, Package, Clock, CheckCircle2, 
+import {
+  Plus, Search, RefreshCw, Package, Clock, CheckCircle2,
   AlertCircle, Truck, FileText, LayoutGrid, List, Filter, GitMerge
 } from 'lucide-react';
 import { Card, DataTable, SearchableSelect, Button, Tabs } from '../components/ui.jsx';
@@ -73,7 +73,7 @@ const PurchaseOrders = () => {
 
   useEffect(() => {
     const path = location.pathname;
-    
+
     if (path === `${deptPrefix}/purchase-orders/add`) {
       if (!showCreateModal) {
         setFormData({
@@ -282,7 +282,7 @@ const PurchaseOrders = () => {
             density: item.density || 0,
             weight_per_unit: item.weight_per_unit || 0
           }));
-        
+
         setManualFormData(prev => ({
           ...prev,
           quotationId: quotationId,
@@ -382,7 +382,7 @@ const PurchaseOrders = () => {
   };
 
   const handleTogglePoSelectionForMerge = (poId) => {
-    setSelectedPoIdsForMerge(prev => 
+    setSelectedPoIdsForMerge(prev =>
       prev.includes(poId) ? prev.filter(id => id !== poId) : [...prev, poId]
     );
   };
@@ -395,7 +395,7 @@ const PurchaseOrders = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken');
-      
+
       // Fetch details of each selected PO to get its line items
       const poDetails = await Promise.all(
         selectedPoIdsForMerge.map(async (poId) => {
@@ -496,7 +496,7 @@ const PurchaseOrders = () => {
       const token = localStorage.getItem('authToken');
       // Calculate totals for consistency
       const subtotal = manualFormData.items.reduce((sum, i) => sum + (parseFloat(i.amount) || 0), 0);
-      
+
       const payload = {
         vendorId: parseInt(manualFormData.vendorId),
         quotationId: manualFormData.quotationId ? parseInt(manualFormData.quotationId) : null,
@@ -524,7 +524,7 @@ const PurchaseOrders = () => {
         }))
       };
 
-      const url = manualFormData.id 
+      const url = manualFormData.id
         ? `${API_BASE}/purchase-orders/${manualFormData.id}`
         : `${API_BASE}/purchase-orders`;
       const method = manualFormData.id ? 'PATCH' : 'POST';
@@ -561,7 +561,7 @@ const PurchaseOrders = () => {
       if (response.ok) {
         const data = await response.json();
         // Only show relevant MRs (not fulfilled or already created as PO)
-        setMaterialRequests((Array.isArray(data) ? data : []).filter(mr => 
+        setMaterialRequests((Array.isArray(data) ? data : []).filter(mr =>
           !['FULFILLED', 'PO_CREATED', 'CANCELLED', 'REJECTED'].includes((mr.status || '').toUpperCase())
         ));
       }
@@ -604,12 +604,12 @@ const PurchaseOrders = () => {
 
   const handleUploadPoAttachments = async () => {
     if (!selectedPoForAttachment) return;
-    
+
     setIsUploadingAttachments(true);
     try {
       const token = localStorage.getItem('authToken');
       const formData = new FormData();
-      
+
       // Append new files
       selectedAttachmentFiles.forEach(file => {
         formData.append('invoice', file);
@@ -621,7 +621,7 @@ const PurchaseOrders = () => {
         .map(p => p.trim())
         .filter(Boolean)
         .join(',');
-      
+
       formData.append('existing_attachments', existing);
 
       const response = await fetch(`${API_BASE}/purchase-orders/${selectedPoForAttachment.id}/invoice`, {
@@ -635,12 +635,12 @@ const PurchaseOrders = () => {
       if (response.ok) {
         const resData = await response.json();
         successToast('Attachments uploaded successfully');
-        
+
         // Update selected PO attachments state locally
         const updatedPo = { ...selectedPoForAttachment, invoice_url: resData.paths.join(',') };
         setSelectedPoForAttachment(updatedPo);
         setSelectedAttachmentFiles([]);
-        
+
         // Refresh PO lists
         fetchPOs();
         fetchStats();
@@ -674,7 +674,7 @@ const PurchaseOrders = () => {
     setIsUploadingAttachments(true);
     try {
       const token = localStorage.getItem('authToken');
-      
+
       // Filter out the file path
       const remaining = (selectedPoForAttachment.invoice_url || '')
         .split(',')
@@ -697,11 +697,11 @@ const PurchaseOrders = () => {
       if (response.ok) {
         const resData = await response.json();
         successToast('Attachment removed successfully');
-        
+
         // Update selected PO attachments state locally
         const updatedPo = { ...selectedPoForAttachment, invoice_url: resData.paths.join(',') };
         setSelectedPoForAttachment(updatedPo);
-        
+
         // Refresh PO lists
         fetchPOs();
         fetchStats();
@@ -779,7 +779,7 @@ const PurchaseOrders = () => {
         if (previewRes.ok && quotationRes.ok) {
           const preview = await previewRes.json();
           const detailedQuotation = await quotationRes.json();
-          
+
           const suggestions = [preview.poNumber];
           if (selected.quote_number && selected.quote_number !== preview.poNumber) {
             suggestions.push(selected.quote_number);
@@ -899,7 +899,7 @@ const PurchaseOrders = () => {
 
       if (!response.ok) throw new Error('Failed to fetch PO details');
       const data = await response.json();
-      
+
       if (data.status === 'PO_REQUEST') {
         setManualFormData({
           id: data.id,
@@ -916,12 +916,12 @@ const PurchaseOrders = () => {
             .map(item => ({
               id: item.id,
               item_code: item.item_code || '',
-            description: item.description || '',
-            quantity: item.quantity || 0,
-            unit: item.unit || 'NOS',
-            rate: item.unit_rate || item.rate || 0,
-            amount: item.amount || ((item.quantity || 0) * (item.unit_rate || item.rate || 0))
-          }))
+              description: item.description || '',
+              quantity: item.quantity || 0,
+              unit: item.unit || 'NOS',
+              rate: item.unit_rate || item.rate || 0,
+              amount: item.amount || ((item.quantity || 0) * (item.unit_rate || item.rate || 0))
+            }))
         });
         setShowManualCreateModal(true);
       } else {
@@ -952,12 +952,12 @@ const PurchaseOrders = () => {
       const qty = parseFloat(updatedItems[index].quantity) || 0;
       const rate = parseFloat(updatedItems[index].unit_rate) || 0;
       const amount = qty * rate;
-      
+
       const cgstPercent = updatedItems[index].cgst_percent || 9;
       const sgstPercent = updatedItems[index].sgst_percent || 9;
       const cgstAmount = (amount * cgstPercent) / 100;
       const sgstAmount = (amount * sgstPercent) / 100;
-      
+
       updatedItems[index].amount = amount;
       updatedItems[index].cgst_amount = cgstAmount;
       updatedItems[index].sgst_amount = sgstAmount;
@@ -965,7 +965,7 @@ const PurchaseOrders = () => {
     }
 
     setPoItems(updatedItems);
-    
+
     // Recalculate grand total for the selected PO
     const newGrandTotal = updatedItems.reduce((sum, item) => sum + (parseFloat(item.total_amount) || 0), 0);
     setSelectedPO({ ...selectedPO, total_amount: newGrandTotal });
@@ -1033,6 +1033,45 @@ const PurchaseOrders = () => {
       fetchStats();
     } catch (error) {
       errorToast(error.message || 'Failed to delete PO');
+    }
+  };
+
+  const handleSendToAccounts = async (po) => {
+    const result = await Swal.fire({
+      title: 'Send to Accounts?',
+      text: `Are you sure you want to forward Purchase Order ${po.po_number} to Accounts? This will automatically create a Vendor Invoice.`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, Send',
+      cancelButtonText: 'Cancel'
+    });
+
+    if (result.isConfirmed) {
+      try {
+        setLoading(true);
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE}/purchase-orders/${po.id}/send-to-accounts`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(errData.message || errData.error || 'Failed to forward to Accounts');
+        }
+
+        successToast('Purchase Order has been forwarded to Accounts successfully.');
+        fetchPOs();
+        fetchStats();
+      } catch (error) {
+        console.error('Send to Accounts Error:', error);
+        errorToast(error.message || 'Failed to forward to Accounts');
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -1108,7 +1147,7 @@ const PurchaseOrders = () => {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const vendor = response.ok ? await response.json() : null;
-      
+
       setSelectedPO(po);
       setEmailData({
         to: vendor?.email || '',
@@ -1305,7 +1344,7 @@ const PurchaseOrders = () => {
               <span className={` ${percent === 100 ? 'text-emerald-500' : 'text-emerald-500'}`}>{percent}%</span>
             </div>
             <div className="w-full bg-slate-100 rounded h-1 overflow-hidden  border border-slate-50">
-              <div 
+              <div
                 className={`h-full transition-all duration-700 ease-out  bg-emerald-500`}
                 style={{ width: `${percent}%` }}
               ></div>
@@ -1360,11 +1399,11 @@ const PurchaseOrders = () => {
             </button>
             <button
               onClick={() => {
-                  if (row.status === 'PO_REQUEST') {
-                      navigate(`${deptPrefix}/purchase-orders/edit-manual/${row.id}`);
-                  } else {
-                      handleEditPO(row.id);
-                  }
+                if (row.status === 'PO_REQUEST') {
+                  navigate(`${deptPrefix}/purchase-orders/edit-manual/${row.id}`);
+                } else {
+                  handleEditPO(row.id);
+                }
               }}
               className=" text-slate-400 hover:bg-slate-50 hover:text-slate-600   transition-all   active:scale-90"
               title="Edit PO"
@@ -1380,11 +1419,10 @@ const PurchaseOrders = () => {
                   setSelectedAttachmentFiles([]);
                   setShowAttachmentModal(true);
                 }}
-                className={`p-1.5 rounded transition-all active:scale-90 flex items-center justify-center gap-1 ${
-                  row.invoice_url && row.invoice_url.trim().length > 0
+                className={`p-1.5 rounded transition-all active:scale-90 flex items-center justify-center gap-1 ${row.invoice_url && row.invoice_url.trim().length > 0
                     ? 'text-emerald-600 bg-emerald-50 hover:bg-emerald-100/70 border border-emerald-100'
                     : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50 border border-transparent'
-                }`}
+                  }`}
                 title="Manage Attachments"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1408,6 +1446,29 @@ const PurchaseOrders = () => {
                 </svg>
               </button>
             )}
+            {row.forwarded_to_accounts === 1 ? (
+              <button
+                disabled
+                className="p-1 text-indigo-600 bg-indigo-50 border border-indigo-200 rounded cursor-default"
+                title="Forwarded to Accounts"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              </button>
+            ) : (
+              ['APPROVED', 'ORDERED', 'SENT', 'RECEIVED', 'PARTIALLY_RECEIVED', 'FULFILLED', 'PAID'].includes(row.status) && (
+                <button
+                  onClick={() => handleSendToAccounts(row)}
+                  className="p-1 text-indigo-600 hover:bg-indigo-50 border border-indigo-100 hover:border-indigo-200 rounded transition-all active:scale-90"
+                  title="Send to Accounts"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                  </svg>
+                </button>
+              )
+            )}
             {!isSent && (
               <button
                 onClick={() => handleDeletePO(row.id)}
@@ -1426,23 +1487,23 @@ const PurchaseOrders = () => {
   ];
 
   const filteredPOs = pos.filter(po => {
-    const matchesSearch = !searchTerm || 
+    const matchesSearch = !searchTerm ||
       po.po_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       po.vendor_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       po.drawing_no?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       po.finished_good?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       po.project_name?.toLowerCase().includes(searchTerm.toLowerCase());
-    
+
     const matchesStatus = statusFilter === 'ALL' || po.status === statusFilter;
-    
+
     return matchesSearch && matchesStatus;
   });
 
   if (viewMode === 'detail' && selectedPO) {
     return (
-      <PurchaseOrderDetail 
-        po={selectedPO} 
-        onBack={() => navigate(`${deptPrefix}/purchase-orders`)} 
+      <PurchaseOrderDetail
+        po={selectedPO}
+        onBack={() => navigate(`${deptPrefix}/purchase-orders`)}
         onRefresh={() => {
           handleViewPODetail(selectedPO.id);
           fetchPOs();
@@ -1466,20 +1527,18 @@ const PurchaseOrders = () => {
         </div>
         <div className="flex items-center gap-3">
           <div className="flex bg-slate-100 p-1 rounded border border-slate-200">
-            <button 
+            <button
               onClick={() => setViewMode('kanban')}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs  transition-all ${
-                viewMode === 'kanban' ? 'bg-white text-slate-900 shadow-sm border border-slate-200' : 'text-slate-500 hover:text-slate-700'
-              }`}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs  transition-all ${viewMode === 'kanban' ? 'bg-white text-slate-900 shadow-sm border border-slate-200' : 'text-slate-500 hover:text-slate-700'
+                }`}
             >
               <LayoutGrid size={14} />
               KANBAN
             </button>
-            <button 
+            <button
               onClick={() => setViewMode('list')}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs  transition-all ${
-                viewMode === 'list' ? 'bg-white text-slate-900 shadow-sm border border-slate-200' : 'text-slate-500 hover:text-slate-700'
-              }`}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs  transition-all ${viewMode === 'list' ? 'bg-white text-slate-900 shadow-sm border border-slate-200' : 'text-slate-500 hover:text-slate-700'
+                }`}
             >
               <List size={14} />
               LIST
@@ -1541,8 +1600,8 @@ const PurchaseOrders = () => {
         <div className="flex flex-col md:flex-row items-center gap-4">
           <div className="relative flex-1 group">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-rose-500 transition-colors" size={18} />
-            <input 
-              type="text" 
+            <input
+              type="text"
               placeholder="Search by PO #, supplier, drawing or project..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -1569,7 +1628,7 @@ const PurchaseOrders = () => {
 
       {/* Main Table Section */}
       <div className="bg-white rounded border border-slate-200  overflow-hidden">
-        
+
         <DataTable
           columns={columns}
           data={filteredPOs}
@@ -1587,7 +1646,7 @@ const PurchaseOrders = () => {
             {/* Modal Header */}
             <div className="flex justify-between items-center p-2 border-b border-slate-50">
               <h2 className="text-xl  text-slate-800">{manualFormData.id ? 'Edit Purchase Order Request' : 'Create New Purchase Order'}</h2>
-              <button 
+              <button
                 onClick={() => navigate(`${deptPrefix}/purchase-orders`)}
                 className="p-2 hover:bg-slate-100 rounded transition-colors text-slate-400"
               >
@@ -1694,7 +1753,7 @@ const PurchaseOrders = () => {
                     </div>
                     <h3 className="text-sm  text-slate-700">Purchase Order Items</h3>
                   </div>
-                  <button 
+                  <button
                     type="button"
                     onClick={handleAddManualItem}
                     className="flex items-center gap-1.5 p-1.5 bg-white border border-blue-200 text-blue-600 rounded  text-xs  hover:bg-blue-50 transition-all "
@@ -1788,7 +1847,7 @@ const PurchaseOrders = () => {
                             {formatCurrency(item.amount)}
                           </td>
                           <td className="px-4 p-2">
-                            <button 
+                            <button
                               type="button"
                               onClick={() => handleRemoveManualItem(idx)}
                               className="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded  transition-all"
@@ -1897,7 +1956,7 @@ const PurchaseOrders = () => {
             {/* Modal Header */}
             <div className="flex justify-between items-center p-2 border-b border-slate-50">
               <h2 className="text-xl  text-slate-800">Create PO from Quotation</h2>
-              <button 
+              <button
                 onClick={() => {
                   navigate(`${deptPrefix}/purchase-orders`);
                 }}
@@ -1934,10 +1993,10 @@ const PurchaseOrders = () => {
                       onChange={(e) => {
                         if (e.target.value === 'MANUAL') {
                           setIsManualPo(true);
-                          setFormData({...formData, poNumber: ''});
+                          setFormData({ ...formData, poNumber: '' });
                         } else {
                           setIsManualPo(false);
-                          setFormData({...formData, poNumber: e.target.value});
+                          setFormData({ ...formData, poNumber: e.target.value });
                         }
                       }}
                       className="flex-1 p-2  bg-slate-50 border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all font-mono"
@@ -1960,7 +2019,7 @@ const PurchaseOrders = () => {
                       <input
                         type="text"
                         value={formData.poNumber}
-                        onChange={(e) => setFormData({...formData, poNumber: e.target.value})}
+                        onChange={(e) => setFormData({ ...formData, poNumber: e.target.value })}
                         placeholder="Enter PO Number"
                         className="flex-1 p-2  bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all font-mono"
                         required
@@ -1976,7 +2035,7 @@ const PurchaseOrders = () => {
                   <input
                     type="date"
                     value={formData.expectedDeliveryDate}
-                    onChange={(e) => setFormData({...formData, expectedDeliveryDate: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, expectedDeliveryDate: e.target.value })}
                     className="w-full p-2  bg-slate-50 border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                     required
                   />
@@ -2044,7 +2103,7 @@ const PurchaseOrders = () => {
                 <label className="text-xs  text-slate-400   ml-1">Notes (Optional)</label>
                 <textarea
                   value={formData.notes}
-                  onChange={(e) => setFormData({...formData, notes: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                   placeholder="Add any special instructions or notes"
                   className="w-full px-4 p-2 bg-slate-50 border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                   rows="3"
@@ -2078,7 +2137,7 @@ const PurchaseOrders = () => {
             {/* Modal Header */}
             <div className="flex justify-between items-center p-2 border-b border-slate-50">
               <h2 className="text-xl  text-slate-800 ">Edit Purchase Order</h2>
-              <button 
+              <button
                 onClick={() => setShowEditModal(false)}
                 className="p-2 hover:bg-slate-100 rounded transition-colors text-slate-400"
               >
@@ -2093,7 +2152,7 @@ const PurchaseOrders = () => {
                   <input
                     type="text"
                     value={selectedPO.po_number}
-                    onChange={(e) => setSelectedPO({...selectedPO, po_number: e.target.value})}
+                    onChange={(e) => setSelectedPO({ ...selectedPO, po_number: e.target.value })}
                     className="flex-1 bg-white border border-slate-200 rounded  p-1.5 text-blue-600  outline-none focus:ring-2 focus:ring-blue-500/20"
                   />
                 </div>
@@ -2104,8 +2163,8 @@ const PurchaseOrders = () => {
                       value={editFormData.vendorId}
                       onChange={(e) => {
                         const newVendorId = e.target.value;
-                        setEditFormData({ 
-                          ...editFormData, 
+                        setEditFormData({
+                          ...editFormData,
                           vendorId: newVendorId,
                           status: newVendorId ? 'DRAFT' : 'PO_REQUEST'
                         });
@@ -2204,7 +2263,7 @@ const PurchaseOrders = () => {
                   <label className="text-xs  text-slate-400   ml-1">Status</label>
                   <select
                     value={editFormData.status}
-                    onChange={(e) => setEditFormData({...editFormData, status: e.target.value})}
+                    onChange={(e) => setEditFormData({ ...editFormData, status: e.target.value })}
                     className="w-full p-2  bg-slate-50 border border-slate-200 rounded text-xs  text-slate-700 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                     required
                   >
@@ -2220,7 +2279,7 @@ const PurchaseOrders = () => {
                   <input
                     type="date"
                     value={editFormData.expectedDeliveryDate ? new Date(editFormData.expectedDeliveryDate).toISOString().split('T')[0] : ''}
-                    onChange={(e) => setEditFormData({...editFormData, expectedDeliveryDate: e.target.value})}
+                    onChange={(e) => setEditFormData({ ...editFormData, expectedDeliveryDate: e.target.value })}
                     className="w-full p-2  bg-slate-50 border border-slate-200 rounded text-xs  text-slate-700 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                   />
                 </div>
@@ -2230,7 +2289,7 @@ const PurchaseOrders = () => {
                 <label className="text-xs  text-slate-400   ml-1">Notes</label>
                 <textarea
                   value={editFormData.notes}
-                  onChange={(e) => setEditFormData({...editFormData, notes: e.target.value})}
+                  onChange={(e) => setEditFormData({ ...editFormData, notes: e.target.value })}
                   className="w-full px-4 p-2 bg-slate-50 border border-slate-200 rounded text-xs focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                   rows="3"
                   placeholder="Add notes about this order"
@@ -2274,7 +2333,7 @@ const PurchaseOrders = () => {
                   <p className="text-xs text-slate-400   ">{selectedPO.po_number} • {selectedPO.vendor_name}</p>
                 </div>
               </div>
-              <button 
+              <button
                 onClick={() => setShowEmailModal(false)}
                 className="p-2 hover:bg-slate-100 rounded transition-colors text-slate-400"
               >
@@ -2289,7 +2348,7 @@ const PurchaseOrders = () => {
                   <input
                     type="email"
                     value={emailData.to}
-                    onChange={(e) => setEmailData({...emailData, to: e.target.value})}
+                    onChange={(e) => setEmailData({ ...emailData, to: e.target.value })}
                     placeholder="vendor@example.com"
                     className="w-full p-2  bg-slate-50 border border-slate-200 rounded text-xs  text-slate-700 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                     required
@@ -2301,7 +2360,7 @@ const PurchaseOrders = () => {
                   <input
                     type="text"
                     value={emailData.cc}
-                    onChange={(e) => setEmailData({...emailData, cc: e.target.value})}
+                    onChange={(e) => setEmailData({ ...emailData, cc: e.target.value })}
                     placeholder="cc@example.com"
                     className="w-full p-2  bg-slate-50 border border-slate-200 rounded text-xs  text-slate-700 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                   />
@@ -2312,7 +2371,7 @@ const PurchaseOrders = () => {
                   <input
                     type="text"
                     value={emailData.bcc}
-                    onChange={(e) => setEmailData({...emailData, bcc: e.target.value})}
+                    onChange={(e) => setEmailData({ ...emailData, bcc: e.target.value })}
                     placeholder="bcc@example.com"
                     className="w-full p-2  bg-slate-50 border border-slate-200 rounded text-xs  text-slate-700 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                   />
@@ -2323,7 +2382,7 @@ const PurchaseOrders = () => {
                   <input
                     type="text"
                     value={emailData.subject}
-                    onChange={(e) => setEmailData({...emailData, subject: e.target.value})}
+                    onChange={(e) => setEmailData({ ...emailData, subject: e.target.value })}
                     className="w-full p-2  bg-slate-50 border border-slate-200 rounded text-xs  text-slate-700 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                     required
                   />
@@ -2333,7 +2392,7 @@ const PurchaseOrders = () => {
                   <label className="text-xs  text-slate-400   ml-1">Message</label>
                   <textarea
                     value={emailData.message}
-                    onChange={(e) => setEmailData({...emailData, message: e.target.value})}
+                    onChange={(e) => setEmailData({ ...emailData, message: e.target.value })}
                     rows="5"
                     className="w-full px-4 p-2 bg-slate-50 border border-slate-200 rounded text-xs text-slate-600 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all resize-none"
                     required
@@ -2353,7 +2412,7 @@ const PurchaseOrders = () => {
                       type="checkbox"
                       id="attachPDF"
                       checked={emailData.attachPDF}
-                      onChange={(e) => setEmailData({...emailData, attachPDF: e.target.checked})}
+                      onChange={(e) => setEmailData({ ...emailData, attachPDF: e.target.checked })}
                       className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300"
                     />
                     <label htmlFor="attachPDF" className="text-xs  text-slate-500  ">Include</label>
@@ -2513,7 +2572,7 @@ const PurchaseOrders = () => {
               {/* Upload Dropzone Section */}
               <div className="space-y-3">
                 <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider">Upload New Documents</h4>
-                <div 
+                <div
                   onClick={() => document.getElementById('poAttachmentsInput').click()}
                   className="border-2 border-dashed border-slate-200 hover:border-rose-400 bg-slate-50/50 hover:bg-slate-50 rounded-xl p-6 text-center cursor-pointer transition-all group"
                 >
@@ -2629,7 +2688,7 @@ const PurchaseOrders = () => {
                   <p className="text-xs text-slate-400 mt-0.5">Consolidate multiple orders for a single vendor</p>
                 </div>
               </div>
-              <button 
+              <button
                 onClick={() => setShowMergeModal(false)}
                 className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors text-slate-400 hover:text-slate-600"
               >

@@ -4,6 +4,8 @@ const emailService = require('./emailService');
 const puppeteer = require('puppeteer');
 const mustache = require('mustache');
 const stockService = require('./stockService');
+const fs = require('fs');
+const path = require('path');
 
 /**
  * Helper to find the correct item_code from stock_balance by matching material name/type
@@ -2442,6 +2444,62 @@ const mergePurchaseOrders = async (payload) => {
   }
 };
 
+const forwardToAccounts = async (poId) => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // 1. Fetch PO details
+    const po = await getPurchaseOrderById(poId);
+    if (!po) {
+      throw new Error('Purchase Order not found');
+    }
+
+    // 2. Mark PO as forwarded
+    await connection.query(
+      'UPDATE purchase_orders SET forwarded_to_accounts = 1 WHERE id = ?',
+      [poId]
+    );
+
+    // 3. Generate PO PDF buffer and save as file
+    const pdfBuffer = await generatePurchaseOrderPDF(poId);
+    const uploadsDir = path.join(__dirname, '..', '..', 'uploads');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+    const pdfFileName = `Purchase_Order_${po.po_number || poId}.pdf`;
+    const pdfFilePath = path.join('uploads', pdfFileName);
+    fs.writeFileSync(path.join(uploadsDir, pdfFileName), pdfBuffer);
+
+    // 4. Insert into vendor_invoices
+    const [result] = await connection.query(
+      `INSERT INTO vendor_invoices (
+        po_id, po_number, po_date, vendor_id, project_name, mr_number, drawing_no, payment_terms, po_pdf_path, po_amount, status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'FORWARDED')`,
+      [
+        poId,
+        po.po_number,
+        po.created_at ? new Date(po.created_at) : new Date(),
+        po.vendor_id,
+        po.project_name || 'Stock/Internal',
+        po.mr_number || null,
+        po.drawing_no || null,
+        po.notes || 'As per Purchase Order terms',
+        pdfFilePath,
+        po.total_amount || 0.00
+      ]
+    );
+
+    await connection.commit();
+    return { id: result.insertId, po_number: po.po_number };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+};
+
 module.exports = {
   createPurchaseOrder,
   previewPurchaseOrder,
@@ -2456,5 +2514,6 @@ module.exports = {
   generatePurchaseOrderPDF,
   sendPurchaseOrderEmail,
   updatePurchaseOrderInvoice,
-  mergePurchaseOrders
+  mergePurchaseOrders,
+  forwardToAccounts
 };

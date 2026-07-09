@@ -304,19 +304,20 @@ const getVendorBalance = async (vendorId) => {
 const getPendingPayments = async () => {
   const [poPayments] = await pool.query(
     `SELECT 
-      po.id,
-      po.po_number,
-      po.total_amount,
-      po.created_at,
-      po.invoice_url,
+      vi.po_id as id,
+      vi.id as vendor_invoice_id,
+      vi.po_number,
+      vi.po_amount as total_amount,
+      vi.created_at,
+      vi.po_pdf_path as invoice_url,
       v.vendor_name,
       v.id as vendor_id,
       'PURCHASE_ORDER' as type,
-      COALESCE((SELECT SUM(payment_amount) FROM payments WHERE po_id = po.id AND status = 'CONFIRMED'), 0) as already_paid,
-      (po.total_amount - COALESCE((SELECT SUM(payment_amount) FROM payments WHERE po_id = po.id AND status = 'CONFIRMED'), 0)) as outstanding
-    FROM purchase_orders po
-    LEFT JOIN vendors v ON po.vendor_id = v.id
-    WHERE po.status IN ('SENT', 'RECEIVED', 'PARTIALLY_RECEIVED', 'APPROVED', 'FULFILLED', 'PAID')
+      COALESCE((SELECT SUM(payment_amount) FROM payments WHERE po_id = vi.po_id AND status = 'CONFIRMED'), 0) as already_paid,
+      (vi.po_amount - COALESCE((SELECT SUM(payment_amount) FROM payments WHERE po_id = vi.po_id AND status = 'CONFIRMED'), 0)) as outstanding
+    FROM vendor_invoices vi
+    LEFT JOIN vendors v ON vi.vendor_id = v.id
+    WHERE vi.status IN ('VERIFIED', 'COMPLETED')
     HAVING outstanding >= 0`
   );
 

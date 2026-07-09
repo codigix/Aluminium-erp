@@ -208,6 +208,19 @@ const mergePurchaseOrders = async (req, res, next) => {
   }
 };
 
+const forwardToAccounts = async (req, res, next) => {
+  try {
+    const poId = req.params.poId;
+    const result = await purchaseOrderService.forwardToAccounts(poId);
+    res.json({
+      message: 'Purchase Order has been forwarded to Accounts successfully.',
+      data: result
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   createPurchaseOrder,
   previewPurchaseOrder,
@@ -223,5 +236,6 @@ module.exports = {
   sendPurchaseOrderEmail,
   uploadInvoice,
   sendToPendingPayment,
-  mergePurchaseOrders
+  mergePurchaseOrders,
+  forwardToAccounts
 };
