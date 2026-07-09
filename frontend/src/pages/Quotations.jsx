@@ -1292,6 +1292,42 @@ const Quotations = () => {
     }
   };
 
+  const handleDeleteRFQ = async (rfqId) => {
+    const result = await Swal.fire({
+      title: 'Delete RFQ Request?',
+      text: 'This action cannot be undone',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Delete',
+      cancelButtonText: 'Cancel'
+    });
+
+    if (!result.isConfirmed) return;
+
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/rfqs/${rfqId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.message || errData.error || 'Failed to delete RFQ');
+      }
+
+      successToast('RFQ deleted successfully');
+      fetchRawRfqs();
+      fetchQuotations();
+      fetchStats();
+    } catch (error) {
+      errorToast(error.message || 'Failed to delete RFQ');
+    }
+  };
+
   const handleCompare = async () => {
     if (selectedQuotes.length < 2) {
       errorToast('Select at least 2 quotes to compare');
@@ -1902,7 +1938,14 @@ const Quotations = () => {
               </>
             )}
             <button
-              onClick={(e) => { e.stopPropagation(); handleDeleteQuotation(q.id); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (q.isRFQOnly) {
+                  handleDeleteRFQ(q.id);
+                } else {
+                  handleDeleteQuotation(q.id);
+                }
+              }}
               className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded  transition-all border border-transparent hover:border-rose-100"
               title="Delete"
             >

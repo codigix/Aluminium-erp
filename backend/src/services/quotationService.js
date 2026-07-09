@@ -224,6 +224,14 @@ const getQuotations = async (filters = {}) => {
   let query = `
     SELECT q.*, v.vendor_name, so.so_number,
            COALESCE(
+             (
+               SELECT COALESCE(ppi_dr.item_code, soi.drawing_no, oi.drawing_no)
+               FROM production_plan_items ppi_dr
+               LEFT JOIN sales_order_items soi ON ppi_dr.sales_order_item_id = soi.id
+               LEFT JOIN order_items oi ON ppi_dr.sales_order_item_id = oi.id AND ppi_dr.sales_order_id = oi.order_id
+               WHERE ppi_dr.plan_id = pp.id
+               LIMIT 1
+             ),
              pp.bom_no,
              (
                SELECT soi.drawing_no 
@@ -384,6 +392,14 @@ const getQuotationById = async (quotationId) => {
   const [rows] = await pool.query(
     `SELECT q.*, mr.mr_number, so.so_number,
             COALESCE(
+              (
+                SELECT COALESCE(ppi_dr.item_code, soi.drawing_no, oi.drawing_no)
+                FROM production_plan_items ppi_dr
+                LEFT JOIN sales_order_items soi ON ppi_dr.sales_order_item_id = soi.id
+                LEFT JOIN order_items oi ON ppi_dr.sales_order_item_id = oi.id AND ppi_dr.sales_order_id = oi.order_id
+                WHERE ppi_dr.plan_id = pp.id
+                LIMIT 1
+              ),
               pp.bom_no,
               (
                 SELECT soi.drawing_no 
@@ -583,9 +599,10 @@ const updateQuotationStatus = async (quotationId, status) => {
 };
 
 const updateQuotation = async (quotationId, payload) => {
-  const { validUntil, notes, items, received_pdf_path, status, hostCompanyId, host_company_id } = payload;
+  const { vendorId, vendor_id, validUntil, notes, items, received_pdf_path, status, hostCompanyId, host_company_id } = payload;
 
   const hostCompanyIdVal = hostCompanyId || host_company_id;
+  const vendorIdVal = vendorId || vendor_id;
 
   const connection = await pool.getConnection();
   try {
@@ -618,7 +635,7 @@ const updateQuotation = async (quotationId, payload) => {
         newQuoteNumber,
         baseQuoteNumber,
         newVersion,
-        oldQuote.vendor_id,
+        vendorIdVal !== undefined ? (vendorIdVal === '' ? null : parseInt(vendorIdVal)) : oldQuote.vendor_id,
         oldQuote.sales_order_id,
         oldQuote.mr_id,
         oldQuote.rfq_id,
@@ -713,6 +730,19 @@ const updateQuotation = async (quotationId, payload) => {
       "UPDATE quotations SET status = 'SUPERSEDED' WHERE id = ? AND status != 'SUPERSEDED'",
       [quotationId]
     );
+
+    // Check if PO already exists for this quotation and update its quotation_id and vendor_id
+    const [existingPO] = await connection.query(
+      'SELECT id FROM purchase_orders WHERE quotation_id = ?',
+      [quotationId]
+    );
+
+    if (existingPO.length > 0) {
+      await connection.execute(
+        'UPDATE purchase_orders SET quotation_id = ?, vendor_id = ? WHERE id = ?',
+        [newQuotationId, vendorIdVal !== undefined ? parseInt(vendorIdVal) : oldQuote.vendor_id, existingPO[0].id]
+      );
+    }
 
     // If the new version is RECEIVED, check for single vendor auto-approval
     const currentStatus = status || 'RECEIVED';

@@ -69,7 +69,7 @@ export const SearchableSelect = ({
 
   const safeSearchTerm = String(searchTerm || '').toLowerCase();
   const filteredOptions = options.filter(opt => {
-    if (localValue && !isSearching) {
+    if (localValue && !isSearching && !isOpen) {
       return String(opt[valueField]) === String(localValue);
     }
     return String(getLabel(opt) || '').toLowerCase().includes(safeSearchTerm) ||

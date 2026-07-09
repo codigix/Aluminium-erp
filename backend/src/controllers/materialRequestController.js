@@ -6,7 +6,17 @@ const materialRequestController = {
     try {
       const [rows] = await pool.query(`
         SELECT mr.*, CONCAT(u.first_name, ' ', u.last_name) as requester_name,
-        pp.bom_no as drawing_no,
+        COALESCE(
+          (
+            SELECT COALESCE(soi.drawing_no, oi.drawing_no)
+            FROM production_plan_items ppi_dr
+            LEFT JOIN sales_order_items soi ON ppi_dr.sales_order_item_id = soi.id
+            LEFT JOIN order_items oi ON ppi_dr.sales_order_item_id = oi.id AND ppi_dr.sales_order_id = oi.order_id
+            WHERE ppi_dr.plan_id = pp.id
+            LIMIT 1
+          ),
+          pp.bom_no
+        ) as drawing_no,
         ppi.description as finished_good,
         COALESCE(
           (
@@ -66,7 +76,17 @@ const materialRequestController = {
       const { warehouse } = req.query;
       const [requests] = await pool.query(`
         SELECT mr.*, CONCAT(u.first_name, ' ', u.last_name) as requester_name,
-        pp.bom_no as drawing_no,
+        COALESCE(
+          (
+            SELECT COALESCE(soi.drawing_no, oi.drawing_no)
+            FROM production_plan_items ppi_dr
+            LEFT JOIN sales_order_items soi ON ppi_dr.sales_order_item_id = soi.id
+            LEFT JOIN order_items oi ON ppi_dr.sales_order_item_id = oi.id AND ppi_dr.sales_order_id = oi.order_id
+            WHERE ppi_dr.plan_id = pp.id
+            LIMIT 1
+          ),
+          pp.bom_no
+        ) as drawing_no,
         ppi.description as finished_good,
         COALESCE(
           (

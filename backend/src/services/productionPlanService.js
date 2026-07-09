@@ -10,6 +10,7 @@ const listProductionPlans = async () => {
             so.project_name as so_project_name,
             o.project_name as o_project_name,
             o_direct.project_name as o_direct_project_name,
+            COALESCE(soi.drawing_no, oi.drawing_no) as drawing_no,
             COALESCE(ppi.item_code, 
               CASE 
                 WHEN o_direct.id IS NOT NULL THEN oi.item_code 

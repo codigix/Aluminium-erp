@@ -733,12 +733,22 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
             if (!item) return false;
             const itemId = (item.id || item.sales_order_item_id || item.order_item_id)?.toString();
             const itemDrawing = (item.drawing_no || item.bom_no)?.toString();
-            return itemId === String(targetBomIdToSelect) || itemDrawing === String(targetBomIdToSelect);
+            const isMatch = itemId === String(targetBomIdToSelect) || itemDrawing === String(targetBomIdToSelect);
+            if (orderId && isMatch) {
+              const itemOrderId = item.sales_order_id || item.order_id;
+              return String(itemOrderId) === String(orderId);
+            }
+            return isMatch;
           }) || (readyItems || []).find(item => {
             if (!item) return false;
             const itemId = (item.id || item.sales_order_item_id || item.order_item_id)?.toString();
             const itemDrawing = (item.drawing_no || item.bom_no)?.toString();
-            return itemId === String(targetBomIdToSelect) || itemDrawing === String(targetBomIdToSelect);
+            const isMatch = itemId === String(targetBomIdToSelect) || itemDrawing === String(targetBomIdToSelect);
+            if (orderId && isMatch) {
+              const itemOrderId = item.sales_order_id || item.order_id;
+              return String(itemOrderId) === String(orderId);
+            }
+            return isMatch;
           });
 
           if (itemInReady) {
@@ -844,7 +854,12 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
       if (!item) return false;
       const itemId = (item.id || item.sales_order_item_id || item.order_item_id)?.toString();
       const itemDrawing = (item.drawing_no || item.bom_no)?.toString();
-      return itemId === finalBomId || itemDrawing === finalBomId;
+      const isMatch = itemId === finalBomId || itemDrawing === finalBomId;
+      if (selectedOrderId && isMatch) {
+        const itemOrderId = item.sales_order_id || item.order_id;
+        return String(itemOrderId) === String(selectedOrderId);
+      }
+      return isMatch;
     });
 
     if (itemInReady) {
@@ -1707,7 +1722,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
 
                         // If a drawing is selected, but not found in the list (e.g., loading or already planned),
                         // append it dynamically using details from newPlan.items[0]
-                        if (selectedBomId && !bomOptions.some(bom => String(bom.drawing_no || bom.bom_no || bom.id || bom.sales_order_item_id) === String(selectedBomId))) {
+                        if (selectedBomId && !bomOptions.some(bom => String(bom.id || bom.sales_order_item_id || bom.order_item_id) === String(selectedBomId))) {
                           const activeItem = newPlan.items?.[0];
                           if (activeItem) {
                             bomOptions.push({
@@ -1723,10 +1738,11 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                           <SearchableSelect
                             options={bomOptions.map((bom, idx) => {
                               const id = (bom.id || bom.sales_order_item_id || bom.order_item_id || idx)?.toString();
-                              const optionValue = bom.drawing_no || bom.bom_no || id;
+                              const optionValue = id;
                               const drawingNo = bom.drawing_no || bom.bom_no || bom.item_code || bom.itemCode || 'No Code';
+                              const orderNoVal = bom.order_no || selectedOrderDetails?.order_no || 'No Order';
                               return {
-                                label: `${drawingNo} - ${bom.description || 'No Description'}`,
+                                label: `${drawingNo} - ${bom.description || 'No Description'} (${orderNoVal})`,
                                 value: optionValue
                               };
                             })}
@@ -2454,14 +2470,18 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
       label: 'Drawing / Finished Good',
       key: 'bom_no',
       sortable: true,
-      render: (val, row) => (
-        <div className="flex flex-col">
-          <span className="text-xs font-medium text-indigo-600">{val || 'No Drawing'}</span>
-          <span className="text-[10px] text-slate-500 mt-0.5 line-clamp-1 max-w-[220px]">
-            {row.item_description || row.description || '—'}
-          </span>
-        </div>
-      )
+      render: (val, row) => {
+        // Show drawing_no if available, fallback to item_code (if non-numeric), and then finally bom_no.
+        const displayDrawing = row.drawing_no || ((row.item_code && isNaN(row.item_code)) ? row.item_code : (val || 'No Drawing'));
+        return (
+          <div className="flex flex-col">
+            <span className="text-xs font-medium text-indigo-600">{displayDrawing}</span>
+            <span className="text-[10px] text-slate-500 mt-0.5 line-clamp-1 max-w-[220px]">
+              {row.item_description || row.description || '—'}
+            </span>
+          </div>
+        );
+      }
     },
     {
       label: 'Qty',
