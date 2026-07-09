@@ -449,7 +449,33 @@ const getPurchaseOrders = async (filters = {}) => {
       v.vendor_name,
       v.email as vendor_email,
       mr.mr_number,
+      (
+        SELECT COUNT(DISTINCT sales_order_id)
+        FROM purchase_order_items
+        WHERE purchase_order_id = po.id AND sales_order_id IS NOT NULL
+      ) as project_count,
+      (
+        SELECT GROUP_CONCAT(DISTINCT so.project_name ORDER BY so.project_name SEPARATOR ', ')
+        FROM purchase_order_items poi_p
+        JOIN sales_orders so ON poi_p.sales_order_id = so.id
+        WHERE poi_p.purchase_order_id = po.id
+      ) as merged_project_names,
       COALESCE(
+        (
+          SELECT GROUP_CONCAT(DISTINCT poi_d.drawing_no ORDER BY poi_d.drawing_no SEPARATOR ', ')
+          FROM purchase_order_items poi_d
+          WHERE poi_d.purchase_order_id = po.id AND poi_d.drawing_no IS NOT NULL AND poi_d.drawing_no != '' AND poi_d.drawing_no != '—'
+        ),
+        (
+          SELECT COALESCE(ppi_inner.item_code, soi_inner.drawing_no, oi_inner.drawing_no)
+          FROM material_requests mr_inner 
+          JOIN production_plans pp_inner ON mr_inner.plan_id = pp_inner.id
+          LEFT JOIN production_plan_items ppi_inner ON pp_inner.id = ppi_inner.plan_id
+          LEFT JOIN sales_order_items soi_inner ON ppi_inner.sales_order_item_id = soi_inner.id
+          LEFT JOIN order_items oi_inner ON ppi_inner.sales_order_item_id = oi_inner.id AND ppi_inner.sales_order_id = oi_inner.order_id
+          WHERE mr_inner.id = po.mr_id 
+          LIMIT 1
+        ),
         (
           SELECT pp_inner.bom_no 
           FROM material_requests mr_inner 
@@ -465,6 +491,11 @@ const getPurchaseOrders = async (filters = {}) => {
         )
       ) as drawing_no,
       COALESCE(
+        (
+          SELECT GROUP_CONCAT(DISTINCT poi_fg.description ORDER BY poi_fg.description SEPARATOR ', ')
+          FROM purchase_order_items poi_fg
+          WHERE poi_fg.purchase_order_id = po.id AND poi_fg.description IS NOT NULL AND poi_fg.description != ''
+        ),
         (
           SELECT ppi_inner.description 
           FROM material_requests mr_inner 
@@ -2103,6 +2134,148 @@ const updatePurchaseOrderInvoice = async (poId, invoiceUrl) => {
   return { id: poId, invoice_url: invoiceUrl };
 };
 
+const mergePurchaseOrders = async (payload) => {
+  const { vendorId, sourcePoIds, items, notes, expectedDeliveryDate } = payload;
+
+  if (!vendorId) {
+    throw new Error('Vendor is required');
+  }
+  if (!Array.isArray(sourcePoIds) || sourcePoIds.length === 0) {
+    throw new Error('At least one source Purchase Order is required to merge');
+  }
+  if (!Array.isArray(items) || items.length === 0) {
+    throw new Error('At least one line item is required to merge');
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // 1. Fetch and validate source POs
+    const [sourcePOs] = await connection.query(
+      'SELECT * FROM purchase_orders WHERE id IN (?)',
+      [sourcePoIds]
+    );
+
+    if (sourcePOs.length !== sourcePoIds.length) {
+      throw new Error('Some source Purchase Orders could not be found');
+    }
+
+    for (const po of sourcePOs) {
+      if (String(po.vendor_id) !== String(vendorId)) {
+        throw new Error('Only Purchase Orders from the same supplier can be merged');
+      }
+      if (!['DRAFT', 'PO_REQUEST'].includes(po.status)) {
+        throw new Error(`Only Draft or Pending Purchase Orders can be merged. PO ${po.po_number} is in status ${po.status}`);
+      }
+    }
+
+    // 2. Generate new PO Number
+    const poNumber = await generatePONumber();
+    const publicId = crypto.randomUUID();
+
+    // 3. Create consolidated PO Header
+    let total_amount = 0;
+    const mappedItems = items.map(item => {
+      const qty = parseFloat(item.quantity) || 0;
+      const rate = parseFloat(item.unit_rate) || 0;
+      const amount = qty * rate;
+      const cgstPercent = parseFloat(item.cgst_percent) || 9;
+      const sgstPercent = parseFloat(item.sgst_percent) || 9;
+      const cgstAmount = (amount * cgstPercent) / 100;
+      const sgstAmount = (amount * sgstPercent) / 100;
+      const totalItemAmount = amount + cgstAmount + sgstAmount;
+
+      total_amount = Number((total_amount + totalItemAmount).toFixed(2));
+
+      return {
+        ...item,
+        quantity: qty,
+        unit_rate: rate,
+        amount: amount,
+        cgst_percent: cgstPercent,
+        cgst_amount: cgstAmount,
+        sgst_percent: sgstPercent,
+        sgst_amount: sgstAmount,
+        total_amount: totalItemAmount
+      };
+    });
+
+    const [result] = await connection.execute(
+      `INSERT INTO purchase_orders (po_number, public_id, vendor_id, status, total_amount, expected_delivery_date, notes)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        poNumber,
+        publicId,
+        parseInt(vendorId),
+        'DRAFT',
+        total_amount,
+        expectedDeliveryDate || null,
+        notes || `Merged from: ${sourcePOs.map(p => p.po_number).join(', ')}`
+      ]
+    );
+
+    const newPoId = result.insertId;
+
+    // 4. Save merged items
+    for (const item of mappedItems) {
+      await connection.execute(
+        `INSERT INTO purchase_order_items (
+          purchase_order_id, item_code, description, material_name, material_type, 
+          drawing_no, quantity, design_qty, planned_qty, unit, unit_rate, 
+          amount, cgst_percent, cgst_amount, sgst_percent, sgst_amount, total_amount,
+          length, width, thickness, diameter, outer_diameter, density, weight_per_unit,
+          sales_order_id, mr_id, source_po_id, source_po_item_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          newPoId,
+          item.item_code || null,
+          item.description || null,
+          item.material_name || null,
+          item.material_type || null,
+          item.drawing_no || null,
+          item.quantity,
+          parseFloat(item.design_qty) || item.quantity || 0,
+          parseFloat(item.planned_qty) || item.quantity || 0,
+          item.unit || item.uom || 'NOS',
+          item.unit_rate,
+          item.amount,
+          item.cgst_percent,
+          item.cgst_amount,
+          item.sgst_percent,
+          item.sgst_amount,
+          item.total_amount,
+          parseFloat(item.length) || 0,
+          parseFloat(item.width) || 0,
+          parseFloat(item.thickness) || 0,
+          parseFloat(item.diameter) || 0,
+          parseFloat(item.outer_diameter) || 0,
+          parseFloat(item.density) || 0,
+          parseFloat(item.weight_per_unit) || 0,
+          item.sales_order_id ? parseInt(item.sales_order_id) : null,
+          item.mr_id ? parseInt(item.mr_id) : null,
+          item.source_po_id ? parseInt(item.source_po_id) : null,
+          item.source_po_item_id ? parseInt(item.source_po_item_id) : null
+        ]
+      );
+    }
+
+    // 5. Update source POs status to MERGED
+    await connection.query(
+      'UPDATE purchase_orders SET status = "MERGED", merged_into_po_id = ? WHERE id IN (?)',
+      [newPoId, sourcePoIds]
+    );
+
+    await connection.commit();
+    return { id: newPoId, po_number: poNumber };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+};
+
 module.exports = {
   createPurchaseOrder,
   previewPurchaseOrder,
@@ -2116,5 +2289,6 @@ module.exports = {
   handleStoreAcceptance,
   generatePurchaseOrderPDF,
   sendPurchaseOrderEmail,
-  updatePurchaseOrderInvoice
+  updatePurchaseOrderInvoice,
+  mergePurchaseOrders
 };

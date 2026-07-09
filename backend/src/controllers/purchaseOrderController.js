@@ -199,6 +199,15 @@ const sendToPendingPayment = async (req, res, next) => {
   }
 };
 
+const mergePurchaseOrders = async (req, res, next) => {
+  try {
+    const result = await purchaseOrderService.mergePurchaseOrders(req.body);
+    res.json({ message: 'Purchase Orders merged successfully', data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   createPurchaseOrder,
   previewPurchaseOrder,
@@ -213,5 +222,6 @@ module.exports = {
   getPurchaseOrderPDF,
   sendPurchaseOrderEmail,
   uploadInvoice,
-  sendToPendingPayment
+  sendToPendingPayment,
+  mergePurchaseOrders
 };

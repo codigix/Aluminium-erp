@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { 
   Plus, Search, RefreshCw, Package, Clock, CheckCircle2, 
-  AlertCircle, Truck, FileText, LayoutGrid, List, Filter
+  AlertCircle, Truck, FileText, LayoutGrid, List, Filter, GitMerge
 } from 'lucide-react';
 import { Card, DataTable, SearchableSelect, Button, Tabs } from '../components/ui.jsx';
 import PurchaseOrderDetail from './PurchaseOrderDetail.jsx';
@@ -25,6 +25,7 @@ const poStatusColors = {
   CLOSED: { bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-600', badge: 'bg-slate-50 text-slate-700', label: 'closed', icon: 'M5 13l4 4L19 7' },
   FULFILLED: { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-600', badge: 'bg-emerald-50 text-emerald-700', label: 'fulfilled', icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' },
   COMPLETED: { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-600', badge: 'bg-emerald-50 text-emerald-700', label: 'completed', icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' },
+  MERGED: { bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-600', badge: 'bg-purple-50 text-purple-700', label: 'merged', icon: 'M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4' }
 };
 
 const formatDate = (date) => {
@@ -179,6 +180,17 @@ const PurchaseOrders = () => {
     items: []
   });
 
+  // Merge PO Wizard State
+  const [showMergeModal, setShowMergeModal] = useState(false);
+  const [mergeStep, setMergeStep] = useState(1);
+  const [mergeSupplierId, setMergeSupplierId] = useState('');
+  const [eligiblePOs, setEligiblePOs] = useState([]);
+  const [selectedPoIdsForMerge, setSelectedPoIdsForMerge] = useState([]);
+  const [mergedItems, setMergedItems] = useState([]);
+  const [mergeNotes, setMergeNotes] = useState('');
+  const [mergeExpectedDeliveryDate, setMergeExpectedDeliveryDate] = useState('');
+
+
   useEffect(() => {
     const storedUser = localStorage.getItem('authUser');
     if (storedUser) {
@@ -327,6 +339,151 @@ const PurchaseOrders = () => {
   const handleRemoveManualItem = (index) => {
     const newItems = manualFormData.items.filter((_, i) => i !== index);
     setManualFormData({ ...manualFormData, items: newItems });
+  };
+
+  const handleOpenMergeModal = () => {
+    setMergeStep(1);
+    setMergeSupplierId('');
+    setEligiblePOs([]);
+    setSelectedPoIdsForMerge([]);
+    setMergedItems([]);
+    setMergeNotes('');
+    setMergeExpectedDeliveryDate('');
+    setShowMergeModal(true);
+  };
+
+  const handleSupplierChangeForMerge = async (vendorId) => {
+    setMergeSupplierId(vendorId);
+    setSelectedPoIdsForMerge([]);
+    setEligiblePOs([]);
+    if (!vendorId) return;
+
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/purchase-orders?vendorId=${vendorId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        // Keep only DRAFT and PO_REQUEST status POs
+        const draftOrRequest = data.filter(p => ['DRAFT', 'PO_REQUEST'].includes(p.status));
+        setEligiblePOs(draftOrRequest);
+      }
+    } catch (error) {
+      console.error(error);
+      errorToast('Failed to fetch eligible Purchase Orders');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleTogglePoSelectionForMerge = (poId) => {
+    setSelectedPoIdsForMerge(prev => 
+      prev.includes(poId) ? prev.filter(id => id !== poId) : [...prev, poId]
+    );
+  };
+
+  const handleProceedToMergeForm = async () => {
+    if (selectedPoIdsForMerge.length === 0) {
+      return errorToast('Please select at least one Purchase Order to merge');
+    }
+
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('authToken');
+      
+      // Fetch details of each selected PO to get its line items
+      const poDetails = await Promise.all(
+        selectedPoIdsForMerge.map(async (poId) => {
+          const response = await fetch(`${API_BASE}/purchase-orders/${poId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (!response.ok) throw new Error(`Failed to load details for PO ID: ${poId}`);
+          return response.json();
+        })
+      );
+
+      // Consolidate all items
+      let consolidated = [];
+      poDetails.forEach(po => {
+        const items = po.items || [];
+        items.forEach(item => {
+          consolidated.push({
+            ...item,
+            source_po_id: po.id,
+            source_po_item_id: item.id,
+            sales_order_id: po.sales_order_id,
+            mr_id: po.mr_id,
+            project_name: po.project_name || '—',
+            rate: parseFloat(item.unit_rate || item.rate || 0),
+            unit_rate: parseFloat(item.unit_rate || item.rate || 0)
+          });
+        });
+      });
+
+      setMergedItems(consolidated);
+      setMergeStep(3);
+    } catch (error) {
+      console.error(error);
+      errorToast(error.message || 'Failed to prepare merged items list');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateMergedPO = async () => {
+    if (mergedItems.length === 0) {
+      return errorToast('No items to merge. Please add or restore items');
+    }
+
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/purchase-orders/merge`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          vendorId: mergeSupplierId,
+          sourcePoIds: selectedPoIdsForMerge,
+          items: mergedItems,
+          notes: mergeNotes,
+          expectedDeliveryDate: mergeExpectedDeliveryDate || null
+        })
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.message || errData.error || 'Failed to merge POs');
+      }
+
+      successToast('Purchase Orders merged successfully');
+      setShowMergeModal(false);
+      fetchPOs();
+      fetchStats();
+    } catch (error) {
+      errorToast(error.message || 'Failed to merge Purchase Orders');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRemoveMergedItem = (idxToRemove) => {
+    setMergedItems(prev => prev.filter((_, idx) => idx !== idxToRemove));
+  };
+
+  const handleMergedItemChange = (idx, field, val) => {
+    setMergedItems(prev => {
+      const copy = [...prev];
+      copy[idx] = { ...copy[idx], [field]: val };
+      return copy;
+    });
   };
 
   const handleCreateManualPO = async (e) => {
@@ -1057,6 +1214,20 @@ const PurchaseOrders = () => {
       key: 'project_name',
       sortable: true,
       render: (val, row) => {
+        if (row.project_count > 1) {
+          return (
+            <div className="flex flex-col py-1 min-w-[260px] max-w-[380px]">
+              <div className="flex flex-col">
+                <span className="text-slate-900 font-semibold text-[13px] leading-tight">
+                  {row.project_count} Projects
+                </span>
+                <span className="text-[11px] text-slate-500 italic mt-0.5 break-words" title={row.merged_project_names}>
+                  {row.merged_project_names}
+                </span>
+              </div>
+            </div>
+          );
+        }
         if (!val) return '—';
         // Intelligent split: break at " for " to keep drawing numbers on top line
         const parts = val.split(/\s+for\s+/i);
@@ -1315,6 +1486,13 @@ const PurchaseOrders = () => {
             icon={RefreshCw}
             className={loading ? 'animate-spin' : ''}
           />
+          <Button
+            variant="secondary"
+            onClick={handleOpenMergeModal}
+            icon={GitMerge}
+          >
+            Merge PO
+          </Button>
           <Button
             variant="primary"
             onClick={() => navigate(`${deptPrefix}/purchase-orders/manual-add`)}
@@ -2426,6 +2604,376 @@ const PurchaseOrders = () => {
                   </>
                 )}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Merge Purchase Order Modal */}
+      {showMergeModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-2 overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl my-auto animate-in fade-in zoom-in duration-200 overflow-hidden border border-slate-100 flex flex-col max-h-[90vh]">
+            {/* Header */}
+            <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-purple-50 text-purple-600 rounded-lg">
+                  <GitMerge className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-slate-800">Merge Purchase Orders</h2>
+                  <p className="text-xs text-slate-400 mt-0.5">Consolidate multiple orders for a single vendor</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowMergeModal(false)}
+                className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors text-slate-400 hover:text-slate-600"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+
+            {/* Steps Progress Indicator */}
+            <div className="px-6 py-3 border-b border-slate-100 bg-white flex items-center justify-center gap-4 text-xs font-semibold text-slate-500">
+              <div className="flex items-center gap-1.5">
+                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${mergeStep >= 1 ? 'bg-purple-600 text-white' : 'bg-slate-100 text-slate-400'}`}>1</span>
+                <span className={mergeStep === 1 ? 'text-purple-600 font-bold' : ''}>Select Vendor</span>
+              </div>
+              <svg className="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
+              <div className="flex items-center gap-1.5">
+                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${mergeStep >= 2 ? 'bg-purple-600 text-white' : 'bg-slate-100 text-slate-400'}`}>2</span>
+                <span className={mergeStep === 2 ? 'text-purple-600 font-bold' : ''}>Select Draft Orders</span>
+              </div>
+              <svg className="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
+              <div className="flex items-center gap-1.5">
+                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${mergeStep >= 3 ? 'bg-purple-600 text-white' : 'bg-slate-100 text-slate-400'}`}>3</span>
+                <span className={mergeStep === 3 ? 'text-purple-600 font-bold' : ''}>Review Merged Form</span>
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto flex-1 custom-scrollbar space-y-4">
+              {/* STEP 1: Select Supplier */}
+              {mergeStep === 1 && (
+                <div className="space-y-4 max-w-md mx-auto py-8">
+                  <div className="space-y-2">
+                    <label className="text-xs font-black text-slate-400 uppercase tracking-wider block">Supplier / Vendor *</label>
+                    <select
+                      value={mergeSupplierId}
+                      onChange={(e) => handleSupplierChangeForMerge(e.target.value)}
+                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none transition-all cursor-pointer"
+                    >
+                      <option value="">Choose Supplier</option>
+                      {vendors.map(v => (
+                        <option key={v.id} value={v.id}>{v.vendor_name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {mergeSupplierId && (
+                    <div className="p-4 bg-purple-50/50 border border-purple-100 rounded-xl text-xs text-purple-700 animate-in fade-in duration-300">
+                      {loading ? (
+                        <span className="flex items-center gap-2">
+                          <svg className="animate-spin h-3.5 w-3.5 text-purple-600" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                          </svg>
+                          Checking for eligible Draft POs...
+                        </span>
+                      ) : (
+                        <span>Found <b>{eligiblePOs.length}</b> pending/draft Purchase Orders for this supplier.</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* STEP 2: Select Purchase Orders */}
+              {mergeStep === 2 && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-wider">Eligible Purchase Orders</h3>
+                    <span className="text-[10px] font-bold text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full">
+                      {selectedPoIdsForMerge.length} Selected
+                    </span>
+                  </div>
+
+                  {eligiblePOs.length === 0 ? (
+                    <div className="text-center py-12 bg-slate-50 border border-slate-100 rounded-xl">
+                      <p className="text-xs text-slate-500 font-semibold">No pending or draft Purchase Orders found</p>
+                      <p className="text-[10px] text-slate-400 mt-1">All orders for this supplier are either already merged or submitted.</p>
+                    </div>
+                  ) : (
+                    <div className="border border-slate-100 rounded-xl overflow-hidden bg-white">
+                      <table className="w-full text-xs text-left">
+                        <thead>
+                          <tr className="bg-slate-50 border-b border-slate-100 text-slate-400 font-bold uppercase tracking-wider text-[10px]">
+                            <th className="p-3 w-12 text-center">Select</th>
+                            <th className="p-3">PO No</th>
+                            <th className="p-3">Project</th>
+                            <th className="p-3">Drawing</th>
+                            <th className="p-3 text-right">Items</th>
+                            <th className="p-3 text-right">Amount</th>
+                            <th className="p-3">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {eligiblePOs.map(po => {
+                            const isChecked = selectedPoIdsForMerge.includes(po.id);
+                            return (
+                              <tr key={po.id} className="hover:bg-slate-50/50 transition-all cursor-pointer" onClick={() => handleTogglePoSelectionForMerge(po.id)}>
+                                <td className="p-3 text-center" onClick={e => e.stopPropagation()}>
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={() => handleTogglePoSelectionForMerge(po.id)}
+                                    className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500/20"
+                                  />
+                                </td>
+                                <td className="p-3 font-semibold text-slate-700">{po.po_number}</td>
+                                <td className="p-3 text-slate-600">{po.project_name || '—'}</td>
+                                <td className="p-3 text-slate-600 font-mono">{po.drawing_no || '—'}</td>
+                                <td className="p-3 text-right text-slate-500 font-bold">{po.total_quantity || 0}</td>
+                                <td className="p-3 text-right font-bold text-slate-700">{formatCurrency(po.total_amount)}</td>
+                                <td className="p-3">
+                                  <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] uppercase font-bold ${poStatusColors[po.status]?.badge}`}>
+                                    {poStatusColors[po.status]?.label}
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* STEP 3: Merge PO Form */}
+              {mergeStep === 3 && (
+                <div className="space-y-4 animate-in fade-in duration-300">
+                  {/* Supplier and Project Header info */}
+                  <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Supplier</span>
+                      <span className="text-xs font-black text-slate-700">{vendors.find(v => String(v.id) === String(mergeSupplierId))?.vendor_name}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Consolidated Projects</span>
+                      <span className="text-xs font-semibold text-slate-600">
+                        {Array.from(new Set(mergedItems.map(i => i.project_name))).filter(p => p && p !== '—').join(', ') || 'Internal / Stock'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Original POs Count</span>
+                      <span className="text-xs font-semibold text-slate-600">{selectedPoIdsForMerge.length} Purchase Orders</span>
+                    </div>
+                  </div>
+
+                  {/* Expected Delivery and Notes */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-500 block">Expected Delivery Date *</label>
+                      <input
+                        type="date"
+                        value={mergeExpectedDeliveryDate}
+                        onChange={(e) => setMergeExpectedDeliveryDate(e.target.value)}
+                        className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none transition-all"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-500 block">Merge Notes / Remarks</label>
+                      <input
+                        type="text"
+                        value={mergeNotes}
+                        onChange={(e) => setMergeNotes(e.target.value)}
+                        placeholder="e.g. Consolidated order for upcoming projects"
+                        className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Consolidated Line Items Table */}
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider">Consolidated Line Items</h4>
+                    <div className="border border-slate-100 rounded-xl overflow-hidden bg-white">
+                      <table className="w-full text-xs text-left">
+                        <thead>
+                          <tr className="bg-slate-50 border-b border-slate-100 text-slate-400 font-bold uppercase tracking-wider text-[10px]">
+                            <th className="p-3">Project</th>
+                            <th className="p-3">Drawing</th>
+                            <th className="p-3">Material</th>
+                            <th className="p-3 text-center w-24">Qty</th>
+                            <th className="p-3 text-center w-28">Rate (₹)</th>
+                            <th className="p-3 text-right">Tax (GST)</th>
+                            <th className="p-3 text-right w-32">Total (₹)</th>
+                            <th className="p-3 w-12 text-center"></th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {mergedItems.map((item, idx) => {
+                            const qty = parseFloat(item.quantity) || 0;
+                            const rate = parseFloat(item.rate || item.unit_rate) || 0;
+                            const amt = qty * rate;
+                            const cgst = parseFloat(item.cgst_percent || 9);
+                            const sgst = parseFloat(item.sgst_percent || 9);
+                            const taxAmt = (amt * (cgst + sgst)) / 100;
+                            const total = amt + taxAmt;
+
+                            return (
+                              <tr key={idx} className="hover:bg-slate-50/50 transition-all">
+                                <td className="p-3 font-semibold text-indigo-600">{item.project_name || '—'}</td>
+                                <td className="p-3 font-mono text-slate-600">{item.drawing_no || '—'}</td>
+                                <td className="p-3 text-slate-700 font-semibold">{item.material_name || item.description || '—'}</td>
+                                <td className="p-3">
+                                  <input
+                                    type="number"
+                                    value={item.quantity}
+                                    onChange={(e) => handleMergedItemChange(idx, 'quantity', e.target.value)}
+                                    className="w-full p-1 bg-slate-50 border border-slate-200 rounded text-xs font-bold text-center focus:bg-white outline-none"
+                                  />
+                                </td>
+                                <td className="p-3">
+                                  <input
+                                    type="number"
+                                    value={item.rate}
+                                    onChange={(e) => handleMergedItemChange(idx, 'rate', e.target.value)}
+                                    className="w-full p-1 bg-slate-50 border border-slate-200 rounded text-xs font-bold text-center focus:bg-white outline-none"
+                                  />
+                                </td>
+                                <td className="p-3 text-right text-slate-500">
+                                  {item.cgst_percent + item.sgst_percent}% ({formatCurrency(taxAmt)})
+                                </td>
+                                <td className="p-3 text-right font-black text-slate-800">
+                                  {formatCurrency(total)}
+                                </td>
+                                <td className="p-3 text-center">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveMergedItem(idx)}
+                                    className="text-rose-500 hover:bg-rose-50 p-1 rounded-md transition-all"
+                                    title="Remove item"
+                                  >
+                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Summary Box */}
+                  <div className="flex justify-end pt-2 border-t border-slate-100">
+                    <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 w-72 space-y-2 text-xs">
+                      <div className="flex justify-between text-slate-500 font-semibold">
+                        <span>Subtotal:</span>
+                        <span>
+                          {formatCurrency(
+                            mergedItems.reduce((sum, i) => sum + (parseFloat(i.quantity || 0) * parseFloat(i.rate || i.unit_rate || 0)), 0)
+                          )}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-slate-500 font-semibold">
+                        <span>GST:</span>
+                        <span>
+                          {formatCurrency(
+                            mergedItems.reduce((sum, i) => {
+                              const amt = parseFloat(i.quantity || 0) * parseFloat(i.rate || i.unit_rate || 0);
+                              return sum + (amt * (parseFloat(i.cgst_percent || 9) + parseFloat(i.sgst_percent || 9))) / 100;
+                            }, 0)
+                          )}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-slate-800 font-bold border-t border-slate-200/80 pt-2 text-sm">
+                        <span>Grand Total:</span>
+                        <span className="text-purple-600">
+                          {formatCurrency(
+                            mergedItems.reduce((sum, i) => {
+                              const amt = parseFloat(i.quantity || 0) * parseFloat(i.rate || i.unit_rate || 0);
+                              const tax = (parseFloat(i.cgst_percent || 9) + parseFloat(i.sgst_percent || 9));
+                              return sum + amt + (amt * tax) / 100;
+                            }, 0)
+                          )}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer Buttons */}
+            <div className="flex justify-between items-center px-6 py-4 border-t border-slate-100 bg-slate-50/50">
+              <div>
+                {mergeStep > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => setMergeStep(prev => prev - 1)}
+                    className="px-5 py-2 border border-slate-200 text-slate-600 rounded-lg text-xs font-semibold hover:bg-slate-100 transition-all active:scale-98"
+                  >
+                    Back
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowMergeModal(false)}
+                  className="px-5 py-2 border border-slate-200 text-slate-600 rounded-lg text-xs font-semibold hover:bg-slate-100 transition-all"
+                >
+                  Cancel
+                </button>
+
+                {mergeStep === 1 && (
+                  <button
+                    type="button"
+                    disabled={!mergeSupplierId || loading}
+                    onClick={() => setMergeStep(2)}
+                    className="px-6 py-2 bg-purple-600 text-white rounded-lg text-xs font-semibold hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md shadow-purple-200 active:scale-98"
+                  >
+                    Next
+                  </button>
+                )}
+
+                {mergeStep === 2 && (
+                  <button
+                    type="button"
+                    disabled={selectedPoIdsForMerge.length === 0 || loading}
+                    onClick={handleProceedToMergeForm}
+                    className="px-6 py-2 bg-purple-600 text-white rounded-lg text-xs font-semibold hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md shadow-purple-200 active:scale-98"
+                  >
+                    Next
+                  </button>
+                )}
+
+                {mergeStep === 3 && (
+                  <button
+                    type="button"
+                    disabled={loading || !mergeExpectedDeliveryDate}
+                    onClick={handleCreateMergedPO}
+                    className="flex items-center gap-1.5 px-6 py-2 bg-purple-600 text-white rounded-lg text-xs font-semibold hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md shadow-purple-200 active:scale-98"
+                  >
+                    {loading ? (
+                      <>
+                        <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                        <span>Merging...</span>
+                      </>
+                    ) : (
+                      <>
+                        <GitMerge className="w-4 h-4" />
+                        <span>Create Merged PO</span>
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
