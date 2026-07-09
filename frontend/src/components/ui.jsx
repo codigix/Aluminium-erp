@@ -169,15 +169,17 @@ export const SearchableSelect = ({
   );
 };
 
-export const MultiSelect = ({ options, value = [], onChange, placeholder, labelField = 'label', valueField = 'value', subLabelField, disabled = false }) => {
+export const MultiSelect = ({ options, value = [], onChange, placeholder, labelField = 'label', valueField = 'value', subLabelField, disabled = false, compactDisplay = false, disabledValues = [] }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [maxDisplayCount, setMaxDisplayCount] = useState(1);
   const containerRef = useRef(null);
 
   const selectedValues = Array.isArray(value) ? value.map(v => String(v)) : [];
 
   const toggleOption = (val) => {
     const stringVal = String(val);
+    if (disabledValues.map(String).includes(stringVal)) return;
     let newValue;
     if (selectedValues.includes(stringVal)) {
       newValue = selectedValues.filter(v => v !== stringVal);
@@ -204,32 +206,92 @@ export const MultiSelect = ({ options, value = [], onChange, placeholder, labelF
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const observer = new ResizeObserver(entries => {
+      for (let entry of entries) {
+        const width = entry.contentRect.width;
+        if (width < 220) {
+          setMaxDisplayCount(1);
+        } else if (width < 350) {
+          setMaxDisplayCount(2);
+        } else {
+          setMaxDisplayCount(3);
+        }
+      }
+    });
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <div className="relative" ref={containerRef}>
       <div
-        className={`min-h-[38px] w-full p-1.5 border border-slate-200 rounded text-xs text-slate-900 flex flex-wrap gap-1 items-center cursor-pointer focus-within:ring-2 focus:ring-blue-500 ${disabled ? 'bg-slate-50 text-slate-500 cursor-not-allowed' : 'bg-white'}`}
+        className={`min-h-[38px] w-full p-1.5 border border-slate-200 rounded text-xs text-slate-900 flex items-center cursor-pointer focus-within:ring-2 focus:ring-blue-500 ${disabled ? 'bg-slate-50 text-slate-500 cursor-not-allowed' : 'bg-white'} ${compactDisplay ? 'flex-nowrap overflow-hidden' : 'flex-wrap gap-1'}`}
         onClick={() => !disabled && setIsOpen(!isOpen)}
       >
-        {selectedValues.length > 0 ? (
-          selectedValues.map(val => {
-            const opt = options.find(o => String(o[valueField]) === val);
+        {compactDisplay ? (
+          (() => {
+            if (selectedValues.length === 0) {
+              return <span className="text-slate-400">{placeholder}</span>;
+            }
+            const selectedOpts = selectedValues.map(val => options.find(o => String(o[valueField]) === val)).filter(Boolean);
+            if (selectedOpts.length === 0) {
+              return <span className="text-slate-400">{placeholder}</span>;
+            }
             return (
-              <span key={val} className="bg-rose-50 text-rose-600 px-2 py-0.5 rounded-md flex items-center gap-1 ">
-                {opt ? opt[labelField] : val}
-                <X
-                  className="w-3 h-3 cursor-pointer hover:text-indigo-800"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleOption(val);
-                  }}
-                />
-              </span>
+              <div className="flex items-center gap-1 overflow-hidden w-full select-none pr-6">
+                {selectedOpts.slice(0, maxDisplayCount).map(opt => {
+                  const val = String(opt[valueField]);
+                  const isDisabled = disabledValues.map(String).includes(val);
+                  return (
+                    <span 
+                      key={val} 
+                      className={`px-2 py-0.5 rounded text-[11px] font-medium flex items-center gap-1 shrink-0 ${isDisabled ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-rose-50 text-rose-600 border border-rose-100'}`}
+                    >
+                      {opt[labelField]}
+                      {!isDisabled && (
+                        <X
+                          className="w-3 h-3 cursor-pointer hover:text-rose-800"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleOption(val);
+                          }}
+                        />
+                      )}
+                    </span>
+                  );
+                })}
+                {selectedOpts.length > maxDisplayCount && (
+                  <span className="text-slate-500 font-medium text-[11px] shrink-0 ml-1">
+                    +{selectedOpts.length - maxDisplayCount} More
+                  </span>
+                )}
+              </div>
             );
-          })
+          })()
         ) : (
-          <span className="text-slate-400">{placeholder}</span>
+          selectedValues.length > 0 ? (
+            selectedValues.map(val => {
+              const opt = options.find(o => String(o[valueField]) === val);
+              return (
+                <span key={val} className="bg-rose-50 text-rose-600 px-2 py-0.5 rounded-md flex items-center gap-1 ">
+                  {opt ? opt[labelField] : val}
+                  <X
+                    className="w-3.5 h-3.5 cursor-pointer hover:text-indigo-800"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleOption(val);
+                    }}
+                  />
+                </span>
+              );
+            })
+          ) : (
+            <span className="text-slate-400">{placeholder}</span>
+          )
         )}
-        <div className="ml-auto text-slate-400">
+        <div className="ml-auto text-slate-400 shrink-0">
           {isOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
         </div>
       </div>
@@ -253,22 +315,25 @@ export const MultiSelect = ({ options, value = [], onChange, placeholder, labelF
             {filteredOptions.length > 0 ? (
               filteredOptions.map((opt, idx) => {
                 const isSelected = selectedValues.includes(String(opt[valueField]));
+                const isDisabledOption = disabledValues.map(String).includes(String(opt[valueField]));
                 return (
                   <div
                     key={idx}
-                    className={`p-2 text-xs cursor-pointer hover:bg-blue-50 flex items-center justify-between ${isSelected ? 'bg-blue-50 text-blue-600 ' : 'text-slate-700'}`}
+                    className={`p-2 text-xs flex items-center justify-between ${isDisabledOption ? 'bg-slate-50/60 text-slate-400 cursor-not-allowed' : 'cursor-pointer hover:bg-blue-50 text-slate-700'} ${isSelected && !isDisabledOption ? 'bg-blue-50 text-blue-600' : ''}`}
                     onClick={(e) => {
                       e.stopPropagation();
-                      toggleOption(opt[valueField]);
+                      if (!isDisabledOption) {
+                        toggleOption(opt[valueField]);
+                      }
                     }}
                   >
                     <div className="flex flex-col">
                       <span>{opt[labelField]}</span>
                       {subLabelField && opt[subLabelField] && (
-                        <span className="text-xs text-slate-400 font-normal">{opt[subLabelField]}</span>
+                        <span className="text-[10px] text-slate-400 font-normal">{opt[subLabelField]}</span>
                       )}
                     </div>
-                    {isSelected && <Check className="w-3.5 h-3.5" />}
+                    {isSelected && <Check className="w-3.5 h-3.5 text-blue-600" />}
                   </div>
                 );
               })

@@ -196,8 +196,13 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
               <ChevronRight className="w-2.5 h-2.5" />
               <span className="text-blue-600 ">{po.po_number}</span>
             </div>
-            <div className="flex items-center gap-2 mt-1">
+             <div className="flex items-center gap-2 mt-1">
               <h1 className="text-xl  text-slate-900 ">{po.po_number}</h1>
+              {po.is_merged ? (
+                <span className="p-1 bg-purple-50 text-purple-600 rounded text-[9px] font-bold border border-purple-100">
+                  MERGED PO
+                </span>
+              ) : null}
               <div className="flex items-center gap-1.5 p-2  bg-white border border-slate-200 rounded text-xs   ">
                 <div className={`w-2 h-2 rounded  ${activeStepIndex === 3 ? 'bg-emerald-500' : 'bg-blue-500'}`} />
                 <span className="text-slate-600 ">{po.status?.toLowerCase()}</span>

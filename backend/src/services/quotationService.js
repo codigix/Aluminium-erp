@@ -225,7 +225,7 @@ const getQuotations = async (filters = {}) => {
     SELECT q.*, v.vendor_name, so.so_number,
            COALESCE(
              (
-               SELECT COALESCE(ppi_dr.item_code, soi.drawing_no, oi.drawing_no)
+               SELECT COALESCE(soi.drawing_no, oi.drawing_no, ppi_dr.item_code)
                FROM production_plan_items ppi_dr
                LEFT JOIN sales_order_items soi ON ppi_dr.sales_order_item_id = soi.id
                LEFT JOIN order_items oi ON ppi_dr.sales_order_item_id = oi.id AND ppi_dr.sales_order_id = oi.order_id
@@ -393,7 +393,7 @@ const getQuotationById = async (quotationId) => {
     `SELECT q.*, mr.mr_number, so.so_number,
             COALESCE(
               (
-                SELECT COALESCE(ppi_dr.item_code, soi.drawing_no, oi.drawing_no)
+                SELECT COALESCE(soi.drawing_no, oi.drawing_no, ppi_dr.item_code)
                 FROM production_plan_items ppi_dr
                 LEFT JOIN sales_order_items soi ON ppi_dr.sales_order_item_id = soi.id
                 LEFT JOIN order_items oi ON ppi_dr.sales_order_item_id = oi.id AND ppi_dr.sales_order_id = oi.order_id

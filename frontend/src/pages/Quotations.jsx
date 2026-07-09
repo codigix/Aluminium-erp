@@ -70,12 +70,12 @@ const formatDimensions = (item) => {
     if (len > 0) parts.push(`L:${len.toFixed(0)}`);
     if (wid > 0) parts.push(`W:${wid.toFixed(0)}`);
     if (thk > 0) parts.push(`T:${thk.toFixed(1)}`);
-    
+
     let base = parts.join(' × ');
     if (base) {
       base += ' mm';
     }
-    
+
     if (od > 0) {
       if (base) {
         base += ` (OD ${od.toFixed(0)})`;
@@ -83,7 +83,7 @@ const formatDimensions = (item) => {
         base += `OD ${od.toFixed(0)}`;
       }
     }
-    
+
     if (dia > 0) {
       if (base) base += ' × ';
       base += `Dia ${dia.toFixed(0)}`;
@@ -91,7 +91,7 @@ const formatDimensions = (item) => {
         base += ' mm';
       }
     }
-    
+
     return base;
   }
   return '';
@@ -199,6 +199,7 @@ const Quotations = () => {
   const [openDownloadMenuId, setOpenDownloadMenuId] = useState(null);
   const [editAttachments, setEditAttachments] = useState([]);
   const [editUploadFiles, setEditUploadFiles] = useState([]);
+  const [itemVendorMap, setItemVendorMap] = useState({});
 
   useEffect(() => {
     setSelectedQuotes([]);
@@ -209,11 +210,11 @@ const Quotations = () => {
     if (showCompareModal && compareData.length > 0) {
       const initialAwards = {};
       const uniqueItemCodes = Array.from(new Set(compareData.flatMap(q => (q.items || []).map(item => item.item_code || item.drawing_no))));
-      
+
       uniqueItemCodes.forEach(itemCode => {
         let cheapestQuoteId = null;
         let cheapestRate = Infinity;
-        
+
         compareData.forEach(q => {
           const item = (q.items || []).find(it => (it.item_code || it.drawing_no) === itemCode);
           if (item && parseFloat(item.unit_rate) < cheapestRate) {
@@ -221,7 +222,7 @@ const Quotations = () => {
             cheapestQuoteId = q.id;
           }
         });
-        
+
         if (cheapestQuoteId) {
           initialAwards[itemCode] = cheapestQuoteId;
         }
@@ -632,7 +633,7 @@ const Quotations = () => {
     const updatedItems = (formData.items || []).map(item => {
       const currentItemVendors = item.vendorIds || [];
       let nextItemVendors = currentItemVendors.filter(vId => selectedIds.map(String).includes(String(vId)));
-      
+
       if (nextItemVendors.length === 0 && selectedIds.length > 0) {
         nextItemVendors = [...selectedIds];
       } else if (selectedIds.length === 1 && (nextItemVendors.length !== 1 || String(nextItemVendors[0]) !== String(selectedIds[0]))) {
@@ -1175,7 +1176,7 @@ const Quotations = () => {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!response.ok) throw new Error('Failed to fetch quotation details');
-      
+
       const qData = await response.json();
       setApprovalModalQuote(qData);
       setApprovalModalItems(qData.items || []);
@@ -1224,7 +1225,7 @@ const Quotations = () => {
     try {
       const token = localStorage.getItem('authToken');
       const quotationIds = compareData.map(q => q.id);
-      
+
       const awards = Object.entries(selectedAwards).map(([itemCode, quotationId]) => ({
         itemCode,
         quotationId
@@ -1646,31 +1647,44 @@ const Quotations = () => {
   const openRFQSendModal = (rfq) => {
     // 1. Pre-fill formData with RFQ data
     const mrId = rfq.mr_id;
-    const mrItems = (rfq.items || []).map(item => ({
-      drawing_no: item.drawing_no || item.item_code || '—',
-      material_name: item.material_name || item.name || item.description || '',
-      material_type: getCorrectMaterialType(item.drawing_no || item.item_code, item.material_type),
-      quantity: parseFloat(item.quantity) || 0,
-      design_qty: parseFloat(item.quantity) || 0,
-      planned_qty: parseFloat(item.planned_qty) || 0,
-      uom: item.uom || 'NOS',
-      unit_rate: 0,
-      length: item.length || 0,
-      width: item.width || 0,
-      thickness: item.thickness || 0,
-      diameter: item.diameter || 0,
-      outer_diameter: item.outer_diameter || 0,
-      density: item.density || 0,
-      weight_per_unit: item.weight_per_unit || 0
-    }));
+    const initialMap = {};
+    const mrItems = (rfq.items || []).map(item => {
+      const assignedIds = (item.assigned_vendors || []).map(v => String(v.vendor_id));
+      if (assignedIds.length === 0 && item.vendor_id != null) {
+        assignedIds.push(String(item.vendor_id));
+      }
+      initialMap[item.id] = assignedIds;
+      return {
+        id: item.id,
+        vendor_id: item.vendor_id,
+        assigned_vendors: item.assigned_vendors || [],
+        drawing_no: item.drawing_no || item.item_code || '—',
+        material_name: item.material_name || item.name || item.description || '',
+        material_type: getCorrectMaterialType(item.drawing_no || item.item_code, item.material_type),
+        quantity: parseFloat(item.quantity) || 0,
+        design_qty: parseFloat(item.quantity) || 0,
+        planned_qty: parseFloat(item.planned_qty) || 0,
+        uom: item.uom || 'NOS',
+        unit_rate: 0,
+        length: item.length || 0,
+        width: item.width || 0,
+        thickness: item.thickness || 0,
+        diameter: item.diameter || 0,
+        outer_diameter: item.outer_diameter || 0,
+        density: item.density || 0,
+        weight_per_unit: item.weight_per_unit || 0
+      };
+    });
+
+    setItemVendorMap(initialMap);
 
     setFormData({
       vendorId: '',
       vendorIds: [],
       salesOrderId: `MR-${mrId}`,
       rfq_id: rfq.id,
-      validUntil: '',
-      notes: `RFQ Ref: ${rfq.rfq_number}`,
+      validUntil: rfq.valid_until ? rfq.valid_until.split('T')[0] : '',
+      notes: rfq.notes || `RFQ Ref: ${rfq.rfq_number}`,
       items: mrItems.length > 0 ? mrItems : [{ drawing_no: '', material_name: '', material_type: '', quantity: 0, design_qty: 0, planned_qty: 0, uom: 'NOS', unit_rate: 0 }]
     });
 
@@ -1678,13 +1692,135 @@ const Quotations = () => {
     navigate(`${deptPrefix}/quotations/request`, { state: { fromRFQ: true } });
   };
 
+  const handleAssignSendSave = async (quotationStatus = 'SENT') => {
+    if (!formData.rfq_id) return;
+    setLoading(true);
+
+    try {
+      const token = localStorage.getItem('authToken');
+      const rfqItems = formData.items || [];
+
+      // Determine which items are newly assigned (have vendors now but didn't before)
+      const newlyAssigned = rfqItems.filter(item => {
+        const selectedVendorIds = itemVendorMap[item.id] || [];
+        const alreadyAssignedIds = (item.assigned_vendors || []).map(v => String(v.vendor_id));
+        if (alreadyAssignedIds.length === 0 && item.vendor_id != null) {
+          alreadyAssignedIds.push(String(item.vendor_id));
+        }
+
+        const newVendors = selectedVendorIds.filter(vId => !alreadyAssignedIds.includes(String(vId)));
+        item.newly_assigned_vendor_ids = newVendors;
+        return newVendors.length > 0;
+      });
+
+      // Group newly assigned items by vendor to create quotations
+      const vendorItemsMap = {};
+      newlyAssigned.forEach(item => {
+        (item.newly_assigned_vendor_ids || []).forEach(vId => {
+          if (!vendorItemsMap[vId]) vendorItemsMap[vId] = [];
+          vendorItemsMap[vId].push(item);
+        });
+      });
+
+      const rfqGroupId = `GRP-${Date.now()}`;
+
+      // Create quotations for each vendor's assigned items
+      for (const [vId, items] of Object.entries(vendorItemsMap)) {
+        const quotationItems = items.map(item => ({
+          drawing_no: item.drawing_no || item.item_code || '—',
+          item_code: item.item_code || item.drawing_no,
+          material_name: item.material_name || item.description || '',
+          material_type: item.material_type || 'RAW_MATERIAL',
+          quantity: parseFloat(item.quantity) || 0,
+          design_qty: parseFloat(item.quantity) || 0,
+          planned_qty: parseFloat(item.planned_qty) || 0,
+          uom: item.uom || 'NOS',
+          unit_rate: 0,
+          length: item.length || 0,
+          width: item.width || 0,
+          thickness: item.thickness || 0,
+          diameter: item.diameter || 0,
+          outer_diameter: item.outer_diameter || 0,
+          density: item.density || 0,
+          weight_per_unit: item.weight_per_unit || 0
+        }));
+
+        const payload = {
+          vendorId: parseInt(vId),
+          mrId: formData.salesOrderId ? parseInt(formData.salesOrderId.replace('MR-', '')) : null,
+          salesOrderId: null,
+          rfq_id: formData.rfq_id,
+          rfq_group_id: rfqGroupId,
+          validUntil: formData.validUntil || null,
+          notes: formData.notes || `RFQ Ref`,
+          hostCompanyId: formData.hostCompanyId || null,
+          status: quotationStatus,
+          items: quotationItems
+        };
+
+        const res = await fetch(`${API_BASE}/quotations`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || `Failed to create quotation for vendor ID ${vId}`);
+        }
+      }
+
+      // Persist per-item vendor assignments in the RFQ
+      const assignRes = await fetch(`${API_BASE}/rfqs/${formData.rfq_id}/assign-vendors`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ itemVendorMap })
+      });
+
+      if (!assignRes.ok) throw new Error('Failed to save vendor assignments');
+      const assignData = await assignRes.json();
+      const { assigned_items, total_items } = assignData.data || {};
+
+      const assignedCount = newlyAssigned.length + rfqItems.filter(i => i.vendor_id != null).length;
+      if (assignedCount >= rfqItems.length) {
+        successToast(`All ${total_items} items assigned! Quotations created successfully.`);
+      } else {
+        successToast(`${assigned_items} of ${total_items} items assigned. Remaining items still pending.`);
+      }
+
+      setShowCreateModal(false);
+      setFormData({
+        vendorId: '',
+        vendorIds: [],
+        salesOrderId: '',
+        rfq_id: null,
+        validUntil: '',
+        notes: '',
+        items: [{ drawing_no: '', material_name: '', material_type: '', quantity: 0, uom: 'NOS', unit_rate: 0 }]
+      });
+      setItemVendorMap({});
+      navigate(`${deptPrefix}/quotations`);
+      fetchQuotations();
+      fetchRawRfqs();
+      fetchStats();
+    } catch (error) {
+      console.error('Assign & Send error:', error);
+      errorToast(error.message || 'Failed to save assignments');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const displayQuotations = useMemo(() => {
     let combined = [...quotations];
 
-    // In 'sent' tab, also show RFQs that don't have linked quotations yet
+    // In 'sent' tab, also show RFQs that don't have linked quotations yet, or have partial assignments
     if (activeTab === 'sent') {
-      const rfqsWithNoQuotes = rawRfqs.filter(r => (r.quotations || []).length === 0);
-      const rfqPlaceholders = rfqsWithNoQuotes.map(r => ({
+      const rfqsNeedingAction = rawRfqs.filter(r => {
+        const hasAllQuotes = (r.total_items || 0) > 0 && (r.pending_items || 0) === 0 && (r.quotations || []).length > 0;
+        return !hasAllQuotes;
+      });
+      const rfqPlaceholders = rfqsNeedingAction.map(r => ({
         ...r,
         isRFQOnly: true,
         quote_number: r.rfq_number,
@@ -1705,7 +1841,7 @@ const Quotations = () => {
 
     const mapped = combined.filter(q => {
       const isTabMatch = activeTab === 'sent'
-        ? ['DRAFT', 'SENT', 'EMAIL_RECEIVED', 'PENDING', 'RFQ_REQUESTED'].includes(q.status)
+        ? ['DRAFT', 'SENT', 'EMAIL_RECEIVED', 'PENDING', 'RFQ_REQUESTED', 'PENDING_ITEMS'].includes(q.status)
         : ['RECEIVED', 'REVIEWED', 'REJECTED'].includes(q.status);
       const matchesStatus = filterStatus === 'All Quotations' || q.status === filterStatus;
       return isTabMatch && matchesStatus;
@@ -1752,11 +1888,20 @@ const Quotations = () => {
             <div className="text-sm   flex items-center gap-2">
               {val}
               {q.version && (
-                <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded text-xs  ">
+                <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded text-xs">
                   V{q.version}
                 </span>
               )}
-              {q.isRFQOnly && <span className="px-1.5 py-0.5 bg-amber-50 text-amber-600 border border-amber-100 rounded text-xs   ">No Vendor Assigned</span>}
+              {q.isRFQOnly && q.status === 'PENDING_ITEMS' && (
+                <span className="px-1.5 py-0.5 bg-yellow-50 text-yellow-600 border border-yellow-100 rounded text-xs">
+                  {q.assigned_items} of {q.total_items} Assigned
+                </span>
+              )}
+              {q.isRFQOnly && q.status !== 'PENDING_ITEMS' && (
+                <span className="px-1.5 py-0.5 bg-amber-50 text-amber-600 border border-amber-100 rounded text-xs">
+                  No Vendor Assigned
+                </span>
+              )}
             </div>
             {(q.sales_order_id || q.mr_number) && (
               <div className="text-xs text-slate-500 mt-1 flex items-center gap-1">
@@ -1804,10 +1949,27 @@ const Quotations = () => {
         sortable: true,
         render: (val, q) => (
           <div className="flex flex-col">
-            <span className="text-slate-900  ">{val ? getVendorName(val) : (q.isRFQOnly ? 'Unassigned' : 'Unknown')}</span>
-            {val && q.is_single_vendor && <span className="text-xs    text-slate-400 mt-0.5 ">[Single Vendor]</span>}
-            {val && <span className="text-xs text-slate-400 mt-1 flex items-center gap-1 opacity-70">Vendor ID: #{val}</span>}
-            {q.isRFQOnly && <span className="text-xs text-amber-500 italic mt-1 ">Select vendor below</span>}
+            {q.isRFQOnly && q.status === 'PENDING_ITEMS' ? (
+              <>
+                <span className="text-yellow-600 font-medium text-sm">
+                  {q.assigned_items} of {q.total_items} Items Assigned
+                </span>
+                <span className="text-xs text-amber-500 italic mt-0.5">
+                  {q.pending_items} Item{q.pending_items !== 1 ? 's' : ''} Pending Vendor Assignment
+                </span>
+              </>
+            ) : q.isRFQOnly ? (
+              <>
+                <span className="text-slate-500">Unassigned</span>
+                <span className="text-xs text-amber-500 italic mt-1">Select vendor below</span>
+              </>
+            ) : (
+              <>
+                <span className="text-slate-900">{val ? getVendorName(val) : 'Unknown'}</span>
+                {val && q.is_single_vendor && <span className="text-xs text-slate-400 mt-0.5">[Single Vendor]</span>}
+                {val && <span className="text-xs text-slate-400 mt-1 flex items-center gap-1 opacity-70">Vendor ID: #{val}</span>}
+              </>
+            )}
           </div>
         )
       },
@@ -2108,7 +2270,7 @@ const Quotations = () => {
             String(item.description || '').toLowerCase().includes(searchLower)
           );
           const matchesDrawing = String(row.drawing_no || '').toLowerCase().includes(searchLower) ||
-                                 String(row.finished_good || '').toLowerCase().includes(searchLower);
+            String(row.finished_good || '').toLowerCase().includes(searchLower);
           return matchesQuoteNo || matchesVendor || matchesProject || matchesCompany || matchesItems || matchesDrawing;
         }}
         actions={
@@ -2179,7 +2341,29 @@ const Quotations = () => {
                   <p className="text-xs text-slate-500 mt-1">Record details from vendor response</p>
                 )}
               </div>
-              <button onClick={() => navigate(`${deptPrefix}/quotations`)} className="text-slate-500 text-xl  leading-none">&times;</button>
+              <button
+                onClick={() => {
+                  if (formData.rfq_id) {
+                    setShowCreateModal(false);
+                    setFormData({
+                      vendorId: '',
+                      vendorIds: [],
+                      salesOrderId: '',
+                      rfq_id: null,
+                      validUntil: '',
+                      notes: '',
+                      items: [{ drawing_no: '', material_name: '', material_type: '', quantity: 0, uom: 'NOS', unit_rate: 0 }]
+                    });
+                    setItemVendorMap({});
+                    navigate(`${deptPrefix}/quotations`);
+                  } else {
+                    navigate(`${deptPrefix}/quotations`);
+                  }
+                }}
+                className="text-slate-500 text-xl leading-none"
+              >
+                &times;
+              </button>
             </div>
 
             <form onSubmit={activeTab === 'sent' ? handleCreateQuotation : handleRecordQuote} className="">
@@ -2231,8 +2415,8 @@ const Quotations = () => {
                             )}
                             <span className="text-[10px] font-bold text-slate-800 leading-tight truncate w-full">{selectedHostCompany.company_name}</span>
                             <span className={`text-[8px] mt-1 px-1.5 py-0.5 rounded-full font-semibold border ${selectedHostCompany.status === 'ACTIVE'
-                                ? 'bg-emerald-50 border-emerald-100 text-emerald-600'
-                                : 'bg-slate-100 border-slate-200 text-slate-500'
+                              ? 'bg-emerald-50 border-emerald-100 text-emerald-600'
+                              : 'bg-slate-100 border-slate-200 text-slate-500'
                               }`}>
                               {selectedHostCompany.status === 'ACTIVE' ? 'Active Global Billing' : 'Inactive'}
                             </span>
@@ -2274,29 +2458,48 @@ const Quotations = () => {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 mb-1">Select Drawing *</label>
-                      <SearchableSelect
-                        options={materialRequests.filter(mr => mr.drawing_no).map(mr => ({
-                          label: `${mr.drawing_no} - ${mr.finished_good || 'No description'}`,
-                          value: `MR-${mr.id}`
-                        }))}
-                        value={formData.salesOrderId || ''}
-                        onChange={handleSalesOrderChange}
-                        placeholder="Search & Select Drawing No..."
-                        allowCustom={false}
-                      />
+                      {formData.rfq_id ? (
+                        <input
+                          type="text"
+                          readOnly
+                          className="w-full bg-slate-50 border border-slate-200 rounded p-1.5 text-xs font-medium text-slate-500 cursor-not-allowed"
+                          value={(() => {
+                            const mrId = formData.salesOrderId?.replace('MR-', '');
+                            const mr = materialRequests.find(m => String(m.id) === String(mrId));
+                            return mr ? `${mr.drawing_no} - ${mr.finished_good || 'No description'}` : formData.salesOrderId || '';
+                          })()}
+                        />
+                      ) : (
+                        <SearchableSelect
+                          options={materialRequests.filter(mr => mr.drawing_no).map(mr => ({
+                            label: `${mr.drawing_no} - ${mr.finished_good || 'No description'}`,
+                            value: `MR-${mr.id}`
+                          }))}
+                          value={formData.salesOrderId || ''}
+                          onChange={handleSalesOrderChange}
+                          placeholder="Search & Select Drawing No..."
+                          allowCustom={false}
+                        />
+                      )}
                     </div>
 
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 mb-1">Vendor *</label>
-                      <MultiSelect
-                        options={vendors}
-                        value={formData.vendorIds}
-                        onChange={(e) => setFormData({ ...formData, vendorIds: e.target.value })}
-                        placeholder="Select Vendors..."
-                        labelField="vendor_name"
-                        valueField="id"
-                        subLabelField="email"
-                      />
+                      {formData.rfq_id ? (
+                        <div className="p-2 bg-amber-50 text-amber-700 border border-amber-200 rounded text-xs font-medium">
+                          Assign vendor per line item below
+                        </div>
+                      ) : (
+                        <MultiSelect
+                          options={vendors}
+                          value={formData.vendorIds}
+                          onChange={(e) => setFormData({ ...formData, vendorIds: e.target.value })}
+                          placeholder="Select Vendors..."
+                          labelField="vendor_name"
+                          valueField="id"
+                          subLabelField="email"
+                        />
+                      )}
                     </div>
                   </div>
 
@@ -2337,14 +2540,29 @@ const Quotations = () => {
 
                   <div>
                     <div className="flex justify-between my-2 items-center">
-                      <label className="block text-sm  text-slate-700">Line Items</label>
-                      <button
-                        type="button"
-                        onClick={handleAddItem}
-                        className="p-2  bg-blue-600 text-white text-xs rounded  hover:bg-blue-700"
-                      >
-                        + Add Item
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <label className="block text-sm font-semibold text-slate-700">Line Items</label>
+                        {formData.rfq_id && (() => {
+                          const items = formData.items || [];
+                          const already = items.filter(i => i.vendor_id != null).length;
+                          const newSel = items.filter(i => i.vendor_id == null && itemVendorMap[i.id]).length;
+                          const totalAssigned = already + newSel;
+                          return (
+                            <span className={`text-xs px-2.5 py-0.5 rounded-full font-medium ${totalAssigned === items.length ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                              {totalAssigned} of {items.length} Items Assigned
+                            </span>
+                          );
+                        })()}
+                      </div>
+                      {!formData.rfq_id && (
+                        <button
+                          type="button"
+                          onClick={handleAddItem}
+                          className="p-2  bg-blue-600 text-white text-xs rounded  hover:bg-blue-700"
+                        >
+                          + Add Item
+                        </button>
+                      )}
                     </div>
 
                     {formData.items.length === 0 ? (
@@ -2362,80 +2580,118 @@ const Quotations = () => {
                           <div className="col-span-2 text-center">Required</div>
                           <div className="col-span-1"></div>
                         </div>
-                        {formData.items.map((item, idx) => (
-                          <div key={idx} className="grid grid-cols-12 gap-2 items-start py-2 border-b border-slate-50 last:border-0">
-                            <div className="col-span-2 relative">
+                        {formData.items.map((item, idx) => {
+                          const alreadyAssignedIds = (item.assigned_vendors || []).map(v => String(v.vendor_id));
+                          if (alreadyAssignedIds.length === 0 && item.vendor_id != null) {
+                            alreadyAssignedIds.push(String(item.vendor_id));
+                          }
+                          const isAlreadyAssigned = formData.rfq_id && alreadyAssignedIds.length > 0;
+                          
+                          const selectedVendorIds = itemVendorMap[item.id] || [];
+                          const newlySelectedIds = selectedVendorIds.filter(id => !alreadyAssignedIds.includes(String(id)));
+                          const hasNewSelection = !isAlreadyAssigned && newlySelectedIds.length > 0;
+
+                          return (
+                            <div key={idx} className={`grid grid-cols-12 gap-2 items-start py-2 border-b border-slate-50 last:border-0 ${isAlreadyAssigned ? 'bg-emerald-50/10' : hasNewSelection ? 'bg-amber-50/10' : ''}`}>
+                              <div className="col-span-2 relative">
+                                <input
+                                  type="text"
+                                  placeholder="Drawing No"
+                                  value={item.drawing_no}
+                                  readOnly={!!formData.rfq_id}
+                                  onChange={(e) => handleItemChange(idx, 'drawing_no', e.target.value)}
+                                  className={`w-full p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 ${formData.rfq_id ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+                                />
+                              </div>
+                              <div className="col-span-3 space-y-1">
+                                <input
+                                  type="text"
+                                  placeholder="Material Name"
+                                  value={item.material_name}
+                                  readOnly={!!formData.rfq_id}
+                                  onChange={(e) => handleItemChange(idx, 'material_name', e.target.value)}
+                                  className={`w-full p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 ${formData.rfq_id ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+                                />
+                                {formatDimensions(item) && (
+                                  <div className="flex flex-wrap gap-x-2 gap-y-1 px-1 font-mono text-[10px] text-slate-500">
+                                    {formatDimensions(item)}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="col-span-2 space-y-1.5">
+                                {formData.rfq_id ? (
+                                  <MultiSelect
+                                    options={vendors}
+                                    value={selectedVendorIds}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      setItemVendorMap(prev => ({ ...prev, [item.id]: val }));
+                                      const newItems = [...formData.items];
+                                      newItems[idx].vendorIds = val;
+                                      setFormData(prev => ({ ...prev, items: newItems }));
+                                    }}
+                                    placeholder="Select Vendors..."
+                                    labelField="vendor_name"
+                                    valueField="id"
+                                    compactDisplay={true}
+                                    disabledValues={alreadyAssignedIds}
+                                  />
+                                ) : (
+                                  <MultiSelect
+                                    options={getAvailableVendors()}
+                                    value={item.vendorIds || []}
+                                    onChange={(e) => handleItemChange(idx, 'vendorIds', e.target.value)}
+                                    placeholder="Select Vendors..."
+                                    labelField="vendor_name"
+                                    valueField="id"
+                                    compactDisplay={true}
+                                  />
+                                )}
+                              </div>
                               <input
                                 type="text"
-                                placeholder="Drawing No"
-                                value={item.drawing_no}
-                                onChange={(e) => handleItemChange(idx, 'drawing_no', e.target.value)}
-                                className="w-full p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                placeholder="Type"
+                                value={item.material_type}
+                                readOnly={!!formData.rfq_id}
+                                onChange={(e) => handleItemChange(idx, 'material_type', e.target.value)}
+                                className={`col-span-1 p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 ${formData.rfq_id ? 'bg-slate-50 cursor-not-allowed' : ''}`}
                               />
-                            </div>
-                            <div className="col-span-3 space-y-1">
-                              <input
-                                type="text"
-                                placeholder="Material Name"
-                                value={item.material_name}
-                                onChange={(e) => handleItemChange(idx, 'material_name', e.target.value)}
-                                className="w-full p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              />
-                              {formatDimensions(item) && (
-                                <div className="flex flex-wrap gap-x-2 gap-y-1 px-1 font-mono text-[10px] text-slate-500">
-                                  {formatDimensions(item)}
+                              <div className="col-span-1 flex flex-col items-center">
+                                <div className="text-xs  text-slate-400 mb-0.5">
+                                  {Number(item.planned_qty || 0).toFixed(3)} {item.uom || 'Kg'}
                                 </div>
-                              )}
-                            </div>
-                            <div className="col-span-2">
-                              <MultiSelect
-                                options={getAvailableVendors()}
-                                value={item.vendorIds || []}
-                                onChange={(e) => handleItemChange(idx, 'vendorIds', e.target.value)}
-                                placeholder="Select Vendors..."
-                                labelField="vendor_name"
-                                valueField="id"
-                              />
-                            </div>
-                            <input
-                              type="text"
-                              placeholder="Type"
-                              value={item.material_type}
-                              onChange={(e) => handleItemChange(idx, 'material_type', e.target.value)}
-                              className="col-span-1 p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            />
-                            <div className="col-span-1 flex flex-col items-center">
-                              <div className="text-xs  text-slate-400 mb-0.5">
-                                {Number(item.planned_qty || 0).toFixed(3)} {item.uom || 'Kg'}
+                                <div className="text-xs   text-slate-600">
+                                  Design Qty
+                                </div>
                               </div>
-                              <div className="text-xs   text-slate-600">
-                                Design Qty
+                              <div className="col-span-2 flex gap-1">
+                                <input
+                                  type="number"
+                                  placeholder="Required"
+                                  value={item.design_qty || 0}
+                                  readOnly={!!formData.rfq_id}
+                                  onChange={(e) => handleItemChange(idx, 'design_qty', parseFloat(e.target.value) || 0)}
+                                  className={`w-full p-2 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500 ${formData.rfq_id ? 'bg-slate-50 cursor-not-allowed' : ''}`}
+                                />
+                                <div className="p-2 bg-slate-50 border border-slate-200 rounded text-xs  text-slate-500 flex items-center justify-center min-w-[40px]">
+                                  {item.uom || 'Kg'}
+                                </div>
                               </div>
-                            </div>
-                            <div className="col-span-2 flex gap-1">
-                              <input
-                                type="number"
-                                placeholder="Required"
-                                value={item.design_qty || 0}
-                                onChange={(e) => handleItemChange(idx, 'design_qty', parseFloat(e.target.value) || 0)}
-                                className="w-full p-2 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              />
-                              <div className="p-2 bg-slate-50 border border-slate-200 rounded text-xs  text-slate-500 flex items-center justify-center min-w-[40px]">
-                                {item.uom || 'Kg'}
+                              <div className="col-span-1 flex justify-center pt-1.5">
+                                {!formData.rfq_id && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveItem(idx)}
+                                    className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-colors"
+                                    title="Remove item"
+                                  >
+                                    ✕
+                                  </button>
+                                )}
                               </div>
                             </div>
-                            <div className="col-span-1 flex justify-center pt-1.5">
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveItem(idx)}
-                                className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-colors"
-                                title="Remove item"
-                              >
-                                ✕
-                              </button>
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -2741,7 +2997,24 @@ const Quotations = () => {
               <div className="flex gap-2 justify-end pt-4 border-t border-slate-200">
                 <button
                   type="button"
-                  onClick={() => navigate(`${deptPrefix}/quotations`)}
+                  onClick={() => {
+                    if (formData.rfq_id) {
+                      setShowCreateModal(false);
+                      setFormData({
+                        vendorId: '',
+                        vendorIds: [],
+                        salesOrderId: '',
+                        rfq_id: null,
+                        validUntil: '',
+                        notes: '',
+                        items: [{ drawing_no: '', material_name: '', material_type: '', quantity: 0, uom: 'NOS', unit_rate: 0 }]
+                      });
+                      setItemVendorMap({});
+                      navigate(`${deptPrefix}/quotations`);
+                    } else {
+                      navigate(`${deptPrefix}/quotations`);
+                    }
+                  }}
                   className="p-2  border border-slate-200 rounded text-xs  hover:bg-slate-50"
                 >
                   Cancel
@@ -2749,7 +3022,13 @@ const Quotations = () => {
                 {activeTab === 'sent' && (
                   <button
                     type="button"
-                    onClick={(e) => handleCreateQuotation(e, 'DRAFT')}
+                    onClick={(e) => {
+                      if (formData.rfq_id) {
+                        handleAssignSendSave('DRAFT');
+                      } else {
+                        handleCreateQuotation(e, 'DRAFT');
+                      }
+                    }}
                     className="p-2 border border-blue-600 text-blue-600 rounded text-xs hover:bg-blue-50"
                     disabled={loading}
                   >
@@ -2757,7 +3036,18 @@ const Quotations = () => {
                   </button>
                 )}
                 <button
-                  type="submit"
+                  type="button"
+                  onClick={(e) => {
+                    if (activeTab === 'sent') {
+                      if (formData.rfq_id) {
+                        handleAssignSendSave('SENT');
+                      } else {
+                        handleCreateQuotation(e, 'SENT');
+                      }
+                    } else {
+                      handleRecordQuote(e);
+                    }
+                  }}
                   className="p-2  bg-green-600 text-white rounded text-xs  hover:bg-green-700"
                   disabled={loading}
                 >
@@ -2911,8 +3201,8 @@ const Quotations = () => {
                           )}
                           <span className="text-[10px] font-bold text-slate-800 leading-tight truncate w-full">{selectedEditHostCompany.company_name}</span>
                           <span className={`text-[8px] mt-1 px-1.5 py-0.5 rounded-full font-semibold border ${selectedEditHostCompany.status === 'ACTIVE'
-                              ? 'bg-emerald-50 border-emerald-100 text-emerald-600'
-                              : 'bg-slate-100 border-slate-200 text-slate-500'
+                            ? 'bg-emerald-50 border-emerald-100 text-emerald-600'
+                            : 'bg-slate-100 border-slate-200 text-slate-500'
                             }`}>
                             {selectedEditHostCompany.status === 'ACTIVE' ? 'Active Global Billing' : 'Inactive'}
                           </span>

@@ -1171,6 +1171,11 @@ const PurchaseOrders = () => {
           <span className=" text-blue-600 cursor-pointer hover:underline text-xs ">
             {val || `PO-${String(row.id).padStart(4, '0')}`}
           </span>
+          {row.is_merged ? (
+            <span className="p-1 bg-purple-50 text-purple-600 rounded text-[9px] font-bold border border-purple-100 w-fit mt-1">
+              MERGED PO
+            </span>
+          ) : null}
           <span className="text-xs text-slate-400  flex items-center gap-1 mt-0.5">
             {row.mr_number || (row.quotation_id ? `QT-${row.quotation_id}` : `ID-${row.id}`)}
           </span>

@@ -462,12 +462,50 @@ const getPurchaseOrders = async (filters = {}) => {
       ) as merged_project_names,
       COALESCE(
         (
-          SELECT GROUP_CONCAT(DISTINCT poi_d.drawing_no ORDER BY poi_d.drawing_no SEPARATOR ', ')
+          SELECT GROUP_CONCAT(DISTINCT 
+            COALESCE(
+              (
+                SELECT COALESCE(soi.drawing_no, oi.drawing_no, ppi.item_code)
+                FROM material_requests mr_inner
+                JOIN production_plans pp ON mr_inner.plan_id = pp.id
+                JOIN production_plan_items ppi ON pp.id = ppi.plan_id
+                LEFT JOIN sales_order_items soi ON ppi.sales_order_item_id = soi.id
+                LEFT JOIN order_items oi ON ppi.sales_order_item_id = oi.id AND ppi.sales_order_id = oi.order_id
+                WHERE mr_inner.id = poi_d.mr_id
+                AND (ppi.item_code IS NOT NULL AND ppi.item_code != '')
+                LIMIT 1
+              ),
+              (
+                SELECT COALESCE(soi.drawing_no, oi.drawing_no, ppi.item_code)
+                FROM production_plans pp
+                JOIN production_plan_items ppi ON pp.id = ppi.plan_id
+                LEFT JOIN sales_order_items soi ON ppi.sales_order_item_id = soi.id
+                LEFT JOIN order_items oi ON ppi.sales_order_item_id = oi.id AND ppi.sales_order_id = oi.order_id
+                WHERE pp.sales_order_id = poi_d.sales_order_id
+                AND (ppi.item_code IS NOT NULL AND ppi.item_code != '')
+                LIMIT 1
+              ),
+              (
+                SELECT soi.drawing_no 
+                FROM sales_order_items soi 
+                WHERE soi.sales_order_id = poi_d.sales_order_id
+                AND (soi.drawing_no IS NOT NULL AND soi.drawing_no != '')
+                LIMIT 1
+              ),
+              (
+                SELECT TRIM(drawing_no) 
+                FROM purchase_order_items 
+                WHERE id = poi_d.id 
+                AND TRIM(drawing_no) != TRIM(item_code)
+              )
+            )
+            ORDER BY poi_d.id SEPARATOR ', '
+          )
           FROM purchase_order_items poi_d
-          WHERE poi_d.purchase_order_id = po.id AND poi_d.drawing_no IS NOT NULL AND poi_d.drawing_no != '' AND poi_d.drawing_no != '—'
+          WHERE poi_d.purchase_order_id = po.id
         ),
         (
-          SELECT COALESCE(ppi_inner.item_code, soi_inner.drawing_no, oi_inner.drawing_no)
+          SELECT COALESCE(soi_inner.drawing_no, oi_inner.drawing_no, ppi_inner.item_code)
           FROM material_requests mr_inner 
           JOIN production_plans pp_inner ON mr_inner.plan_id = pp_inner.id
           LEFT JOIN production_plan_items ppi_inner ON pp_inner.id = ppi_inner.plan_id
@@ -635,7 +673,54 @@ const getPurchaseOrders = async (filters = {}) => {
     const poIds = pos.map(p => p.id);
     const [items] = await pool.query(
       `SELECT 
-        poi.*,
+        poi.id, poi.purchase_order_id, poi.item_code, poi.description, poi.design_qty, poi.planned_qty,
+        poi.quantity, poi.unit, poi.unit_rate, poi.amount, poi.cgst_percent, poi.cgst_amount,
+        poi.sgst_percent, poi.sgst_amount, poi.total_amount, poi.material_name, poi.material_type,
+        poi.drawing_id, poi.length, poi.width, poi.thickness, poi.diameter, poi.outer_diameter,
+        poi.density, poi.weight_per_unit,
+        COALESCE(
+          (
+            SELECT COALESCE(soi.drawing_no, oi.drawing_no, ppi.item_code)
+            FROM material_requests mr
+            JOIN production_plans pp ON mr.plan_id = pp.id
+            JOIN production_plan_items ppi ON pp.id = ppi.plan_id
+            LEFT JOIN sales_order_items soi ON ppi.sales_order_item_id = soi.id
+            LEFT JOIN order_items oi ON ppi.sales_order_item_id = oi.id AND ppi.sales_order_id = oi.order_id
+            WHERE mr.id = poi.mr_id
+            AND (ppi.item_code IS NOT NULL AND ppi.item_code != '')
+            LIMIT 1
+          ),
+          (
+            SELECT COALESCE(soi.drawing_no, oi.drawing_no, ppi.item_code)
+            FROM purchase_order_items poi_src
+            JOIN material_requests mr ON poi_src.mr_id = mr.id
+            JOIN production_plans pp ON mr.plan_id = pp.id
+            JOIN production_plan_items ppi ON pp.id = ppi.plan_id
+            LEFT JOIN sales_order_items soi ON ppi.sales_order_item_id = soi.id
+            LEFT JOIN order_items oi ON ppi.sales_order_item_id = oi.id AND ppi.sales_order_id = oi.order_id
+            WHERE poi_src.id = poi.source_po_item_id
+            AND (ppi.item_code IS NOT NULL AND ppi.item_code != '')
+            LIMIT 1
+          ),
+          (
+            SELECT COALESCE(soi.drawing_no, oi.drawing_no, ppi.item_code)
+            FROM production_plans pp
+            JOIN production_plan_items ppi ON pp.id = ppi.plan_id
+            LEFT JOIN sales_order_items soi ON ppi.sales_order_item_id = soi.id
+            LEFT JOIN order_items oi ON ppi.sales_order_item_id = oi.id AND ppi.sales_order_id = oi.order_id
+            WHERE pp.sales_order_id = poi.sales_order_id
+            AND (ppi.item_code IS NOT NULL AND ppi.item_code != '')
+            LIMIT 1
+          ),
+          (
+            SELECT soi.drawing_no 
+            FROM sales_order_items soi 
+            WHERE soi.sales_order_id = poi.sales_order_id
+            AND (soi.drawing_no IS NOT NULL AND soi.drawing_no != '')
+            LIMIT 1
+          ),
+          poi.drawing_no
+        ) as drawing_no,
         (SELECT status FROM sales_order_items soi 
          WHERE (poi.drawing_no = soi.drawing_no OR poi.item_code = soi.item_code) 
          AND soi.sales_order_id = po.sales_order_id 
@@ -764,7 +849,49 @@ const getPurchaseOrderById = async (poId) => {
       poi.total_amount,
       COALESCE(poi.material_name, sb.material_name, poi.item_code) as material_name,
       poi.material_type,
-      poi.drawing_no,
+      COALESCE(
+        (
+          SELECT COALESCE(soi.drawing_no, oi.drawing_no, ppi.item_code)
+          FROM material_requests mr
+          JOIN production_plans pp ON mr.plan_id = pp.id
+          JOIN production_plan_items ppi ON pp.id = ppi.plan_id
+          LEFT JOIN sales_order_items soi ON ppi.sales_order_item_id = soi.id
+          LEFT JOIN order_items oi ON ppi.sales_order_item_id = oi.id AND ppi.sales_order_id = oi.order_id
+          WHERE mr.id = poi.mr_id
+          AND (ppi.item_code IS NOT NULL AND ppi.item_code != '')
+          LIMIT 1
+        ),
+        (
+          SELECT COALESCE(soi.drawing_no, oi.drawing_no, ppi.item_code)
+          FROM purchase_order_items poi_src
+          JOIN material_requests mr ON poi_src.mr_id = mr.id
+          JOIN production_plans pp ON mr.plan_id = pp.id
+          JOIN production_plan_items ppi ON pp.id = ppi.plan_id
+          LEFT JOIN sales_order_items soi ON ppi.sales_order_item_id = soi.id
+          LEFT JOIN order_items oi ON ppi.sales_order_item_id = oi.id AND ppi.sales_order_id = oi.order_id
+          WHERE poi_src.id = poi.source_po_item_id
+          AND (ppi.item_code IS NOT NULL AND ppi.item_code != '')
+          LIMIT 1
+        ),
+        (
+          SELECT COALESCE(soi.drawing_no, oi.drawing_no, ppi.item_code)
+          FROM production_plans pp
+          JOIN production_plan_items ppi ON pp.id = ppi.plan_id
+          LEFT JOIN sales_order_items soi ON ppi.sales_order_item_id = soi.id
+          LEFT JOIN order_items oi ON ppi.sales_order_item_id = oi.id AND ppi.sales_order_id = oi.order_id
+          WHERE pp.sales_order_id = poi.sales_order_id
+          AND (ppi.item_code IS NOT NULL AND ppi.item_code != '')
+          LIMIT 1
+        ),
+        (
+          SELECT soi.drawing_no 
+          FROM sales_order_items soi 
+          WHERE soi.sales_order_id = poi.sales_order_id
+          AND (soi.drawing_no IS NOT NULL AND soi.drawing_no != '')
+          LIMIT 1
+        ),
+        poi.drawing_no
+      ) as drawing_no,
       poi.accepted_quantity,
       COALESCE(NULLIF(poi.length, 0), sb.length, 0) as length,
       COALESCE(NULLIF(poi.width, 0), sb.width, 0) as width,
@@ -1761,7 +1888,7 @@ const generatePurchaseOrderPDF = async (poId) => {
           <div style="padding-left: 10px;">
             <strong>{{material_name}}</strong><br/>
             {{#description}}
-            <span style="font-size: 7px; color: #555;">{{description}}</span>
+            <strong style="font-size: 7.5px; color: #000; font-weight: bold;">{{description}}</strong>
             {{/description}}
           </div>
         </td>
@@ -2017,19 +2144,58 @@ const generatePurchaseOrderPDF = async (poId) => {
     hostIFSCCode: activeCompany?.ifsc_code ? activeCompany.ifsc_code.toUpperCase() : 'HDFC0001234',
     hostBranchName: activeCompany?.branch_name || 'Bhosari, Pune - 411026, Maharashtra',
     hostState: activeCompany?.state || 'Maharashtra',
-    items: (po.items || []).map((i, idx) => {
+    items: await Promise.all((po.items || []).map(async (i, idx) => {
       const dQty = parseFloat(i.design_qty);
       const qty = parseFloat(i.quantity);
       const displayQty = (dQty && dQty !== 0) ? dQty : (qty || 0);
+
+      let resolvedDrawingNo = null;
+
+      // 1. Check by drawing_id in customer_drawings
+      if (i.drawing_id) {
+        const [dwg] = await pool.query('SELECT drawing_no FROM customer_drawings WHERE id = ?', [i.drawing_id]);
+        if (dwg.length > 0 && dwg[0].drawing_no) {
+          resolvedDrawingNo = dwg[0].drawing_no;
+        }
+      }
+
+      // 2. Check by material_name / description in customer_drawings
+      if (!resolvedDrawingNo && i.material_name) {
+        const [dwg] = await pool.query('SELECT drawing_no FROM customer_drawings WHERE TRIM(LOWER(description)) = TRIM(LOWER(?))', [i.material_name]);
+        if (dwg.length > 0 && dwg[0].drawing_no) {
+          resolvedDrawingNo = dwg[0].drawing_no;
+        }
+      }
+
+      // 3. Check in stock_balance
+      if (!resolvedDrawingNo && i.item_code) {
+        const [sb] = await pool.query(
+          'SELECT drawing_no FROM stock_balance WHERE item_code = ? AND drawing_no IS NOT NULL AND TRIM(drawing_no) != "" LIMIT 1',
+          [i.item_code]
+        );
+        if (sb.length > 0 && sb[0].drawing_no) {
+          resolvedDrawingNo = sb[0].drawing_no;
+        }
+      }
+
+      // 4. Fallback to i.drawing_no
+      if (!resolvedDrawingNo && i.drawing_no) {
+        resolvedDrawingNo = i.drawing_no;
+      }
+
+      // If the drawing number matches the item code or is a fallback dash/empty, set it to null so it doesn't print
+      if (resolvedDrawingNo && (resolvedDrawingNo === i.item_code || resolvedDrawingNo === '—' || resolvedDrawingNo.trim() === '')) {
+        resolvedDrawingNo = null;
+      }
 
       return {
         ...i,
         sl_no: idx + 1,
         item_code: i.item_code || '—',
         item_no: i.item_code || '—',
-        drawing_no: i.drawing_no || i.item_code || '—',
+        drawing_no: resolvedDrawingNo || '',
         material_name: i.material_name || i.description || '—',
-        description: i.drawing_no ? `DRW: ${i.drawing_no}` : '—',
+        description: resolvedDrawingNo || '',
         material_type: i.material_type || '—',
         hsn_code: '73089090', // realistic fallback
         expected_delivery_date: formatDate(po.expected_delivery_date),
@@ -2045,7 +2211,7 @@ const generatePurchaseOrderPDF = async (poId) => {
         sgst_rate: parseFloat(i.sgst_percent || 0).toFixed(2),
         sgst_amount: parseFloat(i.sgst_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
       };
-    }),
+    })),
     empty_rows: Array.from({ length: Math.max(0, 4 - (po.items || []).length) })
   };
 
@@ -2202,8 +2368,8 @@ const mergePurchaseOrders = async (payload) => {
     });
 
     const [result] = await connection.execute(
-      `INSERT INTO purchase_orders (po_number, public_id, vendor_id, status, total_amount, expected_delivery_date, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO purchase_orders (po_number, public_id, vendor_id, status, total_amount, expected_delivery_date, notes, is_merged)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 1)`,
       [
         poNumber,
         publicId,
