@@ -7,6 +7,7 @@ const getPOReceipts = async (filters = {}) => {
     SELECT 
       pr.*,
       po.po_number,
+      po.is_merged,
       v.vendor_name,
       po.total_amount,
       COALESCE(
@@ -21,6 +22,14 @@ const getPOReceipts = async (filters = {}) => {
           SELECT soi_inner.drawing_no 
           FROM sales_order_items soi_inner 
           WHERE soi_inner.sales_order_id = po.sales_order_id 
+          LIMIT 1
+        ),
+        (
+          SELECT poi_inner.drawing_no
+          FROM purchase_order_items poi_inner
+          WHERE poi_inner.purchase_order_id = po.id
+            AND poi_inner.drawing_no IS NOT NULL
+            AND poi_inner.drawing_no != ''
           LIMIT 1
         )
       ) as drawing_no,

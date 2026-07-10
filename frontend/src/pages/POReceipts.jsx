@@ -686,9 +686,15 @@ const POReceipts = () => {
       width: '18%',
       render: (val, row) => (
         <div className="flex flex-col">
-          <span className="text-xs font-semibold text-[#111827] leading-[16px]">
-            {row.drawing_no || '—'}
-          </span>
+          {row.is_merged ? (
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded-full w-fit">
+              <span>🟣</span> Merged GRN
+            </span>
+          ) : (
+            <span className="text-xs font-semibold text-[#111827] leading-[16px]">
+              {row.drawing_no || '—'}
+            </span>
+          )}
           {row.finished_good && (
             <span className="text-[10px] text-[#6B7280] leading-[14px] mt-0.5">
               {row.finished_good}
@@ -702,8 +708,14 @@ const POReceipts = () => {
       label: 'PO No',
       sortable: true,
       width: '12%',
-      render: (val) => (
-        <span className="text-xs text-slate-600 bg-slate-50 px-2 py-0.5 rounded border border-slate-100 font-medium">#{val || 'Direct'}</span>
+      render: (val, row) => (
+        <span className={`text-xs px-2 py-0.5 rounded border font-medium ${
+          row.is_merged
+            ? 'text-purple-700 bg-purple-50 border-purple-200'
+            : 'text-slate-600 bg-slate-50 border-slate-100'
+        }`}>
+          #{val || 'Direct'}
+        </span>
       )
     },
     { 

@@ -25,7 +25,8 @@ import {
   Loader2,
   RefreshCw,
   Edit2,
-  Check
+  Check,
+  Printer
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
@@ -2319,7 +2320,15 @@ const BOMFormPage = () => {
               </p>
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 bom-print-hide">
+            <button
+              onClick={() => window.print()}
+              className="p-2 bg-slate-50 text-slate-600 rounded text-xs border border-slate-200 hover:bg-slate-100 transition-all flex items-center gap-1.5"
+              title="Print BOM Form"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              Print
+            </button>
             <button
               onClick={() => navigate('/design/bom-creation?filter=drafts')}
               className="p-2 bg-blue-50 text-blue-600 rounded  text-xs  border border-blue-100 hover:bg-blue-100 transition-all flex items-center gap-1.5"
