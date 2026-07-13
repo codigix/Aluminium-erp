@@ -452,11 +452,161 @@ const getQuotationById = async (quotationId) => {
 
   const [items] = await pool.query(
     `SELECT qi.*, 
-            COALESCE(NULLIF(qi.length, 0), mri.length, sb.length, 0) as length,
-            COALESCE(NULLIF(qi.width, 0), mri.width, sb.width, 0) as width,
-            COALESCE(NULLIF(qi.thickness, 0), mri.thickness, sb.thickness, 0) as thickness,
-            COALESCE(NULLIF(qi.diameter, 0), mri.diameter, sb.diameter, 0) as diameter,
-            COALESCE(NULLIF(qi.outer_diameter, 0), mri.outer_diameter, sb.outer_diameter, 0) as outer_diameter,
+            COALESCE(
+              -- 1. Try production_plan_materials
+              (
+                SELECT ppm.bom_ref 
+                FROM production_plan_materials ppm
+                JOIN material_requests mr ON mr.plan_id = ppm.plan_id
+                WHERE mr.id = q.mr_id
+                  AND (ppm.material_name = qi.material_name OR ppm.item_code = qi.item_code)
+                LIMIT 1
+              ),
+              -- 2. Try sales_order_item_materials
+              (
+                SELECT som.drawing_no 
+                FROM sales_order_item_materials som
+                JOIN sales_order_items soi ON soi.id = som.sales_order_item_id
+                WHERE soi.sales_order_id = q.sales_order_id
+                  AND (som.material_name = qi.material_name OR som.item_code = qi.item_code)
+                LIMIT 1
+              ),
+              qi.drawing_no,
+              qi.item_code
+            ) AS drawing_no,
+            (
+              SELECT cd.description 
+              FROM customer_drawings cd 
+              WHERE cd.drawing_no = COALESCE(
+                (
+                  SELECT ppm.bom_ref 
+                  FROM production_plan_materials ppm
+                  JOIN material_requests mr ON mr.plan_id = ppm.plan_id
+                  WHERE mr.id = q.mr_id
+                    AND (ppm.material_name = qi.material_name OR ppm.item_code = qi.item_code)
+                  LIMIT 1
+                ),
+                (
+                  SELECT som.drawing_no 
+                  FROM sales_order_item_materials som
+                  JOIN sales_order_items soi ON soi.id = som.sales_order_item_id
+                  WHERE soi.sales_order_id = q.sales_order_id
+                    AND (som.material_name = qi.material_name OR som.item_code = qi.item_code)
+                  LIMIT 1
+                )
+              )
+              LIMIT 1
+            ) AS drawing_name,
+            COALESCE(
+              NULLIF(qi.length, 0),
+              (
+                SELECT ppm.length 
+                FROM production_plan_materials ppm
+                JOIN material_requests mr ON mr.plan_id = ppm.plan_id
+                WHERE mr.id = q.mr_id
+                  AND (ppm.material_name = qi.material_name OR ppm.item_code = qi.item_code)
+                LIMIT 1
+              ),
+              (
+                SELECT som.length 
+                FROM sales_order_item_materials som
+                JOIN sales_order_items soi ON soi.id = som.sales_order_item_id
+                WHERE soi.sales_order_id = q.sales_order_id
+                  AND (som.material_name = qi.material_name OR som.item_code = qi.item_code)
+                LIMIT 1
+              ),
+              mri.length,
+              sb.length,
+              0
+            ) as length,
+            COALESCE(
+              NULLIF(qi.width, 0),
+              (
+                SELECT ppm.width 
+                FROM production_plan_materials ppm
+                JOIN material_requests mr ON mr.plan_id = ppm.plan_id
+                WHERE mr.id = q.mr_id
+                  AND (ppm.material_name = qi.material_name OR ppm.item_code = qi.item_code)
+                LIMIT 1
+              ),
+              (
+                SELECT som.width 
+                FROM sales_order_item_materials som
+                JOIN sales_order_items soi ON soi.id = som.sales_order_item_id
+                WHERE soi.sales_order_id = q.sales_order_id
+                  AND (som.material_name = qi.material_name OR som.item_code = qi.item_code)
+                LIMIT 1
+              ),
+              mri.width,
+              sb.width,
+              0
+            ) as width,
+            COALESCE(
+              NULLIF(qi.thickness, 0),
+              (
+                SELECT ppm.thickness 
+                FROM production_plan_materials ppm
+                JOIN material_requests mr ON mr.plan_id = ppm.plan_id
+                WHERE mr.id = q.mr_id
+                  AND (ppm.material_name = qi.material_name OR ppm.item_code = qi.item_code)
+                LIMIT 1
+              ),
+              (
+                SELECT som.thickness 
+                FROM sales_order_item_materials som
+                JOIN sales_order_items soi ON soi.id = som.sales_order_item_id
+                WHERE soi.sales_order_id = q.sales_order_id
+                  AND (som.material_name = qi.material_name OR som.item_code = qi.item_code)
+                LIMIT 1
+              ),
+              mri.thickness,
+              sb.thickness,
+              0
+            ) as thickness,
+            COALESCE(
+              NULLIF(qi.diameter, 0),
+              (
+                SELECT ppm.diameter 
+                FROM production_plan_materials ppm
+                JOIN material_requests mr ON mr.plan_id = ppm.plan_id
+                WHERE mr.id = q.mr_id
+                  AND (ppm.material_name = qi.material_name OR ppm.item_code = qi.item_code)
+                LIMIT 1
+              ),
+              (
+                SELECT som.diameter 
+                FROM sales_order_item_materials som
+                JOIN sales_order_items soi ON soi.id = som.sales_order_item_id
+                WHERE soi.sales_order_id = q.sales_order_id
+                  AND (som.material_name = qi.material_name OR som.item_code = qi.item_code)
+                LIMIT 1
+              ),
+              mri.diameter,
+              sb.diameter,
+              0
+            ) as diameter,
+            COALESCE(
+              NULLIF(qi.outer_diameter, 0),
+              (
+                SELECT ppm.outer_diameter 
+                FROM production_plan_materials ppm
+                JOIN material_requests mr ON mr.plan_id = ppm.plan_id
+                WHERE mr.id = q.mr_id
+                  AND (ppm.material_name = qi.material_name OR ppm.item_code = qi.item_code)
+                LIMIT 1
+              ),
+              (
+                SELECT som.outer_diameter 
+                FROM sales_order_item_materials som
+                JOIN sales_order_items soi ON soi.id = som.sales_order_item_id
+                WHERE soi.sales_order_id = q.sales_order_id
+                  AND (som.material_name = qi.material_name OR som.item_code = qi.item_code)
+                LIMIT 1
+              ),
+              mri.outer_diameter,
+              sb.outer_diameter,
+              0
+            ) as outer_diameter,
             COALESCE(NULLIF(qi.density, 0), mri.density, sb.density, 0) as density,
             COALESCE(NULLIF(qi.weight_per_unit, 0), mri.weight_per_unit, sb.weight_per_unit, 0) as weight_per_unit
      FROM quotation_items qi
@@ -1159,7 +1309,7 @@ const generateQuotationPDF = async (quotationId) => {
             {{/logoBase64}}
           </div>
           <div class="header-content">
-            <h1 class="rfq-title">{{#isRFQ}}Request For Quotation{{/isRFQ}}{{^isRFQ}}Vendor Quotation{{/isRFQ}}</h1>
+            <h1 class="rfq-title">{{#isRFQ}}Request For Quotation{{/isRFQ}}{{^isRFQ}}Supplier PO{{/isRFQ}}</h1>
             <h2 class="company-name">{{hostCompanyName}}</h2>
             <p class="company-address">{{hostCompanyAddress}}</p>
             {{#hostGSTIN}}
@@ -1221,13 +1371,14 @@ const generateQuotationPDF = async (quotationId) => {
             {{^isRFQ}}
             <tr>
               <th style="width: 5%; text-align: center;">Sr. No</th>
-              <th style="width: 20%">Drawing No / Item Code</th>
-              <th style="width: 32%">Description / Material Name</th>
-              <th style="width: 10%; text-align: center;">Design Qty</th>
-              <th style="width: 10%; text-align: center;">Required Weight</th>
-              <th style="width: 11%; text-align: right;">Unit Rate (₹)</th>
-              <th style="width: 5%; text-align: center;">GST %</th>
-              <th style="width: 12%; text-align: right;">Total (Incl. GST)</th>
+              <th style="width: 20%">Drawing No</th>
+              <th style="width: 24%">Description / Material Name</th>
+              <th style="width: 12%">Item Size</th>
+              <th style="width: 8%; text-align: center;">Design Qty</th>
+              <th style="width: 9%; text-align: center;">Required Weight</th>
+              <th style="width: 8%; text-align: right;">Unit Rate (₹)</th>
+              <th style="width: 5%; text-align: center;">GST</th>
+              <th style="width: 9%; text-align: right;">Total</th>
             </tr>
             {{/isRFQ}}
           </thead>
@@ -1235,16 +1386,22 @@ const generateQuotationPDF = async (quotationId) => {
             {{#items}}
             <tr>
               <td class="center-col">{{sr}}</td>
+              {{#isRFQ}}
               <td style="font-family: monospace; font-weight: 500;">{{drawing_no}}</td>
               <td>
                 <strong>{{material_name}}</strong>
                 {{#material_description}}<br><span style="font-size: 8px; color: #64748b;">{{material_description}}</span>{{/material_description}}
               </td>
-              {{#isRFQ}}
               <td class="center-col"><strong>{{design_qty_str}}</strong></td>
               <td class="center-col"><strong>{{required_weight_str}}</strong></td>
               {{/isRFQ}}
               {{^isRFQ}}
+              <td style="font-family: monospace; font-weight: 500;">
+                {{drawing_no}}
+                {{#drawing_name}}<br><span style="font-family: sans-serif; font-size: 8px; font-weight: 700; color: #1e293b;">{{drawing_name}}</span>{{/drawing_name}}
+              </td>
+              <td><strong>{{material_name}}</strong></td>
+              <td><strong>{{item_size}}</strong></td>
               <td class="center-col"><strong>{{design_qty_str}}</strong></td>
               <td class="center-col"><strong>{{required_weight_str}}</strong></td>
               <td class="amount-col">{{unit_rate}}</td>
@@ -1361,23 +1518,30 @@ const generateQuotationPDF = async (quotationId) => {
         if (base) {
           base += ' mm';
         }
-        
-        if (od > 0) {
-          if (base) {
-            base += ` (OD ${od.toFixed(0)})`;
-          } else {
-            base += `OD ${od.toFixed(0)}`;
-          }
-        }
-        
-        if (dia > 0) {
-          if (base) base += ' × ';
-          base += `Dia ${dia.toFixed(0)}`;
-          if (!base.endsWith('mm')) {
-            base += ' mm';
-          }
-        }
         dimsSpec = base;
+      }
+      
+      let sizeParts = [];
+      if (dia > 0) {
+        sizeParts.push(`Ø${dia.toFixed(0)}`);
+      } else if (od > 0) {
+        sizeParts.push(`OD ${od.toFixed(0)}`);
+      }
+      
+      let otherParts = [];
+      if (len > 0) otherParts.push(`${len.toFixed(0)}`);
+      if (wid > 0) otherParts.push(`${wid.toFixed(0)}`);
+      if (thk > 0) {
+        otherParts.push(thk % 1 === 0 ? thk.toFixed(0) : thk.toFixed(1));
+      }
+      
+      if (otherParts.length > 0) {
+        sizeParts.push(otherParts.join(' × '));
+      }
+      
+      let itemSize = sizeParts.join(' × ');
+      if (itemSize) {
+        itemSize += ' mm';
       }
 
       const designQtyVal = parseFloat(i.planned_qty || i.design_qty || 0);
@@ -1391,6 +1555,8 @@ const generateQuotationPDF = async (quotationId) => {
         isRFQ: isRFQVal,
         sr: idx + 1,
         drawing_no: i.drawing_no || i.item_code || '—',
+        drawing_name: i.drawing_name || i.description || '—',
+        item_size: itemSize || '—',
         material_name: i.material_name || i.description || '—',
         material_description: dimsSpec || null,
         specification: dimsSpec || '—',

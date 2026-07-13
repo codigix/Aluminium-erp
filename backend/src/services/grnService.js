@@ -15,38 +15,45 @@ const getGRNWithDetails = async (grnId) => {
       po.vendor_id AS vendorId,
       v.vendor_name AS vendorName,
       v.location AS vendorAddress,
-      COALESCE(
-        (
-          SELECT COALESCE(soi_inner.drawing_no, oi_inner.drawing_no, ppi_inner.item_code)
-          FROM material_requests mr_inner 
-          JOIN production_plans pp_inner ON mr_inner.plan_id = pp_inner.id
-          LEFT JOIN production_plan_items ppi_inner ON pp_inner.id = ppi_inner.plan_id
-          LEFT JOIN sales_order_items soi_inner ON ppi_inner.sales_order_item_id = soi_inner.id
-          LEFT JOIN order_items oi_inner ON ppi_inner.sales_order_item_id = oi_inner.id AND ppi_inner.sales_order_id = oi_inner.order_id
-          WHERE mr_inner.id = po.mr_id 
-          LIMIT 1
-        ),
-        (
-          SELECT pp_inner.bom_no 
-          FROM material_requests mr_inner 
-          JOIN production_plans pp_inner ON mr_inner.plan_id = pp_inner.id 
-          WHERE mr_inner.id = po.mr_id 
-          LIMIT 1
-        ),
-        (
-          SELECT soi_inner.drawing_no 
-          FROM sales_order_items soi_inner 
-          WHERE soi_inner.sales_order_id = po.sales_order_id 
-          LIMIT 1
-        ),
-        (
-          SELECT poi_inner.drawing_no
-          FROM purchase_order_items poi_inner
-          WHERE poi_inner.purchase_order_id = po.id
-            AND poi_inner.drawing_no IS NOT NULL
-            AND poi_inner.drawing_no != ''
-          LIMIT 1
+      (
+        SELECT GROUP_CONCAT(DISTINCT 
+          COALESCE(
+            -- 1. Drawing from production plan linked to the item's mr_id
+            (
+              SELECT COALESCE(soi_inner.drawing_no, oi_inner.drawing_no, ppi_inner.item_code)
+              FROM material_requests mr_inner 
+              JOIN production_plans pp_inner ON mr_inner.plan_id = pp_inner.id
+              LEFT JOIN production_plan_items ppi_inner ON pp_inner.id = ppi_inner.plan_id
+              LEFT JOIN sales_order_items soi_inner ON ppi_inner.sales_order_item_id = soi_inner.id
+              LEFT JOIN order_items oi_inner ON ppi_inner.sales_order_item_id = oi_inner.id AND pp_inner.sales_order_id = oi_inner.order_id
+              WHERE mr_inner.id = poi_d.mr_id
+              LIMIT 1
+            ),
+            -- 2. BOM No from production plan linked to the item's mr_id
+            (
+              SELECT pp_inner.bom_no 
+              FROM material_requests mr_inner 
+              JOIN production_plans pp_inner ON mr_inner.plan_id = pp_inner.id 
+              WHERE mr_inner.id = poi_d.mr_id 
+              LIMIT 1
+            ),
+            -- 3. Drawing from sales order linked to the item
+            (
+              SELECT soi_inner.drawing_no 
+              FROM sales_order_items soi_inner 
+              WHERE soi_inner.sales_order_id = poi_d.sales_order_id 
+              LIMIT 1
+            ),
+            -- 4. Drawing No directly on the PO item
+            IF(poi_d.drawing_no IS NOT NULL AND poi_d.drawing_no != '' AND poi_d.drawing_no != poi_d.item_code, poi_d.drawing_no, NULL),
+            -- 5. Item Code directly on the PO item
+            poi_d.item_code
+          )
+          ORDER BY poi_d.id SEPARATOR ', '
         )
+        FROM grn_items gi_d
+        JOIN purchase_order_items poi_d ON gi_d.po_item_id = poi_d.id
+        WHERE gi_d.grn_id = g.id
       ) as drawing_no,
       COALESCE(
         (
@@ -119,38 +126,45 @@ const getAllGRNs = async () => {
       po.vendor_id AS vendorId,
       v.vendor_name AS vendorName,
       v.location AS vendorAddress,
-      COALESCE(
-        (
-          SELECT COALESCE(soi_inner.drawing_no, oi_inner.drawing_no, ppi_inner.item_code)
-          FROM material_requests mr_inner 
-          JOIN production_plans pp_inner ON mr_inner.plan_id = pp_inner.id
-          LEFT JOIN production_plan_items ppi_inner ON pp_inner.id = ppi_inner.plan_id
-          LEFT JOIN sales_order_items soi_inner ON ppi_inner.sales_order_item_id = soi_inner.id
-          LEFT JOIN order_items oi_inner ON ppi_inner.sales_order_item_id = oi_inner.id AND ppi_inner.sales_order_id = oi_inner.order_id
-          WHERE mr_inner.id = po.mr_id 
-          LIMIT 1
-        ),
-        (
-          SELECT pp_inner.bom_no 
-          FROM material_requests mr_inner 
-          JOIN production_plans pp_inner ON mr_inner.plan_id = pp_inner.id 
-          WHERE mr_inner.id = po.mr_id 
-          LIMIT 1
-        ),
-        (
-          SELECT soi_inner.drawing_no 
-          FROM sales_order_items soi_inner 
-          WHERE soi_inner.sales_order_id = po.sales_order_id 
-          LIMIT 1
-        ),
-        (
-          SELECT poi_inner.drawing_no
-          FROM purchase_order_items poi_inner
-          WHERE poi_inner.purchase_order_id = po.id
-            AND poi_inner.drawing_no IS NOT NULL
-            AND poi_inner.drawing_no != ''
-          LIMIT 1
+      (
+        SELECT GROUP_CONCAT(DISTINCT 
+          COALESCE(
+            -- 1. Drawing from production plan linked to the item's mr_id
+            (
+              SELECT COALESCE(soi_inner.drawing_no, oi_inner.drawing_no, ppi_inner.item_code)
+              FROM material_requests mr_inner 
+              JOIN production_plans pp_inner ON mr_inner.plan_id = pp_inner.id
+              LEFT JOIN production_plan_items ppi_inner ON pp_inner.id = ppi_inner.plan_id
+              LEFT JOIN sales_order_items soi_inner ON ppi_inner.sales_order_item_id = soi_inner.id
+              LEFT JOIN order_items oi_inner ON ppi_inner.sales_order_item_id = oi_inner.id AND pp_inner.sales_order_id = oi_inner.order_id
+              WHERE mr_inner.id = poi_d.mr_id
+              LIMIT 1
+            ),
+            -- 2. BOM No from production plan linked to the item's mr_id
+            (
+              SELECT pp_inner.bom_no 
+              FROM material_requests mr_inner 
+              JOIN production_plans pp_inner ON mr_inner.plan_id = pp_inner.id 
+              WHERE mr_inner.id = poi_d.mr_id 
+              LIMIT 1
+            ),
+            -- 3. Drawing from sales order linked to the item
+            (
+              SELECT soi_inner.drawing_no 
+              FROM sales_order_items soi_inner 
+              WHERE soi_inner.sales_order_id = poi_d.sales_order_id 
+              LIMIT 1
+            ),
+            -- 4. Drawing No directly on the PO item
+            IF(poi_d.drawing_no IS NOT NULL AND poi_d.drawing_no != '' AND poi_d.drawing_no != poi_d.item_code, poi_d.drawing_no, NULL),
+            -- 5. Item Code directly on the PO item
+            poi_d.item_code
+          )
+          ORDER BY poi_d.id SEPARATOR ', '
         )
+        FROM grn_items gi_d
+        JOIN purchase_order_items poi_d ON gi_d.po_item_id = poi_d.id
+        WHERE gi_d.grn_id = g.id
       ) as drawing_no,
       COALESCE(
         (
@@ -218,7 +232,7 @@ const getAllGRNs = async () => {
          JOIN orders o ON pp.sales_order_id = o.id AND o.source_type = 'DIRECT'
          JOIN companies c3 ON o.client_id = c3.id
          WHERE mr_inner.id = po.mr_id LIMIT 1),
-        'N/A'
+        'Internal'
       ) as clientName,
       (SELECT COUNT(*) FROM grn_items WHERE grn_id = g.id) AS items_count
     FROM grns g

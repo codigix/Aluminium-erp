@@ -2173,8 +2173,8 @@ const Quotations = () => {
               <ChevronRight className="w-3 h-3" />
               <span>Procurement</span>
             </div>
-            <h1 className="text-xl  text-slate-900 ">Vendor Quotations</h1>
-            <p className="text-xs text-slate-500 ">Manage and compare vendor quotes</p>
+            <h1 className="text-xl  text-slate-900 ">Supplier PO</h1>
+            <p className="text-xs text-slate-500 ">Manage and compare supplier quotes</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -3588,7 +3588,7 @@ const Quotations = () => {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2">
           <div className="bg-white rounded p-4 max-w-lg w-full">
             <div className="flex justify-between items-center mb-4 border-b pb-2">
-              <h3 className="text-md font-semibold text-slate-800 text-xs">Upload Vendor Quotation Attachments</h3>
+              <h3 className="text-md font-semibold text-slate-800 text-xs">Upload Supplier PO Attachments</h3>
               <button onClick={() => setShowUploadAttachmentsModal(false)} className="text-slate-500 text-xl">✕</button>
             </div>
 
@@ -3704,7 +3704,7 @@ const Quotations = () => {
         <Modal
           isOpen={showCompareModal}
           onClose={() => setShowCompareModal(false)}
-          title="Compare Vendor Quotations"
+          title="Compare Supplier PO"
           size="6xl"
         >
           <div className="overflow-x-auto">
@@ -3833,7 +3833,7 @@ const Quotations = () => {
         <Modal
           isOpen={showApprovalModal}
           onClose={() => setShowApprovalModal(false)}
-          title="Approve Vendor Quotation"
+          title="Approve Supplier PO"
           size="3xl"
         >
           <div className="space-y-6 text-sm">
@@ -3910,7 +3910,7 @@ const Quotations = () => {
 
             {/* Confirmation Alert Box */}
             <div className="bg-amber-50/50 border border-amber-100 rounded-lg p-3 text-xs text-amber-800 space-y-1">
-              <p className="font-semibold">Are you sure you want to approve this vendor quotation?</p>
+              <p className="font-semibold">Are you sure you want to approve this Supplier PO?</p>
               <p className="text-amber-700/95">This action will enable Purchase Order creation for the approved items.</p>
             </div>
 
