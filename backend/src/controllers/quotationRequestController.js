@@ -999,19 +999,37 @@ const downloadQuotationPDF = async (req, res, next) => {
 
     const representative = quotes[0];
 
-    // 2. Fetch all quotations in this batch (same client, same approx timestamp)
+    // 2. Fetch all quotations in this batch
     // We exclude COMPONENT rows as they are snapshots for sub-assemblies
-    const [batchQuotes] = await pool.query(
-      `SELECT qr.*, 
-              COALESCE(soi.drawing_no, qr.drawing_no) as effective_drawing_no, 
-              COALESCE(soi.description, qr.description) as effective_description
-       FROM quotation_requests qr
-       LEFT JOIN sales_order_items soi ON qr.sales_order_item_id = soi.id
-       WHERE qr.company_id = ? 
-       AND ABS(TIMESTAMPDIFF(SECOND, qr.created_at, ?)) <= 10
-       AND qr.status != 'COMPONENT'`,
-      [representative.company_id, representative.created_at]
-    );
+    let batchQuotes;
+    if (representative.batch_id) {
+      const [rows] = await pool.query(
+        `SELECT qr.*, 
+                COALESCE(soi.drawing_no, qr.drawing_no) as effective_drawing_no, 
+                COALESCE(soi.description, qr.description) as effective_description
+         FROM quotation_requests qr
+         LEFT JOIN sales_order_items soi ON qr.sales_order_item_id = soi.id
+         WHERE qr.batch_id = ? 
+         AND qr.version = ?
+         AND qr.status != 'COMPONENT'`,
+        [representative.batch_id, representative.version]
+      );
+      batchQuotes = rows;
+    } else {
+      const [rows] = await pool.query(
+        `SELECT qr.*, 
+                COALESCE(soi.drawing_no, qr.drawing_no) as effective_drawing_no, 
+                COALESCE(soi.description, qr.description) as effective_description
+         FROM quotation_requests qr
+         LEFT JOIN sales_order_items soi ON qr.sales_order_item_id = soi.id
+         WHERE qr.company_id = ? 
+         AND ABS(TIMESTAMPDIFF(SECOND, qr.created_at, ?)) <= 10
+         AND qr.version = ?
+         AND qr.status != 'COMPONENT'`,
+        [representative.company_id, representative.created_at, representative.version]
+      );
+      batchQuotes = rows;
+    }
 
     const items = await Promise.all(batchQuotes.map(async q => {
       // Fetch component snapshots for this item
@@ -1097,19 +1115,39 @@ const exportQuotationCostBreakdown = async (req, res, next) => {
     const representative = quotes[0];
 
     // 2. Fetch all items in this batch
-    const [batchQuotes] = await pool.query(
-      `SELECT qr.*, 
-              COALESCE(soi.drawing_no, qr.drawing_no) as effective_drawing_no, 
-              COALESCE(soi.description, qr.description) as effective_description,
-              soi.drawing_id as effective_drawing_id
-       FROM quotation_requests qr
-       LEFT JOIN sales_order_items soi ON qr.sales_order_item_id = soi.id
-       WHERE qr.company_id = ? 
-       AND ABS(TIMESTAMPDIFF(SECOND, qr.created_at, ?)) <= 10
-       AND qr.status != 'COMPONENT'
-       ORDER BY qr.id ASC`,
-      [representative.company_id, representative.created_at]
-    );
+    let batchQuotes;
+    if (representative.batch_id) {
+      const [rows] = await pool.query(
+        `SELECT qr.*, 
+                COALESCE(soi.drawing_no, qr.drawing_no) as effective_drawing_no, 
+                COALESCE(soi.description, qr.description) as effective_description,
+                soi.drawing_id as effective_drawing_id
+         FROM quotation_requests qr
+         LEFT JOIN sales_order_items soi ON qr.sales_order_item_id = soi.id
+         WHERE qr.batch_id = ? 
+         AND qr.version = ?
+         AND qr.status != 'COMPONENT'
+         ORDER BY qr.id ASC`,
+        [representative.batch_id, representative.version]
+      );
+      batchQuotes = rows;
+    } else {
+      const [rows] = await pool.query(
+        `SELECT qr.*, 
+                COALESCE(soi.drawing_no, qr.drawing_no) as effective_drawing_no, 
+                COALESCE(soi.description, qr.description) as effective_description,
+                soi.drawing_id as effective_drawing_id
+         FROM quotation_requests qr
+         LEFT JOIN sales_order_items soi ON qr.sales_order_item_id = soi.id
+         WHERE qr.company_id = ? 
+         AND ABS(TIMESTAMPDIFF(SECOND, qr.created_at, ?)) <= 10
+         AND qr.version = ?
+         AND qr.status != 'COMPONENT'
+         ORDER BY qr.id ASC`,
+        [representative.company_id, representative.created_at, representative.version]
+      );
+      batchQuotes = rows;
+    }
 
     // Helpers
     const calculateMaterialCost = (m) => {
@@ -1369,19 +1407,40 @@ const exportQuotationCostBreakdownPDF = async (req, res, next) => {
     const representative = quotes[0];
 
     // 2. Fetch all items in this batch
-    const [batchQuotes] = await pool.query(
-      `SELECT qr.*, 
-              COALESCE(soi.drawing_no, qr.drawing_no) as effective_drawing_no, 
-              COALESCE(soi.description, qr.description) as effective_description,
-              soi.drawing_id as effective_drawing_id
-       FROM quotation_requests qr
-       LEFT JOIN sales_order_items soi ON qr.sales_order_item_id = soi.id
-       WHERE qr.company_id = ? 
-       AND ABS(TIMESTAMPDIFF(SECOND, qr.created_at, ?)) <= 10
-       AND qr.status != 'COMPONENT'
-       ORDER BY qr.id ASC`,
-      [representative.company_id, representative.created_at]
-    );
+    // 2. Fetch all items in this batch
+    let batchQuotes;
+    if (representative.batch_id) {
+      const [rows] = await pool.query(
+        `SELECT qr.*, 
+                COALESCE(soi.drawing_no, qr.drawing_no) as effective_drawing_no, 
+                COALESCE(soi.description, qr.description) as effective_description,
+                soi.drawing_id as effective_drawing_id
+         FROM quotation_requests qr
+         LEFT JOIN sales_order_items soi ON qr.sales_order_item_id = soi.id
+         WHERE qr.batch_id = ? 
+         AND qr.version = ?
+         AND qr.status != 'COMPONENT'
+         ORDER BY qr.id ASC`,
+        [representative.batch_id, representative.version]
+      );
+      batchQuotes = rows;
+    } else {
+      const [rows] = await pool.query(
+        `SELECT qr.*, 
+                COALESCE(soi.drawing_no, qr.drawing_no) as effective_drawing_no, 
+                COALESCE(soi.description, qr.description) as effective_description,
+                soi.drawing_id as effective_drawing_id
+         FROM quotation_requests qr
+         LEFT JOIN sales_order_items soi ON qr.sales_order_item_id = soi.id
+         WHERE qr.company_id = ? 
+         AND ABS(TIMESTAMPDIFF(SECOND, qr.created_at, ?)) <= 10
+         AND qr.version = ?
+         AND qr.status != 'COMPONENT'
+         ORDER BY qr.id ASC`,
+        [representative.company_id, representative.created_at, representative.version]
+      );
+      batchQuotes = rows;
+    }
 
     // Helpers
     const calculateMaterialCost = (m) => {
@@ -1631,19 +1690,39 @@ const getQuotationCostBreakdownDetails = async (req, res, next) => {
     const representative = quotes[0];
 
     // 2. Fetch all items in this batch
-    const [batchQuotes] = await pool.query(
-      `SELECT qr.*, 
-              COALESCE(soi.drawing_no, qr.drawing_no) as effective_drawing_no, 
-              COALESCE(soi.description, qr.description) as effective_description,
-              soi.drawing_id as effective_drawing_id
-       FROM quotation_requests qr
-       LEFT JOIN sales_order_items soi ON qr.sales_order_item_id = soi.id
-       WHERE qr.company_id = ? 
-       AND ABS(TIMESTAMPDIFF(SECOND, qr.created_at, ?)) <= 10
-       AND qr.status != 'COMPONENT'
-       ORDER BY qr.id ASC`,
-      [representative.company_id, representative.created_at]
-    );
+    let batchQuotes;
+    if (representative.batch_id) {
+      const [rows] = await pool.query(
+        `SELECT qr.*, 
+                COALESCE(soi.drawing_no, qr.drawing_no) as effective_drawing_no, 
+                COALESCE(soi.description, qr.description) as effective_description,
+                soi.drawing_id as effective_drawing_id
+         FROM quotation_requests qr
+         LEFT JOIN sales_order_items soi ON qr.sales_order_item_id = soi.id
+         WHERE qr.batch_id = ? 
+         AND qr.version = ?
+         AND qr.status != 'COMPONENT'
+         ORDER BY qr.id ASC`,
+        [representative.batch_id, representative.version]
+      );
+      batchQuotes = rows;
+    } else {
+      const [rows] = await pool.query(
+        `SELECT qr.*, 
+                COALESCE(soi.drawing_no, qr.drawing_no) as effective_drawing_no, 
+                COALESCE(soi.description, qr.description) as effective_description,
+                soi.drawing_id as effective_drawing_id
+         FROM quotation_requests qr
+         LEFT JOIN sales_order_items soi ON qr.sales_order_item_id = soi.id
+         WHERE qr.company_id = ? 
+         AND ABS(TIMESTAMPDIFF(SECOND, qr.created_at, ?)) <= 10
+         AND qr.version = ?
+         AND qr.status != 'COMPONENT'
+         ORDER BY qr.id ASC`,
+        [representative.company_id, representative.created_at, representative.version]
+      );
+      batchQuotes = rows;
+    }
 
     // Helpers
     const calculateMaterialCost = (m) => {
@@ -2182,19 +2261,37 @@ const sendExistingQuotationEmail = async (req, res, next) => {
       return res.status(400).json({ error: 'Client email is required to send quotation' });
     }
 
-    // 2. Fetch all quotations in this batch (same client, same approx timestamp)
+    // 2. Fetch all quotations in this batch
     // We exclude COMPONENT rows as they are snapshots for sub-assemblies
-    const [batchQuotes] = await pool.query(
-      `SELECT qr.*, 
-              COALESCE(soi.drawing_no, qr.drawing_no) as effective_drawing_no, 
-              COALESCE(soi.description, qr.description) as effective_description
-       FROM quotation_requests qr
-       LEFT JOIN sales_order_items soi ON qr.sales_order_item_id = soi.id
-       WHERE qr.company_id = ? 
-       AND ABS(TIMESTAMPDIFF(SECOND, qr.created_at, ?)) <= 10
-       AND qr.status != 'COMPONENT'`,
-      [representative.company_id, representative.created_at]
-    );
+    let batchQuotes;
+    if (representative.batch_id) {
+      const [rows] = await pool.query(
+        `SELECT qr.*, 
+                COALESCE(soi.drawing_no, qr.drawing_no) as effective_drawing_no, 
+                COALESCE(soi.description, qr.description) as effective_description
+         FROM quotation_requests qr
+         LEFT JOIN sales_order_items soi ON qr.sales_order_item_id = soi.id
+         WHERE qr.batch_id = ? 
+         AND qr.version = ?
+         AND qr.status != 'COMPONENT'`,
+        [representative.batch_id, representative.version]
+      );
+      batchQuotes = rows;
+    } else {
+      const [rows] = await pool.query(
+        `SELECT qr.*, 
+                COALESCE(soi.drawing_no, qr.drawing_no) as effective_drawing_no, 
+                COALESCE(soi.description, qr.description) as effective_description
+         FROM quotation_requests qr
+         LEFT JOIN sales_order_items soi ON qr.sales_order_item_id = soi.id
+         WHERE qr.company_id = ? 
+         AND ABS(TIMESTAMPDIFF(SECOND, qr.created_at, ?)) <= 10
+         AND qr.version = ?
+         AND qr.status != 'COMPONENT'`,
+        [representative.company_id, representative.created_at, representative.version]
+      );
+      batchQuotes = rows;
+    }
 
     const items = await Promise.all(batchQuotes.map(async q => {
       // Fetch component snapshots for this item

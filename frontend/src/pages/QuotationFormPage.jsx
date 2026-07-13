@@ -79,31 +79,34 @@ const QuotationFormPage = () => {
   const [showGlobalBreakdown, setShowGlobalBreakdown] = useState(false);
   const [globalBreakdownData, setGlobalBreakdownData] = useState({ loading: false, rows: [], error: null });
 
+  const fetchBreakdownData = async (targetItems = items) => {
+    const savedItem = targetItems.find(i => i.id && typeof i.id === 'number' && i.drawing_no);
+    const itemId = savedItem?.id || null;
+    if (!itemId) {
+      setGlobalBreakdownData({ loading: false, rows: [], error: 'Please save the quotation first to view Cost Breakdown.' });
+      return;
+    }
+    setGlobalBreakdownData({ loading: true, rows: [], error: null });
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/quotation-requests/cost-breakdown-details/${itemId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!response.ok) throw new Error('Failed to fetch Cost Breakdown');
+      const rows = await response.json();
+      setGlobalBreakdownData({ loading: false, rows, error: null });
+    } catch (err) {
+      console.error('Error loading breakdown:', err);
+      setGlobalBreakdownData({ loading: false, rows: [], error: err.message });
+    }
+  };
+
   const handleToggleBreakdown = async () => {
     const isExpanded = !showGlobalBreakdown;
     setShowGlobalBreakdown(isExpanded);
 
     if (isExpanded && globalBreakdownData.rows.length === 0 && !globalBreakdownData.loading) {
-      // Use the first saved quotation item id (must be a saved DB id, not a temp local id)
-      const savedItem = items.find(i => i.id && typeof i.id === 'number' && i.drawing_no);
-      const itemId = savedItem?.id || (selectedVersionId ? null : null);
-      if (!itemId) {
-        setGlobalBreakdownData({ loading: false, rows: [], error: 'Please save the quotation first to view Cost Breakdown.' });
-        return;
-      }
-      setGlobalBreakdownData({ loading: true, rows: [], error: null });
-      try {
-        const token = localStorage.getItem('authToken');
-        const response = await fetch(`${API_BASE}/quotation-requests/cost-breakdown-details/${itemId}`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (!response.ok) throw new Error('Failed to fetch Cost Breakdown');
-        const rows = await response.json();
-        setGlobalBreakdownData({ loading: false, rows, error: null });
-      } catch (err) {
-        console.error('Error loading breakdown:', err);
-        setGlobalBreakdownData({ loading: false, rows: [], error: err.message });
-      }
+      await fetchBreakdownData(items);
     }
   };
 
@@ -745,7 +748,7 @@ const QuotationFormPage = () => {
         // Deep clone to ensure no shared references with historical state
         const itemsSnapshot = JSON.parse(JSON.stringify(versionData.items));
 
-        setItems(itemsSnapshot.map(item => {
+        const mappedItems = itemsSnapshot.map(item => {
           // Apply overrides ONLY if we are preparing a NEW version (forceNextVersion)
           const override = forceNextVersion ? initialData?.items?.find(oi =>
             (oi.salesOrderItemId && String(oi.salesOrderItemId) === String(item.sales_order_item_id)) ||
@@ -815,7 +818,13 @@ const QuotationFormPage = () => {
               rate: parseFloat(sa.rate || sa.bom_cost || 0)
             }))
           };
-        }));
+        });
+        setItems(mappedItems);
+        if (showGlobalBreakdown) {
+          fetchBreakdownData(mappedItems);
+        } else {
+          setGlobalBreakdownData({ loading: false, rows: [], error: null });
+        }
       }
     } catch (err) {
       console.error('Error loading version data:', err);
