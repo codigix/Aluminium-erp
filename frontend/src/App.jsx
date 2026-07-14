@@ -1884,7 +1884,7 @@ function App() {
         )}
 
         <div className={`flex-1 lg:ml-64 flex flex-col bg-slate-50 min-w-0`}>
-          <div className="sticky top-0 z-10 bg-white/80 backdrop-blur-md border-b border-slate-200">
+          <div className="sticky top-0 z-10 bg-white/80 backdrop-blur-md border-b border-slate-200 print:hidden no-print">
               <div className="p-3 flex items-center justify-between">
                 <button
                   type="button"

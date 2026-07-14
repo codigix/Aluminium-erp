@@ -45,6 +45,8 @@ const DesignOrders = () => {
   const [bulkOperationLoading, setBulkOperationLoading] = useState(false);
   const [expandedIncomingPo, setExpandedIncomingPo] = useState({});
   const [expandedActivePo, setExpandedActivePo] = useState({});
+  const [bulkRequests, setBulkRequests] = useState([]);
+  const [bulkLoading, setBulkLoading] = useState(false);
 
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectData, setRejectData] = useState({
@@ -433,6 +435,97 @@ const DesignOrders = () => {
     }
   }, []);
 
+  const fetchBulkRequests = useCallback(async () => {
+    try {
+      setBulkLoading(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/design-orders/bulk-requests`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (!response.ok) throw new Error('Failed to fetch bulk requests');
+      const data = await response.json();
+      setBulkRequests(data);
+    } catch (error) {
+      console.error('Fetch bulk requests error:', error);
+    } finally {
+      setBulkLoading(false);
+    }
+  }, []);
+
+  const handleApproveBulkRequest = async (id, requestNo) => {
+    const result = await Swal.fire({
+      title: 'Approve Bulk Design Request?',
+      text: `Are you sure you want to approve bulk design request ${requestNo}?`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, Approve',
+      cancelButtonText: 'Cancel',
+      confirmButtonColor: '#10b981',
+      cancelButtonColor: '#6b7280'
+    });
+
+    if (result.isConfirmed) {
+      try {
+        setBulkLoading(true);
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE}/design-orders/bulk-requests/${id}/approve`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        if (!response.ok) throw new Error('Failed to approve bulk design request');
+        successToast(`Bulk Design Request ${requestNo} approved successfully`);
+        fetchBulkRequests();
+        fetchIncomingOrders();
+        fetchOrders();
+      } catch (error) {
+        console.error(error);
+        errorToast(error.message);
+      } finally {
+        setBulkLoading(false);
+      }
+    }
+  };
+
+  const handleRejectBulkRequest = async (id, requestNo) => {
+    const result = await Swal.fire({
+      title: 'Reject Bulk Design Request?',
+      text: `Are you sure you want to reject bulk design request ${requestNo}?`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, Reject',
+      cancelButtonText: 'Cancel',
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#6b7280'
+    });
+
+    if (result.isConfirmed) {
+      try {
+        setBulkLoading(true);
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE}/design-orders/bulk-requests/${id}/reject`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        if (!response.ok) throw new Error('Failed to reject bulk design request');
+        successToast(`Bulk Design Request ${requestNo} rejected and sent back to Sales`);
+        fetchBulkRequests();
+        fetchIncomingOrders();
+        fetchOrders();
+      } catch (error) {
+        console.error(error);
+        errorToast(error.message);
+      } finally {
+        setBulkLoading(false);
+      }
+    }
+  };
+
   const fetchIncomingOrders = useCallback(async () => {
     try {
       setIncomingLoading(true);
@@ -446,12 +539,13 @@ const DesignOrders = () => {
       if (!response.ok) throw new Error('Failed to fetch incoming orders');
       const data = await response.json();
       setIncomingOrders(data);
+      fetchBulkRequests();
     } catch (error) {
       console.error(error);
     } finally {
       setIncomingLoading(false);
     }
-  }, []);
+  }, [fetchBulkRequests]);
 
   useEffect(() => {
     fetchOrders();
@@ -910,6 +1004,87 @@ const DesignOrders = () => {
             </div>
 
             <div className="space-y-2">
+              {/* BULK DESIGN REQUESTS SUB-SECTION */}
+              {!incomingLoading && bulkRequests.length > 0 && (
+                <div className="mb-6 space-y-4">
+                  <div className="flex items-center justify-between border-b pb-2">
+                    <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                      <span>📦</span> Bulk Design Requests ({bulkRequests.length})
+                    </h3>
+                    <span className="px-2 py-0.5 bg-amber-50 border border-amber-200 text-amber-700 text-xxs font-semibold rounded">
+                      Requires Action
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {bulkRequests.map((req) => (
+                      <div key={req.id} className="bg-white rounded border border-slate-200 shadow-sm overflow-hidden flex flex-col justify-between hover:border-indigo-300 transition-all duration-200">
+                        <div className="p-4 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">
+                              {req.request_no}
+                            </span>
+                            <span className="text-xxs text-slate-400">
+                              Sent: {new Date(req.sent_at).toLocaleString()}
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2 bg-slate-50 p-2.5 rounded text-xs">
+                            <div>
+                              <span className="text-slate-500 block text-xxs uppercase tracking-wider font-semibold">Sent By</span>
+                              <span className="text-slate-800 font-medium">{req.sent_by}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-500 block text-xxs uppercase tracking-wider font-semibold">Status</span>
+                              <span className="text-amber-600 font-bold">{req.status}</span>
+                            </div>
+                            <div className="mt-1">
+                              <span className="text-slate-500 block text-xxs uppercase tracking-wider font-semibold">Total Requirements</span>
+                              <span className="text-slate-800 font-bold">{req.total_requirements}</span>
+                            </div>
+                            <div className="mt-1">
+                              <span className="text-slate-500 block text-xxs uppercase tracking-wider font-semibold">Total Drawings</span>
+                              <span className="text-slate-800 font-bold">{req.total_drawings}</span>
+                            </div>
+                          </div>
+
+                          <div className="space-y-1">
+                            <span className="text-xxs text-slate-400 font-semibold uppercase tracking-wider block">Included Client Requirements:</span>
+                            <div className="max-h-28 overflow-y-auto space-y-1 custom-scrollbar bg-slate-50/50 p-2 rounded border border-slate-100">
+                              {req.items?.map((item) => (
+                                <div key={item.id} className="flex items-center justify-between text-xs text-slate-700 py-0.5 border-b border-slate-100 last:border-0">
+                                  <span className="font-medium flex items-center gap-1">
+                                    <span className="text-emerald-500 font-bold">✓</span> {item.project_name || `Req - ${item.sales_order_id}`}
+                                  </span>
+                                  <span className="text-xxs text-slate-400 bg-slate-100 px-1 py-0.5 rounded">
+                                    {item.drawing_count || 0} Drawings
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="bg-slate-50 p-2 border-t border-slate-100 flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => handleRejectBulkRequest(req.id, req.request_no)}
+                            className="px-3 py-1 bg-white hover:bg-rose-50 border border-slate-200 text-rose-600 hover:border-rose-200 rounded text-xs transition-all font-medium active:scale-95"
+                          >
+                            Reject Request
+                          </button>
+                          <button
+                            onClick={() => handleApproveBulkRequest(req.id, req.request_no)}
+                            className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs transition-all font-medium active:scale-95"
+                          >
+                            Approve Request
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {incomingLoading ? (
                 <div className="py-24 text-center">
                   <div className="flex flex-col items-center gap-2">
@@ -917,12 +1092,12 @@ const DesignOrders = () => {
                     <p className="text-sm  text-slate-600 animate-pulse">Scanning for incoming requests...</p>
                   </div>
                 </div>
-              ) : incomingOrders.length === 0 ? (
+              ) : (incomingOrders.length === 0 && bulkRequests.length === 0) ? (
                 <div className="p-6 text-center bg-white rounded border-2 border-dashed border-slate-200  group hover:border-indigo-300 transition-colors duration-500">
                   <div className="flex flex-col items-center gap-2">
                     <div className="w-16 h-16 bg-slate-50 rounded flex items-center justify-center text-slate-200 group-hover:scale-110 group-hover:bg-indigo-50 group-hover:text-indigo-200 transition-all duration-500 shadow-sm">
                       <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707.293l-2.414-2.414A1 1 0 006.586 13H4"/>
                       </svg>
                     </div>
                     <div className="max-w-xs">
@@ -931,6 +1106,8 @@ const DesignOrders = () => {
                     </div>
                   </div>
                 </div>
+              ) : incomingOrders.length === 0 ? (
+                null
               ) : (
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 p-2  bg-slate-100 rounded  mb-2">

@@ -975,6 +975,30 @@ const ensureDesignOrderTables = async () => {
     `);
     console.log('Design Order table synchronized');
 
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS bulk_design_requests (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        request_no VARCHAR(100) UNIQUE NOT NULL,
+        sent_by VARCHAR(255) NOT NULL,
+        sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        total_requirements INT DEFAULT 0,
+        total_drawings INT DEFAULT 0,
+        status VARCHAR(50) DEFAULT 'Pending Design'
+      )
+    `);
+
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS bulk_design_request_items (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        bulk_request_id INT NOT NULL,
+        sales_order_id INT NOT NULL,
+        drawing_count INT DEFAULT 0,
+        FOREIGN KEY (bulk_request_id) REFERENCES bulk_design_requests(id) ON DELETE CASCADE,
+        FOREIGN KEY (sales_order_id) REFERENCES sales_orders(id) ON DELETE CASCADE
+      )
+    `);
+    console.log('Bulk Design Request tables synchronized');
+
   } catch (error) {
     console.error('Design Order table sync failed', error.message);
   } finally {

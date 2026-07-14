@@ -11,6 +11,7 @@ router.get('/:id', authorize(['ORDER_VIEW']), salesOrderController.getSalesOrder
 router.put('/:id', authorize(['ORDER_EDIT']), salesOrderController.updateSalesOrder);
 router.get('/', authorize(['ORDER_VIEW']), salesOrderController.listSalesOrders);
 router.post('/', authorize(['ORDER_CREATE']), salesOrderController.createSalesOrder);
+router.post('/bulk-send-to-design', authorize(['STATUS_CHANGE']), salesOrderController.bulkSendToDesign);
 router.post('/bulk/approve-designs', authorize(['STATUS_CHANGE']), salesOrderController.bulkApproveDesigns);
 router.post('/bulk/reject-designs', authorize(['STATUS_CHANGE']), salesOrderController.bulkRejectDesigns);
 router.post('/bulk/update-status', authorize(['STATUS_CHANGE']), salesOrderController.bulkUpdateStatus);

@@ -249,12 +249,24 @@ const bulkUpdateItemStatus = async (req, res, next) => {
   }
 };
 
+const bulkSendToDesign = async (req, res, next) => {
+  try {
+    const { ids } = req.body;
+    const sentBy = req.user?.name || req.user?.email || 'Sales';
+    const result = await salesOrderService.bulkSendToDesign(ids, sentBy);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   listSalesOrders,
   getSalesOrderById,
   updateSalesOrder,
   getIncomingOrders,
   createSalesOrder,
+  bulkSendToDesign,
   updateSalesOrderStatus,
   bulkUpdateStatus,
   bulkUpdateItemStatus,

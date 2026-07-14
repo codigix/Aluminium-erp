@@ -41,9 +41,41 @@ const getDesignOrderItemsBySalesOrder = async (req, res) => {
   }
 };
 
+const listBulkRequests = async (req, res) => {
+  try {
+    const requests = await designOrderService.listBulkRequests();
+    res.json(requests);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+const approveBulkRequest = async (req, res) => {
+  try {
+    const { id } = req.params;
+    await designOrderService.approveBulkRequest(id);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+const rejectBulkRequest = async (req, res) => {
+  try {
+    const { id } = req.params;
+    await designOrderService.rejectBulkRequest(id);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   listDesignOrders,
   updateStatus,
   deleteOrder,
-  getDesignOrderItemsBySalesOrder
+  getDesignOrderItemsBySalesOrder,
+  listBulkRequests,
+  approveBulkRequest,
+  rejectBulkRequest
 };

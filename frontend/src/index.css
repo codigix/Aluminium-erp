@@ -108,15 +108,17 @@ th{
 
 /* ===== PRINT STYLES ===== */
 @media print {
+  .no-print {
+    display: none !important;
+  }
+
   /* ---- Broad Reset on Layout Containers ---- */
   html, body, #root, 
   div.flex.h-screen.overflow-hidden,
   div.flex-1.lg\:ml-64,
   div.flex-1.p-4.overflow-y-auto,
   .overflow-y-auto,
-  .overflow-x-auto,
-  .min-h-screen,
-  .h-screen {
+  .overflow-x-auto {
     height: auto !important;
     min-height: 0 !important;
     max-height: none !important;
@@ -125,6 +127,18 @@ th{
     overflow-y: visible !important;
     position: static !important;
     display: block !important;
+  }
+
+  .min-h-screen,
+  .h-screen {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+  }
+
+  @page {
+    size: A4;
+    margin: 10mm;
   }
 
   /* Reset outer html/body specifically to ensure natural paging */

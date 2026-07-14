@@ -26,7 +26,8 @@ import {
   RefreshCw,
   Edit2,
   Check,
-  Printer
+  Printer,
+  Paperclip
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
@@ -482,6 +483,14 @@ const BOMFormPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  const authUser = useMemo(() => {
+    try {
+      return JSON.parse(localStorage.getItem('authUser') || '{}');
+    } catch {
+      return {};
+    }
+  }, []);
+
   const getDeptPrefix = () => {
     const segments = location.pathname.split('/').filter(Boolean);
     const prefixes = ['sales', 'design', 'production', 'procurement', 'inventory', 'quality', 'shipment', 'accounts', 'hr', 'admin'];
@@ -568,6 +577,72 @@ const BOMFormPage = () => {
   // Preview State
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [previewDrawing, setPreviewDrawing] = useState(null);
+  const [activeDrawingIdForFiles, setActiveDrawingIdForFiles] = useState(null);
+  const [updatingAttachments, setUpdatingAttachments] = useState(false);
+
+  const handleUpdateDrawingAttachments = async (drawingId, updatedExistingFiles, newFilesToUpload) => {
+    try {
+      setUpdatingAttachments(true);
+      const token = localStorage.getItem('authToken');
+      const formData = new FormData();
+      
+      formData.append('existingFiles', updatedExistingFiles.join(','));
+      if (newFilesToUpload && newFilesToUpload.length > 0) {
+        newFilesToUpload.forEach(file => {
+          formData.append('drawing_pdf', file);
+        });
+      }
+      
+      const response = await fetch(`${API_BASE}/drawings/${drawingId}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
+      
+      if (!response.ok) throw new Error('Failed to update drawing files');
+      
+      successToast('Attachments updated successfully');
+      
+      const drawingNo = previewDrawing?.drawing_no;
+      if (drawingNo) {
+        const searchRes = await fetch(`${API_BASE}/drawings?search=${encodeURIComponent(drawingNo)}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (searchRes.ok) {
+          const list = await searchRes.json();
+          const updatedDwg = list.find(d => d.id === drawingId || d.drawing_master_id === drawingId || d.drawing_no === drawingNo);
+          if (updatedDwg) {
+            const finalDwg = {
+              ...updatedDwg,
+              file_path: updatedDwg.file_path || updatedDwg.drawing_pdf,
+              drawing_pdf: updatedDwg.drawing_pdf || updatedDwg.file_path,
+              client_name: updatedDwg.client_name || updatedDwg.company_name
+            };
+            setPreviewDrawing(finalDwg);
+            
+            setApprovedDrawings(prev => prev.map(item => {
+              if (item.drawing_no === updatedDwg.drawing_no) {
+                return {
+                  ...item,
+                  file_path: updatedDwg.file_path || updatedDwg.drawing_pdf,
+                  drawing_pdf: updatedDwg.drawing_pdf || updatedDwg.file_path
+                };
+              }
+              return item;
+            }));
+          }
+        }
+      }
+    } catch (error) {
+      console.error(error);
+      errorToast(error.message);
+    } finally {
+      setUpdatingAttachments(false);
+    }
+  };
+
   const [bomHistory, setBomHistory] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const hasAutoUpdated = useRef(false);
@@ -2276,8 +2351,9 @@ const BOMFormPage = () => {
   );
 
   return (
-    <div className="bg-slate-50 min-h-screen">
-      <div className="">
+    <>
+      <div className="bg-slate-50 min-h-screen print:hidden no-print">
+        <div className="">
         {/* Header Actions */}
         <div className="flex justify-between items-center mb-2">
           <div className="flex items-center gap-2  text-slate-900">
@@ -4058,9 +4134,9 @@ const BOMFormPage = () => {
       </div>
 
       {/* Side-by-Side Costing and Version History */}
-      <div className={itemId && itemId !== 'bom-form' ? "grid grid-cols-1 xl:grid-cols-2 gap-4" : "w-full"}>
+      <div className={itemId && itemId !== 'bom-form' ? "grid grid-cols-1 xl:grid-cols-2 gap-4 print:flex print:flex-col print:w-full" : "w-full"}>
         {/* SECTION 6: BOM Costing */}
-        <Card className={`p-0 border-slate-200 overflow-hidden ${!(itemId && itemId !== 'bom-form') ? 'w-full' : ''}`}>
+        <Card className={`p-0 border-slate-200 overflow-hidden print:w-full ${!(itemId && itemId !== 'bom-form') ? 'w-full' : ''}`}>
           <div
             className="bg-white p-2 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition-colors"
             onClick={() => toggleSection('costing')}
@@ -4137,7 +4213,7 @@ const BOMFormPage = () => {
 
         {/* BOM Version History */}
         {(itemId && itemId !== 'bom-form') && (
-          <Card className="p-0 border-slate-200 overflow-hidden h-full">
+          <Card className="p-0 border-slate-200 overflow-hidden h-full bom-print-hide">
             <div className="bg-white  flex items-center justify-between border-b border-slate-100">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 bg-indigo-600 rounded flex items-center justify-center text-white text-sm">
@@ -4308,11 +4384,563 @@ const BOMFormPage = () => {
         isOpen={showPreviewModal}
         onClose={() => setShowPreviewModal(false)}
         drawing={previewDrawing}
+        onOpenAttachments={(dwg) => {
+          const dwgId = dwg.drawing_master_id || dwg.drawing_id || dwg.id;
+          setActiveDrawingIdForFiles(dwgId);
+        }}
       />
-    </div >
 
+      {/* Drawing Attachments Modal */}
+      {activeDrawingIdForFiles && (() => {
+        const activeDrawing = (previewDrawing && (previewDrawing.drawing_master_id === activeDrawingIdForFiles || previewDrawing.drawing_id === activeDrawingIdForFiles || previewDrawing.id === activeDrawingIdForFiles))
+          ? previewDrawing
+          : approvedDrawings.find(d => d.drawing_master_id === activeDrawingIdForFiles || d.drawing_id === activeDrawingIdForFiles || d.id === activeDrawingIdForFiles);
+        if (!activeDrawing) return null;
+
+        const pathVal = activeDrawing.file_path || activeDrawing.drawing_pdf || '';
+        const existingFiles = pathVal.split(',').filter(Boolean);
+
+        return (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200 no-print">
+            <div className="bg-white rounded-xl border border-slate-100 shadow-2xl w-full max-w-xl overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in duration-300">
+              {/* Modal Header */}
+              <div className="bg-slate-50 px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-slate-800">Drawing Attachments & Documents</h3>
+                    <p className="text-xs text-slate-400 mt-0.5 font-mono">Drawing #: {activeDrawing.drawing_no || 'Drawing'}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setActiveDrawingIdForFiles(null)}
+                  className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors text-slate-400 hover:text-slate-600"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="p-6 overflow-y-auto space-y-6 flex-1 min-h-0 custom-scrollbar">
+                {/* Currently Attached Files */}
+                <div className="space-y-3">
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Currently Attached Files</h4>
+                  <div className="border border-slate-100 rounded-xl overflow-hidden bg-slate-50/50">
+                    {existingFiles.length > 0 ? (
+                      <div className="divide-y divide-slate-100 bg-white">
+                        {existingFiles.map((filePath, fileIdx) => {
+                          const fileName = filePath.split('/').pop().replace(/^\d+-/, '');
+                          return (
+                            <div key={fileIdx} className="flex items-center justify-between p-3 hover:bg-slate-50/50 transition-all group">
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg group-hover:scale-105 transition-all">
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                  </svg>
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-xs font-semibold text-slate-700 truncate max-w-[320px]" title={fileName}>{fileName}</p>
+                                  <p className="text-[10px] text-slate-400 mt-0.5">Uploaded drawing file</p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setPreviewDrawing({ ...activeDrawing, drawing_pdf: filePath });
+                                    setShowPreviewModal(true);
+                                  }}
+                                  className="p-1.5 text-indigo-500 hover:bg-indigo-50 rounded-lg transition-all"
+                                  title="Preview Document"
+                                >
+                                  <Eye size={15} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const updated = existingFiles.filter((_, idx) => idx !== fileIdx);
+                                    handleUpdateDrawingAttachments(activeDrawing.drawing_master_id || activeDrawing.drawing_id || activeDrawing.id, updated, null);
+                                  }}
+                                  className="p-1.5 rounded-lg transition-all text-rose-500 hover:bg-rose-50"
+                                  title="Delete Document"
+                                >
+                                  <Trash2 size={15} />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="p-8 text-center bg-white">
+                        <p className="text-xs text-slate-400">No files currently attached to this drawing</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Upload New Files */}
+                <div className="space-y-3">
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Upload New Files</h4>
+                  <div className="border-2 border-dashed border-slate-200 hover:border-indigo-400 transition-colors rounded-xl p-6 bg-slate-50/50 flex flex-col items-center justify-center cursor-pointer relative group">
+                    <input
+                      type="file"
+                      multiple
+                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                      onChange={(e) => {
+                        const stagedFiles = Array.from(e.target.files);
+                        if (stagedFiles.length > 0) {
+                          handleUpdateDrawingAttachments(activeDrawing.drawing_master_id || activeDrawing.drawing_id || activeDrawing.id, existingFiles, stagedFiles);
+                        }
+                      }}
+                      accept=".pdf,image/*,.dxf,.dwg,.igs,.stp"
+                    />
+                    <div className="p-3 bg-white rounded-lg shadow-sm group-hover:scale-110 transition-transform mb-3">
+                      <svg className="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                      </svg>
+                    </div>
+                    <p className="text-xs font-semibold text-slate-700">Drag & drop or click to upload</p>
+                    <p className="text-[10px] text-slate-400 mt-1">Supports PDF drawings, image files, and CAD files up to 10MB each</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="bg-slate-50 px-6 py-4 border-t border-slate-100 flex justify-end">
+                <button
+                  onClick={() => setActiveDrawingIdForFiles(null)}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg text-xs transition-colors shadow-sm"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+    </div>
+
+      {/* PRINT-ONLY PROFESSIONAL BOM REPORT VIEW */}
+      <div className="hidden print:block print:p-4 print:m-0 bg-white text-black font-sans w-full max-w-[210mm] min-h-[297mm] mx-auto text-xs leading-normal">
+        {/* Document Header */}
+        <div className="flex justify-between items-start border-b-2 border-slate-900 pb-3 mb-3">
+          <div className="flex flex-col">
+            <div className="flex items-center gap-1.5 mb-1.5">
+              <div className="bg-red-600 text-white font-bold text-sm px-2 py-0.5 rounded leading-none">
+                ILLUMIUM
+              </div>
+              <div className="text-red-600 font-bold text-[9px] tracking-wider uppercase">
+                Design-Eng
+              </div>
+            </div>
+            <div className="text-[9px] text-slate-700 leading-tight font-medium">
+              <div className="font-bold text-xs text-slate-900 leading-none mb-0.5">SPTECH</div>
+              <div>Pune – 411 050, Maharashtra, India</div>
+              <div>GSTIN: 27ABCDE1234F1Z5</div>
+            </div>
+          </div>
+          
+          <div className="flex-1 text-center self-center">
+            <h1 className="text-lg font-bold tracking-tight text-slate-900 uppercase">Bill of Material (BOM)</h1>
+          </div>
+          
+          <div className="flex flex-col text-[9px] text-slate-800 leading-normal font-medium pl-4 border-l border-slate-200 min-w-[180px]">
+            <div className="flex justify-between">
+              <span className="text-slate-500 font-semibold">BOM No.</span>
+              <span className="font-bold">: BOM-2026-{String(itemId || '000000').padStart(6, '0')}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500 font-semibold">Date</span>
+              <span>: {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500 font-semibold">Page</span>
+              <span>: 1 of 1</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500 font-semibold">Generated By</span>
+              <span>: {authUser.first_name ? `${authUser.first_name} ${authUser.last_name || ''}` : (authUser.username || 'Jane Design')}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* 1. PRODUCT INFORMATION */}
+        <div className="border border-slate-300 rounded overflow-hidden mb-3">
+          <div className="bg-slate-100 text-slate-800 font-semibold px-2 py-1 flex items-center gap-1.5 border-b border-slate-300 text-[10px]">
+            <span className="w-4 h-4 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[9px]">1</span>
+            <span>1. PRODUCT INFORMATION</span>
+          </div>
+          <table className="w-full text-[10px] border-collapse">
+            <tbody>
+              <tr className="border-b border-slate-200">
+                <td className="w-1/4 p-1.5 border-r border-slate-200 bg-slate-50/30">
+                  <div className="text-slate-400 font-medium text-[8px] uppercase">Product Name</div>
+                  <div className="font-bold text-slate-800 uppercase">{productForm.description || '—'}</div>
+                </td>
+                <td className="w-1/4 p-1.5 border-r border-slate-200 bg-slate-50/30">
+                  <div className="text-slate-400 font-medium text-[8px] uppercase">Item Code</div>
+                  <div className="font-bold text-slate-800 uppercase">{productForm.itemCode || '—'}</div>
+                </td>
+                <td className="w-1/4 p-1.5 border-r border-slate-200 bg-slate-50/30">
+                  <div className="text-slate-400 font-medium text-[8px] uppercase">Drawing No</div>
+                  <div className="font-bold text-slate-800 uppercase">{productForm.drawingNo || '—'}</div>
+                </td>
+                <td className="w-1/4 p-1.5 bg-slate-50/30">
+                  <div className="text-slate-400 font-medium text-[8px] uppercase">Item Group</div>
+                  <div className="font-bold text-slate-800 uppercase">{productForm.itemGroup || '—'}</div>
+                </td>
+              </tr>
+              <tr className="border-b border-slate-200">
+                <td className="w-1/4 p-1.5 border-r border-slate-200 bg-slate-50/30">
+                  <div className="text-slate-400 font-medium text-[8px] uppercase">Base Quantity (Yield)</div>
+                  <div className="font-bold text-slate-800 uppercase">{parseFloat(productForm.quantity || 1).toFixed(3)} {productForm.uom || 'NOS'}</div>
+                </td>
+                <td className="w-1/4 p-1.5 border-r border-slate-200 bg-slate-50/30">
+                  <div className="text-slate-400 font-medium text-[8px] uppercase">UOM</div>
+                  <div className="font-bold text-slate-800 uppercase">{productForm.uom || '—'}</div>
+                </td>
+                <td className="w-1/4 p-1.5 border-r border-slate-200 bg-slate-50/30">
+                  <div className="text-slate-400 font-medium text-[8px] uppercase">BOM Revision</div>
+                  <div className="font-bold text-slate-800 uppercase">{productForm.revision || '—'}</div>
+                </td>
+                <td className="w-1/4 p-1.5 bg-slate-50/30">
+                  <div className="text-slate-400 font-medium text-[8px] uppercase">Status</div>
+                  <div>
+                    <span className="px-1.5 py-0.5 rounded text-[8px] uppercase font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                      {selectedItem?.status || 'APPROVED'}
+                    </span>
+                  </div>
+                </td>
+              </tr>
+              {productForm.notes && (
+                <tr>
+                  <td colSpan="4" className="p-1.5 bg-slate-50/30">
+                    <div className="text-slate-400 font-medium text-[8px] uppercase">Technical Specifications / Notes</div>
+                    <div className="text-slate-700 italic text-[9px]">{productForm.notes}</div>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* 2. COMPONENT / PART */}
+        <div className="border border-slate-300 rounded overflow-hidden mb-3">
+          <div className="bg-slate-100 text-slate-800 font-semibold px-2 py-1 flex items-center justify-between border-b border-slate-300 text-[10px]">
+            <div className="flex items-center gap-1.5">
+              <span className="w-4 h-4 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[9px]">2</span>
+              <span>2. COMPONENT / PART</span>
+            </div>
+            <span className="text-[9px] text-slate-500 font-medium">
+              {bomData.components?.length || 0} Items • Total Cost: ₹{componentsCost.toFixed(2)}
+            </span>
+          </div>
+          <table className="w-full text-[9px] text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold uppercase text-[8px]">
+                <th className="p-1.5 text-center w-10">Sr. No.</th>
+                <th className="p-1.5">Item Code</th>
+                <th className="p-1.5">Item Name</th>
+                <th className="p-1.5">Type</th>
+                <th className="p-1.5">Parent Level</th>
+                <th className="p-1.5 text-center">Qty</th>
+                <th className="p-1.5 text-center">UOM</th>
+                <th className="p-1.5 text-right">Unit Rate (₹)</th>
+                <th className="p-1.5 text-right">Total Cost (₹)</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200">
+              {bomData.components?.length > 0 ? (
+                bomData.components.map((c, i) => {
+                  const parentItem = c.parentId || c.parent_id
+                    ? bomData.components.find(comp => String(comp.id) === String(c.parentId || c.parent_id))
+                    : null;
+                  const parentName = parentItem
+                    ? (parentItem.description || parentItem.component_code)
+                    : (productForm.description || '—');
+                  const qty = parseFloat(c.quantity ?? c.qty ?? 0);
+                  const rate = parseFloat(c.rate ?? 0);
+                  return (
+                    <tr key={c.id || i} className="hover:bg-slate-50/50">
+                      <td className="p-1.5 text-center text-slate-400">{i + 1}</td>
+                      <td className="p-1.5 font-mono uppercase font-semibold text-slate-700">{c.component_code}</td>
+                      <td className="p-1.5 text-slate-800">{c.description || '—'}</td>
+                      <td className="p-1.5 text-slate-600 capitalize">{c.item_group || 'Part'}</td>
+                      <td className="p-1.5 text-slate-600">{parentName}</td>
+                      <td className="p-1.5 text-center">{qty.toFixed(2)}</td>
+                      <td className="p-1.5 text-center">{c.uom || 'Nos'}</td>
+                      <td className="p-1.5 text-right">₹{rate.toFixed(2)}</td>
+                      <td className="p-1.5 text-right font-semibold">₹{(qty * rate).toFixed(2)}</td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td colSpan="9" className="p-3 text-center text-slate-400 italic">No component or part items added.</td>
+                </tr>
+              )}
+              <tr className="bg-slate-50 font-bold border-t border-slate-300">
+                <td colSpan="8" className="p-1.5 text-right text-slate-600">Total Component Cost</td>
+                <td className="p-1.5 text-right text-slate-900">₹{componentsCost.toFixed(2)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        {/* 3. RAW MATERIALS */}
+        <div className="border border-slate-300 rounded overflow-hidden mb-3">
+          <div className="bg-slate-100 text-slate-800 font-semibold px-2 py-1 flex items-center justify-between border-b border-slate-300 text-[10px]">
+            <div className="flex items-center gap-1.5">
+              <span className="w-4 h-4 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[9px]">3</span>
+              <span>3. RAW MATERIALS</span>
+            </div>
+            <span className="text-[9px] text-slate-500 font-medium">
+              {bomData.materials?.length || 0} Items • Total Cost: ₹{rawMaterialsCost.toFixed(2)}
+            </span>
+          </div>
+          <table className="w-full text-[9px] text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold uppercase text-[8px]">
+                <th className="p-1.5 text-center w-10">Sr. No.</th>
+                <th className="p-1.5">Material Code</th>
+                <th className="p-1.5">Material Name</th>
+                <th className="p-1.5">Material Type</th>
+                <th className="p-1.5">Shape Type</th>
+                <th className="p-1.5 text-center">Qty</th>
+                <th className="p-1.5 text-center">UOM</th>
+                <th className="p-1.5 text-center">Weight/Unit (Kg)</th>
+                <th className="p-1.5 text-center">Scrap (Kg)</th>
+                <th className="p-1.5">Warehouse</th>
+                <th className="p-1.5 text-right">Rate (₹)</th>
+                <th className="p-1.5 text-right">Total Cost (₹)</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200">
+              {bomData.materials?.length > 0 ? (
+                bomData.materials.map((m, i) => {
+                  const qty = parseFloat(m.qty_per_pc ?? m.qtyPerPc ?? m.qty ?? 0);
+                  const rate = parseFloat(m.rate ?? 0);
+                  const weightPerUnit = parseFloat(m.weight_per_unit ?? m.weightPerUnit ?? 0);
+                  const scrapPercent = parseFloat(m.scrap_percent ?? m.scrapPercent ?? 0);
+                  const unitWeight = weightPerUnit * (1 + (scrapPercent > 1 ? scrapPercent / 100 : scrapPercent));
+                  const totalWeight = qty * unitWeight;
+                  let cost = qty * rate;
+                  if (weightPerUnit > 0) {
+                    cost = totalWeight * rate;
+                  }
+                  const shapeObj = shapes.find(s => String(s.id) === String(m.shapeId || m.shape_id));
+                  return (
+                    <tr key={m.id || i} className="hover:bg-slate-50/50">
+                      <td className="p-1.5 text-center text-slate-400">{i + 1}</td>
+                      <td className="p-1.5 font-mono uppercase text-slate-700">{m.item_code || '—'}</td>
+                      <td className="p-1.5 text-slate-800">{m.material_name || '—'}</td>
+                      <td className="p-1.5 text-slate-600">{m.item_group || 'Raw Material'}</td>
+                      <td className="p-1.5 text-slate-600 capitalize">{shapeObj?.name || '—'}</td>
+                      <td className="p-1.5 text-center">{qty.toFixed(2)}</td>
+                      <td className="p-1.5 text-center">{m.uom || 'Kg'}</td>
+                      <td className="p-1.5 text-center">{weightPerUnit > 0 ? weightPerUnit.toFixed(3) : '—'}</td>
+                      <td className="p-1.5 text-center">{scrapPercent > 0 ? `${scrapPercent.toFixed(1)}%` : '—'}</td>
+                      <td className="p-1.5 text-slate-600">{m.warehouse || '—'}</td>
+                      <td className="p-1.5 text-right">₹{rate.toFixed(2)}</td>
+                      <td className="p-1.5 text-right font-semibold">₹{cost.toFixed(2)}</td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td colSpan="12" className="p-3 text-center text-slate-400 italic">No raw materials added yet.</td>
+                </tr>
+              )}
+              <tr className="bg-slate-50 font-bold border-t border-slate-300">
+                <td colSpan="11" className="p-1.5 text-right text-slate-600">Total Raw Material Cost</td>
+                <td className="p-1.5 text-right text-slate-900">₹{rawMaterialsCost.toFixed(2)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        {/* 4. PROCESS ROUTING */}
+        <div className="border border-slate-300 rounded overflow-hidden mb-3">
+          <div className="bg-slate-100 text-slate-800 font-semibold px-2 py-1 flex items-center justify-between border-b border-slate-300 text-[10px]">
+            <div className="flex items-center gap-1.5">
+              <span className="w-4 h-4 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[9px]">4</span>
+              <span>4. PROCESS ROUTING</span>
+            </div>
+            <span className="text-[9px] text-slate-500 font-medium">
+              {bomData.operations?.length || 0} Operations • Total Cost: ₹{operationsCost.toFixed(2)}
+            </span>
+          </div>
+          <table className="w-full text-[9px] text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold uppercase text-[8px]">
+                <th className="p-1.5 text-center w-10">Sr. No.</th>
+                <th className="p-1.5">Operation</th>
+                <th className="p-1.5">Workstation / Resource</th>
+                <th className="p-1.5">Process Type</th>
+                <th className="p-1.5 text-center">Cycle Time (min)</th>
+                <th className="p-1.5 text-center">Setup Time (min)</th>
+                <th className="p-1.5 text-right">Hourly Rate (₹)</th>
+                <th className="p-1.5 text-right">Op. Cost (₹)</th>
+                <th className="p-1.5">Output Warehouse</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200">
+              {bomData.operations?.length > 0 ? (
+                bomData.operations.map((o, i) => {
+                  const hourlyRate = parseFloat(o.hourly_rate || o.hourlyRate || 0);
+                  const setupTime = parseFloat(o.setup_time_min || o.setupTimeMin || 0);
+                  const cycleTime = parseFloat(o.cycle_time_min || o.cycleTimeMin || 0);
+                  const setupPerUnit = batchQty > 0 ? (setupTime / batchQty) : 0;
+                  const opCost = ((cycleTime + setupPerUnit) / 60) * hourlyRate;
+                  return (
+                    <tr key={o.id || i} className="hover:bg-slate-50/50">
+                      <td className="p-1.5 text-center text-slate-400">{i + 1}</td>
+                      <td className="p-1.5 font-semibold text-slate-800">{o.operation_name || o.operationName}</td>
+                      <td className="p-1.5 text-slate-600">{o.workstation || '—'}</td>
+                      <td className="p-1.5 text-slate-600">{o.operation_type || o.operationType || 'In-House'}</td>
+                      <td className="p-1.5 text-center">{cycleTime.toFixed(2)}</td>
+                      <td className="p-1.5 text-center">{setupTime.toFixed(2)}</td>
+                      <td className="p-1.5 text-right">₹{hourlyRate.toFixed(2)}</td>
+                      <td className="p-1.5 text-right font-semibold">₹{opCost.toFixed(2)}</td>
+                      <td className="p-1.5 text-slate-600">{o.target_warehouse || o.targetWarehouse || '—'}</td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td colSpan="9" className="p-3 text-center text-slate-400 italic">No operations added.</td>
+                </tr>
+              )}
+              <tr className="bg-slate-50 font-bold border-t border-slate-300">
+                <td colSpan="7" className="p-1.5 text-right text-slate-600">Total Operations Cost</td>
+                <td className="p-1.5 text-right text-slate-900" colSpan="2">₹{operationsCost.toFixed(2)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        {/* 5. SCRAP & RECOVERIES */}
+        <div className="border border-slate-300 rounded overflow-hidden mb-3">
+          <div className="bg-slate-100 text-slate-800 font-semibold px-2 py-1 flex items-center justify-between border-b border-slate-300 text-[10px]">
+            <div className="flex items-center gap-1.5">
+              <span className="w-4 h-4 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[9px]">5</span>
+              <span>5. SCRAP & RECOVERIES</span>
+            </div>
+            <span className="text-[9px] text-slate-500 font-medium">
+              {bomData.scrap?.length || 0} Scrap Items • Value: ₹{(scrapLoss * batchQty).toFixed(2)}
+            </span>
+          </div>
+          <table className="w-full text-[9px] text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold uppercase text-[8px]">
+                <th className="p-1.5 text-center w-10">Sr. No.</th>
+                <th className="p-1.5">Scrap Material</th>
+                <th className="p-1.5">Process Link (Component)</th>
+                <th className="p-1.5 text-center">Input Qty</th>
+                <th className="p-1.5 text-center">Loss %</th>
+                <th className="p-1.5 text-right">Recovery Rate (₹) / Unit</th>
+                <th className="p-1.5 text-right">Recovery Value (₹)</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200">
+              {bomData.scrap?.length > 0 ? (
+                bomData.scrap.map((s, i) => {
+                  const inputQty = parseFloat(s.input_qty || s.inputQty || 0);
+                  const lossPercent = parseFloat(s.loss_percent || s.lossPercent || 0);
+                  const rate = parseFloat(s.rate || 0);
+                  const recoveryVal = inputQty * (lossPercent / 100) * rate;
+                  const linkedComp = bomData.components.find(c => String(c.id) === String(s.parent_id || s.parentId));
+                  return (
+                    <tr key={s.id || i} className="hover:bg-slate-50/50">
+                      <td className="p-1.5 text-center text-slate-400">{i + 1}</td>
+                      <td className="p-1.5 font-semibold text-slate-800">{s.item_name || '—'}</td>
+                      <td className="p-1.5 text-slate-600">{linkedComp?.component_code || 'Top Level'}</td>
+                      <td className="p-1.5 text-center">{inputQty.toFixed(2)}</td>
+                      <td className="p-1.5 text-center">{lossPercent.toFixed(2)}%</td>
+                      <td className="p-1.5 text-right">₹{rate.toFixed(2)}</td>
+                      <td className="p-1.5 text-right font-semibold text-rose-600">₹{recoveryVal.toFixed(2)}</td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td colSpan="7" className="p-3 text-center text-slate-400 italic">No scrap or loss recorded.</td>
+                </tr>
+              )}
+              <tr className="bg-slate-50 font-bold border-t border-slate-300">
+                <td colSpan="6" className="p-1.5 text-right text-slate-600">Total Scrap Deduction</td>
+                <td className="p-1.5 text-right text-slate-900">₹{(scrapLoss * batchQty).toFixed(2)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        {/* 6. BOM COSTING */}
+        <div className="border border-slate-300 rounded overflow-hidden mb-3">
+          <div className="bg-slate-100 text-slate-800 font-semibold px-2 py-1 flex items-center gap-1.5 border-b border-slate-300 text-[10px]">
+            <span className="w-4 h-4 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[9px]">6</span>
+            <span>6. BOM COSTING</span>
+          </div>
+          <div className="p-3 grid grid-cols-2 gap-6">
+            <div className="space-y-1.5 border-r border-slate-200 pr-6">
+              <div className="flex justify-between text-slate-600">
+                <span>Components Cost:</span>
+                <span className="font-semibold text-slate-800">₹{componentsCost.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-slate-600">
+                <span>Raw Materials Cost:</span>
+                <span className="font-semibold text-slate-800">₹{rawMaterialsCost.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-rose-600">
+                <span>Scrap Loss (Deduction):</span>
+                <span>-₹{(scrapLoss * batchQty).toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-blue-700 font-bold pt-1.5 border-t border-slate-100">
+                <span>Material Cost (after Scrap):</span>
+                <span>₹{(materialCostAfterScrap * batchQty).toFixed(2)}</span>
+              </div>
+            </div>
+            
+            <div className="space-y-1.5 pl-6 flex flex-col justify-between">
+              <div>
+                <div className="flex justify-between text-slate-600">
+                  <span>Operations Cost:</span>
+                  <span className="font-semibold text-slate-800">₹{(operationsCost * batchQty).toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-slate-600">
+                  <span>Total Scrap Qty:</span>
+                  <span className="font-semibold text-slate-800">{(totalScrapQty * batchQty).toFixed(2)} Kg</span>
+                </div>
+              </div>
+              
+              <div className="bg-slate-50 p-1.5 rounded border border-slate-200 flex flex-col gap-1">
+                <div className="flex justify-between text-[10px] font-bold text-slate-700">
+                  <span>ORDER TOTAL ({batchQty} {productForm.uom}):</span>
+                  <span>₹{(totalBOMCost * batchQty).toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-xs font-bold text-blue-800 border-t border-slate-200 pt-1">
+                  <span>COST PER UNIT:</span>
+                  <span>₹{costPerUnit.toFixed(2)}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="text-center text-[9px] text-slate-400 mt-6 border-t border-slate-200 pt-2">
+          This is a system generated BOM. No signature is required.
+        </div>
+      </div>
+    </>
   );
 };
 
 export default BOMFormPage;
-

@@ -1713,6 +1713,7 @@ model sales_orders {
   quotation_requests   quotation_requests[]
   quotations           quotations[]
   sales_order_items    sales_order_items[]
+  bulk_design_request_items bulk_design_request_items[]
   customer_pos         customer_pos?                     @relation(fields: [customer_po_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "sales_orders_ibfk_1")
   companies            companies                         @relation(fields: [company_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "sales_orders_ibfk_2")
   shipment_orders      shipment_orders[]
@@ -2599,4 +2600,27 @@ enum qc_inspections_status {
   OVERAGE
   ACCEPTED
   REJECTED
+}
+
+model bulk_design_requests {
+  id                 Int                         @id @default(autoincrement())
+  request_no         String                      @unique(map: "request_no") @db.VarChar(100)
+  sent_by            String                      @db.VarChar(255)
+  sent_at            DateTime?                   @default(now()) @db.Timestamp(0)
+  total_requirements Int?                        @default(0)
+  total_drawings     Int?                        @default(0)
+  status             String?                     @default("Pending Design") @db.VarChar(50)
+  items              bulk_design_request_items[]
+}
+
+model bulk_design_request_items {
+  id                   Int                  @id @default(autoincrement())
+  bulk_request_id      Int
+  sales_order_id       Int
+  drawing_count        Int?                 @default(0)
+  bulk_design_requests bulk_design_requests @relation(fields: [bulk_request_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "bulk_design_request_items_ibfk_1")
+  sales_orders         sales_orders         @relation(fields: [sales_order_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "bulk_design_request_items_ibfk_2")
+
+  @@index([bulk_request_id], map: "bulk_request_id")
+  @@index([sales_order_id], map: "sales_order_id")
 }

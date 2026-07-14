@@ -714,6 +714,7 @@ export const DataTable = ({
   selectedRows = new Set(),
   onSelectionChange,
   rowId: rowIdProp = 'id',
+  isRowSelectable = null,
   expandedRows: expandedRowsProp,
   onExpandedChange,
   onSearchChange,
@@ -794,10 +795,14 @@ export const DataTable = ({
     currentPage * pageSize
   );
 
+  const selectableRows = React.useMemo(() => {
+    return filteredData.filter(row => !isRowSelectable || isRowSelectable(row));
+  }, [filteredData, isRowSelectable]);
+
   const handleSelectAll = (e) => {
     if (onSelectionChange) {
       if (e.target.checked) {
-        onSelectionChange(new Set(filteredData.map((row, idx) => row[rowIdProp] || row.id || idx)));
+        onSelectionChange(new Set(selectableRows.map((row, idx) => row[rowIdProp] || row.id || idx)));
       } else {
         onSelectionChange(new Set());
       }
@@ -866,7 +871,7 @@ export const DataTable = ({
                     type="checkbox"
                     className="rounded border-slate-300 text-rose-600 focus:ring-rose-500"
                     onChange={handleSelectAll}
-                    checked={filteredData.length > 0 && filteredData.every((row, idx) => selectedRows.has(row[rowIdProp] || row.id || idx))}
+                    checked={selectableRows.length > 0 && selectableRows.every((row, idx) => selectedRows.has(row[rowIdProp] || row.id || idx))}
                   />
                 </th>
               )}
@@ -939,11 +944,14 @@ export const DataTable = ({
                         <td className="p-2 w-10">
                           <input
                             type="checkbox"
-                            className="rounded border-slate-300 text-rose-600 focus:ring-rose-500"
+                            className="rounded border-slate-300 text-rose-600 focus:ring-rose-500 disabled:opacity-40 disabled:bg-slate-50"
                             checked={isSelected}
+                            disabled={isRowSelectable && !isRowSelectable(row)}
                             onChange={(e) => {
                               e.stopPropagation();
-                              handleSelectRow(rowId);
+                              if (!isRowSelectable || isRowSelectable(row)) {
+                                handleSelectRow(rowId);
+                              }
                             }}
                             onClick={(e) => e.stopPropagation()}
                           />

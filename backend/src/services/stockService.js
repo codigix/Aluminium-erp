@@ -193,25 +193,10 @@ const getStockBalance = async (drawingNo = null, includeAll = false) => {
       MAX(sb.max_stock) as max_stock,
       MAX(sb.reorder_level) as reorder_level,
       SUM(sb.current_balance) as current_balance,
-      COALESCE(MAX(sl.accepted_qty), 0) as accepted_qty,
-      COALESCE(MAX(sl.issued_qty), 0) as issued_qty,
-      COALESCE(MAX(po.po_qty), 0) as po_qty
+      0 as accepted_qty,
+      0 as issued_qty,
+      0 as po_qty
     FROM stock_balance sb
-    LEFT JOIN (
-      SELECT 
-        item_code,
-        SUM(qty_in) as accepted_qty,
-        SUM(qty_out) as issued_qty
-      FROM stock_ledger
-      GROUP BY item_code
-    ) sl ON sb.item_code = sl.item_code
-    LEFT JOIN (
-      SELECT 
-        item_code,
-        SUM(quantity) as po_qty
-      FROM purchase_order_items
-      GROUP BY item_code
-    ) po ON sb.item_code = po.item_code
     LEFT JOIN (
       SELECT drawing_no, MAX(hsn_code) as hsn_code
       FROM customer_drawings

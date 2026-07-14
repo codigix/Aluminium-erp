@@ -81,8 +81,8 @@ const CustomerDrawing = () => {
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [uploadMode, setUploadMode] = useState('bulk'); // 'bulk' or 'manual'
   const [clientLocked, setClientLocked] = useState(false);
+  const [selectedRequirements, setSelectedRequirements] = useState(new Set());
   const [deletedDrawingIds, setDeletedDrawingIds] = useState([]);
   const [activeDrawingIdForFiles, setActiveDrawingIdForFiles] = useState(null);
 
@@ -185,7 +185,6 @@ const CustomerDrawing = () => {
               setFormMode('edit');
               setEditingRequirementId(row.id);
               setEditingRequirementData(row);
-              setUploadMode('manual');
               setShowFormModal(true);
               navigate(`${deptPrefix}/customer-drawing/edit-client?requirement_id=${row.public_id || row.id}`, {
                 state: { type: 'edit-requirement', data: row }
@@ -552,7 +551,6 @@ const CustomerDrawing = () => {
       setFormMode('edit');
       setEditingRequirementId(data.id);
       setEditingRequirementData(data);
-      setUploadMode('manual');
       setShowFormModal(true);
     } catch (error) {
       console.error(error);
@@ -857,14 +855,14 @@ const CustomerDrawing = () => {
       formik.setValues({
         client_name: row.client_name || row.company_name || '',
         project_name: row.project_name || '',
-        contact_person: row.contact_person || company?.contact_person || '',
-        phone_number: row.contact_phone || row.phone || company?.contact_mobile || company?.phone || '',
-        email_address: row.email_address || row.email || company?.contact_email || company?.email || '',
-        customer_type: row.customer_type || company?.customer_type || '',
-        gstin: row.gstin || company?.gstin || '',
-        city: row.city || company?.addresses?.find(a => a.address_type === 'BILLING')?.city || '',
-        state: row.state || company?.addresses?.find(a => a.address_type === 'BILLING')?.state || '',
-        billing_address: row.billing_address || (company ? (company.addresses?.find(a => a.address_type === 'BILLING') ? `${company.addresses.find(a => a.address_type === 'BILLING').line1}, ${company.addresses.find(a => a.address_type === 'BILLING').city}` : '') : ''),
+        contact_person: row.contact_person || '',
+        phone_number: row.contact_phone || row.phone || '',
+        email_address: row.email_address || row.email || '',
+        customer_type: row.customer_type || '',
+        gstin: row.gstin || '',
+        city: row.city || '',
+        state: row.state || '',
+        billing_address: row.billing_address || '',
         shipping_address: row.shipping_address || '',
         uploadMode: row.excel_path ? 'bulk' : 'manual',
         file: row.excel_path ? { name: row.excel_path.split('/').pop() } : null,
@@ -872,11 +870,6 @@ const CustomerDrawing = () => {
         manualDrawings: manualDrawings.length > 0 ? manualDrawings : [getEmptyDrawingRow()]
       });
       setClientLocked(true);
-      if (row.excel_path) {
-        setUploadMode('bulk');
-      } else {
-        setUploadMode('manual');
-      }
     }
   }, [showFormModal, formMode, editingRequirementData, companies]);
 
@@ -1075,24 +1068,19 @@ const CustomerDrawing = () => {
   const validationSchema = Yup.object().shape({
     client_name: Yup.string().required('Client Name is required'),
     project_name: Yup.string().required('Project Name is required'),
-    contact_person: Yup.string().required('Contact Person is required'),
+    contact_person: Yup.string().nullable(),
     phone_number: Yup.string()
       .matches(/^[0-9]{10}$/, {
         message: 'Phone number must be exactly 10 digits',
         excludeEmptyString: true
       })
-      .required('Phone number is required'),
-    email_address: Yup.string().email('Invalid email address').required('Email address is required'),
-    customer_type: Yup.string().nullable(),
-    gstin: Yup.string()
-      .matches(/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/, {
-        message: 'Invalid GSTIN format',
-        excludeEmptyString: true
-      })
       .nullable(),
+    email_address: Yup.string().email('Invalid email address').nullable(),
+    customer_type: Yup.string().nullable(),
+    gstin: Yup.string().nullable(),
     city: Yup.string().nullable(),
     state: Yup.string().nullable(),
-    billing_address: Yup.string().required('Billing Address is required'),
+    billing_address: Yup.string().nullable(),
     file: Yup.mixed().when('uploadMode', {
       is: 'bulk',
       then: (schema) => schema.required('Excel file is required'),
@@ -1147,6 +1135,7 @@ const CustomerDrawing = () => {
       try {
         let successCount = 0;
         setSubmitting(true);
+
         if (values.uploadMode === 'bulk') {
           const result = await saveSingleDrawing(values, false);
           if (result) {
@@ -1364,17 +1353,16 @@ const CustomerDrawing = () => {
     // 1. Check top-level mandatory fields
     if (!formik.values.client_name?.trim()) reasons.push('Client Name');
     if (!formik.values.project_name?.trim()) reasons.push('Project Name');
-    if (!formik.values.contact_person?.trim()) reasons.push('Contact Person');
-    if (!formik.values.phone_number?.trim() || !/^[0-9]{10}$/.test(formik.values.phone_number)) {
-      reasons.push('Phone (10 digits)');
+    if (formik.values.phone_number?.trim() && !/^[0-9]{10}$/.test(formik.values.phone_number)) {
+      reasons.push('Phone (must be 10 digits if provided)');
     }
-    if (!formik.values.email_address?.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formik.values.email_address)) {
-      reasons.push('Email Address');
+    if (formik.values.email_address?.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formik.values.email_address)) {
+      reasons.push('Email Address (invalid format)');
     }
-    if (!formik.values.billing_address?.trim()) reasons.push('Billing Address');
+    if (!formik.values.billing_address?.trim()) { /* optional */ }
 
     // 2. Check drawing information based on uploadMode
-    if (uploadMode === 'bulk') {
+    if (formik.values.uploadMode === 'bulk') {
       if (!formik.values.file) reasons.push('Excel File');
     } else {
       if (!formik.values.manualDrawings || formik.values.manualDrawings.length === 0) {
@@ -1451,10 +1439,6 @@ const CustomerDrawing = () => {
     }
   }, [showFormModal, showClientDrawingsModal, viewingClient, formik.values.manualDrawings]);
 
-  // Keep uploadMode state in sync with formik
-  useEffect(() => {
-    formik.setFieldValue('uploadMode', uploadMode);
-  }, [uploadMode]);
 
   // Reset form to clear stale/old data when entering add mode or closing form modal
   useEffect(() => {
@@ -1633,25 +1617,45 @@ const CustomerDrawing = () => {
   const handleSelectClient = (company) => {
     const billingAddress = company.addresses?.find(a => a.address_type === 'BILLING');
     const shippingAddress = company.addresses?.find(a => a.address_type === 'SHIPPING');
-    const billingAddressLine = billingAddress ? `${billingAddress.line1}${billingAddress.line2 ? ', ' + billingAddress.line2 : ''}, ${billingAddress.city}, ${billingAddress.state} ${billingAddress.pincode}` : '';
-    const shippingAddressLine = shippingAddress ? `${shippingAddress.line1}${shippingAddress.line2 ? ', ' + shippingAddress.line2 : ''}, ${shippingAddress.city}, ${shippingAddress.state} ${shippingAddress.pincode}` : '';
+    const billingAddressLine = billingAddress
+      ? [billingAddress.line1, billingAddress.line2, billingAddress.city, billingAddress.state, billingAddress.pincode].filter(Boolean).join(', ')
+      : '';
+    const shippingAddressLine = shippingAddress
+      ? [shippingAddress.line1, shippingAddress.line2, shippingAddress.city, shippingAddress.state, shippingAddress.pincode].filter(Boolean).join(', ')
+      : '';
+
+    // Extract contact from contacts array (primary first, then first available)
+    const primaryContact = company.contacts?.find(c => c.contact_type === 'PRIMARY') || company.contacts?.[0];
 
     formik.setValues({
       ...formik.values,
       client_name: company.company_name,
-      contact_person: company.contact_person || '',
-      phone_number: company.contact_mobile || company.phone || '',
-      email_address: company.contact_email || company.email || '',
+      contact_person: company.contact_person || primaryContact?.name || '',
+      phone_number: company.contact_mobile || company.phone || primaryContact?.phone || '',
+      email_address: company.contact_email || company.email || primaryContact?.email || '',
       customer_type: company.customer_type || '',
       gstin: company.gstin || '',
-      city: company.city || '',
-      state: company.state || '',
+      city: billingAddress?.city || company.city || '',
+      state: billingAddress?.state || company.state || '',
       billing_address: billingAddressLine,
       shipping_address: shippingAddressLine
     });
     setClientLocked(true);
     setShowSuggestions(false);
   };
+
+  // Auto-populate when user types a name and leaves the field (without clicking suggestion)
+  const handleClientBlur = () => {
+    const typedName = formik.values.client_name?.trim();
+    if (!typedName || clientLocked) return;
+    const matchedCompany = companies.find(c =>
+      c.company_name?.toLowerCase() === typedName.toLowerCase()
+    );
+    if (matchedCompany) {
+      handleSelectClient(matchedCompany);
+    }
+  };
+
 
   const saveSingleDrawing = async (drawingData, sendToDesign = false) => {
     const firstFile = drawingData.file || (drawingData.files && drawingData.files[0]);
@@ -2000,6 +2004,110 @@ const CustomerDrawing = () => {
   };
 
 
+  const handleBulkSendToDesign = async () => {
+    const selectedReqObjects = requirements.filter(r => selectedRequirements.has(r.id));
+    
+    if (selectedReqObjects.length === 0) {
+      Swal.fire({
+        title: 'Please select at least one Client Requirement to send to the Design Department.',
+        icon: 'warning',
+        confirmButtonColor: '#4f46e5'
+      });
+      return;
+    }
+
+    // Filter to only those eligible for design (status CREATED or has unshared drawings)
+    const eligibleReqs = selectedReqObjects.filter(r => {
+      const status = (r.status || '').toUpperCase().trim();
+      return status === 'CREATED' || status === 'PENDING';
+    });
+
+    if (eligibleReqs.length === 0) {
+      Swal.fire({
+        title: 'The selected Client Requirements have already been sent to the Design Department.',
+        icon: 'info',
+        confirmButtonColor: '#4f46e5'
+      });
+      return;
+    }
+
+    const reqCount = eligibleReqs.length;
+    const drawingsCount = eligibleReqs.reduce((sum, r) => sum + (r.drawing_count || 0), 0);
+    const projectsHtml = eligibleReqs.map(r => `
+      <div class="text-left font-medium text-slate-700 flex items-center gap-1.5 py-0.5" style="font-family: inherit;">
+        <span class="text-emerald-500 font-bold">✓</span> ${r.project_name || `Drawing Requirement - ${r.id}`}
+        <span class="text-xs text-slate-400">(${r.drawing_count || 0} Drawings)</span>
+      </div>
+    `).join('');
+
+    const htmlContent = `
+      <div class="text-left space-y-2 mt-2" style="font-family: inherit;">
+        <div class="flex justify-between border-b pb-1 text-sm">
+          <span class="text-slate-500">Selected Client Requirements:</span>
+          <span class="font-bold text-slate-800">${reqCount}</span>
+        </div>
+        <div class="flex justify-between border-b pb-1 text-sm">
+          <span class="text-slate-500">Total Drawings:</span>
+          <span class="font-bold text-slate-800">${drawingsCount}</span>
+        </div>
+        <div class="pt-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">Projects</div>
+        <div class="max-h-36 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
+          ${projectsHtml}
+        </div>
+      </div>
+    `;
+
+    const result = await Swal.fire({
+      title: 'Send to Design Department',
+      html: htmlContent,
+      showCancelButton: true,
+      confirmButtonText: 'Send',
+      cancelButtonText: 'Cancel',
+      confirmButtonColor: '#4f46e5',
+      cancelButtonColor: '#6b7280',
+      width: '400px',
+      customClass: {
+        title: 'text-base font-bold text-slate-850',
+        htmlContainer: 'text-slate-650',
+        confirmButton: 'text-xs px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded',
+        cancelButton: 'text-xs px-4 py-2 bg-slate-105 hover:bg-slate-205 text-slate-600 font-medium rounded'
+      }
+    });
+
+    if (result.isConfirmed) {
+      try {
+        setLoading(true);
+        const token = localStorage.getItem('authToken');
+        const ids = eligibleReqs.map(r => r.id);
+
+        const response = await fetch(`${API_BASE}/sales-orders/bulk-send-to-design`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ ids })
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Failed to send bulk requests to Design');
+        }
+
+        successToast(`Successfully sent ${reqCount} requirements to Design Department`);
+        setSelectedRequirements(new Set());
+        fetchDrawings(searchTerm);
+        fetchRequirements();
+      } catch (error) {
+        console.error(error);
+        errorToast(error.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
+
   const handleShareWithDesign = async (id) => {
     try {
       const token = localStorage.getItem('authToken');
@@ -2194,6 +2302,14 @@ const CustomerDrawing = () => {
         <div className="flex items-center gap-3">
           <Button
             variant="secondary"
+            onClick={handleBulkSendToDesign}
+            disabled={selectedRequirements.size === 0}
+            className="flex items-center gap-1.5"
+          >
+            <span>📤</span> Send to Design (Bulk)
+          </Button>
+          <Button
+            variant="secondary"
             onClick={() => { setShowApprovedDrawings(true); fetchApprovedDrawings(); }}
             icon={Check}
           >
@@ -2263,6 +2379,14 @@ const CustomerDrawing = () => {
               return row.original_items?.some(item =>
                 String(item.drawing_no || '').toLowerCase().includes(searchLower)
               );
+            }}
+            selectable={true}
+            selectedRows={selectedRequirements}
+            onSelectionChange={setSelectedRequirements}
+            rowId="id"
+            isRowSelectable={(row) => {
+              const status = (row.status || '').toUpperCase().trim();
+              return status === 'CREATED' || status === 'PENDING';
             }}
           />
         </div>
@@ -2752,20 +2876,20 @@ const CustomerDrawing = () => {
                   type="radio"
                   name="uploadMode"
                   className="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-slate-300"
-                  checked={uploadMode === 'bulk'}
-                  onChange={() => setUploadMode('bulk')}
+                  checked={formik.values.uploadMode === 'bulk'}
+                  onChange={() => formik.setFieldValue('uploadMode', 'bulk')}
                 />
-                <span className={`text-xs  transition-colors ${uploadMode === 'bulk' ? 'text-indigo-600' : 'text-slate-600 group-hover:text-slate-900'}`}>Bulk Import (Excel)</span>
+                <span className={`text-xs  transition-colors ${formik.values.uploadMode === 'bulk' ? 'text-indigo-600' : 'text-slate-600 group-hover:text-slate-900'}`}>Bulk Import (Excel)</span>
               </label>
               <label className="flex items-center gap-2  cursor-pointer group">
                 <input
                   type="radio"
                   name="uploadMode"
                   className="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-slate-300"
-                  checked={uploadMode === 'manual'}
-                  onChange={() => setUploadMode('manual')}
+                  checked={formik.values.uploadMode === 'manual'}
+                  onChange={() => formik.setFieldValue('uploadMode', 'manual')}
                 />
-                <span className={`text-xs  transition-colors ${uploadMode === 'manual' ? 'text-indigo-600' : 'text-slate-600 group-hover:text-slate-900'}`}>Manual Entry</span>
+                <span className={`text-xs  transition-colors ${formik.values.uploadMode === 'manual' ? 'text-indigo-600' : 'text-slate-600 group-hover:text-slate-900'}`}>Manual Entry</span>
               </label>
             </div>
           </div>
@@ -2797,7 +2921,7 @@ const CustomerDrawing = () => {
                     className={`w-full p-2 .5 border rounded text-xs outline-none focus:ring-2 focus:ring-indigo-500 bg-white transition-all ${clientLocked ? 'bg-slate-100 cursor-not-allowed text-slate-600 border-slate-300' : 'border-slate-300 hover:border-slate-400'} ${formik.touched.client_name && formik.errors.client_name ? 'border-red-500' : ''}`}
                     value={formik.values.client_name}
                     onChange={(e) => handleClientInput(e.target.value)}
-                    onBlur={formik.handleBlur}
+                    onBlur={(e) => { formik.handleBlur(e); handleClientBlur(); }}
                     onFocus={() => formik.values.client_name && setShowSuggestions(true)}
                   />
                   {formik.touched.client_name && formik.errors.client_name && (
@@ -2834,7 +2958,7 @@ const CustomerDrawing = () => {
             </div>
 
             <div>
-              <label className="block text-xs  text-slate-700 mb-1">Contact Person *</label>
+              <label className="block text-xs  text-slate-700 mb-1">Contact Person</label>
               <input
                 type="text"
                 name="contact_person"
@@ -2849,7 +2973,7 @@ const CustomerDrawing = () => {
               )}
             </div>
             <div>
-              <label className="block text-xs  text-slate-700 mb-1">Phone *</label>
+              <label className="block text-xs  text-slate-700 mb-1">Phone</label>
               <input
                 type="text"
                 name="phone_number"
@@ -2868,7 +2992,7 @@ const CustomerDrawing = () => {
               )}
             </div>
             <div>
-              <label className="block text-xs  text-slate-700 mb-1">Email *</label>
+              <label className="block text-xs  text-slate-700 mb-1">Email</label>
               <input
                 type="email"
                 name="email_address"
@@ -2943,7 +3067,7 @@ const CustomerDrawing = () => {
               )}
             </div>
             <div className="lg:col-span-2">
-              <label className="block text-xs  text-slate-700 mb-1">Billing Address *</label>
+              <label className="block text-xs  text-slate-700 mb-1">Billing Address</label>
               <input
                 type="text"
                 name="billing_address"
@@ -2972,7 +3096,7 @@ const CustomerDrawing = () => {
           </div>
 
           {/* CONDITIONAL FIELDS BASED ON MODE */}
-          {uploadMode === 'manual' ? (
+          {formik.values.uploadMode === 'manual' ? (
             <div className="mt-4">
               <div className="flex justify-between items-center mb-2">
                 <h3 className="text-xs  text-slate-700">Drawing Details</h3>
@@ -3266,7 +3390,7 @@ const CustomerDrawing = () => {
               >
                 {submitting && <Loader2 className="w-3 h-3 animate-spin" />}
                 <Send className="w-3 h-3" />
-                {formMode === 'edit' ? (submitting ? 'Updating...' : 'Update Requirement') : (uploadMode === 'bulk' ? 'Upload Excel' : 'Add Requirements')}
+                {formMode === 'edit' ? (submitting ? 'Updating...' : 'Update Requirement') : (formik.values.uploadMode === 'bulk' ? 'Upload Excel' : 'Add Requirements')}
               </button>
             </div>
           </div>
@@ -3336,6 +3460,22 @@ const CustomerDrawing = () => {
         isOpen={showPreviewModal}
         onClose={() => setShowPreviewModal(false)}
         drawing={previewDrawing}
+        onOpenAttachments={(dwg) => {
+          const dwgMasterId = dwg.drawing_master_id || dwg.id || dwg.drawing_id;
+          const dwgNo = dwg.drawing_no;
+          
+          // Find in manualDrawings by master ID or drawing number
+          const matched = formik.values.manualDrawings.find(d => 
+            (dwgMasterId && (d.drawing_id === dwgMasterId || d.id === dwgMasterId)) ||
+            (dwgNo && d.drawing_no === dwgNo)
+          );
+          
+          if (matched) {
+            setActiveDrawingIdForFiles(matched.id);
+          } else {
+            toast.info("Please open the 'Edit Client & Drawings' modal to manage attachments.");
+          }
+        }}
       />
 
       {/* Drawing Attachments Modal */}

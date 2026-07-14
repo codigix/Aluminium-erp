@@ -327,11 +327,34 @@ const updateDrawing = async (id, data) => {
        WHERE soi.drawing_id = ?`,
       [internalId]
     );
-    for (const order of orders) {
-      const statusUpper = (order.status || '').toUpperCase().replace(/_/g, ' ').trim();
-      // QUOTATION SENT: updates are allowed
-      if (statusUpper === 'BOM SUBMITTED') {
-        throw new Error('bom allready sent now cant update requirement');
+    const isOnlyFilesUpdate = 
+      description === undefined &&
+      revisionNo === undefined &&
+      clientName === undefined &&
+      projectName === undefined &&
+      contactPerson === undefined &&
+      phoneNumber === undefined &&
+      emailAddress === undefined &&
+      customerType === undefined &&
+      gstin === undefined &&
+      city === undefined &&
+      state === undefined &&
+      billingAddress === undefined &&
+      shippingAddress === undefined &&
+      qty === undefined &&
+      remarks === undefined &&
+      drawingNo === undefined &&
+      drawing_type === undefined &&
+      hsnCode === undefined &&
+      deliveryDate === undefined;
+
+    if (!isOnlyFilesUpdate) {
+      for (const order of orders) {
+        const statusUpper = (order.status || '').toUpperCase().replace(/_/g, ' ').trim();
+        // QUOTATION SENT: updates are allowed
+        if (statusUpper === 'BOM SUBMITTED') {
+          throw new Error('bom allready sent now cant update requirement');
+        }
       }
     }
 

@@ -63,9 +63,9 @@ const listSalesOrders = async (includeWithoutPo = true) => {
               so.current_department
             ) as current_department,
             so.target_dispatch_date as delivery_date, c.company_name, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path,
-            COALESCE(cd_contact.email, ct.email, "") as email_address, 
-            COALESCE(cd_contact.phone, ct.phone, "") as contact_phone,
-            COALESCE(cd_contact.contact_person, ct.name, "") as contact_person,
+            COALESCE(cd_contact.email, "") as email_address, 
+            COALESCE(cd_contact.phone, "") as contact_phone,
+            COALESCE(cd_contact.contact_person, "") as contact_person,
             (SELECT GROUP_CONCAT(DISTINCT drawing_no SEPARATOR ', ') FROM sales_order_items WHERE sales_order_id = so.id) as drawing_no,
             (SELECT reason FROM design_rejections WHERE sales_order_id = so.id ORDER BY created_at DESC LIMIT 1) as rejection_reason,
             (SELECT COUNT(*) FROM sales_order_items WHERE sales_order_id = so.id AND UPPER(TRIM(status)) = 'APPROVED') as approved_items_count,
@@ -133,11 +133,11 @@ const getSalesOrderById = async (id) => {
               so.current_department
             ) as current_department,
             so.target_dispatch_date as delivery_date, c.company_name, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path,
-            COALESCE(cd_contact.email, ct.email, cd_client.email, "") as email_address, 
-            COALESCE(cd_contact.phone, ct.phone, cd_client.phone, "") as contact_phone,
-            COALESCE(cd_contact.contact_person, ct.name, cd_client.contact_person, "") as contact_person,
-            COALESCE(so.billing_address, ba.billing_address, cd_client.billing_address, "") as billing_address,
-            COALESCE(so.shipping_address, sa.shipping_address, cd_client.shipping_address, "") as shipping_address
+            COALESCE(cd_contact.email, "") as email_address, 
+            COALESCE(cd_contact.phone, "") as contact_phone,
+            COALESCE(cd_contact.contact_person, "") as contact_person,
+            COALESCE(so.billing_address, "") as billing_address,
+            COALESCE(so.shipping_address, "") as shipping_address
      FROM sales_orders so
      LEFT JOIN companies c ON c.id = so.company_id
      LEFT JOIN customer_pos cp ON cp.id = so.customer_po_id
@@ -229,9 +229,9 @@ const getIncomingOrders = async (departmentCode, includeAccepted = false) => {
             soi.item_id, soi.item_code, soi.drawing_no, soi.description AS item_description, soi.quantity AS item_qty, soi.unit AS item_unit, soi.item_status, soi.item_rejection_reason,
             cd.drawing_name,
             sb.material_type as item_group,
-            COALESCE(cd_contact.email, ct.email, "") as email_address, 
-            COALESCE(cd_contact.phone, ct.phone, "") as contact_phone, 
-            COALESCE(cd_contact.contact_person, ct.name, "") as contact_person,
+            COALESCE(cd_contact.email, "") as email_address, 
+            COALESCE(cd_contact.phone, "") as contact_phone, 
+            COALESCE(cd_contact.contact_person, "") as contact_person,
             (SELECT reason FROM design_rejections WHERE sales_order_id = so.id ORDER BY created_at DESC LIMIT 1) as rejection_reason
      FROM sales_orders so
      LEFT JOIN companies c ON c.id = so.company_id
@@ -973,9 +973,9 @@ const bulkRejectDesigns = async (orderIds, reason) => {
 
 const getApprovedDrawings = async (companyId = null) => {
   let query = `SELECT so.*, c.company_name, c.company_code, c.id as company_id_check,
-     COALESCE(cd_contact.email, ct.email, '') as email,
-     COALESCE(cd_contact.phone, ct.phone, '') as phone,
-     COALESCE(cd_contact.contact_person, ct.name, '') as contact_person,
+     COALESCE(cd_contact.email, '') as email,
+     COALESCE(cd_contact.phone, '') as phone,
+     COALESCE(cd_contact.contact_person, '') as contact_person,
      cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total,
      (SELECT reason FROM design_rejections WHERE sales_order_id = so.id ORDER BY created_at DESC LIMIT 1) as rejection_reason
      FROM sales_orders so
@@ -1006,89 +1006,73 @@ const getApprovedDrawings = async (companyId = null) => {
 
   const [rows] = await pool.query(query, params);
 
-  for (const order of rows) {
-    const [items] = await pool.query(
-      `SELECT soi.id, soi.sales_order_id, soi.bom_id, soi.item_code, soi.item_type, soi.item_group, 
-              soi.unit, soi.description, soi.is_active, soi.is_default, soi.quantity, 
-              soi.drawing_no, soi.drawing_id, soi.status, soi.created_by, soi.created_at, soi.updated_at,
-              soi.drawing_pdf, soi.drawing_type, cd.file_path, cd.drawing_type as cd_drawing_type,
-              cd.contact_person, cd.phone, cd.email,
-              (
-                SELECT bom_cost FROM sales_order_items v2 
-                WHERE ((v2.bom_id = soi.bom_id AND soi.bom_id IS NOT NULL AND v2.bom_id IS NOT NULL)
-                   OR (LOWER(TRIM(v2.item_code)) = LOWER(TRIM(soi.item_code)) AND LOWER(TRIM(v2.drawing_no)) = LOWER(TRIM(soi.drawing_no)) AND v2.item_code IS NOT NULL AND v2.drawing_no IS NOT NULL))
-                   AND v2.bom_cost > 0
-                ORDER BY v2.id DESC LIMIT 1
-              ) as bom_cost,
-              (
-                SELECT revision_no FROM sales_order_items v3 
-                WHERE ((v3.bom_id = soi.bom_id AND soi.bom_id IS NOT NULL)
-                   OR (v3.item_code = soi.item_code AND v3.drawing_no = soi.drawing_no AND v3.item_code IS NOT NULL AND v3.drawing_no IS NOT NULL))
-                   AND v3.bom_cost > 0
-                ORDER BY v3.id DESC LIMIT 1
-              ) as revision_no,
-              (
-                SELECT COUNT(*) 
-                FROM sales_order_item_components 
-                WHERE sales_order_item_id IN (SELECT id FROM sales_order_items WHERE sales_order_id = soi.sales_order_id)
-                AND component_code = soi.item_code
-              ) as is_component,
-              COALESCE(NULLIF(soi.item_group, ''), NULLIF(soi.item_type, '')) as item_group_calc,
-              COALESCE(
-                poi.quantity, 
-                (SELECT MAX(quantity) FROM sales_order_items WHERE sales_order_id = soi.sales_order_id AND TRIM(drawing_no) = TRIM(soi.drawing_no)),
-                soi.quantity
-              ) as design_qty
-       FROM sales_order_items soi
-       INNER JOIN (
-         SELECT sales_order_id, drawing_no, item_code, item_group, item_type, MAX(id) as max_id
-         FROM sales_order_items
-         GROUP BY sales_order_id, drawing_no, item_code, item_group, item_type
-       ) latest ON soi.id = latest.max_id
-       LEFT JOIN sales_orders so ON soi.sales_order_id = so.id
-       LEFT JOIN customer_po_items poi ON so.customer_po_id = poi.customer_po_id 
-            AND (TRIM(soi.drawing_no) = TRIM(poi.drawing_no) AND soi.drawing_no IS NOT NULL)
-       LEFT JOIN customer_drawings cd ON soi.drawing_id = cd.id
-       WHERE soi.sales_order_id = ? 
-       AND (
-         TRIM(UPPER(soi.item_group)) IN ('ASSEMBLY', 'PART') 
-         OR (
-           TRIM(UPPER(soi.item_type)) IN ('ASSEMBLY', 'PART')
-         )
+  if (rows.length === 0) return [];
+
+  const orderIds = rows.map(r => r.id);
+  const [allItems] = await pool.query(
+    `SELECT soi.id, soi.sales_order_id, soi.bom_id, soi.item_code, soi.item_type, soi.item_group, 
+            soi.unit, soi.description, soi.is_active, soi.is_default, soi.quantity, 
+            soi.drawing_no, soi.drawing_id, soi.status, soi.created_by, soi.created_at, soi.updated_at,
+            soi.drawing_pdf, soi.drawing_type, cd.file_path, cd.drawing_type as cd_drawing_type,
+            cd.contact_person, cd.phone, cd.email,
+            (
+              SELECT bom_cost FROM sales_order_items v2 
+              WHERE ((v2.bom_id = soi.bom_id AND soi.bom_id IS NOT NULL AND v2.bom_id IS NOT NULL)
+                 OR (LOWER(TRIM(v2.item_code)) = LOWER(TRIM(soi.item_code)) AND LOWER(TRIM(v2.drawing_no)) = LOWER(TRIM(soi.drawing_no)) AND v2.item_code IS NOT NULL AND v2.drawing_no IS NOT NULL))
+                 AND v2.bom_cost > 0
+              ORDER BY v2.id DESC LIMIT 1
+            ) as bom_cost,
+            (
+              SELECT revision_no FROM sales_order_items v3 
+              WHERE ((v3.bom_id = soi.bom_id AND soi.bom_id IS NOT NULL)
+                 OR (v3.item_code = soi.item_code AND v3.drawing_no = soi.drawing_no AND v3.item_code IS NOT NULL AND v3.drawing_no IS NOT NULL))
+                 AND v3.bom_cost > 0
+              ORDER BY v3.id DESC LIMIT 1
+            ) as revision_no,
+            (
+              SELECT COUNT(*) 
+              FROM sales_order_item_components 
+              WHERE sales_order_item_id IN (SELECT id FROM sales_order_items WHERE sales_order_id = soi.sales_order_id)
+              AND component_code = soi.item_code
+            ) as is_component,
+            COALESCE(NULLIF(soi.item_group, ''), NULLIF(soi.item_type, '')) as item_group_calc,
+            COALESCE(
+              poi.quantity, 
+              (SELECT MAX(quantity) FROM sales_order_items WHERE sales_order_id = soi.sales_order_id AND TRIM(drawing_no) = TRIM(soi.drawing_no)),
+              soi.quantity
+            ) as design_qty
+     FROM sales_order_items soi
+     INNER JOIN (
+       SELECT sales_order_id, drawing_no, item_code, item_group, item_type, MAX(id) as max_id
+       FROM sales_order_items
+       GROUP BY sales_order_id, drawing_no, item_code, item_group, item_type
+     ) latest ON soi.id = latest.max_id
+     LEFT JOIN sales_orders so ON soi.sales_order_id = so.id
+     LEFT JOIN customer_po_items poi ON so.customer_po_id = poi.customer_po_id 
+          AND (TRIM(soi.drawing_no) = TRIM(poi.drawing_no) AND soi.drawing_no IS NOT NULL)
+     LEFT JOIN customer_drawings cd ON soi.drawing_id = cd.id
+     WHERE soi.sales_order_id IN (?) 
+     AND (
+       TRIM(UPPER(soi.item_group)) IN ('ASSEMBLY', 'PART') 
+       OR (
+         TRIM(UPPER(soi.item_type)) IN ('ASSEMBLY', 'PART')
        )
-       AND (soi.status IS NULL OR TRIM(UPPER(soi.status)) NOT IN ('REJECTED', 'CANCELLED'))`,
-      [order.id]
-    );
-    order.items = items;
+     )
+     AND (soi.status IS NULL OR TRIM(UPPER(soi.status)) NOT IN ('REJECTED', 'CANCELLED'))`,
+    [orderIds]
+  );
 
-    // Fetch sub-assemblies for each item if it's an ASSEMBLY
-    for (const item of order.items) {
-      const g = (item.item_group || '').toUpperCase();
-      const t = (item.item_type || '').toUpperCase();
-      const isPart = g.includes('PART') || t.includes('PART');
-      const components = await bomService.getItemComponents(item.id, item.item_code, item.drawing_no);
-
-      const isSA = g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY') || t.includes('SA') || t.includes('SUB') || t.includes('ASSEMBLY');
-      const isDrawingOrSA = isSA || g.includes('PART') || t.includes('PART') || (item.drawing_no && item.drawing_no !== '—');
-      if (isDrawingOrSA) {
-        item.sub_assemblies = components;
-      } else {
-        item.sub_assemblies = components.filter(c => {
-          const code = (c.item_code || c.component_code || '').toUpperCase();
-          const group = (c.item_group || '').toUpperCase();
-          const desc = (c.description || '').toUpperCase();
-          return group.includes('PART') || code.startsWith('PART-') || desc.includes('PART');
-        });
-      }
+  const itemsByOrder = new Map();
+  for (const item of allItems) {
+    item.sub_assemblies = []; // Populate with empty array since not used by drawings endpoints
+    if (!itemsByOrder.has(item.sales_order_id)) {
+      itemsByOrder.set(item.sales_order_id, []);
     }
+    itemsByOrder.get(item.sales_order_id).push(item);
+  }
 
-    if (order.company_id) {
-      const [companyContacts] = await pool.query(
-        'SELECT id, name, email, phone, contact_type, status FROM contacts WHERE company_id = ? ORDER BY contact_type = "PRIMARY" DESC LIMIT 5',
-        [order.company_id]
-      );
-      order._debug_contacts = companyContacts;
-    }
+  for (const order of rows) {
+    order.items = itemsByOrder.get(order.id) || [];
   }
 
   return rows;
@@ -2046,6 +2030,89 @@ const bulkUpdateItemStatus = async (itemIds, status, reason) => {
   }
 };
 
+const bulkSendToDesign = async (salesOrderIds, sentBy) => {
+  if (!salesOrderIds || !Array.isArray(salesOrderIds) || salesOrderIds.length === 0) {
+    throw new Error('Sales Order IDs are required');
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // 1. Generate Request No (BDR-2026-0001)
+    const year = new Date().getFullYear();
+    let nextSeq = 1;
+    const [maxRows] = await connection.query(
+      "SELECT MAX(request_no) as max_no FROM bulk_design_requests WHERE request_no LIKE ?",
+      [`BDR-${year}-%`]
+    );
+    if (maxRows.length > 0 && maxRows[0].max_no) {
+      const parts = maxRows[0].max_no.split('-');
+      const seq = parseInt(parts[2], 10);
+      if (!isNaN(seq)) nextSeq = seq + 1;
+    }
+    const requestNo = `BDR-${year}-${String(nextSeq).padStart(4, '0')}`;
+
+    // 2. Count total drawings across all sales orders
+    let totalDrawings = 0;
+    const drawingCounts = {};
+    for (const soId of salesOrderIds) {
+      const [drawingRows] = await connection.query(
+        "SELECT COUNT(*) as cnt FROM sales_order_items WHERE sales_order_id = ?",
+        [soId]
+      );
+      const count = drawingRows[0]?.cnt || 0;
+      drawingCounts[soId] = count;
+      totalDrawings += count;
+    }
+
+    // 3. Create the Bulk Design Request
+    const [result] = await connection.execute(
+      `INSERT INTO bulk_design_requests (request_no, sent_by, total_requirements, total_drawings, status)
+       VALUES (?, ?, ?, ?, ?)`,
+      [requestNo, sentBy || 'Sales', salesOrderIds.length, totalDrawings, 'Pending Design']
+    );
+    const bulkRequestId = result.insertId;
+
+    // 4. Update sales orders, drawings, items, and insert request items
+    for (const soId of salesOrderIds) {
+      // Create request item mapping
+      await connection.execute(
+        `INSERT INTO bulk_design_request_items (bulk_request_id, sales_order_id, drawing_count)
+         VALUES (?, ?, ?)`,
+        [bulkRequestId, soId, drawingCounts[soId]]
+      );
+
+      // Update customer drawings to SHARED
+      await connection.execute(
+        `UPDATE customer_drawings SET status = 'SHARED', shared_with_design = 1, shared_at = CURRENT_TIMESTAMP 
+         WHERE id IN (SELECT drawing_id FROM sales_order_items WHERE sales_order_id = ?)`,
+        [soId]
+      );
+
+      // Update sales order status and current department
+      await connection.execute(
+        `UPDATE sales_orders SET status = 'DESIGN_IN_REVIEW', current_department = 'DESIGN_ENG', request_accepted = 0, updated_at = NOW() WHERE id = ?`,
+        [soId]
+      );
+
+      // Update all items status to DESIGN_IN_REVIEW so they show up in Drawing Master
+      await connection.execute(
+        `UPDATE sales_order_items SET status = 'DESIGN_IN_REVIEW' WHERE sales_order_id = ? AND (status IS NULL OR status = 'PENDING' OR status = 'SHARED')`,
+        [soId]
+      );
+    }
+
+    await connection.commit();
+    return { bulkRequestId, requestNo, totalRequirements: salesOrderIds.length, totalDrawings };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+};
+
 module.exports = {
   listSalesOrders,
   getSalesOrderById,
@@ -2070,5 +2137,6 @@ module.exports = {
   updateSalesOrderItem,
   updateSalesOrderItemStatus,
   generateSalesOrderPDF,
-  deleteSalesOrder
+  deleteSalesOrder,
+  bulkSendToDesign
 };

@@ -171,10 +171,123 @@ const getDesignOrderItemsBySalesOrder = async (salesOrderId) => {
   return rows;
 };
 
+const listBulkRequests = async () => {
+  const [requests] = await pool.query(
+    `SELECT * FROM bulk_design_requests WHERE status = 'Pending Design' ORDER BY sent_at DESC`
+  );
+
+  if (requests.length === 0) return [];
+
+  const [items] = await pool.query(
+    `SELECT bdri.*, so.project_name, c.company_name
+     FROM bulk_design_request_items bdri
+     JOIN sales_orders so ON bdri.sales_order_id = so.id
+     LEFT JOIN companies c ON so.company_id = c.id`
+  );
+
+  for (const req of requests) {
+    req.items = items.filter(i => i.bulk_request_id === req.id);
+  }
+  return requests;
+};
+
+const approveBulkRequest = async (id) => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const [items] = await connection.query(
+      `SELECT sales_order_id FROM bulk_design_request_items WHERE bulk_request_id = ?`,
+      [id]
+    );
+
+    if (items.length > 0) {
+      const salesOrderIds = items.map(item => item.sales_order_id);
+      const placeholders = salesOrderIds.map(() => '?').join(',');
+
+      await connection.execute(
+        `UPDATE sales_orders SET status = ?, current_department = ?, request_accepted = 1, updated_at = NOW() 
+         WHERE id IN (${placeholders})`,
+        ['DESIGN_IN_REVIEW', 'DESIGN_ENG', ...salesOrderIds]
+      );
+
+      await connection.execute(
+        `UPDATE sales_order_items SET status = 'Approved' 
+         WHERE sales_order_id IN (${placeholders}) AND (status IS NULL OR status = 'PENDING' OR status = 'SHARED')`,
+        salesOrderIds
+      );
+
+      for (const soId of salesOrderIds) {
+        await createDesignOrder(soId, connection, 'IN_DESIGN');
+      }
+    }
+
+    await connection.execute(
+      `UPDATE bulk_design_requests SET status = 'Approved' WHERE id = ?`,
+      [id]
+    );
+
+    await connection.commit();
+    return true;
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+};
+
+const rejectBulkRequest = async (id) => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const [items] = await connection.query(
+      `SELECT sales_order_id FROM bulk_design_request_items WHERE bulk_request_id = ?`,
+      [id]
+    );
+
+    if (items.length > 0) {
+      const salesOrderIds = items.map(item => item.sales_order_id);
+      const placeholders = salesOrderIds.map(() => '?').join(',');
+
+      await connection.execute(
+        `UPDATE sales_orders SET status = ?, current_department = ?, request_accepted = 0, updated_at = NOW() 
+         WHERE id IN (${placeholders})`,
+        ['DESIGN_QUERY', 'SALES', ...salesOrderIds]
+      );
+
+      for (const soId of salesOrderIds) {
+        await connection.execute(
+          `INSERT INTO design_rejections (sales_order_id, reason, created_at)
+           VALUES (?, ?, NOW())`,
+          [soId, 'Bulk rejection by Design Department']
+        );
+      }
+    }
+
+    await connection.execute(
+      `UPDATE bulk_design_requests SET status = 'Rejected' WHERE id = ?`,
+      [id]
+    );
+
+    await connection.commit();
+    return true;
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+};
+
 module.exports = {
   listDesignOrders,
   createDesignOrder,
   updateDesignOrderStatus,
   deleteDesignOrder,
-  getDesignOrderItemsBySalesOrder
+  getDesignOrderItemsBySalesOrder,
+  listBulkRequests,
+  approveBulkRequest,
+  rejectBulkRequest
 };

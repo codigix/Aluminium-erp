@@ -1,23 +1,84 @@
 import React from 'react';
 import { Modal } from './ui.jsx';
-import { FileText, Download, Hash, Calendar, User, Package, MessageSquare, History, ExternalLink, X } from 'lucide-react';
+import { FileText, Download, Hash, Calendar, User, Package, MessageSquare, History, ExternalLink, X, Paperclip } from 'lucide-react';
 import { getFileUrl } from '../utils/url';
 
-const DrawingPreviewModal = ({ isOpen, onClose, drawing }) => {
+const DrawingPreviewModal = ({ isOpen, onClose, drawing, onOpenAttachments }) => {
   const [activeIdx, setActiveIdx] = React.useState(0);
 
-  React.useEffect(() => {
-    setActiveIdx(0);
+  const files = React.useMemo(() => {
+    if (!drawing) return [];
+    const list = [];
+    
+    // Source 1: Check drawing.existingFiles (array of strings)
+    if (Array.isArray(drawing.existingFiles)) {
+      drawing.existingFiles.forEach(path => {
+        if (path) {
+          const url = getFileUrl(path);
+          const name = path.split('/').pop().replace(/^\d+-/, '');
+          const extension = path.split('?')[0].toLowerCase().split('.').pop();
+          list.push({ url, name, extension, path });
+        }
+      });
+    }
+    
+    // Source 2: Check drawing.files (array of File objects)
+    if (Array.isArray(drawing.files)) {
+      drawing.files.forEach(fileObj => {
+        if (fileObj) {
+          const url = URL.createObjectURL(fileObj);
+          const name = fileObj.name;
+          const extension = name.split('.').pop().toLowerCase();
+          list.push({ url, name, extension, fileObj });
+        }
+      });
+    }
+    
+    // Source 3: Fallback to drawing.file_path or drawing.drawing_pdf (comma-separated strings)
+    if (list.length === 0) {
+      const filePathStr = drawing.file_path || drawing.drawing_pdf || '';
+      const paths = filePathStr.split(',').filter(Boolean);
+      paths.forEach(path => {
+        const isAbsoluteOrBlob = path.startsWith('blob:') || path.startsWith('data:') || path.startsWith('http://') || path.startsWith('https://');
+        const url = isAbsoluteOrBlob ? path : getFileUrl(path);
+        const name = path.split('/').pop().replace(/^\d+-/, '');
+        const extension = path.split('?')[0].toLowerCase().split('.').pop();
+        list.push({ url, name, extension, path });
+      });
+    }
+    
+    return list;
   }, [drawing]);
 
-  if (!drawing) return null;
+  React.useEffect(() => {
+    if (drawing && files.length > 0) {
+      const targetPath = drawing.drawing_pdf || drawing.file_path;
+      if (targetPath) {
+        const foundIdx = files.findIndex(f => f.path === targetPath || f.url === targetPath);
+        if (foundIdx !== -1) {
+          setActiveIdx(foundIdx);
+          return;
+        }
+      }
+    }
+    setActiveIdx(0);
+  }, [drawing, files]);
 
-  const filePath = drawing.file_path || drawing.drawing_pdf || '';
-  const files = filePath.split(',').filter(Boolean);
-  const activeFilePath = files[activeIdx] || '';
-  const fileUrl = getFileUrl(activeFilePath);
-  const extension = activeFilePath.split('?')[0].toLowerCase().split('.').pop();
+  React.useEffect(() => {
+    return () => {
+      files.forEach(file => {
+        if (file.url && file.url.startsWith('blob:')) {
+          URL.revokeObjectURL(file.url);
+        }
+      });
+    };
+  }, [files]);
 
+  if (!drawing || files.length === 0) return null;
+
+  const activeFile = files[activeIdx] || files[0];
+  const fileUrl = activeFile.url;
+  const extension = activeFile.extension;
   const serverFileType = (drawing.file_type || '').toUpperCase();
 
   let type = 'other';
@@ -33,10 +94,24 @@ const DrawingPreviewModal = ({ isOpen, onClose, drawing }) => {
 
   const previewFile = {
     url: fileUrl,
-    name: (activeFilePath.split('/').pop().replace(/^\d+-/, '')) || drawing.drawing_no || drawing.name || 'Drawing',
+    name: activeFile.name,
     type: type,
     extension: extension
   };
+
+  const drawingNoVal = drawing.drawing_no || drawing.drawingNo || '—';
+  const descriptionVal = drawing.description || drawing.drawing_description || drawing.item_description || '';
+  const clientVal = drawing.client_name || drawing.company_name || (drawing.company && typeof drawing.company === 'object' ? drawing.company.company_name : drawing.company) || '';
+  const qtyVal = drawing.qty || drawing.quantity || '—';
+  
+  const updatedDate = drawing.updated_at || drawing.created_at || drawing.updatedAt || drawing.createdAt;
+  let formattedDate = '—';
+  if (updatedDate) {
+    const d = new Date(updatedDate);
+    if (!isNaN(d.getTime())) {
+      formattedDate = d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    }
+  }
 
   const DetailItem = ({ icon: Icon, label, value }) => (
     <div className="flex flex-col gap-1 p-2 bg-slate-50/50 border border-slate-100 rounded  hover:bg-white hover:shadow-sm transition-all duration-300">
@@ -83,28 +158,46 @@ const DrawingPreviewModal = ({ isOpen, onClose, drawing }) => {
 
           <div className="grid grid-cols-1 gap-2">
             <DetailItem
+              icon={FileText}
+              label="Drawing Number"
+              value={drawingNoVal}
+            />
+            <DetailItem
               icon={Package}
               label="Description"
-              value={drawing.description}
+              value={descriptionVal}
             />
             <DetailItem
               icon={User}
               label="Client / Vendor"
-              value={drawing.client_name}
+              value={clientVal}
             />
             <DetailItem
               icon={Hash}
               label="Quantity"
-              value={drawing.qty}
+              value={qtyVal}
             />
             <DetailItem
               icon={Calendar}
               label="Updated On"
-              value={new Date(drawing.updated_at || drawing.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+              value={formattedDate}
             />
           </div>
 
           <div className="mt-auto pt-2 flex flex-col gap-2">
+            {onOpenAttachments && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onOpenAttachments(drawing);
+                }}
+                className="w-full flex items-center justify-center gap-2 py-2 bg-indigo-50 border border-indigo-200 text-indigo-700 rounded text-xs font-semibold hover:bg-indigo-100 transition-all shadow-sm active:scale-95"
+              >
+                <Paperclip size={12} />
+                Manage Attachments
+              </button>
+            )}
             <a
               href={previewFile.url}
               target="_blank"
@@ -131,7 +224,7 @@ const DrawingPreviewModal = ({ isOpen, onClose, drawing }) => {
             <div className="flex flex-wrap items-center gap-1.5 p-2 bg-slate-100 border-b border-slate-200">
               <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider px-1">Files ({files.length}):</span>
               {files.map((file, idx) => {
-                const name = file.split('/').pop().replace(/^\d+-/, '');
+                const name = file.name;
                 const isActive = idx === activeIdx;
                 return (
                   <button
