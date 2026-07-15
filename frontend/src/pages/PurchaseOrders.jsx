@@ -189,6 +189,7 @@ const PurchaseOrders = () => {
   const [mergedItems, setMergedItems] = useState([]);
   const [mergeNotes, setMergeNotes] = useState('');
   const [mergeExpectedDeliveryDate, setMergeExpectedDeliveryDate] = useState('');
+  const [mergeSearchTerm, setMergeSearchTerm] = useState('');
 
 
   useEffect(() => {
@@ -948,25 +949,70 @@ const PurchaseOrders = () => {
     const updatedItems = [...poItems];
     updatedItems[index][field] = value;
 
-    if (field === 'unit_rate' || field === 'quantity') {
-      const qty = parseFloat(updatedItems[index].quantity) || 0;
-      const rate = parseFloat(updatedItems[index].unit_rate) || 0;
-      const amount = qty * rate;
-
-      const cgstPercent = updatedItems[index].cgst_percent || 9;
-      const sgstPercent = updatedItems[index].sgst_percent || 9;
-      const cgstAmount = (amount * cgstPercent) / 100;
-      const sgstAmount = (amount * sgstPercent) / 100;
-
-      updatedItems[index].amount = amount;
-      updatedItems[index].cgst_amount = cgstAmount;
-      updatedItems[index].sgst_amount = sgstAmount;
-      updatedItems[index].total_amount = amount + cgstAmount + sgstAmount;
+    if (field === 'item_code') {
+      const selectedItem = stockItems.find(i => String(i.item_code) === String(value));
+      if (selectedItem) {
+        updatedItems[index].description = selectedItem.item_description || selectedItem.material_name || selectedItem.description;
+        updatedItems[index].material_name = selectedItem.material_name;
+        updatedItems[index].material_type = selectedItem.material_type;
+        updatedItems[index].unit = selectedItem.unit || 'NOS';
+        updatedItems[index].unit_rate = selectedItem.valuation_rate || 0;
+        updatedItems[index].length = selectedItem.length || 0;
+        updatedItems[index].width = selectedItem.width || 0;
+        updatedItems[index].thickness = selectedItem.thickness || 0;
+        updatedItems[index].diameter = selectedItem.diameter || 0;
+        updatedItems[index].outer_diameter = selectedItem.outer_diameter || 0;
+        updatedItems[index].density = selectedItem.density || 0;
+        updatedItems[index].weight_per_unit = selectedItem.weight_per_unit || 0;
+      }
     }
+
+    // Always recalculate amount on any change to quantity or rate
+    const qty = parseFloat(updatedItems[index].quantity) || 0;
+    const rate = parseFloat(updatedItems[index].unit_rate) || 0;
+    const amount = qty * rate;
+
+    const cgstPercent = updatedItems[index].cgst_percent || 9;
+    const sgstPercent = updatedItems[index].sgst_percent || 9;
+    const cgstAmount = (amount * cgstPercent) / 100;
+    const sgstAmount = (amount * sgstPercent) / 100;
+
+    updatedItems[index].amount = amount;
+    updatedItems[index].cgst_amount = cgstAmount;
+    updatedItems[index].sgst_amount = sgstAmount;
+    updatedItems[index].total_amount = amount + cgstAmount + sgstAmount;
 
     setPoItems(updatedItems);
 
     // Recalculate grand total for the selected PO
+    const newGrandTotal = updatedItems.reduce((sum, item) => sum + (parseFloat(item.total_amount) || 0), 0);
+    setSelectedPO({ ...selectedPO, total_amount: newGrandTotal });
+  };
+
+  const handleAddEditItem = () => {
+    const newItem = {
+      item_code: '',
+      description: '',
+      material_name: '',
+      quantity: 1,
+      design_qty: 1,
+      planned_qty: 1,
+      unit: 'NOS',
+      unit_rate: 0,
+      amount: 0,
+      cgst_percent: 9,
+      cgst_amount: 0,
+      sgst_percent: 9,
+      sgst_amount: 0,
+      total_amount: 0
+    };
+    setPoItems([...poItems, newItem]);
+  };
+
+  const handleRemoveEditItem = (index) => {
+    const updatedItems = poItems.filter((_, idx) => idx !== index);
+    setPoItems(updatedItems);
+    // Recalculate grand total
     const newGrandTotal = updatedItems.reduce((sum, item) => sum + (parseFloat(item.total_amount) || 0), 0);
     setSelectedPO({ ...selectedPO, total_amount: newGrandTotal });
   };
@@ -2133,7 +2179,7 @@ const PurchaseOrders = () => {
 
       {showEditModal && selectedPO && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-2 overflow-y-auto">
-          <div className="bg-white rounded shadow-2xl w-full max-w-2xl my-auto animate-in fade-in zoom-in duration-200 overflow-hidden border border-slate-100">
+          <div className="bg-white rounded shadow-2xl w-full max-w-4xl my-auto animate-in fade-in zoom-in duration-200 overflow-hidden border border-slate-100">
             {/* Modal Header */}
             <div className="flex justify-between items-center p-2 border-b border-slate-50">
               <h2 className="text-xl  text-slate-800 ">Edit Purchase Order</h2>
@@ -2197,49 +2243,85 @@ const PurchaseOrders = () => {
               <div className="space-y-3">
                 <div className="flex items-center justify-between px-1">
                   <h3 className="text-xs  text-slate-400  ">Order Items (Update Rates & Tax)</h3>
-                  <span className="text-xs  text-emerald-500 bg-emerald-50 px-2 py-0.5 rounded">Default 18% GST Applied</span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleAddEditItem}
+                      className="flex items-center gap-1 px-3 py-1 bg-white border border-blue-200 hover:border-blue-300 hover:bg-blue-50/20 rounded text-xs font-semibold text-blue-600 transition-all active:scale-95 shadow-sm"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      Add Item
+                    </button>
+                    <span className="text-xs  text-emerald-500 bg-emerald-50 px-2 py-0.5 rounded">Default 18% GST Applied</span>
+                  </div>
                 </div>
                 <div className="bg-white border border-slate-200 rounded overflow-hidden ">
                   <table className="w-full text-left border-collapse">
                     <thead className="bg-slate-50/50">
                       <tr>
+                        <th className="p-2 text-xs  text-slate-400  ">Drawing No</th>
                         <th className="p-2 text-xs  text-slate-400  ">Item</th>
                         <th className="p-2 text-xs  text-slate-400   text-center">Design Qty</th>
                         <th className="p-2 text-xs  text-slate-400   text-center">Required Qty</th>
                         <th className="p-2 text-xs  text-slate-400   text-center">Rate</th>
                         <th className="p-2 text-xs  text-slate-400   text-right">Amount</th>
+                        <th className="p-2 w-10"></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
                       {poItems.map((item, idx) => (
                         <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="px-2 p-2">
+                            <input
+                              type="text"
+                              value={item.drawing_no || ''}
+                              placeholder="Drawing No"
+                              onChange={(e) => handleEditItemChange(idx, 'drawing_no', e.target.value)}
+                              className="w-28 px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs font-bold text-slate-700 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                            />
+                          </td>
                           <td className="px-4 p-2">
-                            <div className="flex flex-col">
-                              <span className="text-xs  text-slate-700">{item.material_name || item.description}</span>
-                              <span className="text-xs text-slate-400 ">{item.item_code}</span>
-                            </div>
+                            {item.id ? (
+                              <div className="flex flex-col">
+                                <span className="text-xs  text-slate-700">{item.material_name || item.description}</span>
+                                <span className="text-xs text-slate-400 ">{item.item_code}</span>
+                              </div>
+                            ) : (
+                              <div className="min-w-[200px]">
+                                <SearchableSelect
+                                  options={stockItems}
+                                  value={item.item_code}
+                                  onChange={(e) => handleEditItemChange(idx, 'item_code', e.target.value)}
+                                  placeholder="Select Item"
+                                  labelField="material_name"
+                                  valueField="item_code"
+                                  subLabelField="item_code"
+                                  allowCustom={false}
+                                />
+                              </div>
+                            )}
                           </td>
                           <td className="px-4 p-2 text-center">
                             <span className="text-xs  text-slate-400">{Number(item.planned_qty || item.design_qty || 0).toFixed(3)}</span>
                             <span className="text-xs text-slate-400 ml-1 ">{item.unit || item.uom || 'NOS'}</span>
                           </td>
                           <td className="px-4 p-2 text-center">
-                            <div className="relative group max-w-[100px] mx-auto">
+                            <div className="relative group max-w-[140px] mx-auto">
                               <input
                                 type="number"
                                 step="0.001"
-                                value={item.quantity || 0}
+                                value={item.quantity === 0 || item.quantity === '0' ? '0' : (item.quantity || '')}
                                 onChange={(e) => handleEditItemChange(idx, 'quantity', e.target.value)}
                                 className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all text-center"
                               />
                             </div>
                           </td>
                           <td className="px-4 p-2">
-                            <div className="relative group max-w-[120px] mx-auto">
+                            <div className="relative group max-w-[150px] mx-auto">
                               <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-xs ">₹</span>
                               <input
                                 type="number"
-                                value={item.unit_rate || item.rate || 0}
+                                value={item.unit_rate === 0 || item.unit_rate === '0' ? '0' : (item.unit_rate || '')}
                                 onChange={(e) => handleEditItemChange(idx, 'unit_rate', e.target.value)}
                                 className="w-full pl-5 pr-2 py-1.5 bg-slate-50 border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all text-center"
                               />
@@ -2250,6 +2332,16 @@ const PurchaseOrders = () => {
                               <span className="text-xs  text-slate-800">{formatCurrency(item.total_amount || (item.quantity * (item.unit_rate || item.rate || 0) * 1.18))}</span>
                               <span className="text-xs text-emerald-500 ">+18% GST</span>
                             </div>
+                          </td>
+                          <td className="p-2 text-center">
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveEditItem(idx)}
+                              className="text-rose-500 hover:bg-rose-50 p-1.5 rounded-lg transition-all"
+                              title="Delete Item"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                            </button>
                           </td>
                         </tr>
                       ))}
@@ -2721,16 +2813,16 @@ const PurchaseOrders = () => {
                 <div className="space-y-4 max-w-md mx-auto py-8">
                   <div className="space-y-2">
                     <label className="text-xs font-black text-slate-400 uppercase tracking-wider block">Supplier / Vendor *</label>
-                    <select
+                    <SearchableSelect
+                      options={vendors}
                       value={mergeSupplierId}
                       onChange={(e) => handleSupplierChangeForMerge(e.target.value)}
-                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none transition-all cursor-pointer"
-                    >
-                      <option value="">Choose Supplier</option>
-                      {vendors.map(v => (
-                        <option key={v.id} value={v.id}>{v.vendor_name}</option>
-                      ))}
-                    </select>
+                      placeholder="Choose Supplier"
+                      labelField="vendor_name"
+                      valueField="id"
+                      allowCustom={false}
+                      openUpwards={true}
+                    />
                   </div>
 
                   {mergeSupplierId && (
@@ -2754,19 +2846,42 @@ const PurchaseOrders = () => {
               {/* STEP 2: Select Purchase Orders */}
               {mergeStep === 2 && (
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
                     <h3 className="text-xs font-black text-slate-400 uppercase tracking-wider">Eligible Purchase Orders</h3>
-                    <span className="text-[10px] font-bold text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full">
-                      {selectedPoIdsForMerge.length} Selected
-                    </span>
+                    <div className="flex items-center gap-3 w-full sm:w-auto">
+                      <div className="relative flex-1 sm:w-60">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                        <input
+                          type="text"
+                          placeholder="Search PO no, project, drawing..."
+                          value={mergeSearchTerm}
+                          onChange={(e) => setMergeSearchTerm(e.target.value)}
+                          className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-all"
+                        />
+                      </div>
+                      <span className="text-[10px] font-bold text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full whitespace-nowrap">
+                        {selectedPoIdsForMerge.length} Selected
+                      </span>
+                    </div>
                   </div>
 
-                  {eligiblePOs.length === 0 ? (
-                    <div className="text-center py-12 bg-slate-50 border border-slate-100 rounded-xl">
-                      <p className="text-xs text-slate-500 font-semibold">No pending or draft Purchase Orders found</p>
-                      <p className="text-[10px] text-slate-400 mt-1">All orders for this supplier are either already merged or submitted.</p>
-                    </div>
-                  ) : (
+                  {(() => {
+                    const searchLower = mergeSearchTerm.toLowerCase();
+                    const filteredPOs = eligiblePOs.filter(po => 
+                      String(po.po_number || '').toLowerCase().includes(searchLower) ||
+                      String(po.project_name || '').toLowerCase().includes(searchLower) ||
+                      String(po.drawing_no || '').toLowerCase().includes(searchLower)
+                    );
+
+                    if (filteredPOs.length === 0) {
+                      return (
+                        <div className="text-center py-12 bg-slate-50 border border-slate-100 rounded-xl">
+                          <p className="text-xs text-slate-500 font-semibold">No pending or draft Purchase Orders found</p>
+                          <p className="text-[10px] text-slate-400 mt-1">Try adjusting your search criteria.</p>
+                        </div>
+                      );
+                    }
+                    return (
                     <div className="border border-slate-100 rounded-xl overflow-hidden bg-white">
                       <table className="w-full text-xs text-left">
                         <thead>
@@ -2781,7 +2896,7 @@ const PurchaseOrders = () => {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                          {eligiblePOs.map(po => {
+                          {filteredPOs.map(po => {
                             const isChecked = selectedPoIdsForMerge.includes(po.id);
                             return (
                               <tr key={po.id} className="hover:bg-slate-50/50 transition-all cursor-pointer" onClick={() => handleTogglePoSelectionForMerge(po.id)}>
@@ -2809,7 +2924,8 @@ const PurchaseOrders = () => {
                         </tbody>
                       </table>
                     </div>
-                  )}
+                    );
+                  })()}
                 </div>
               )}
 
