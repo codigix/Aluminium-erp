@@ -205,26 +205,8 @@ const POReceipts = () => {
   const handleItemChange = (index, field, value) => {
     const newItems = [...formData.items];
     newItems[index][field] = value;
-
-    if (field === 'item_code') {
-      const selectedItem = stockItems.find(i => String(i.item_code) === String(value));
-      if (selectedItem) {
-        newItems[index].description = selectedItem.item_description || selectedItem.material_name || selectedItem.description;
-        newItems[index].material_name = selectedItem.material_name;
-        newItems[index].material_type = selectedItem.material_type;
-        newItems[index].unit = selectedItem.unit || 'NOS';
-        newItems[index].rate = selectedItem.valuation_rate || 0;
-        newItems[index].length = selectedItem.length || 0;
-        newItems[index].width = selectedItem.width || 0;
-        newItems[index].thickness = selectedItem.thickness || 0;
-        newItems[index].diameter = selectedItem.diameter || 0;
-        newItems[index].outer_diameter = selectedItem.outer_diameter || 0;
-        newItems[index].density = selectedItem.density || 0;
-        newItems[index].weight_per_unit = selectedItem.weight_per_unit || 0;
-      }
-    }
     
-    if (field === 'received_qty' || field === 'rate' || field === 'item_code') {
+    if (field === 'received_qty' || field === 'rate') {
       const qty = parseFloat(newItems[index].received_qty) || 0;
       const rate = parseFloat(newItems[index].rate) || 0;
       newItems[index].amount = qty * rate;
@@ -1180,7 +1162,6 @@ const POReceipts = () => {
                 <table className="w-full text-left border-collapse">
                   <thead className="bg-slate-50/50">
                     <tr className="text-xs  text-slate-400   border-b border-slate-200">
-                      <th className="p-2 ">Drawing No</th>
                       <th className="p-2 ">Item</th>
                       <th className="p-2  text-center">Design Qty</th>
                       <th className="p-2  text-center">Required</th>
@@ -1190,19 +1171,16 @@ const POReceipts = () => {
                   <tbody className="divide-y divide-slate-100">
                     {(selectedReceiptForView.items || []).map((item, idx) => (
                       <tr key={idx} className="group hover:bg-slate-50/50 transition-colors">
-                        <td className="p-2 text-xs font-bold text-slate-900">
-                          {item.drawing_no || '—'}
-                        </td>
                         <td className="p-2 ">
                           <div className="text-xs  text-slate-900 ">{item.item_code}</div>
                           <div className="text-xs text-slate-500   mt-0.5 ">{item.material_name || item.description}</div>
-                          {(item.length > 0 || item.width > 0 || item.thickness > 0 || item.diameter > 0 || item.outer_diameter > 0) && (
+                          {(item.length > 0 || item.width > 0 || item.thickness > 0 || item.diameter > 0) && (
                             <div className="flex flex-wrap gap-x-2 gap-y-1 mt-1 opacity-70">
-                              {item.diameter > 0 && <span className="text-xs  text-slate-400">Dia: {item.diameter}</span>}
-                              {item.outer_diameter > 0 && <span className="text-xs  text-slate-400">OD: {item.outer_diameter}</span>}
+                              {item.length > 0 && <span className="text-xs  text-slate-400">L: {item.length}</span>}
                               {item.width > 0 && <span className="text-xs  text-slate-400">W: {item.width}</span>}
                               {item.thickness > 0 && <span className="text-xs  text-slate-400">T: {item.thickness}</span>}
-                              {item.length > 0 && <span className="text-xs  text-slate-400">L: {item.length}</span>}
+                              {item.diameter > 0 && <span className="text-xs  text-slate-400">Dia: {item.diameter}</span>}
+                              {item.outer_diameter > 0 && <span className="text-xs  text-slate-400">OD: {item.outer_diameter}</span>}
                             </div>
                           )}
                         </td>
@@ -1492,8 +1470,7 @@ const POReceipts = () => {
                 <table className="w-full text-left">
                   <thead className="bg-slate-50/80">
                     <tr className="text-xs text-slate-500 border-b border-slate-200">
-                      <th className="p-2 pl-4">Drawing No</th>
-                      <th className="p-2">Item ID</th>
+                      <th className="p-2 pl-4">Item ID</th>
                       <th className="p-2">Material Name & Dimensions</th>
                       <th className="p-2 text-center w-24">Ordered Qty</th>
                       <th className="p-2 text-center w-24">Receiving Qty</th>
@@ -1505,60 +1482,50 @@ const POReceipts = () => {
                   <tbody className="divide-y divide-slate-50">
                     {formData.items.map((item, idx) => (
                       <tr key={idx} className="group hover:bg-slate-50/30 transition-all">
-                        <td className="p-2 pl-4 text-xs font-bold text-slate-900">
-                          <input
-                            type="text"
-                            value={item.drawing_no || ''}
-                            placeholder="Drawing No"
-                            onChange={(e) => handleItemChange(idx, 'drawing_no', e.target.value)}
-                            className="w-28 px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs font-bold text-slate-700 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
-                          />
-                        </td>
-                        <td className="p-2">
-                          <div className="flex flex-col min-w-[200px]">
-                            <SearchableSelect
-                              options={stockItems}
-                              value={item.item_code}
-                              onChange={(e) => handleItemChange(idx, 'item_code', e.target.value)}
-                              placeholder="Select Item ID"
-                              labelField="item_code"
-                              valueField="item_code"
-                              subLabelField="material_name"
-                              allowCustom={true}
-                            />
-                            {item.description && (
-                              <span className="text-[10px] text-slate-400 mt-1 leading-normal max-w-[200px] break-words">
-                                {item.description}
-                              </span>
+                        <td className="p-2 pl-4">
+                          <div className="flex flex-col">
+                            {item.poId || formData.poId ? (
+                              <div className="flex flex-col">
+                                <span className="text-slate-900 text-xs font-semibold">{item.item_code || '—'}</span>
+                                {item.description && (
+                                  <span className="text-[10px] text-slate-400 mt-0.5 leading-normal max-w-[200px] break-words">
+                                    {item.description}
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <select 
+                                value={item.item_code || ''}
+                                onChange={(e) => {
+                                  const selectedItem = stockItems.find(it => it.item_code === e.target.value);
+                                  handleItemChange(idx, 'item_code', e.target.value);
+                                  if (selectedItem) {
+                                    handleItemChange(idx, 'material_name', selectedItem.material_name);
+                                    handleItemChange(idx, 'description', selectedItem.description);
+                                    handleItemChange(idx, 'unit', selectedItem.unit_of_measure);
+                                    handleItemChange(idx, 'rate', selectedItem.valuation_rate || 0);
+                                  }
+                                }}
+                                className="bg-transparent text-slate-900 text-xs w-full outline-none focus:text-blue-600 transition-colors appearance-none cursor-pointer font-semibold"
+                              >
+                                <option value="">Select Item.</option>
+                                {stockItems.map(si => (
+                                  <option key={si.id} value={si.item_code}>{si.item_code}</option>
+                                ))}
+                              </select>
                             )}
                           </div>
                         </td>
                         <td className="p-2">
-                          <div className="flex flex-col gap-1.5 min-w-[250px]">
-                            <SearchableSelect
-                              options={stockItems}
-                              value={item.item_code}
-                              onChange={(e) => {
-                                handleItemChange(idx, 'item_code', e.target.value);
-                                // Also update the helper state trigger to force update values
-                                const selectedItem = stockItems.find(it => it.item_code === e.target.value);
-                                if (selectedItem) {
-                                  handleItemChange(idx, 'material_name', selectedItem.material_name);
-                                }
-                              }}
-                              placeholder="Select Material Name"
-                              labelField="material_name"
-                              valueField="item_code"
-                              subLabelField="item_code"
-                              allowCustom={true}
-                            />
-                            {(item.length > 0 || item.width > 0 || item.thickness > 0 || item.diameter > 0 || item.outer_diameter > 0) && (
+                          <div className="flex flex-col gap-1 min-w-[200px]">
+                            <span className="text-xs text-slate-700 font-medium">{item.material_name || '—'}</span>
+                            {(item.length > 0 || item.width > 0 || item.thickness > 0 || item.diameter > 0) && (
                               <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] text-slate-400">
-                                {item.diameter > 0 && <span>Dia: {item.diameter}</span>}
-                                {item.outer_diameter > 0 && <span>OD: {item.outer_diameter}</span>}
+                                {item.length > 0 && <span>L: {item.length}</span>}
                                 {item.width > 0 && <span>W: {item.width}</span>}
                                 {item.thickness > 0 && <span>T: {item.thickness}</span>}
-                                {item.length > 0 && <span>L: {item.length}</span>}
+                                {item.diameter > 0 && <span>Dia: {item.diameter}</span>}
+                                {item.outer_diameter > 0 && <span>OD: {item.outer_diameter}</span>}
                               </div>
                             )}
                             <div className="mt-1 flex items-center gap-1.5">
