@@ -172,7 +172,8 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
   const grandTotal = subtotal + totalTax;
 
   return (
-    <div className="space-y-2 p-4 animate-in fade-in slide-in-from-bottom duration-500">
+    <>
+      <div className="space-y-2 p-4 animate-in fade-in slide-in-from-bottom duration-500 print:hidden">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -604,7 +605,258 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+
+      {/* Print View Layout */}
+      <div className="hidden print:block p-4 max-w-[210mm] mx-auto text-black">
+        {/* Title / Top Section */}
+        <div className="flex justify-between items-start border-b-2 border-slate-900 pb-4 mb-4">
+          <div>
+            <h1 className="text-2xl font-bold uppercase tracking-wider mb-2">Purchase Order</h1>
+            <table className="text-xs">
+              <tbody>
+                <tr>
+                  <td className="font-bold pr-2 py-1">PO Number</td>
+                  <td className="pr-2">:</td>
+                  <td>{po.po_number}</td>
+                </tr>
+                <tr>
+                  <td className="font-bold pr-2 py-1">PO Date</td>
+                  <td className="pr-2">:</td>
+                  <td>{formatDate(po.created_at)}</td>
+                </tr>
+                <tr>
+                  <td className="font-bold pr-2 py-1">Status</td>
+                  <td className="pr-2">:</td>
+                  <td>{po.is_merged ? 'MERGED PO' : (po.status || 'Draft')}</td>
+                </tr>
+                <tr>
+                  <td className="font-bold pr-2 py-1">Priority</td>
+                  <td className="pr-2">:</td>
+                  <td>{po.priority || 'Ordered'}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          
+          <div className="border border-slate-200 p-3 rounded w-72 bg-white">
+            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Supplier</p>
+            <h3 className="text-sm font-bold text-slate-800">{po.vendor_name}</h3>
+            <div className="flex items-center gap-1 mt-1 text-[10px] text-slate-500">
+              <MapPin className="w-3.5 h-3.5" />
+              <span>Ship to Main Warehouse</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Key Metrics Row */}
+        <div className="grid grid-cols-4 gap-2 mb-4 border border-slate-200 rounded divide-x divide-slate-200">
+          <div className="p-2">
+            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Total Value</p>
+            <h3 className="text-sm font-bold text-slate-800">{formatCurrency(grandTotal, po.currency)}</h3>
+            <p className="text-[9px] text-slate-500">✓ INCL. ALL TAXES</p>
+          </div>
+          <div className="p-2">
+            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Expected By</p>
+            <h3 className="text-sm font-bold text-slate-800">{formatDate(po.expected_delivery_date)}</h3>
+            <p className="text-[9px] text-slate-500">
+              {po.expected_delivery_date && (
+                <span>
+                  {Math.ceil((new Date(po.expected_delivery_date) - new Date()) / (1000 * 60 * 60 * 24))} Days Left
+                </span>
+              )}
+            </p>
+          </div>
+          <div className="p-2">
+            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Project Context</p>
+            <table className="text-[10px] text-slate-600">
+              <tbody>
+                <tr>
+                  <td>Project</td>
+                  <td className="px-1">:</td>
+                  <td className="font-semibold">{po.project_name || 'Stock/Internal'}</td>
+                </tr>
+                <tr>
+                  <td>Customer</td>
+                  <td className="px-1">:</td>
+                  <td className="font-semibold">{po.company_name || 'Internal'}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div className="p-2">
+            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Document Info</p>
+            <table className="text-[10px] text-slate-600">
+              <tbody>
+                <tr>
+                  <td>Created By</td>
+                  <td className="px-1">:</td>
+                  <td className="font-semibold">{po.created_by_name || 'System Administrator'}</td>
+                </tr>
+                <tr>
+                  <td>Creation Date</td>
+                  <td className="px-1">:</td>
+                  <td className="font-semibold">{formatDate(po.created_at)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Details Row */}
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          <div className="border border-slate-200 rounded p-3">
+            <h4 className="text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-2">Shipping Details</h4>
+            <table className="w-full text-xs text-slate-600">
+              <tbody>
+                <tr className="border-b border-slate-100">
+                  <td className="py-1">Address</td>
+                  <td className="text-right py-1 font-semibold">{po.vendor_location || po.vendor_address || 'No address provided'}</td>
+                </tr>
+                <tr className="border-b border-slate-100">
+                  <td className="py-1">Incoterm</td>
+                  <td className="text-right py-1 font-semibold">{po.incoterm || 'EXW'}</td>
+                </tr>
+                <tr>
+                  <td className="py-1">Shipping Rule</td>
+                  <td className="text-right py-1 font-semibold">{po.shipping_rule || 'Standard'}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div className="border border-slate-200 rounded p-3">
+            <h4 className="text-[10px] font-bold text-slate-700 uppercase tracking-wider mb-2">Payment & Others</h4>
+            <table className="w-full text-xs text-slate-600">
+              <tbody>
+                <tr className="border-b border-slate-100">
+                  <td className="py-1">Tax Category</td>
+                  <td className="text-right py-1 font-semibold">{po.tax_category || 'GST'}</td>
+                </tr>
+                <tr className="border-b border-slate-100">
+                  <td className="py-1">Currency</td>
+                  <td className="text-right py-1 font-semibold">{po.currency || 'INR'}</td>
+                </tr>
+                <tr>
+                  <td className="py-1" colSpan="2">
+                    <div className="flex items-start justify-between w-full">
+                      <span>Notes</span>
+                      <span className="text-right font-semibold whitespace-pre-wrap max-w-[200px] inline-block">{po.notes || 'No notes added'}</span>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Items Table */}
+        <div className="border border-slate-200 rounded overflow-hidden mb-4">
+          <div className="p-2 border-b border-slate-200 bg-slate-50 flex justify-between items-center text-xs">
+            <span className="font-bold">ITEMS LIST</span>
+            <span className="text-slate-500">Total Items: {filteredItems.length}</span>
+          </div>
+          <table className="w-full text-[11px] text-left border-collapse">
+            <thead className="bg-slate-100">
+              <tr className="border-b border-slate-200">
+                <th className="p-2 text-center border-r border-slate-200" style={{ width: '50px' }}>Sr. No.</th>
+                <th className="p-2 border-r border-slate-200">Drawing No</th>
+                <th className="p-2 border-r border-slate-200">Item / Description</th>
+                <th className="p-2 border-r border-slate-200">Size</th>
+                <th className="p-2 text-center border-r border-slate-200">Design Qty</th>
+                <th className="p-2 text-center border-r border-slate-200">Required</th>
+                <th className="p-2 text-center border-r border-slate-200">Rate</th>
+                <th className="p-2 text-right border-r border-slate-200">Amount</th>
+                <th className="p-2 text-right">Total Amount</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200">
+              {filteredItems.map((item, idx) => {
+                const isDwgCodePattern = /^(RM-|OTH-|SFG-|FG-|GEN-|CAT-)/i.test(item.drawing_no || '');
+                const cleanDwgNo = isDwgCodePattern ? '—' : (item.drawing_no || '—');
+                
+                const formatSize = (i) => {
+                  const len = parseFloat(i.length || 0);
+                  const wid = parseFloat(i.width || 0);
+                  const thk = parseFloat(i.thickness || 0);
+                  const dia = parseFloat(i.diameter || 0);
+                  const od = parseFloat(i.outer_diameter || 0);
+
+                  let parts = [];
+                  if (dia > 0) parts.push(`Ø${dia}`);
+                  else if (od > 0) parts.push(`OD ${od}`);
+                  if (wid > 0) parts.push(wid);
+                  if (thk > 0) parts.push(thk);
+                  if (len > 0) parts.push(len);
+
+                  if (parts.length === 0) return '—';
+                  return parts.join(' × ') + ' mm';
+                };
+
+                return (
+                  <tr key={idx} className="border-b border-slate-200">
+                    <td className="p-2 text-center border-r border-slate-200 font-bold">{idx + 1}</td>
+                    <td className="p-2 border-r border-slate-200 font-semibold">{cleanDwgNo}</td>
+                    <td className="p-2 border-r border-slate-200">
+                      <p className="font-semibold text-slate-800">{item.material_name || item.description || 'N/A'}</p>
+                      {item.item_code && (
+                        <span className="inline-block px-1 bg-slate-100 text-slate-500 rounded text-[9px] uppercase font-mono mt-0.5">
+                          {item.item_code}
+                        </span>
+                      )}
+                    </td>
+                    <td className="p-2 border-r border-slate-200 font-mono font-bold">{formatSize(item)}</td>
+                    <td className="p-2 text-center border-r border-slate-200 font-semibold">
+                      {Number(item.planned_qty || item.design_qty || 0).toFixed(3)} {item.unit || item.uom}
+                    </td>
+                    <td className="p-2 text-center border-r border-slate-200 font-semibold">
+                      {Number(item.quantity || 0).toFixed(3)} {item.unit || item.uom}
+                    </td>
+                    <td className="p-2 text-center border-r border-slate-200">{formatCurrency(item.unit_rate, po.currency)}</td>
+                    <td className="p-2 text-right border-r border-slate-200">{formatCurrency((parseFloat(item.quantity) || 0) * (parseFloat(item.unit_rate) || 0), po.currency)}</td>
+                    <td className="p-2 text-right font-bold">{formatCurrency((parseFloat(item.quantity) || 0) * (parseFloat(item.unit_rate) || 0) * 1.18, po.currency)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          
+          {/* Totals inside print items list */}
+          <div className="border-t border-slate-200 bg-slate-50/50 p-3 space-y-2">
+            <div className="flex justify-end gap-12 text-xs">
+              <span className="text-slate-500">Subtotal</span>
+              <span className="text-slate-800 font-semibold w-32 text-right">{formatCurrency(subtotal, po.currency)}</span>
+            </div>
+            <div className="flex justify-end gap-12 text-xs">
+              <span className="text-slate-500">CGST (9%)</span>
+              <span className="text-slate-800 font-semibold w-32 text-right">
+                {formatCurrency(filteredItems.reduce((sum, i) => {
+                  const qty = parseFloat(i.quantity);
+                  const rate = parseFloat(i.unit_rate) || 0;
+                  const tax = parseFloat(i.cgst_amount) || (qty * rate * 0.09);
+                  return sum + tax;
+                }, 0), po.currency)}
+              </span>
+            </div>
+            <div className="flex justify-end gap-12 text-xs">
+              <span className="text-slate-500">SGST (9%)</span>
+              <span className="text-slate-800 font-semibold w-32 text-right">
+                {formatCurrency(filteredItems.reduce((sum, i) => {
+                  const qty = parseFloat(i.quantity);
+                  const rate = parseFloat(i.unit_rate) || 0;
+                  const tax = parseFloat(i.sgst_amount) || (qty * rate * 0.09);
+                  return sum + tax;
+                }, 0), po.currency)}
+              </span>
+            </div>
+            <div className="flex justify-end gap-12 text-sm font-bold border-t border-slate-200 pt-2">
+              <span>GRAND TOTAL</span>
+              <span className="w-32 text-right">{formatCurrency(grandTotal, po.currency)}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
   );
 };
 
