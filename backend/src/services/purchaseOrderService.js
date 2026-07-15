@@ -2064,19 +2064,20 @@ const generatePurchaseOrderPDF = async (poId) => {
         <th style="width: 3%;">SL No.</th>
         <th style="width: 10%; text-align: left; vertical-align: top; line-height: 1.3;">Drawing No</th>
         <th style="width: 17%; text-align: left; vertical-align: top; line-height: 1.3;">Item No.<br/>Item Description</th>
-        <th style="width: 11%; text-align: left; vertical-align: top; line-height: 1.3;">Size</th>
-        <th style="width: 5%;">HSN Code</th>
+        <th style="width: 10%; text-align: left; vertical-align: top; line-height: 1.3;">Size</th>
+        <th style="width: 4%;">HSN Code</th>
         <th style="width: 6%; text-align: right;">Rate</th>
-        <th style="width: 6%; text-align: right;">Qty</th>
+        <th style="width: 5%; text-align: right; line-height: 1.2;">Design<br/>Qty</th>
+        <th style="width: 5%; text-align: right; line-height: 1.2;">Req<br/>Qty</th>
         <th style="width: 4%;">Unit</th>
         <th style="width: 6%; text-align: right;">Amount</th>
-        <th style="width: 4%; text-align: right;">Discount</th>
+        <th style="width: 3%; text-align: right;">Discount</th>
         <th style="width: 5%; text-align: right;">Transaction Amount</th>
         <th style="width: 3%; text-align: right; line-height: 1.2;">CGST<br/>%</th>
         <th style="width: 5%; text-align: right;">CGST Amt</th>
         <th style="width: 3%; text-align: right; line-height: 1.2;">SGST<br/>%</th>
         <th style="width: 5%; text-align: right;">SGST Amt</th>
-        <th style="width: 7%; text-align: right;">Total Amount</th>
+        <th style="width: 6%; text-align: right;">Total Amount</th>
       </tr>
     </thead>
     <tbody>
@@ -2093,7 +2094,8 @@ const generatePurchaseOrderPDF = async (poId) => {
         <td style="text-align: left; font-family: monospace; font-weight: bold; color: #000;">{{size}}</td>
         <td style="text-align: center;">{{hsn_code}}</td>
         <td style="text-align: right;">{{unit_rate}}</td>
-        <td style="text-align: right;">{{quantity}}</td>
+        <td style="text-align: right;">{{design_qty}}</td>
+        <td style="text-align: right;">{{required_qty}}</td>
         <td style="text-align: center;">{{unit}}</td>
         <td style="text-align: right;">{{amount}}</td>
         <td style="text-align: right;">{{discount}}</td>
@@ -2112,6 +2114,7 @@ const generatePurchaseOrderPDF = async (poId) => {
         <td></td>
         <td style="text-align: center;">{{hsn_code}}</td>
         <td style="text-align: right;">{{displayRate}}</td>
+        <td></td>
         <td style="text-align: right;">{{displayQuantity}}</td>
         <td style="text-align: center;">{{unit}}</td>
         <td style="text-align: right; font-weight: bold;">{{displayTotal}}</td>
@@ -2353,9 +2356,8 @@ const generatePurchaseOrderPDF = async (poId) => {
     hostBranchName: activeCompany?.branch_name || 'Bhosari, Pune - 411026, Maharashtra',
     hostState: activeCompany?.state || 'Maharashtra',
     items: await Promise.all((po.items || []).map(async (i, idx) => {
-      const dQty = parseFloat(i.design_qty);
-      const qty = parseFloat(i.quantity);
-      const displayQty = (dQty && dQty !== 0) ? dQty : (qty || 0);
+      const designQty = parseFloat(i.planned_qty || i.design_qty || 0);
+      const requiredQty = parseFloat(i.quantity || 0);
 
       let resolvedDrawingNo = await getItemParentDrawingNumber(pool, i);
       if (!resolvedDrawingNo) {
@@ -2403,7 +2405,9 @@ const generatePurchaseOrderPDF = async (poId) => {
         hsn_code: '73089090', // realistic fallback
         expected_delivery_date: formatDate(po.expected_delivery_date),
         pur_req_no: po.mr_number || '—',
-        quantity: displayQty.toFixed(3),
+        design_qty: designQty.toFixed(3),
+        required_qty: requiredQty.toFixed(3),
+        quantity: requiredQty.toFixed(3),
         unit: (i.unit || 'NOS').toUpperCase(),
         unit_rate: parseFloat(i.unit_rate || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
         amount: parseFloat(i.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
