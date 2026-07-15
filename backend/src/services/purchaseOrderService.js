@@ -681,47 +681,58 @@ const getPurchaseOrders = async (filters = {}) => {
         poi.drawing_id, poi.length, poi.width, poi.thickness, poi.diameter, poi.outer_diameter,
         poi.density, poi.weight_per_unit,
         COALESCE(
+          NULLIF(NULLIF(TRIM(poi.drawing_no), TRIM(poi.item_code)), ''),
           (
-            SELECT COALESCE(soi.drawing_no, oi.drawing_no, ppi.item_code)
+            SELECT NULLIF(ppm.bom_ref, '')
+            FROM material_requests mr
+            JOIN production_plan_materials ppm ON mr.plan_id = ppm.plan_id
+            WHERE mr.id = po.mr_id
+            AND LOWER(TRIM(ppm.material_name)) = LOWER(TRIM(poi.material_name))
+            LIMIT 1
+          ),
+          (
+            SELECT NULLIF(ppm.bom_ref, '')
+            FROM purchase_order_items poi_src
+            JOIN material_requests mr ON poi_src.mr_id = mr.id
+            JOIN production_plan_materials ppm ON mr.plan_id = ppm.plan_id
+            WHERE poi_src.id = poi.source_po_item_id
+            AND LOWER(TRIM(ppm.material_name)) = LOWER(TRIM(poi.material_name))
+            LIMIT 1
+          ),
+          (
+            SELECT NULLIF(ppm.bom_ref, '')
+            FROM production_plans pp
+            JOIN production_plan_materials ppm ON pp.id = ppm.plan_id
+            WHERE pp.sales_order_id = po.sales_order_id
+            AND LOWER(TRIM(ppm.material_name)) = LOWER(TRIM(poi.material_name))
+            LIMIT 1
+          ),
+          (
+            SELECT NULLIF(soi.drawing_no, soi.item_code)
+            FROM sales_order_items soi 
+            WHERE soi.sales_order_id = po.sales_order_id
+            AND soi.item_code = poi.item_code
+            LIMIT 1
+          ),
+          (
+            SELECT NULLIF(COALESCE(soi.drawing_no, oi.drawing_no), ppi.item_code)
             FROM material_requests mr
             JOIN production_plans pp ON mr.plan_id = pp.id
             JOIN production_plan_items ppi ON pp.id = ppi.plan_id
             LEFT JOIN sales_order_items soi ON ppi.sales_order_item_id = soi.id
             LEFT JOIN order_items oi ON ppi.sales_order_item_id = oi.id AND ppi.sales_order_id = oi.order_id
-            WHERE mr.id = poi.mr_id
-            AND (ppi.item_code IS NOT NULL AND ppi.item_code != '')
+            WHERE mr.id = po.mr_id
             LIMIT 1
           ),
           (
-            SELECT COALESCE(soi.drawing_no, oi.drawing_no, ppi.item_code)
-            FROM purchase_order_items poi_src
-            JOIN material_requests mr ON poi_src.mr_id = mr.id
-            JOIN production_plans pp ON mr.plan_id = pp.id
-            JOIN production_plan_items ppi ON pp.id = ppi.plan_id
-            LEFT JOIN sales_order_items soi ON ppi.sales_order_item_id = soi.id
-            LEFT JOIN order_items oi ON ppi.sales_order_item_id = oi.id AND ppi.sales_order_id = oi.order_id
-            WHERE poi_src.id = poi.source_po_item_id
-            AND (ppi.item_code IS NOT NULL AND ppi.item_code != '')
-            LIMIT 1
-          ),
-          (
-            SELECT COALESCE(soi.drawing_no, oi.drawing_no, ppi.item_code)
+            SELECT NULLIF(COALESCE(soi.drawing_no, oi.drawing_no), ppi.item_code)
             FROM production_plans pp
             JOIN production_plan_items ppi ON pp.id = ppi.plan_id
             LEFT JOIN sales_order_items soi ON ppi.sales_order_item_id = soi.id
             LEFT JOIN order_items oi ON ppi.sales_order_item_id = oi.id AND ppi.sales_order_id = oi.order_id
-            WHERE pp.sales_order_id = poi.sales_order_id
-            AND (ppi.item_code IS NOT NULL AND ppi.item_code != '')
+            WHERE pp.sales_order_id = po.sales_order_id
             LIMIT 1
-          ),
-          (
-            SELECT soi.drawing_no 
-            FROM sales_order_items soi 
-            WHERE soi.sales_order_id = poi.sales_order_id
-            AND (soi.drawing_no IS NOT NULL AND soi.drawing_no != '')
-            LIMIT 1
-          ),
-          poi.drawing_no
+          )
         ) as drawing_no,
         (SELECT status FROM sales_order_items soi 
          WHERE (poi.drawing_no = soi.drawing_no OR poi.item_code = soi.item_code) 
@@ -852,47 +863,58 @@ const getPurchaseOrderById = async (poId) => {
       COALESCE(poi.material_name, sb.material_name, poi.item_code) as material_name,
       poi.material_type,
       COALESCE(
+        NULLIF(NULLIF(TRIM(poi.drawing_no), TRIM(poi.item_code)), ''),
         (
-          SELECT COALESCE(soi.drawing_no, oi.drawing_no, ppi.item_code)
+          SELECT NULLIF(ppm.bom_ref, '')
+          FROM material_requests mr
+          JOIN production_plan_materials ppm ON mr.plan_id = ppm.plan_id
+          WHERE mr.id = po.mr_id
+          AND LOWER(TRIM(ppm.material_name)) = LOWER(TRIM(poi.material_name))
+          LIMIT 1
+        ),
+        (
+          SELECT NULLIF(ppm.bom_ref, '')
+          FROM purchase_order_items poi_src
+          JOIN material_requests mr ON poi_src.mr_id = mr.id
+          JOIN production_plan_materials ppm ON mr.plan_id = ppm.plan_id
+          WHERE poi_src.id = poi.source_po_item_id
+          AND LOWER(TRIM(ppm.material_name)) = LOWER(TRIM(poi.material_name))
+          LIMIT 1
+        ),
+        (
+          SELECT NULLIF(ppm.bom_ref, '')
+          FROM production_plans pp
+          JOIN production_plan_materials ppm ON pp.id = ppm.plan_id
+          WHERE pp.sales_order_id = po.sales_order_id
+          AND LOWER(TRIM(ppm.material_name)) = LOWER(TRIM(poi.material_name))
+          LIMIT 1
+        ),
+        (
+          SELECT NULLIF(soi.drawing_no, soi.item_code)
+          FROM sales_order_items soi 
+          WHERE soi.sales_order_id = po.sales_order_id
+          AND soi.item_code = poi.item_code
+          LIMIT 1
+        ),
+        (
+          SELECT NULLIF(COALESCE(soi.drawing_no, oi.drawing_no), ppi.item_code)
           FROM material_requests mr
           JOIN production_plans pp ON mr.plan_id = pp.id
           JOIN production_plan_items ppi ON pp.id = ppi.plan_id
           LEFT JOIN sales_order_items soi ON ppi.sales_order_item_id = soi.id
           LEFT JOIN order_items oi ON ppi.sales_order_item_id = oi.id AND ppi.sales_order_id = oi.order_id
-          WHERE mr.id = poi.mr_id
-          AND (ppi.item_code IS NOT NULL AND ppi.item_code != '')
+          WHERE mr.id = po.mr_id
           LIMIT 1
         ),
         (
-          SELECT COALESCE(soi.drawing_no, oi.drawing_no, ppi.item_code)
-          FROM purchase_order_items poi_src
-          JOIN material_requests mr ON poi_src.mr_id = mr.id
-          JOIN production_plans pp ON mr.plan_id = pp.id
-          JOIN production_plan_items ppi ON pp.id = ppi.plan_id
-          LEFT JOIN sales_order_items soi ON ppi.sales_order_item_id = soi.id
-          LEFT JOIN order_items oi ON ppi.sales_order_item_id = oi.id AND ppi.sales_order_id = oi.order_id
-          WHERE poi_src.id = poi.source_po_item_id
-          AND (ppi.item_code IS NOT NULL AND ppi.item_code != '')
-          LIMIT 1
-        ),
-        (
-          SELECT COALESCE(soi.drawing_no, oi.drawing_no, ppi.item_code)
+          SELECT NULLIF(COALESCE(soi.drawing_no, oi.drawing_no), ppi.item_code)
           FROM production_plans pp
           JOIN production_plan_items ppi ON pp.id = ppi.plan_id
           LEFT JOIN sales_order_items soi ON ppi.sales_order_item_id = soi.id
           LEFT JOIN order_items oi ON ppi.sales_order_item_id = oi.id AND ppi.sales_order_id = oi.order_id
-          WHERE pp.sales_order_id = poi.sales_order_id
-          AND (ppi.item_code IS NOT NULL AND ppi.item_code != '')
+          WHERE pp.sales_order_id = po.sales_order_id
           LIMIT 1
-        ),
-        (
-          SELECT soi.drawing_no 
-          FROM sales_order_items soi 
-          WHERE soi.sales_order_id = poi.sales_order_id
-          AND (soi.drawing_no IS NOT NULL AND soi.drawing_no != '')
-          LIMIT 1
-        ),
-        poi.drawing_no
+        )
       ) as drawing_no,
       poi.accepted_quantity,
       COALESCE(NULLIF(poi.length, 0), sb.length, 0) as length,
@@ -921,6 +943,7 @@ const getPurchaseOrderById = async (poId) => {
        FROM stock_balance 
        GROUP BY item_code
      ) sb ON poi.item_code = sb.item_code
+     LEFT JOIN purchase_orders po ON poi.purchase_order_id = po.id
      WHERE poi.purchase_order_id = ?`,
     [po.sales_order_id, po.id]
   );

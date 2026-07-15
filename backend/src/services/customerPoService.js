@@ -102,7 +102,13 @@ const createCustomerPo = async payload => {
       specialNotes,
       inspectionClause,
       testCertificate,
-      hostCompanyId
+      hostCompanyId,
+      contactPerson,
+      email,
+      phone,
+      gstin,
+      billingAddress,
+      shippingAddress
     } = payload;
 
     const totals = calculateAmounts(items);
@@ -112,8 +118,8 @@ const createCustomerPo = async payload => {
         (company_id, project_name, po_number, po_date, po_version, order_type, plant, currency, payment_terms,
          credit_days, freight_terms, packing_forwarding, insurance_terms, delivery_terms, status,
          pdf_path, subtotal, tax_total, net_total, remarks, terms_and_conditions, special_notes,
-         inspection_clause, test_certificate, host_company_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         inspection_clause, test_certificate, host_company_id, contact_person, email, phone, gstin, billing_address, shipping_address)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ,
       [
         companyId,
@@ -140,7 +146,13 @@ const createCustomerPo = async payload => {
         specialNotes || null,
         inspectionClause || null,
         testCertificate || null,
-        hostCompanyId ? Number(hostCompanyId) : null
+        hostCompanyId ? Number(hostCompanyId) : null,
+        contactPerson || null,
+        email || null,
+        phone || null,
+        gstin || null,
+        billingAddress || null,
+        shippingAddress || null
       ]
     );
 
@@ -307,36 +319,44 @@ const getCustomerPoById = async id => {
     companyDetails?.contacts?.[0] || {};
 
   // Format billing address
-  let billingAddrParts = [
-    billing.line1,
-    billing.line2,
-    billing.city,
-    billing.state,
-    billing.pincode ? `Pincode: ${billing.pincode}` : null
-  ].filter(part => part && String(part).trim() !== '' && String(part).toUpperCase() !== 'N/A');
-  po.billing_address = cleanAddress(billingAddrParts.join(', ') || 'N/A');
+  if (po.billing_address) {
+    po.billing_address = cleanAddress(po.billing_address);
+  } else {
+    let billingAddrParts = [
+      billing.line1,
+      billing.line2,
+      billing.city,
+      billing.state,
+      billing.pincode ? `Pincode: ${billing.pincode}` : null
+    ].filter(part => part && String(part).trim() !== '' && String(part).toUpperCase() !== 'N/A');
+    po.billing_address = cleanAddress(billingAddrParts.join(', ') || 'N/A');
+  }
   po.billing_state = billing.state || 'N/A';
   po.billing_state_code = ''; // Fallback since state_code is missing in schema
 
   // Format shipping address
-  let shippingAddrParts = [
-    shipping.line1,
-    shipping.line2,
-    shipping.city,
-    shipping.state,
-    shipping.pincode ? `Pincode: ${shipping.pincode}` : null
-  ].filter(part => part && String(part).trim() !== '' && String(part).toUpperCase() !== 'N/A');
-  po.shipping_address = cleanAddress(shippingAddrParts.join(', ') || po.billing_address);
+  if (po.shipping_address) {
+    po.shipping_address = cleanAddress(po.shipping_address);
+  } else {
+    let shippingAddrParts = [
+      shipping.line1,
+      shipping.line2,
+      shipping.city,
+      shipping.state,
+      shipping.pincode ? `Pincode: ${shipping.pincode}` : null
+    ].filter(part => part && String(part).trim() !== '' && String(part).toUpperCase() !== 'N/A');
+    po.shipping_address = cleanAddress(shippingAddrParts.join(', ') || po.billing_address);
+  }
   po.shipping_state = shipping.state || po.billing_state;
 
   // Contacts
-  po.billing_contact_name = billingContact.name || '';
-  po.billing_contact_phone = billingContact.phone || '';
-  po.shipping_contact_name = shippingContact.name || '';
-  po.shipping_contact_phone = shippingContact.phone || '';
+  po.billing_contact_name = po.contact_person || billingContact.name || '';
+  po.billing_contact_phone = po.phone || billingContact.phone || '';
+  po.shipping_contact_name = po.contact_person || shippingContact.name || '';
+  po.shipping_contact_phone = po.phone || shippingContact.phone || '';
 
   // GSTIN / PAN / CIN
-  po.gstin = companyDetails?.gstin || po.gstin || '';
+  po.gstin = po.gstin || companyDetails?.gstin || '';
   po.pan = companyDetails?.pan || po.pan || '';
   po.cin = companyDetails?.cin || po.cin || '';
 
@@ -379,11 +399,11 @@ const getCustomerPoById = async id => {
       );
 
       if (quotes.length > 0) {
-        po.contact_person = quotes[0].resolved_contact_person || po.contact_person || '—';
-        po.email = quotes[0].resolved_client_email || po.email || '—';
-        po.phone = quotes[0].resolved_client_phone || po.phone || '—';
-        po.billing_address = cleanAddress(quotes[0].resolved_client_address || po.billing_address || '—');
-        po.shipping_address = cleanAddress(quotes[0].resolved_client_address || po.shipping_address || '—');
+        po.contact_person = po.contact_person || quotes[0].resolved_contact_person || '—';
+        po.email = po.email || quotes[0].resolved_client_email || '—';
+        po.phone = po.phone || quotes[0].resolved_client_phone || '—';
+        po.billing_address = cleanAddress(po.billing_address || quotes[0].resolved_client_address || '—');
+        po.shipping_address = cleanAddress(po.shipping_address || quotes[0].resolved_client_address || '—');
       }
     }
   } catch (err) {
@@ -399,47 +419,77 @@ const getCustomerPoById = async id => {
     [id]
   );
 
+  const dispatchMap = new Map();
+  try {
+    const [salesOrders] = await pool.query(
+      `SELECT id FROM sales_orders WHERE customer_po_id = ? OR (customer_po_id IS NULL AND company_id = ? AND TRIM(UPPER(project_name)) = TRIM(UPPER(?)))`,
+      [id, po.company_id, po.project_name]
+    );
+    const salesOrderIds = salesOrders.map(so => so.id);
+
+    let linkedOrderIds = [];
+    if (salesOrderIds.length > 0) {
+      const [orders] = await pool.query(
+        `SELECT id FROM orders WHERE quotation_id IN (?)`,
+        [salesOrderIds]
+      );
+      linkedOrderIds = orders.map(o => o.id);
+    }
+
+    if (salesOrderIds.length > 0) {
+      const allSalesOrderIds = salesOrderIds;
+      const allLinkedOrderIds = linkedOrderIds;
+      
+      const queryParams = [allSalesOrderIds];
+      if (allLinkedOrderIds.length > 0) {
+        queryParams.push(allLinkedOrderIds);
+      }
+
+      const [dispRows] = await pool.query(
+        `SELECT 
+           COALESCE(soi.item_code, oi.item_code, wo.item_code) as item_code,
+           COALESCE(soi.drawing_no, oi.drawing_no, wo.bom_no) as drawing_no,
+           SUM(COALESCE(jc.dispatch_qty, jc.accepted_qty, 0)) as dispatched_qty
+         FROM job_cards jc
+         JOIN work_orders wo ON jc.work_order_id = wo.id
+         LEFT JOIN sales_order_items soi ON wo.sales_order_item_id = soi.id
+         LEFT JOIN order_items oi ON wo.sales_order_item_id = oi.id
+         WHERE (jc.operation_name = 'shipment' OR jc.operation_name = 'dispatch')
+           AND wo.source_type = 'FG'
+           AND (
+             wo.sales_order_id IN (?)
+             ${allLinkedOrderIds.length > 0 ? 'OR wo.sales_order_id IN (?)' : ''}
+           )
+         GROUP BY 
+           COALESCE(soi.item_code, oi.item_code, wo.item_code),
+           COALESCE(soi.drawing_no, oi.drawing_no, wo.bom_no)`,
+         queryParams
+      );
+
+      for (const r of dispRows) {
+        if (r.item_code) {
+          const key = String(r.item_code).trim().toUpperCase();
+          dispatchMap.set(key, (dispatchMap.get(key) || 0) + Number(r.dispatched_qty));
+        }
+        if (r.drawing_no) {
+          const key = String(r.drawing_no).trim().toUpperCase();
+          dispatchMap.set(key, (dispatchMap.get(key) || 0) + Number(r.dispatched_qty));
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Error pre-fetching PO dispatch quantities:', err);
+  }
+
   const enrichedItems = await Promise.all(items.map(async (item) => {
     let dispatched_qty = 0;
-    if ((item.item_code && item.item_code.trim()) || (item.drawing_no && item.drawing_no.trim())) {
-      try {
-        const [dispRows] = await pool.query(
-          `SELECT COALESCE(SUM(COALESCE(jc.dispatch_qty, jc.accepted_qty, 0)), 0) as dispatched_qty
-           FROM job_cards jc
-           JOIN work_orders wo ON jc.work_order_id = wo.id
-           LEFT JOIN sales_order_items soi ON wo.sales_order_item_id = soi.id
-           LEFT JOIN order_items oi ON wo.sales_order_item_id = oi.id
-           WHERE (jc.operation_name = 'shipment' OR jc.operation_name = 'dispatch')
-             AND wo.source_type = 'FG'
-             AND (
-               (
-                 (
-                   wo.sales_order_id IN (SELECT id FROM sales_orders WHERE customer_po_id = ? OR (customer_po_id IS NULL AND company_id = ? AND TRIM(UPPER(project_name)) = TRIM(UPPER(?))))
-                   OR
-                   wo.sales_order_id IN (SELECT id FROM orders WHERE quotation_id IN (SELECT id FROM sales_orders WHERE customer_po_id = ? OR (customer_po_id IS NULL AND company_id = ? AND TRIM(UPPER(project_name)) = TRIM(UPPER(?)))))
-                 )
-                 AND (
-                   (soi.item_code IS NOT NULL AND TRIM(UPPER(soi.item_code)) = TRIM(UPPER(?)))
-                   OR (soi.drawing_no IS NOT NULL AND TRIM(UPPER(soi.drawing_no)) = TRIM(UPPER(?)))
-                   OR (oi.item_code IS NOT NULL AND TRIM(UPPER(oi.item_code)) = TRIM(UPPER(?)))
-                   OR (oi.drawing_no IS NOT NULL AND TRIM(UPPER(oi.drawing_no)) = TRIM(UPPER(?)))
-                   OR (wo.item_code IS NOT NULL AND TRIM(UPPER(wo.item_code)) = TRIM(UPPER(?)))
-                   OR (wo.bom_no IS NOT NULL AND TRIM(UPPER(wo.bom_no)) = TRIM(UPPER(?)))
-                 )
-               )
-             )`,
-          [
-            id, po.company_id, po.project_name,
-            id, po.company_id, po.project_name,
-            item.item_code, item.drawing_no,
-            item.item_code, item.drawing_no,
-            item.item_code, item.drawing_no
-          ]
-        );
-        dispatched_qty = Number(dispRows[0]?.dispatched_qty || 0);
-      } catch (err) {
-        console.error('Error fetching dispatch quantity for item:', err);
-      }
+    const itemCodeKey = item.item_code ? String(item.item_code).trim().toUpperCase() : null;
+    const drawingNoKey = item.drawing_no ? String(item.drawing_no).trim().toUpperCase() : null;
+
+    if (itemCodeKey && dispatchMap.has(itemCodeKey)) {
+      dispatched_qty = dispatchMap.get(itemCodeKey);
+    } else if (drawingNoKey && dispatchMap.has(drawingNoKey)) {
+      dispatched_qty = dispatchMap.get(drawingNoKey);
     }
 
     // 1. Try to fetch stored sub-assemblies first (as a snapshot)
@@ -505,7 +555,13 @@ const updateCustomerPo = async (id, payload) => {
       specialNotes,
       inspectionClause,
       testCertificate,
-      hostCompanyId
+      hostCompanyId,
+      contactPerson,
+      email,
+      phone,
+      gstin,
+      billingAddress,
+      shippingAddress
     } = payload;
 
     const totals = calculateAmounts(items);
@@ -516,7 +572,8 @@ const updateCustomerPo = async (id, payload) => {
            payment_terms = ?, credit_days = ?, freight_terms = ?, packing_forwarding = ?, 
            insurance_terms = ?, delivery_terms = ?, subtotal = ?, tax_total = ?, net_total = ?, 
            remarks = ?, terms_and_conditions = ?, special_notes = ?, inspection_clause = ?, 
-           test_certificate = ?, host_company_id = ?, pdf_path = ?
+           test_certificate = ?, host_company_id = ?, pdf_path = ?,
+           contact_person = ?, email = ?, phone = ?, gstin = ?, billing_address = ?, shipping_address = ?
        WHERE id = ?`
       ,
       [
@@ -543,6 +600,12 @@ const updateCustomerPo = async (id, payload) => {
         testCertificate || null,
         hostCompanyId ? Number(hostCompanyId) : null,
         pdfFile || null,
+        contactPerson || null,
+        email || null,
+        phone || null,
+        gstin || null,
+        billingAddress || null,
+        shippingAddress || null,
         id
       ]
     );

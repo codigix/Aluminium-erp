@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Card, DataTable, StatusBadge, Modal, SearchableSelect } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
@@ -68,6 +68,7 @@ const POMaterialRequest = () => {
   const [users, setUsers] = useState([]);
   const [items, setItems] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
+  const lastFetchedIdRef = useRef(null);
 
   useEffect(() => {
     const isAdd = location.pathname.includes('/new');
@@ -78,7 +79,8 @@ const POMaterialRequest = () => {
       setShowModal(true);
       setShowViewModal(false);
     } else if (isView && id) {
-      if (selectedRequest?.id?.toString() !== id.toString()) {
+      if (selectedRequest?.id?.toString() !== id.toString() && lastFetchedIdRef.current !== id.toString()) {
+        lastFetchedIdRef.current = id.toString();
         handleViewRequest(id);
       }
       setShowViewModal(true);
@@ -87,6 +89,7 @@ const POMaterialRequest = () => {
       setShowModal(false);
       setShowViewModal(false);
       setSelectedRequest(null);
+      lastFetchedIdRef.current = null;
     }
   }, [location.pathname, searchParams, requests]);
 

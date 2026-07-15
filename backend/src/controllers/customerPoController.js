@@ -94,7 +94,13 @@ const createCustomerPo = async (req, res, next) => {
       drawingRequired: req.body.drawingRequired === 'true' || req.body.drawingRequired === true,
       productionPriority: req.body.productionPriority,
       targetDispatchDate: req.body.targetDispatchDate,
-      hostCompanyId: req.body.hostCompanyId || null
+      hostCompanyId: req.body.hostCompanyId || null,
+      contactPerson: req.body.contactPerson || null,
+      email: req.body.email || null,
+      phone: req.body.phone || null,
+      gstin: req.body.gstin || null,
+      billingAddress: req.body.billingAddress || null,
+      shippingAddress: req.body.shippingAddress || null
     };
 
     const result = await customerPoService.createCustomerPo(payload);
@@ -266,7 +272,13 @@ const updateCustomerPo = async (req, res, next) => {
       specialNotes: req.body.specialNotes,
       inspectionClause: req.body.inspectionClause,
       testCertificate: req.body.testCertificate,
-      hostCompanyId: req.body.hostCompanyId || null
+      hostCompanyId: req.body.hostCompanyId || null,
+      contactPerson: req.body.contactPerson || null,
+      email: req.body.email || null,
+      phone: req.body.phone || null,
+      gstin: req.body.gstin || null,
+      billingAddress: req.body.billingAddress || null,
+      shippingAddress: req.body.shippingAddress || null
     };
 
     const result = await customerPoService.updateCustomerPo(req.params.id, payload);

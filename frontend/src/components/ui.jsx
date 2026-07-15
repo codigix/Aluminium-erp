@@ -36,7 +36,20 @@ export const SearchableSelect = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [localValue, setLocalValue] = useState(value);
+  const [dropdownDirection, setDropdownDirection] = useState('down');
   const containerRef = useRef(null);
+
+  useEffect(() => {
+    if (isOpen && containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      if (spaceBelow < 260 && rect.top > spaceBelow) {
+        setDropdownDirection('up');
+      } else {
+        setDropdownDirection('down');
+      }
+    }
+  }, [isOpen]);
 
   const getLabel = (opt) => {
     if (!opt) return '';
@@ -129,7 +142,7 @@ export const SearchableSelect = ({
       </div>
 
       {isOpen && !disabled && (
-        <div className={`absolute z-[100] w-full bg-white border border-slate-200 rounded shadow-xl max-h-60 flex flex-col overflow-hidden ${openUpwards ? 'bottom-full mb-1' : 'top-full mt-1'}`}>
+        <div className={`absolute z-[100] w-full bg-white border border-slate-200 rounded shadow-xl max-h-60 flex flex-col overflow-hidden ${openUpwards || dropdownDirection === 'up' ? 'bottom-full mb-1' : 'top-full mt-1'}`}>
           <div className="overflow-y-auto flex-1">
             {filteredOptions.length > 0 ? (
               filteredOptions.map((opt, idx) => (
@@ -144,7 +157,7 @@ export const SearchableSelect = ({
                     setIsOpen(false);
                   }}
                 >
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 whitespace-nowrap">
                     <span className="">{getLabel(opt)}</span>
                     {getSublabel(opt) && (
                       <span className="text-xs text-slate-400 font-normal whitespace-pre-line">

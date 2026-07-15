@@ -1067,6 +1067,7 @@ const getApprovedDrawings = async () => {
        MAX(d.hsn_code) as hsn_code,
        MAX(d.delivery_date) as delivery_date,
        MAX(d.drawing_type) as drawing_type,
+       MAX(d.qty) as qty,
        MAX(latest_bom.id) as id,
        MAX(latest_bom.bom_cost) as bom_cost, 
        MAX(latest_bom.item_group) as item_group, 
@@ -1087,11 +1088,23 @@ const getApprovedDrawings = async () => {
          drawing_id
        FROM sales_order_items 
        WHERE id IN (
-         SELECT MAX(soi2.id) 
-         FROM sales_order_items soi2
-         JOIN sales_orders so ON so.id = soi2.sales_order_id
-         WHERE soi2.bom_cost > 0
-         GROUP BY COALESCE(soi2.drawing_id, soi2.drawing_no)
+         SELECT id FROM (
+           SELECT 
+             id,
+             ROW_NUMBER() OVER (
+               PARTITION BY COALESCE(drawing_id, drawing_no) 
+               ORDER BY 
+                 CASE 
+                   WHEN item_group = 'Assembly' OR item_code LIKE 'SA-%' OR item_code LIKE 'SFG-%' THEN 1
+                   WHEN item_type = 'FG' THEN 2
+                   ELSE 3
+                 END ASC,
+                 id DESC
+             ) as rn
+           FROM sales_order_items
+           WHERE bom_cost > 0
+         ) t
+         WHERE rn = 1
        )
      ) latest_bom ON (d.id = latest_bom.drawing_id OR (latest_bom.drawing_id IS NULL AND d.drawing_no = latest_bom.drawing_no))
      WHERE d.status IN ('APPROVED', 'SHARED', 'PENDING') OR d.shared_with_design = 1
@@ -1099,12 +1112,17 @@ const getApprovedDrawings = async () => {
      ORDER BY MAX(d.created_at) DESC`
   );
 
-  // Enrich with sub-assemblies for FG items
+  // Enrich with sub-assemblies for approved drawings
   const enrichedRows = await Promise.all(rows.map(async (row) => {
-    const isFG = (row.item_group || '').toUpperCase().includes('FG');
-    if (isFG && row.id) {
-      try {
-        const components = await bomService.getItemComponents(row.id);
+    try {
+      let components = [];
+      if (row.id) {
+        components = await bomService.getItemComponents(row.id);
+      } else if (row.drawing_no && row.drawing_no !== '—') {
+        components = await bomService.getItemComponents(null, null, row.drawing_no);
+      }
+
+      if (components && components.length > 0) {
         const g = (row.item_group || '').toUpperCase();
         const isDrawingOrSA = g.includes('SA') || g.includes('SUB') || g.includes('ASSEMBLY') || g.includes('PART') || (row.drawing_no && row.drawing_no !== '—');
         const sub_assemblies = isDrawingOrSA ? components : components.filter(c => {
@@ -1117,10 +1135,9 @@ const getApprovedDrawings = async () => {
             group.includes('PART') || (c.drawing_no && c.drawing_no !== '—'));
         });
         return { ...row, sub_assemblies };
-      } catch (err) {
-        console.error(`Error fetching components for item ${row.id}:`, err);
-        return { ...row, sub_assemblies: [] };
       }
+    } catch (err) {
+      console.error(`Error fetching components for item ${row.id || row.drawing_no}:`, err);
     }
     return { ...row, sub_assemblies: [] };
   }));
