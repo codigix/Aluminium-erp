@@ -355,6 +355,7 @@ const createPurchaseOrder = async (data, existingConnection = null) => {
     }
 
     let actualTotalAmount = 0;
+    const parentDrawingNo = await getParentDrawingNumber(connection, { quotation_id: quotationId, sales_order_id: sales_order_id, mr_id: actualMrId });
 
     if (items.length > 0) {
       for (const item of items) {
@@ -400,7 +401,16 @@ const createPurchaseOrder = async (data, existingConnection = null) => {
             totalItemAmount,
             item.material_name || null,
             item.material_type || null,
-            item.drawing_no || null,
+            (() => {
+              let targetDrawingNo = item.drawing_no;
+              if (targetDrawingNo) {
+                const isItemCodePattern = /^(RM-|OTH-|SFG-|FG-|GEN-|CAT-)/i.test(targetDrawingNo);
+                if (isItemCodePattern) {
+                  targetDrawingNo = null;
+                }
+              }
+              return targetDrawingNo || parentDrawingNo || null;
+            })(),
             item.drawing_id || null,
             item.length || 0,
             item.width || 0,
@@ -462,72 +472,74 @@ const getPurchaseOrders = async (filters = {}) => {
         JOIN sales_orders so ON poi_p.sales_order_id = so.id
         WHERE poi_p.purchase_order_id = po.id
       ) as merged_project_names,
-      COALESCE(
-        (
-          SELECT GROUP_CONCAT(DISTINCT 
-            COALESCE(
-              (
-                SELECT COALESCE(soi.drawing_no, oi.drawing_no, ppi.item_code)
-                FROM material_requests mr_inner
-                JOIN production_plans pp ON mr_inner.plan_id = pp.id
-                JOIN production_plan_items ppi ON pp.id = ppi.plan_id
-                LEFT JOIN sales_order_items soi ON ppi.sales_order_item_id = soi.id
-                LEFT JOIN order_items oi ON ppi.sales_order_item_id = oi.id AND ppi.sales_order_id = oi.order_id
-                WHERE mr_inner.id = poi_d.mr_id
-                AND (ppi.item_code IS NOT NULL AND ppi.item_code != '')
-                LIMIT 1
-              ),
-              (
-                SELECT COALESCE(soi.drawing_no, oi.drawing_no, ppi.item_code)
-                FROM production_plans pp
-                JOIN production_plan_items ppi ON pp.id = ppi.plan_id
-                LEFT JOIN sales_order_items soi ON ppi.sales_order_item_id = soi.id
-                LEFT JOIN order_items oi ON ppi.sales_order_item_id = oi.id AND ppi.sales_order_id = oi.order_id
-                WHERE pp.sales_order_id = poi_d.sales_order_id
-                AND (ppi.item_code IS NOT NULL AND ppi.item_code != '')
-                LIMIT 1
-              ),
-              (
-                SELECT soi.drawing_no 
-                FROM sales_order_items soi 
-                WHERE soi.sales_order_id = poi_d.sales_order_id
-                AND (soi.drawing_no IS NOT NULL AND soi.drawing_no != '')
-                LIMIT 1
-              ),
-              (
-                SELECT TRIM(drawing_no) 
-                FROM purchase_order_items 
-                WHERE id = poi_d.id 
-                AND TRIM(drawing_no) != TRIM(item_code)
-              )
-            )
-            ORDER BY poi_d.id SEPARATOR ', '
+      (
+        SELECT COALESCE(
+          -- 1. From the production plan of the quotation
+          (
+            SELECT COALESCE(soi.drawing_no, oi.drawing_no, ppi_dr.item_code)
+            FROM production_plan_items ppi_dr
+            LEFT JOIN sales_order_items soi ON ppi_dr.sales_order_item_id = soi.id
+            LEFT JOIN order_items oi ON ppi_dr.sales_order_item_id = oi.id AND ppi_dr.sales_order_id = oi.order_id
+            JOIN material_requests mr ON mr.plan_id = ppi_dr.plan_id
+            JOIN quotations q ON q.mr_id = mr.id
+            WHERE q.id = po.quotation_id
+            AND NOT (COALESCE(soi.drawing_no, oi.drawing_no, ppi_dr.item_code) LIKE 'RM-%' OR COALESCE(soi.drawing_no, oi.drawing_no, ppi_dr.item_code) LIKE 'OTH-%' OR COALESCE(soi.drawing_no, oi.drawing_no, ppi_dr.item_code) LIKE 'SFG-%' OR COALESCE(soi.drawing_no, oi.drawing_no, ppi_dr.item_code) LIKE 'FG-%')
+            LIMIT 1
+          ),
+          -- 2. From production plan of quotation via bom_no
+          (
+            SELECT pp.bom_no
+            FROM production_plans pp
+            JOIN material_requests mr ON mr.plan_id = pp.id
+            JOIN quotations q ON q.mr_id = mr.id
+            WHERE q.id = po.quotation_id
+            AND NOT (pp.bom_no LIKE 'RM-%' OR pp.bom_no LIKE 'OTH-%' OR pp.bom_no LIKE 'SFG-%' OR pp.bom_no LIKE 'FG-%')
+            LIMIT 1
+          ),
+          -- 3. From sales order items of quotation
+          (
+            SELECT soi.drawing_no 
+            FROM sales_order_items soi 
+            JOIN quotations q ON q.sales_order_id = soi.sales_order_id
+            WHERE q.id = po.quotation_id
+            AND NOT (soi.drawing_no LIKE 'RM-%' OR soi.drawing_no LIKE 'OTH-%' OR soi.drawing_no LIKE 'SFG-%' OR soi.drawing_no LIKE 'FG-%')
+            LIMIT 1
+          ),
+          -- 4. From production plan of MR
+          (
+            SELECT COALESCE(soi.drawing_no, oi.drawing_no, ppi_dr.item_code)
+            FROM production_plan_items ppi_dr
+            LEFT JOIN sales_order_items soi ON ppi_dr.sales_order_item_id = soi.id
+            LEFT JOIN order_items oi ON ppi_dr.sales_order_item_id = oi.id AND ppi_dr.sales_order_id = oi.order_id
+            JOIN material_requests mr ON mr.plan_id = ppi_dr.plan_id
+            WHERE mr.id = po.mr_id
+            AND NOT (COALESCE(soi.drawing_no, oi.drawing_no, ppi_dr.item_code) LIKE 'RM-%' OR COALESCE(soi.drawing_no, oi.drawing_no, ppi_dr.item_code) LIKE 'OTH-%' OR COALESCE(soi.drawing_no, oi.drawing_no, ppi_dr.item_code) LIKE 'SFG-%' OR COALESCE(soi.drawing_no, oi.drawing_no, ppi_dr.item_code) LIKE 'FG-%')
+            LIMIT 1
+          ),
+          (
+            SELECT pp.bom_no
+            FROM production_plans pp
+            JOIN material_requests mr ON mr.plan_id = pp.id
+            WHERE mr.id = po.mr_id
+            AND NOT (pp.bom_no LIKE 'RM-%' OR pp.bom_no LIKE 'OTH-%' OR pp.bom_no LIKE 'SFG-%' OR pp.bom_no LIKE 'FG-%')
+            LIMIT 1
+          ),
+          -- 5. From sales order items linked to PO
+          (
+            SELECT soi.drawing_no 
+            FROM sales_order_items soi 
+            WHERE soi.sales_order_id = po.sales_order_id 
+            AND NOT (soi.drawing_no LIKE 'RM-%' OR soi.drawing_no LIKE 'OTH-%' OR soi.drawing_no LIKE 'SFG-%' OR soi.drawing_no LIKE 'FG-%')
+            LIMIT 1
+          ),
+          -- 6. Fallback to existing po drawing_no
+          (
+            SELECT TRIM(drawing_no)
+            FROM purchase_order_items
+            WHERE purchase_order_id = po.id
+            AND NOT (drawing_no LIKE 'RM-%' OR drawing_no LIKE 'OTH-%' OR drawing_no LIKE 'SFG-%' OR drawing_no LIKE 'FG-%')
+            LIMIT 1
           )
-          FROM purchase_order_items poi_d
-          WHERE poi_d.purchase_order_id = po.id
-        ),
-        (
-          SELECT COALESCE(soi_inner.drawing_no, oi_inner.drawing_no, ppi_inner.item_code)
-          FROM material_requests mr_inner 
-          JOIN production_plans pp_inner ON mr_inner.plan_id = pp_inner.id
-          LEFT JOIN production_plan_items ppi_inner ON pp_inner.id = ppi_inner.plan_id
-          LEFT JOIN sales_order_items soi_inner ON ppi_inner.sales_order_item_id = soi_inner.id
-          LEFT JOIN order_items oi_inner ON ppi_inner.sales_order_item_id = oi_inner.id AND ppi_inner.sales_order_id = oi_inner.order_id
-          WHERE mr_inner.id = po.mr_id 
-          LIMIT 1
-        ),
-        (
-          SELECT pp_inner.bom_no 
-          FROM material_requests mr_inner 
-          JOIN production_plans pp_inner ON mr_inner.plan_id = pp_inner.id 
-          WHERE mr_inner.id = po.mr_id 
-          LIMIT 1
-        ),
-        (
-          SELECT soi_inner.drawing_no 
-          FROM sales_order_items soi_inner 
-          WHERE soi_inner.sales_order_id = po.sales_order_id 
-          LIMIT 1
         )
       ) as drawing_no,
       COALESCE(
@@ -744,18 +756,216 @@ const getPurchaseOrders = async (filters = {}) => {
       [poIds]
     );
 
-    // Group items by purchase_order_id and filter them
-    pos.forEach(po => {
+    // Group items by purchase_order_id, filter, and resolve drawings
+    for (const po of pos) {
       po.items = items
         .filter(item => item.purchase_order_id === po.id)
         .filter(item => {
           const type = (item.material_type || '').toUpperCase();
           return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
         });
-    });
+
+      const uniqueDwgNos = new Set();
+      for (const item of po.items) {
+        const resolvedDwg = await getItemParentDrawingNumber(pool, item);
+        item.drawing_no = resolvedDwg || item.drawing_no;
+
+        if (item.drawing_no) {
+          const isItemCodePattern = /^(RM-|OTH-|SFG-|FG-|GEN-|CAT-)/i.test(item.drawing_no);
+          if (isItemCodePattern || item.drawing_no === item.item_code || item.drawing_no === '—') {
+            item.drawing_no = null;
+          }
+        }
+        if (item.drawing_no && item.drawing_no !== '—') {
+          uniqueDwgNos.add(item.drawing_no);
+        }
+      }
+
+      if (po.is_merged === 1 || po.is_merged === true || uniqueDwgNos.size > 1) {
+        po.drawing_no = 'Merged Drawings';
+        po.finished_good = `${uniqueDwgNos.size} Drawings`;
+      }
+    }
   }
 
   return pos;
+};
+
+const getParentDrawingNumber = async (connection, poHeader) => {
+  const conn = connection || pool;
+  let parentDrawingNo = null;
+
+  if (poHeader.quotation_id) {
+    try {
+      const [qRows] = await conn.query(
+        `SELECT q.sales_order_id, q.mr_id,
+                (SELECT pp.bom_no FROM production_plans pp JOIN material_requests mr ON mr.plan_id = pp.id WHERE mr.id = q.mr_id LIMIT 1) as plan_bom_no,
+                (SELECT pp.id FROM production_plans pp JOIN material_requests mr ON mr.plan_id = pp.id WHERE mr.id = q.mr_id LIMIT 1) as plan_id,
+                (SELECT soi.drawing_no FROM sales_order_items soi WHERE soi.sales_order_id = q.sales_order_id LIMIT 1) as so_drawing_no
+         FROM quotations q WHERE q.id = ?`,
+        [poHeader.quotation_id]
+      );
+      if (qRows.length > 0) {
+        const q = qRows[0];
+        if (q.plan_id) {
+          const [ppiRows] = await conn.query(
+            `SELECT COALESCE(soi.drawing_no, oi.drawing_no, ppi_dr.item_code) as drawing_no
+             FROM production_plan_items ppi_dr
+             LEFT JOIN sales_order_items soi ON ppi_dr.sales_order_item_id = soi.id
+             LEFT JOIN order_items oi ON ppi_dr.sales_order_item_id = oi.id AND ppi_dr.sales_order_id = oi.order_id
+             WHERE ppi_dr.plan_id = ?
+             LIMIT 1`,
+            [q.plan_id]
+          );
+          if (ppiRows.length > 0 && ppiRows[0].drawing_no) {
+            parentDrawingNo = ppiRows[0].drawing_no;
+          }
+        }
+        if (!parentDrawingNo && q.plan_bom_no) parentDrawingNo = q.plan_bom_no;
+        if (!parentDrawingNo && q.so_drawing_no) parentDrawingNo = q.so_drawing_no;
+      }
+    } catch (err) {
+      console.error('[getParentDrawingNumber] Error resolving via quotation:', err.message);
+    }
+  }
+
+  if (!parentDrawingNo && poHeader.mr_id) {
+    try {
+      const [mrRows] = await conn.query(
+        `SELECT mr.plan_id,
+                (SELECT pp.bom_no FROM production_plans pp WHERE pp.id = mr.plan_id LIMIT 1) as plan_bom_no
+         FROM material_requests mr WHERE mr.id = ?`,
+        [poHeader.mr_id]
+      );
+      if (mrRows.length > 0) {
+        const mr = mrRows[0];
+        if (mr.plan_id) {
+          const [ppiRows] = await conn.query(
+            `SELECT COALESCE(soi.drawing_no, oi.drawing_no, ppi_dr.item_code) as drawing_no
+             FROM production_plan_items ppi_dr
+             LEFT JOIN sales_order_items soi ON ppi_dr.sales_order_item_id = soi.id
+             LEFT JOIN order_items oi ON ppi_dr.sales_order_item_id = oi.id AND ppi_dr.sales_order_id = oi.order_id
+             WHERE ppi_dr.plan_id = ?
+             LIMIT 1`,
+            [mr.plan_id]
+          );
+          if (ppiRows.length > 0 && ppiRows[0].drawing_no) {
+            parentDrawingNo = ppiRows[0].drawing_no;
+          }
+        }
+        if (!parentDrawingNo && mr.plan_bom_no) parentDrawingNo = mr.plan_bom_no;
+      }
+    } catch (err) {
+      console.error('[getParentDrawingNumber] Error resolving via MR:', err.message);
+    }
+  }
+
+  if (!parentDrawingNo && poHeader.sales_order_id) {
+    try {
+      const [soRows] = await conn.query(
+        `SELECT drawing_no FROM sales_order_items WHERE sales_order_id = ? LIMIT 1`,
+        [poHeader.sales_order_id]
+      );
+      if (soRows.length > 0 && soRows[0].drawing_no) {
+        parentDrawingNo = soRows[0].drawing_no;
+      }
+    } catch (err) {
+      console.error('[getParentDrawingNumber] Error resolving via Sales Order:', err.message);
+    }
+  }
+
+  if (parentDrawingNo) {
+    const isItemCodePattern = /^(RM-|OTH-|SFG-|FG-|GEN-|CAT-)/i.test(parentDrawingNo);
+    if (isItemCodePattern) {
+      parentDrawingNo = null;
+    }
+  }
+
+  return parentDrawingNo;
+};
+
+const getItemParentDrawingNumber = async (connection, item) => {
+  const conn = connection || pool;
+  let parentDrawingNo = null;
+
+  if (item.mr_id) {
+    try {
+      const [mrRows] = await conn.query(
+        `SELECT mr.plan_id,
+                (SELECT pp.bom_no FROM production_plans pp WHERE pp.id = mr.plan_id LIMIT 1) as plan_bom_no
+         FROM material_requests mr WHERE mr.id = ?`,
+        [item.mr_id]
+      );
+      if (mrRows.length > 0) {
+        const mr = mrRows[0];
+        if (mr.plan_id) {
+          const [ppiRows] = await conn.query(
+            `SELECT COALESCE(soi.drawing_no, oi.drawing_no, ppi_dr.item_code) as drawing_no
+             FROM production_plan_items ppi_dr
+             LEFT JOIN sales_order_items soi ON ppi_dr.sales_order_item_id = soi.id
+             LEFT JOIN order_items oi ON ppi_dr.sales_order_item_id = oi.id AND ppi_dr.sales_order_id = oi.order_id
+             WHERE ppi_dr.plan_id = ?
+             LIMIT 1`,
+            [mr.plan_id]
+          );
+          if (ppiRows.length > 0 && ppiRows[0].drawing_no) {
+            parentDrawingNo = ppiRows[0].drawing_no;
+          }
+        }
+        if (!parentDrawingNo && mr.plan_bom_no) parentDrawingNo = mr.plan_bom_no;
+      }
+    } catch (err) {
+      console.error('[getItemParentDrawingNumber] Error resolving via MR:', err.message);
+    }
+  }
+
+  if (!parentDrawingNo && item.source_po_item_id) {
+    try {
+      const [srcRows] = await conn.query(
+        `SELECT mr_id, drawing_no FROM purchase_order_items WHERE id = ?`,
+        [item.source_po_item_id]
+      );
+      if (srcRows.length > 0) {
+        const srcItem = srcRows[0];
+        if (srcItem.mr_id) {
+          parentDrawingNo = await getItemParentDrawingNumber(conn, { mr_id: srcItem.mr_id });
+        }
+        if (!parentDrawingNo && srcItem.drawing_no) {
+          const isItemCodePattern = /^(RM-|OTH-|SFG-|FG-|GEN-|CAT-)/i.test(srcItem.drawing_no);
+          if (!isItemCodePattern) {
+            parentDrawingNo = srcItem.drawing_no;
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[getItemParentDrawingNumber] Error resolving via source PO item:', err.message);
+    }
+  }
+
+  if (!parentDrawingNo && item.purchase_order_id) {
+    try {
+      const [poRows] = await conn.query(
+        `SELECT sales_order_id FROM purchase_orders WHERE id = ?`,
+        [item.purchase_order_id]
+      );
+      if (poRows.length > 0) {
+        const po = poRows[0];
+        if (po.sales_order_id) {
+          const [soRows] = await conn.query(
+            `SELECT drawing_no FROM sales_order_items WHERE sales_order_id = ? LIMIT 1`,
+            [po.sales_order_id]
+          );
+          if (soRows.length > 0 && soRows[0].drawing_no) {
+            parentDrawingNo = soRows[0].drawing_no;
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[getItemParentDrawingNumber] Error resolving via PO header:', err.message);
+    }
+  }
+
+  return parentDrawingNo;
 };
 
 const getPurchaseOrderById = async (poId) => {
@@ -948,11 +1158,34 @@ const getPurchaseOrderById = async (poId) => {
     [po.sales_order_id, po.id]
   );
 
+  const parentDrawingNo = await getParentDrawingNumber(pool, po);
+  if (parentDrawingNo) {
+    po.drawing_no = parentDrawingNo;
+  }
+
   // Filter out FG and Sub Assembly items
   const filteredItems = items.filter(item => {
     const type = (item.material_type || '').toUpperCase();
     return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
   });
+
+  filteredItems.forEach(item => {
+    item.drawing_no = parentDrawingNo || item.drawing_no;
+  });
+
+  for (const item of filteredItems) {
+    const resolvedDwg = await getItemParentDrawingNumber(pool, item);
+    item.drawing_no = resolvedDwg || parentDrawingNo || item.drawing_no;
+
+    if (item.drawing_no) {
+      const isItemCodePattern = /^(RM-|OTH-|SFG-|FG-|GEN-|CAT-)/i.test(item.drawing_no);
+      if (isItemCodePattern || item.drawing_no === item.item_code || item.drawing_no === '—') {
+        item.drawing_no = '—';
+      }
+    } else {
+      item.drawing_no = '—';
+    }
+  }
 
   // Use the total_amount stored in po if available, otherwise calculate from filtered items
   if (!po.total_amount || po.total_amount === 0) {
@@ -1023,6 +1256,12 @@ const updatePurchaseOrder = async (poId, payload) => {
 
     if (items && Array.isArray(items)) {
       let totalAmount = 0;
+      const parentDrawingNo = await getParentDrawingNumber(connection, {
+        quotation_id: existing[0].quotation_id,
+        mr_id: existing[0].mr_id,
+        sales_order_id: existing[0].sales_order_id
+      });
+
       for (const item of items) {
         const qty = parseFloat(item.quantity) || 0;
         const designQty = parseFloat(item.design_qty) || qty;
@@ -1038,15 +1277,27 @@ const updatePurchaseOrder = async (poId, payload) => {
 
         totalAmount = Number((totalAmount + totalItemAmount).toFixed(2));
 
+        let targetDrawingNo = item.drawing_no;
+        if (targetDrawingNo) {
+          const isItemCodePattern = /^(RM-|OTH-|SFG-|FG-|GEN-|CAT-)/i.test(targetDrawingNo);
+          if (isItemCodePattern) {
+            targetDrawingNo = null;
+          }
+        }
+        if (!targetDrawingNo) {
+          targetDrawingNo = parentDrawingNo;
+        }
+
         if (item.id) {
           await connection.execute(
             `UPDATE purchase_order_items 
              SET unit_rate = ?, amount = ?, cgst_percent = ?, cgst_amount = ?, sgst_percent = ?, sgst_amount = ?, total_amount = ?, quantity = ?, design_qty = ?, planned_qty = ?, description = ?, item_code = ?, unit = ?,
-                 length = ?, width = ?, thickness = ?, diameter = ?, outer_diameter = ?, density = ?, weight_per_unit = ?
+                 length = ?, width = ?, thickness = ?, diameter = ?, outer_diameter = ?, density = ?, weight_per_unit = ?, drawing_no = ?
              WHERE id = ? AND purchase_order_id = ?`,
             [
               rate, amount, cgstPercent, cgstAmount, sgstPercent, sgstAmount, totalItemAmount, qty, designQty, parseFloat(item.planned_qty) || designQty || 0, item.description, item.item_code, item.unit,
               item.length || 0, item.width || 0, item.thickness || 0, item.diameter || 0, item.outer_diameter || 0, item.density || 0, item.weight_per_unit || 0,
+              targetDrawingNo || null,
               item.id, poId
             ]
           );
@@ -1054,11 +1305,12 @@ const updatePurchaseOrder = async (poId, payload) => {
           await connection.execute(
             `INSERT INTO purchase_order_items 
              (purchase_order_id, item_code, description, quantity, design_qty, planned_qty, unit, unit_rate, amount, cgst_percent, cgst_amount, sgst_percent, sgst_amount, total_amount,
-              length, width, thickness, diameter, outer_diameter, density, weight_per_unit)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              length, width, thickness, diameter, outer_diameter, density, weight_per_unit, drawing_no)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
               poId, item.item_code, item.description, qty, designQty, parseFloat(item.planned_qty) || designQty || 0, item.unit || 'NOS', rate, amount, cgstPercent, cgstAmount, sgstPercent, sgstAmount, totalItemAmount,
-              item.length || 0, item.width || 0, item.thickness || 0, item.diameter || 0, item.outer_diameter || 0, item.density || 0, item.weight_per_unit || 0
+              item.length || 0, item.width || 0, item.thickness || 0, item.diameter || 0, item.outer_diameter || 0, item.density || 0, item.weight_per_unit || 0,
+              targetDrawingNo || null
             ]
           );
         }
@@ -1381,7 +1633,7 @@ const generatePurchaseOrderPDF = async (poId) => {
 <title>Purchase Order - {{hostCompanyName}}</title>
 <style>
   @page {
-    size: A4 landscape;
+    size: A4 portrait;
     margin: 8mm;
   }
 
@@ -1674,51 +1926,24 @@ const generatePurchaseOrderPDF = async (poId) => {
   <table class="header-table">
     <tr>
       <td style="width: 70%; padding: 6px;">
-        <div style="display: flex; align-items: flex-start; justify-content: space-between;">
-          <div style="display: flex; align-items: flex-start;">
-            <div class="logo-box">
-              {{#logoBase64}}
-              <img src="{{logoBase64}}" style="max-width: 100%; max-height: 100%; object-fit: contain;" />
-              {{/logoBase64}}
-              {{^logoBase64}}
-              <div style="font-size: 9px;">S P</div>
-              <div style="font-size: 12px; margin: 1px 0;">⚙</div>
-              <div style="font-size: 9px;">T P</div>
-              {{/logoBase64}}
-            </div>
-            <div>
-              <div class="company-title">{{hostCompanyName}}</div>
-              <div class="company-address">{{{hostCompanyAddressHtml}}}</div>
-              <div class="company-meta"><strong>GSTIN NO.</strong> : {{hostGSTIN}}</div>
-              {{#hostCIN}}
-              <div class="company-meta"><strong>CIN NO.</strong> : {{hostCIN}}</div>
-              {{/hostCIN}}
-            </div>
+        <div style="display: flex; align-items: flex-start;">
+          <div class="logo-box">
+            {{#logoBase64}}
+            <img src="{{logoBase64}}" style="max-width: 100%; max-height: 100%; object-fit: contain;" />
+            {{/logoBase64}}
+            {{^logoBase64}}
+            <div style="font-size: 9px;">S P</div>
+            <div style="font-size: 12px; margin: 1px 0;">⚙</div>
+            <div style="font-size: 9px;">T P</div>
+            {{/logoBase64}}
           </div>
-          
-          <div style="width: 220px; margin-left: 10px;">
-            <table class="created-by-table">
-              <tr>
-                <td style="width: 38%; font-weight: bold;">Created By</td>
-                <td style="width: 5%;">:</td>
-                <td>{{created_by_name}}</td>
-              </tr>
-              <tr>
-                <td style="font-weight: bold;">Mobile</td>
-                <td>:</td>
-                <td>{{created_by_mobile}}</td>
-              </tr>
-              <tr>
-                <td style="font-weight: bold;">Telephone</td>
-                <td>:</td>
-                <td>{{created_by_phone}}</td>
-              </tr>
-              <tr>
-                <td style="font-weight: bold;">Email</td>
-                <td>:</td>
-                <td style="word-break: break-all;">{{created_by_email}}</td>
-              </tr>
-            </table>
+          <div>
+            <div class="company-title">{{hostCompanyName}}</div>
+            <div class="company-address">{{{hostCompanyAddressHtml}}}</div>
+            <div class="company-meta"><strong>GSTIN NO.</strong> : {{hostGSTIN}}</div>
+            {{#hostCIN}}
+            <div class="company-meta"><strong>CIN NO.</strong> : {{hostCIN}}</div>
+            {{/hostCIN}}
           </div>
         </div>
       </td>
@@ -1774,7 +1999,7 @@ const generatePurchaseOrderPDF = async (poId) => {
   <!-- MIDDLE SECTION -->
   <table class="middle-table">
     <tr>
-      <td style="width: 35%; border-right: 1.5px solid #000;">
+      <td style="width: 50%; border-right: 1.5px solid #000;">
         <div class="section-title">VENDOR DETAILS</div>
         <div class="vendor-name">{{vendor_name}}</div>
         <div class="address-text">{{{vendor_address_html}}}</div>
@@ -1802,7 +2027,7 @@ const generatePurchaseOrderPDF = async (poId) => {
         </table>
       </td>
       
-      <td style="width: 35%; border-right: 1.5px solid #000;">
+      <td style="width: 50%;">
         <div class="section-title">DISPATCH / SHIP TO ADDRESS</div>
         <div class="vendor-name">{{hostCompanyName}}</div>
         <div class="address-text">{{{hostCompanyAddressHtml}}}</div>
@@ -1829,8 +2054,126 @@ const generatePurchaseOrderPDF = async (poId) => {
           </tr>
         </table>
       </td>
-      
-      <td style="width: 30%;">
+    </tr>
+  </table>
+
+  <!-- ITEMS TABLE -->
+  <table class="items-table">
+    <thead>
+      <tr>
+        <th style="width: 3%;">SL No.</th>
+        <th style="width: 10%; text-align: left; vertical-align: top; line-height: 1.3;">Drawing No</th>
+        <th style="width: 17%; text-align: left; vertical-align: top; line-height: 1.3;">Item No.<br/>Item Description</th>
+        <th style="width: 11%; text-align: left; vertical-align: top; line-height: 1.3;">Size</th>
+        <th style="width: 5%;">HSN Code</th>
+        <th style="width: 6%; text-align: right;">Rate</th>
+        <th style="width: 6%; text-align: right;">Qty</th>
+        <th style="width: 4%;">Unit</th>
+        <th style="width: 6%; text-align: right;">Amount</th>
+        <th style="width: 4%; text-align: right;">Discount</th>
+        <th style="width: 5%; text-align: right;">Transaction Amount</th>
+        <th style="width: 3%; text-align: right; line-height: 1.2;">CGST<br/>%</th>
+        <th style="width: 5%; text-align: right;">CGST Amt</th>
+        <th style="width: 3%; text-align: right; line-height: 1.2;">SGST<br/>%</th>
+        <th style="width: 5%; text-align: right;">SGST Amt</th>
+        <th style="width: 7%; text-align: right;">Total Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{#items}}
+      <tr {{#has_sub_assemblies}}class="parent-with-subs"{{/has_sub_assemblies}}>
+        <td style="text-align: center;">{{sl_no}}</td>
+        <td style="text-align: left; font-weight: bold; color: #000;">{{drawing_no}}</td>
+        <td style="text-align: left; line-height: 1.35; padding-left: 5px;">
+          {{item_no}}<br/>
+          <div style="padding-left: 10px;">
+            <strong>{{material_name}}</strong>
+          </div>
+        </td>
+        <td style="text-align: left; font-family: monospace; font-weight: bold; color: #000;">{{size}}</td>
+        <td style="text-align: center;">{{hsn_code}}</td>
+        <td style="text-align: right;">{{unit_rate}}</td>
+        <td style="text-align: right;">{{quantity}}</td>
+        <td style="text-align: center;">{{unit}}</td>
+        <td style="text-align: right;">{{amount}}</td>
+        <td style="text-align: right;">{{discount}}</td>
+        <td style="text-align: right;">{{transaction_amount}}</td>
+        <td style="text-align: right;">{{cgst_rate}}%</td>
+        <td style="text-align: right;">{{cgst_amount}}</td>
+        <td style="text-align: right;">{{sgst_rate}}%</td>
+        <td style="text-align: right;">{{sgst_amount}}</td>
+        <td style="text-align: right; font-weight: bold; color: #000;">{{total_amount}}</td>
+      </tr>
+      {{#sub_assemblies}}
+      <tr class="sub-assembly-row {{#is_last}}last-sub-assembly{{/is_last}}" style="background: #fafafa; font-size: 6.5px;">
+        <td></td>
+        <td></td>
+        <td style="text-align: left; padding-left: 15px;">{{description}} ({{drawingNo}})</td>
+        <td></td>
+        <td style="text-align: center;">{{hsn_code}}</td>
+        <td style="text-align: right;">{{displayRate}}</td>
+        <td style="text-align: right;">{{displayQuantity}}</td>
+        <td style="text-align: center;">{{unit}}</td>
+        <td style="text-align: right; font-weight: bold;">{{displayTotal}}</td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+      </tr>
+      {{/sub_assemblies}}
+      {{/items}}
+    </tbody>
+  </table>
+
+  <!-- SUMMARY -->
+  <table class="summary-table">
+    <tr>
+      <td style="width: 60%; padding: 8px; border-right: 1.5px solid #000;">
+        <div style="font-size: 7.5px; font-weight: bold; margin-bottom: 4px;">Amount Chargeable (in words)</div>
+        <div style="font-size: 8.5px; font-weight: bold; text-transform: uppercase; line-height: 1.35; color: #000;">
+          INR {{total_amount_words}} ONLY
+        </div>
+      </td>
+      <td style="width: 40%; padding: 0;">
+        <table class="totals-subtable">
+          <tr>
+            <td style="width: 55%; padding: 3px 5px; font-weight: bold;">Sub Total</td>
+            <td style="width: 5%; text-align: center; padding: 3px 0;">:</td>
+            <td style="text-align: right; padding: 3px 5px;">{{subtotal}}</td>
+          </tr>
+          {{#cgst_total}}
+          <tr>
+            <td style="padding: 3px 5px; font-weight: bold;">CGST @ {{cgst_rate_summary}}%</td>
+            <td style="text-align: center; padding: 3px 0;">:</td>
+            <td style="text-align: right; padding: 3px 5px;">{{cgst_total}}</td>
+          </tr>
+          {{/cgst_total}}
+          {{#sgst_total}}
+          <tr>
+            <td style="padding: 3px 5px; font-weight: bold;">SGST @ {{sgst_rate_summary}}%</td>
+            <td style="text-align: center; padding: 3px 0;">:</td>
+            <td style="text-align: right; padding: 3px 5px;">{{sgst_total}}</td>
+          </tr>
+          {{/sgst_total}}
+          <tr class="grand-total-row">
+            <td style="padding: 5px; font-size: 9px; font-weight: bold;">Grand Total</td>
+            <td style="text-align: center; padding: 5px 0; font-size: 9px; font-weight: bold;">:</td>
+            <td style="text-align: right; padding: 5px; font-size: 10px; font-weight: bold;">
+              ₹ {{total_amount}}
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+
+  <!-- BOTTOM SECTION -->
+  <table class="bottom-table">
+    <tr>
+      <td style="width: 50%; border-right: 1.5px solid #000; border-bottom: 1.5px solid #000; vertical-align: top;">
         <div class="section-title">TERMS & CONDITIONS</div>
         <table class="details-subtable">
           <tr>
@@ -1880,167 +2223,8 @@ const generatePurchaseOrderPDF = async (poId) => {
           </tr>
         </table>
       </td>
-    </tr>
-  </table>
-
-  <!-- ITEMS TABLE -->
-  <table class="items-table">
-    <thead>
-      <tr>
-        <th style="width: 3%;">SL No.</th>
-        <th style="width: 25%; text-align: left; vertical-align: top; line-height: 1.3;">Item No.<br/>Item Description</th>
-        <th style="width: 5%;">HSN Code</th>
-        <th style="width: 7%;">Item Dlv. Dt.</th>
-        <th style="width: 7%;">Pur. Req. No.</th>
-        <th style="width: 6%; text-align: right;">Rate</th>
-        <th style="width: 6%; text-align: right;">Qty</th>
-        <th style="width: 4%;">Unit</th>
-        <th style="width: 6%; text-align: right;">Amount</th>
-        <th style="width: 5%; text-align: right;">Discount</th>
-        <th style="width: 6%; text-align: right;">Transaction Amount</th>
-        <th style="width: 3%; text-align: right; line-height: 1.2;">CGST<br/>%</th>
-        <th style="width: 6%; text-align: right;">CGST Amt</th>
-        <th style="width: 3%; text-align: right; line-height: 1.2;">SGST<br/>%</th>
-        <th style="width: 6%; text-align: right;">SGST Amt</th>
-      </tr>
-    </thead>
-    <tbody>
-      {{#items}}
-      <tr {{#has_sub_assemblies}}class="parent-with-subs"{{/has_sub_assemblies}}>
-        <td style="text-align: center;">{{sl_no}}</td>
-        <td style="text-align: left; line-height: 1.35; padding-left: 5px;">
-          {{item_no}}<br/>
-          <div style="padding-left: 10px;">
-            <strong>{{material_name}}</strong><br/>
-            {{#description}}
-            <strong style="font-size: 7.5px; color: #000; font-weight: bold;">{{description}}</strong>
-            {{/description}}
-          </div>
-        </td>
-        <td style="text-align: center;">{{hsn_code}}</td>
-        <td style="text-align: center;">{{expected_delivery_date}}</td>
-        <td style="text-align: center;">{{pur_req_no}}</td>
-        <td style="text-align: right;">{{unit_rate}}</td>
-        <td style="text-align: right;">{{quantity}}</td>
-        <td style="text-align: center;">{{unit}}</td>
-        <td style="text-align: right;">{{amount}}</td>
-        <td style="text-align: right;">{{discount}}</td>
-        <td style="text-align: right;">{{transaction_amount}}</td>
-        <td style="text-align: right;">{{cgst_rate}}%</td>
-        <td style="text-align: right;">{{cgst_amount}}</td>
-        <td style="text-align: right;">{{sgst_rate}}%</td>
-        <td style="text-align: right;">{{sgst_amount}}</td>
-      </tr>
-      {{#sub_assemblies}}
-      <tr class="sub-assembly-row {{#is_last}}last-sub-assembly{{/is_last}}" style="background: #fafafa; font-size: 6.5px;">
-        <td></td>
-        <td style="text-align: left; padding-left: 15px;">{{description}} ({{drawingNo}})</td>
-        <td style="text-align: center;">{{hsn_code}}</td>
-        <td style="text-align: center;">{{formatted_delivery_date}}</td>
-        <td></td>
-        <td style="text-align: right;">{{displayRate}}</td>
-        <td style="text-align: right;">{{displayQuantity}}</td>
-        <td style="text-align: center;">{{unit}}</td>
-        <td style="text-align: right; font-weight: bold;">{{displayTotal}}</td>
-        <td></td>
-        <td></td>
-        <td></td>
-        <td></td>
-        <td></td>
-        <td></td>
-      </tr>
-      {{/sub_assemblies}}
-      {{/items}}
-      {{#empty_rows}}
-      <tr style="height: 22px;">
-        <td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>
-      </tr>
-      {{/empty_rows}}
-    </tbody>
-  </table>
-
-  <!-- SUMMARY -->
-  <table class="summary-table">
-    <tr>
-      <td style="width: 60%; padding: 8px; border-right: 1.5px solid #000;">
-        <div style="font-size: 7.5px; font-weight: bold; margin-bottom: 4px;">Amount Chargeable (in words)</div>
-        <div style="font-size: 8.5px; font-weight: bold; text-transform: uppercase; line-height: 1.35; color: #000;">
-          INR {{total_amount_words}} ONLY
-        </div>
-      </td>
-      <td style="width: 40%; padding: 0;">
-        <table class="totals-subtable">
-          <tr>
-            <td style="width: 55%; padding: 3px 5px; font-weight: bold;">Sub Total</td>
-            <td style="width: 5%; text-align: center; padding: 3px 0;">:</td>
-            <td style="text-align: right; padding: 3px 5px;">{{subtotal}}</td>
-          </tr>
-          {{#cgst_total}}
-          <tr>
-            <td style="padding: 3px 5px; font-weight: bold;">CGST @ {{cgst_rate_summary}}%</td>
-            <td style="text-align: center; padding: 3px 0;">:</td>
-            <td style="text-align: right; padding: 3px 5px;">{{cgst_total}}</td>
-          </tr>
-          {{/cgst_total}}
-          {{#sgst_total}}
-          <tr>
-            <td style="padding: 3px 5px; font-weight: bold;">SGST @ {{sgst_rate_summary}}%</td>
-            <td style="text-align: center; padding: 3px 0;">:</td>
-            <td style="text-align: right; padding: 3px 5px;">{{sgst_total}}</td>
-          </tr>
-          {{/sgst_total}}
-          <tr class="grand-total-row">
-            <td style="padding: 5px; font-size: 9px; font-weight: bold;">Grand Total</td>
-            <td style="text-align: center; padding: 5px 0; font-size: 9px; font-weight: bold;">:</td>
-            <td style="text-align: right; padding: 5px; font-size: 10px; font-weight: bold;">
-              ₹ {{total_amount}}
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-
-  <!-- BOTTOM SECTION -->
-  <table class="bottom-table">
-    <tr>
-      <td style="width: 35%; border-right: 1.5px solid #000;">
-        <div class="section-title">BANK DETAILS (For Remittance)</div>
-        <table class="details-subtable">
-          <tr>
-            <td style="width: 35%; font-weight: bold;">Bank Name</td>
-            <td style="width: 5%;">:</td>
-            <td>{{hostBankName}}</td>
-          </tr>
-          <tr>
-            <td style="font-weight: bold;">Account Name</td>
-            <td>:</td>
-            <td>{{hostAccountName}}</td>
-          </tr>
-          <tr>
-            <td style="font-weight: bold;">Account Number</td>
-            <td>:</td>
-            <td>{{hostAccountNumber}}</td>
-          </tr>
-          <tr>
-            <td style="font-weight: bold;">IFSC Code</td>
-            <td>:</td>
-            <td>{{hostIFSCCode}}</td>
-          </tr>
-          <tr>
-            <td style="font-weight: bold;">Branch</td>
-            <td>:</td>
-            <td>{{hostBranchName}}</td>
-          </tr>
-          <tr>
-            <td style="font-weight: bold;">Beneficiary GSTIN</td>
-            <td>:</td>
-            <td>{{hostGSTIN}}</td>
-          </tr>
-        </table>
-      </td>
       
-      <td style="width: 35%; border-right: 1.5px solid #000;">
+      <td style="width: 50%; border-bottom: 1.5px solid #000; vertical-align: top;">
         <div class="section-title">IMPORTANT NOTES</div>
         <ol style="margin: 0; padding-left: 12px; font-size: 7.5px; line-height: 1.35; color: #333;">
           <li>Please ensure all supplied material meet the requirements specified in PO.</li>
@@ -2051,37 +2235,36 @@ const generatePurchaseOrderPDF = async (poId) => {
           <li>Goods once sold will not be taken back.</li>
         </ol>
       </td>
-      
-      <td style="width: 30%;">
+    </tr>
+    <tr>
+      <td colspan="2" style="padding: 6px; vertical-align: top;">
         <div class="section-title">DECLARATION</div>
-        <div class="declaration-text">
+        <div class="declaration-text" style="margin-top: 4px; margin-bottom: 8px; font-size: 7.5px; line-height: 1.35; color: #333;">
           We declare that this Purchase Order is issued for the goods / services as per the terms and conditions mentioned herein.
         </div>
         
-        <div class="signature-section">
-          <div style="font-weight: bold; margin-bottom: 20px;">For {{hostCompanyName}}</div>
-          <div class="signature-box">
-            {{#signatureBase64}}
-            <img src="{{signatureBase64}}" class="signature-img" />
-            {{/signatureBase64}}
-            {{^signatureBase64}}
-            <div style="font-family: 'Courier New', Courier, monospace; font-style: italic; font-size: 11px; font-weight: bold; border-bottom: 1px dashed #000; display: inline-block; padding: 2px 10px; margin-bottom: 5px;">
-              {{hostCompanyName}}
-            </div>
-            {{/signatureBase64}}
-          </div>
-          <div style="font-weight: bold; margin-top: 5px;">Authorized Signatory</div>
-        </div>
+        <table style="width: 100%; border-collapse: collapse; margin-top: 6px;">
+          <tr>
+            <td style="width: 33.33%; border: 1.5px solid #000; padding: 6px; text-align: center; vertical-align: bottom;">
+              <div style="height: 35px;"></div>
+              <div style="font-size: 8px; font-weight: bold; border-top: 1px dashed #555; padding-top: 3px; color: #000;">Prepared By</div>
+            </td>
+            <td style="width: 33.33%; border: 1.5px solid #000; border-left: none; padding: 6px; text-align: center; vertical-align: bottom;">
+              <div style="height: 35px;"></div>
+              <div style="font-size: 8px; font-weight: bold; border-top: 1px dashed #555; padding-top: 3px; color: #000;">Approved By</div>
+            </td>
+            <td style="width: 33.33%; border: 1.5px solid #000; border-left: none; padding: 6px; text-align: center; vertical-align: bottom;">
+              <div style="font-size: 8.5px; font-weight: bold; margin-bottom: 25px; color: #000;">For {{hostCompanyName}}</div>
+              <div style="font-size: 8px; font-weight: bold; border-top: 1px dashed #555; padding-top: 3px; color: #000;">Authorized By</div>
+            </td>
+          </tr>
+        </table>
       </td>
     </tr>
   </table>
 
   <!-- FOOTER -->
-  <div class="footer-row">
-    THIS IS ELECTRONICALLY GENERATED PURCHASE ORDER AND DOES NOT REQUIRE SIGNATURE.
-  </div>
-
-  <div class="page-number-row">
+  <div class="page-number-row" style="margin-top: 5px;">
     Page 1 of 1
   </div>
 
@@ -2174,38 +2357,16 @@ const generatePurchaseOrderPDF = async (poId) => {
       const qty = parseFloat(i.quantity);
       const displayQty = (dQty && dQty !== 0) ? dQty : (qty || 0);
 
-      let resolvedDrawingNo = null;
-
-      // 1. Check by drawing_id in customer_drawings
-      if (i.drawing_id) {
-        const [dwg] = await pool.query('SELECT drawing_no FROM customer_drawings WHERE id = ?', [i.drawing_id]);
-        if (dwg.length > 0 && dwg[0].drawing_no) {
-          resolvedDrawingNo = dwg[0].drawing_no;
-        }
+      let resolvedDrawingNo = await getItemParentDrawingNumber(pool, i);
+      if (!resolvedDrawingNo) {
+        resolvedDrawingNo = po.drawing_no || i.drawing_no;
       }
 
-      // 2. Check by material_name / description in customer_drawings
-      if (!resolvedDrawingNo && i.material_name) {
-        const [dwg] = await pool.query('SELECT drawing_no FROM customer_drawings WHERE TRIM(LOWER(description)) = TRIM(LOWER(?))', [i.material_name]);
-        if (dwg.length > 0 && dwg[0].drawing_no) {
-          resolvedDrawingNo = dwg[0].drawing_no;
+      if (resolvedDrawingNo) {
+        const isItemCodePattern = /^(RM-|OTH-|SFG-|FG-|GEN-|CAT-)/i.test(resolvedDrawingNo);
+        if (isItemCodePattern) {
+          resolvedDrawingNo = null;
         }
-      }
-
-      // 3. Check in stock_balance
-      if (!resolvedDrawingNo && i.item_code) {
-        const [sb] = await pool.query(
-          'SELECT drawing_no FROM stock_balance WHERE item_code = ? AND drawing_no IS NOT NULL AND TRIM(drawing_no) != "" LIMIT 1',
-          [i.item_code]
-        );
-        if (sb.length > 0 && sb[0].drawing_no) {
-          resolvedDrawingNo = sb[0].drawing_no;
-        }
-      }
-
-      // 4. Fallback to i.drawing_no
-      if (!resolvedDrawingNo && i.drawing_no) {
-        resolvedDrawingNo = i.drawing_no;
       }
 
       // If the drawing number matches the item code or is a fallback dash/empty, set it to null so it doesn't print
@@ -2213,13 +2374,30 @@ const generatePurchaseOrderPDF = async (poId) => {
         resolvedDrawingNo = null;
       }
 
+      const len = parseFloat(i.length || 0);
+      const wid = parseFloat(i.width || 0);
+      const thk = parseFloat(i.thickness || 0);
+      const dia = parseFloat(i.diameter || 0);
+      const od = parseFloat(i.outer_diameter || 0);
+
+      let parts = [];
+      if (dia > 0) parts.push(`Ø${dia.toFixed(0)}`);
+      else if (od > 0) parts.push(`OD ${od.toFixed(0)}`);
+      
+      if (wid > 0) parts.push(wid.toFixed(0));
+      if (thk > 0) parts.push(thk % 1 === 0 ? thk.toFixed(0) : thk.toFixed(1));
+      if (len > 0) parts.push(len.toFixed(0));
+
+      const sizeStr = parts.length > 0 ? parts.join(' × ') + ' mm' : '—';
+
       return {
         ...i,
         sl_no: idx + 1,
         item_code: i.item_code || '—',
         item_no: i.item_code || '—',
-        drawing_no: resolvedDrawingNo || '',
+        drawing_no: resolvedDrawingNo || '—',
         material_name: i.material_name || i.description || '—',
+        size: sizeStr,
         description: resolvedDrawingNo || '',
         material_type: i.material_type || '—',
         hsn_code: '73089090', // realistic fallback
@@ -2234,10 +2412,11 @@ const generatePurchaseOrderPDF = async (poId) => {
         cgst_rate: parseFloat(i.cgst_percent || 0).toFixed(2),
         cgst_amount: parseFloat(i.cgst_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
         sgst_rate: parseFloat(i.sgst_percent || 0).toFixed(2),
-        sgst_amount: parseFloat(i.sgst_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+        sgst_amount: parseFloat(i.sgst_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+        total_amount: (parseFloat(i.amount || 0) + parseFloat(i.cgst_amount || 0) + parseFloat(i.sgst_amount || 0) + parseFloat(i.igst_amount || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
       };
     })),
-    empty_rows: Array.from({ length: Math.max(0, 4 - (po.items || []).length) })
+    empty_rows: []
   };
 
   const mustache = require('mustache');
@@ -2252,7 +2431,6 @@ const generatePurchaseOrderPDF = async (poId) => {
   await page.setContent(html, { waitUntil: 'load' });
   const pdf = await page.pdf({
     format: 'A4',
-    landscape: true,
     printBackground: true,
     margin: { top: '8mm', right: '8mm', bottom: '8mm', left: '8mm' }
   });

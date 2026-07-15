@@ -376,12 +376,15 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead className="bg-slate-50/50">
-                  <tr>
-                    <th className="p-2  text-xs  text-slate-400  ">Item</th>
+                  <tr className="border-b border-slate-100 text-left bg-slate-50/50">
+                    <th className="p-2  text-xs  text-slate-400  ">Drawing No</th>
+                    <th className="p-2  text-xs  text-slate-400  ">Item / Description</th>
+                    <th className="p-2  text-xs  text-slate-400  ">Size</th>
                     <th className="p-2  text-xs  text-slate-400   text-center">Design Qty</th>
                     <th className="p-2  text-xs  text-slate-400   text-center">Required</th>
                     <th className="p-2  text-xs  text-slate-400   text-center">Rate</th>
                     <th className="p-2  text-xs  text-slate-400   text-right">Amount</th>
+                    <th className="p-2  text-xs  text-slate-400   text-right">Total Amount</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
@@ -390,24 +393,43 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
                     const total = parseFloat(item.quantity) || 1;
                     const percent = Math.min(100, Math.round((received / total) * 100));
                     
+                    const isDwgCodePattern = /^(RM-|OTH-|SFG-|FG-|GEN-|CAT-)/i.test(item.drawing_no || '');
+                    const cleanDwgNo = isDwgCodePattern ? '—' : (item.drawing_no || '—');
+
+                    const formatSize = (i) => {
+                      const len = parseFloat(i.length || 0);
+                      const wid = parseFloat(i.width || 0);
+                      const thk = parseFloat(i.thickness || 0);
+                      const dia = parseFloat(i.diameter || 0);
+                      const od = parseFloat(i.outer_diameter || 0);
+
+                      let parts = [];
+                      if (dia > 0) parts.push(`Ø${dia}`);
+                      else if (od > 0) parts.push(`OD ${od}`);
+                      
+                      if (wid > 0) parts.push(wid);
+                      if (thk > 0) parts.push(thk);
+                      if (len > 0) parts.push(len);
+
+                      if (parts.length === 0) return '—';
+                      return parts.join(' × ') + ' mm';
+                    };
+                    
                     return (
                       <tr key={idx} className="hover:bg-slate-50/50 transition-colors group">
+                        <td className="p-2 text-xs font-bold text-slate-900">
+                          {cleanDwgNo}
+                        </td>
                         <td className="p-2">
                           <p className="text-xs text-slate-800 ">{item.material_name || item.description || 'N/A'}</p>
-                          {(item.item_code || item.drawing_no) && (
+                          {item.item_code && (
                             <span className="inline-flex items-center p-1 rounded text-xs  bg-slate-100 text-slate-500 mt-1 uppercase tracking-wider">
-                              {item.item_code || item.drawing_no}
+                              {item.item_code}
                             </span>
                           )}
-                          {(item.length > 0 || item.width > 0 || item.thickness > 0 || item.diameter > 0 || item.outer_diameter > 0) && (
-                            <div className="flex flex-wrap gap-x-2 gap-y-1 mt-1">
-                              {item.length > 0 && <span className="text-xs  text-slate-400">L: {item.length}</span>}
-                              {item.width > 0 && <span className="text-xs  text-slate-400">W: {item.width}</span>}
-                              {item.thickness > 0 && <span className="text-xs  text-slate-400">T: {item.thickness}</span>}
-                              {item.diameter > 0 && <span className="text-xs  text-slate-400">Dia: {item.diameter}</span>}
-                              {item.outer_diameter > 0 && <span className="text-xs  text-slate-400">OD: {item.outer_diameter}</span>}
-                            </div>
-                          )}
+                        </td>
+                        <td className="p-2 text-xs text-slate-900 font-mono font-bold">
+                          {formatSize(item)}
                         </td>
                         <td className="p-2  text-center">
                           <span className="text-xs  text-slate-800">
@@ -421,21 +443,6 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
                           </span>
                           <span className="text-xs  text-slate-400  ml-1 uppercase">{item.unit || item.uom}</span>
                         </td>
-                        {/* Hiding Received column as requested */}
-                        {/* <td className="p-2 ">
-                          <div className="flex flex-col items-center gap-1.5 min-w-[120px]">
-                            <div className="flex justify-between w-full text-xs ">
-                              <span className="text-blue-600">{received} {item.unit}</span>
-                              <span className="text-slate-400">{percent}%</span>
-                            </div>
-                            <div className="w-full h-1.5 bg-slate-100 rounded  overflow-hidden">
-                              <div 
-                                className="h-full bg-blue-500 rounded  transition-all duration-700"
-                                style={{ width: `${percent}%` }}
-                              />
-                            </div>
-                          </div>
-                        </td> */}
                         <td className="p-2  text-center">
                           <div className="flex flex-col items-center">
                             <span className="text-xs  text-slate-700">{formatCurrency(item.unit_rate, po.currency)}</span>
@@ -451,6 +458,16 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
                               })()}
                             </span>
                           </div>
+                        </td>
+                        <td className="p-2  text-right font-bold text-slate-900">
+                          {(() => {
+                            const qty = parseFloat(item.quantity) || 0;
+                            const rate = parseFloat(item.unit_rate) || 0;
+                            const cgst = parseFloat(item.cgst_amount) || 0;
+                            const sgst = parseFloat(item.sgst_amount) || 0;
+                            const igst = parseFloat(item.igst_amount) || 0;
+                            return formatCurrency((qty * rate) + cgst + sgst + igst, po.currency);
+                          })()}
                         </td>
                       </tr>
                     );

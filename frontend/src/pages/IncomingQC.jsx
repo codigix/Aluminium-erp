@@ -868,11 +868,11 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
           </div>
           {(item.length || item.width || item.thickness || item.diameter || item.outer_diameter) && (
             <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1">
-              {item.length > 0 && <span className="text-[9px] text-slate-500 bg-slate-50 px-1 border border-slate-100 rounded">L: {parseFloat(item.length).toFixed(4)}</span>}
+              {item.outer_diameter > 0 && <span className="text-[9px] text-slate-500 bg-slate-50 px-1 border border-slate-100 rounded">OD: {parseFloat(item.outer_diameter).toFixed(4)}</span>}
               {item.width > 0 && <span className="text-[9px] text-slate-500 bg-slate-50 px-1 border border-slate-100 rounded">W: {parseFloat(item.width).toFixed(4)}</span>}
               {item.thickness > 0 && <span className="text-[9px] text-slate-500 bg-slate-50 px-1 border border-slate-100 rounded">T: {parseFloat(item.thickness).toFixed(4)}</span>}
               {item.diameter > 0 && <span className="text-[9px] text-slate-500 bg-slate-50 px-1 border border-slate-100 rounded">Dia: {parseFloat(item.diameter).toFixed(4)}</span>}
-              {item.outer_diameter > 0 && <span className="text-[9px] text-slate-500 bg-slate-50 px-1 border border-slate-100 rounded">OD: {parseFloat(item.outer_diameter).toFixed(4)}</span>}
+              {item.length > 0 && <span className="text-[9px] text-slate-500 bg-slate-50 px-1 border border-slate-100 rounded">L: {parseFloat(item.length).toFixed(4)}</span>}
             </div>
           )}
           {item.description && item.description !== val && (
@@ -881,6 +881,17 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
             </div>
           )}
         </div>
+      )
+    },
+    {
+      label: 'Drawing No',
+      key: 'drawing_no',
+      render: (val) => val ? (
+        <span className="inline-flex items-center px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-100 text-xs font-medium whitespace-nowrap">
+          {val}
+        </span>
+      ) : (
+        <span className="text-slate-300 text-xs">—</span>
       )
     },
     {
@@ -952,11 +963,11 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
           </div>
           {(item.length || item.width || item.thickness || item.diameter || item.outer_diameter) && (
             <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1">
-              {item.length > 0 && <span className="text-[9px] text-slate-500 bg-slate-50 px-1 border border-slate-100 rounded">L: {parseFloat(item.length).toFixed(4)}</span>}
+              {item.outer_diameter > 0 && <span className="text-[9px] text-slate-500 bg-slate-50 px-1 border border-slate-100 rounded">OD: {parseFloat(item.outer_diameter).toFixed(4)}</span>}
               {item.width > 0 && <span className="text-[9px] text-slate-500 bg-slate-50 px-1 border border-slate-100 rounded">W: {parseFloat(item.width).toFixed(4)}</span>}
               {item.thickness > 0 && <span className="text-[9px] text-slate-500 bg-slate-50 px-1 border border-slate-100 rounded">T: {parseFloat(item.thickness).toFixed(4)}</span>}
               {item.diameter > 0 && <span className="text-[9px] text-slate-500 bg-slate-50 px-1 border border-slate-100 rounded">Dia: {parseFloat(item.diameter).toFixed(4)}</span>}
-              {item.outer_diameter > 0 && <span className="text-[9px] text-slate-500 bg-slate-50 px-1 border border-slate-100 rounded">OD: {parseFloat(item.outer_diameter).toFixed(4)}</span>}
+              {item.length > 0 && <span className="text-[9px] text-slate-500 bg-slate-50 px-1 border border-slate-100 rounded">L: {parseFloat(item.length).toFixed(4)}</span>}
             </div>
           )}
           {item.description && item.description !== val && (
@@ -965,6 +976,17 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
             </div>
           )}
         </div>
+      )
+    },
+    {
+      label: 'Drawing No',
+      key: 'drawing_no',
+      render: (val) => val ? (
+        <span className="inline-flex items-center px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-100 text-xs font-medium whitespace-nowrap">
+          {val}
+        </span>
+      ) : (
+        <span className="text-slate-300 text-xs">—</span>
       )
     },
     {

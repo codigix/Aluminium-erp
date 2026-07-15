@@ -15,32 +15,16 @@ const formatDimensions = (item) => {
 
   if (len > 0 || wid > 0 || thk > 0 || dia > 0 || od > 0) {
     let parts = [];
-    if (len > 0) parts.push(`L:${len.toFixed(0)}`);
+    // OD first
+    if (od > 0) parts.push(`OD:${od.toFixed(0)}`);
+    // Width, Thickness, Diameter in middle
     if (wid > 0) parts.push(`W:${wid.toFixed(0)}`);
     if (thk > 0) parts.push(`T:${thk.toFixed(1)}`);
-    
-    let base = parts.join(' × ');
-    if (base) {
-      base += ' mm';
-    }
-    
-    if (od > 0) {
-      if (base) {
-        base += ` (OD ${od.toFixed(0)})`;
-      } else {
-        base += `OD ${od.toFixed(0)}`;
-      }
-    }
-    
-    if (dia > 0) {
-      if (base) base += ' × ';
-      base += `Dia ${dia.toFixed(0)}`;
-      if (!base.endsWith('mm')) {
-        base += ' mm';
-      }
-    }
-    
-    return base;
+    if (dia > 0) parts.push(`Dia:${dia.toFixed(0)}`);
+    // Length last
+    if (len > 0) parts.push(`L:${len.toFixed(0)}`);
+
+    return parts.join(' × ') + ' mm';
   }
   return '';
 };
@@ -1197,8 +1181,9 @@ const POMaterialRequest = () => {
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
-                    <tr className="bg-slate-50/50 border-b border-slate-100">
+                                    <tr className="bg-slate-50/50 border-b border-slate-100">
                       <th className="p-2  text-left text-xs   text-slate-400  ">Item Details</th>
+                      <th className="p-2  text-left text-xs   text-slate-400  ">Drawing No</th>
                       <th className="p-2  text-center text-xs   text-slate-400  ">Design Qty</th>
                       <th className="p-2  text-center text-xs   text-slate-400  ">Required</th>
                       <th className="p-2  text-center text-xs   text-slate-400  ">Stock Level</th>
@@ -1224,6 +1209,15 @@ const POMaterialRequest = () => {
                                 </div>
                               )}
                             </div>
+                          </td>
+                          <td className="px-3 py-5">
+                            {selectedRequest?.drawing_no ? (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-100 text-xs font-medium whitespace-nowrap">
+                                {selectedRequest.drawing_no}
+                              </span>
+                            ) : (
+                              <span className="text-slate-300 text-xs">—</span>
+                            )}
                           </td>
                           <td className="px-6 py-5 text-center">
                             <div className="flex flex-col items-center">

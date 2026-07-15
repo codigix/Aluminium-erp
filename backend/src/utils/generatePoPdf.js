@@ -189,7 +189,14 @@ const generatePoPdf = async (data) => {
       const displayQty = isReceiptOrGrn ? receivedQtyVal : (parseFloat(item.design_qty) || parseFloat(item.quantity || item.po_qty || 0));
 
       const itemCode = item.item_code || item.itemCode || '';
-      const rawDrawingNo = item.drawing_no || item.drawingNo || '';
+      let parentDrawingNo = poDetail?.drawing_no || '';
+      if (parentDrawingNo) {
+        const isParentDwgPattern = /^(RM-|OTH-|SFG-|FG-|GEN-|CAT-)/i.test(parentDrawingNo);
+        if (isParentDwgPattern) {
+          parentDrawingNo = '';
+        }
+      }
+      const rawDrawingNo = parentDrawingNo || item.drawing_no || item.drawingNo || '';
       const isItemCodePattern = /^(RM-|OTH-|SFG-|FG-|GEN-|CAT-)/i.test(rawDrawingNo);
       const cleanDrawingNo = (rawDrawingNo && rawDrawingNo !== itemCode && !isItemCodePattern && rawDrawingNo !== '—') ? rawDrawingNo : null;
 
@@ -219,31 +226,14 @@ const generatePoPdf = async (data) => {
       let dimsSpec = '';
       if (len > 0 || wid > 0 || thk > 0 || dia > 0 || od > 0) {
         let parts = [];
-        if (len > 0) parts.push(`L:${len.toFixed(0)}`);
-        if (wid > 0) parts.push(`W:${wid.toFixed(0)}`);
-        if (thk > 0) parts.push(`T:${thk.toFixed(1)}`);
+        if (dia > 0) parts.push(`Ø${dia.toFixed(0)}`);
+        else if (od > 0) parts.push(`OD ${od.toFixed(0)}`);
         
-        let base = parts.join(' × ');
-        if (base) {
-          base += ' mm';
-        }
+        if (wid > 0) parts.push(wid.toFixed(0));
+        if (thk > 0) parts.push(thk % 1 === 0 ? thk.toFixed(0) : thk.toFixed(1));
+        if (len > 0) parts.push(len.toFixed(0));
         
-        if (od > 0) {
-          if (base) {
-            base += ` (OD ${od.toFixed(0)})`;
-          } else {
-            base += `OD ${od.toFixed(0)}`;
-          }
-        }
-        
-        if (dia > 0) {
-          if (base) base += ' × ';
-          base += `Dia ${dia.toFixed(0)}`;
-          if (!base.endsWith('mm')) {
-            base += ' mm';
-          }
-        }
-        dimsSpec = base;
+        dimsSpec = parts.join(' × ') + ' mm';
       }
 
       return {

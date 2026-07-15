@@ -67,32 +67,16 @@ const formatDimensions = (item) => {
 
   if (len > 0 || wid > 0 || thk > 0 || dia > 0 || od > 0) {
     let parts = [];
-    if (len > 0) parts.push(`L:${len.toFixed(0)}`);
+    // OD first
+    if (od > 0) parts.push(`OD:${od.toFixed(0)}`);
+    // Width, Thickness, Diameter in middle
     if (wid > 0) parts.push(`W:${wid.toFixed(0)}`);
     if (thk > 0) parts.push(`T:${thk.toFixed(1)}`);
+    if (dia > 0) parts.push(`Dia:${dia.toFixed(0)}`);
+    // Length last
+    if (len > 0) parts.push(`L:${len.toFixed(0)}`);
 
-    let base = parts.join(' × ');
-    if (base) {
-      base += ' mm';
-    }
-
-    if (od > 0) {
-      if (base) {
-        base += ` (OD ${od.toFixed(0)})`;
-      } else {
-        base += `OD ${od.toFixed(0)}`;
-      }
-    }
-
-    if (dia > 0) {
-      if (base) base += ' × ';
-      base += `Dia ${dia.toFixed(0)}`;
-      if (!base.endsWith('mm')) {
-        base += ' mm';
-      }
-    }
-
-    return base;
+    return parts.join(' × ') + ' mm';
   }
   return '';
 };

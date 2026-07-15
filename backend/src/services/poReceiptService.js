@@ -12,6 +12,16 @@ const getPOReceipts = async (filters = {}) => {
       po.total_amount,
       COALESCE(
         (
+          SELECT COALESCE(soi_inner.drawing_no, oi_inner.drawing_no, ppi_inner.item_code)
+          FROM material_requests mr_inner 
+          JOIN production_plans pp_inner ON mr_inner.plan_id = pp_inner.id
+          LEFT JOIN production_plan_items ppi_inner ON pp_inner.id = ppi_inner.plan_id
+          LEFT JOIN sales_order_items soi_inner ON ppi_inner.sales_order_item_id = soi_inner.id
+          LEFT JOIN order_items oi_inner ON ppi_inner.sales_order_item_id = oi_inner.id AND pp_inner.sales_order_id = oi_inner.order_id
+          WHERE mr_inner.id = po.mr_id
+          LIMIT 1
+        ),
+        (
           SELECT pp_inner.bom_no 
           FROM material_requests mr_inner 
           JOIN production_plans pp_inner ON mr_inner.plan_id = pp_inner.id 

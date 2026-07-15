@@ -382,10 +382,22 @@ const getQuotations = async (filters = {}) => {
     [quotationIds]
   );
 
-  return quotations.map(q => ({
-    ...q,
-    items: items.filter(i => i.quotation_id === q.id)
-  }));
+  return quotations.map(q => {
+    const parentDrawingNo = q.drawing_no;
+    const isParentDwgPattern = parentDrawingNo ? /^(RM-|OTH-|SFG-|FG-|GEN-|CAT-)/i.test(parentDrawingNo) : false;
+
+    const quoteItems = items.filter(i => i.quotation_id === q.id).map(item => {
+      if (parentDrawingNo && !isParentDwgPattern) {
+        return { ...item, drawing_no: parentDrawingNo };
+      }
+      return item;
+    });
+
+    return {
+      ...q,
+      items: quoteItems
+    };
+  });
 };
 
 const getQuotationById = async (quotationId) => {
@@ -624,7 +636,18 @@ const getQuotationById = async (quotationId) => {
     [quotationId]
   );
 
-  return { ...rows[0], items };
+  const quote = rows[0];
+  if (quote && quote.drawing_no) {
+    const parentDrawingNo = quote.drawing_no;
+    const isParentDwgPattern = /^(RM-|OTH-|SFG-|FG-|GEN-|CAT-)/i.test(parentDrawingNo);
+    if (!isParentDwgPattern) {
+      items.forEach(item => {
+        item.drawing_no = parentDrawingNo;
+      });
+    }
+  }
+
+  return { ...quote, items };
 };
 
 const handleAutoApproval = async (quotationId, connection) => {
@@ -1510,15 +1533,14 @@ const generateQuotationPDF = async (quotationId) => {
       let dimsSpec = '';
       if (len > 0 || wid > 0 || thk > 0 || dia > 0 || od > 0) {
         let parts = [];
-        if (len > 0) parts.push(`L:${len.toFixed(0)}`);
-        if (wid > 0) parts.push(`W:${wid.toFixed(0)}`);
-        if (thk > 0) parts.push(`T:${thk.toFixed(1)}`);
+        if (dia > 0) parts.push(`Ø${dia.toFixed(0)}`);
+        else if (od > 0) parts.push(`OD ${od.toFixed(0)}`);
         
-        let base = parts.join(' × ');
-        if (base) {
-          base += ' mm';
-        }
-        dimsSpec = base;
+        if (wid > 0) parts.push(wid.toFixed(0));
+        if (thk > 0) parts.push(thk % 1 === 0 ? thk.toFixed(0) : thk.toFixed(1));
+        if (len > 0) parts.push(len.toFixed(0));
+        
+        dimsSpec = parts.join(' × ') + ' mm';
       }
       
       let sizeParts = [];
@@ -1529,11 +1551,11 @@ const generateQuotationPDF = async (quotationId) => {
       }
       
       let otherParts = [];
-      if (len > 0) otherParts.push(`${len.toFixed(0)}`);
       if (wid > 0) otherParts.push(`${wid.toFixed(0)}`);
       if (thk > 0) {
         otherParts.push(thk % 1 === 0 ? thk.toFixed(0) : thk.toFixed(1));
       }
+      if (len > 0) otherParts.push(`${len.toFixed(0)}`);
       
       if (otherParts.length > 0) {
         sizeParts.push(otherParts.join(' × '));
@@ -1555,7 +1577,13 @@ const generateQuotationPDF = async (quotationId) => {
         isRFQ: isRFQVal,
         sr: idx + 1,
         drawing_no: i.drawing_no || i.item_code || '—',
-        drawing_name: i.drawing_name || i.description || '—',
+        drawing_name: (() => {
+          let cleanDwgName = i.drawing_name || i.description || '';
+          if (cleanDwgName === '—' || cleanDwgName.trim() === '') {
+            return null;
+          }
+          return cleanDwgName;
+        })(),
         item_size: itemSize || '—',
         material_name: i.material_name || i.description || '—',
         material_description: dimsSpec || null,
