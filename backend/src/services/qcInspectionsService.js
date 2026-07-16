@@ -170,29 +170,34 @@ const getQCWithDetails = async (qcId) => {
         qci.accepted_qty, 
         qci.rejected_qty, 
         qci.status,
-        poi.material_name,
-        poi.description,
+        COALESCE(poi.material_name, pri.material_name) as material_name,
+        COALESCE(poi.description, pri.material_name, pri.item_code) as description,
         poi.unit_rate,
         poi.planned_qty,
         poi.design_qty,
         poi.quantity,
-        poi.drawing_no,
-        COALESCE(poi.uom, poi.unit) as uom,
-        CASE WHEN gi.length > 0 THEN gi.length ELSE poi.length END as length,
-        CASE WHEN gi.width > 0 THEN gi.width ELSE poi.width END as width,
-        CASE WHEN gi.thickness > 0 THEN gi.thickness ELSE poi.thickness END as thickness,
-        CASE WHEN gi.diameter > 0 THEN gi.diameter ELSE poi.diameter END as diameter,
-        CASE WHEN gi.outer_diameter > 0 THEN gi.outer_diameter ELSE poi.outer_diameter END as outer_diameter,
-        CASE WHEN gi.density > 0 THEN gi.density ELSE poi.density END as density,
-        CASE WHEN gi.weight_per_unit > 0 THEN gi.weight_per_unit ELSE poi.weight_per_unit END as weight_per_unit,
+        COALESCE(poi.drawing_no, pri.drawing_no) as drawing_no,
+        COALESCE(NULLIF(qci.item_code,''), poi.item_code, pri.item_code) as item_code,
+        COALESCE(poi.uom, poi.unit, pri.unit) as uom,
+        CASE WHEN gi.length > 0 THEN gi.length ELSE COALESCE(poi.length, 0) END as length,
+        CASE WHEN gi.width > 0 THEN gi.width ELSE COALESCE(poi.width, 0) END as width,
+        CASE WHEN gi.thickness > 0 THEN gi.thickness ELSE COALESCE(poi.thickness, 0) END as thickness,
+        CASE WHEN gi.diameter > 0 THEN gi.diameter ELSE COALESCE(poi.diameter, 0) END as diameter,
+        CASE WHEN gi.outer_diameter > 0 THEN gi.outer_diameter ELSE COALESCE(poi.outer_diameter, 0) END as outer_diameter,
+        CASE WHEN gi.density > 0 THEN gi.density ELSE COALESCE(poi.density, 0) END as density,
+        CASE WHEN gi.weight_per_unit > 0 THEN gi.weight_per_unit ELSE COALESCE(poi.weight_per_unit, 0) END as weight_per_unit,
         w.warehouse_name
        FROM qc_inspection_items qci
        LEFT JOIN grn_items gi ON qci.grn_item_id = gi.id
+       LEFT JOIN grns grn ON gi.grn_id = grn.id
        LEFT JOIN purchase_order_items poi ON gi.po_item_id = poi.id
+       LEFT JOIN po_receipt_items pri ON pri.receipt_id = grn.po_receipt_id
+         AND (pri.po_item_id = gi.po_item_id OR (gi.po_item_id IS NULL AND pri.po_item_id IS NULL))
        LEFT JOIN warehouses w ON qci.warehouse_id = w.id
        WHERE qci.qc_inspection_id = ?`,
       [qcId]
     );
+
 
     const orderedQty = qcItems.reduce((sum, item) => sum + (parseFloat(item.po_qty) || 0), 0);
     const acceptedQty = qcItems.reduce((sum, item) => sum + (parseFloat(item.accepted_qty) || 0), 0);
@@ -388,29 +393,34 @@ const getAllQCs = async () => {
         qci.accepted_qty, 
         qci.rejected_qty, 
         qci.status,
-        poi.material_name,
-        poi.description,
+        COALESCE(poi.material_name, pri.material_name) as material_name,
+        COALESCE(poi.description, pri.material_name, pri.item_code) as description,
         poi.unit_rate,
         poi.planned_qty,
         poi.design_qty,
         poi.quantity,
-        poi.drawing_no,
-        COALESCE(poi.uom, poi.unit) as uom,
-        CASE WHEN gi.length > 0 THEN gi.length ELSE poi.length END as length,
-        CASE WHEN gi.width > 0 THEN gi.width ELSE poi.width END as width,
-        CASE WHEN gi.thickness > 0 THEN gi.thickness ELSE poi.thickness END as thickness,
-        CASE WHEN gi.diameter > 0 THEN gi.diameter ELSE poi.diameter END as diameter,
-        CASE WHEN gi.outer_diameter > 0 THEN gi.outer_diameter ELSE poi.outer_diameter END as outer_diameter,
-        CASE WHEN gi.density > 0 THEN gi.density ELSE poi.density END as density,
-        CASE WHEN gi.weight_per_unit > 0 THEN gi.weight_per_unit ELSE poi.weight_per_unit END as weight_per_unit,
+        COALESCE(poi.drawing_no, pri.drawing_no) as drawing_no,
+        COALESCE(NULLIF(qci.item_code,''), poi.item_code, pri.item_code) as item_code,
+        COALESCE(poi.uom, poi.unit, pri.unit) as uom,
+        CASE WHEN gi.length > 0 THEN gi.length ELSE COALESCE(poi.length, 0) END as length,
+        CASE WHEN gi.width > 0 THEN gi.width ELSE COALESCE(poi.width, 0) END as width,
+        CASE WHEN gi.thickness > 0 THEN gi.thickness ELSE COALESCE(poi.thickness, 0) END as thickness,
+        CASE WHEN gi.diameter > 0 THEN gi.diameter ELSE COALESCE(poi.diameter, 0) END as diameter,
+        CASE WHEN gi.outer_diameter > 0 THEN gi.outer_diameter ELSE COALESCE(poi.outer_diameter, 0) END as outer_diameter,
+        CASE WHEN gi.density > 0 THEN gi.density ELSE COALESCE(poi.density, 0) END as density,
+        CASE WHEN gi.weight_per_unit > 0 THEN gi.weight_per_unit ELSE COALESCE(poi.weight_per_unit, 0) END as weight_per_unit,
         w.warehouse_name
        FROM qc_inspection_items qci 
        LEFT JOIN grn_items gi ON qci.grn_item_id = gi.id
+       LEFT JOIN grns grn ON gi.grn_id = grn.id
        LEFT JOIN purchase_order_items poi ON gi.po_item_id = poi.id
+       LEFT JOIN po_receipt_items pri ON pri.receipt_id = grn.po_receipt_id
+         AND (pri.po_item_id = gi.po_item_id OR (gi.po_item_id IS NULL AND pri.po_item_id IS NULL))
        LEFT JOIN warehouses w ON qci.warehouse_id = w.id
        WHERE qci.qc_inspection_id = ?`,
       [qc.id]
     );
+
 
     const orderedQty = qcItems.reduce((sum, item) => sum + (parseFloat(item.po_qty) || 0), 0);
     const acceptedQty = qcItems.reduce((sum, item) => sum + (parseFloat(item.accepted_qty) || 0), 0);

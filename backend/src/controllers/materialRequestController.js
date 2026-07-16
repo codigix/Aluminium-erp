@@ -131,7 +131,7 @@ const materialRequestController = {
 
       const request = requests[0];
 
-      const [items] = await pool.query(`
+       const [items] = await pool.query(`
         SELECT mri.*, 
                COALESCE(mri.item_name, sb.material_name, sb.item_description, mri.item_code) as name, 
                COALESCE(mri.uom, sb.unit) as uom,
@@ -142,8 +142,18 @@ const materialRequestController = {
                COALESCE(NULLIF(mri.diameter, 0), sb.diameter, 0) as diameter,
                COALESCE(NULLIF(mri.outer_diameter, 0), sb.outer_diameter, 0) as outer_diameter,
                COALESCE(NULLIF(mri.density, 0), sb.density, 0) as density,
-               COALESCE(NULLIF(mri.weight_per_unit, 0), sb.weight_per_unit, 0) as weight_per_unit
+               COALESCE(NULLIF(mri.weight_per_unit, 0), sb.weight_per_unit, 0) as weight_per_unit,
+               COALESCE(
+                 (
+                   SELECT ppi.uom 
+                   FROM production_plan_items ppi 
+                   WHERE ppi.plan_id = mr.plan_id 
+                   LIMIT 1
+                 ),
+                 'Nos'
+               ) as fg_uom
         FROM material_request_items mri
+        JOIN material_requests mr ON mri.mr_id = mr.id
         LEFT JOIN (
           SELECT item_code, 
                  MAX(material_name) as material_name, 
@@ -392,6 +402,103 @@ const materialRequestController = {
     } catch (error) {
       await connection.rollback();
       console.error('Error creating material request:', error);
+      res.status(500).json({ message: error.message });
+    } finally {
+      connection.release();
+    }
+  },
+
+  addItem: async (req, res) => {
+    const connection = await pool.getConnection();
+    try {
+      await connection.beginTransaction();
+      const { id } = req.params;
+      const { item_code, quantity, design_qty, remarks } = req.body;
+
+      if (!item_code || !quantity) {
+        return res.status(400).json({ message: 'item_code and quantity are required' });
+      }
+
+      // Fetch item info from stock_balance or stock_items
+      const [itemRows] = await connection.query(
+        `SELECT item_code, material_name as item_name, material_type as item_type, unit as uom,
+                length, width, thickness, diameter, outer_diameter, density, weight_per_unit, valuation_rate as unit_rate
+         FROM stock_balance 
+         WHERE item_code = ? 
+         LIMIT 1`,
+        [item_code]
+      );
+
+      let itemInfo = itemRows[0] || {};
+      if (itemRows.length === 0) {
+        const [masterRows] = await connection.query(
+          `SELECT item_code, item_description as item_name, material_type as item_type, unit as uom,
+                  length, width, thickness, diameter, outer_diameter, density, weight_per_unit, valuation_rate as unit_rate
+           FROM stock_items 
+           WHERE item_code = ? 
+           LIMIT 1`,
+          [item_code]
+        );
+        itemInfo = masterRows[0] || {};
+      }
+
+      await connection.query(
+        `INSERT INTO material_request_items 
+          (mr_id, item_code, item_name, item_type, design_qty, quantity, unit_rate, uom, length, width, thickness, diameter, outer_diameter, density, weight_per_unit, item_source, remarks)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          id,
+          item_code,
+          itemInfo.item_name || item_code,
+          itemInfo.item_type || 'Raw Material',
+          (design_qty !== undefined && design_qty !== null && design_qty !== '') ? parseFloat(design_qty) : null,
+          parseFloat(quantity),
+          itemInfo.unit_rate || 0,
+          itemInfo.uom || 'pcs',
+          itemInfo.length || 0,
+          itemInfo.width || 0,
+          itemInfo.thickness || 0,
+          itemInfo.diameter || 0,
+          itemInfo.outer_diameter || 0,
+          itemInfo.density || 0,
+          itemInfo.weight_per_unit || 0,
+          'MANUAL',
+          remarks || null
+        ]
+      );
+
+      await connection.commit();
+      res.json({ message: 'Item added successfully' });
+    } catch (error) {
+      await connection.rollback();
+      console.error('Error adding item to Material Request:', error);
+      res.status(500).json({ message: error.message });
+    } finally {
+      connection.release();
+    }
+  },
+
+  deleteItem: async (req, res) => {
+    const connection = await pool.getConnection();
+    try {
+      await connection.beginTransaction();
+      const { id, itemId } = req.params;
+
+      const [result] = await connection.query(
+        'DELETE FROM material_request_items WHERE id = ? AND mr_id = ?',
+        [itemId, id]
+      );
+
+      if (result.affectedRows === 0) {
+        await connection.rollback();
+        return res.status(404).json({ message: 'Item not found in this Material Request' });
+      }
+
+      await connection.commit();
+      res.json({ message: 'Item deleted successfully from Material Request' });
+    } catch (error) {
+      await connection.rollback();
+      console.error('Error deleting item from Material Request:', error);
       res.status(500).json({ message: error.message });
     } finally {
       connection.release();

@@ -122,6 +122,7 @@ const Quotations = () => {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(false);
   const [vendors, setVendors] = useState([]);
+  const [stockItems, setStockItems] = useState([]);
   const [salesOrders, setSalesOrders] = useState([]);
   const [materialRequests, setMaterialRequests] = useState([]);
   const [filterStatus, setFilterStatus] = useState('All Quotations');
@@ -246,6 +247,21 @@ const Quotations = () => {
     }
   };
 
+  const fetchStockItems = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/items`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setStockItems(data);
+      }
+    } catch (err) {
+      console.error('Error fetching stock items:', err);
+    }
+  };
+
   useEffect(() => {
     fetchQuotations();
     fetchRawRfqs();
@@ -254,6 +270,7 @@ const Quotations = () => {
     fetchSalesOrders();
     fetchMaterialRequests();
     fetchHostCompanies();
+    fetchStockItems();
   }, []);
 
   const fetchHostCompanies = async () => {
@@ -1434,6 +1451,7 @@ const Quotations = () => {
       material_name: item.material_name || '',
       material_type: getCorrectMaterialType(item.drawing_no || item.item_code, item.material_type),
       design_qty: item.design_qty || item.quantity || 0,
+      planned_qty: item.planned_qty,
       quantity: item.quantity || 0,
       uom: item.unit || item.uom || 'NOS',
       unit_rate: item.unit_rate || 0,
@@ -2641,20 +2659,25 @@ const Quotations = () => {
                                 className={`col-span-1 p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 ${formData.rfq_id ? 'bg-slate-50 cursor-not-allowed' : ''}`}
                               />
                               <div className="col-span-1 flex flex-col items-center">
-                                <div className="text-xs  text-slate-400 mb-0.5">
-                                  {Number(item.planned_qty || 0).toFixed(3)} {item.uom || 'Kg'}
-                                </div>
-                                <div className="text-xs   text-slate-600">
-                                  Design Qty
-                                </div>
-                              </div>
+                               <div className="text-xs text-slate-400 mb-0.5">
+                                 {item.planned_qty !== null && item.planned_qty !== undefined
+                                   ? (['NOS', 'PCS', 'SETS', 'NO', 'PC'].includes((item.uom || '').toUpperCase())
+                                       ? Number(item.planned_qty).toFixed(0)
+                                       : Number(item.planned_qty).toFixed(3))
+                                   : '-'}
+                                 {item.planned_qty !== null && item.planned_qty !== undefined && ' Nos'}
+                               </div>
+                               <div className="text-xs text-slate-600">
+                                 Design Qty
+                               </div>
+                             </div>
                               <div className="col-span-2 flex gap-1">
                                 <input
                                   type="number"
                                   placeholder="Required"
-                                  value={item.design_qty || 0}
+                                  value={item.design_qty === 0 ? 0 : (item.design_qty || '')}
                                   readOnly={!!formData.rfq_id}
-                                  onChange={(e) => handleItemChange(idx, 'design_qty', parseFloat(e.target.value) || 0)}
+                                  onChange={(e) => handleItemChange(idx, 'design_qty', e.target.value === '' ? '' : (parseFloat(e.target.value) || 0))}
                                   className={`w-full p-2 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500 ${formData.rfq_id ? 'bg-slate-50 cursor-not-allowed' : ''}`}
                                 />
                                 <div className="p-2 bg-slate-50 border border-slate-200 rounded text-xs  text-slate-500 flex items-center justify-center min-w-[40px]">
@@ -2832,7 +2855,7 @@ const Quotations = () => {
                       </button>
                     </div>
 
-                    <div className="border rounded  overflow-hidden">
+                    <div className="border rounded  overflow-visible">
                       <table className="w-full text-xs text-left">
                         <thead className="bg-slate-50 border-b border-slate-200">
                           <tr>
@@ -2868,13 +2891,33 @@ const Quotations = () => {
                                   </div>
                                 </td>
                                 <td className="p-2">
-                                  <input
-                                    type="text"
-                                    value={item.material_name}
-                                    onChange={(e) => handleRecordItemChange(idx, 'material_name', e.target.value)}
-                                    className="w-full px-2 py-1 border border-transparent hover:border-slate-200 focus:border-blue-500 rounded outline-none transition-all"
-                                    placeholder="Material..."
-                                  />
+                                  <div className="min-w-[200px]">
+                                    <SearchableSelect
+                                      options={stockItems}
+                                      value={item.item_code || item.material_name || ''}
+                                      onChange={(e) => {
+                                        const selected = stockItems.find(i => i.item_code === e.target.value);
+                                        handleRecordItemChange(idx, 'item_code', e.target.value);
+                                        handleRecordItemChange(idx, 'material_name', selected?.material_name || e.target.value);
+                                        handleRecordItemChange(idx, 'material_type', selected?.material_type || item.material_type);
+                                        if (selected?.unit) {
+                                          handleRecordItemChange(idx, 'uom', selected.unit);
+                                        }
+                                        if (selected?.length) handleRecordItemChange(idx, 'length', selected.length);
+                                        if (selected?.width) handleRecordItemChange(idx, 'width', selected.width);
+                                        if (selected?.thickness) handleRecordItemChange(idx, 'thickness', selected.thickness);
+                                        if (selected?.diameter) handleRecordItemChange(idx, 'diameter', selected.diameter);
+                                        if (selected?.outer_diameter) handleRecordItemChange(idx, 'outer_diameter', selected.outer_diameter);
+                                        if (selected?.density) handleRecordItemChange(idx, 'density', selected.density);
+                                        if (selected?.weight_per_unit) handleRecordItemChange(idx, 'weight_per_unit', selected.weight_per_unit);
+                                      }}
+                                      placeholder="Select Item"
+                                      labelField="material_name"
+                                      valueField="item_code"
+                                      subLabelField="item_code"
+                                      allowCustom={true}
+                                    />
+                                  </div>
                                   {item.item_code && item.item_code !== item.drawing_no && (
                                     <div className="px-2 text-xs text-slate-400   truncate max-w-[150px]">
                                       Code: {item.item_code}
@@ -2896,19 +2939,23 @@ const Quotations = () => {
                                   />
                                 </td>
                                 <td className="p-2 text-center">
-                                  <div className="text-xs  text-slate-400">
-                                    {Number(item.planned_qty || 0).toFixed(3)}
-                                  </div>
-                                  <div className="text-[9px] text-slate-500  ">
-                                    Design Qty
+                                  <input
+                                    type="number"
+                                    value={item.planned_qty === null || item.planned_qty === undefined ? '' : item.planned_qty}
+                                    onChange={(e) => handleRecordItemChange(idx, 'planned_qty', e.target.value === '' ? null : parseFloat(e.target.value))}
+                                    className="w-16 p-1 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium text-slate-700"
+                                    placeholder="0"
+                                  />
+                                  <div className="text-[9px] text-slate-400 mt-1">
+                                    Nos
                                   </div>
                                 </td>
                                 <td className="p-2">
                                   <div className="flex flex-col items-center gap-1">
                                     <input
                                       type="number"
-                                      value={item.design_qty || item.quantity || 0}
-                                      onChange={(e) => handleRecordItemChange(idx, 'design_qty', parseFloat(e.target.value) || 0)}
+                                      value={item.design_qty === 0 ? 0 : (item.design_qty || item.quantity || '')}
+                                      onChange={(e) => handleRecordItemChange(idx, 'design_qty', e.target.value === '' ? '' : (parseFloat(e.target.value) || 0))}
                                       className="w-full px-2 py-1 border border-transparent hover:border-slate-200 focus:border-blue-500 rounded outline-none transition-all text-center  text-indigo-600"
                                       placeholder="0.000"
                                     />
@@ -3259,7 +3306,7 @@ const Quotations = () => {
                     onClick={() => {
                       setEditFormData({
                         ...editFormData,
-                        items: [...editFormData.items, { drawing_no: '', material_name: '', material_type: '', design_qty: 0, quantity: 0, planned_qty: 0, uom: 'NOS', unit_rate: 0 }]
+                        items: [...editFormData.items, { drawing_no: '', material_name: '', material_type: '', design_qty: 0, quantity: 0, planned_qty: null, uom: 'NOS', unit_rate: 0 }]
                       });
                     }}
                     className="p-2  bg-blue-600 text-white text-xs rounded  hover:bg-blue-700"
@@ -3313,16 +3360,32 @@ const Quotations = () => {
                               className="col-span-2 p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
                             <div className="col-span-4 flex flex-col">
-                              <input
-                                type="text"
-                                placeholder="Material Name"
-                                value={item.material_name}
+                              <SearchableSelect
+                                options={stockItems}
+                                value={item.item_code || ''}
                                 onChange={(e) => {
+                                  const selected = stockItems.find(i => i.item_code === e.target.value);
                                   const newItems = [...editFormData.items];
-                                  newItems[idx].material_name = e.target.value;
+                                  newItems[idx].item_code = e.target.value;
+                                  newItems[idx].material_name = selected?.material_name || e.target.value;
+                                  newItems[idx].material_type = selected?.material_type || newItems[idx].material_type;
+                                  if (selected?.unit) {
+                                    newItems[idx].uom = selected.unit;
+                                  }
+                                  if (selected?.length) newItems[idx].length = selected.length;
+                                  if (selected?.width) newItems[idx].width = selected.width;
+                                  if (selected?.thickness) newItems[idx].thickness = selected.thickness;
+                                  if (selected?.diameter) newItems[idx].diameter = selected.diameter;
+                                  if (selected?.outer_diameter) newItems[idx].outer_diameter = selected.outer_diameter;
+                                  if (selected?.density) newItems[idx].density = selected.density;
+                                  if (selected?.weight_per_unit) newItems[idx].weight_per_unit = selected.weight_per_unit;
                                   setEditFormData({ ...editFormData, items: newItems });
                                 }}
-                                className="w-full p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                placeholder="Select Item"
+                                labelField="material_name"
+                                valueField="item_code"
+                                subLabelField="item_code"
+                                allowCustom={true}
                               />
                               {formatDimensions(item) && (
                                 <div className="flex flex-wrap gap-x-2 gap-y-1 mt-1 opacity-70 font-mono text-[10px] text-slate-500">
@@ -3342,21 +3405,29 @@ const Quotations = () => {
                               className="col-span-1 p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
                             <div className="col-span-2 flex flex-col items-center">
-                              <div className="text-xs  text-slate-400 mb-0.5">
-                                {Number(item.planned_qty || 0).toFixed(3)} {item.uom || 'Kg'}
-                              </div>
-                              <div className="text-xs   text-slate-600">
-                                Design Qty
+                              <input
+                                type="number"
+                                value={item.planned_qty === null || item.planned_qty === undefined ? '' : item.planned_qty}
+                                onChange={(e) => {
+                                  const newItems = [...editFormData.items];
+                                  newItems[idx].planned_qty = e.target.value === '' ? null : parseFloat(e.target.value);
+                                  setEditFormData({ ...editFormData, items: newItems });
+                                }}
+                                className="w-full p-2 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium text-slate-700"
+                                placeholder="0"
+                              />
+                              <div className="text-[9px] text-slate-400 mt-0.5">
+                                Nos
                               </div>
                             </div>
                             <div className="col-span-2 flex flex-col items-center">
                               <input
                                 type="number"
                                 placeholder="Qty"
-                                value={item.design_qty || 0}
+                                value={item.design_qty === 0 ? 0 : (item.design_qty || '')}
                                 onChange={(e) => {
                                   const newItems = [...editFormData.items];
-                                  const val = parseFloat(e.target.value) || 0;
+                                  const val = e.target.value === '' ? '' : (parseFloat(e.target.value) || 0);
                                   newItems[idx].design_qty = val;
                                   newItems[idx].quantity = val;
                                   setEditFormData({ ...editFormData, items: newItems });
@@ -3381,16 +3452,32 @@ const Quotations = () => {
                               className="col-span-2 p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
                             <div className="col-span-3 flex flex-col">
-                              <input
-                                type="text"
-                                placeholder="Material Name"
-                                value={item.material_name}
+                              <SearchableSelect
+                                options={stockItems}
+                                value={item.item_code || item.material_name || ''}
                                 onChange={(e) => {
+                                  const selected = stockItems.find(i => i.item_code === e.target.value);
                                   const newItems = [...editFormData.items];
-                                  newItems[idx].material_name = e.target.value;
+                                  newItems[idx].item_code = e.target.value;
+                                  newItems[idx].material_name = selected?.material_name || e.target.value;
+                                  newItems[idx].material_type = selected?.material_type || newItems[idx].material_type;
+                                  if (selected?.unit) {
+                                    newItems[idx].uom = selected.unit;
+                                  }
+                                  if (selected?.length) newItems[idx].length = selected.length;
+                                  if (selected?.width) newItems[idx].width = selected.width;
+                                  if (selected?.thickness) newItems[idx].thickness = selected.thickness;
+                                  if (selected?.diameter) newItems[idx].diameter = selected.diameter;
+                                  if (selected?.outer_diameter) newItems[idx].outer_diameter = selected.outer_diameter;
+                                  if (selected?.density) newItems[idx].density = selected.density;
+                                  if (selected?.weight_per_unit) newItems[idx].weight_per_unit = selected.weight_per_unit;
                                   setEditFormData({ ...editFormData, items: newItems });
                                 }}
-                                className="w-full p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                placeholder="Select Item"
+                                labelField="material_name"
+                                valueField="item_code"
+                                subLabelField="item_code"
+                                allowCustom={true}
                               />
                               {formatDimensions(item) && (
                                 <div className="flex flex-wrap gap-x-2 gap-y-1 mt-1 opacity-70 font-mono text-[10px] text-slate-500">
@@ -3410,27 +3497,38 @@ const Quotations = () => {
                               className="col-span-1 p-2 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
                             <div className="col-span-1 flex flex-col items-center">
-                              <div className="text-xs  text-slate-400">
-                                {Number(item.planned_qty || 0).toFixed(3)}
-                              </div>
-                              <div className="text-[9px] text-slate-400 ">
-                                {item.uom || 'Kg'}
+                              <input
+                                type="number"
+                                value={item.planned_qty === null || item.planned_qty === undefined ? '' : item.planned_qty}
+                                onChange={(e) => {
+                                  const newItems = [...editFormData.items];
+                                  newItems[idx].planned_qty = e.target.value === '' ? null : parseFloat(e.target.value);
+                                  setEditFormData({ ...editFormData, items: newItems });
+                                }}
+                                className="w-full p-2 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium text-slate-700"
+                                placeholder="0"
+                              />
+                              <div className="text-[9px] text-slate-400 mt-0.5">
+                                Nos
                               </div>
                             </div>
                             <div className="col-span-1 flex flex-col items-center">
                               <input
                                 type="number"
                                 placeholder="Qty"
-                                value={item.quantity || item.design_qty || 0}
+                                value={item.quantity === 0 ? 0 : (item.quantity || item.design_qty || '')}
                                 onChange={(e) => {
                                   const newItems = [...editFormData.items];
-                                  const val = parseFloat(e.target.value) || 0;
+                                  const val = e.target.value === '' ? '' : (parseFloat(e.target.value) || 0);
                                   newItems[idx].design_qty = val;
                                   newItems[idx].quantity = val;
                                   setEditFormData({ ...editFormData, items: newItems });
                                 }}
                                 className="w-full p-2 border border-slate-200 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
                               />
+                              <div className="text-[9px] text-slate-400 mt-0.5">
+                                {item.uom || 'Kg'}
+                              </div>
                             </div>
                             <input
                               type="number"
@@ -3732,7 +3830,11 @@ const Quotations = () => {
                         </div>
                       </td>
                       <td className="p-2 border text-center text-slate-400">
-                        {Number(firstItem?.planned_qty || firstItem?.design_qty || 0).toFixed(3)}
+                        {firstItem?.planned_qty !== null && firstItem?.planned_qty !== undefined
+                          ? (['NOS', 'PCS', 'SETS', 'NO', 'PC'].includes((firstItem?.uom || '').toUpperCase())
+                              ? Number(firstItem.planned_qty).toFixed(0)
+                              : Number(firstItem.planned_qty).toFixed(3))
+                          : '-'}
                       </td>
                       <td className="p-2 border text-center text-slate-800 ">
                         {Number(firstItem?.quantity || 0).toFixed(3)}

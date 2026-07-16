@@ -52,6 +52,8 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
   const [showAddItem, setShowAddItem] = useState(false);
   const [selectedNewItem, setSelectedNewItem] = useState(null);
   const [newItemQty, setNewItemQty] = useState(1);
+  const [newItemDesignQty, setNewItemDesignQty] = useState('');
+  const [newItemRemarks, setNewItemRemarks] = useState('');
   const [expandedRows, setExpandedRows] = useState(new Set());
 
   const [newPlan, setNewPlan] = useState({
@@ -460,6 +462,8 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
       item_code: itemCode,
       material_name: itemName,
       quantity: Number(newItemQty),
+      design_qty: newItemDesignQty !== '' ? parseFloat(newItemDesignQty) : null,
+      remarks: newItemRemarks || null,
       uom: selectedNewItem.unit || selectedNewItem.uom || 'Nos',
       inventory: selectedNewItem.current_balance || 0,
       is_fulfilled: false,
@@ -478,6 +482,8 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
     setShowAddItem(false);
     setSelectedNewItem(null);
     setNewItemQty(1);
+    setNewItemDesignQty('');
+    setNewItemRemarks('');
     successToast('Item added to material request');
   };
 
@@ -2355,6 +2361,23 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
       )
     },
     {
+      label: 'Design Qty',
+      key: 'design_qty',
+      className: 'text-center',
+      render: (val, row) => (
+        <div className="flex flex-col items-center">
+          <span className="text-xs text-slate-800">
+            {row.is_manual 
+              ? (val !== null && val !== undefined ? Number(val).toFixed(0) : '-') 
+              : Number(val || 0).toFixed(0)}
+          </span>
+          {!(row.is_manual && (val === null || val === undefined)) && (
+            <span className="text-[9px] text-slate-400 uppercase">Nos</span>
+          )}
+        </div>
+      )
+    },
+    {
       label: 'Req Qty',
       key: 'quantity',
       className: 'text-center',
@@ -2701,62 +2724,90 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
           {/* Items to Request Section */}
           <div className="flex-1 flex flex-col min-h-0">
             {showAddItem && (
-              <div className="p-3 bg-indigo-50/30 border border-indigo-100 rounded mb-2 grid grid-cols-12 gap-3 items-end animate-in slide-in-from-top-2">
-                <div className="col-span-6">
-                  <label className="text-[10px] text-slate-500 mb-1 block uppercase font-semibold">Select Material</label>
-                  <SearchableSelect
-                    options={allStockItems.map(item => ({
-                      id: item.id,
-                      label: `${item.material_name} (${item.item_code})`,
-                      value: item.item_code
-                    }))}
-                    value={selectedNewItem?.item_code}
-                    onChange={(e) => {
-                      const code = e.target.value;
-                      const item = allStockItems.find(i => i.item_code === code);
-                      setSelectedNewItem(item || null);
-                    }}
-                    allowCustom={false}
-                    placeholder="Search material..."
-                    className="text-xs h-8 bg-white"
-                  />
-                </div>
-                <div className="col-span-3">
-                  <label className="text-[10px] text-slate-500 mb-1 block uppercase font-semibold">Quantity</label>
-                  <input
-                    type="number"
-                    value={newItemQty}
-                    onChange={(e) => setNewItemQty(e.target.value)}
-                    placeholder="Qty"
-                    className="w-full h-8 px-2 bg-white border border-slate-200 rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500"
-                    min="0"
-                    step="0.01"
-                  />
-                </div>
-                <div className="col-span-3 flex gap-2">
-                  <button
-                    onClick={handleAddNewMrItem}
-                    disabled={!selectedNewItem || !newItemQty}
-                    className="flex-1 h-8 bg-indigo-600 text-white rounded text-xs  hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400 transition-all shadow-sm"
-                  >
-                    Add to Request
-                  </button>
-                  <button
-                    onClick={() => setShowAddItem(false)}
-                    className="h-8 w-8 flex items-center justify-center bg-white border border-slate-200 rounded text-slate-400 hover:text-rose-500 hover:border-rose-200 transition-all shadow-sm"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-                {selectedNewItem && (
-                  <div className="col-span-12 mt-1 flex gap-3 items-center bg-white/50 p-1.5 rounded border border-indigo-50/50">
-                    <span className="text-[10px] text-indigo-600  uppercase">{selectedNewItem.material_name}</span>
-                    <div className="h-3 w-px bg-slate-200" />
-                    <span className="text-[10px] text-slate-500">
-                      Current Stock: <span className="font-semibold text-slate-700">{Number(selectedNewItem.current_balance || 0).toFixed(2)}</span> {selectedNewItem.uom}
-                    </span>
+              <div className="p-3 bg-indigo-50/30 border border-indigo-100 rounded mb-2 space-y-3 animate-in slide-in-from-top-2">
+                <div className="grid grid-cols-12 gap-3 items-end">
+                  <div className="col-span-6">
+                    <label className="text-[10px] text-slate-500 mb-1 block uppercase font-semibold">Select Material <span className="text-rose-500">*</span></label>
+                    <SearchableSelect
+                      options={allStockItems.map(item => ({
+                        id: item.id,
+                        label: `${item.material_name} (${item.item_code})`,
+                        value: item.item_code
+                      }))}
+                      value={selectedNewItem?.item_code}
+                      onChange={(e) => {
+                        const code = e.target.value;
+                        const item = allStockItems.find(i => i.item_code === code);
+                        setSelectedNewItem(item || null);
+                      }}
+                      allowCustom={false}
+                      placeholder="Search material..."
+                      className="text-xs h-8 bg-white"
+                    />
                   </div>
-                )}
+                  <div className="col-span-2">
+                    <label className="text-[10px] text-slate-500 mb-1 block uppercase font-semibold">Unit</label>
+                    <input
+                      type="text"
+                      value={selectedNewItem?.unit || selectedNewItem?.uom || ''}
+                      readOnly
+                      placeholder="Unit"
+                      className="w-full h-8 px-2 bg-slate-100 border border-slate-200 rounded text-xs text-slate-500 outline-none"
+                    />
+                  </div>
+                  <div className="col-span-4">
+                    <label className="text-[10px] text-slate-500 mb-1 block uppercase font-semibold">Required Qty <span className="text-rose-500">*</span></label>
+                    <input
+                      type="number"
+                      value={newItemQty}
+                      onChange={(e) => setNewItemQty(e.target.value)}
+                      placeholder="Qty"
+                      className="w-full h-8 px-2 bg-white border border-slate-200 rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500"
+                      min="0.001"
+                      step="any"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-12 gap-3 items-end">
+                  <div className="col-span-4">
+                    <label className="text-[10px] text-slate-500 mb-1 block uppercase font-semibold">Design Qty (Optional)</label>
+                    <input
+                      type="number"
+                      value={newItemDesignQty}
+                      onChange={(e) => setNewItemDesignQty(e.target.value)}
+                      placeholder="Enter design qty or leave empty"
+                      className="w-full h-8 px-2 bg-white border border-slate-200 rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500"
+                      min="0"
+                      step="any"
+                    />
+                  </div>
+                  <div className="col-span-5">
+                    <label className="text-[10px] text-slate-500 mb-1 block uppercase font-semibold">Remarks (Optional)</label>
+                    <input
+                      type="text"
+                      value={newItemRemarks}
+                      onChange={(e) => setNewItemRemarks(e.target.value)}
+                      placeholder="Remarks"
+                      className="w-full h-8 px-2 bg-white border border-slate-200 rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500"
+                    />
+                  </div>
+                  <div className="col-span-3 flex gap-2">
+                    <button
+                      onClick={handleAddNewMrItem}
+                      disabled={!selectedNewItem || !newItemQty}
+                      className="flex-1 h-8 bg-indigo-600 text-white rounded text-xs  hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400 transition-all shadow-sm"
+                    >
+                      Add to Request
+                    </button>
+                    <button
+                      onClick={() => setShowAddItem(false)}
+                      className="h-8 w-8 flex items-center justify-center bg-white border border-slate-200 rounded text-slate-400 hover:text-rose-500 hover:border-rose-200 transition-all shadow-sm"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
 

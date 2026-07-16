@@ -2255,7 +2255,7 @@ const PurchaseOrders = () => {
                     <span className="text-xs  text-emerald-500 bg-emerald-50 px-2 py-0.5 rounded">Default 18% GST Applied</span>
                   </div>
                 </div>
-                <div className="bg-white border border-slate-200 rounded overflow-hidden ">
+                <div className="bg-white border border-slate-200 rounded overflow-visible ">
                   <table className="w-full text-left border-collapse">
                     <thead className="bg-slate-50/50">
                       <tr>

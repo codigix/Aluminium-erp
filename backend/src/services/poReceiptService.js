@@ -207,9 +207,19 @@ const getPOReceiptById = async (receiptId) => {
   const receipt = rows[0];
 
   const [items] = await pool.query(
-    `SELECT pri.*, poi.item_code, poi.description, poi.material_name, poi.material_type, poi.unit, 
-            poi.drawing_no, poi.cgst_percent, poi.sgst_percent,
-            poi.design_qty, poi.planned_qty, poi.quantity as expected_quantity,
+    `SELECT pri.*,
+            pri.id as id,
+            pri.po_item_id as po_item_id,
+            COALESCE(poi.item_code, pri.item_code) as item_code,
+            COALESCE(poi.description, pri.material_name) as description,
+            COALESCE(poi.material_name, pri.material_name) as material_name,
+            poi.material_type,
+            COALESCE(poi.unit, pri.unit) as unit,
+            COALESCE(poi.drawing_no, pri.drawing_no) as drawing_no,
+            poi.cgst_percent, poi.sgst_percent,
+            poi.design_qty, poi.planned_qty,
+            poi.quantity as expected_quantity,
+            COALESCE(poi.quantity, pri.received_quantity, 0) as required_qty,
             poi.unit_rate, poi.cgst_amount, poi.sgst_amount, poi.total_amount as po_item_total,
             COALESCE(NULLIF(pri.length, 0), poi.length, 0) as length,
             COALESCE(NULLIF(pri.width, 0), poi.width, 0) as width,
@@ -290,17 +300,25 @@ const createPOReceipt = async (poId, receiptDate, receivedQuantity, notes, items
       // Pre-fetch all warehouses to map code/name to ID
       const [allWarehouses] = await connection.query('SELECT id, warehouse_code, warehouse_name FROM warehouses');
       
+      // Ensure grn_items.po_item_id is nullable so custom items (no PO link) can be inserted
+      try {
+        await connection.query(`ALTER TABLE grn_items MODIFY COLUMN po_item_id INT NULL`);
+      } catch (e) { /* already nullable - continue */ }
+
       for (const item of filteredItems) {
         const receivedQty = item.received_qty || item.receivedQty || 0;
+        const poItemId = item.id != null ? item.id : null;
+
         await connection.execute(
           `INSERT INTO po_receipt_items (
             receipt_id, po_item_id, received_quantity, 
-            length, width, thickness, diameter, outer_diameter, density, weight_per_unit
+            length, width, thickness, diameter, outer_diameter, density, weight_per_unit,
+            item_code, material_name, drawing_no, unit
           )
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             receiptId, 
-            item.id, 
+            poItemId, 
             receivedQty,
             item.length || 0,
             item.width || 0,
@@ -308,7 +326,11 @@ const createPOReceipt = async (poId, receiptDate, receivedQuantity, notes, items
             item.diameter || 0,
             item.outer_diameter || 0,
             item.density || 0,
-            item.weight_per_unit || 0
+            item.weight_per_unit || 0,
+            item.item_code || null,
+            item.material_name || null,
+            item.drawing_no || null,
+            item.unit || null
           ]
         );
 
@@ -328,7 +350,7 @@ const createPOReceipt = async (poId, receiptDate, receivedQuantity, notes, items
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             grnId, 
-            item.id, 
+            poItemId, 
             item.quantity || item.required_qty || item.design_qty || 0, 
             receivedQty, 
             receivedQty, 
@@ -378,7 +400,7 @@ const createPOReceipt = async (poId, receiptDate, receivedQuantity, notes, items
   }
 };
 
-const updatePOReceipt = async (receiptId, receiptDate, receivedQuantity, notes, status, pdfPath) => {
+const updatePOReceipt = async (receiptId, receiptDate, receivedQuantity, notes, status, pdfPath, items) => {
   await getPOReceiptById(receiptId);
 
   const updateFields = [];
@@ -416,16 +438,63 @@ const updatePOReceipt = async (receiptId, receiptDate, receivedQuantity, notes, 
     updateValues.push(status);
   }
 
-  if (updateFields.length === 0) {
-    return { id: receiptId };
+  if (updateFields.length > 0) {
+    updateValues.push(receiptId);
+    await pool.execute(
+      `UPDATE po_receipts SET ${updateFields.join(', ')} WHERE id = ?`,
+      updateValues
+    );
   }
 
-  updateValues.push(receiptId);
-
-  await pool.execute(
-    `UPDATE po_receipts SET ${updateFields.join(', ')} WHERE id = ?`,
-    updateValues
-  );
+  // Update individual item rows if provided
+  if (Array.isArray(items) && items.length > 0) {
+    for (const item of items) {
+      if (!item.id) continue; // must have a po_receipt_items id
+      await pool.execute(
+        `UPDATE po_receipt_items SET
+          received_quantity = ?,
+          drawing_no = ?,
+          item_code = ?,
+          material_name = ?,
+          unit = ?,
+          length = ?,
+          width = ?,
+          thickness = ?,
+          diameter = ?,
+          outer_diameter = ?
+         WHERE id = ?`,
+        [
+          item.received_quantity ?? item.received_qty ?? 0,
+          item.drawing_no || null,
+          item.item_code || null,
+          item.material_name || null,
+          item.unit || null,
+          item.length || 0,
+          item.width || 0,
+          item.thickness || 0,
+          item.diameter || 0,
+          item.outer_diameter || 0,
+          item.id
+        ]
+      );
+      // Also update purchase_order_items design_qty and quantity (required) if this item has a po_item_id
+      if (item.po_item_id) {
+        const dQty = item.planned_qty ?? item.design_qty ?? null;
+        const rQty = item.required_qty ?? null;
+        if (dQty !== null || rQty !== null) {
+          const poItemFields = [];
+          const poItemValues = [];
+          if (dQty !== null) { poItemFields.push('planned_qty = ?, design_qty = ?'); poItemValues.push(dQty, dQty); }
+          if (rQty !== null) { poItemFields.push('quantity = ?'); poItemValues.push(rQty); }
+          poItemValues.push(item.po_item_id);
+          await pool.execute(
+            `UPDATE purchase_order_items SET ${poItemFields.join(', ')} WHERE id = ?`,
+            poItemValues
+          );
+        }
+      }
+    }
+  }
 
   return { id: receiptId };
 };

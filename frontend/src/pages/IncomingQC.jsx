@@ -1099,7 +1099,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
   ];
 
   const tabs = [
-    { id: 'incoming', label: 'Incoming QC', icon: Inbox, color: 'text-blue-600', bg: 'bg-blue-50' },
+    { id: 'incoming', label: 'Inward QC', icon: Inbox, color: 'text-blue-600', bg: 'bg-blue-50' },
     { id: 'in-process', label: 'Partially QC', icon: Search, color: 'text-emerald-600', bg: 'bg-emerald-50' },
     { id: 'final', label: 'Final QC', icon: CheckCircle2, color: 'text-indigo-600', bg: 'bg-indigo-50' },
   ];
@@ -1134,7 +1134,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
 
             <Card>
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-xs  text-slate-900">Incoming Inspection Queue</h3>
+                 <h3 className="text-xs  text-slate-900">Inward Inspection Queue</h3>
                 <button 
                   onClick={() => { fetchQCInspections(); fetchStats(); }}
                   className="p-2 text-slate-500 hover:text-indigo-600 rounded  hover:bg-slate-50 transition-all"
@@ -1205,7 +1205,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
           <div className="space-y-2">
             {finalInspections.length > 0 && (
               <Card 
-                title="Completed Incoming Inspections" 
+                title="Completed Inward Inspections" 
                 subtitle="Recent raw material and component inspection results"
               >
                 <div className="flex justify-end items-center gap-2 mb-4">

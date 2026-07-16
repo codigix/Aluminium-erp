@@ -393,7 +393,7 @@ const ensurePoReceiptItemTable = async () => {
       CREATE TABLE IF NOT EXISTS po_receipt_items (
         id INT AUTO_INCREMENT PRIMARY KEY,
         receipt_id INT NOT NULL,
-        po_item_id INT NOT NULL,
+        po_item_id INT NULL,
         received_quantity DECIMAL(12, 3) DEFAULT 0,
         length DECIMAL(12, 4) DEFAULT 0,
         width DECIMAL(12, 4) DEFAULT 0,
@@ -413,6 +413,26 @@ const ensurePoReceiptItemTable = async () => {
     for (const dim of dims) {
       if (!existing.has(dim)) {
         await connection.query(`ALTER TABLE po_receipt_items ADD COLUMN ${dim} DECIMAL(12, 4) DEFAULT 0`);
+      }
+    }
+
+    // Make po_item_id nullable for custom (non-PO-linked) items
+    try {
+      await connection.query(`ALTER TABLE po_receipt_items MODIFY COLUMN po_item_id INT NULL`);
+    } catch (e) { /* already nullable */ }
+
+    // Ensure item_code, material_name, drawing_no, unit columns exist for custom items
+    const customCols = [
+      "item_code VARCHAR(100) NULL",
+      "material_name VARCHAR(255) NULL",
+      "drawing_no VARCHAR(100) NULL",
+      "unit VARCHAR(50) NULL"
+    ];
+    const existingAfter = new Set((await connection.query("SHOW COLUMNS FROM po_receipt_items"))[0].map(c => c.Field));
+    for (const colDef of customCols) {
+      const colName = colDef.split(' ')[0];
+      if (!existingAfter.has(colName)) {
+        await connection.query(`ALTER TABLE po_receipt_items ADD COLUMN ${colDef}`);
       }
     }
     console.log('PO Receipt items table synchronized');

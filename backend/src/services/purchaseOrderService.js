@@ -757,6 +757,7 @@ const getPurchaseOrders = async (filters = {}) => {
     );
 
     // Group items by purchase_order_id, filter, and resolve drawings
+    const cache = {};
     for (const po of pos) {
       po.items = items
         .filter(item => item.purchase_order_id === po.id)
@@ -767,7 +768,11 @@ const getPurchaseOrders = async (filters = {}) => {
 
       const uniqueDwgNos = new Set();
       for (const item of po.items) {
-        const resolvedDwg = await getItemParentDrawingNumber(pool, item);
+        let resolvedDwg = null;
+        const needsResolving = !item.drawing_no || /^(RM-|OTH-|SFG-|FG-|GEN-|CAT-)/i.test(item.drawing_no) || item.drawing_no === '—';
+        if (needsResolving) {
+          resolvedDwg = await getItemParentDrawingNumber(pool, item, cache);
+        }
         item.drawing_no = resolvedDwg || item.drawing_no;
 
         if (item.drawing_no) {
@@ -884,35 +889,47 @@ const getParentDrawingNumber = async (connection, poHeader) => {
   return parentDrawingNo;
 };
 
-const getItemParentDrawingNumber = async (connection, item) => {
+const getItemParentDrawingNumber = async (connection, item, cache = {}) => {
   const conn = connection || pool;
   let parentDrawingNo = null;
 
   if (item.mr_id) {
     try {
-      const [mrRows] = await conn.query(
-        `SELECT mr.plan_id,
-                (SELECT pp.bom_no FROM production_plans pp WHERE pp.id = mr.plan_id LIMIT 1) as plan_bom_no
-         FROM material_requests mr WHERE mr.id = ?`,
-        [item.mr_id]
-      );
-      if (mrRows.length > 0) {
-        const mr = mrRows[0];
-        if (mr.plan_id) {
-          const [ppiRows] = await conn.query(
-            `SELECT COALESCE(soi.drawing_no, oi.drawing_no, ppi_dr.item_code) as drawing_no
-             FROM production_plan_items ppi_dr
-             LEFT JOIN sales_order_items soi ON ppi_dr.sales_order_item_id = soi.id
-             LEFT JOIN order_items oi ON ppi_dr.sales_order_item_id = oi.id AND ppi_dr.sales_order_id = oi.order_id
-             WHERE ppi_dr.plan_id = ?
-             LIMIT 1`,
-            [mr.plan_id]
-          );
-          if (ppiRows.length > 0 && ppiRows[0].drawing_no) {
-            parentDrawingNo = ppiRows[0].drawing_no;
+      const mrIdKey = `mr_${item.mr_id}`;
+      if (cache[mrIdKey] !== undefined) {
+        parentDrawingNo = cache[mrIdKey];
+      } else {
+        const [mrRows] = await conn.query(
+          `SELECT mr.plan_id,
+                  (SELECT pp.bom_no FROM production_plans pp WHERE pp.id = mr.plan_id LIMIT 1) as plan_bom_no
+           FROM material_requests mr WHERE mr.id = ?`,
+          [item.mr_id]
+        );
+        if (mrRows.length > 0) {
+          const mr = mrRows[0];
+          if (mr.plan_id) {
+            const planKey = `plan_${mr.plan_id}`;
+            if (cache[planKey] !== undefined) {
+              parentDrawingNo = cache[planKey];
+            } else {
+              const [ppiRows] = await conn.query(
+                `SELECT COALESCE(soi.drawing_no, oi.drawing_no, ppi_dr.item_code) as drawing_no
+                 FROM production_plan_items ppi_dr
+                 LEFT JOIN sales_order_items soi ON ppi_dr.sales_order_item_id = soi.id
+                 LEFT JOIN order_items oi ON ppi_dr.sales_order_item_id = oi.id AND ppi_dr.sales_order_id = oi.order_id
+                 WHERE ppi_dr.plan_id = ?
+                 LIMIT 1`,
+                [mr.plan_id]
+              );
+              if (ppiRows.length > 0 && ppiRows[0].drawing_no) {
+                parentDrawingNo = ppiRows[0].drawing_no;
+              }
+              cache[planKey] = parentDrawingNo;
+            }
           }
+          if (!parentDrawingNo && mr.plan_bom_no) parentDrawingNo = mr.plan_bom_no;
         }
-        if (!parentDrawingNo && mr.plan_bom_no) parentDrawingNo = mr.plan_bom_no;
+        cache[mrIdKey] = parentDrawingNo;
       }
     } catch (err) {
       console.error('[getItemParentDrawingNumber] Error resolving via MR:', err.message);
@@ -921,21 +938,27 @@ const getItemParentDrawingNumber = async (connection, item) => {
 
   if (!parentDrawingNo && item.source_po_item_id) {
     try {
-      const [srcRows] = await conn.query(
-        `SELECT mr_id, drawing_no FROM purchase_order_items WHERE id = ?`,
-        [item.source_po_item_id]
-      );
-      if (srcRows.length > 0) {
-        const srcItem = srcRows[0];
-        if (srcItem.mr_id) {
-          parentDrawingNo = await getItemParentDrawingNumber(conn, { mr_id: srcItem.mr_id });
-        }
-        if (!parentDrawingNo && srcItem.drawing_no) {
-          const isItemCodePattern = /^(RM-|OTH-|SFG-|FG-|GEN-|CAT-)/i.test(srcItem.drawing_no);
-          if (!isItemCodePattern) {
-            parentDrawingNo = srcItem.drawing_no;
+      const srcKey = `src_${item.source_po_item_id}`;
+      if (cache[srcKey] !== undefined) {
+        parentDrawingNo = cache[srcKey];
+      } else {
+        const [srcRows] = await conn.query(
+          `SELECT mr_id, drawing_no FROM purchase_order_items WHERE id = ?`,
+          [item.source_po_item_id]
+        );
+        if (srcRows.length > 0) {
+          const srcItem = srcRows[0];
+          if (srcItem.mr_id) {
+            parentDrawingNo = await getItemParentDrawingNumber(conn, { mr_id: srcItem.mr_id }, cache);
+          }
+          if (!parentDrawingNo && srcItem.drawing_no) {
+            const isItemCodePattern = /^(RM-|OTH-|SFG-|FG-|GEN-|CAT-)/i.test(srcItem.drawing_no);
+            if (!isItemCodePattern) {
+              parentDrawingNo = srcItem.drawing_no;
+            }
           }
         }
+        cache[srcKey] = parentDrawingNo;
       }
     } catch (err) {
       console.error('[getItemParentDrawingNumber] Error resolving via source PO item:', err.message);
@@ -944,21 +967,33 @@ const getItemParentDrawingNumber = async (connection, item) => {
 
   if (!parentDrawingNo && item.purchase_order_id) {
     try {
-      const [poRows] = await conn.query(
-        `SELECT sales_order_id FROM purchase_orders WHERE id = ?`,
-        [item.purchase_order_id]
-      );
-      if (poRows.length > 0) {
-        const po = poRows[0];
-        if (po.sales_order_id) {
-          const [soRows] = await conn.query(
-            `SELECT drawing_no FROM sales_order_items WHERE sales_order_id = ? LIMIT 1`,
-            [po.sales_order_id]
-          );
-          if (soRows.length > 0 && soRows[0].drawing_no) {
-            parentDrawingNo = soRows[0].drawing_no;
+      const poKey = `po_${item.purchase_order_id}`;
+      if (cache[poKey] !== undefined) {
+        parentDrawingNo = cache[poKey];
+      } else {
+        const [poRows] = await conn.query(
+          `SELECT sales_order_id FROM purchase_orders WHERE id = ?`,
+          [item.purchase_order_id]
+        );
+        if (poRows.length > 0) {
+          const po = poRows[0];
+          if (po.sales_order_id) {
+            const soKey = `so_${po.sales_order_id}`;
+            if (cache[soKey] !== undefined) {
+              parentDrawingNo = cache[soKey];
+            } else {
+              const [soRows] = await conn.query(
+                `SELECT drawing_no FROM sales_order_items WHERE sales_order_id = ? LIMIT 1`,
+                [po.sales_order_id]
+              );
+              if (soRows.length > 0 && soRows[0].drawing_no) {
+                parentDrawingNo = soRows[0].drawing_no;
+              }
+              cache[soKey] = parentDrawingNo;
+            }
           }
         }
+        cache[poKey] = parentDrawingNo;
       }
     } catch (err) {
       console.error('[getItemParentDrawingNumber] Error resolving via PO header:', err.message);

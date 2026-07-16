@@ -1245,12 +1245,12 @@ function App() {
     { label: 'Operations', moduleId: 'operation-master', icon: 'activity', indent: true, prefix: '/production' },
     { label: 'Production Report', moduleId: 'production-report', icon: 'file-bar-chart', indent: true, deptCode: 'PRODUCTION', prefix: '/production' },
 
-    { label: 'PROCUREMENT', isGroup: true, groupId: 'procurement-group' },
+    { label: 'PURCHASE', isGroup: true, groupId: 'procurement-group' },
     { label: 'Purchase RFQs', moduleId: 'quotations', icon: 'file-question', indent: true, prefix: '/procurement' },
     { label: 'Purchase Orders', moduleId: 'purchase-orders', icon: 'shopping-bag', indent: true, prefix: '/procurement' },
     { label: 'Goods Receipt (PO)', moduleId: 'po-receipts', icon: 'inbox', indent: true, prefix: '/procurement' },
     { label: 'Suppliers', moduleId: 'suppliers', icon: 'truck', indent: true, deptCode: 'PROCUREMENT', prefix: '/procurement' },
-    { label: 'Procurement Report', moduleId: 'procurement-report', icon: 'file-bar-chart', indent: true, deptCode: 'PROCUREMENT', prefix: '/procurement' },
+    { label: 'Purchase Report', moduleId: 'procurement-report', icon: 'file-bar-chart', indent: true, deptCode: 'PROCUREMENT', prefix: '/procurement' },
 
     { label: 'INVENTORY', isGroup: true, groupId: 'inventory-group' },
     { label: 'Material Requests', moduleId: 'po-material-request', icon: 'clipboard-plus', indent: true, prefix: '/inventory' },
@@ -1264,7 +1264,7 @@ function App() {
 
     { label: 'QUALITY', isGroup: true, groupId: 'quality-group' },
     { label: 'QC Inspection', moduleId: 'quality-rejection-entry', icon: 'shield-check', indent: true, prefix: '/quality' },
-    { label: 'Incoming QC', moduleId: 'incoming-qc', icon: 'log-in', indent: true, prefix: '/quality' },
+    { label: 'Inward QC', moduleId: 'incoming-qc', icon: 'log-in', indent: true, prefix: '/quality' },
     { label: 'Rejections', moduleId: 'quality-rejections', icon: 'close', indent: true, prefix: '/quality' },
     { label: 'QC Reports', moduleId: 'quality-reports', icon: 'file-bar-chart', indent: true, prefix: '/quality' },
 
@@ -1639,7 +1639,7 @@ function App() {
                     onClick={() => performLogin('procurement@company.com', 'Procurement@123')}
                     className="p-2 border border-slate-200 rounded hover:bg-white hover:border-slate-300 transition group text-left"
                   >
-                    <p className=" text-slate-700 group-hover:text-blue-600">Procurement</p>
+                    <p className=" text-slate-700 group-hover:text-blue-600">Purchase</p>
                     <p className="opacity-70">PO & Vendors</p>
                   </button>
                   <button 
@@ -1700,7 +1700,7 @@ function App() {
                 </div>
                 <div className="min-w-0">
                   <p className="text-sm  text-slate-900  leading-none">ILLUMIUM</p>
-                  <p className="text-[9px] text-rose-500   tracking-[0.15em] mt-1.5 truncate">{sidebarDept || 'ERP System'}</p>
+                  <p className="text-[9px] text-rose-500   tracking-[0.15em] mt-1.5 truncate">{sidebarDept === 'PROCUREMENT' ? 'PURCHASE' : (sidebarDept || 'ERP System')}</p>
                 </div>
               </div>
               <button

@@ -60,7 +60,12 @@ const getPOReceiptById = async (req, res, next) => {
 
 const updatePOReceipt = async (req, res, next) => {
   try {
-    const { receiptDate, receivedQuantity, notes, status, existingAttachments, existing_attachments } = req.body;
+    const { receiptDate, receivedQuantity, notes, status, existingAttachments, existing_attachments, items } = req.body;
+
+    let parsedItems = items;
+    if (typeof items === 'string') {
+      try { parsedItems = JSON.parse(items); } catch (e) { parsedItems = []; }
+    }
 
     let filePaths = [];
     if (req.files && req.files.length > 0) {
@@ -84,7 +89,8 @@ const updatePOReceipt = async (req, res, next) => {
       receivedQuantity,
       notes,
       status,
-      finalPdfPath
+      finalPdfPath,
+      parsedItems
     );
     res.json({ message: 'PO Receipt updated', data: result });
   } catch (error) {

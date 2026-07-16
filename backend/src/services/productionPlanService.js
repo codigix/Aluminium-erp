@@ -1717,7 +1717,7 @@ const createMaterialRequestFromPlan = async (planId, userId, customItems = null)
     const purchaseMap = new Map();
     const issueMap = new Map();
 
-    const addToPurposeMap = (map, itemCode, qty, uom, name, warehouse, category, rate, designQty, dimensions = {}) => {
+    const addToPurposeMap = (map, itemCode, qty, uom, name, warehouse, category, rate, designQty, dimensions = {}, itemSource = 'BOM', remarks = null) => {
       if (!itemCode && !name || qty <= 0) return;
 
       const code = (itemCode || name).trim();
@@ -1741,12 +1741,15 @@ const createMaterialRequestFromPlan = async (planId, userId, customItems = null)
       if (map.has(key)) {
         const existing = map.get(key);
         existing.quantity += Number(qty);
-        existing.design_qty = (existing.design_qty || 0) + Number(designQty || 0);
+        if (designQty !== null && designQty !== undefined) {
+          existing.design_qty = (existing.design_qty || 0) + Number(designQty);
+        }
+        existing.remarks = existing.remarks || remarks;
       } else {
         map.set(key, {
           item_code: code,
           quantity: Number(qty),
-          design_qty: Number(designQty || 0),
+          design_qty: (designQty !== null && designQty !== undefined) ? Number(designQty) : null,
           uom: uom || 'Nos',
           material_name: name || code,
           warehouse: warehouse || 'Consumables Store',
@@ -1758,7 +1761,9 @@ const createMaterialRequestFromPlan = async (planId, userId, customItems = null)
           diameter: dia,
           outer_diameter: od,
           density: Number(dimensions?.density) || 0,
-          weight_per_unit: Number(dimensions?.weight_per_unit) || 0
+          weight_per_unit: Number(dimensions?.weight_per_unit) || 0,
+          item_source: itemSource,
+          remarks: remarks
         });
       }
     };
@@ -1773,7 +1778,8 @@ const createMaterialRequestFromPlan = async (planId, userId, customItems = null)
         const name = item.material_name || item.item_name;
         const wh = item.warehouse || 'Consumables Store';
         const rate = item.unit_rate || 0;
-        const design = item.design_qty || 0;
+        const design = (item.design_qty !== undefined && item.design_qty !== null && item.design_qty !== '') ? item.design_qty : null;
+        const remarks = item.remarks || null;
         const cat = item.item_type || item.category || 'RAW_MATERIAL';
 
         const dimsObj = item.dimensions || {};
@@ -1793,7 +1799,7 @@ const createMaterialRequestFromPlan = async (planId, userId, customItems = null)
           outer_diameter: od,
           density: dens,
           weight_per_unit: wpu
-        });
+        }, item.is_manual ? 'MANUAL' : 'BOM', remarks);
       }
     } else {
       // Automatic logic for non-custom items
@@ -1844,7 +1850,7 @@ const createMaterialRequestFromPlan = async (planId, userId, customItems = null)
           outer_diameter: mat.outer_diameter,
           density: mat.density,
           weight_per_unit: mat.weight_per_unit
-        });
+        }, 'BOM');
       }
     }
 
@@ -1905,14 +1911,14 @@ const createMaterialRequestFromPlan = async (planId, userId, customItems = null)
         await connection.execute(
           `INSERT INTO material_request_items (
             mr_id, item_code, item_name, item_type, design_qty, quantity, unit_rate, uom, warehouse,
-            length, width, thickness, diameter, outer_diameter, density, weight_per_unit
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            length, width, thickness, diameter, outer_diameter, density, weight_per_unit, item_source, remarks
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             mrId,
             item.item_code,
             item.material_name,
             item.item_type,
-            item.design_qty || 0,
+            (item.design_qty !== undefined && item.design_qty !== null && item.design_qty !== '') ? Number(item.design_qty) : null,
             item.quantity,
             item.unit_rate || 0,
             item.uom,
@@ -1923,7 +1929,9 @@ const createMaterialRequestFromPlan = async (planId, userId, customItems = null)
             item.diameter || 0,
             item.outer_diameter || 0,
             item.density || 0,
-            item.weight_per_unit || 0
+            item.weight_per_unit || 0,
+            item.item_source || 'BOM',
+            item.remarks || null
           ]
         );
       }

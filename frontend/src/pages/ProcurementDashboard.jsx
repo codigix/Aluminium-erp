@@ -88,7 +88,7 @@ const ProcurementDashboard = () => {
     return (
       <div className="flex flex-col items-center justify-center p-22 space-y-2">
         <div className="w-16 h-16 border-4 border-slate-100 border-t-indigo-600 rounded animate-spin" />
-        <p className="text-xs text-slate-500   ">Initializing Procurement Hub...</p>
+        <p className="text-xs text-slate-500   ">Initializing Purchase Hub...</p>
       </div>
     );
   }
@@ -102,7 +102,7 @@ const ProcurementDashboard = () => {
           
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl  text-slate-900 ">Procurement Hub</h1>
+              <h1 className="text-xl  text-slate-900 ">Purchase Hub</h1>
               <span className="p-1 bg-indigo-50 text-indigo-600 rounded text-xs    border border-indigo-100">
                 Supply Chain
               </span>
@@ -156,7 +156,7 @@ const ProcurementDashboard = () => {
         <StatCard title="Open RFQs" count={stats.openRfqs || 0} subtitle="Awaiting vendor response" color="bg-indigo-500" icon={FileText} trend={12} />
         <StatCard title="Pending POs" count={stats.pendingPos || 0} subtitle="Ready for dispatch" color="bg-emerald-500" icon={ClipboardList} trend={5} />
         <StatCard title="Material Requests" count={stats.materialRequests || 0} subtitle="From Production" color="bg-amber-500" icon={Box} />
-        <StatCard title="Procurement Spend" count={`₹${(stats.monthlySpend || 0).toLocaleString()}`} subtitle="This Month" color="bg-blue-500" icon={IndianRupee} trend={-8} />
+        <StatCard title="Purchase Spend" count={`₹${(stats.monthlySpend || 0).toLocaleString()}`} subtitle="This Month" color="bg-blue-500" icon={IndianRupee} trend={-8} />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
@@ -166,7 +166,7 @@ const ProcurementDashboard = () => {
             <div>
               <h3 className="text-md  text-slate-900  flex items-center gap-2">
                 <TrendingUp className="w-3 h-3 text-indigo-600" />
-                Procurement Analytics
+                Purchase Analytics
               </h3>
               <p className="text-xs text-slate-500   mt-1 ">DAILY SPENDING TREND (LAST 5 DAYS)</p>
             </div>

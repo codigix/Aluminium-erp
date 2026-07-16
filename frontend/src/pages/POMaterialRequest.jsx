@@ -3,6 +3,7 @@ import { Card, DataTable, StatusBadge, Modal, SearchableSelect } from '../compon
 import Swal from 'sweetalert2';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { successToast, errorToast } from '../utils/toast';
+import { Plus } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -94,6 +95,16 @@ const POMaterialRequest = () => {
     quantity: 1,
     uom: 'pcs'
   });
+
+  const [isAddingViewItem, setIsAddingViewItem] = useState(false);
+  const [viewItemForm, setViewItemForm] = useState({
+    item_code: '',
+    quantity: '',
+    design_qty: '',
+    remarks: '',
+    uom: 'pcs'
+  });
+
 
   useEffect(() => {
     const storedUser = localStorage.getItem('authUser');
@@ -352,6 +363,83 @@ const POMaterialRequest = () => {
     } catch (error) {
       console.error('Error:', error);
       errorToast("Network error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSaveViewItem = async () => {
+    if (!viewItemForm.item_code || !viewItemForm.quantity) {
+      errorToast("Please select an item and enter quantity");
+      return;
+    }
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/material-requests/${selectedRequest.id}/items`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          item_code: viewItemForm.item_code,
+          quantity: parseFloat(viewItemForm.quantity),
+          design_qty: viewItemForm.design_qty !== '' ? parseFloat(viewItemForm.design_qty) : null,
+          remarks: viewItemForm.remarks || null
+        })
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.message || 'Failed to add item');
+      }
+
+      successToast("Item added successfully");
+      setIsAddingViewItem(false);
+      setViewItemForm({ item_code: '', quantity: '', design_qty: '', remarks: '', uom: 'pcs' });
+      await handleViewRequest(selectedRequest.id);
+      fetchRequests();
+    } catch (error) {
+      errorToast(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteItem = async (itemId) => {
+    try {
+      const result = await Swal.fire({
+        title: 'Delete Item?',
+        text: 'Are you sure you want to remove this item from the material request?',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#ef4444',
+        cancelButtonColor: '#64748b',
+        confirmButtonText: 'Yes, delete it!'
+      });
+
+      if (result.isConfirmed) {
+        setLoading(true);
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE}/material-requests/${selectedRequest.id}/items/${itemId}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (response.ok) {
+          successToast("Item deleted successfully");
+          await handleViewRequest(selectedRequest.id);
+          fetchRequests();
+        } else {
+          const err = await response.json();
+          throw new Error(err.message || 'Failed to delete item');
+        }
+      }
+    } catch (error) {
+      errorToast(error.message || 'Failed to delete item');
     } finally {
       setLoading(false);
     }
@@ -1161,7 +1249,7 @@ const POMaterialRequest = () => {
 
           <div className="flex gap-8">
             {/* Left Side - Line Items */}
-            <div className="flex-1 bg-white rounded border border-slate-100  overflow-hidden flex flex-col">
+            <div className="flex-1 bg-white rounded border border-slate-100  overflow-visible flex flex-col">
               <div className="p-5 border-b border-slate-50 bg-white flex justify-between items-center">
                 <div className="flex items-center gap-2">
                   <div className="w-5 h-5 rounded  bg-slate-900 flex items-center justify-center">
@@ -1169,25 +1257,116 @@ const POMaterialRequest = () => {
                   </div>
                   <h4 className="text-xs  text-slate-900">Line Items</h4>
                 </div>
-                <button 
-                  onClick={() => fulfillmentWarehouse && handleWarehouseChange(fulfillmentWarehouse)}
-                  className="p-2 .5 bg-indigo-50 text-indigo-600 rounded text-xs   flex items-center gap-2  hover:bg-indigo-100 transition-colors"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                  Refresh Stock
-                </button>
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => setIsAddingViewItem(!isAddingViewItem)}
+                    className="p-2 bg-emerald-50 text-emerald-600 rounded text-xs flex items-center gap-2 hover:bg-emerald-100 transition-colors"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    {isAddingViewItem ? 'Close Form' : 'Add Item'}
+                  </button>
+                  <button 
+                    onClick={() => fulfillmentWarehouse && handleWarehouseChange(fulfillmentWarehouse)}
+                    className="p-2 bg-indigo-50 text-indigo-600 rounded text-xs flex items-center gap-2 hover:bg-indigo-100 transition-colors"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                    Refresh Stock
+                  </button>
+                </div>
               </div>
+
+              {isAddingViewItem && (
+                <div className="p-4 bg-slate-50 border-b border-slate-100 space-y-4">
+                  <div className="grid grid-cols-12 gap-3 items-end">
+                    <div className="col-span-6">
+                      <label className="block text-[10px] font-semibold text-slate-500 mb-1">Select Material / Item <span className="text-rose-500">*</span></label>
+                      <SearchableSelect 
+                        options={items}
+                        value={viewItemForm.item_code}
+                        onChange={(e) => {
+                          const selected = items.find(i => i.item_code === e.target.value);
+                          setViewItemForm({ 
+                            ...viewItemForm, 
+                            item_code: e.target.value,
+                            name: selected?.name || '',
+                            uom: selected?.uom || 'pcs'
+                          });
+                        }}
+                        placeholder="Select Item"
+                        labelField="name"
+                        valueField="item_code"
+                        subLabelField="material_type"
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-[10px] font-semibold text-slate-500 mb-1">Unit</label>
+                      <input 
+                        type="text"
+                        value={viewItemForm.uom || ''}
+                        readOnly
+                        className="w-full p-2 bg-slate-100 border border-slate-200 rounded text-xs text-slate-500 outline-none"
+                      />
+                    </div>
+                    <div className="col-span-4">
+                      <label className="block text-[10px] font-semibold text-slate-500 mb-1">Required Qty <span className="text-rose-500">*</span></label>
+                      <input 
+                        type="number"
+                        min="0.001"
+                        step="any"
+                        value={viewItemForm.quantity}
+                        onChange={(e) => setViewItemForm({ ...viewItemForm, quantity: e.target.value })}
+                        className="w-full p-2 bg-white border border-slate-200 rounded text-xs outline-none focus:ring-2 focus:ring-blue-100"
+                        placeholder="Required Qty"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-12 gap-3 items-end">
+                    <div className="col-span-4">
+                      <label className="block text-[10px] font-semibold text-slate-500 mb-1">Design Qty (Optional)</label>
+                      <input 
+                        type="number"
+                        min="0"
+                        step="any"
+                        value={viewItemForm.design_qty}
+                        onChange={(e) => setViewItemForm({ ...viewItemForm, design_qty: e.target.value })}
+                        className="w-full p-2 bg-white border border-slate-200 rounded text-xs outline-none focus:ring-2 focus:ring-blue-100"
+                        placeholder="Enter design qty or leave empty"
+                      />
+                    </div>
+                    <div className="col-span-6">
+                      <label className="block text-[10px] font-semibold text-slate-500 mb-1">Remarks (Optional)</label>
+                      <input 
+                        type="text"
+                        value={viewItemForm.remarks || ''}
+                        onChange={(e) => setViewItemForm({ ...viewItemForm, remarks: e.target.value })}
+                        className="w-full p-2 bg-white border border-slate-200 rounded text-xs outline-none focus:ring-2 focus:ring-blue-100"
+                        placeholder="Add manual addition remarks..."
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <button 
+                        onClick={handleSaveViewItem}
+                        className="w-full py-2 bg-emerald-600 text-white rounded text-xs font-semibold hover:bg-emerald-700 transition-colors shadow-md active:scale-95"
+                      >
+                        Save Item
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
-                                    <tr className="bg-slate-50/50 border-b border-slate-100">
+                    <tr className="bg-slate-50/50 border-b border-slate-100">
                       <th className="p-2  text-left text-xs   text-slate-400  ">Item Details</th>
                       <th className="p-2  text-left text-xs   text-slate-400  ">Drawing No</th>
                       <th className="p-2  text-center text-xs   text-slate-400  ">Design Qty</th>
                       <th className="p-2  text-center text-xs   text-slate-400  ">Required</th>
                       <th className="p-2  text-center text-xs   text-slate-400  ">Stock Level</th>
                       <th className="p-2  text-right text-xs   text-slate-400  ">Status</th>
+                      <th className="p-2  text-center text-xs   text-slate-400  ">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
@@ -1221,16 +1400,20 @@ const POMaterialRequest = () => {
                           </td>
                           <td className="px-6 py-5 text-center">
                             <div className="flex flex-col items-center">
-                              <span className="text-xs  text-slate-800">
-                                {Number(item.design_qty || 0).toFixed(3)}
+                              <span className="text-xs text-slate-800 font-medium">
+                                {item.item_source === 'MANUAL' 
+                                  ? (item.design_qty !== null && item.design_qty !== undefined ? (isWeightBased(item.fg_uom) ? Number(item.design_qty).toFixed(3) : Number(item.design_qty).toFixed(0)) : '-') 
+                                  : (isWeightBased(item.fg_uom) ? Number(item.design_qty || 0).toFixed(3) : Number(item.design_qty || 0).toFixed(0))}
                               </span>
-                              <span className="text-xs  text-slate-400 ">{item.uom}</span>
+                              {!(item.item_source === 'MANUAL' && (item.design_qty === null || item.design_qty === undefined)) && (
+                                <span className="text-xs text-slate-400">{item.fg_uom || 'Nos'}</span>
+                              )}
                             </div>
                           </td>
                           <td className="px-6 py-5 text-center">
                             <div className="flex flex-col items-center">
-                              <span className="text-xs  text-slate-800">
-                                {Number(item.quantity || 0).toFixed(3)}
+                              <span className="text-xs text-slate-800 font-medium">
+                                {isWeightBased(item.uom) ? Number(item.quantity || 0).toFixed(3) : Number(item.quantity || 0).toFixed(0)}
                               </span>
                               <span className="text-xs  text-slate-400 ">{item.uom}</span>
                             </div>
@@ -1268,6 +1451,15 @@ const POMaterialRequest = () => {
                                 {selectedRequest?.status || 'Draft'}
                               </span>
                             </div>
+                          </td>
+                          <td className="px-6 py-5 text-center">
+                            <button
+                              onClick={() => handleDeleteItem(item.id)}
+                              className="p-1.5 text-rose-600 hover:text-rose-900 rounded hover:bg-rose-50 transition-colors"
+                              title="Delete Item"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                            </button>
                           </td>
                         </tr>
                       );

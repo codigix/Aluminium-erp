@@ -10,6 +10,7 @@ router.post('/', authorize(['PURCHASE_ORDER_EDIT']), upload.any(), poReceiptCont
 router.get('/stats', authorize(['PURCHASE_ORDER_VIEW']), poReceiptController.getPOReceiptStats);
 router.get('/', authorize(['PURCHASE_ORDER_VIEW']), poReceiptController.getPOReceipts);
 router.get('/:receiptId', authorize(['PURCHASE_ORDER_VIEW']), poReceiptController.getPOReceiptById);
+router.put('/:receiptId', authorize(['PURCHASE_ORDER_EDIT']), upload.any(), poReceiptController.updatePOReceipt);
 router.patch('/:receiptId', authorize(['PURCHASE_ORDER_EDIT']), upload.any(), poReceiptController.updatePOReceipt);
 router.delete('/:receiptId', authorize(['PURCHASE_ORDER_EDIT']), poReceiptController.deletePOReceipt);
 router.get('/:receiptId/pdf', authorize(['PURCHASE_ORDER_VIEW']), poReceiptController.generatePOReceiptPdf);

@@ -1,23 +1,23 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Card, DataTable, StatusBadge, Modal, FormControl, SearchableSelect } from '../components/ui.jsx';
-import { 
-  Plus, 
-  Search, 
-  Filter, 
-  FileText, 
-  Package, 
-  RefreshCw, 
-  Eye, 
-  FileEdit, 
-  Trash2, 
-  Calendar, 
-  ChevronRight, 
-  LayoutGrid, 
-  List, 
-  CheckCircle2, 
-  User, 
-  Warehouse, 
+import {
+  Plus,
+  Search,
+  Filter,
+  FileText,
+  Package,
+  RefreshCw,
+  Eye,
+  FileEdit,
+  Trash2,
+  Calendar,
+  ChevronRight,
+  LayoutGrid,
+  List,
+  CheckCircle2,
+  User,
+  Warehouse,
   ClipboardCheck,
   X,
   ArrowLeft,
@@ -85,10 +85,14 @@ const POReceipts = () => {
   const [isHostCompanyLocked, setIsHostCompanyLocked] = useState(false);
   const [attachments, setAttachments] = useState([]);
   const [existingAttachments, setExistingAttachments] = useState([]);
+  // --- View modal inline edit state ---
+  const [isViewEditMode, setIsViewEditMode] = useState(false);
+  const [viewEditItems, setViewEditItems] = useState([]);
+  const [isSavingViewEdit, setIsSavingViewEdit] = useState(false);
 
   useEffect(() => {
     const path = location.pathname;
-    
+
     if (path === `${deptPrefix}/po-receipts/add`) {
       if (!showCreateModal) {
         const activeCompany = hostCompanies.find(c => c.status === 'ACTIVE') || hostCompanies[0];
@@ -176,18 +180,73 @@ const POReceipts = () => {
       ...prev,
       items: [
         ...prev.items,
-        { 
-          item_code: '', 
-          description: '', 
-          quantity: 0, 
-          received_qty: 0, 
-          rate: 0, 
-          amount: 0, 
+        {
+          item_code: '',
+          description: '',
+          material_name: '',
+          drawing_no: '',
+          quantity: 0,
+          received_qty: 0,
+          rate: 0,
+          amount: 0,
           warehouse: warehouses[0]?.warehouse_code || 'main',
-          unit: 'NOS'
+          unit: 'NOS',
+          is_custom: true
         }
       ]
     }));
+  };
+
+  // --- View modal inline edit helpers ---
+  const handleEnterViewEdit = () => {
+    setViewEditItems((selectedReceiptForView?.items || []).map(it => ({ ...it })));
+    setIsViewEditMode(true);
+  };
+
+  const handleCancelViewEdit = () => {
+    setIsViewEditMode(false);
+    setViewEditItems([]);
+  };
+
+  const handleViewItemChange = (idx, field, value) => {
+    setViewEditItems(prev => {
+      const next = [...prev];
+      next[idx] = { ...next[idx], [field]: value };
+      return next;
+    });
+  };
+
+  const handleSaveViewEdits = async () => {
+    if (!selectedReceiptForView) return;
+    setIsSavingViewEdit(true);
+    try {
+      const token = localStorage.getItem('authToken');
+      const payload = new FormData();
+      payload.append('items', JSON.stringify(viewEditItems));
+      const response = await fetch(`${API_BASE}/po-receipts/${selectedReceiptForView.id}`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: payload
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.message || 'Failed to save');
+      }
+      // Reload the view data
+      const refreshed = await fetch(`${API_BASE}/po-receipts/${selectedReceiptForView.id}`, {
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+      });
+      const updatedData = await refreshed.json();
+      setSelectedReceiptForView(updatedData);
+      setIsViewEditMode(false);
+      setViewEditItems([]);
+      successToast('GRN items updated successfully');
+      fetchReceipts();
+    } catch (error) {
+      errorToast(error.message || 'Failed to save changes');
+    } finally {
+      setIsSavingViewEdit(false);
+    }
   };
 
   const handleRemoveItem = (index) => {
@@ -205,7 +264,7 @@ const POReceipts = () => {
   const handleItemChange = (index, field, value) => {
     const newItems = [...formData.items];
     newItems[index][field] = value;
-    
+
     if (field === 'received_qty' || field === 'rate') {
       const qty = parseFloat(newItems[index].received_qty) || 0;
       const rate = parseFloat(newItems[index].rate) || 0;
@@ -214,7 +273,7 @@ const POReceipts = () => {
 
     const totalQty = newItems.reduce((sum, it) => sum + (parseFloat(it.received_qty) || 0), 0);
     const totalVal = newItems.reduce((sum, it) => sum + (parseFloat(it.amount) || 0), 0);
-    
+
     setFormData({
       ...formData,
       items: newItems,
@@ -232,7 +291,13 @@ const POReceipts = () => {
 
   const fetchStockItems = async () => {
     try {
-      const response = await fetch(`${API_BASE}/inventory/items`);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/items?includeAll=true`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
       if (response.ok) {
         const data = await response.json();
         const filteredData = (Array.isArray(data) ? data : []).filter(item => {
@@ -425,29 +490,29 @@ const POReceipts = () => {
               return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
             })
             .map(item => {
-            const dQty = parseFloat(item.planned_qty || item.design_qty || 0);
-            const qQty = parseFloat(item.quantity || 0);
-            
-            return {
-              ...item,
-              item_code: item.item_code || '',
-              material_name: item.material_name || item.description,
-              description: item.description || '',
-              design_qty: dQty,
-              required_qty: qQty,
-              quantity: qQty,
-              received_qty: qQty,
-              rate: parseFloat(item.unit_rate || item.rate || 0),
-              amount: qQty * parseFloat(item.unit_rate || item.rate || 0),
-              warehouse: warehouses[0]?.warehouse_code || 'main',
-              unit: item.unit || 'NOS'
-            };
-          });
+              const dQty = parseFloat(item.planned_qty || item.design_qty || 0);
+              const qQty = parseFloat(item.quantity || 0);
+
+              return {
+                ...item,
+                item_code: item.item_code || '',
+                material_name: item.material_name || item.description,
+                description: item.description || '',
+                design_qty: dQty,
+                required_qty: qQty,
+                quantity: qQty,
+                received_qty: qQty,
+                rate: parseFloat(item.unit_rate || item.rate || 0),
+                amount: qQty * parseFloat(item.unit_rate || item.rate || 0),
+                warehouse: warehouses[0]?.warehouse_code || 'main',
+                unit: item.unit || 'NOS'
+              };
+            });
 
           const poHostCompanyId = detailedPO.host_company_id;
           const activeCompany = hostCompanies.find(c => c.status === 'ACTIVE') || hostCompanies[0];
           const resolvedHostCompanyId = poHostCompanyId || (activeCompany ? String(activeCompany.id) : '');
-          
+
           setIsHostCompanyLocked(!!poHostCompanyId);
 
           setFormData({
@@ -709,18 +774,17 @@ const POReceipts = () => {
       sortable: true,
       width: '12%',
       render: (val, row) => (
-        <span className={`text-xs px-2 py-0.5 rounded border font-medium ${
-          row.is_merged
-            ? 'text-purple-700 bg-purple-50 border-purple-200'
-            : 'text-slate-600 bg-slate-50 border-slate-100'
-        }`}>
+        <span className={`text-xs px-2 py-0.5 rounded border font-medium ${row.is_merged
+          ? 'text-purple-700 bg-purple-50 border-purple-200'
+          : 'text-slate-600 bg-slate-50 border-slate-100'
+          }`}>
           #{val || 'Direct'}
         </span>
       )
     },
-    { 
-      key: 'vendor_name', 
-      label: 'Supplier', 
+    {
+      key: 'vendor_name',
+      label: 'Supplier',
       sortable: true,
       width: '15%',
       render: (val) => (
@@ -764,18 +828,16 @@ const POReceipts = () => {
       sortable: true,
       width: '8%',
       render: (val) => (
-        <span className={`inline-flex items-center gap-1  rounded text-xs     ${
-          val === 'DRAFT' ? ' text-amber-700 border-amber-200' : 
+        <span className={`inline-flex items-center gap-1  rounded text-xs     ${val === 'DRAFT' ? ' text-amber-700 border-amber-200' :
           val === 'RECEIVED' ? ' text-emerald-700 border-emerald-200' :
-          val === 'ACKNOWLEDGED' ? ' text-blue-700 border-blue-200' :
-          ' text-slate-700 border-slate-200'
-        }`}>
-          <div className={`w-1.5 h-1.5 rounded  ${
-            val === 'DRAFT' ? 'bg-amber-500' : 
+            val === 'ACKNOWLEDGED' ? ' text-blue-700 border-blue-200' :
+              ' text-slate-700 border-slate-200'
+          }`}>
+          <div className={`w-1.5 h-1.5 rounded  ${val === 'DRAFT' ? 'bg-amber-500' :
             val === 'RECEIVED' ? 'bg-emerald-500' :
-            val === 'ACKNOWLEDGED' ? 'bg-blue-500' :
-            'bg-slate-500'
-          }`} />
+              val === 'ACKNOWLEDGED' ? 'bg-blue-500' :
+                'bg-slate-500'
+            }`} />
           <span className=" ">{val}</span>
         </span>
       )
@@ -787,22 +849,22 @@ const POReceipts = () => {
       width: '6%',
       render: (_, row) => (
         <div className="flex justify-center gap-2" onClick={(e) => e.stopPropagation()}>
-          <button 
-            onClick={() => navigate(`${deptPrefix}/po-receipts/view/${row.id}`)} 
+          <button
+            onClick={() => navigate(`${deptPrefix}/po-receipts/view/${row.id}`)}
             className="p-2 text-indigo-500 hover:bg-indigo-50 rounded  transition-all border border-indigo-50  active:scale-90"
             title="View Details"
           >
             <Eye className="w-4 h-4" />
           </button>
-          <button 
-            onClick={() => handleOpenPdfInNewTab(row)} 
+          <button
+            onClick={() => handleOpenPdfInNewTab(row)}
             className="p-2 text-emerald-500 hover:bg-emerald-50 rounded  transition-all border border-emerald-50  active:scale-90"
             title="Print GRN"
           >
             <Printer className="w-4 h-4" />
           </button>
-          <button 
-            onClick={() => handleDeleteReceipt(row.id)} 
+          <button
+            onClick={() => handleDeleteReceipt(row.id)}
             className="p-2 text-rose-500 hover:bg-rose-50 rounded  transition-all border border-rose-50  active:scale-90"
             title="Delete Receipt"
           >
@@ -879,14 +941,14 @@ const POReceipts = () => {
         </div>
         <div className="flex items-center gap-2">
           <div className="flex bg-slate-100 p-1 rounded  border border-slate-200">
-            <button 
+            <button
               onClick={() => setViewMode('kanban')}
               className={`flex items-center gap-2  p-2  rounded text-xs   transition-all ${viewMode === 'kanban' ? 'bg-white text-slate-900  border border-slate-200/50' : 'text-slate-400 hover:text-slate-600'}`}
             >
               <LayoutGrid className="w-3.5 h-3.5" />
               KANBAN
             </button>
-            <button 
+            <button
               onClick={() => setViewMode('list')}
               className={`flex items-center gap-2  p-2  rounded text-xs   transition-all ${viewMode === 'list' ? 'bg-white text-slate-900  border border-slate-200/50' : 'text-slate-400 hover:text-slate-600'}`}
             >
@@ -938,14 +1000,14 @@ const POReceipts = () => {
       {/* Tabs */}
       <div className="flex items-center my-5 gap-2">
         <div className="flex bg-white p-1 rounded  border border-slate-200 ">
-          <button 
+          <button
             onClick={() => navigate(`${deptPrefix}/po-receipts`)}
             className={`flex items-center gap-2  p-2 rounded  text-xs  transition-all ${activeTab === 'grn' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'text-slate-400 hover:text-slate-600'}`}
           >
             <FileText className="w-4 h-4" />
             GRN Request
           </button>
-          <button 
+          <button
             onClick={() => navigate(`${deptPrefix}/po-receipts/stocks`)}
             className={`flex items-center gap-2  p-2 rounded  text-xs  transition-all ${activeTab === 'stocks' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'text-slate-400 hover:text-slate-600'}`}
           >
@@ -958,8 +1020,8 @@ const POReceipts = () => {
       {/* Search & Filter Bar */}
       <div className="flex items-center my-4 gap-2">
         <div className="relative flex-1">
-          <input 
-            type="text" 
+          <input
+            type="text"
             placeholder="Search by Drawing No., Finished Good, GRN No., PO No., Project No., or Supplier..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -971,7 +1033,7 @@ const POReceipts = () => {
         <div className="flex items-center gap-2  p-2  bg-white border border-slate-200 rounded  ">
           <Filter className="w-4 h-4 text-slate-400" />
           <span className="text-xs text-slate-400   ">Status:</span>
-          <select 
+          <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
             className="text-xs  text-blue-600 outline-none bg-transparent cursor-pointer"
@@ -995,7 +1057,7 @@ const POReceipts = () => {
             columns={columns}
             data={receipts.filter(r => {
               const grnCode = `GRN-${String(r.id).padStart(4, '0')}`;
-              const matchesSearch = !searchTerm || 
+              const matchesSearch = !searchTerm ||
                 String(r.id).includes(searchTerm) ||
                 grnCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 r.po_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -1015,7 +1077,7 @@ const POReceipts = () => {
           <DataTable
             columns={stockColumns}
             data={stockBalances.filter(s => {
-              const matchesSearch = !searchTerm || 
+              const matchesSearch = !searchTerm ||
                 s.item_code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 s.material_name?.toLowerCase().includes(searchTerm.toLowerCase());
               return matchesSearch;
@@ -1031,8 +1093,8 @@ const POReceipts = () => {
       </div>
 
       {/* GRN View Details Modal */}
-      <Modal 
-        isOpen={showViewModal} 
+      <Modal
+        isOpen={showViewModal}
         onClose={() => navigate(`${deptPrefix}/po-receipts`)}
         title={selectedReceiptForView ? `GRN Details - GRN-${String(selectedReceiptForView.id).padStart(4, '0')}` : 'GRN Details'}
         size="6xl"
@@ -1043,17 +1105,15 @@ const POReceipts = () => {
             <div className="flex items-center justify-between">
               <div className="flex flex-col gap-1">
                 <span className="text-xs  text-slate-500  ">Status</span>
-                <div className={`flex items-center gap-2  p-1 rounded  border text-xs    ${
-                  selectedReceiptForView.status === 'RECEIVED' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 
+                <div className={`flex items-center gap-2  p-1 rounded  border text-xs    ${selectedReceiptForView.status === 'RECEIVED' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
                   selectedReceiptForView.status === 'DRAFT' ? 'bg-amber-50 text-amber-700 border-amber-200' :
-                  'bg-blue-50 text-blue-700 border-blue-200'
-                }`}>
+                    'bg-blue-50 text-blue-700 border-blue-200'
+                  }`}>
                   {selectedReceiptForView.status === 'RECEIVED' ? (
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
                   ) : (
-                    <div className={`w-1.5 h-1.5 rounded  ${
-                      selectedReceiptForView.status === 'DRAFT' ? 'bg-amber-500' : 'bg-blue-500'
-                    }`} />
+                    <div className={`w-1.5 h-1.5 rounded  ${selectedReceiptForView.status === 'DRAFT' ? 'bg-amber-500' : 'bg-blue-500'
+                      }`} />
                   )}
                   {selectedReceiptForView.status}
                 </div>
@@ -1118,8 +1178,8 @@ const POReceipts = () => {
               )}
 
               {(() => {
-                const receiptHostCompany = selectedReceiptForView.host_company_id 
-                  ? hostCompanies.find(h => String(h.id) === String(selectedReceiptForView.host_company_id)) 
+                const receiptHostCompany = selectedReceiptForView.host_company_id
+                  ? hostCompanies.find(h => String(h.id) === String(selectedReceiptForView.host_company_id))
                   : null;
                 return receiptHostCompany ? (
                   <div className="p-2 bg-white border border-slate-200 rounded   space-y-3 hover:border-rose-100 transition-colors">
@@ -1162,6 +1222,7 @@ const POReceipts = () => {
                 <table className="w-full text-left border-collapse">
                   <thead className="bg-slate-50/50">
                     <tr className="text-xs  text-slate-400   border-b border-slate-200">
+                      <th className="p-2 ">Drawing No</th>
                       <th className="p-2 ">Item</th>
                       <th className="p-2  text-center">Design Qty</th>
                       <th className="p-2  text-center">Required</th>
@@ -1169,38 +1230,113 @@ const POReceipts = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {(selectedReceiptForView.items || []).map((item, idx) => (
-                      <tr key={idx} className="group hover:bg-slate-50/50 transition-colors">
-                        <td className="p-2 ">
-                          <div className="text-xs  text-slate-900 ">{item.item_code}</div>
-                          <div className="text-xs text-slate-500   mt-0.5 ">{item.material_name || item.description}</div>
-                          {(item.length > 0 || item.width > 0 || item.thickness > 0 || item.diameter > 0) && (
-                            <div className="flex flex-wrap gap-x-2 gap-y-1 mt-1 opacity-70">
-                              {item.length > 0 && <span className="text-xs  text-slate-400">L: {item.length}</span>}
-                              {item.width > 0 && <span className="text-xs  text-slate-400">W: {item.width}</span>}
-                              {item.thickness > 0 && <span className="text-xs  text-slate-400">T: {item.thickness}</span>}
-                              {item.diameter > 0 && <span className="text-xs  text-slate-400">Dia: {item.diameter}</span>}
-                              {item.outer_diameter > 0 && <span className="text-xs  text-slate-400">OD: {item.outer_diameter}</span>}
+                    {(isViewEditMode ? viewEditItems : (selectedReceiptForView.items || [])).map((item, idx) => (
+                      <tr key={idx} className={`group transition-colors ${isViewEditMode ? 'bg-blue-50/20 hover:bg-blue-50/40' : 'hover:bg-slate-50/50'}`}>
+                        {/* Drawing No — editable in edit mode */}
+                        <td className="p-2 text-xs font-bold text-slate-900">
+                          {isViewEditMode ? (
+                            <input
+                              type="text"
+                              value={item.drawing_no || ''}
+                              onChange={e => handleViewItemChange(idx, 'drawing_no', e.target.value)}
+                              placeholder="Drawing No"
+                              className="w-28 px-2 py-1 border border-blue-300 rounded text-xs focus:ring-2 focus:ring-blue-400/30 outline-none bg-white"
+                            />
+                          ) : (
+                            item.drawing_no || '—'
+                          )}
+                        </td>
+
+                        {/* Item — always static / read-only */}
+                        <td className="p-2">
+                          <div className="text-xs text-slate-900 font-medium">{item.item_code}</div>
+                          <div className="text-xs text-slate-500 mt-0.5">{item.material_name || item.description}</div>
+                          {(item.length > 0 || item.width > 0 || item.thickness > 0 || item.diameter > 0 || item.outer_diameter > 0) && (
+                            <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1">
+                              {item.diameter > 0 && <span className="text-xs text-slate-400">Dia: {item.diameter}</span>}
+                              {item.outer_diameter > 0 && <span className="text-xs text-slate-400">OD: {item.outer_diameter}</span>}
+                              {item.length > 0 && <span className="text-xs text-slate-400">L: {item.length}</span>}
+                              {item.width > 0 && <span className="text-xs text-slate-400">W: {item.width}</span>}
+                              {item.thickness > 0 && <span className="text-xs text-slate-400">T: {item.thickness}</span>}
                             </div>
                           )}
                         </td>
-                        <td className="p-2  text-center  text-slate-500 text-xs">
-                          <div className="flex flex-col items-center">
-                            <span>{parseFloat(item.planned_qty || item.design_qty || 0).toFixed(3)}</span>
-                            <span className="text-xs  text-slate-400 uppercase tracking-wider">{item.unit || 'NOS'}</span>
-                          </div>
+
+                        {/* Design Qty — editable in edit mode */}
+                        <td className="p-2 text-center text-slate-500 text-xs">
+                          {isViewEditMode ? (
+                            <div className="flex flex-col items-center gap-1">
+                              <input
+                                type="number"
+                                step="0.001"
+                                min="0"
+                                value={item.planned_qty ?? item.design_qty ?? 0}
+                                onChange={e => {
+                                  handleViewItemChange(idx, 'planned_qty', e.target.value);
+                                  handleViewItemChange(idx, 'design_qty', e.target.value);
+                                }}
+                                className="w-24 px-2 py-1 border border-blue-300 rounded text-xs text-center focus:ring-2 focus:ring-blue-400/30 outline-none bg-white"
+                              />
+                              <span className="text-xs text-slate-400 uppercase tracking-wider">{item.unit || 'NOS'}</span>
+                            </div>
+                          ) : (
+                            <div className="flex flex-col items-center">
+                              <span>{parseFloat(item.planned_qty || item.design_qty || 0).toFixed(3)}</span>
+                              <span className="text-xs text-slate-400 uppercase tracking-wider">{item.unit || 'NOS'}</span>
+                            </div>
+                          )}
                         </td>
-                        <td className="p-2  text-center  text-slate-500 text-xs">
-                          <div className="flex flex-col items-center">
-                            <span className=" text-blue-600">{parseFloat(item.required_qty || item.expected_quantity || item.quantity || 0).toFixed(3)}</span>
-                            <span className="text-xs  text-slate-400 uppercase tracking-wider">{item.unit || 'NOS'}</span>
-                          </div>
+
+                        {/* Required Qty — editable in edit mode */}
+                        <td className="p-2 text-center text-slate-500 text-xs">
+                          {isViewEditMode ? (
+                            <div className="flex flex-col items-center gap-1">
+                              <input
+                                type="number"
+                                step="0.001"
+                                min="0"
+                                value={item.required_qty ?? item.expected_quantity ?? item.quantity ?? 0}
+                                onChange={e => handleViewItemChange(idx, 'required_qty', e.target.value)}
+                                className="w-24 px-2 py-1 border border-blue-300 rounded text-xs text-center focus:ring-2 focus:ring-blue-400/30 outline-none bg-white"
+                              />
+                              <span className="text-xs text-slate-400 uppercase tracking-wider">{item.unit || 'NOS'}</span>
+                            </div>
+                          ) : (
+                            <div className="flex flex-col items-center">
+                              <span className="text-blue-600">{parseFloat(item.required_qty || item.expected_quantity || item.quantity || 0).toFixed(3)}</span>
+                              <span className="text-xs text-slate-400 uppercase tracking-wider">{item.unit || 'NOS'}</span>
+                            </div>
+                          )}
                         </td>
-                        <td className="p-2  text-right  text-slate-900 text-xs">
-                          <div className="flex flex-col items-end">
-                            <span>{parseFloat(item.received_quantity || 0).toFixed(3)}</span>
-                            <span className="text-xs  text-slate-400 uppercase tracking-wider">{item.unit || 'NOS'}</span>
-                          </div>
+
+                        {/* Received Qty — editable in edit mode */}
+                        <td className="p-2 text-right text-slate-900 text-xs">
+                          {isViewEditMode ? (
+                            <div className="flex flex-col items-end gap-1">
+                              <input
+                                type="number"
+                                step="0.001"
+                                min="0"
+                                value={item.received_quantity || 0}
+                                onChange={e => handleViewItemChange(idx, 'received_quantity', e.target.value)}
+                                className="w-24 px-2 py-1 border border-blue-300 rounded text-xs text-right focus:ring-2 focus:ring-blue-400/30 outline-none bg-white"
+                              />
+                              <select
+                                value={item.unit || 'NOS'}
+                                onChange={e => handleViewItemChange(idx, 'unit', e.target.value)}
+                                className="w-24 px-1 py-1 border border-blue-200 rounded text-xs focus:ring-1 focus:ring-blue-300 outline-none bg-white"
+                              >
+                                {['NOS','KG','MTR','SET','LTR','SQM','GM','TON'].map(u => (
+                                  <option key={u} value={u}>{u}</option>
+                                ))}
+                              </select>
+                            </div>
+                          ) : (
+                            <div className="flex flex-col items-end">
+                              <span>{parseFloat(item.received_quantity || 0).toFixed(3)}</span>
+                              <span className="text-xs text-slate-400 uppercase tracking-wider">{item.unit || 'NOS'}</span>
+                            </div>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -1246,16 +1382,45 @@ const POReceipts = () => {
 
             {/* Footer Actions */}
             <div className="flex items-center justify-between pt-6 border-t border-slate-100">
-              <button 
-                onClick={() => handleOpenPdfInNewTab(selectedReceiptForView)}
-                className="flex items-center gap-2  p-2 bg-emerald-600 text-white rounded  text-xs  hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 active:scale-95"
-              >
-                <Printer className="w-4 h-4" />
-                PRINT GRN
-              </button>
-              <button 
-                onClick={() => navigate(`${deptPrefix}/po-receipts`)}
-                className="px-8 py-2.5 bg-emerald-500 text-white rounded  text-xs  hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-100 active:scale-95"
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleOpenPdfInNewTab(selectedReceiptForView)}
+                  className="flex items-center gap-2 p-2 bg-emerald-600 text-white rounded text-xs hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 active:scale-95"
+                >
+                  <Printer className="w-4 h-4" />
+                  PRINT GRN
+                </button>
+                {!isViewEditMode ? (
+                  <button
+                    onClick={handleEnterViewEdit}
+                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95"
+                  >
+                    <FileEdit className="w-4 h-4" />
+                    Edit Items
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      onClick={handleSaveViewEdits}
+                      disabled={isSavingViewEdit}
+                      className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 active:scale-95 disabled:opacity-60"
+                    >
+                      {isSavingViewEdit ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                      {isSavingViewEdit ? 'Saving…' : 'Save Changes'}
+                    </button>
+                    <button
+                      onClick={handleCancelViewEdit}
+                      className="flex items-center gap-2 px-4 py-2 bg-slate-200 text-slate-700 rounded text-xs hover:bg-slate-300 transition-all active:scale-95"
+                    >
+                      <X className="w-4 h-4" />
+                      Cancel
+                    </button>
+                  </>
+                )}
+              </div>
+              <button
+                onClick={() => { setIsViewEditMode(false); setViewEditItems([]); navigate(`${deptPrefix}/po-receipts`); }}
+                className="px-8 py-2.5 bg-emerald-500 text-white rounded text-xs hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-100 active:scale-95"
               >
                 Close
               </button>
@@ -1265,9 +1430,9 @@ const POReceipts = () => {
       </Modal>
 
       {/* Modal logic remains same but with updated styling if needed */}
-      <Modal 
-        isOpen={showCreateModal} 
-        onClose={() => navigate(`${deptPrefix}/po-receipts`)} 
+      <Modal
+        isOpen={showCreateModal}
+        onClose={() => navigate(`${deptPrefix}/po-receipts`)}
         title="Create GRN Request"
         size="6xl"
       >
@@ -1285,7 +1450,7 @@ const POReceipts = () => {
                     <p className="text-[8px] text-slate-400   er">Link source and set date</p>
                   </div>
                 </div>
-                
+
                 <FormControl label="GRN Number">
                   <input
                     type="text"
@@ -1312,7 +1477,7 @@ const POReceipts = () => {
                   <input
                     type="date"
                     value={formData.receiptDate}
-                    onChange={(e) => setFormData({...formData, receiptDate: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, receiptDate: e.target.value })}
                     className="w-full p-2 bg-white border border-slate-200 rounded text-xs  text-slate-900 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all"
                     required
                   />
@@ -1329,14 +1494,14 @@ const POReceipts = () => {
                     <p className="text-[8px] text-slate-400">Auto-fetched drawing context</p>
                   </div>
                 </div>
-                
+
                 <div className="p-2.5 bg-slate-50 rounded border border-slate-100 space-y-3">
                   {formData.poId ? (() => {
                     const poDetails = purchaseOrders.find(po => String(po.id) === String(formData.poId));
                     const orderedQty = formData.items.reduce((sum, item) => sum + parseFloat(item.quantity || 0), 0);
                     const receivedQty = formData.items.reduce((sum, item) => sum + parseFloat(item.received_qty || 0), 0);
                     const pendingQty = Math.max(0, orderedQty - receivedQty);
-                    
+
                     return (
                       <div className="space-y-2 text-xs animate-in fade-in duration-300">
                         <div>
@@ -1431,11 +1596,10 @@ const POReceipts = () => {
                         </div>
                       )}
                       <span className="text-[10px] font-bold text-slate-800 truncate w-full">{selectedHostCompany.company_name}</span>
-                      <span className={`text-[8px] mt-1 px-2 py-0.5 rounded-full font-semibold border ${
-                        selectedHostCompany.status === 'ACTIVE'
-                          ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
-                          : 'bg-slate-100 text-slate-500 border-slate-200'
-                      }`}>
+                      <span className={`text-[8px] mt-1 px-2 py-0.5 rounded-full font-semibold border ${selectedHostCompany.status === 'ACTIVE'
+                        ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                        : 'bg-slate-100 text-slate-500 border-slate-200'
+                        }`}>
                         {selectedHostCompany.status === 'ACTIVE' ? 'Active Global Billing' : 'Inactive'}
                       </span>
                     </div>
@@ -1470,7 +1634,8 @@ const POReceipts = () => {
                 <table className="w-full text-left">
                   <thead className="bg-slate-50/80">
                     <tr className="text-xs text-slate-500 border-b border-slate-200">
-                      <th className="p-2 pl-4">Item ID</th>
+                      <th className="p-2 pl-4">Drawing No</th>
+                      <th className="p-2">Item ID</th>
                       <th className="p-2">Material Name & Dimensions</th>
                       <th className="p-2 text-center w-24">Ordered Qty</th>
                       <th className="p-2 text-center w-24">Receiving Qty</th>
@@ -1482,50 +1647,62 @@ const POReceipts = () => {
                   <tbody className="divide-y divide-slate-50">
                     {formData.items.map((item, idx) => (
                       <tr key={idx} className="group hover:bg-slate-50/30 transition-all">
-                        <td className="p-2 pl-4">
-                          <div className="flex flex-col">
-                            {item.poId || formData.poId ? (
-                              <div className="flex flex-col">
-                                <span className="text-slate-900 text-xs font-semibold">{item.item_code || '—'}</span>
-                                {item.description && (
-                                  <span className="text-[10px] text-slate-400 mt-0.5 leading-normal max-w-[200px] break-words">
-                                    {item.description}
-                                  </span>
-                                )}
-                              </div>
-                            ) : (
-                              <select 
-                                value={item.item_code || ''}
-                                onChange={(e) => {
-                                  const selectedItem = stockItems.find(it => it.item_code === e.target.value);
-                                  handleItemChange(idx, 'item_code', e.target.value);
-                                  if (selectedItem) {
-                                    handleItemChange(idx, 'material_name', selectedItem.material_name);
-                                    handleItemChange(idx, 'description', selectedItem.description);
-                                    handleItemChange(idx, 'unit', selectedItem.unit_of_measure);
-                                    handleItemChange(idx, 'rate', selectedItem.valuation_rate || 0);
-                                  }
-                                }}
-                                className="bg-transparent text-slate-900 text-xs w-full outline-none focus:text-blue-600 transition-colors appearance-none cursor-pointer font-semibold"
-                              >
-                                <option value="">Select Item.</option>
-                                {stockItems.map(si => (
-                                  <option key={si.id} value={si.item_code}>{si.item_code}</option>
-                                ))}
-                              </select>
+                        <td className="p-2 pl-4 text-xs font-bold text-slate-900">
+                          <input
+                            type="text"
+                            value={item.drawing_no || ''}
+                            placeholder="Drawing No"
+                            onChange={(e) => handleItemChange(idx, 'drawing_no', e.target.value)}
+                            className="w-28 px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs font-bold text-slate-700 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                          />
+                        </td>
+                        <td className="p-2">
+                          <div className="flex flex-col min-w-[200px]">
+                            <SearchableSelect
+                              options={stockItems}
+                              value={item.item_code}
+                              onChange={(e) => handleItemChange(idx, 'item_code', e.target.value)}
+                              placeholder="Select Item ID"
+                              labelField="item_code"
+                              valueField="item_code"
+                              subLabelField="material_name"
+                              allowCustom={true}
+                            />
+                            {item.description && (
+                              <span className="text-[10px] text-slate-400 mt-1 leading-normal max-w-[200px] break-words">
+                                {item.description}
+                              </span>
                             )}
                           </div>
                         </td>
                         <td className="p-2">
-                          <div className="flex flex-col gap-1 min-w-[200px]">
-                            <span className="text-xs text-slate-700 font-medium">{item.material_name || '—'}</span>
-                            {(item.length > 0 || item.width > 0 || item.thickness > 0 || item.diameter > 0) && (
-                              <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] text-slate-400">
-                                {item.length > 0 && <span>L: {item.length}</span>}
-                                {item.width > 0 && <span>W: {item.width}</span>}
-                                {item.thickness > 0 && <span>T: {item.thickness}</span>}
-                                {item.diameter > 0 && <span>Dia: {item.diameter}</span>}
-                                {item.outer_diameter > 0 && <span>OD: {item.outer_diameter}</span>}
+                          <div className="flex flex-col gap-1.5 min-w-[250px]">
+                            <SearchableSelect
+                              options={stockItems}
+                              value={item.material_name}
+                              onChange={(e) => {
+                                handleItemChange(idx, 'material_name', e.target.value);
+                                const selectedItem = stockItems.find(it => it.material_name === e.target.value);
+                                if (selectedItem) {
+                                  handleItemChange(idx, 'item_code', selectedItem.item_code);
+                                  if (selectedItem.item_description) {
+                                    handleItemChange(idx, 'description', selectedItem.item_description);
+                                  }
+                                }
+                              }}
+                              placeholder="Select Material Name"
+                              labelField="material_name"
+                              valueField="material_name"
+                              subLabelField="item_code"
+                              allowCustom={true}
+                            />
+                            {(item.length > 0 || item.width > 0 || item.thickness > 0 || item.diameter > 0 || item.outer_diameter > 0) && (
+                              <div className="flex flex-wrap gap-x-2 gap-y-1 mt-1 opacity-70">
+                                {item.diameter > 0 && <span className="text-xs  text-slate-400">Dia: {item.diameter}</span>}
+                                {item.outer_diameter > 0 && <span className="text-xs  text-slate-400">OD: {item.outer_diameter}</span>}
+                                {item.length > 0 && <span className="text-xs  text-slate-400">L: {item.length}</span>}
+                                {item.width > 0 && <span className="text-xs  text-slate-400">W: {item.width}</span>}
+                                {item.thickness > 0 && <span className="text-xs  text-slate-400">T: {item.thickness}</span>}
                               </div>
                             )}
                             <div className="mt-1 flex items-center gap-1.5">
@@ -1548,8 +1725,30 @@ const POReceipts = () => {
                         </td>
                         <td className="p-2 text-center text-xs">
                           <div className="flex flex-col items-center">
-                            <span className="text-slate-800 font-semibold">{Number(item.quantity || 0).toFixed(0)}</span>
-                            <span className="text-[10px] text-slate-400 uppercase tracking-wider">{item.unit || 'NOS'}</span>
+                            {item.is_custom ? (
+                              <input
+                                type="number"
+                                value={item.quantity || 0}
+                                onChange={(e) => handleItemChange(idx, 'quantity', e.target.value)}
+                                className="w-16 p-1 bg-white border border-slate-200 rounded text-center text-xs text-slate-800 font-semibold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all mb-1"
+                              />
+                            ) : (
+                              <span className="text-slate-800 font-semibold">{Number(item.quantity || 0).toFixed(0)}</span>
+                            )}
+                            {item.is_custom ? (
+                              <select
+                                value={item.unit || 'NOS'}
+                                onChange={(e) => handleItemChange(idx, 'unit', e.target.value)}
+                                className="bg-transparent text-[10px] text-slate-500 outline-none border-b border-slate-200 cursor-pointer font-medium"
+                              >
+                                <option value="NOS">NOS</option>
+                                <option value="KG">KG</option>
+                                <option value="MTR">MTR</option>
+                                <option value="SET">SET</option>
+                              </select>
+                            ) : (
+                              <span className="text-[10px] text-slate-400 uppercase tracking-wider">{item.unit || 'NOS'}</span>
+                            )}
                           </div>
                         </td>
                         <td className="p-2">
@@ -1678,7 +1877,7 @@ const POReceipts = () => {
                 <p className="text-xl  text-indigo-600">{formatCurrency((formData.totalValuation || 0) * 1.18)}</p>
               </div>
             </div>
-            
+
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -1699,166 +1898,166 @@ const POReceipts = () => {
         </form>
       </Modal>
 
-        <Modal isOpen={showEditModal} onClose={() => navigate(`${deptPrefix}/po-receipts`)} title="Edit PO Receipt" size="xl">
-          <form onSubmit={handleUpdateReceipt} className="space-y-2">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-              <FormControl label="Receipt Date *">
-                <input
-                  type="date"
-                  value={editFormData.receiptDate}
-                  onChange={(e) => setEditFormData({...editFormData, receiptDate: e.target.value})}
-                  className="w-full p-2 bg-white border border-slate-200 rounded text-xs  text-slate-900 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all"
-                  required
-                />
-              </FormControl>
-              <FormControl label="Status *">
-                <select
-                  value={editFormData.status}
-                  onChange={(e) => setEditFormData({...editFormData, status: e.target.value})}
-                  className="w-full p-2 bg-white border border-slate-200 rounded text-xs  text-slate-900 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all appearance-none cursor-pointer"
-                  required
-                >
-                  <option value="DRAFT">Draft</option>
-                  <option value="RECEIVED">Received</option>
-                  <option value="ACKNOWLEDGED">Acknowledged</option>
-                  <option value="CLOSED">Closed</option>
-                </select>
-              </FormControl>
+      <Modal isOpen={showEditModal} onClose={() => navigate(`${deptPrefix}/po-receipts`)} title="Edit PO Receipt" size="xl">
+        <form onSubmit={handleUpdateReceipt} className="space-y-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            <FormControl label="Receipt Date *">
+              <input
+                type="date"
+                value={editFormData.receiptDate}
+                onChange={(e) => setEditFormData({ ...editFormData, receiptDate: e.target.value })}
+                className="w-full p-2 bg-white border border-slate-200 rounded text-xs  text-slate-900 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all"
+                required
+              />
+            </FormControl>
+            <FormControl label="Status *">
+              <select
+                value={editFormData.status}
+                onChange={(e) => setEditFormData({ ...editFormData, status: e.target.value })}
+                className="w-full p-2 bg-white border border-slate-200 rounded text-xs  text-slate-900 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all appearance-none cursor-pointer"
+                required
+              >
+                <option value="DRAFT">Draft</option>
+                <option value="RECEIVED">Received</option>
+                <option value="ACKNOWLEDGED">Acknowledged</option>
+                <option value="CLOSED">Closed</option>
+              </select>
+            </FormControl>
+          </div>
+
+          <FormControl label="Total Received Quantity">
+            <input
+              type="number"
+              value={editFormData.receivedQuantity}
+              onChange={(e) => setEditFormData({ ...editFormData, receivedQuantity: e.target.value })}
+              className="w-full p-2 bg-white border border-slate-200 rounded text-xs  text-indigo-600 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all"
+            />
+          </FormControl>
+
+          <FormControl label="Notes (Optional)">
+            <textarea
+              value={editFormData.notes}
+              onChange={(e) => setEditFormData({ ...editFormData, notes: e.target.value })}
+              className="w-full p-2 bg-white border border-slate-200 rounded text-xs  text-slate-900 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all"
+              rows="3"
+            />
+          </FormControl>
+
+          {/* Attachments Section in Edit Modal */}
+          <div className="space-y-2 pt-4 border-t border-slate-100">
+            <div className="flex items-center gap-2">
+              <div className="p-2 bg-indigo-50 text-indigo-600 rounded">
+                <Upload className="w-5 h-5" />
+              </div>
+              <h3 className="text-sm font-semibold text-slate-800">Attachments & Documents</h3>
             </div>
 
-            <FormControl label="Total Received Quantity">
+            <div className="border-2 border-dashed border-slate-200 rounded p-4 text-center hover:border-indigo-300 transition-all cursor-pointer bg-slate-50/50 group relative">
               <input
-                type="number"
-                value={editFormData.receivedQuantity}
-                onChange={(e) => setEditFormData({...editFormData, receivedQuantity: e.target.value})}
-                className="w-full p-2 bg-white border border-slate-200 rounded text-xs  text-indigo-600 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all"
+                type="file"
+                multiple
+                onChange={(e) => {
+                  const files = Array.from(e.target.files || []);
+                  setAttachments(prev => [...prev, ...files]);
+                }}
+                className="absolute inset-0 opacity-0 cursor-pointer"
+                accept=".pdf,.png,.jpg,.jpeg"
               />
-            </FormControl>
-
-            <FormControl label="Notes (Optional)">
-              <textarea
-                value={editFormData.notes}
-                onChange={(e) => setEditFormData({...editFormData, notes: e.target.value})}
-                className="w-full p-2 bg-white border border-slate-200 rounded text-xs  text-slate-900 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all"
-                rows="3"
-              />
-            </FormControl>
-
-            {/* Attachments Section in Edit Modal */}
-            <div className="space-y-2 pt-4 border-t border-slate-100">
-              <div className="flex items-center gap-2">
-                <div className="p-2 bg-indigo-50 text-indigo-600 rounded">
+              <div className="flex flex-col items-center justify-center gap-1.5">
+                <div className="p-2 bg-indigo-50 rounded text-indigo-600 group-hover:bg-indigo-100 transition-all">
                   <Upload className="w-5 h-5" />
                 </div>
-                <h3 className="text-sm font-semibold text-slate-800">Attachments & Documents</h3>
+                <p className="text-xs font-semibold text-slate-700">Click or drag files here to upload GRN / Challan Documents</p>
+                <p className="text-[10px] text-slate-400">PDF, PNG, JPG, JPEG (Multiple files allowed)</p>
               </div>
+            </div>
 
-              <div className="border-2 border-dashed border-slate-200 rounded p-4 text-center hover:border-indigo-300 transition-all cursor-pointer bg-slate-50/50 group relative">
-                <input
-                  type="file"
-                  multiple
-                  onChange={(e) => {
-                    const files = Array.from(e.target.files || []);
-                    setAttachments(prev => [...prev, ...files]);
-                  }}
-                  className="absolute inset-0 opacity-0 cursor-pointer"
-                  accept=".pdf,.png,.jpg,.jpeg"
-                />
-                <div className="flex flex-col items-center justify-center gap-1.5">
-                  <div className="p-2 bg-indigo-50 rounded text-indigo-600 group-hover:bg-indigo-100 transition-all">
-                    <Upload className="w-5 h-5" />
-                  </div>
-                  <p className="text-xs font-semibold text-slate-700">Click or drag files here to upload GRN / Challan Documents</p>
-                  <p className="text-[10px] text-slate-400">PDF, PNG, JPG, JPEG (Multiple files allowed)</p>
-                </div>
-              </div>
-
-              {((existingAttachments && existingAttachments.length > 0) || (attachments && attachments.length > 0)) && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3 font-sans">
-                  {/* Existing Attachments */}
-                  {existingAttachments.map((file, idx) => {
-                    const rawName = file.split('/').pop() || file.split('\\').pop() || '';
-                    const parts = rawName.split('-');
-                    const fileName = parts.length > 1 ? parts.slice(1).join('-') : rawName;
-                    return (
-                      <div key={`existing-${idx}`} className="flex items-center justify-between p-2.5 bg-slate-50 border border-slate-200/60 rounded hover:bg-slate-100/70 transition-all">
-                        <div className="flex items-center gap-2 overflow-hidden mr-2">
-                          <FileText className="w-4 h-4 text-indigo-500 shrink-0" />
-                          <div className="flex flex-col overflow-hidden">
-                            <span className="text-xs text-slate-700 truncate font-semibold" title={fileName}>{fileName}</span>
-                            <span className="text-[9px] text-slate-400 font-medium">Existing Document</span>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => handleOpenPdf(file)}
-                            className="p-1 bg-white border border-slate-200 rounded text-slate-500 hover:text-indigo-600 hover:border-indigo-100 transition-all hover:bg-indigo-50 active:scale-95"
-                            title="View Document"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setExistingAttachments(prev => prev.filter((_, i) => i !== idx));
-                            }}
-                            className="p-1 bg-white border border-slate-200 rounded text-slate-400 hover:text-rose-600 hover:border-rose-100 transition-all hover:bg-rose-50 active:scale-95"
-                            title="Delete Document"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-
-                  {/* Staged New Attachments */}
-                  {attachments.map((file, idx) => (
-                    <div key={`staged-${idx}`} className="flex items-center justify-between p-2.5 bg-indigo-50/20 border border-indigo-100/60 rounded hover:bg-indigo-50/40 transition-all">
+            {((existingAttachments && existingAttachments.length > 0) || (attachments && attachments.length > 0)) && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3 font-sans">
+                {/* Existing Attachments */}
+                {existingAttachments.map((file, idx) => {
+                  const rawName = file.split('/').pop() || file.split('\\').pop() || '';
+                  const parts = rawName.split('-');
+                  const fileName = parts.length > 1 ? parts.slice(1).join('-') : rawName;
+                  return (
+                    <div key={`existing-${idx}`} className="flex items-center justify-between p-2.5 bg-slate-50 border border-slate-200/60 rounded hover:bg-slate-100/70 transition-all">
                       <div className="flex items-center gap-2 overflow-hidden mr-2">
-                        <FileText className="w-4 h-4 text-indigo-600 shrink-0" />
+                        <FileText className="w-4 h-4 text-indigo-500 shrink-0" />
                         <div className="flex flex-col overflow-hidden">
-                          <span className="text-xs text-indigo-950 truncate font-semibold" title={file.name}>{file.name}</span>
-                          <span className="text-[9px] text-indigo-600 font-medium">Staged - {(file.size / 1024).toFixed(1)} KB</span>
+                          <span className="text-xs text-slate-700 truncate font-semibold" title={fileName}>{fileName}</span>
+                          <span className="text-[9px] text-slate-400 font-medium">Existing Document</span>
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setAttachments(prev => prev.filter((_, i) => i !== idx));
-                        }}
-                        className="p-1 bg-white border border-indigo-100/40 rounded text-indigo-400 hover:text-rose-600 hover:border-rose-100 transition-all hover:bg-rose-50 active:scale-95 shrink-0"
-                        title="Remove Document"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenPdf(file)}
+                          className="p-1 bg-white border border-slate-200 rounded text-slate-500 hover:text-indigo-600 hover:border-indigo-100 transition-all hover:bg-indigo-50 active:scale-95"
+                          title="View Document"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setExistingAttachments(prev => prev.filter((_, i) => i !== idx));
+                          }}
+                          className="p-1 bg-white border border-slate-200 rounded text-slate-400 hover:text-rose-600 hover:border-rose-100 transition-all hover:bg-rose-50 active:scale-95"
+                          title="Delete Document"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
+                  );
+                })}
 
-            <div className="flex gap-2 justify-end pt-4 border-t border-slate-100">
-              <button
-                type="button"
-                onClick={() => navigate(`${deptPrefix}/po-receipts`)}
-                className="p-2 border border-slate-200 rounded text-xs  text-slate-500 hover:bg-slate-50 transition-all active:scale-95"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="p-2 bg-blue-600 text-white rounded text-xs  hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95"
-              >
-                Update Receipt
-              </button>
-            </div>
-          </form>
-        </Modal>
-      </div>
-    );
-  };
+                {/* Staged New Attachments */}
+                {attachments.map((file, idx) => (
+                  <div key={`staged-${idx}`} className="flex items-center justify-between p-2.5 bg-indigo-50/20 border border-indigo-100/60 rounded hover:bg-indigo-50/40 transition-all">
+                    <div className="flex items-center gap-2 overflow-hidden mr-2">
+                      <FileText className="w-4 h-4 text-indigo-600 shrink-0" />
+                      <div className="flex flex-col overflow-hidden">
+                        <span className="text-xs text-indigo-950 truncate font-semibold" title={file.name}>{file.name}</span>
+                        <span className="text-[9px] text-indigo-600 font-medium">Staged - {(file.size / 1024).toFixed(1)} KB</span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAttachments(prev => prev.filter((_, i) => i !== idx));
+                      }}
+                      className="p-1 bg-white border border-indigo-100/40 rounded text-indigo-400 hover:text-rose-600 hover:border-rose-100 transition-all hover:bg-rose-50 active:scale-95 shrink-0"
+                      title="Remove Document"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="flex gap-2 justify-end pt-4 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={() => navigate(`${deptPrefix}/po-receipts`)}
+              className="p-2 border border-slate-200 rounded text-xs  text-slate-500 hover:bg-slate-50 transition-all active:scale-95"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="p-2 bg-blue-600 text-white rounded text-xs  hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95"
+            >
+              Update Receipt
+            </button>
+          </div>
+        </form>
+      </Modal>
+    </div>
+  );
+};
 
 export default POReceipts;
 
