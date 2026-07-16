@@ -80,7 +80,8 @@ const QuotationFormPage = () => {
   const [globalBreakdownData, setGlobalBreakdownData] = useState({ loading: false, rows: [], error: null });
 
   const fetchBreakdownData = async (targetItems = items) => {
-    const savedItem = targetItems.find(i => i.id && typeof i.id === 'number' && i.drawing_no);
+    // Accept any saved item — not just those with drawing_no (some items use item_code only)
+    const savedItem = targetItems.find(i => i.id && typeof i.id === 'number');
     const itemId = savedItem?.id || null;
     if (!itemId) {
       setGlobalBreakdownData({ loading: false, rows: [], error: 'Please save the quotation first to view Cost Breakdown.' });
@@ -105,7 +106,8 @@ const QuotationFormPage = () => {
     const isExpanded = !showGlobalBreakdown;
     setShowGlobalBreakdown(isExpanded);
 
-    if (isExpanded && globalBreakdownData.rows.length === 0 && !globalBreakdownData.loading) {
+    if (isExpanded) {
+      // Always refresh to pick up the latest quotation version / BOM
       await fetchBreakdownData(items);
     }
   };
@@ -2202,7 +2204,7 @@ const QuotationFormPage = () => {
                         <span className="text-xs font-bold text-slate-800">Complete Quotation Cost Breakdown</span>
                       </div>
                       <button
-                        onClick={() => handleDownloadCostBreakdownPDF(items.find(i => i.id && typeof i.id === 'number' && i.drawing_no)?.id)}
+                        onClick={() => handleDownloadCostBreakdownPDF(items.find(i => i.id && typeof i.id === 'number')?.id)}
                         disabled={loading}
                         className="px-2 py-1 text-[10px] text-rose-600 bg-rose-50 border border-rose-100 rounded hover:bg-rose-100 transition-all flex items-center gap-1 disabled:opacity-50"
                       >
@@ -2265,30 +2267,31 @@ const QuotationFormPage = () => {
                         <tfoot>
                           {(() => {
                             const parentRows = (globalBreakdownData.rows || []).filter(r => !r.sr.includes('↳'));
-                            const totalSum = parentRows.reduce((sum, r) => sum + (parseFloat(r.total) || 0), 0);
+                            const totalSum   = parentRows.reduce((sum, r) => sum + (parseFloat(r.total) || 0), 0);
+                            const totalQty   = parentRows.reduce((sum, r) => sum + (parseFloat(r.qty)   || 0), 0);
                             return (
                               <tr className="border-t border-slate-200 bg-slate-50 font-semibold text-slate-700">
                                 <td colSpan={4} className="whitespace-nowrap sticky left-0 z-5 bg-slate-50 text-left font-bold text-slate-800" style={{ padding: '10px', boxShadow: '2px 0 5px -2px rgba(0,0,0,0.1)' }}>Quotation Grand Total</td>
-                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + r.materialCost * r.qty, 0))}</td>
-                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + r.cnc * r.qty, 0))}</td>
-                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + r.milling * r.qty, 0))}</td>
-                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + r.vmc * r.qty, 0))}</td>
-                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + r.drilling * r.qty, 0))}</td>
-                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + r.tapping * r.qty, 0))}</td>
-                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + r.grinding * r.qty, 0))}</td>
-                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + r.laser * r.qty, 0))}</td>
-                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + r.sparking * r.qty, 0))}</td>
-                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + r.finish * r.qty, 0))}</td>
-                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + r.qc * r.qty, 0))}</td>
-                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + r.packing * r.qty, 0))}</td>
-                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + r.profit * r.qty, 0))}</td>
+                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + (r.materialCost || 0) * (r.qty || 0), 0))}</td>
+                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + (r.cnc      || 0) * (r.qty || 0), 0))}</td>
+                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + (r.milling  || 0) * (r.qty || 0), 0))}</td>
+                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + (r.vmc      || 0) * (r.qty || 0), 0))}</td>
+                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + (r.drilling || 0) * (r.qty || 0), 0))}</td>
+                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + (r.tapping  || 0) * (r.qty || 0), 0))}</td>
+                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + (r.grinding || 0) * (r.qty || 0), 0))}</td>
+                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + (r.laser    || 0) * (r.qty || 0), 0))}</td>
+                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + (r.sparking || 0) * (r.qty || 0), 0))}</td>
+                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + (r.finish   || 0) * (r.qty || 0), 0))}</td>
+                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + (r.qc      || 0) * (r.qty || 0), 0))}</td>
+                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + (r.packing  || 0) * (r.qty || 0), 0))}</td>
+                                <td className="whitespace-nowrap text-right" style={{ padding: '10px' }}>{formatCurrency(parentRows.reduce((sum, r) => sum + (r.profit   || 0) * (r.qty || 0), 0))}</td>
                                 <td className="whitespace-nowrap text-right font-bold text-slate-900" style={{ padding: '10px' }}>
-                                  {formatCurrency(totalSum / (parentRows.reduce((sum, r) => sum + r.qty, 0) || 1))}
+                                  {formatCurrency(totalQty > 0 ? totalSum / totalQty : 0)}
                                 </td>
                                 <td className="whitespace-nowrap text-center font-mono font-bold" style={{ padding: '10px' }}>
-                                  {parentRows.reduce((sum, r) => sum + r.qty, 0)}
+                                  {totalQty}
                                 </td>
-                                <td className="whitespace-nowrap text-right text-indigo-650 font-bold text-xs" style={{ padding: '10px' }}>
+                                <td className="whitespace-nowrap text-right text-indigo-700 font-bold" style={{ padding: '10px' }}>
                                   {formatCurrency(totalSum)}
                                 </td>
                               </tr>

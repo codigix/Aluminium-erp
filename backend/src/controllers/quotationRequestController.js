@@ -1407,7 +1407,6 @@ const exportQuotationCostBreakdownPDF = async (req, res, next) => {
     const representative = quotes[0];
 
     // 2. Fetch all items in this batch
-    // 2. Fetch all items in this batch
     let batchQuotes;
     if (representative.batch_id) {
       const [rows] = await pool.query(
@@ -1442,13 +1441,12 @@ const exportQuotationCostBreakdownPDF = async (req, res, next) => {
       batchQuotes = rows;
     }
 
-    // Helpers
+    // --- Helpers ---
     const calculateMaterialCost = (m) => {
       const qty = parseFloat(m.qty_per_pc || m.quantity || 0);
       const rate = parseFloat(m.rate || 0);
       const weightPerUnit = parseFloat(m.weight_per_unit || 0);
       const scrapPercent = parseFloat(m.scrap_percent || 0);
-      
       if (weightPerUnit > 0) {
         const sP = scrapPercent > 1 ? scrapPercent / 100 : scrapPercent;
         return qty * weightPerUnit * (1 + sP) * rate;
@@ -1464,7 +1462,6 @@ const exportQuotationCostBreakdownPDF = async (req, res, next) => {
         const setupTime = parseFloat(op.setup_time_min || 0);
         const cycleTime = parseFloat(op.cycle_time_min || 0);
         const totalOpCost = ((cycleTime + setupTime) / 60) * hourlyRate;
-        
         if (name.includes('laser')) ops.laser += totalOpCost;
         else if (name.includes('cnc') || name.includes('turn')) ops.cnc += totalOpCost;
         else if (name.includes('vmc')) ops.vmc += totalOpCost;
@@ -1475,18 +1472,15 @@ const exportQuotationCostBreakdownPDF = async (req, res, next) => {
         else if (name.includes('qc') || name.includes('inspect')) ops.qc += totalOpCost;
         else if (name.includes('pack')) ops.packing += totalOpCost;
         else if (name.includes('mill') || name.includes('cut')) ops.milling += totalOpCost;
-        else if (name.includes('finish') || name.includes('powder') || name.includes('anodiz') || name.includes('paint') || name.includes('weld')) ops.finish += totalOpCost;
-        else {
-          ops.finish += totalOpCost;
-        }
+        else ops.finish += totalOpCost;
       });
       return ops;
     };
 
-    // Columns structure (Material, Material Size, and Weight columns removed)
+    // Columns structure
     const headers = [
-      "Sr No", "Component Number", "Description", "Type", "Material Cost", 
-      "CNC/Turning", "Milling/Cutting", "VMC", "Drilling", "Tapping", "Grinding", "Laser Cutting & Bending", 
+      "Sr No", "Component Number", "Description", "Type", "Material Cost",
+      "CNC/Turning", "Milling/Cutting", "VMC", "Drilling", "Tapping", "Grinding", "Laser Cutting & Bending",
       "Sparking", "Finish", "Profit & Overheads", "Qty", "Unit Price", "Total Price"
     ];
 
@@ -1495,52 +1489,50 @@ const exportQuotationCostBreakdownPDF = async (req, res, next) => {
     let mainSr = 1;
 
     for (const q of batchQuotes) {
-      const effectiveItemId = q.sales_order_item_id || null;
+      let effectiveItemId = q.sales_order_item_id || null;
       const resolvedDrawingId = q.effective_drawing_id || q.drawing_id || null;
-      
+
+      // Dynamic Revision Lookup: Find the specific sales_order_items record for this drawing/item
+      // that matches the stored bom_cost of this quotation version
+      if (q.bom_cost && (q.effective_drawing_no || q.drawing_no || q.item_code)) {
+        const targetDwg = q.effective_drawing_no || q.drawing_no || '';
+        const targetCode = q.item_code || '';
+        const [matchedSOI] = await pool.query(
+          `SELECT id FROM sales_order_items 
+           WHERE (drawing_no = ? OR item_code = ?) 
+           AND ABS(bom_cost - ?) < 0.1 
+           ORDER BY id DESC LIMIT 1`,
+          [targetDwg, targetCode, parseFloat(q.bom_cost)]
+        );
+        if (matchedSOI.length > 0) {
+          effectiveItemId = matchedSOI[0].id;
+        }
+      }
+
+      // ── Quotation Pricing (SOURCE OF TRUTH) ──────────────────────────────
+      const qQty          = parseFloat(q.item_qty) || 0;
+      const qTotal        = parseFloat(q.total_amount) || 0;
+      const qRate         = qQty > 0 ? qTotal / qQty : 0;
+      const storedBomCost = parseFloat(q.bom_cost) || 0;
+
+      grandTotalSum += qTotal;
+
+      // ── BOM Data (for operation proportion only) ──────────────────────────
       const parentBOM = {
-        materials: await bomService.getItemMaterials(effectiveItemId, q.item_code, q.effective_drawing_no, resolvedDrawingId),
+        materials:  await bomService.getItemMaterials(effectiveItemId, q.item_code, q.effective_drawing_no, resolvedDrawingId),
         components: await bomService.getItemComponents(effectiveItemId, q.item_code, q.effective_drawing_no, null, null, null, resolvedDrawingId),
         operations: await bomService.getItemOperations(effectiveItemId, q.item_code, q.effective_drawing_no, resolvedDrawingId)
       };
 
       const isAssembly = parentBOM.components && parentBOM.components.length > 0;
-      const qQty = parseFloat(q.item_qty) || 0;
-      const qRate = parseFloat(q.total_amount / (q.item_qty || 1)) || 0;
-      const qTotal = parseFloat(q.total_amount) || 0;
-      
-      grandTotalSum += qTotal;
+
+      let rawMatCost = 0;
+      let rawOps = { cnc: 0, milling: 0, vmc: 0, drilling: 0, tapping: 0, grinding: 0, laser: 0, sparking: 0, finish: 0, qc: 0, packing: 0 };
 
       if (!isAssembly) {
-        // Part/Commercial Row
-        const matCost = parentBOM.materials.reduce((sum, m) => sum + calculateMaterialCost(m), 0);
-        const ops = parseOperations(parentBOM.operations);
-        const opsSum = Object.values(ops).reduce((a, b) => a + b, 0);
-        const profit = qRate - matCost - opsSum;
-
-        dataRows.push([
-          mainSr++,
-          q.effective_drawing_no || q.drawing_no || q.item_code || '—',
-          q.effective_description || '',
-          q.item_group || 'PART',
-          matCost,
-          ops.cnc,
-          ops.milling,
-          ops.vmc,
-          ops.drilling,
-          ops.tapping,
-          ops.grinding,
-          ops.laser,
-          ops.sparking,
-          ops.finish,
-          profit,
-          qQty,
-          qRate,
-          qTotal
-        ]);
+        rawMatCost = parentBOM.materials.reduce((sum, m) => sum + calculateMaterialCost(m), 0);
+        rawOps = parseOperations(parentBOM.operations);
       } else {
-        // Assembly & Components
-        // 1. Calculate parent assembly values as sum of components
         const childBOMs = await Promise.all(
           parentBOM.components.map(async (c) => {
             try {
@@ -1550,106 +1542,63 @@ const exportQuotationCostBreakdownPDF = async (req, res, next) => {
               );
               if (childRes[0].length > 0) {
                 return {
-                  materials: await bomService.getItemMaterials(null, c.component_code, null, null),
+                  materials:  await bomService.getItemMaterials(null, c.component_code, null, null),
                   operations: await bomService.getItemOperations(null, c.component_code, null, null)
                 };
               }
-            } catch (e) {
-              console.error(e);
-            }
+            } catch (e) { console.error(e); }
             return null;
           })
         );
-
-        let parentMatCost = 0;
-        let parentOps = { cnc: 0, milling: 0, vmc: 0, drilling: 0, tapping: 0, grinding: 0, laser: 0, sparking: 0, finish: 0, qc: 0, packing: 0 };
-
         parentBOM.components.forEach((c, idx) => {
           const childBOM = childBOMs[idx];
           const cQty = parseFloat(c.quantity || 0);
           if (childBOM) {
-            const childMat = childBOM.materials.reduce((sum, m) => sum + calculateMaterialCost(m), 0);
+            rawMatCost += childBOM.materials.reduce((sum, m) => sum + calculateMaterialCost(m), 0) * cQty;
             const childOps = parseOperations(childBOM.operations);
-            parentMatCost += childMat * cQty;
-            Object.keys(parentOps).forEach(k => {
-              parentOps[k] += (childOps[k] || 0) * cQty;
-            });
+            Object.keys(rawOps).forEach(k => { rawOps[k] += (childOps[k] || 0) * cQty; });
           } else {
-            parentMatCost += (parseFloat(c.rate || 0) * cQty);
+            rawMatCost += parseFloat(c.rate || 0) * cQty;
           }
-        });
-
-        const parentOpsSum = Object.values(parentOps).reduce((a, b) => a + b, 0);
-        const parentProfit = qRate - parentMatCost - parentOpsSum;
-
-        // Push Parent Assembly Row
-        const currentAssemblySr = mainSr++;
-        dataRows.push([
-          currentAssemblySr,
-          q.effective_drawing_no || q.drawing_no || q.item_code || '—',
-          q.effective_description || '',
-          'ASM',
-          parentMatCost,
-          parentOps.cnc,
-          parentOps.milling,
-          parentOps.vmc,
-          parentOps.drilling,
-          parentOps.tapping,
-          parentOps.grinding,
-          parentOps.laser,
-          parentOps.sparking,
-          parentOps.finish,
-          parentProfit,
-          qQty,
-          qRate,
-          qTotal
-        ]);
-
-        // Push Child Components
-        parentBOM.components.forEach((c, idx) => {
-          const childBOM = childBOMs[idx];
-          const cQty = parseFloat(c.quantity || 0);
-          let childMatCost = 0;
-          let childOps = { cnc: 0, milling: 0, vmc: 0, drilling: 0, tapping: 0, grinding: 0, laser: 0, sparking: 0, finish: 0, qc: 0, packing: 0 };
-
-          if (childBOM) {
-            childMatCost = childBOM.materials.reduce((sum, m) => sum + calculateMaterialCost(m), 0);
-            childOps = parseOperations(childBOM.operations);
-          } else {
-            childMatCost = parseFloat(c.rate || 0);
-          }
-
-          const childOpsSum = Object.values(childOps).reduce((a, b) => a + b, 0);
-          const childProfit = 0;
-          const childRate = childMatCost + childOpsSum;
-
-          dataRows.push([
-            `↳ ${currentAssemblySr}.${idx + 1}`,
-            c.drawing_no || c.component_code || c.item_code || '—',
-            c.description || '',
-            c.item_group || 'PART',
-            childMatCost,
-            childOps.cnc,
-            childOps.milling,
-            childOps.vmc,
-            childOps.drilling,
-            childOps.tapping,
-            childOps.grinding,
-            childOps.laser,
-            childOps.sparking,
-            childOps.finish,
-            childProfit,
-            cQty * qQty,
-            childRate,
-            ""
-          ]);
         });
       }
+
+      // ── Use raw BOM values directly (no scaling/distribution) ─────────
+      const rawOpsSum   = Object.values(rawOps).reduce((a, b) => a + b, 0);
+      const scaledMatCost = rawMatCost;
+      const scaledOps = { ...rawOps };
+
+      // Profit = Selling Price (Unit Price) − (Material Cost + Operation Cost)
+      const profit = qRate - (scaledMatCost + rawOpsSum);
+
+      // In PDF, since there is no separate QC and Packing column, map them to Finish to keep totals exact
+      const finishPDFVal = (scaledOps.finish || 0) + (scaledOps.qc || 0) + (scaledOps.packing || 0);
+
+      dataRows.push([
+        mainSr++,
+        q.effective_drawing_no || q.drawing_no || q.item_code || '—',
+        q.effective_description || '',
+        isAssembly ? 'ASM' : (q.item_group || 'PART'),
+        scaledMatCost,
+        scaledOps.cnc || 0,
+        scaledOps.milling || 0,
+        scaledOps.vmc || 0,
+        scaledOps.drilling || 0,
+        scaledOps.tapping || 0,
+        scaledOps.grinding || 0,
+        scaledOps.laser || 0,
+        scaledOps.sparking || 0,
+        finishPDFVal,
+        profit,        // Profit & Overheads = Selling Price − (Material Cost + Operation Cost)
+        qQty,
+        qRate,
+        qTotal         // Always = quotation total_amount
+      ]);
     }
 
-    // Add Grand Total Row
-    const grandTotalRow = Array(17).fill("");
-    grandTotalRow[0] = "Grand Total";
+    // Grand Total Row
+    const grandTotalRow = Array(18).fill('');
+    grandTotalRow[0] = 'Grand Total';
     grandTotalRow[17] = grandTotalSum;
     dataRows.push(grandTotalRow);
 
@@ -1670,6 +1619,7 @@ const exportQuotationCostBreakdownPDF = async (req, res, next) => {
   }
 };
 
+
 const getQuotationCostBreakdownDetails = async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -1689,7 +1639,7 @@ const getQuotationCostBreakdownDetails = async (req, res, next) => {
 
     const representative = quotes[0];
 
-    // 2. Fetch all items in this batch
+    // 2. Fetch all items in this batch (same version)
     let batchQuotes;
     if (representative.batch_id) {
       const [rows] = await pool.query(
@@ -1724,13 +1674,12 @@ const getQuotationCostBreakdownDetails = async (req, res, next) => {
       batchQuotes = rows;
     }
 
-    // Helpers
+    // --- Helpers ---
     const calculateMaterialCost = (m) => {
       const qty = parseFloat(m.qty_per_pc || m.quantity || 0);
       const rate = parseFloat(m.rate || 0);
       const weightPerUnit = parseFloat(m.weight_per_unit || 0);
       const scrapPercent = parseFloat(m.scrap_percent || 0);
-      
       if (weightPerUnit > 0) {
         const sP = scrapPercent > 1 ? scrapPercent / 100 : scrapPercent;
         return qty * weightPerUnit * (1 + sP) * rate;
@@ -1746,7 +1695,6 @@ const getQuotationCostBreakdownDetails = async (req, res, next) => {
         const setupTime = parseFloat(op.setup_time_min || 0);
         const cycleTime = parseFloat(op.cycle_time_min || 0);
         const totalOpCost = ((cycleTime + setupTime) / 60) * hourlyRate;
-        
         if (name.includes('laser')) ops.laser += totalOpCost;
         else if (name.includes('cnc') || name.includes('turn')) ops.cnc += totalOpCost;
         else if (name.includes('vmc')) ops.vmc += totalOpCost;
@@ -1757,10 +1705,7 @@ const getQuotationCostBreakdownDetails = async (req, res, next) => {
         else if (name.includes('qc') || name.includes('inspect')) ops.qc += totalOpCost;
         else if (name.includes('pack')) ops.packing += totalOpCost;
         else if (name.includes('mill') || name.includes('cut')) ops.milling += totalOpCost;
-        else if (name.includes('finish') || name.includes('powder') || name.includes('anodiz') || name.includes('paint') || name.includes('weld')) ops.finish += totalOpCost;
-        else {
-          ops.finish += totalOpCost;
-        }
+        else ops.finish += totalOpCost;
       });
       return ops;
     };
@@ -1769,49 +1714,51 @@ const getQuotationCostBreakdownDetails = async (req, res, next) => {
     let mainSr = 1;
 
     for (const q of batchQuotes) {
-      const effectiveItemId = q.sales_order_item_id || null;
+      let effectiveItemId = q.sales_order_item_id || null;
       const resolvedDrawingId = q.effective_drawing_id || q.drawing_id || null;
-      
+
+      // Dynamic Revision Lookup: Find the specific sales_order_items record for this drawing/item
+      // that matches the stored bom_cost of this quotation version
+      if (q.bom_cost && (q.effective_drawing_no || q.drawing_no || q.item_code)) {
+        const targetDwg = q.effective_drawing_no || q.drawing_no || '';
+        const targetCode = q.item_code || '';
+        const [matchedSOI] = await pool.query(
+          `SELECT id FROM sales_order_items 
+           WHERE (drawing_no = ? OR item_code = ?) 
+           AND ABS(bom_cost - ?) < 0.1 
+           ORDER BY id DESC LIMIT 1`,
+          [targetDwg, targetCode, parseFloat(q.bom_cost)]
+        );
+        if (matchedSOI.length > 0) {
+          effectiveItemId = matchedSOI[0].id;
+        }
+      }
+
+      // ── Quotation Pricing (SOURCE OF TRUTH) ────────────────────────────
+      const qQty   = parseFloat(q.item_qty) || 0;
+      const qTotal = parseFloat(q.total_amount) || 0;   // Grand Total for this line item
+      const qRate  = qQty > 0 ? qTotal / qQty : 0;      // Selling price per unit
+      // bom_cost stored in quotation = manufacturing cost per unit
+      const storedBomCost = parseFloat(q.bom_cost) || 0;
+
+      // ── BOM Data (operation proportion only, NOT used for grand total) ──
       const parentBOM = {
-        materials: await bomService.getItemMaterials(effectiveItemId, q.item_code, q.effective_drawing_no, resolvedDrawingId),
+        materials:  await bomService.getItemMaterials(effectiveItemId, q.item_code, q.effective_drawing_no, resolvedDrawingId),
         components: await bomService.getItemComponents(effectiveItemId, q.item_code, q.effective_drawing_no, null, null, null, resolvedDrawingId),
         operations: await bomService.getItemOperations(effectiveItemId, q.item_code, q.effective_drawing_no, resolvedDrawingId)
       };
 
       const isAssembly = parentBOM.components && parentBOM.components.length > 0;
-      const qQty = parseFloat(q.item_qty) || 0;
-      const qRate = parseFloat(q.total_amount / (q.item_qty || 1)) || 0;
-      const qTotal = parseFloat(q.total_amount) || 0;
+
+      // Raw BOM material + operation costs (used only for proportional breakdown)
+      let rawMatCost = 0;
+      let rawOps = { cnc: 0, milling: 0, vmc: 0, drilling: 0, tapping: 0, grinding: 0, laser: 0, sparking: 0, finish: 0, qc: 0, packing: 0 };
 
       if (!isAssembly) {
-        // Part/Commercial Row
-        const matCost = parentBOM.materials.reduce((sum, m) => sum + calculateMaterialCost(m), 0);
-        const ops = parseOperations(parentBOM.operations);
-        const opsSum = Object.values(ops).reduce((a, b) => a + b, 0);
-        const profit = qRate - matCost - opsSum;
-
-        dataRows.push({
-          sr: String(mainSr++),
-          drawing_no: q.effective_drawing_no || q.drawing_no || q.item_code || '—',
-          description: q.effective_description || '',
-          type: q.item_group || 'PART',
-          materialCost: matCost,
-          cnc: ops.cnc,
-          milling: ops.milling,
-          vmc: ops.vmc,
-          drilling: ops.drilling,
-          tapping: ops.tapping,
-          grinding: ops.grinding,
-          laser: ops.laser,
-          sparking: ops.sparking,
-          finish: ops.finish,
-          profit: profit,
-          qty: qQty,
-          unitRate: qRate,
-          total: qTotal
-        });
+        rawMatCost = parentBOM.materials.reduce((sum, m) => sum + calculateMaterialCost(m), 0);
+        rawOps = parseOperations(parentBOM.operations);
       } else {
-        // Assembly & Components
+        // Assembly: aggregate child BOM costs
         const childBOMs = await Promise.all(
           parentBOM.components.map(async (c) => {
             try {
@@ -1821,100 +1768,57 @@ const getQuotationCostBreakdownDetails = async (req, res, next) => {
               );
               if (childRes[0].length > 0) {
                 return {
-                  materials: await bomService.getItemMaterials(null, c.component_code, null, null),
+                  materials:  await bomService.getItemMaterials(null, c.component_code, null, null),
                   operations: await bomService.getItemOperations(null, c.component_code, null, null)
                 };
               }
-            } catch (e) {
-              console.error(e);
-            }
+            } catch (e) { console.error(e); }
             return null;
           })
         );
-
-        let parentMatCost = 0;
-        let parentOps = { cnc: 0, milling: 0, vmc: 0, drilling: 0, tapping: 0, grinding: 0, laser: 0, sparking: 0, finish: 0, qc: 0, packing: 0 };
-
         parentBOM.components.forEach((c, idx) => {
           const childBOM = childBOMs[idx];
           const cQty = parseFloat(c.quantity || 0);
           if (childBOM) {
-            const childMat = childBOM.materials.reduce((sum, m) => sum + calculateMaterialCost(m), 0);
+            rawMatCost += childBOM.materials.reduce((sum, m) => sum + calculateMaterialCost(m), 0) * cQty;
             const childOps = parseOperations(childBOM.operations);
-            parentMatCost += childMat * cQty;
-            Object.keys(parentOps).forEach(k => {
-              parentOps[k] += (childOps[k] || 0) * cQty;
-            });
+            Object.keys(rawOps).forEach(k => { rawOps[k] += (childOps[k] || 0) * cQty; });
           } else {
-            parentMatCost += (parseFloat(c.rate || 0) * cQty);
+            rawMatCost += parseFloat(c.rate || 0) * cQty;
           }
-        });
-
-        const parentOpsSum = Object.values(parentOps).reduce((a, b) => a + b, 0);
-        const parentProfit = qRate - parentMatCost - parentOpsSum;
-
-        const currentAssemblySr = mainSr++;
-        dataRows.push({
-          sr: String(currentAssemblySr),
-          drawing_no: q.effective_drawing_no || q.drawing_no || q.item_code || '—',
-          description: q.effective_description || '',
-          type: 'ASM',
-          materialCost: parentMatCost,
-          cnc: parentOps.cnc,
-          milling: parentOps.milling,
-          vmc: parentOps.vmc,
-          drilling: parentOps.drilling,
-          tapping: parentOps.tapping,
-          grinding: parentOps.grinding,
-          laser: parentOps.laser,
-          sparking: parentOps.sparking,
-          finish: parentOps.finish,
-          profit: parentProfit,
-          qty: qQty,
-          unitRate: qRate,
-          total: qTotal
-        });
-
-        // Child Components
-        parentBOM.components.forEach((c, idx) => {
-          const childBOM = childBOMs[idx];
-          const cQty = parseFloat(c.quantity || 0);
-          let childMatCost = 0;
-          let childOps = { cnc: 0, milling: 0, vmc: 0, drilling: 0, tapping: 0, grinding: 0, laser: 0, sparking: 0, finish: 0, qc: 0, packing: 0 };
-
-          if (childBOM) {
-            childMatCost = childBOM.materials.reduce((sum, m) => sum + calculateMaterialCost(m), 0);
-            childOps = parseOperations(childBOM.operations);
-          } else {
-            childMatCost = parseFloat(c.rate || 0);
-          }
-
-          const childOpsSum = Object.values(childOps).reduce((a, b) => a + b, 0);
-          const childProfit = 0;
-          const childRate = childMatCost + childOpsSum;
-
-          dataRows.push({
-            sr: `↳ ${currentAssemblySr}.${idx + 1}`,
-            drawing_no: c.drawing_no || c.component_code || c.item_code || '—',
-            description: c.description || '',
-            type: c.item_group || 'PART',
-            materialCost: childMatCost,
-            cnc: childOps.cnc,
-            milling: childOps.milling,
-            vmc: childOps.vmc,
-            drilling: childOps.drilling,
-            tapping: childOps.tapping,
-            grinding: childOps.grinding,
-            laser: childOps.laser,
-            sparking: childOps.sparking,
-            finish: childOps.finish,
-            profit: childProfit,
-            qty: cQty * qQty,
-            unitRate: childRate,
-            total: 0
-          });
         });
       }
+
+      // ── Use raw BOM values directly (no scaling/distribution) ─────────
+      const rawOpsSum   = Object.values(rawOps).reduce((a, b) => a + b, 0);
+      const scaledMatCost = rawMatCost;
+      const scaledOps = { ...rawOps };
+
+      // Profit = Selling Price (Unit Price) − (Material Cost + Operation Cost)
+      const profit = qRate - (scaledMatCost + rawOpsSum);
+
+      dataRows.push({
+        sr:           String(mainSr++),
+        drawing_no:   q.effective_drawing_no || q.drawing_no || q.item_code || '—',
+        description:  q.effective_description || '',
+        type:         isAssembly ? 'ASM' : (q.item_group || 'PART'),
+        materialCost: scaledMatCost,
+        cnc:          scaledOps.cnc || 0,
+        milling:      scaledOps.milling || 0,
+        vmc:          scaledOps.vmc || 0,
+        drilling:     scaledOps.drilling || 0,
+        tapping:      scaledOps.tapping || 0,
+        grinding:     scaledOps.grinding || 0,
+        laser:        scaledOps.laser || 0,
+        sparking:     scaledOps.sparking || 0,
+        finish:       scaledOps.finish || 0,
+        qc:           scaledOps.qc      || 0,
+        packing:      scaledOps.packing || 0,
+        profit:       profit,
+        qty:          qQty,
+        unitRate:     qRate,
+        total:        qTotal
+      });
     }
 
     res.json(dataRows);
