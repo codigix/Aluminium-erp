@@ -1776,10 +1776,15 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                     <div className="flex items-center">
                       <input
                         type="number"
-                        value={newPlan.targetQuantity}
-                        onChange={(e) => setNewPlan(prev => ({ ...prev, targetQuantity: parseFloat(e.target.value) }))}
-                        className="flex-1 p-2 .5 bg-slate-50 border border-slate-200 rounded-l-lg text-xs  focus:outline-none cursor-not-allowed transition-all"
-                        readOnly
+                        value={newPlan.targetQuantity === 0 ? '' : newPlan.targetQuantity}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setNewPlan(prev => ({ 
+                            ...prev, 
+                            targetQuantity: val === '' ? '' : (parseFloat(val) || 0)
+                          }));
+                        }}
+                        className="flex-1 p-2 .5 bg-white border border-slate-200 rounded-l-lg text-xs  focus:outline-none transition-all"
                       />
                       <span className="p-2 .5 bg-slate-50 border border-l-0 border-slate-200 rounded-r-lg text-xs  text-slate-400">UNIT</span>
                     </div>

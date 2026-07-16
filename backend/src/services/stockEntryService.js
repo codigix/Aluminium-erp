@@ -689,10 +689,89 @@ const autoCreateStockEntryFromGRN = async (grnId, userId, providedConnection = n
   }
 };
 
+const updateStockEntry = async (id, data, userId) => {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const [entries] = await connection.query('SELECT * FROM stock_entries WHERE id = ?', [id]);
+    if (entries.length === 0) throw new Error('Stock Entry not found');
+    const oldEntry = entries[0];
+
+    // 1. If old entry was submitted, reverse the stock ledger entries first
+    if (oldEntry.status === 'submitted') {
+      const [ledgerEntries] = await connection.query(
+        'SELECT id FROM stock_ledger WHERE reference_doc_type = "STOCK_ENTRY" AND reference_doc_id = ?',
+        [id]
+      );
+      for (const le of ledgerEntries) {
+        await stockService.deleteStockLedgerEntry(le.id, connection);
+      }
+    }
+
+    // 2. Update stock entry details
+    await connection.execute(
+      `UPDATE stock_entries 
+       SET entry_type = ?, purpose = ?, from_warehouse_id = ?, to_warehouse_id = ?, entry_date = ?, grn_id = ?, remarks = ?, status = ?
+       WHERE id = ?`,
+      [
+        data.entryType || oldEntry.entry_type,
+        data.purpose || null,
+        data.fromWarehouseId || null,
+        data.toWarehouseId || null,
+        data.entryDate || oldEntry.entry_date,
+        data.grnId || null,
+        data.remarks || null,
+        data.status || 'draft',
+        id
+      ]
+    );
+
+    // 3. Delete existing items
+    await connection.execute('DELETE FROM stock_entry_items WHERE stock_entry_id = ?', [id]);
+
+    // 4. Insert new items
+    if (data.items && data.items.length > 0) {
+      for (const item of data.items) {
+        await connection.execute(
+          `INSERT INTO stock_entry_items 
+           (stock_entry_id, item_code, material_name, material_type, quantity, uom, batch_no, valuation_rate, amount)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            id,
+            item.itemCode || item.item_code,
+            item.materialName || item.material_name || null,
+            item.materialType || item.material_type || null,
+            item.quantity,
+            item.uom || null,
+            item.batchNo || item.batch_no || null,
+            item.valuationRate || item.valuation_rate || 0,
+            (item.quantity * (item.valuationRate || item.valuation_rate || 0))
+          ]
+        );
+      }
+    }
+
+    // 5. If new status is submitted, process stock movement
+    if (data.status === 'submitted') {
+      await processStockMovement(id, connection, userId);
+    }
+
+    await connection.commit();
+    return { success: true };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+};
+
 module.exports = {
   getAllStockEntries,
   getStockEntryById,
   createStockEntry,
+  updateStockEntry,
   submitStockEntry,
   deleteStockEntry,
   getStockEntryItemsFromGRN,

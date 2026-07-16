@@ -205,9 +205,11 @@ const materialRequestController = {
         
         // An item is "Available" if total stock >= required quantity
         const requiredQty = parseFloat(item.quantity || item.design_qty || 0);
-        item.fulfillment_source = totalStock >= requiredQty ? 'STOCK' : 'PURCHASE';
+        const allocatedQty = parseFloat(item.allocated_quantity || 0);
+        const remainingQty = Math.max(0, requiredQty - allocatedQty);
+        item.fulfillment_source = (remainingQty <= 0 || totalStock >= remainingQty) ? 'STOCK' : 'PURCHASE';
         
-        if (item.fulfillment_source === 'PURCHASE') {
+        if (remainingQty > 0 && totalStock < remainingQty) {
           allItemsAvailable = false;
         }
       }
@@ -262,6 +264,7 @@ const materialRequestController = {
       const { id } = req.params;
       const { status } = req.body;
       const normalizedStatus = status.toUpperCase();
+      let finalStatus = normalizedStatus;
 
       // If status is being updated to COMPLETED or FULFILLED, trigger stock out
       if (normalizedStatus === 'COMPLETED' || normalizedStatus === 'FULFILLED') {
@@ -277,35 +280,44 @@ const materialRequestController = {
           const [items] = await connection.query('SELECT * FROM material_request_items WHERE mr_id = ?', [id]);
           
           for (const item of items) {
-            // Find a warehouse with enough stock, or just the one with most stock
-            const [stockRows] = await connection.query(`
-              SELECT warehouse, current_balance 
-              FROM stock_balance 
-              WHERE item_code = ?
-              ORDER BY current_balance DESC LIMIT 1
-            `, [item.item_code]);
+            const requiredQty = parseFloat(item.quantity || item.design_qty || 0);
+            const releasedQty = mr.status?.toUpperCase() === 'PARTIALLY_RELEASED' ? parseFloat(item.allocated_quantity || 0) : 0;
+            const remainingQty = Math.max(0, requiredQty - releasedQty);
 
-            const sourceWarehouse = stockRows.length > 0 ? stockRows[0].warehouse : (mr.source_warehouse || 'Main');
+            if (remainingQty > 0) {
+              // Find a warehouse with enough stock, or just the one with most stock
+              const [stockRows] = await connection.query(`
+                SELECT warehouse, current_balance 
+                FROM stock_balance 
+                WHERE item_code = ?
+                ORDER BY current_balance DESC LIMIT 1
+              `, [item.item_code]);
 
-            // Use quantity (the required amount) for stock release
-            const releaseQty = item.quantity || item.design_qty;
+              const sourceWarehouse = stockRows.length > 0 ? stockRows[0].warehouse : (mr.source_warehouse || 'Main');
 
-            await stockService.addStockLedgerEntry(
-              item.item_code,
-              'OUT',
-              releaseQty,
-              'Material Request',
-              mr.id,
-              mr.mr_number,
-              {
-                remarks: `Material released for MR: ${mr.mr_number}`,
-                userId: req.user?.id || 1,
-                warehouse: sourceWarehouse,
-                materialName: item.item_name,
-                materialType: item.item_type,
-                unit: item.uom
-              },
-              connection
+              await stockService.addStockLedgerEntry(
+                item.item_code,
+                'OUT',
+                remainingQty,
+                'Material Request',
+                mr.id,
+                mr.mr_number,
+                {
+                  remarks: `Material released for MR: ${mr.mr_number}`,
+                  userId: req.user?.id || 1,
+                  warehouse: sourceWarehouse,
+                  materialName: item.item_name,
+                  materialType: item.item_type,
+                  unit: item.uom
+                },
+                connection
+              );
+            }
+
+            // Always update allocated_quantity to requiredQty on completion
+            await connection.execute(
+              `UPDATE material_request_items SET allocated_quantity = ? WHERE id = ?`,
+              [requiredQty, item.id]
             );
           }
 
@@ -317,12 +329,141 @@ const materialRequestController = {
             );
           }
         }
+      } else if (normalizedStatus === 'PARTIALLY_RELEASED') {
+        // Fetch MR and its items
+        const [mrRows] = await connection.query('SELECT * FROM material_requests WHERE id = ?', [id]);
+        if (mrRows.length === 0) {
+          throw new Error('Material Request not found');
+        }
+        const mr = mrRows[0];
+
+        // Fetch items
+        const [items] = await connection.query('SELECT * FROM material_request_items WHERE mr_id = ?', [id]);
+
+        // Find work_order linked to this plan/mr
+        let workOrderId = null;
+        if (mr.plan_id) {
+          const [woRows] = await connection.query('SELECT id FROM work_orders WHERE plan_id = ? LIMIT 1', [mr.plan_id]);
+          if (woRows.length > 0) {
+            workOrderId = woRows[0].id;
+          }
+        }
+
+        // Generate Material Issue number
+        const [countRows] = await connection.query('SELECT COUNT(*) as count FROM material_issues');
+        const count = countRows[0].count + 1;
+        const issueNumber = `MI-${new Date().getFullYear().toString().slice(-2)}-${count.toString().padStart(4, '0')}`;
+
+        // Create Material Issue header if we have a work_order
+        let issueId = null;
+        if (workOrderId) {
+          const [miResult] = await connection.execute(
+            `INSERT INTO material_issues (issue_number, work_order_id, issued_by, remarks)
+             VALUES (?, ?, ?, ?)`,
+            [issueNumber, workOrderId, req.user?.id || 1, `Partial release for MR: ${mr.mr_number}`]
+          );
+          issueId = miResult.insertId;
+        }
+
+        // Loop items and deduct available stock
+        for (const item of items) {
+          // Get total stock available across all warehouses for this item
+          const [stockRows] = await connection.query(`
+            SELECT warehouse, current_balance 
+            FROM stock_balance 
+            WHERE item_code = ? AND current_balance > 0
+            ORDER BY current_balance DESC
+          `, [item.item_code]);
+
+          const totalStock = stockRows.reduce((sum, row) => sum + parseFloat(row.current_balance), 0);
+          const requiredQty = parseFloat(item.quantity || item.design_qty || 0);
+          const allocatedQty = parseFloat(item.allocated_quantity || 0);
+          const remainingQty = Math.max(0, requiredQty - allocatedQty);
+
+          if (remainingQty <= 0 || totalStock <= 0) {
+            // Skip this material if no remaining quantity is needed or no stock is available
+            continue;
+          }
+
+          let amountToDeduct = remainingQty;
+          
+          for (const stockRow of stockRows) {
+            if (amountToDeduct <= 0) break;
+            const availableInWarehouse = parseFloat(stockRow.current_balance || 0);
+            if (availableInWarehouse <= 0) continue;
+
+            const issueQty = Math.min(amountToDeduct, availableInWarehouse);
+
+            if (issueQty > 0) {
+              // If we have a work_order and issueId, insert into material_issue_items
+              if (issueId) {
+                await connection.execute(
+                  `INSERT INTO material_issue_items (issue_id, material_name, material_type, item_code, quantity, uom, warehouse)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                  [issueId, item.item_name, item.item_type, item.item_code, issueQty, item.uom, stockRow.warehouse]
+                );
+              }
+
+              // Deduct from stock ledger
+              await stockService.addStockLedgerEntry(
+                item.item_code,
+                'OUT',
+                issueQty,
+                issueId ? 'MATERIAL_ISSUE' : 'Material Request',
+                issueId || mr.id,
+                issueId ? issueNumber : mr.mr_number,
+                {
+                  remarks: `Partial release for MR: ${mr.mr_number}`,
+                  userId: req.user?.id || 1,
+                  warehouse: stockRow.warehouse,
+                  materialName: item.item_name,
+                  materialType: item.item_type,
+                  unit: item.uom
+                },
+                connection
+              );
+
+              // Update allocated_quantity in material_request_items
+              await connection.execute(
+                `UPDATE material_request_items SET allocated_quantity = COALESCE(allocated_quantity, 0) + ? WHERE id = ?`,
+                [issueQty, item.id]
+              );
+
+              amountToDeduct -= issueQty;
+            }
+          }
+        }
+
+        // Check if all items are now fully released
+        const [updatedItems] = await connection.query(
+          'SELECT id, quantity, allocated_quantity FROM material_request_items WHERE mr_id = ?',
+          [id]
+        );
+        const allFullyReleased = updatedItems.every(item => {
+          const req = parseFloat(item.quantity || 0);
+          const alloc = parseFloat(item.allocated_quantity || 0);
+          return alloc >= req;
+        });
+
+        if (allFullyReleased) {
+          finalStatus = 'FULFILLED';
+        } else {
+          finalStatus = 'PARTIALLY_RELEASED';
+        }
+
+        // If linked to a production plan, update its material status
+        if (mr.plan_id) {
+          await connection.query(
+            "UPDATE production_plan_materials SET status = ? WHERE plan_id = ?",
+            [finalStatus, mr.plan_id]
+          );
+        }
       }
 
-      await connection.query('UPDATE material_requests SET status = ? WHERE id = ?', [normalizedStatus, id]);
+      await connection.query('UPDATE material_requests SET status = ? WHERE id = ?', [finalStatus, id]);
       
       await connection.commit();
-      res.json({ message: `Material Request status updated to ${normalizedStatus}` });
+      res.json({ message: `Material Request status updated to ${finalStatus}` });
     } catch (error) {
       if (connection) await connection.rollback();
       console.error('Error in updateStatus:', error);

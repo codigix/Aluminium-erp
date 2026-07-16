@@ -1235,8 +1235,6 @@ function App() {
     { label: 'Process Sheet', moduleId: 'process-sheet', icon: 'spreadsheet', indent: true, prefix: '/design' },
 
     { label: 'PRODUCTION', isGroup: true, groupId: 'production-group' },
-    { label: 'Project Requests', moduleId: 'project-requests', icon: 'clipboard', indent: true, prefix: '/production' },
-    { label: 'Material Requirements', moduleId: 'material-requirements', icon: 'package-search', indent: true, prefix: '/production' },
     { label: 'Production Plan', moduleId: 'production-plan', icon: 'calendar', indent: true, prefix: '/production' },
     { label: 'Work Order', moduleId: 'work-order', icon: 'wrench', indent: true, prefix: '/production' },
     { label: 'Job Card', moduleId: 'job-card', icon: 'signature', indent: true, prefix: '/production' },

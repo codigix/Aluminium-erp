@@ -2468,6 +2468,8 @@ enum material_requests_status {
   ORDERED
   COMPLETED
   PO_CREATED
+  PARTIALLY_RELEASED
+  PARTIAL_STOCK_AVAILABLE
 }
 
 enum permissions_status {

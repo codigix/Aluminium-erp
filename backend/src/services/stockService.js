@@ -15,7 +15,7 @@ const calculateBalanceDetailsFromLedger = async (itemCode, warehouse = null, con
   if (warehouse && warehouse !== 'ALL') {
     query += ` AND warehouse = ? `;
     params.push(warehouse);
-  } else if (warehouse === null) {
+  } else if (warehouse === null || warehouse === '') {
     query += ` AND (warehouse IS NULL OR warehouse = '') `;
   }
   // If warehouse === 'ALL', no additional filter is added
@@ -27,7 +27,7 @@ const calculateBalanceDetailsFromLedger = async (itemCode, warehouse = null, con
     received_qty: parseFloat(ledger.accepted_qty) || 0,
     accepted_qty: parseFloat(ledger.accepted_qty) || 0,
     issued_qty: parseFloat(ledger.issued_qty) || 0,
-    current_balance: parseFloat(ledger.current_balance) || 0
+    current_balance: Math.max(0, parseFloat(ledger.current_balance) || 0)
   };
 };
 
@@ -236,7 +236,7 @@ const getStockBalance = async (drawingNo = null, includeAll = false) => {
     received_qty: parseFloat(balance.accepted_qty || 0),
     accepted_qty: parseFloat(balance.accepted_qty || 0),
     issued_qty: parseFloat(balance.issued_qty || 0),
-    current_balance: parseFloat(balance.current_balance || 0),
+    current_balance: Math.max(0, parseFloat(balance.current_balance || 0)),
     unit: balance.unit || 'NOS',
     valuation_rate: balance.valuation_rate,
     selling_rate: balance.selling_rate,
@@ -324,7 +324,7 @@ const getStockBalanceByItem = async (itemCode) => {
     received_qty: details.received_qty,
     accepted_qty: details.accepted_qty,
     issued_qty: details.issued_qty,
-    current_balance: parseFloat(balance[0].current_balance || 0),
+    current_balance: Math.max(0, parseFloat(balance[0].current_balance || 0)),
     avg_cost: parseFloat(balance[0].avg_cost || 0),
     unit: balance[0].unit || 'NOS',
     preferred_supplier: preferredSupplier,
@@ -337,10 +337,12 @@ const getStockBalanceByItem = async (itemCode) => {
 
 const getStockBalanceByItemAndWarehouse = async (itemCode, warehouse = null, connection = null) => {
   const executor = connection || pool;
+  const wh = warehouse || '';
   const [balance] = await executor.query(`
     SELECT * FROM stock_balance 
-    WHERE item_code = ? AND (warehouse = ? OR (warehouse IS NULL AND ? IS NULL))
-  `, [itemCode, warehouse, warehouse]);
+    WHERE item_code = ? AND (warehouse = ? OR (warehouse IS NULL AND (? IS NULL OR ? = '')))
+    ORDER BY current_balance DESC
+  `, [itemCode, wh, wh, wh]);
 
   return balance.length > 0 ? balance[0] : null;
 };
@@ -405,10 +407,18 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
     let newBalance = 0;
     const qty = parseFloat(quantity) || 0;
 
+    // Validation to prevent negative stock
+    if (transactionType === 'OUT' || ((transactionType === 'ADJUSTMENT' || transactionType === 'RETURN') && qty < 0)) {
+      const deductionQty = Math.abs(qty);
+      if (currentBalance < deductionQty) {
+        throw new Error(`Insufficient stock. Available Qty: ${currentBalance}. Negative stock is not allowed.`);
+      }
+    }
+
     if (transactionType === 'IN' || transactionType === 'GRN_IN') {
       newBalance = currentBalance + qty;
     } else if (transactionType === 'OUT') {
-      newBalance = Math.max(0, currentBalance - qty);
+      newBalance = currentBalance - qty;
     } else if (transactionType === 'ADJUSTMENT' || transactionType === 'RETURN') {
       newBalance = currentBalance + qty;
     } else {

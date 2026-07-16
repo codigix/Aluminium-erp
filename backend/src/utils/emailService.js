@@ -85,7 +85,7 @@ const generateQuotationHTML = async (clientName, items, totalAmount, notes, clie
       const totalLineStr = isRejected ?
         '<span style="color: #dc2626; font-weight: bold;">REJECTED</span>' :
         `₹${lineTotalBase.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
-      
+
       // PDF: Always use solid border for main rows (child parts are hidden)
       const mainItemRow = `
       <tr>
@@ -753,17 +753,40 @@ const generateQuotationPDF = async (clientName, items, totalAmount, notes, clien
 };
 
 const generateCostBreakdownPDF = async (clientName, quoteNumber, projectName, dataRows) => {
-  const headers = dataRows[0];
-  const rows = dataRows.slice(1);
+  // Get body rows (exclude the last placeholder row, which is the Grand Total row sent from controller)
+  const bodyRows = dataRows.slice(1, -1);
+  const grandTotalEntry = dataRows[dataRows.length - 1];
 
-  const formattedRowsHtml = rows.map(r => {
-    const isGrandTotal = r[0] === "Grand Total";
+  // Compute column sums from parent (non-child) rows
+  const NUM_COLS = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 19];
+  const colTotals = {};
+  NUM_COLS.forEach(c => { colTotals[c] = 0; });
+  let totalQty = 0;
+
+  bodyRows.forEach(r => {
     const isChild = typeof r[0] === 'string' && r[0].startsWith('↳');
+    if (!isChild) {
+      NUM_COLS.forEach(c => { colTotals[c] += (parseFloat(r[c]) || 0); });
+      totalQty += (parseFloat(r[17]) || 0);
+    }
+  });
+
+  const fmt = (val) =>
+    (val !== undefined && val !== null && val !== '')
+      ? '₹' + Number(val).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      : '₹0.00';
+
+  const fmtOrBlank = (val) =>
+    (val !== undefined && val !== null && val !== '' && !isNaN(Number(val)) && Number(val) !== 0)
+      ? '₹' + Number(val).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      : '';
+
+  const formattedRowsHtml = bodyRows.map(r => {
+    const isChild    = typeof r[0] === 'string' && r[0].startsWith('↳');
     const isAssembly = r[3] === 'ASM';
-    
+
     let rowClass = '';
-    if (isGrandTotal) rowClass = 'bg-slate-100 font-bold';
-    else if (isChild) rowClass = 'child-row bg-slate-50';
+    if (isChild)    rowClass = 'child-row bg-slate-50';
     else if (isAssembly) rowClass = 'font-bold bg-slate-50';
 
     return `
@@ -772,23 +795,50 @@ const generateCostBreakdownPDF = async (clientName, quoteNumber, projectName, da
         <td class="${isChild ? 'pl-4' : 'font-bold'}" style="border: 1px solid #cbd5e1; padding: 4px 3px;">${r[1] || ''}</td>
         <td style="border: 1px solid #cbd5e1; padding: 4px 3px; max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${r[2] || ''}</td>
         <td class="text-center font-bold" style="border: 1px solid #cbd5e1; padding: 4px 3px; color: ${isAssembly ? '#2563eb' : '#475569'};">${r[3] || ''}</td>
-        <td class="text-right" style="border: 1px solid #cbd5e1; padding: 4px 3px;">${(r[4] !== undefined && r[4] !== null && r[4] !== '') ? '₹' + Number(r[4]).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '₹0.00'}</td>
-        <td class="text-right" style="border: 1px solid #cbd5e1; padding: 4px 3px;">${(r[5] !== undefined && r[5] !== null && r[5] !== '') ? '₹' + Number(r[5]).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '₹0.00'}</td>
-        <td class="text-right" style="border: 1px solid #cbd5e1; padding: 4px 3px;">${(r[6] !== undefined && r[6] !== null && r[6] !== '') ? '₹' + Number(r[6]).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '₹0.00'}</td>
-        <td class="text-right" style="border: 1px solid #cbd5e1; padding: 4px 3px;">${(r[7] !== undefined && r[7] !== null && r[7] !== '') ? '₹' + Number(r[7]).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '₹0.00'}</td>
-        <td class="text-right" style="border: 1px solid #cbd5e1; padding: 4px 3px;">${(r[8] !== undefined && r[8] !== null && r[8] !== '') ? '₹' + Number(r[8]).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '₹0.00'}</td>
-        <td class="text-right" style="border: 1px solid #cbd5e1; padding: 4px 3px;">${(r[9] !== undefined && r[9] !== null && r[9] !== '') ? '₹' + Number(r[9]).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '₹0.00'}</td>
-        <td class="text-right" style="border: 1px solid #cbd5e1; padding: 4px 3px;">${(r[10] !== undefined && r[10] !== null && r[10] !== '') ? '₹' + Number(r[10]).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '₹0.00'}</td>
-        <td class="text-right" style="border: 1px solid #cbd5e1; padding: 4px 3px;">${(r[11] !== undefined && r[11] !== null && r[11] !== '') ? '₹' + Number(r[11]).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '₹0.00'}</td>
-        <td class="text-right" style="border: 1px solid #cbd5e1; padding: 4px 3px;">${(r[12] !== undefined && r[12] !== null && r[12] !== '') ? '₹' + Number(r[12]).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '₹0.00'}</td>
-        <td class="text-right" style="border: 1px solid #cbd5e1; padding: 4px 3px;">${(r[13] !== undefined && r[13] !== null && r[13] !== '') ? '₹' + Number(r[13]).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '₹0.00'}</td>
-        <td class="text-right" style="border: 1px solid #cbd5e1; padding: 4px 3px;">${(r[14] !== undefined && r[14] !== null && r[14] !== '') ? '₹' + Number(r[14]).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '₹0.00'}</td>
-        <td class="text-center font-bold" style="border: 1px solid #cbd5e1; padding: 4px 3px;">${r[15] !== undefined ? r[15] : ''}</td>
-        <td class="text-right font-semibold" style="border: 1px solid #cbd5e1; padding: 4px 3px;">${(r[16] !== undefined && r[16] !== null && r[16] !== '') ? '₹' + Number(r[16]).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''}</td>
-        <td class="text-right font-bold text-indigo-750" style="border: 1px solid #cbd5e1; padding: 4px 3px;">${(r[17] !== undefined && r[17] !== null && r[17] !== '') ? '₹' + Number(r[17]).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''}</td>
+        <td class="text-right" style="border: 1px solid #cbd5e1; padding: 4px 3px;">${fmt(r[4])}</td>
+        <td class="text-right" style="border: 1px solid #cbd5e1; padding: 4px 3px;">${fmt(r[5])}</td>
+        <td class="text-right" style="border: 1px solid #cbd5e1; padding: 4px 3px;">${fmt(r[6])}</td>
+        <td class="text-right" style="border: 1px solid #cbd5e1; padding: 4px 3px;">${fmt(r[7])}</td>
+        <td class="text-right" style="border: 1px solid #cbd5e1; padding: 4px 3px;">${fmt(r[8])}</td>
+        <td class="text-right" style="border: 1px solid #cbd5e1; padding: 4px 3px;">${fmt(r[9])}</td>
+        <td class="text-right" style="border: 1px solid #cbd5e1; padding: 4px 3px;">${fmt(r[10])}</td>
+        <td class="text-right" style="border: 1px solid #cbd5e1; padding: 4px 3px;">${fmt(r[11])}</td>
+        <td class="text-right" style="border: 1px solid #cbd5e1; padding: 4px 3px;">${fmt(r[12])}</td>
+        <td class="text-right" style="border: 1px solid #cbd5e1; padding: 4px 3px;">${fmt(r[13])}</td>
+        <td class="text-right" style="border: 1px solid #cbd5e1; padding: 4px 3px;">${fmt(r[14])}</td>
+        <td class="text-right" style="border: 1px solid #cbd5e1; padding: 4px 3px;">${fmt(r[15])}</td>
+        <td class="text-right" style="border: 1px solid #cbd5e1; padding: 4px 3px;">${fmt(r[16])}</td>
+        <td class="text-center font-bold" style="border: 1px solid #cbd5e1; padding: 4px 3px;">${r[17] !== undefined ? r[17] : ''}</td>
+        <td class="text-right font-semibold" style="border: 1px solid #cbd5e1; padding: 4px 3px;">${fmtOrBlank(r[18])}</td>
+        <td class="text-right font-bold text-indigo-750" style="border: 1px solid #cbd5e1; padding: 4px 3px;">${fmtOrBlank(r[19])}</td>
       </tr>
     `;
   }).join('');
+
+  // ── Grand Total row HTML ──
+  const grandTotalHtml = `
+    <tr class="bg-slate-100 font-bold">
+      <td colspan="4" class="text-left font-bold" style="border: 1px solid #94a3b8; padding: 5px 4px;">Grand Total</td>
+      <td class="text-right" style="border: 1px solid #94a3b8; padding: 5px 3px;">${fmt(colTotals[4])}</td>
+      <td class="text-right" style="border: 1px solid #94a3b8; padding: 5px 3px;">${fmt(colTotals[5])}</td>
+      <td class="text-right" style="border: 1px solid #94a3b8; padding: 5px 3px;">${fmt(colTotals[6])}</td>
+      <td class="text-right" style="border: 1px solid #94a3b8; padding: 5px 3px;">${fmt(colTotals[7])}</td>
+      <td class="text-right" style="border: 1px solid #94a3b8; padding: 5px 3px;">${fmt(colTotals[8])}</td>
+      <td class="text-right" style="border: 1px solid #94a3b8; padding: 5px 3px;">${fmt(colTotals[9])}</td>
+      <td class="text-right" style="border: 1px solid #94a3b8; padding: 5px 3px;">${fmt(colTotals[10])}</td>
+      <td class="text-right" style="border: 1px solid #94a3b8; padding: 5px 3px;">${fmt(colTotals[11])}</td>
+      <td class="text-right" style="border: 1px solid #94a3b8; padding: 5px 3px;">${fmt(colTotals[12])}</td>
+      <td class="text-right" style="border: 1px solid #94a3b8; padding: 5px 3px;">${fmt(colTotals[13])}</td>
+      <td class="text-right" style="border: 1px solid #94a3b8; padding: 5px 3px;">${fmt(colTotals[14])}</td>
+      <td class="text-right" style="border: 1px solid #94a3b8; padding: 5px 3px;">${fmt(colTotals[15])}</td>
+      <td class="text-right" style="border: 1px solid #94a3b8; padding: 5px 3px;">${fmt(colTotals[16])}</td>
+      <td class="text-center" style="border: 1px solid #94a3b8; padding: 5px 3px;">${totalQty}</td>
+      <td style="border: 1px solid #94a3b8; padding: 5px 3px;"></td>
+      <td class="text-right font-bold" style="border: 1px solid #94a3b8; padding: 5px 3px; color: #1e40af;">
+        ${fmt(parseFloat(grandTotalEntry[19]) || colTotals[19])}
+      </td>
+    </tr>
+  `;
 
   const html = `
     <!DOCTYPE html>
@@ -918,6 +968,8 @@ const generateCostBreakdownPDF = async (clientName, quoteNumber, projectName, da
               <th class="text-right" style="width: 100px;">Laser Cutting</th>
               <th class="text-right" style="width: 85px;">Sparking</th>
               <th class="text-right" style="width: 85px;">Finish</th>
+              <th class="text-right" style="width: 85px;">QC</th>
+              <th class="text-right" style="width: 85px;">Packing</th>
               <th class="text-right" style="width: 100px;">Profit & Overheads</th>
               <th style="width: 45px;">Qty</th>
               <th class="text-right" style="width: 85px;">Unit Price</th>

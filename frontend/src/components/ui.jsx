@@ -513,6 +513,8 @@ export const StatusBadge = ({ status }) => {
         // Danger style: Red
         return 'bg-rose-50 border-rose-100 text-rose-600 shadow-sm border'
 
+      case 'PARTIALLY_RELEASED':
+      case 'PARTIAL_STOCK_AVAILABLE':
       case 'RFQ_REQUESTED':
       case 'ON_HOLD':
       case 'PARTIALLY_CONSUMED':

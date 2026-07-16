@@ -161,7 +161,7 @@ const getQuotationRequests = async (req, res, next) => {
 
       if (row.batch_id && batchComponentsMap[row.batch_id]) {
         const { parents, components } = batchComponentsMap[row.batch_id];
-        const matchingParents = parents.filter(p => 
+        const matchingParents = parents.filter(p =>
           (p.item_code === itemCode && p.item_code !== null) ||
           (p.drawing_no === drawingNo && p.drawing_no !== null && p.drawing_no !== '—' && p.drawing_no !== 'NA')
         );
@@ -177,7 +177,7 @@ const getQuotationRequests = async (req, res, next) => {
           drawingNo
         ]);
 
-        const matchedComponents = components.filter(c => 
+        const matchedComponents = components.filter(c =>
           (row.version === undefined || c.version === row.version) &&
           matchCandidates.has(String(c.rejection_reason))
         );
@@ -568,13 +568,13 @@ const sendQuotationViaEmail = async (req, res, next) => {
     const resolvedContactPerson = req.body.contactPerson || req.body.contact_person;
     const resolvedClientAddress = req.body.clientAddress || req.body.address;
 
-    const { 
-      items, 
-      totalAmount, 
-      notes, 
-      emailRequired = true, 
-      status, 
-      projectName, 
+    const {
+      items,
+      totalAmount,
+      notes,
+      emailRequired = true,
+      status,
+      projectName,
       clearPendingBomId,
       customSubject,
       customMessage,
@@ -1155,7 +1155,7 @@ const exportQuotationCostBreakdown = async (req, res, next) => {
       const rate = parseFloat(m.rate || 0);
       const weightPerUnit = parseFloat(m.weight_per_unit || 0);
       const scrapPercent = parseFloat(m.scrap_percent || 0);
-      
+
       if (weightPerUnit > 0) {
         const sP = scrapPercent > 1 ? scrapPercent / 100 : scrapPercent;
         return qty * weightPerUnit * (1 + sP) * rate;
@@ -1171,7 +1171,7 @@ const exportQuotationCostBreakdown = async (req, res, next) => {
         const setupTime = parseFloat(op.setup_time_min || 0);
         const cycleTime = parseFloat(op.cycle_time_min || 0);
         const totalOpCost = ((cycleTime + setupTime) / 60) * hourlyRate;
-        
+
         if (name.includes('laser')) ops.laser += totalOpCost;
         else if (name.includes('cnc') || name.includes('turn')) ops.cnc += totalOpCost;
         else if (name.includes('vmc')) ops.vmc += totalOpCost;
@@ -1192,8 +1192,8 @@ const exportQuotationCostBreakdown = async (req, res, next) => {
 
     // Columns structure (Material, Material Size, and Weight columns removed)
     const headers = [
-      "Sr No", "Component Number", "Description", "Type", "Material Cost", 
-      "CNC/Turning", "Milling/Cutting", "VMC", "Drilling", "Tapping", "Grinding", "Laser Cutting & Bending", 
+      "Sr No", "Component Number", "Description", "Type", "Material Cost",
+      "CNC/Turning", "Milling/Cutting", "VMC", "Drilling", "Tapping", "Grinding", "Laser Cutting & Bending",
       "Sparking", "Finish", "Profit & Overheads", "Qty", "Unit Price", "Total Price"
     ];
 
@@ -1204,7 +1204,7 @@ const exportQuotationCostBreakdown = async (req, res, next) => {
     for (const q of batchQuotes) {
       const effectiveItemId = q.sales_order_item_id || null;
       const resolvedDrawingId = q.effective_drawing_id || q.drawing_id || null;
-      
+
       const parentBOM = {
         materials: await bomService.getItemMaterials(effectiveItemId, q.item_code, q.effective_drawing_no, resolvedDrawingId),
         components: await bomService.getItemComponents(effectiveItemId, q.item_code, q.effective_drawing_no, null, null, null, resolvedDrawingId),
@@ -1215,7 +1215,7 @@ const exportQuotationCostBreakdown = async (req, res, next) => {
       const qQty = parseFloat(q.item_qty) || 0;
       const qRate = parseFloat(q.total_amount / (q.item_qty || 1)) || 0;
       const qTotal = parseFloat(q.total_amount) || 0;
-      
+
       grandTotalSum += qTotal;
 
       if (!isAssembly) {
@@ -1510,16 +1510,16 @@ const exportQuotationCostBreakdownPDF = async (req, res, next) => {
       }
 
       // ── Quotation Pricing (SOURCE OF TRUTH) ──────────────────────────────
-      const qQty          = parseFloat(q.item_qty) || 0;
-      const qTotal        = parseFloat(q.total_amount) || 0;
-      const qRate         = qQty > 0 ? qTotal / qQty : 0;
+      const qQty = parseFloat(q.item_qty) || 0;
+      const qTotal = parseFloat(q.total_amount) || 0;
+      const qRate = qQty > 0 ? qTotal / qQty : 0;
       const storedBomCost = parseFloat(q.bom_cost) || 0;
 
       grandTotalSum += qTotal;
 
       // ── BOM Data (for operation proportion only) ──────────────────────────
       const parentBOM = {
-        materials:  await bomService.getItemMaterials(effectiveItemId, q.item_code, q.effective_drawing_no, resolvedDrawingId),
+        materials: await bomService.getItemMaterials(effectiveItemId, q.item_code, q.effective_drawing_no, resolvedDrawingId),
         components: await bomService.getItemComponents(effectiveItemId, q.item_code, q.effective_drawing_no, null, null, null, resolvedDrawingId),
         operations: await bomService.getItemOperations(effectiveItemId, q.item_code, q.effective_drawing_no, resolvedDrawingId)
       };
@@ -1542,7 +1542,7 @@ const exportQuotationCostBreakdownPDF = async (req, res, next) => {
               );
               if (childRes[0].length > 0) {
                 return {
-                  materials:  await bomService.getItemMaterials(null, c.component_code, null, null),
+                  materials: await bomService.getItemMaterials(null, c.component_code, null, null),
                   operations: await bomService.getItemOperations(null, c.component_code, null, null)
                 };
               }
@@ -1564,7 +1564,7 @@ const exportQuotationCostBreakdownPDF = async (req, res, next) => {
       }
 
       // ── Use raw BOM values directly (no scaling/distribution) ─────────
-      const rawOpsSum   = Object.values(rawOps).reduce((a, b) => a + b, 0);
+      const rawOpsSum = Object.values(rawOps).reduce((a, b) => a + b, 0);
       const scaledMatCost = rawMatCost;
       const scaledOps = { ...rawOps };
 
@@ -1572,8 +1572,6 @@ const exportQuotationCostBreakdownPDF = async (req, res, next) => {
       const profit = qRate - (scaledMatCost + rawOpsSum);
 
       // In PDF, since there is no separate QC and Packing column, map them to Finish to keep totals exact
-      const finishPDFVal = (scaledOps.finish || 0) + (scaledOps.qc || 0) + (scaledOps.packing || 0);
-
       dataRows.push([
         mainSr++,
         q.effective_drawing_no || q.drawing_no || q.item_code || '—',
@@ -1588,7 +1586,9 @@ const exportQuotationCostBreakdownPDF = async (req, res, next) => {
         scaledOps.grinding || 0,
         scaledOps.laser || 0,
         scaledOps.sparking || 0,
-        finishPDFVal,
+        scaledOps.finish || 0,
+        scaledOps.qc || 0,
+        scaledOps.packing || 0,
         profit,        // Profit & Overheads = Selling Price − (Material Cost + Operation Cost)
         qQty,
         qRate,
@@ -1597,9 +1597,9 @@ const exportQuotationCostBreakdownPDF = async (req, res, next) => {
     }
 
     // Grand Total Row
-    const grandTotalRow = Array(18).fill('');
+    const grandTotalRow = Array(20).fill('');
     grandTotalRow[0] = 'Grand Total';
-    grandTotalRow[17] = grandTotalSum;
+    grandTotalRow[19] = grandTotalSum;
     dataRows.push(grandTotalRow);
 
     const pdfBuffer = await emailService.generateCostBreakdownPDF(
@@ -1735,15 +1735,15 @@ const getQuotationCostBreakdownDetails = async (req, res, next) => {
       }
 
       // ── Quotation Pricing (SOURCE OF TRUTH) ────────────────────────────
-      const qQty   = parseFloat(q.item_qty) || 0;
+      const qQty = parseFloat(q.item_qty) || 0;
       const qTotal = parseFloat(q.total_amount) || 0;   // Grand Total for this line item
-      const qRate  = qQty > 0 ? qTotal / qQty : 0;      // Selling price per unit
+      const qRate = qQty > 0 ? qTotal / qQty : 0;      // Selling price per unit
       // bom_cost stored in quotation = manufacturing cost per unit
       const storedBomCost = parseFloat(q.bom_cost) || 0;
 
       // ── BOM Data (operation proportion only, NOT used for grand total) ──
       const parentBOM = {
-        materials:  await bomService.getItemMaterials(effectiveItemId, q.item_code, q.effective_drawing_no, resolvedDrawingId),
+        materials: await bomService.getItemMaterials(effectiveItemId, q.item_code, q.effective_drawing_no, resolvedDrawingId),
         components: await bomService.getItemComponents(effectiveItemId, q.item_code, q.effective_drawing_no, null, null, null, resolvedDrawingId),
         operations: await bomService.getItemOperations(effectiveItemId, q.item_code, q.effective_drawing_no, resolvedDrawingId)
       };
@@ -1768,7 +1768,7 @@ const getQuotationCostBreakdownDetails = async (req, res, next) => {
               );
               if (childRes[0].length > 0) {
                 return {
-                  materials:  await bomService.getItemMaterials(null, c.component_code, null, null),
+                  materials: await bomService.getItemMaterials(null, c.component_code, null, null),
                   operations: await bomService.getItemOperations(null, c.component_code, null, null)
                 };
               }
@@ -1790,7 +1790,7 @@ const getQuotationCostBreakdownDetails = async (req, res, next) => {
       }
 
       // ── Use raw BOM values directly (no scaling/distribution) ─────────
-      const rawOpsSum   = Object.values(rawOps).reduce((a, b) => a + b, 0);
+      const rawOpsSum = Object.values(rawOps).reduce((a, b) => a + b, 0);
       const scaledMatCost = rawMatCost;
       const scaledOps = { ...rawOps };
 
@@ -1798,26 +1798,26 @@ const getQuotationCostBreakdownDetails = async (req, res, next) => {
       const profit = qRate - (scaledMatCost + rawOpsSum);
 
       dataRows.push({
-        sr:           String(mainSr++),
-        drawing_no:   q.effective_drawing_no || q.drawing_no || q.item_code || '—',
-        description:  q.effective_description || '',
-        type:         isAssembly ? 'ASM' : (q.item_group || 'PART'),
+        sr: String(mainSr++),
+        drawing_no: q.effective_drawing_no || q.drawing_no || q.item_code || '—',
+        description: q.effective_description || '',
+        type: isAssembly ? 'ASM' : (q.item_group || 'PART'),
         materialCost: scaledMatCost,
-        cnc:          scaledOps.cnc || 0,
-        milling:      scaledOps.milling || 0,
-        vmc:          scaledOps.vmc || 0,
-        drilling:     scaledOps.drilling || 0,
-        tapping:      scaledOps.tapping || 0,
-        grinding:     scaledOps.grinding || 0,
-        laser:        scaledOps.laser || 0,
-        sparking:     scaledOps.sparking || 0,
-        finish:       scaledOps.finish || 0,
-        qc:           scaledOps.qc      || 0,
-        packing:      scaledOps.packing || 0,
-        profit:       profit,
-        qty:          qQty,
-        unitRate:     qRate,
-        total:        qTotal
+        cnc: scaledOps.cnc || 0,
+        milling: scaledOps.milling || 0,
+        vmc: scaledOps.vmc || 0,
+        drilling: scaledOps.drilling || 0,
+        tapping: scaledOps.tapping || 0,
+        grinding: scaledOps.grinding || 0,
+        laser: scaledOps.laser || 0,
+        sparking: scaledOps.sparking || 0,
+        finish: scaledOps.finish || 0,
+        qc: scaledOps.qc || 0,
+        packing: scaledOps.packing || 0,
+        profit: profit,
+        qty: qQty,
+        unitRate: qRate,
+        total: qTotal
       });
     }
 

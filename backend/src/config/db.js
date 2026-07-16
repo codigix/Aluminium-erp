@@ -597,10 +597,9 @@ const ensureMaterialRequestColumns = async () => {
 
     const missing = requiredColumns.filter(column => !existing.has(column.name));
 
-    // Update status enum if needed
     const statusCol = columns.find(c => c.Field === 'status');
-    if (statusCol && (!statusCol.Type.includes('ORDERED') || !statusCol.Type.includes('COMPLETED') || !statusCol.Type.includes('PO_CREATED'))) {
-      await connection.query(`ALTER TABLE material_requests MODIFY status ENUM('DRAFT', 'Approved ', 'PROCESSING', 'FULFILLED', 'CANCELLED', 'ORDERED', 'COMPLETED', 'PO_CREATED') DEFAULT 'DRAFT'`);
+    if (statusCol && (!statusCol.Type.includes('ORDERED') || !statusCol.Type.includes('COMPLETED') || !statusCol.Type.includes('PO_CREATED') || !statusCol.Type.includes('PARTIALLY_RELEASED'))) {
+      await connection.query(`ALTER TABLE material_requests MODIFY status ENUM('DRAFT', 'Approved ', 'PROCESSING', 'FULFILLED', 'CANCELLED', 'ORDERED', 'COMPLETED', 'PO_CREATED', 'PARTIALLY_RELEASED', 'PARTIAL_STOCK_AVAILABLE') DEFAULT 'DRAFT'`);
       console.log('Material Request status enum updated');
     }
 

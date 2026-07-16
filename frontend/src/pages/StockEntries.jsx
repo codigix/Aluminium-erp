@@ -132,6 +132,7 @@ const StockEntries = () => {
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const [warehouses, setWarehouses] = useState([]);
   const [grns, setGrns] = useState([]);
   const [stockBalances, setStockBalances] = useState([]);
@@ -140,19 +141,61 @@ const StockEntries = () => {
   const [warehouseFilter, setWarehouseFilter] = useState('all');
   const [expandedId, setExpandedId] = useState(null);
 
+  const loadEditingDetails = async (id) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/stock-entries/${id}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!response.ok) throw new Error('Failed to load stock entry details');
+      const detail = await response.json();
+
+      setEditingId(parseInt(id));
+      setFormData({
+        entryType: detail.entry_type,
+        entryDate: detail.entry_date ? new Date(detail.entry_date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+        fromWarehouseId: detail.from_warehouse_id || '',
+        toWarehouseId: detail.to_warehouse_id || '',
+        grnId: detail.grn_id || '',
+        purpose: detail.purpose || '',
+        remarks: detail.remarks || '',
+        items: (detail.items || []).map(item => ({
+          id: item.id,
+          itemCode: item.item_code,
+          materialName: item.material_name,
+          materialType: item.material_type,
+          quantity: item.quantity,
+          uom: item.uom,
+          batchNo: item.batch_no || '',
+          valuationRate: item.valuation_rate || 0
+        }))
+      });
+    } catch (error) {
+      errorToast(error.message);
+    }
+  };
+
   useEffect(() => {
     const isNew = location.pathname.includes('/new');
     const viewId = searchParams.get('id');
+    const editId = searchParams.get('edit');
 
     if (isNew) {
       setShowModal(true);
       setExpandedId(null);
+      if (editId) {
+        loadEditingDetails(editId);
+      } else {
+        setEditingId(null);
+      }
     } else if (viewId) {
       setExpandedId(parseInt(viewId));
       setShowModal(false);
+      setEditingId(null);
     } else {
       setShowModal(false);
       setExpandedId(null);
+      setEditingId(null);
     }
   }, [location.pathname, searchParams]);
 
@@ -376,8 +419,10 @@ const StockEntries = () => {
 
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/stock-entries`, {
-        method: 'POST',
+      const url = editingId ? `${API_BASE}/stock-entries/${editingId}` : `${API_BASE}/stock-entries`;
+      const method = editingId ? 'PUT' : 'POST';
+      const response = await fetch(url, {
+        method,
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -385,10 +430,11 @@ const StockEntries = () => {
         body: JSON.stringify({ ...formData, purpose: finalPurpose, status })
       });
 
-      if (!response.ok) throw new Error('Failed to create stock entry');
+      if (!response.ok) throw new Error(editingId ? 'Failed to update stock entry' : 'Failed to create stock entry');
       
       successToast(`Stock entry ${status === 'submitted' ? 'submitted' : 'saved'} successfully`);
       setShowModal(false);
+      setEditingId(null);
       setFormData({
         entryType: 'Material Receipt',
         entryDate: new Date().toISOString().split('T')[0],
@@ -400,6 +446,7 @@ const StockEntries = () => {
         items: []
       });
       fetchEntries();
+      navigate(`${deptPrefix}/stock-entries`);
     } catch (error) {
       console.error('Error creating stock entry:', error);
       errorToast(error.message);
@@ -665,22 +712,21 @@ const StockEntries = () => {
                   <td className="p-2  text-right">
                     <div className="flex items-center justify-end gap-2  group-hover:opacity-100 transition-opacity">
                       {entry.status === 'draft' && (
-                        <>
-                          <button 
-                            onClick={() => submitExisting(entry.id)}
-                            className="p-2 text-emerald-600 hover:bg-emerald-50 rounded  transition-colors"
-                            title="Submit"
-                          >
-                            <CheckCircle2 className="w-4 h-4" />
-                          </button>
-                          <button 
-                            className="p-2 text-blue-600 hover:bg-blue-50 rounded  transition-colors"
-                            title="Edit"
-                          >
-                            <Edit3 className="w-4 h-4" />
-                          </button>
-                        </>
+                        <button 
+                          onClick={() => submitExisting(entry.id)}
+                          className="p-2 text-emerald-600 hover:bg-emerald-50 rounded  transition-colors"
+                          title="Submit"
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                        </button>
                       )}
+                      <button 
+                        onClick={() => navigate(`${deptPrefix}/stock-entries/new?edit=${entry.id}`)}
+                        className="p-2 text-blue-600 hover:bg-blue-50 rounded  transition-colors"
+                        title="Edit"
+                      >
+                        <Edit3 className="w-4 h-4" />
+                      </button>
                       <button 
                         onClick={() => handleDelete(entry.id)}
                         className="p-2 text-rose-600 hover:bg-rose-50 rounded  transition-colors"
@@ -710,7 +756,7 @@ const StockEntries = () => {
           <div className="relative bg-white rounded shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col animate-in fade-in zoom-in duration-200">
             <div className="p-2  border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
               <div>
-                <h2 className="text-xl  text-slate-900">Create Stock Entry</h2>
+                <h2 className="text-xl  text-slate-900">{editingId ? 'Edit Stock Entry' : 'Create Stock Entry'}</h2>
                 <p className="text-xs text-slate-500 mt-1">Record material movements between warehouses or adjust stock levels.</p>
               </div>
               <button 
@@ -917,9 +963,33 @@ const StockEntries = () => {
                             <td className="p-2  text-right">₹{item.valuationRate}</td>
                             <td className="p-2  text-right  text-slate-700">₹{(item.quantity * item.valuationRate).toFixed(2)}</td>
                             <td className="p-2  text-center">
-                              <button onClick={() => removeItem(idx)} className="p-1.5 text-rose-500 hover:bg-rose-50 rounded ">
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
+                              <div className="flex items-center justify-center gap-1">
+                                <button 
+                                  type="button"
+                                  onClick={() => {
+                                    setCurrentItem({
+                                      itemCode: item.itemCode,
+                                      quantity: item.quantity,
+                                      uom: item.uom,
+                                      batchNo: item.batchNo || '',
+                                      valuationRate: item.valuationRate || 0
+                                    });
+                                    removeItem(idx);
+                                  }} 
+                                  className="p-1 text-blue-500 hover:bg-blue-50 rounded"
+                                  title="Edit Item"
+                                >
+                                  <Edit3 className="w-3.5 h-3.5" />
+                                </button>
+                                <button 
+                                  type="button"
+                                  onClick={() => removeItem(idx)} 
+                                  className="p-1 text-rose-500 hover:bg-rose-50 rounded"
+                                  title="Remove Item"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -958,7 +1028,7 @@ const StockEntries = () => {
                   onClick={(e) => handleSubmit(e, 'submitted')}
                   className="px-8 py-2.5 rounded  bg-indigo-600 text-white  text-sm hover:bg-indigo-700 transition-all shadow-lg active:scale-95"
                 >
-                  Create Entry
+                  {editingId ? 'Update Entry' : 'Create Entry'}
                 </button>
               </div>
             </div>

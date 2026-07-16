@@ -269,17 +269,17 @@ const POMaterialRequest = () => {
         const type = (item.material_type || '').toUpperCase();
         const isNotFG = type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
         
-        // Calculate shortage: quantity requested minus what's currently in stock
-        const requiredQty = parseFloat(item.quantity || 0);
+        // Calculate remaining qty to release
+        const remainingQty = Math.max(0, parseFloat(item.quantity || 0) - parseFloat(item.allocated_quantity || 0));
         const stockQty = parseFloat(item.total_stock || 0);
-        const shortage = Math.max(0, requiredQty - stockQty);
+        const shortage = Math.max(0, remainingQty - stockQty);
         
         // ONLY request items that have a shortage and are not Finished Goods
         return isNotFG && shortage > 0;
       }).map(item => {
-        const requiredQty = parseFloat(item.quantity || 0);
+        const remainingQty = Math.max(0, parseFloat(item.quantity || 0) - parseFloat(item.allocated_quantity || 0));
         const stockQty = parseFloat(item.total_stock || 0);
-        const shortage = Math.max(0, requiredQty - stockQty);
+        const shortage = Math.max(0, remainingQty - stockQty);
         
         return {
           ...item,
@@ -486,6 +486,46 @@ const POMaterialRequest = () => {
     }
   };
 
+  const handleReleasePartialStock = async (id) => {
+    try {
+      const result = await Swal.fire({
+        title: 'Release Partial Stock?',
+        text: 'This will issue all currently available stock to production and mark this request as Partially Released.',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#10b981',
+        cancelButtonColor: '#64748b',
+        confirmButtonText: 'Yes, release available stock'
+      });
+
+      if (result.isConfirmed) {
+        setLoading(true);
+        const token = localStorage.getItem('authToken');
+        const response = await fetch(`${API_BASE}/material-requests/${id}/status`, {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ status: 'PARTIALLY_RELEASED' })
+        });
+
+        if (response.ok) {
+          successToast("Partial stock released successfully");
+          fetchRequests();
+          handleViewRequest(id);
+        } else {
+          errorToast("Failed to release partial stock");
+        }
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      errorToast("Network error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleReleaseMaterial = async (id) => {
     try {
       const result = await Swal.fire({
@@ -512,9 +552,8 @@ const POMaterialRequest = () => {
 
         if (response.ok) {
           successToast("Material released successfully");
-          setShowViewModal(false);
           fetchRequests();
-          navigate(`${deptPrefix}/po-material-request`);
+          handleViewRequest(id);
         } else {
           errorToast("Failed to release material");
         }
@@ -1190,6 +1229,9 @@ const POMaterialRequest = () => {
                return (available + 0.0001) >= required;
              });
              
+             const releasedMaterialsCount = filteredItems.filter(item => parseFloat(item.allocated_quantity || 0) > 0).length;
+             const pendingMaterialsCount = filteredItems.filter(item => parseFloat(item.allocated_quantity || 0) === 0).length;
+
              return (
           <>
           <div className="grid grid-cols-5 gap-2 mb-8">
@@ -1199,7 +1241,15 @@ const POMaterialRequest = () => {
               </div>
               <div>
                 <p className="text-xs  text-slate-400   mb-1.5">Status</p>
-                <StatusBadge status={selectedRequest?.status} />
+                <div className="flex flex-col gap-1 items-start">
+                  <StatusBadge status={selectedRequest?.status} />
+                  {selectedRequest?.status?.toUpperCase() === 'PARTIALLY_RELEASED' && (
+                    <div className="text-[10px] text-slate-500 font-medium mt-1 leading-tight">
+                      <div className="text-emerald-600 font-semibold">{releasedMaterialsCount} of {filteredItems.length} Materials Released</div>
+                      <div className="text-amber-600 font-semibold">{pendingMaterialsCount} Material{pendingMaterialsCount !== 1 ? 's' : ''} Pending Procurement</div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
             <div className="bg-white p-2 rounded  border border-slate-100  flex items-center gap-2 transition-all hover:">
@@ -1360,11 +1410,11 @@ const POMaterialRequest = () => {
                 <table className="w-full">
                   <thead>
                     <tr className="bg-slate-50/50 border-b border-slate-100">
-                      <th className="p-2  text-left text-xs   text-slate-400  ">Item Details</th>
-                      <th className="p-2  text-left text-xs   text-slate-400  ">Drawing No</th>
-                      <th className="p-2  text-center text-xs   text-slate-400  ">Design Qty</th>
-                      <th className="p-2  text-center text-xs   text-slate-400  ">Required</th>
-                      <th className="p-2  text-center text-xs   text-slate-400  ">Stock Level</th>
+                      <th className="p-2  text-left text-xs   text-slate-400  ">Item</th>
+                      <th className="p-2  text-center text-xs   text-slate-400  ">Required Qty</th>
+                      <th className="p-2  text-center text-xs   text-slate-400  ">Available Stock</th>
+                      <th className="p-2  text-center text-xs   text-slate-400  ">Released Qty</th>
+                      <th className="p-2  text-center text-xs   text-slate-400  ">Remaining Qty</th>
                       <th className="p-2  text-right text-xs   text-slate-400  ">Status</th>
                       <th className="p-2  text-center text-xs   text-slate-400  ">Actions</th>
                     </tr>
@@ -1374,39 +1424,23 @@ const POMaterialRequest = () => {
                       const type = (item.material_type || '').toUpperCase();
                       return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
                     }).map((item, idx) => {
-                      const isAvailable = item.fulfillment_source === 'STOCK';
-                      
                       return (
                         <tr key={idx} className="hover:bg-slate-50/30 transition-colors group">
                           <td className="px-6 py-5">
                             <div>
-                              <p className="text-xs font-semibold text-slate-900 group-hover:text-indigo-600 transition-colors">{item.item_code}</p>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <p className="text-xs font-semibold text-slate-900 group-hover:text-indigo-600 transition-colors">{item.item_code}</p>
+                                {selectedRequest?.drawing_no && (
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-100 text-[10px] font-medium whitespace-nowrap">
+                                    {selectedRequest.drawing_no}
+                                  </span>
+                                )}
+                              </div>
                               <p className="text-sm  text-slate-600 mt-0.5">{item.name}</p>
                               {formatDimensions(item) && (
                                 <div className="mt-1 text-xs text-slate-400 font-mono">
                                   {formatDimensions(item)}
                                 </div>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-3 py-5">
-                            {selectedRequest?.drawing_no ? (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-100 text-xs font-medium whitespace-nowrap">
-                                {selectedRequest.drawing_no}
-                              </span>
-                            ) : (
-                              <span className="text-slate-300 text-xs">—</span>
-                            )}
-                          </td>
-                          <td className="px-6 py-5 text-center">
-                            <div className="flex flex-col items-center">
-                              <span className="text-xs text-slate-800 font-medium">
-                                {item.item_source === 'MANUAL' 
-                                  ? (item.design_qty !== null && item.design_qty !== undefined ? (isWeightBased(item.fg_uom) ? Number(item.design_qty).toFixed(3) : Number(item.design_qty).toFixed(0)) : '-') 
-                                  : (isWeightBased(item.fg_uom) ? Number(item.design_qty || 0).toFixed(3) : Number(item.design_qty || 0).toFixed(0))}
-                              </span>
-                              {!(item.item_source === 'MANUAL' && (item.design_qty === null || item.design_qty === undefined)) && (
-                                <span className="text-xs text-slate-400">{item.fg_uom || 'Nos'}</span>
                               )}
                             </div>
                           </td>
@@ -1419,37 +1453,78 @@ const POMaterialRequest = () => {
                             </div>
                           </td>
                           <td className="px-6 py-5 text-center">
-                            <div className="flex flex-col items-center">
-                              <p className={`text-sm ${(parseFloat(item.total_stock || 0) + 0.0001) >= parseFloat(item.quantity || 0) ? 'text-slate-500' : 'text-slate-400  text-rose-500'}`}>
+                            <div className="flex items-center justify-center gap-1.5">
+                              <span className={`w-2 h-2 rounded-full ${parseFloat(item.total_stock || 0) > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
+                              <span className={`text-xs font-semibold ${parseFloat(item.total_stock || 0) > 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
                                 {isWeightBased(item.uom) 
                                   ? Number(item.total_stock || 0).toFixed(3) 
                                   : Number(item.total_stock || 0).toFixed(0)} {item.uom}
-                              </p>
-                              <div className="flex flex-col items-center mt-1">
-                                {item.stocks && item.stocks.length > 0 ? (
-                                  item.stocks.map((st, sidx) => (
-                                    <span key={sidx} className="text-xs  text-indigo-500 leading-tight">
-                                      {st.warehouse_name}: {isWeightBased(item.uom) ? Number(st.current_stock).toFixed(3) : Number(st.current_stock).toFixed(0)}
-                                    </span>
-                                  ))
-                                ) : (
-                                  <span className="text-xs text-indigo-400 ">All Warehouses</span>
-                                )}
-                              </div>
+                              </span>
                             </div>
                           </td>
-                          <td className="px-6 py-5">
+                          <td className="px-6 py-5 text-center">
+                            <div className="flex flex-col items-center">
+                              <span className="text-xs text-slate-800 font-medium">
+                                {isWeightBased(item.uom) ? Number(item.allocated_quantity || 0).toFixed(3) : Number(item.allocated_quantity || 0).toFixed(0)}
+                              </span>
+                              <span className="text-xs  text-slate-400 ">{item.uom}</span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-5 text-center">
+                            <div className="flex flex-col items-center">
+                              <span className="text-xs text-slate-800 font-medium">
+                                {(() => {
+                                  const req = parseFloat(item.quantity || 0);
+                                  const rel = parseFloat(item.allocated_quantity || 0);
+                                  const rem = Math.max(0, req - rel);
+                                  return isWeightBased(item.uom) ? rem.toFixed(3) : rem.toFixed(0);
+                                })()}
+                              </span>
+                              <span className="text-xs  text-slate-400 ">{item.uom}</span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-5 text-right">
                             <div className="flex flex-col items-end gap-1.5">
-                              <span className={`px-2.5 py-1 rounded  text-xs   border  ${
-                                (parseFloat(item.total_stock || 0) + 0.0001) >= parseFloat(item.quantity || 0) 
-                                  ? 'bg-emerald-50 text-emerald-600 border-emerald-100' 
-                                  : 'bg-rose-50 text-rose-600 border-rose-100 '
-                              }`}>
-                                {(parseFloat(item.total_stock || 0) + 0.0001) >= parseFloat(item.quantity || 0) ? 'in stock' : 'out of stock'}
-                              </span>
-                              <span className="px-2.5 py-1 rounded  bg-slate-50 text-slate-600 text-xs   border border-slate-100 ">
-                                {selectedRequest?.status || 'Draft'}
-                              </span>
+                              {(() => {
+                                const req = parseFloat(item.quantity || 0);
+                                const rel = parseFloat(item.allocated_quantity || 0);
+                                
+                                if (rel <= 0) {
+                                  return (
+                                    <span className="px-2.5 py-1 rounded text-xs border bg-slate-50 text-slate-600 border-slate-100">
+                                      Awaiting Release
+                                    </span>
+                                  );
+                                } else if (rel < req) {
+                                  return (
+                                    <span className="px-2.5 py-1 rounded text-xs border bg-amber-50 text-amber-600 border-amber-100 font-medium">
+                                      Partially Released
+                                    </span>
+                                  );
+                                } else {
+                                  return (
+                                    <span className="px-2.5 py-1 rounded text-xs border bg-emerald-50 text-emerald-600 border-emerald-100 font-medium">
+                                      Released
+                                    </span>
+                                  );
+                                }
+                              })()}
+                              {(() => {
+                                const req = parseFloat(item.quantity || 0);
+                                const rel = parseFloat(item.allocated_quantity || 0);
+                                const rem = Math.max(0, req - rel);
+                                const stockVal = parseFloat(item.total_stock || 0);
+                                if (rem <= 0 || rel > 0) return null;
+                                return (
+                                  <span className={`px-2 py-0.5 rounded text-[10px] border ${
+                                    (stockVal + 0.0001) >= rem 
+                                      ? 'bg-emerald-50/50 text-emerald-500 border-emerald-100/50' 
+                                      : 'bg-rose-50/50 text-rose-500 border-rose-100/50'
+                                  }`}>
+                                    {(stockVal + 0.0001) >= rem ? 'in stock' : 'out of stock'}
+                                  </span>
+                                );
+                              })()}
                             </div>
                           </td>
                           <td className="px-6 py-5 text-center">
@@ -1688,29 +1763,74 @@ const POMaterialRequest = () => {
                 const type = (item.material_type || '').toUpperCase();
                 return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
               }) || [];
-              const allAvailable = filteredItems.length > 0 && filteredItems.every(item => (parseFloat(item.total_stock || 0) + 0.0001) >= parseFloat(item.quantity || 0));
-              const hasInsufficientStock = filteredItems.some(item => (parseFloat(item.total_stock || 0) + 0.0001) < parseFloat(item.quantity || 0));
+              const allAvailable = filteredItems.length > 0 && filteredItems.every(item => {
+                const req = parseFloat(item.quantity || 0);
+                const rel = parseFloat(item.allocated_quantity || 0);
+                const rem = Math.max(0, req - rel);
+                return rem === 0 || (parseFloat(item.total_stock || 0) + 0.0001) >= rem;
+              });
+              const hasInsufficientStock = filteredItems.some(item => {
+                const req = parseFloat(item.quantity || 0);
+                const rel = parseFloat(item.allocated_quantity || 0);
+                const rem = Math.max(0, req - rel);
+                return rem > 0 && (parseFloat(item.total_stock || 0) + 0.0001) < rem;
+              });
+              const anyAvailableStock = filteredItems.some(item => {
+                const req = parseFloat(item.quantity || 0);
+                const rel = parseFloat(item.allocated_quantity || 0);
+                const rem = Math.max(0, req - rel);
+                return rem > 0 && parseFloat(item.total_stock || 0) > 0;
+              });
               const currentStatus = (selectedRequest?.status || '').toUpperCase().trim();
               const isFinalStatus = ['COMPLETED', 'FULFILLED', 'CANCELLED', 'REJECTED'].includes(currentStatus);
+              const hasReleasedItems = filteredItems.some(item => parseFloat(item.allocated_quantity || 0) > 0);
               
               return (
                 <>
                   {hasInsufficientStock && !selectedRequest?.linked_po_id && !isFinalStatus && 
-                    !['PROCESSING', 'PO_CREATED'].includes(currentStatus) && (
+                    (!rfqs || rfqs.length === 0) &&
+                    !['COMPLETED', 'FULFILLED', 'CANCELLED', 'REJECTED', 'RFQ_CREATED', 'PO_CREATED'].includes(currentStatus) && (
                     <button 
                       onClick={() => handleRequestQuote(selectedRequest)}
                       className="p-2  bg-indigo-500 text-white rounded  text-xs  hover:bg-indigo-600 flex items-center gap-2 shadow-xl shadow-indigo-200/50 transition-all hover:-translate-y-0.5 active:translate-y-0"
                     >
-                      Request Quote (RFQ)
+                      Create RFQ
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
                     </button>
                   )}
-                  {allAvailable && !isFinalStatus && (
+                  {hasInsufficientStock && anyAvailableStock && !isFinalStatus && !hasReleasedItems && (
+                    <button 
+                      onClick={() => handleReleasePartialStock(selectedRequest?.id)}
+                      className="p-2  bg-emerald-500 text-white rounded  text-xs  hover:bg-emerald-600 flex items-center gap-2 shadow-xl shadow-emerald-200/50 transition-all hover:-translate-y-0.5 active:translate-y-0"
+                    >
+                      Release Partial Stock
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" /></svg>
+                    </button>
+                  )}
+                  {hasInsufficientStock && anyAvailableStock && !isFinalStatus && hasReleasedItems && (
+                    <button 
+                      onClick={() => handleReleasePartialStock(selectedRequest?.id)}
+                      className="p-2  bg-emerald-500 text-white rounded  text-xs  hover:bg-emerald-600 flex items-center gap-2 shadow-xl shadow-emerald-200/50 transition-all hover:-translate-y-0.5 active:translate-y-0"
+                    >
+                      Release Available Stock
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" /></svg>
+                    </button>
+                  )}
+                  {allAvailable && !isFinalStatus && !hasReleasedItems && (
                     <button 
                       onClick={() => handleReleaseMaterial(selectedRequest?.id)}
                       className="p-2  bg-emerald-500 text-white rounded  text-xs  hover:bg-emerald-600 flex items-center gap-2 shadow-xl shadow-emerald-200/50 transition-all hover:-translate-y-0.5 active:translate-y-0"
                     >
                       Release Material
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" /></svg>
+                    </button>
+                  )}
+                  {allAvailable && !isFinalStatus && hasReleasedItems && (
+                    <button 
+                      onClick={() => handleReleaseMaterial(selectedRequest?.id)}
+                      className="p-2  bg-emerald-500 text-white rounded  text-xs  hover:bg-emerald-600 flex items-center gap-2 shadow-xl shadow-emerald-200/50 transition-all hover:-translate-y-0.5 active:translate-y-0"
+                    >
+                      Release Remaining Stock
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" /></svg>
                     </button>
                   )}
