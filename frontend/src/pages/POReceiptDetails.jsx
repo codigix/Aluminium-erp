@@ -208,11 +208,11 @@ const POReceiptDetails = () => {
                             <div>{item.material_name || item.description || '—'}</div>
                             {(item.length > 0 || item.width > 0 || item.thickness > 0 || item.diameter > 0) && (
                               <div className="flex flex-wrap gap-x-2 gap-y-1 mt-1 opacity-70">
-                                {item.length > 0 && <span className="text-xs  text-slate-400">L: {item.length}</span>}
-                                {item.width > 0 && <span className="text-xs  text-slate-400">W: {item.width}</span>}
-                                {item.thickness > 0 && <span className="text-xs  text-slate-400">T: {item.thickness}</span>}
                                 {item.diameter > 0 && <span className="text-xs  text-slate-400">Dia: {item.diameter}</span>}
                                 {item.outer_diameter > 0 && <span className="text-xs  text-slate-400">OD: {item.outer_diameter}</span>}
+                                {item.width > 0 && <span className="text-xs  text-slate-400">W: {item.width}</span>}
+                                {item.thickness > 0 && <span className="text-xs  text-slate-400">T: {item.thickness}</span>}
+                                {item.length > 0 && <span className="text-xs  text-slate-400">L: {item.length}</span>}
                               </div>
                             )}
                           </td>

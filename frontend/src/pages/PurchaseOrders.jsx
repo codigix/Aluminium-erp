@@ -1854,13 +1854,13 @@ const PurchaseOrders = () => {
                                 className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs text-slate-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                                 placeholder="Material Name"
                               />
-                              {(item.length > 0 || item.width > 0 || item.thickness > 0 || item.diameter > 0) && (
+                              {(item.length > 0 || item.width > 0 || item.thickness > 0 || item.diameter > 0 || item.outer_diameter > 0) && (
                                 <div className="flex flex-wrap gap-x-2 gap-y-0.5 px-1 text-[10px] text-slate-400">
-                                  {item.length > 0 && <span>L: {item.length}</span>}
-                                  {item.width > 0 && <span>W: {item.width}</span>}
-                                  {item.thickness > 0 && <span>T: {item.thickness}</span>}
                                   {item.diameter > 0 && <span>Dia: {item.diameter}</span>}
                                   {item.outer_diameter > 0 && <span>OD: {item.outer_diameter}</span>}
+                                  {item.width > 0 && <span>W: {item.width}</span>}
+                                  {item.thickness > 0 && <span>T: {item.thickness}</span>}
+                                  {item.length > 0 && <span>L: {item.length}</span>}
                                 </div>
                               )}
                             </div>
@@ -2125,7 +2125,7 @@ const PurchaseOrders = () => {
                               {item.item_code && <p className="text-xs text-slate-400">{item.item_code}</p>}
                             </td>
                             <td className="px-4 p-2 text-xs text-slate-500">{item.material_name || '—'}</td>
-                            <td className="px-4 p-2 text-center text-xs text-slate-400 ">{Number(item.planned_qty || item.design_qty || 0).toFixed(3)} {item.unit || 'NOS'}</td>
+                            <td className="px-4 p-2 text-center text-xs text-slate-400 ">{Number(item.planned_qty || item.design_qty || 0).toFixed(3)} NOS</td>
                             <td className="px-4 p-2 text-center text-xs text-slate-600 ">{Number(item.quantity || 0).toFixed(3)} {item.unit || 'NOS'}</td>
                             <td className="px-4 p-2 text-right text-xs text-slate-500">{formatCurrency(item.unit_rate)}</td>
                             <td className="px-4 p-2 text-right text-xs  text-slate-800">{formatCurrency(item.total_amount || (item.quantity * item.unit_rate))}</td>
@@ -2302,11 +2302,23 @@ const PurchaseOrders = () => {
                             )}
                           </td>
                           <td className="px-4 p-2 text-center">
-                            <span className="text-xs  text-slate-400">{Number(item.planned_qty || item.design_qty || 0).toFixed(3)}</span>
-                            <span className="text-xs text-slate-400 ml-1 ">{item.unit || item.uom || 'NOS'}</span>
+                            <div className="relative group max-w-[100px] mx-auto flex flex-col items-center gap-1">
+                              <input
+                                type="number"
+                                step="0.001"
+                                value={(item.planned_qty === 0 || item.design_qty === 0) ? 0 : (item.planned_qty || item.design_qty || '')}
+                                onChange={(e) => {
+                                  const val = e.target.value === '' ? '' : parseFloat(e.target.value);
+                                  handleEditItemChange(idx, 'planned_qty', val);
+                                  handleEditItemChange(idx, 'design_qty', val);
+                                }}
+                                className="w-20 px-2 py-1 bg-slate-50 border border-slate-200 rounded text-xs text-slate-700 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all text-center"
+                              />
+                              <span className="text-[10px] text-slate-400">NOS</span>
+                            </div>
                           </td>
                           <td className="px-4 p-2 text-center">
-                            <div className="relative group max-w-[140px] mx-auto">
+                            <div className="relative group max-w-[140px] mx-auto flex flex-col items-center gap-1">
                               <input
                                 type="number"
                                 step="0.001"
@@ -2314,6 +2326,7 @@ const PurchaseOrders = () => {
                                 onChange={(e) => handleEditItemChange(idx, 'quantity', e.target.value)}
                                 className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded  text-xs  text-slate-700 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all text-center"
                               />
+                              <span className="text-[10px] text-slate-400 uppercase tracking-wider">{item.unit || item.uom || 'NOS'}</span>
                             </div>
                           </td>
                           <td className="px-4 p-2">

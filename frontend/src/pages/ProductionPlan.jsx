@@ -54,6 +54,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
   const [newItemQty, setNewItemQty] = useState(1);
   const [newItemDesignQty, setNewItemDesignQty] = useState('');
   const [newItemRemarks, setNewItemRemarks] = useState('');
+  const [newItemUnit, setNewItemUnit] = useState('');
   const [expandedRows, setExpandedRows] = useState(new Set());
 
   const [newPlan, setNewPlan] = useState({
@@ -464,7 +465,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
       quantity: Number(newItemQty),
       design_qty: newItemDesignQty !== '' ? parseFloat(newItemDesignQty) : null,
       remarks: newItemRemarks || null,
-      uom: selectedNewItem.unit || selectedNewItem.uom || 'Nos',
+      uom: newItemUnit || selectedNewItem.unit || selectedNewItem.uom || 'Nos',
       inventory: selectedNewItem.current_balance || 0,
       is_fulfilled: false,
       request_exists: false,
@@ -484,6 +485,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
     setNewItemQty(1);
     setNewItemDesignQty('');
     setNewItemRemarks('');
+    setNewItemUnit('');
     successToast('Item added to material request');
   };
 
@@ -2739,6 +2741,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                         const code = e.target.value;
                         const item = allStockItems.find(i => i.item_code === code);
                         setSelectedNewItem(item || null);
+                        setNewItemUnit(item ? (item.unit || item.uom || '') : '');
                       }}
                       allowCustom={false}
                       placeholder="Search material..."
@@ -2747,13 +2750,16 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                   </div>
                   <div className="col-span-2">
                     <label className="text-[10px] text-slate-500 mb-1 block uppercase font-semibold">Unit</label>
-                    <input
-                      type="text"
-                      value={selectedNewItem?.unit || selectedNewItem?.uom || ''}
-                      readOnly
-                      placeholder="Unit"
-                      className="w-full h-8 px-2 bg-slate-100 border border-slate-200 rounded text-xs text-slate-500 outline-none"
-                    />
+                    <select
+                      value={newItemUnit}
+                      onChange={(e) => setNewItemUnit(e.target.value)}
+                      className="w-full h-8 px-2 bg-white border border-slate-200 rounded text-xs text-slate-700 outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer font-medium"
+                    >
+                      <option value="">Unit</option>
+                      {['NOS','KG','MTR','SET','LTR','SQM','GM','TON'].map(u => (
+                        <option key={u} value={u}>{u}</option>
+                      ))}
+                    </select>
                   </div>
                   <div className="col-span-4">
                     <label className="text-[10px] text-slate-500 mb-1 block uppercase font-semibold">Required Qty <span className="text-rose-500">*</span></label>

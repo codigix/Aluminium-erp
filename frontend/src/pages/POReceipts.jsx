@@ -1218,7 +1218,7 @@ const POReceipts = () => {
                 <h4 className="text-xs  text-slate-900  ">Received Items</h4>
               </div>
 
-              <div className="bg-white border border-slate-200 rounded  overflow-hidden ">
+              <div className="bg-white border border-slate-200 rounded  overflow-visible ">
                 <table className="w-full text-left border-collapse">
                   <thead className="bg-slate-50/50">
                     <tr className="text-xs  text-slate-400   border-b border-slate-200">
@@ -1255,9 +1255,9 @@ const POReceipts = () => {
                             <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1">
                               {item.diameter > 0 && <span className="text-xs text-slate-400">Dia: {item.diameter}</span>}
                               {item.outer_diameter > 0 && <span className="text-xs text-slate-400">OD: {item.outer_diameter}</span>}
-                              {item.length > 0 && <span className="text-xs text-slate-400">L: {item.length}</span>}
                               {item.width > 0 && <span className="text-xs text-slate-400">W: {item.width}</span>}
                               {item.thickness > 0 && <span className="text-xs text-slate-400">T: {item.thickness}</span>}
+                              {item.length > 0 && <span className="text-xs text-slate-400">L: {item.length}</span>}
                             </div>
                           )}
                         </td>
@@ -1270,19 +1270,19 @@ const POReceipts = () => {
                                 type="number"
                                 step="0.001"
                                 min="0"
-                                value={item.planned_qty ?? item.design_qty ?? 0}
+                                value={(item.planned_qty === 0 || item.design_qty === 0) ? 0 : (item.planned_qty || item.design_qty || '')}
                                 onChange={e => {
                                   handleViewItemChange(idx, 'planned_qty', e.target.value);
                                   handleViewItemChange(idx, 'design_qty', e.target.value);
                                 }}
                                 className="w-24 px-2 py-1 border border-blue-300 rounded text-xs text-center focus:ring-2 focus:ring-blue-400/30 outline-none bg-white"
                               />
-                              <span className="text-xs text-slate-400 uppercase tracking-wider">{item.unit || 'NOS'}</span>
+                              <span className="text-xs text-slate-400 uppercase tracking-wider">NOS</span>
                             </div>
                           ) : (
                             <div className="flex flex-col items-center">
                               <span>{parseFloat(item.planned_qty || item.design_qty || 0).toFixed(3)}</span>
-                              <span className="text-xs text-slate-400 uppercase tracking-wider">{item.unit || 'NOS'}</span>
+                              <span className="text-xs text-slate-400 uppercase tracking-wider">NOS</span>
                             </div>
                           )}
                         </td>
@@ -1295,7 +1295,7 @@ const POReceipts = () => {
                                 type="number"
                                 step="0.001"
                                 min="0"
-                                value={item.required_qty ?? item.expected_quantity ?? item.quantity ?? 0}
+                                value={(item.required_qty === 0 || item.expected_quantity === 0 || item.quantity === 0) ? 0 : (item.required_qty || item.expected_quantity || item.quantity || '')}
                                 onChange={e => handleViewItemChange(idx, 'required_qty', e.target.value)}
                                 className="w-24 px-2 py-1 border border-blue-300 rounded text-xs text-center focus:ring-2 focus:ring-blue-400/30 outline-none bg-white"
                               />
@@ -1317,7 +1317,7 @@ const POReceipts = () => {
                                 type="number"
                                 step="0.001"
                                 min="0"
-                                value={item.received_quantity || 0}
+                                value={item.received_quantity === 0 ? 0 : (item.received_quantity || '')}
                                 onChange={e => handleViewItemChange(idx, 'received_quantity', e.target.value)}
                                 className="w-24 px-2 py-1 border border-blue-300 rounded text-xs text-right focus:ring-2 focus:ring-blue-400/30 outline-none bg-white"
                               />
@@ -1630,7 +1630,7 @@ const POReceipts = () => {
                 </button>
               </div>
 
-              <div className="bg-white border border-slate-100 rounded overflow-hidden">
+              <div className="bg-white border border-slate-100 rounded overflow-visible">
                 <table className="w-full text-left">
                   <thead className="bg-slate-50/80">
                     <tr className="text-xs text-slate-500 border-b border-slate-200">
@@ -1698,11 +1698,11 @@ const POReceipts = () => {
                             />
                             {(item.length > 0 || item.width > 0 || item.thickness > 0 || item.diameter > 0 || item.outer_diameter > 0) && (
                               <div className="flex flex-wrap gap-x-2 gap-y-1 mt-1 opacity-70">
-                                {item.diameter > 0 && <span className="text-xs  text-slate-400">Dia: {item.diameter}</span>}
-                                {item.outer_diameter > 0 && <span className="text-xs  text-slate-400">OD: {item.outer_diameter}</span>}
-                                {item.length > 0 && <span className="text-xs  text-slate-400">L: {item.length}</span>}
-                                {item.width > 0 && <span className="text-xs  text-slate-400">W: {item.width}</span>}
-                                {item.thickness > 0 && <span className="text-xs  text-slate-400">T: {item.thickness}</span>}
+                                {item.diameter > 0 && <span className="text-xs text-slate-400">Dia: {item.diameter}</span>}
+                                {item.outer_diameter > 0 && <span className="text-xs text-slate-400">OD: {item.outer_diameter}</span>}
+                                {item.width > 0 && <span className="text-xs text-slate-400">W: {item.width}</span>}
+                                {item.thickness > 0 && <span className="text-xs text-slate-400">T: {item.thickness}</span>}
+                                {item.length > 0 && <span className="text-xs text-slate-400">L: {item.length}</span>}
                               </div>
                             )}
                             <div className="mt-1 flex items-center gap-1.5">
@@ -1728,13 +1728,24 @@ const POReceipts = () => {
                             {item.is_custom ? (
                               <input
                                 type="number"
-                                value={item.quantity || 0}
+                                value={item.quantity === 0 ? 0 : (item.quantity || '')}
                                 onChange={(e) => handleItemChange(idx, 'quantity', e.target.value)}
                                 className="w-16 p-1 bg-white border border-slate-200 rounded text-center text-xs text-slate-800 font-semibold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all mb-1"
                               />
                             ) : (
                               <span className="text-slate-800 font-semibold">{Number(item.quantity || 0).toFixed(0)}</span>
                             )}
+                            <span className="text-[10px] text-slate-400 uppercase tracking-wider">NOS</span>
+                          </div>
+                        </td>
+                        <td className="p-2">
+                          <div className="flex flex-col items-center gap-1">
+                            <input
+                              type="number"
+                              value={item.received_qty}
+                              onChange={(e) => handleItemChange(idx, 'received_qty', e.target.value)}
+                              className="w-20 p-1.5 bg-white border border-slate-200 rounded text-center text-xs text-blue-600 font-semibold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                            />
                             {item.is_custom ? (
                               <select
                                 value={item.unit || 'NOS'}
@@ -1749,16 +1760,6 @@ const POReceipts = () => {
                             ) : (
                               <span className="text-[10px] text-slate-400 uppercase tracking-wider">{item.unit || 'NOS'}</span>
                             )}
-                          </div>
-                        </td>
-                        <td className="p-2">
-                          <div className="flex justify-center">
-                            <input
-                              type="number"
-                              value={item.received_qty}
-                              onChange={(e) => handleItemChange(idx, 'received_qty', e.target.value)}
-                              className="w-20 p-1.5 bg-white border border-slate-200 rounded text-center text-xs text-blue-600 font-semibold focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                            />
                           </div>
                         </td>
                         <td className="p-2">

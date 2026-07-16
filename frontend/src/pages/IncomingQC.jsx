@@ -868,10 +868,10 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
           </div>
           {(item.length || item.width || item.thickness || item.diameter || item.outer_diameter) && (
             <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1">
+              {item.diameter > 0 && <span className="text-[9px] text-slate-500 bg-slate-50 px-1 border border-slate-100 rounded">Dia: {parseFloat(item.diameter).toFixed(4)}</span>}
               {item.outer_diameter > 0 && <span className="text-[9px] text-slate-500 bg-slate-50 px-1 border border-slate-100 rounded">OD: {parseFloat(item.outer_diameter).toFixed(4)}</span>}
               {item.width > 0 && <span className="text-[9px] text-slate-500 bg-slate-50 px-1 border border-slate-100 rounded">W: {parseFloat(item.width).toFixed(4)}</span>}
               {item.thickness > 0 && <span className="text-[9px] text-slate-500 bg-slate-50 px-1 border border-slate-100 rounded">T: {parseFloat(item.thickness).toFixed(4)}</span>}
-              {item.diameter > 0 && <span className="text-[9px] text-slate-500 bg-slate-50 px-1 border border-slate-100 rounded">Dia: {parseFloat(item.diameter).toFixed(4)}</span>}
               {item.length > 0 && <span className="text-[9px] text-slate-500 bg-slate-50 px-1 border border-slate-100 rounded">L: {parseFloat(item.length).toFixed(4)}</span>}
             </div>
           )}
@@ -910,7 +910,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       render: (val, item) => (
         <span className="text-xs text-slate-400">
           {parseFloat(item.planned_qty || val || 0).toFixed(3)}
-          <span className="ml-1 text-xs  text-slate-300 uppercase">{item.uom || 'Nos'}</span>
+          <span className="ml-1 text-xs  text-slate-300 uppercase">Nos</span>
         </span>
       )
     },
@@ -963,10 +963,10 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
           </div>
           {(item.length || item.width || item.thickness || item.diameter || item.outer_diameter) && (
             <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1">
+              {item.diameter > 0 && <span className="text-[9px] text-slate-500 bg-slate-50 px-1 border border-slate-100 rounded">Dia: {parseFloat(item.diameter).toFixed(4)}</span>}
               {item.outer_diameter > 0 && <span className="text-[9px] text-slate-500 bg-slate-50 px-1 border border-slate-100 rounded">OD: {parseFloat(item.outer_diameter).toFixed(4)}</span>}
               {item.width > 0 && <span className="text-[9px] text-slate-500 bg-slate-50 px-1 border border-slate-100 rounded">W: {parseFloat(item.width).toFixed(4)}</span>}
               {item.thickness > 0 && <span className="text-[9px] text-slate-500 bg-slate-50 px-1 border border-slate-100 rounded">T: {parseFloat(item.thickness).toFixed(4)}</span>}
-              {item.diameter > 0 && <span className="text-[9px] text-slate-500 bg-slate-50 px-1 border border-slate-100 rounded">Dia: {parseFloat(item.diameter).toFixed(4)}</span>}
               {item.length > 0 && <span className="text-[9px] text-slate-500 bg-slate-50 px-1 border border-slate-100 rounded">L: {parseFloat(item.length).toFixed(4)}</span>}
             </div>
           )}
@@ -996,7 +996,7 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
       render: (val, item) => (
         <span className="text-xs text-slate-400">
           {parseFloat(item.planned_qty || val || 0).toFixed(3)}
-          <span className="ml-1 text-xs  text-slate-300 uppercase">{item.uom || 'Nos'}</span>
+          <span className="ml-1 text-xs  text-slate-300 uppercase">Nos</span>
         </span>
       )
     },

@@ -217,7 +217,8 @@ const getPOReceiptById = async (receiptId) => {
             COALESCE(poi.unit, pri.unit) as unit,
             COALESCE(poi.drawing_no, pri.drawing_no) as drawing_no,
             poi.cgst_percent, poi.sgst_percent,
-            poi.design_qty, poi.planned_qty,
+            COALESCE(poi.design_qty, pri.po_qty, 0) as design_qty,
+            COALESCE(poi.planned_qty, pri.po_qty, 0) as planned_qty,
             poi.quantity as expected_quantity,
             COALESCE(poi.quantity, pri.received_quantity, 0) as required_qty,
             poi.unit_rate, poi.cgst_amount, poi.sgst_amount, poi.total_amount as po_item_total,
@@ -311,15 +312,16 @@ const createPOReceipt = async (poId, receiptDate, receivedQuantity, notes, items
 
         await connection.execute(
           `INSERT INTO po_receipt_items (
-            receipt_id, po_item_id, received_quantity, 
+            receipt_id, po_item_id, received_quantity, po_qty,
             length, width, thickness, diameter, outer_diameter, density, weight_per_unit,
             item_code, material_name, drawing_no, unit
           )
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             receiptId, 
             poItemId, 
             receivedQty,
+            item.quantity || item.planned_qty || item.design_qty || 0,
             item.length || 0,
             item.width || 0,
             item.thickness || 0,
@@ -453,6 +455,7 @@ const updatePOReceipt = async (receiptId, receiptDate, receivedQuantity, notes, 
       await pool.execute(
         `UPDATE po_receipt_items SET
           received_quantity = ?,
+          po_qty = ?,
           drawing_no = ?,
           item_code = ?,
           material_name = ?,
@@ -465,6 +468,7 @@ const updatePOReceipt = async (receiptId, receiptDate, receivedQuantity, notes, 
          WHERE id = ?`,
         [
           item.received_quantity ?? item.received_qty ?? 0,
+          item.planned_qty ?? item.design_qty ?? item.quantity ?? 0,
           item.drawing_no || null,
           item.item_code || null,
           item.material_name || null,

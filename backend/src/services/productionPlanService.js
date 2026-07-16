@@ -1689,6 +1689,85 @@ ON (ppm.material_name = issued.material_name) OR (ppm.item_code = issued.item_co
     );
   }
 
+  // Step 2: Fetch and add items that are already in a transmitted/created material request for this plan
+  const [mrItems] = await pool.query(`
+    SELECT mri.*, mri.quantity as required_qty, mr.status,
+           COALESCE(actual_sb.valuation_rate, 0) as stock_rate,
+           COALESCE(actual_sb.current_balance, 0) as current_balance,
+           COALESCE(issued.issued_qty, 0) as issued_qty,
+           COALESCE(NULLIF(mri.length, 0), actual_sb.length, 0) as length, 
+           COALESCE(NULLIF(mri.width, 0), actual_sb.width, 0) as width, 
+           COALESCE(NULLIF(mri.thickness, 0), actual_sb.thickness, 0) as thickness, 
+           COALESCE(NULLIF(mri.diameter, 0), actual_sb.diameter, 0) as diameter, 
+           COALESCE(NULLIF(mri.outer_diameter, 0), actual_sb.outer_diameter, 0) as outer_diameter
+    FROM material_requests mr
+    JOIN material_request_items mri ON mr.id = mri.mr_id
+    LEFT JOIN (
+        SELECT 
+            material_name, 
+            MAX(item_code) as item_code, 
+            MAX(valuation_rate) as valuation_rate, 
+            SUM(current_balance) as current_balance,
+            MAX(length) as length, 
+            MAX(width) as width, 
+            MAX(thickness) as thickness, 
+            MAX(diameter) as diameter, 
+            MAX(outer_diameter) as outer_diameter
+        FROM stock_balance 
+        GROUP BY material_name
+    ) actual_sb ON mri.item_name = actual_sb.material_name OR mri.item_code = actual_sb.item_code
+    LEFT JOIN (
+        SELECT 
+            mii.item_code, 
+            mii.material_name,
+            SUM(mii.quantity) as issued_qty
+        FROM material_issue_items mii
+        JOIN material_issues mi ON mii.issue_id = mi.id
+        JOIN work_orders wo ON mi.work_order_id = wo.id
+        WHERE wo.plan_id = ?
+        GROUP BY mii.item_code, mii.material_name
+    ) issued ON (mri.item_name = issued.material_name) OR (mri.item_code = issued.item_code)
+    WHERE mr.plan_id = ?
+  `, [planId, planId]);
+
+  for (const mri of mrItems) {
+    let code = (mri.item_code || '').toUpperCase();
+    if (!code || code.startsWith('PART-') || code.startsWith('SA-') || code.startsWith('FG-') || code.startsWith('SFG-') || code.startsWith('ASSEMBLY')) {
+      code = (mri.item_name || '').trim().toUpperCase();
+    }
+
+    if (!code || code.startsWith('PART-') || code.startsWith('SA-') || code.startsWith('FG-') || code.startsWith('SFG-') || code.startsWith('ASSEMBLY')) {
+      continue;
+    }
+
+    const isFulfilled = ['COMPLETED', 'FULFILLED'].includes(String(mri.status).toUpperCase());
+    const requestExists = true;
+    const effectiveInventory = isFulfilled
+      ? Math.max(Number(mri.required_qty), Number(mri.current_balance) + Number(mri.issued_qty))
+      : Number(mri.current_balance) + Number(mri.issued_qty);
+
+    addToMap(
+      code,
+      mri.required_qty,
+      mri.uom || mri.unit,
+      mri.item_name,
+      mri.warehouse,
+      'RAW_MATERIAL',
+      mri.unit_rate || mri.stock_rate || 0,
+      mri.design_qty,
+      effectiveInventory,
+      isFulfilled,
+      requestExists,
+      {
+        length: mri.length,
+        width: mri.width,
+        thickness: mri.thickness,
+        diameter: mri.diameter,
+        outer_diameter: mri.outer_diameter
+      }
+    );
+  }
+
   return {
     plan_code: plan.plan_code,
     start_date: plan.start_date,

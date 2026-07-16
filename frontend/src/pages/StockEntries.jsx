@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
-import { Card, Badge } from '../components/ui.jsx';
+import { Card, Badge, SearchableSelect } from '../components/ui.jsx';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
 import { 
@@ -35,7 +35,11 @@ const entryTypeIcons = {
   'Material Receipt': <Package className="w-4 h-4 text-emerald-500" />,
   'Material Issue': <ArrowRight className="w-4 h-4 text-orange-500" />,
   'Material Transfer': <RotateCw className="w-4 h-4 text-blue-500" />,
-  'Material Adjustment': <Activity className="w-4 h-4 text-amber-500" />
+  'Material Adjustment': <Activity className="w-4 h-4 text-amber-500" />,
+  'Manual Entry': <Plus className="w-4 h-4 text-indigo-500" />,
+  'Stock Transfer': <RotateCw className="w-4 h-4 text-blue-500" />,
+  'Stock Adjustment': <Activity className="w-4 h-4 text-amber-500" />,
+  'Opening Stock': <Boxes className="w-4 h-4 text-teal-500" />
 };
 
 const StatCard = ({ label, value, icon: Icon, colorClass, iconBg }) => (
@@ -49,6 +53,69 @@ const StatCard = ({ label, value, icon: Icon, colorClass, iconBg }) => (
     </div>
   </div>
 );
+const getDisplayTypeAndPurpose = (entry) => {
+  if (entry.purpose === 'Initial Inventory' || entry.entry_type === 'Opening Stock') {
+    return {
+      type: 'Opening Stock',
+      purpose: 'Initial Inventory',
+      icon: entryTypeIcons['Opening Stock']
+    };
+  }
+
+  if (entry.grn_id || entry.purpose === 'Stock Receipt from GRN') {
+    return {
+      type: 'Material Receipt',
+      purpose: 'Stock Receipt from GRN',
+      icon: entryTypeIcons['Material Receipt']
+    };
+  }
+
+  if (entry.purpose === 'Purchase Return') {
+    return {
+      type: 'Material Issue',
+      purpose: 'Purchase Return',
+      icon: entryTypeIcons['Material Issue']
+    };
+  }
+
+  if (entry.purpose === 'Material Issue to Production' || entry.purpose?.toLowerCase().includes('production') || entry.purpose?.toLowerCase().includes('request')) {
+    return {
+      type: 'Material Issue',
+      purpose: entry.purpose || 'Material Issue to Production',
+      icon: entryTypeIcons['Material Issue']
+    };
+  }
+
+  if (entry.entry_type === 'Material Transfer') {
+    return {
+      type: 'Stock Transfer',
+      purpose: entry.purpose || 'Warehouse Transfer',
+      icon: entryTypeIcons['Stock Transfer']
+    };
+  }
+
+  if (entry.entry_type === 'Material Adjustment') {
+    return {
+      type: 'Stock Adjustment',
+      purpose: entry.purpose || 'Inventory Adjustment',
+      icon: entryTypeIcons['Stock Adjustment']
+    };
+  }
+
+  if (entry.entry_type === 'Material Receipt' && !entry.grn_id) {
+    return {
+      type: 'Manual Entry',
+      purpose: entry.purpose || 'Manual Stock Receipt',
+      icon: entryTypeIcons['Manual Entry']
+    };
+  }
+
+  return {
+    type: entry.entry_type,
+    purpose: entry.purpose || 'Stock Movement',
+    icon: entryTypeIcons[entry.entry_type]
+  };
+};
 
 const StockEntries = () => {
   const navigate = useNavigate();
@@ -237,11 +304,74 @@ const StockEntries = () => {
     }));
   };
 
+  const getModalDropdownValue = () => {
+    if (formData.purpose === 'Initial Inventory') return 'Opening Stock';
+    if (formData.grnId || formData.purpose === 'Stock Receipt from GRN') return 'Material Receipt (GRN)';
+    if (formData.entryType === 'Material Issue' && formData.purpose === 'Purchase Return') return 'Purchase Return';
+    if (formData.entryType === 'Material Issue') return 'Material Issue';
+    if (formData.entryType === 'Material Transfer') return 'Stock Transfer';
+    if (formData.entryType === 'Material Adjustment') return 'Stock Adjustment';
+    if (formData.entryType === 'Material Receipt' && !formData.grnId) return 'Manual Entry';
+    return 'Manual Entry';
+  };
+
+  const handleModalDropdownChange = (val) => {
+    let entryType = 'Material Receipt';
+    let purpose = '';
+    
+    if (val === 'Manual Entry') {
+      entryType = 'Material Receipt';
+      purpose = 'Manual Stock Receipt';
+    } else if (val === 'Material Receipt (GRN)') {
+      entryType = 'Material Receipt';
+      purpose = 'Stock Receipt from GRN';
+    } else if (val === 'Purchase Return') {
+      entryType = 'Material Issue';
+      purpose = 'Purchase Return';
+    } else if (val === 'Material Issue') {
+      entryType = 'Material Issue';
+      purpose = 'Material Issue to Production';
+    } else if (val === 'Stock Transfer') {
+      entryType = 'Material Transfer';
+      purpose = 'Warehouse Transfer';
+    } else if (val === 'Stock Adjustment') {
+      entryType = 'Material Adjustment';
+      purpose = 'Inventory Adjustment';
+    } else if (val === 'Opening Stock') {
+      entryType = 'Material Receipt';
+      purpose = 'Initial Inventory';
+    }
+
+    setFormData(prev => ({
+      ...prev,
+      entryType,
+      purpose,
+      grnId: val === 'Material Receipt (GRN)' ? prev.grnId : ''
+    }));
+  };
+
   const handleSubmit = async (e, status = 'draft') => {
     if (e) e.preventDefault();
     if (formData.items.length === 0) {
       errorToast('At least one item is required');
       return;
+    }
+
+    let finalPurpose = formData.purpose;
+    if (!finalPurpose) {
+      if (!formData.grnId) {
+        if (formData.entryType === 'Material Receipt') {
+          finalPurpose = 'Manual Stock Receipt';
+        } else if (formData.entryType === 'Material Issue') {
+          finalPurpose = 'Material Issue to Production';
+        } else if (formData.entryType === 'Material Transfer') {
+          finalPurpose = 'Warehouse Transfer';
+        } else if (formData.entryType === 'Material Adjustment') {
+          finalPurpose = 'Inventory Adjustment';
+        }
+      } else {
+        finalPurpose = 'Stock Receipt from GRN';
+      }
     }
 
     try {
@@ -252,7 +382,7 @@ const StockEntries = () => {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ ...formData, status })
+        body: JSON.stringify({ ...formData, purpose: finalPurpose, status })
       });
 
       if (!response.ok) throw new Error('Failed to create stock entry');
@@ -348,7 +478,10 @@ const StockEntries = () => {
       (entry.from_warehouse_name && entry.from_warehouse_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (entry.to_warehouse_name && entry.to_warehouse_name.toLowerCase().includes(searchTerm.toLowerCase()));
     
-    const matchesType = typeFilter === 'all' || entry.entry_type === typeFilter;
+    const matchesType = typeFilter === 'all' || (() => {
+      const display = getDisplayTypeAndPurpose(entry);
+      return display.type === typeFilter;
+    })();
     const matchesWarehouse = warehouseFilter === 'all' || 
       entry.from_warehouse_id === parseInt(warehouseFilter) || 
       entry.to_warehouse_id === parseInt(warehouseFilter);
@@ -414,10 +547,12 @@ const StockEntries = () => {
               onChange={e => setTypeFilter(e.target.value)}
             >
               <option value="all">All Types</option>
+              <option value="Manual Entry">Manual Entry</option>
               <option value="Material Receipt">Material Receipt</option>
               <option value="Material Issue">Material Issue</option>
-              <option value="Material Transfer">Material Transfer</option>
-              <option value="Material Adjustment">Material Adjustment</option>
+              <option value="Stock Transfer">Stock Transfer</option>
+              <option value="Stock Adjustment">Stock Adjustment</option>
+              <option value="Opening Stock">Opening Stock</option>
             </select>
 
             <select 
@@ -488,15 +623,22 @@ const StockEntries = () => {
                     </div>
                   </td>
                   <td className="p-2 ">
-                    <div className="flex items-center gap-2   text-slate-700">
-                      {entryTypeIcons[entry.entry_type]}
-                      {entry.entry_type}
-                    </div>
-                    {entry.purpose && (
-                      <div className="text-xs text-slate-400 mt-0.5 truncate max-w-[200px]" title={entry.purpose}>
-                        {entry.purpose}
-                      </div>
-                    )}
+                    {(() => {
+                      const display = getDisplayTypeAndPurpose(entry);
+                      return (
+                        <>
+                          <div className="flex items-center gap-2 text-slate-700">
+                            {display.icon}
+                            {display.type}
+                          </div>
+                          {display.purpose && (
+                            <div className="text-xs text-slate-400 mt-0.5 truncate max-w-[200px]" title={display.purpose}>
+                              {display.purpose}
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
                   </td>
                   <td className="p-2 ">
                     <div className="flex items-center gap-2  text-slate-600">
@@ -622,13 +764,16 @@ const StockEntries = () => {
                       <label className="text-xs font-semibold text-slate-600  ">Entry Type *</label>
                       <select 
                         className="w-full bg-slate-50 border border-slate-200 rounded  p-2  text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none"
-                        value={formData.entryType}
-                        onChange={e => setFormData({ ...formData, entryType: e.target.value })}
+                        value={getModalDropdownValue()}
+                        onChange={e => handleModalDropdownChange(e.target.value)}
                       >
-                        <option value="Material Receipt">Material Receipt</option>
-                        <option value="Material Issue">Material Issue</option>
-                        <option value="Material Transfer">Material Transfer</option>
-                        <option value="Material Adjustment">Material Adjustment</option>
+                        <option value="Manual Entry">Manual Entry</option>
+                        <option value="Material Receipt (GRN)">Material Receipt (GRN)</option>
+                        <option value="Purchase Return">Purchase Return</option>
+                        <option value="Material Issue">Material Issue (to Production)</option>
+                        <option value="Stock Transfer">Stock Transfer</option>
+                        <option value="Stock Adjustment">Stock Adjustment</option>
+                        <option value="Opening Stock">Opening Stock</option>
                       </select>
                     </div>
                   </div>
@@ -677,16 +822,27 @@ const StockEntries = () => {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                     <div className="md:col-span-1">
                       <label className="blocktext-xs   text-slate-500 mb-1.5 ">Item Code *</label>
-                      <select 
-                        className="w-full bg-white border border-slate-200 rounded  p-2  text-sm outline-none focus:ring-2 focus:ring-indigo-500/20"
+                      <SearchableSelect
+                        options={stockBalances.map(item => ({
+                          id: item.item_code,
+                          label: `${item.material_name || item.item_name} (${item.item_code})`,
+                          value: item.item_code
+                        }))}
                         value={currentItem.itemCode}
-                        onChange={e => setCurrentItem({ ...currentItem, itemCode: e.target.value })}
-                      >
-                        <option value="">Select Item</option>
-                        {stockBalances.map(item => (
-                          <option key={item.item_code} value={item.item_code}>{item.item_code} - {item.material_name}</option>
-                        ))}
-                      </select>
+                        onChange={(e) => {
+                          const code = e.target.value;
+                          const selected = stockBalances.find(i => i.item_code === code);
+                          setCurrentItem({
+                            ...currentItem,
+                            itemCode: code,
+                            uom: selected?.unit || selected?.uom || currentItem.uom,
+                            valuationRate: selected?.valuation_rate || selected?.rate || currentItem.valuationRate
+                          });
+                        }}
+                        allowCustom={false}
+                        placeholder="Search item..."
+                        className="text-sm bg-white"
+                      />
                     </div>
                     <div>
                       <label className="blocktext-xs   text-slate-500 mb-1.5 ">Quantity *</label>
