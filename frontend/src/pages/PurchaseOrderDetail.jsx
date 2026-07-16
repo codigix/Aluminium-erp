@@ -436,7 +436,7 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
                           <span className="text-xs  text-slate-800">
                             {Number(item.planned_qty || item.design_qty || 0).toFixed(3)}
                           </span>
-                          <span className="text-xs  text-slate-400  ml-1 uppercase">{item.unit || item.uom}</span>
+                          <span className="text-xs  text-slate-400  ml-1 uppercase">NOS</span>
                         </td>
                         <td className="p-2  text-center">
                           <span className="text-xs  text-slate-800">
@@ -807,7 +807,7 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
                     </td>
                     <td className="p-2 border-r border-slate-200 font-mono font-bold">{formatSize(item)}</td>
                     <td className="p-2 text-center border-r border-slate-200 font-semibold">
-                      {Number(item.planned_qty || item.design_qty || 0).toFixed(3)} {item.unit || item.uom}
+                      {Number(item.planned_qty || item.design_qty || 0).toFixed(3)} NOS
                     </td>
                     <td className="p-2 text-center border-r border-slate-200 font-semibold">
                       {Number(item.quantity || 0).toFixed(3)} {item.unit || item.uom}
