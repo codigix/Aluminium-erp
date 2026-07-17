@@ -651,6 +651,9 @@ const getQuotationById = async (quotationId) => {
 };
 
 const handleAutoApproval = async (quotationId, connection) => {
+  // Auto approval for single vendor quotations is disabled.
+  return false;
+
   const [q] = await connection.query(
     'SELECT rfq_group_id, rfq_id, sales_order_id, mr_id, base_quote_number FROM quotations WHERE id = ?',
     [quotationId]
@@ -733,6 +736,12 @@ const updateQuotationStatus = async (quotationId, status) => {
     if (status === 'RECEIVED') {
       await handleAutoApproval(quotationId, connection);
     } else if (status === 'REVIEWED') {
+      // Auto-select all items of this quotation upon approval so they are included in the generated PO
+      await connection.execute(
+        'UPDATE quotation_items SET is_selected = 1 WHERE quotation_id = ?',
+        [quotationId]
+      );
+
       // Manual approval - create PO if not exists
       // Check if PO already exists for this quotation or its base versions to avoid duplicates
       const [qInfo] = await connection.query('SELECT base_quote_number FROM quotations WHERE id = ?', [quotationId]);

@@ -2006,9 +2006,7 @@ const Quotations = () => {
             <span className={`inline-flex px-2.5 py-1 rounded text-xs    border ${rfqStatusColors[val]?.badge}`}>
               {val === 'REJECTED' ? rfqStatusColors[val]?.label : (rfqStatusColors[val]?.label?.toUpperCase() || val)}
             </span>
-            {val === 'REVIEWED' && q.is_single_vendor && (
-              <span className="text-xs  text-indigo-500  ml-1">Auto Approved</span>
-            )}
+            {/* Auto Approved label removed */}
           </div>
         )
       },
