@@ -26,7 +26,8 @@ const listProductionPlans = async () => {
             (SELECT COUNT(*) FROM work_orders WHERE plan_id = pp.id) as wo_count,
             (SELECT COUNT(*) FROM job_cards jc JOIN work_orders wo ON jc.work_order_id = wo.id WHERE wo.plan_id = pp.id) as total_ops,
             (SELECT COUNT(*) FROM job_cards jc JOIN work_orders wo ON jc.work_order_id = wo.id WHERE wo.plan_id = pp.id AND jc.status = 'COMPLETED') as completed_ops,
-            (SELECT status FROM material_requests WHERE plan_id = pp.id ORDER BY id DESC LIMIT 1) as mr_status
+            (SELECT status FROM material_requests WHERE plan_id = pp.id ORDER BY id DESC LIMIT 1) as mr_status,
+            (SELECT id FROM material_requests WHERE plan_id = pp.id ORDER BY id DESC LIMIT 1) as mr_id
      FROM production_plans pp
      LEFT JOIN users u ON pp.created_by = u.id
      LEFT JOIN (
@@ -83,7 +84,8 @@ const getProductionPlanById = async (id) => {
             COALESCE(c.company_name, c_direct.company_name) as company_name,
             COALESCE(ppi_first.item_code) as item_code,
             COALESCE(ppi_first.description) as item_description,
-            (SELECT status FROM material_requests WHERE plan_id = pp.id ORDER BY id DESC LIMIT 1) as mr_status
+            (SELECT status FROM material_requests WHERE plan_id = pp.id ORDER BY id DESC LIMIT 1) as mr_status,
+            (SELECT id FROM material_requests WHERE plan_id = pp.id ORDER BY id DESC LIMIT 1) as mr_id
      FROM production_plans pp
      LEFT JOIN users u ON pp.created_by = u.id
      LEFT JOIN (
@@ -1771,9 +1773,18 @@ ON (ppm.material_name = issued.material_name) OR (ppm.item_code = issued.item_co
     );
   }
 
+  const [mrRows] = await pool.query(
+    'SELECT id, status FROM material_requests WHERE plan_id = ? ORDER BY id DESC LIMIT 1',
+    [planId]
+  );
+  const mrId = mrRows.length > 0 ? mrRows[0].id : null;
+  const mrStatus = mrRows.length > 0 ? mrRows[0].status : null;
+
   return {
     plan_code: plan.plan_code,
     start_date: plan.start_date,
+    mr_id: mrId,
+    mr_status: mrStatus,
     items: Array.from(aggregatedMap.values())
   };
 };

@@ -365,7 +365,9 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
         setMrPlanDetails({
           id: planId,
           planCode: data.plan_code,
-          startDate: data.start_date
+          startDate: data.start_date,
+          mrId: data.mr_id,
+          mrStatus: data.mr_status
         });
         setShowAddItem(false);
         setSelectedNewItem(null);
@@ -2718,13 +2720,15 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                 <div className="w-1.5 h-6 bg-indigo-500 rounded" />
                 <span className="text-xs   text-slate-700">Items to Request ({mrItems.filter(item => !item.request_exists && (parseFloat(item.inventory || 0) < parseFloat(item.quantity) || item.is_manual)).length})</span>
               </div>
-              <button
-                onClick={() => setShowAddItem(!showAddItem)}
-                className="flex items-center gap-1.5 p-1.5 bg-indigo-600 text-white rounded  hover:bg-indigo-700 transition-all text-xs  shadow-sm"
-              >
-                <Plus className="w-3 h-3" />
-                Add Item
-              </button>
+              {!mrPlanDetails?.mrId && (
+                <button
+                  onClick={() => setShowAddItem(!showAddItem)}
+                  className="flex items-center gap-1.5 p-1.5 bg-indigo-600 text-white rounded  hover:bg-indigo-700 transition-all text-xs  shadow-sm"
+                >
+                  <Plus className="w-3 h-3" />
+                  Add Item
+                </button>
+              )}
             </div>
           </div>
 
@@ -2835,31 +2839,42 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
           </div>
           {/* Modal Actions */}
           <div className="flex items-center justify-end gap-2 pt-6 border-t border-slate-100">
-            <button
-              onClick={() => setMrModalOpen(false)}
-              disabled={transmittingMr}
-              className="p-2 text-xs  text-slate-400 hover:text-slate-600 transition-colors"
-            >
-              Abort Request
-            </button>
-            {mrItems.length > 0 && mrItems.some(item => !item.request_exists) && (
+            {mrPlanDetails?.mrId ? (
               <button
-                onClick={confirmTransmitMR}
-                disabled={transmittingMr}
-                className="flex items-center gap-2 px-6 py-2.5 bg-slate-900 text-white rounded  hover:bg-slate-800 transition-all text-xs  shadow-lg shadow-slate-200 disabled:opacity-50"
+                onClick={() => setMrModalOpen(false)}
+                className="px-6 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-xs transition-all font-medium"
               >
-                {transmittingMr ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded animate-spin" />
-                    Transmitting...
-                  </>
-                ) : (
-                  <>
-                    <Send className="w-3.5 h-3.5" />
-                    Material Request
-                  </>
-                )}
+                Close
               </button>
+            ) : (
+              <>
+                <button
+                  onClick={() => setMrModalOpen(false)}
+                  disabled={transmittingMr}
+                  className="p-2 text-xs  text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  Abort Request
+                </button>
+                {mrItems.length > 0 && mrItems.some(item => !item.request_exists) && (
+                  <button
+                    onClick={confirmTransmitMR}
+                    disabled={transmittingMr}
+                    className="flex items-center gap-2 px-6 py-2.5 bg-slate-900 text-white rounded  hover:bg-slate-800 transition-all text-xs  shadow-lg shadow-slate-200 disabled:opacity-50"
+                  >
+                    {transmittingMr ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded animate-spin" />
+                        Transmitting...
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-3.5 h-3.5" />
+                        Material Request
+                      </>
+                    )}
+                  </button>
+                )}
+              </>
             )}
           </div>
         </div>
