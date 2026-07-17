@@ -142,7 +142,7 @@ export const SearchableSelect = ({
       </div>
 
       {isOpen && !disabled && (
-        <div className={`absolute z-[100] w-full bg-white border border-slate-200 rounded shadow-xl max-h-60 flex flex-col overflow-hidden ${openUpwards || dropdownDirection === 'up' ? 'bottom-full mb-1' : 'top-full mt-1'}`}>
+        <div className={`absolute z-[100] w-full min-w-full md:min-w-[320px] lg:min-w-[400px] bg-white border border-slate-200 rounded shadow-xl max-h-60 flex flex-col overflow-hidden ${openUpwards || dropdownDirection === 'up' ? 'bottom-full mb-1' : 'top-full mt-1'}`}>
           <div className="overflow-y-auto flex-1">
             {filteredOptions.length > 0 ? (
               filteredOptions.map((opt, idx) => (
@@ -157,7 +157,7 @@ export const SearchableSelect = ({
                     setIsOpen(false);
                   }}
                 >
-                  <div className="flex items-center gap-2 whitespace-nowrap">
+                  <div className="flex flex-col gap-0.5 whitespace-normal break-words">
                     <span className="">{getLabel(opt)}</span>
                     {getSublabel(opt) && (
                       <span className="text-xs text-slate-400 font-normal whitespace-pre-line">

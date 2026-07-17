@@ -113,6 +113,31 @@ const createCustomerPo = async payload => {
 
     const totals = calculateAmounts(items);
 
+    // Dynamic, concurrency-safe PO number generation: PO17-07-2026-001
+    const today = new Date();
+    const day = String(today.getDate()).padStart(2, '0');
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const year = today.getFullYear();
+    const dateStr = `${day}-${month}-${year}`; // DD-MM-YYYY
+    const prefix = `PO${dateStr}-`;
+
+    const [rows] = await connection.execute(
+      `SELECT po_number FROM customer_pos WHERE po_number LIKE ? FOR UPDATE`,
+      [`${prefix}%`]
+    );
+
+    let maxSeq = 0;
+    for (const r of rows) {
+      if (r.po_number) {
+        const parts = r.po_number.split('-');
+        const seqVal = parseInt(parts[parts.length - 1]);
+        if (!isNaN(seqVal) && seqVal > maxSeq) {
+          maxSeq = seqVal;
+        }
+      }
+    }
+    const finalPoNumber = `${prefix}${String(maxSeq + 1).padStart(3, '0')}`;
+
     const [poResult] = await connection.execute(
       `INSERT INTO customer_pos
         (company_id, project_name, po_number, po_date, po_version, order_type, plant, currency, payment_terms,
@@ -124,7 +149,7 @@ const createCustomerPo = async payload => {
       [
         companyId,
         projectName || null,
-        header.poNumber || null,
+        finalPoNumber,
         header.poDate || null,
         header.poVersion || '1.0',
         header.orderType || 'STANDARD',

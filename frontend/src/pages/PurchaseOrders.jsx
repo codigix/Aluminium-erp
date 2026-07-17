@@ -466,7 +466,7 @@ const PurchaseOrders = () => {
 
       successToast('Purchase Orders merged successfully');
       setShowMergeModal(false);
-      fetchPOs();
+      fetchPOs(false);
       fetchStats();
     } catch (error) {
       errorToast(error.message || 'Failed to merge Purchase Orders');
@@ -546,7 +546,7 @@ const PurchaseOrders = () => {
 
       successToast(`Purchase Order ${manualFormData.id ? 'updated' : 'created'} successfully`);
       navigate(`${deptPrefix}/purchase-orders`);
-      fetchPOs();
+      fetchPOs(false);
       fetchStats();
     } catch (error) {
       errorToast(error.message || 'Failed to create PO');
@@ -571,9 +571,9 @@ const PurchaseOrders = () => {
     }
   };
 
-  const fetchPOs = async () => {
+  const fetchPOs = async (showLoader = true) => {
     try {
-      setLoading(true);
+      if (showLoader) setLoading(true);
       const token = localStorage.getItem('authToken');
       const response = await fetch(`${API_BASE}/purchase-orders`, {
         headers: {
@@ -589,7 +589,7 @@ const PurchaseOrders = () => {
       console.error('Error fetching POs:', error);
       setPos([]);
     } finally {
-      setLoading(false);
+      if (showLoader) setLoading(false);
     }
   };
 
@@ -643,7 +643,7 @@ const PurchaseOrders = () => {
         setSelectedAttachmentFiles([]);
 
         // Refresh PO lists
-        fetchPOs();
+        fetchPOs(false);
         fetchStats();
       } else {
         const err = await response.json();
@@ -704,7 +704,7 @@ const PurchaseOrders = () => {
         setSelectedPoForAttachment(updatedPo);
 
         // Refresh PO lists
-        fetchPOs();
+        fetchPOs(false);
         fetchStats();
       } else {
         const err = await response.json();
@@ -858,7 +858,7 @@ const PurchaseOrders = () => {
       setShowCreateModal(false);
       setPoItems([]);
       setFormData({ quotationId: '', projectName: '', quoteNumber: '', poNumber: '', vendorName: '', expectedDeliveryDate: '', notes: '' });
-      fetchPOs();
+      fetchPOs(false);
       fetchStats();
       fetchApprovedQuotations();
     } catch (error) {
@@ -1062,6 +1062,12 @@ const PurchaseOrders = () => {
 
     if (!result.isConfirmed) return;
 
+    // Save previous POs list in case we need to roll back
+    const previousPos = [...pos];
+
+    // Optimistically update the list by removing the deleted PO
+    setPos(prev => prev.filter(po => po.id !== poId));
+
     try {
       const token = localStorage.getItem('authToken');
       const response = await fetch(`${API_BASE}/purchase-orders/${poId}`, {
@@ -1072,12 +1078,17 @@ const PurchaseOrders = () => {
         }
       });
 
-      if (!response.ok) throw new Error('Failed to delete PO');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Failed to delete PO');
+      }
 
       successToast('Purchase Order deleted successfully');
-      fetchPOs();
+      fetchPOs(false);
       fetchStats();
     } catch (error) {
+      // Revert frontend state on failure
+      setPos(previousPos);
       errorToast(error.message || 'Failed to delete PO');
     }
   };
@@ -1110,7 +1121,7 @@ const PurchaseOrders = () => {
         }
 
         successToast('Purchase Order has been forwarded to Accounts successfully.');
-        fetchPOs();
+        fetchPOs(false);
         fetchStats();
       } catch (error) {
         console.error('Send to Accounts Error:', error);
@@ -1152,7 +1163,7 @@ const PurchaseOrders = () => {
 
         if (response.ok) {
           successToast("Purchase Order approved successfully");
-          fetchPOs();
+          fetchPOs(false);
           fetchStats();
         } else {
           const error = await response.json();
@@ -1233,7 +1244,7 @@ const PurchaseOrders = () => {
       if (response.ok) {
         successToast('Purchase Order sent to vendor');
         setShowEmailModal(false);
-        fetchPOs();
+        fetchPOs(false);
       } else {
         const error = await response.json();
         errorToast(error.message || 'Failed to send email');
@@ -1515,17 +1526,15 @@ const PurchaseOrders = () => {
                 </button>
               )
             )}
-            {!isSent && (
-              <button
-                onClick={() => handleDeletePO(row.id)}
-                className="text-rose-500 hover:bg-rose-50 transition-all active:scale-90 p-1 rounded"
-                title="Delete PO"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-              </button>
-            )}
+            <button
+              onClick={() => handleDeletePO(row.id)}
+              className="text-rose-500 hover:bg-rose-50 transition-all active:scale-90 p-1 rounded"
+              title="Delete PO"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </button>
           </div>
         );
       }

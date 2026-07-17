@@ -49,17 +49,17 @@ const listSalesOrders = async (includeWithoutPo = true) => {
   if (!includeWithoutPo) {
     whereClause += ' AND so.customer_po_id IS NOT NULL';
   }
-  whereClause += " AND (so.so_number IS NULL OR so.so_number NOT LIKE 'ORD-%')";
+  whereClause += " AND (so.so_number IS NULL OR so.so_number NOT LIKE 'ORD%')";
 
   const [rows] = await pool.query(
     `SELECT so.*, 
             COALESCE(so.project_name, cp.project_name, (SELECT project_name FROM orders WHERE id = so.id)) as project_name,
             COALESCE(
-              (SELECT status FROM sales_orders WHERE project_name = so.project_name AND company_id = so.company_id AND so_number LIKE 'ORD-%' ORDER BY id DESC LIMIT 1),
+              (SELECT status FROM sales_orders WHERE project_name = so.project_name AND company_id = so.company_id AND so_number LIKE 'ORD%' ORDER BY id DESC LIMIT 1),
               so.status
             ) as status,
             COALESCE(
-              (SELECT current_department FROM sales_orders WHERE project_name = so.project_name AND company_id = so.company_id AND so_number LIKE 'ORD-%' ORDER BY id DESC LIMIT 1),
+              (SELECT current_department FROM sales_orders WHERE project_name = so.project_name AND company_id = so.company_id AND so_number LIKE 'ORD%' ORDER BY id DESC LIMIT 1),
               so.current_department
             ) as current_department,
             so.target_dispatch_date as delivery_date, c.company_name, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path,
@@ -125,11 +125,11 @@ const getSalesOrderById = async (id) => {
     `SELECT so.*, 
             COALESCE(so.project_name, cp.project_name, (SELECT project_name FROM orders WHERE id = so.id)) as project_name,
             COALESCE(
-              (SELECT status FROM sales_orders WHERE project_name = so.project_name AND company_id = so.company_id AND so_number LIKE 'ORD-%' ORDER BY id DESC LIMIT 1),
+              (SELECT status FROM sales_orders WHERE project_name = so.project_name AND company_id = so.company_id AND so_number LIKE 'ORD%' ORDER BY id DESC LIMIT 1),
               so.status
             ) as status,
             COALESCE(
-              (SELECT current_department FROM sales_orders WHERE project_name = so.project_name AND company_id = so.company_id AND so_number LIKE 'ORD-%' ORDER BY id DESC LIMIT 1),
+              (SELECT current_department FROM sales_orders WHERE project_name = so.project_name AND company_id = so.company_id AND so_number LIKE 'ORD%' ORDER BY id DESC LIMIT 1),
               so.current_department
             ) as current_department,
             so.target_dispatch_date as delivery_date, c.company_name, cp.po_number, cp.po_date, cp.currency AS po_currency, cp.net_total AS po_net_total, cp.pdf_path,

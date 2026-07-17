@@ -116,29 +116,31 @@ const SalesOrders = () => {
       })).filter(po => po.items.length > 0);
     }
 
-    return (
-      <>
-        {filteredPos
-          .filter(po => po.items && po.items.length > 0)
-          .flatMap(po =>
-            po.items.map((item, idx) => (
-              <option
-                key={`${po.uniqueKey}_item_${idx}`}
-                value={po.uniqueKey}
-              >
-                ({po.po_number || '—'}) {item.drawing_no || '—'} — {item.description || '—'}
-              </option>
-            ))
-          )}
-        {!targetDrawingNo && filteredPos
-          .filter(po => !po.items || po.items.length === 0)
-          .map(po => (
-            <option key={po.uniqueKey} value={po.uniqueKey}>
-              {po.po_number} — {po.company_name || ''}
-            </option>
-          ))}
-      </>
-    );
+    const options = [];
+
+    filteredPos
+      .filter(po => po.items && po.items.length > 0)
+      .forEach(po => {
+        po.items.forEach((item, idx) => {
+          options.push({
+            value: String(po.uniqueKey),
+            label: `(${po.po_number || '—'}) ${item.drawing_no || '—'} — ${item.description || '—'}`
+          });
+        });
+      });
+
+    if (!targetDrawingNo) {
+      filteredPos
+        .filter(po => !po.items || po.items.length === 0)
+        .forEach(po => {
+          options.push({
+            value: String(po.uniqueKey),
+            label: `${po.po_number} — ${po.company_name || ''}`
+          });
+        });
+    }
+
+    return options;
   }, [formData.drawingId, allDrawings, allCustomerPos]);
 
   useEffect(() => {
@@ -1442,8 +1444,8 @@ const SalesOrders = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-2">
+      <div className="grid grid-cols-1 lg:grid-cols-10 gap-6">
+        <div className="lg:col-span-7 space-y-4">
           {/* Host Company Profile Details */}
           <Card title="Host Billing Entity Details" className="bg-white border border-slate-200 rounded-xl" subtitle="Select issuing host company profile for this sales document">
             <div className="p-3 space-y-4">
@@ -1636,19 +1638,18 @@ const SalesOrders = () => {
               <FormControl label="Customer PO">
                 <div className="flex gap-2">
                   <div className="flex-1">
-                    <select
-                      className="w-full p-2 border border-slate-200 rounded text-xs text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-rose-500 disabled:bg-slate-50 disabled:text-slate-500"
+                    <SearchableSelect
+                      options={memoizedPoOptions}
                       value={formData.customerPoId || ''}
                       onChange={(e) => {
                         const val = e.target.value;
                         if (!val) return;
                         handleCustomerPoChange(val);
                       }}
+                      placeholder="Select PO..."
                       disabled={formMode === 'view'}
-                    >
-                      <option value="">-- Select PO --</option>
-                      {memoizedPoOptions}
-                    </select>
+                      allowCustom={false}
+                    />
                   </div>
                   {formData.customerPoId && String(formData.customerPoId).startsWith('PO_') && (
                     <button
@@ -1904,68 +1905,78 @@ const SalesOrders = () => {
           )}
         </div>
 
-        <div className="space-y-2">
-          {/* Order Status & Taxes */}
-          <Card title="Order Status & Taxes" className='bg-white'>
-            <div className="space-y-2 p-2">
-              <FormControl label="Status">
-                <select
-                  className="w-full p-2 border border-slate-200 rounded  text-xs"
-                  value={formData.status}
-                  onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                  disabled={formMode === 'view'}
-                >
-                  <option value="Draft">Draft</option>
-                  <option value="Created">Created</option>
-                  <option value="Active">Active</option>
-                  <option value="Completed">Completed</option>
-                  <option value="Cancelled">Cancelled</option>
-                </select>
-              </FormControl>
-              <div className="grid grid-cols-2 gap-2">
-                <FormControl label="CGST Rate (%)">
-                  <input
-                    type="number"
-                    className="w-full p-2 border border-slate-200 rounded  text-xs"
-                    value={formData.cgstRate}
-                    onChange={(e) => setFormData({ ...formData, cgstRate: Number(e.target.value) })}
+        <div className="lg:col-span-3 space-y-4 lg:sticky lg:top-6 self-start">
+          {/* Order Summary & Controls Card */}
+          <Card title="Order Summary & Controls" className='bg-white shadow-sm border border-slate-100 rounded-xl overflow-hidden'>
+            <div className="p-3 space-y-5">
+              {/* Status and Taxes Section */}
+              <div className="space-y-3">
+                <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Status & Taxes</h3>
+                <FormControl label="Status">
+                  <select
+                    className="w-full p-2 border border-slate-200 rounded text-xs text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none"
+                    value={formData.status}
+                    onChange={(e) => setFormData({ ...formData, status: e.target.value })}
                     disabled={formMode === 'view'}
-                  />
+                  >
+                    <option value="Draft">Draft</option>
+                    <option value="Created">Created</option>
+                    <option value="Active">Active</option>
+                    <option value="Completed">Completed</option>
+                    <option value="Cancelled">Cancelled</option>
+                  </select>
                 </FormControl>
-                <FormControl label="SGST Rate (%)">
-                  <input
-                    type="number"
-                    className="w-full p-2 border border-slate-200 rounded  text-xs"
-                    value={formData.sgstRate}
-                    onChange={(e) => setFormData({ ...formData, sgstRate: Number(e.target.value) })}
-                    disabled={formMode === 'view'}
-                  />
-                </FormControl>
-              </div>
-            </div>
-          </Card>
-
-          {/* Price Summary */}
-          <Card title="Order Summary" className='bg-white'>
-            <div className="space-y-3 p-2">
-              <div className="flex justify-between text-xs">
-                <span className="text-slate-500">Items Subtotal:</span>
-                <span className=" text-slate-700">₹ {(Number(subTotal) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-              </div>
-              <div className="flex justify-between text-xs pt-3 border-t border-slate-100 text-blue-600">
-                <span>Total Profit:</span>
-                <span>₹ {(Number(totalProfitVal) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-slate-500">Tax (GST {cgstRateVal + sgstRateVal}%):</span>
-                <span className=" text-slate-700">₹ {(Number(gstAmount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-              </div>
-              <div className="pt-4 mt-2 border-t border-slate-200 flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-semibold text-slate-700">Total Order Value:</p>
+                
+                <div className="grid grid-cols-2 gap-2">
+                  <FormControl label="CGST Rate (%)">
+                    <input
+                      type="number"
+                      className="w-full p-2 border border-slate-200 rounded text-xs text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none"
+                      value={formData.cgstRate}
+                      onChange={(e) => setFormData({ ...formData, cgstRate: Number(e.target.value) })}
+                      disabled={formMode === 'view'}
+                    />
+                  </FormControl>
+                  <FormControl label="SGST Rate (%)">
+                    <input
+                      type="number"
+                      className="w-full p-2 border border-slate-200 rounded text-xs text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 outline-none"
+                      value={formData.sgstRate}
+                      onChange={(e) => setFormData({ ...formData, sgstRate: Number(e.target.value) })}
+                      disabled={formMode === 'view'}
+                    />
+                  </FormControl>
                 </div>
-                <div className="text-right">
-                  <p className="text-xl  text-emerald-600">₹ {(Number(totalAmount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+              </div>
+
+              {/* Price Breakdown Section */}
+              <div className="border-t border-slate-100 pt-4 space-y-3">
+                <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Breakdown</h3>
+                
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-slate-500">Items Subtotal:</span>
+                    <span className="text-slate-900 font-semibold">₹ {(Number(subTotal) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </div>
+                  
+                  <div className="flex justify-between items-center text-xs text-blue-600">
+                    <span>Total Profit:</span>
+                    <span className="font-semibold">₹ {(Number(totalProfitVal) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </div>
+                  
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-slate-500">Tax (GST {cgstRateVal + sgstRateVal}%):</span>
+                    <span className="text-slate-900 font-semibold">₹ {(Number(gstAmount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </div>
+                </div>
+
+                <div className="pt-3 mt-1 border-t border-slate-200 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Value</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-lg font-bold text-emerald-600">₹ {(Number(totalAmount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                  </div>
                 </div>
               </div>
             </div>

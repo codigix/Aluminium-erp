@@ -707,7 +707,7 @@ const getProductionReadySalesOrders = async () => {
        )
        WHERE 
          -- Only show Sales Orders starting with ORD-
-         o.order_no LIKE 'ORD-%'
+         o.order_no LIKE 'ORD%'
          -- 1. Has at least one FG/Assembly/Part item
          AND (EXISTS (
            SELECT 1 FROM order_items oi 

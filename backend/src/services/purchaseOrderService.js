@@ -1368,8 +1368,18 @@ const updatePurchaseOrder = async (poId, payload) => {
 };
 
 const deletePurchaseOrder = async (poId) => {
-  await getPurchaseOrderById(poId);
-  await pool.execute('DELETE FROM purchase_orders WHERE id = ?', [poId]);
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    await connection.execute('DELETE FROM purchase_order_items WHERE purchase_order_id = ?', [poId]);
+    await connection.execute('DELETE FROM purchase_orders WHERE id = ?', [poId]);
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 };
 
 const getPurchaseOrderStats = async () => {

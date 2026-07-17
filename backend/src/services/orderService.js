@@ -42,28 +42,33 @@ const numberToWords = (num) => {
   return result;
 };
 
-const generateOrderNo = async () => {
-  const date = new Date();
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  const dateStr = `${year}${month}${day}`;
+const generateOrderNo = async (connection) => {
+  const today = new Date();
+  const day = String(today.getDate()).padStart(2, '0');
+  const month = String(today.getMonth() + 1).padStart(2, '0');
+  const year = today.getFullYear();
+  const dateStr = `${day}-${month}-${year}`; // DD-MM-YYYY
+  const prefix = `ORD${dateStr}-`;
 
-  const [rows] = await pool.query(
-    'SELECT order_no FROM orders WHERE order_no LIKE ? ORDER BY order_no DESC LIMIT 1',
-    [`ORD-${dateStr}-%`]
+  const db = connection || pool;
+  const [rows] = await db.execute(
+    'SELECT order_no FROM orders WHERE order_no LIKE ? FOR UPDATE',
+    [`${prefix}%`]
   );
 
-  let sequence = 1;
-  if (rows.length > 0) {
-    const lastNo = rows[0].order_no;
-    const lastSeq = parseInt(lastNo.split('-')[2]);
-    if (!isNaN(lastSeq)) {
-      sequence = lastSeq + 1;
+  let maxSeq = 0;
+  for (const r of rows) {
+    if (r.order_no) {
+      const parts = r.order_no.split('-');
+      const seqVal = parseInt(parts[parts.length - 1]);
+      if (!isNaN(seqVal) && seqVal > maxSeq) {
+        maxSeq = seqVal;
+      }
     }
   }
+  const sequence = maxSeq + 1;
 
-  return `ORD-${dateStr}-${String(sequence).padStart(3, '0')}`;
+  return `${prefix}${String(sequence).padStart(3, '0')}`;
 };
 
 const listOrders = async () => {
@@ -138,12 +143,13 @@ const createOrder = async (orderData) => {
     }
   }
 
-  const orderNo = await generateOrderNo();
   const publicId = crypto.randomUUID();
 
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
+
+    const orderNo = await generateOrderNo(connection);
 
     const [result] = await connection.execute(`
       INSERT INTO orders

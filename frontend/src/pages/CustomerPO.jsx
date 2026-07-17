@@ -474,9 +474,13 @@ const CustomerPO = ({
   // Auto-generate PO Number when form opens
   React.useEffect(() => {
     if (showPoForm && !poForm.poNumber) {
-      const year = new Date().getFullYear();
+      const today = new Date();
+      const day = String(today.getDate()).padStart(2, '0');
+      const month = String(today.getMonth() + 1).padStart(2, '0');
+      const year = today.getFullYear();
+      const dateStr = `${day}-${month}-${year}`;
       const count = (customerPos?.length || 0) + 1;
-      const autoPo = `PO-${year}-${count.toString().padStart(3, '0')}`;
+      const autoPo = `PO${dateStr}-${count.toString().padStart(3, '0')}`;
       setPoForm(prev => ({ ...prev, poNumber: autoPo }));
     }
   }, [showPoForm, customerPos]);
@@ -1496,9 +1500,13 @@ const CustomerPO = ({
               setShowPoForm(true);
               try {
                 const data = await apiRequest(`/customer-pos/${row.id}`);
-                const year = new Date().getFullYear();
+                const today = new Date();
+                const day = String(today.getDate()).padStart(2, '0');
+                const month = String(today.getMonth() + 1).padStart(2, '0');
+                const year = today.getFullYear();
+                const dateStr = `${day}-${month}-${year}`;
                 const count = (customerPos?.length || 0) + 1;
-                const autoPo = `PO-${year}-${count.toString().padStart(3, '0')}`;
+                const autoPo = `PO${dateStr}-${count.toString().padStart(3, '0')}`;
 
                 setPoForm({
                   companyId: data.company_id || '',
