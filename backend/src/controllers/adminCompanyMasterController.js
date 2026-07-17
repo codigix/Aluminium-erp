@@ -100,7 +100,8 @@ const updateCompany = async (req, res, next) => {
       email,
       phone,
       contactPerson,
-      status
+      status,
+      removeSignature
     } = req.body;
 
     const payload = {
@@ -126,6 +127,10 @@ const updateCompany = async (req, res, next) => {
       if (req.files.authorizedSignature && req.files.authorizedSignature[0]) {
         payload.authorizedSignature = `uploads/${req.files.authorizedSignature[0].filename}`;
       }
+    }
+
+    if (removeSignature === 'true') {
+      payload.authorizedSignature = null;
     }
 
     const result = await adminCompanyMasterService.updateCompany(id, payload);

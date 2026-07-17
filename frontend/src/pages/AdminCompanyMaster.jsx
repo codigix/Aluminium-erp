@@ -166,6 +166,9 @@ const AdminCompanyMaster = () => {
       if (authorizedSignatureFile) {
         apiFormData.append('authorizedSignature', authorizedSignatureFile);
       }
+      if (!signaturePreview) {
+        apiFormData.append('removeSignature', 'true');
+      }
 
       const method = isEditing ? 'PUT' : 'POST';
       const url = isEditing 
