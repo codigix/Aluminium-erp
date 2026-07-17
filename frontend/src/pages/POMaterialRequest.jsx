@@ -1411,6 +1411,7 @@ const POMaterialRequest = () => {
                   <thead>
                     <tr className="bg-slate-50/50 border-b border-slate-100">
                       <th className="p-2  text-left text-xs   text-slate-400  ">Item</th>
+                      <th className="p-2  text-center text-xs   text-slate-400  ">Design Qty</th>
                       <th className="p-2  text-center text-xs   text-slate-400  ">Required Qty</th>
                       <th className="p-2  text-center text-xs   text-slate-400  ">Available Stock</th>
                       <th className="p-2  text-center text-xs   text-slate-400  ">Released Qty</th>
@@ -1442,6 +1443,14 @@ const POMaterialRequest = () => {
                                   {formatDimensions(item)}
                                 </div>
                               )}
+                            </div>
+                          </td>
+                          <td className="px-6 py-5 text-center">
+                            <div className="flex flex-col items-center">
+                              <span className="text-xs text-slate-800 font-medium">
+                                {item.design_qty !== null && item.design_qty !== undefined ? Number(item.design_qty).toFixed(0) : '-'}
+                              </span>
+                              <span className="text-xs  text-slate-400 ">Nos</span>
                             </div>
                           </td>
                           <td className="px-6 py-5 text-center">
