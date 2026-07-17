@@ -2300,14 +2300,16 @@ const CustomerDrawing = () => {
         </div>
 
         <div className="flex items-center gap-3">
-          <Button
-            variant="secondary"
-            onClick={handleBulkSendToDesign}
-            disabled={selectedRequirements.size === 0}
-            className="flex items-center gap-1.5"
-          >
-            <span>📤</span> Send to Design (Bulk)
-          </Button>
+          {selectedRequirements.size > 0 && (
+            <Button
+              variant="secondary"
+              onClick={handleBulkSendToDesign}
+              disabled={selectedRequirements.size === 0}
+              className="flex items-center gap-1.5"
+            >
+              <span>📤</span> Send to Design (Bulk)
+            </Button>
+          )}
           <Button
             variant="secondary"
             onClick={() => { setShowApprovedDrawings(true); fetchApprovedDrawings(); }}
