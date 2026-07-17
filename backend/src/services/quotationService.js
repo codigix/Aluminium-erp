@@ -952,18 +952,12 @@ const deleteQuotation = async (quotationId) => {
     throw error;
   }
 
-  // Check if any purchase orders reference this quotation
-  const [poRefs] = await pool.query('SELECT po_number FROM purchase_orders WHERE quotation_id = ?', [quotationId]);
-  if (poRefs.length > 0) {
-    const poNumbers = poRefs.map(p => p.po_number).join(', ');
-    const error = new Error(`Cannot delete quotation because it is referenced by Purchase Order(s): ${poNumbers}. Please delete the PO(s) first.`);
-    error.statusCode = 400;
-    throw error;
-  }
-
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
+
+    // Clear quotation_id reference in purchase_orders first to satisfy RESTRICT FK constraint
+    await connection.execute('UPDATE purchase_orders SET quotation_id = NULL WHERE quotation_id = ?', [quotationId]);
 
     // Delete related items first
     await connection.execute('DELETE FROM quotation_items WHERE quotation_id = ?', [quotationId]);
