@@ -1515,7 +1515,7 @@ const getMaterialRequestItemsForPlan = async (planId) => {
   const planCode = plan.plan_code;
   const aggregatedMap = new Map();
 
-  const addToMap = (itemCode, qty, uom, name, warehouse, category, rate, designQty, currentBalance, isFulfilled, requestExists, dimensions = {}) => {
+  const addToMap = (itemCode, qty, uom, name, warehouse, category, rate, designQty, currentBalance, isFulfilled, requestExists, dimensions = {}, isExistingRequest = false) => {
     if (!itemCode && !name) return;
 
     const code = (itemCode || name).trim();
@@ -1552,8 +1552,10 @@ const getMaterialRequestItemsForPlan = async (planId) => {
 
     if (aggregatedMap.has(key)) {
       const existing = aggregatedMap.get(key);
-      existing.quantity += Number(qty);
-      existing.design_qty = (existing.design_qty || 0) + Number(designQty || 0);
+      if (!isExistingRequest) {
+        existing.quantity += Number(qty);
+        existing.design_qty = (existing.design_qty || 0) + Number(designQty || 0);
+      }
       // Ensure inventory is updated if the new source has a higher value (e.g. from fulfilled MR)
       if (Number(currentBalance) > existing.inventory) {
         existing.inventory = Number(currentBalance);
@@ -1764,7 +1766,8 @@ ON (ppm.material_name = issued.material_name) OR (ppm.item_code = issued.item_co
         thickness: mri.thickness,
         diameter: mri.diameter,
         outer_diameter: mri.outer_diameter
-      }
+      },
+      true // isExistingRequest
     );
   }
 
