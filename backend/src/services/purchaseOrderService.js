@@ -2112,9 +2112,8 @@ const generatePurchaseOrderPDF = async (poId) => {
         <th style="width: 10%; text-align: left; vertical-align: top; line-height: 1.3;">Size</th>
         <th style="width: 4%;">HSN Code</th>
         <th style="width: 6%; text-align: right;">Rate</th>
-        <th style="width: 5%; text-align: right; line-height: 1.2;">Design<br/>Qty</th>
-        <th style="width: 5%; text-align: right; line-height: 1.2;">Req<br/>Qty</th>
-        <th style="width: 4%;">Unit</th>
+        <th style="width: 5%; text-align: right; line-height: 1.2;">Qty</th>
+        <th style="width: 9%; text-align: right; line-height: 1.2;">Weight</th>
         <th style="width: 6%; text-align: right;">Amount</th>
         <th style="width: 3%; text-align: right;">Discount</th>
         <th style="width: 5%; text-align: right;">Transaction Amount</th>
@@ -2140,8 +2139,7 @@ const generatePurchaseOrderPDF = async (poId) => {
         <td style="text-align: center;">{{hsn_code}}</td>
         <td style="text-align: right;">{{unit_rate}}</td>
         <td style="text-align: right;">{{design_qty}}</td>
-        <td style="text-align: right;">{{required_qty}}</td>
-        <td style="text-align: center;">{{unit}}</td>
+        <td style="text-align: right;">{{required_qty}} {{unit}}</td>
         <td style="text-align: right;">{{amount}}</td>
         <td style="text-align: right;">{{discount}}</td>
         <td style="text-align: right;">{{transaction_amount}}</td>
@@ -2160,8 +2158,7 @@ const generatePurchaseOrderPDF = async (poId) => {
         <td style="text-align: center;">{{hsn_code}}</td>
         <td style="text-align: right;">{{displayRate}}</td>
         <td></td>
-        <td style="text-align: right;">{{displayQuantity}}</td>
-        <td style="text-align: center;">{{unit}}</td>
+        <td style="text-align: right;">{{displayQuantity}} {{unit}}</td>
         <td style="text-align: right; font-weight: bold;">{{displayTotal}}</td>
         <td></td>
         <td></td>
