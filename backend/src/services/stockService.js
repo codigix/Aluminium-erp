@@ -10,7 +10,7 @@ const calculateBalanceDetailsFromLedger = async (itemCode, warehouse = null, con
     FROM stock_ledger 
     WHERE item_code = ?
   `;
-  
+
   const params = [itemCode];
   if (warehouse && warehouse !== 'ALL') {
     query += ` AND warehouse = ? `;
@@ -34,7 +34,7 @@ const calculateBalanceDetailsFromLedger = async (itemCode, warehouse = null, con
 const deleteStockLedgerEntry = async (id, externalConnection = null) => {
   const connection = externalConnection || await pool.getConnection();
   const shouldRelease = !externalConnection;
-  
+
   try {
     if (shouldRelease) {
       await connection.beginTransaction();
@@ -161,7 +161,7 @@ const getStockLedger = async (itemCode = null, startDate = null, endDate = null)
 
 const getStockBalance = async (drawingNo = null, includeAll = false) => {
   const params = [];
-  
+
   if (includeAll) {
     // Items Master view: aggregate all dimension records of the same material into one generic row.
     // Prefer canonical RM- codes over dimension-specific RAW- codes for the item_code column.
@@ -407,7 +407,7 @@ const getStockBalanceByItem = async (itemCode) => {
   const [poItems] = await pool.query(`
     SELECT COALESCE(SUM(quantity), 0) as po_qty FROM purchase_order_items WHERE item_code = ?
   `, [itemCode]);
-  
+
   const poQty = parseFloat(poItems[0]?.po_qty || 0);
 
   // Find Preferred Supplier (Vendor with highest ordered qty or who quoted)
@@ -495,7 +495,7 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
 
   const useConnection = connection || options.connection || await pool.getConnection();
   const shouldRelease = !(connection || options.connection);
-  
+
   try {
     if (shouldRelease) {
       await useConnection.beginTransaction();
@@ -505,7 +505,7 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
     const valuationRate = options.valuationRate || 0;
     const qcId = options.qcId || null;
     const grnItemId = options.grnItemId || null;
-    
+
     // Get existing balance for this item and warehouse
     let existingBalance = await getStockBalanceByItemAndWarehouse(itemCode, warehouse, useConnection);
 
@@ -566,7 +566,7 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
         WHERE item_code = ? AND material_name IS NOT NULL 
         LIMIT 1
       `, [itemCode]);
-      
+
       if (nameRows.length > 0) {
         matName = nameRows[0].material_name;
         matType = nameRows[0].material_type;
@@ -611,7 +611,7 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
     // Recalculate balances for accuracy
     const globalDetails = await calculateBalanceDetailsFromLedger(itemCode, 'ALL', useConnection);
     const globalBalance = globalDetails.current_balance;
-    
+
     let warehouseBalance = globalBalance;
     if (warehouse && warehouse !== 'ALL') {
       const whDetails = await calculateBalanceDetailsFromLedger(itemCode, warehouse, useConnection);
@@ -657,11 +657,11 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
         material_id = COALESCE(?, material_id),
         last_updated = CURRENT_TIMESTAMP
     `, [
-      itemCode, 
-      matName, 
-      matType, 
-      whName, 
-      options.unit || existingBalance?.unit || 'NOS', 
+      itemCode,
+      matName,
+      matType,
+      whName,
+      options.unit || existingBalance?.unit || 'NOS',
       warehouseBalance,
       valuationRate,
       options.remarks || options.description || existingBalance?.item_description || null,
@@ -708,7 +708,7 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
 
 const createQCStockLedgerEntry = async (qcId, grnId, grnItemId, itemCode, passQty, connection = null) => {
   const useConnection = connection || (await pool.getConnection());
-  
+
   try {
     if (!connection) {
       await useConnection.beginTransaction();
@@ -744,7 +744,7 @@ const createQCStockLedgerEntry = async (qcId, grnId, grnItemId, itemCode, passQt
       `GRN-${String(grnId).padStart(4, '0')}`,
       'Auto-created from QC Pass',
       null,
-      { 
+      {
         connection: useConnection,
         qcId: qcId,
         grnItemId: grnItemId,
@@ -858,7 +858,7 @@ const updateStockBalance = async (itemCode, poQty = null, receivedQty = null, ac
 
 const generateItemCode = async (itemName, itemGroup) => {
   let prefix = 'ITM';
-  
+
   // Try to find the actual group_type from the item_groups table first
   const [groupRows] = await pool.query(
     'SELECT group_type FROM item_groups WHERE name = ? OR id = ? LIMIT 1',
@@ -871,21 +871,23 @@ const generateItemCode = async (itemName, itemGroup) => {
   }
 
   const group = (groupType || '').toUpperCase().trim();
-  
+
   if (group === 'FINISHED GOODS' || group === 'FG' || group === 'FINISHED GOOD' || group === 'PART') {
     prefix = 'PART';
-  } else if (group === 'RAW MATERIAL' || group === 'RAW MATERIALS' || group === 'RM') {
-    prefix = 'RM';
+  } else if (group === 'RAW MATERIAL' || group === 'RAW MATERIALS' || group === 'RM' || group === 'RAW_MATERIAL' || group === 'SS' || group === 'MS' || group === 'AL' || group === 'ALUMINIUM') {
+    prefix = 'RAW';
   } else if (group === 'SEMI FINISHED GOODS' || group === 'SFG' || group === 'SEMI-FINISHED GOODS') {
     prefix = 'SFG';
   } else if (group === 'SUB ASSEMBLY' || group === 'SUB ASSEMBLIES' || group === 'SA' || group === 'SUB-ASSEMBLY' || group === 'ASSEMBLY' || group === 'ASSY') {
     prefix = 'ASSEMBLY';
   } else if (group === 'CONSUMABLES' || group === 'CONSUMABLE' || group === 'CON') {
     prefix = 'CON';
-  } else if (group === 'PACKING MATERIAL' || group === 'PACKING MATERIALS' || group === 'PAC') {
+  } else if (group === 'PACKING MATERIAL' || group === 'PACKING MATERIALS' || group === 'PAC' || group === 'PACKAGING') {
     prefix = 'PAC';
-  } else if (group === 'BOUGHT OUT' || group === 'BO') {
-    prefix = 'BO';
+  } else if (group === 'SERVICE' || group === 'SERVICES' || group === 'SER') {
+    prefix = 'SER';
+  } else if (group === 'OTHER' || group === 'OTHERS' || group === 'OTH') {
+    prefix = 'OTH';
   } else if (group) {
     prefix = group.substring(0, 3).toUpperCase();
   }
@@ -899,7 +901,7 @@ const generateItemCode = async (itemName, itemGroup) => {
     'SELECT item_code FROM stock_balance WHERE item_code LIKE ? ORDER BY item_code DESC LIMIT 1',
     [`${baseCode}-%`]
   );
-  
+
   let nextNumber = 1;
   if (result.length > 0) {
     const lastCode = result[0].item_code;
@@ -1059,7 +1061,7 @@ const promoteDrawingToItem = async (drawingData, connection = null) => {
     let itemGroup = drawing_type;
     if (drawing_type?.toUpperCase() === 'ASSEMBLY') itemGroup = 'ASSEMBLY';
     else if (drawing_type?.toUpperCase() === 'PART') itemGroup = 'PART';
-    
+
     const itemCode = await generateItemCode(description, itemGroup);
     const normalizedGroup = (itemGroup || 'PART').toUpperCase().trim().replace(/ /g, '_');
 

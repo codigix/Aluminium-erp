@@ -1,6 +1,145 @@
 const pool = require('../config/db');
 const stockService = require('./stockService');
 
+
+const getCorrectItemCode = async (item, connection) => {
+  let itemCode = item.itemCode || item.item_code;
+
+  const length = parseFloat(item.length || 0);
+  const width = parseFloat(item.width || 0);
+  const thickness = parseFloat(item.thickness || 0);
+  const diameter = parseFloat(item.diameter || 0);
+  const outerDiameter = parseFloat(item.outerDiameter || item.outer_diameter || 0);
+
+  // 0. If we already have a specific item code that exists in stock_balance and matches name + dimensions, use it!
+  if (itemCode && itemCode !== 'auto-generated') {
+    const [existing] = await connection.query(
+      `SELECT item_code, material_type FROM stock_balance 
+       WHERE (item_code = ? OR drawing_no = ?) 
+         AND LOWER(TRIM(material_name)) = LOWER(TRIM(?))
+         AND (ABS(COALESCE(length, 0) - COALESCE(?, 0)) < 0.0001)
+         AND (ABS(COALESCE(width, 0) - COALESCE(?, 0)) < 0.0001)
+         AND (ABS(COALESCE(thickness, 0) - COALESCE(?, 0)) < 0.0001)
+         AND (ABS(COALESCE(diameter, 0) - COALESCE(?, 0)) < 0.0001)
+         AND (ABS(COALESCE(outer_diameter, 0) - COALESCE(?, 0)) < 0.0001)
+       LIMIT 1`,
+      [itemCode, itemCode, item.materialName || item.material_name, length, width, thickness, diameter, outerDiameter]
+    );
+    if (existing.length > 0) {
+      if (existing[0].material_type) {
+        item.materialType = existing[0].material_type;
+      }
+      return existing[0].item_code;
+    }
+  }
+
+  if (item.materialName || item.material_name) {
+    const matName = item.materialName || item.material_name;
+    const matType = item.materialType || item.material_type;
+    // 1. Try matching by name, material type, and dimensions
+    const [sb] = await connection.query(
+      `SELECT item_code FROM stock_balance 
+       WHERE LOWER(TRIM(material_name)) = LOWER(TRIM(?)) 
+         AND (material_type = ? OR UPPER(REPLACE(material_type, ' ', '_')) = UPPER(REPLACE(?, ' ', '_')))
+         AND (ABS(COALESCE(length, 0) - COALESCE(?, 0)) < 0.0001)
+         AND (ABS(COALESCE(width, 0) - COALESCE(?, 0)) < 0.0001)
+         AND (ABS(COALESCE(thickness, 0) - COALESCE(?, 0)) < 0.0001)
+         AND (ABS(COALESCE(diameter, 0) - COALESCE(?, 0)) < 0.0001)
+         AND (ABS(COALESCE(outer_diameter, 0) - COALESCE(?, 0)) < 0.0001)
+       LIMIT 1`,
+      [matName, matType, matType, length, width, thickness, diameter, outerDiameter]
+    );
+
+    if (sb.length > 0) {
+      return sb[0].item_code;
+    }
+
+    // 2. Try matching by name and dimensions only (more flexible type match)
+    const [sbNameDims] = await connection.query(
+      `SELECT item_code FROM stock_balance 
+       WHERE LOWER(TRIM(material_name)) = LOWER(TRIM(?)) 
+         AND (ABS(COALESCE(length, 0) - COALESCE(?, 0)) < 0.0001)
+         AND (ABS(COALESCE(width, 0) - COALESCE(?, 0)) < 0.0001)
+         AND (ABS(COALESCE(thickness, 0) - COALESCE(?, 0)) < 0.0001)
+         AND (ABS(COALESCE(diameter, 0) - COALESCE(?, 0)) < 0.0001)
+         AND (ABS(COALESCE(outer_diameter, 0) - COALESCE(?, 0)) < 0.0001)
+       LIMIT 1`,
+      [matName, length, width, thickness, diameter, outerDiameter]
+    );
+
+    if (sbNameDims.length > 0) {
+      return sbNameDims[0].item_code;
+    }
+  }
+
+  // 3. Fallback: If we have an item code, check if it exists in stock_balance with different dimensions.
+  // If it does, we ignore it (isMismatch = true) so we generate a new unique code.
+  let isMismatch = false;
+  if (itemCode && itemCode !== 'auto-generated') {
+    const [existing] = await connection.query(
+      `SELECT item_code, length, width, thickness, diameter, outer_diameter FROM stock_balance 
+       WHERE item_code = ? LIMIT 1`,
+      [itemCode]
+    );
+    if (existing.length > 0) {
+      const ext = existing[0];
+      const hasDimensions = (parseFloat(ext.length || 0) > 0 || parseFloat(ext.width || 0) > 0 || parseFloat(ext.thickness || 0) > 0 || parseFloat(ext.diameter || 0) > 0 || parseFloat(ext.outer_diameter || 0) > 0);
+      const incomingHasDimensions = (length > 0 || width > 0 || thickness > 0 || diameter > 0 || outerDiameter > 0);
+      
+      if (incomingHasDimensions && (!hasDimensions || itemCode.startsWith('RM-'))) {
+        isMismatch = true;
+      } else if (hasDimensions) {
+        const lengthDiff = Math.abs(parseFloat(ext.length || 0) - length) >= 0.0001;
+        const widthDiff = Math.abs(parseFloat(ext.width || 0) - width) >= 0.0001;
+        const thicknessDiff = Math.abs(parseFloat(ext.thickness || 0) - thickness) >= 0.0001;
+        const diameterDiff = Math.abs(parseFloat(ext.diameter || 0) - diameter) >= 0.0001;
+        const outerDiameterDiff = Math.abs(parseFloat(ext.outer_diameter || 0) - outerDiameter) >= 0.0001;
+        
+        if (lengthDiff || widthDiff || thicknessDiff || diameterDiff || outerDiameterDiff) {
+          isMismatch = true;
+        }
+      }
+    }
+  }
+
+  if (itemCode && itemCode !== 'auto-generated' && !isMismatch) {
+    return itemCode;
+  }
+
+  // 4. Fallback: Generate a standard item code and create a new master record in stock_balance
+  const matName = item.materialName || item.material_name;
+  const matType = item.materialType || item.material_type;
+  if (matName) {
+    const generatedCode = await stockService.generateItemCode(matName, matType);
+    
+    const normalizedType = (matType || '').toUpperCase().trim().replace(/ /g, '_');
+    await connection.execute(
+      `INSERT INTO stock_balance (
+        item_code, material_name, material_type, unit, current_balance, valuation_rate,
+        length, width, thickness, diameter, outer_diameter, density, weight_per_unit, shape_id, material_id
+      ) VALUES (?, ?, ?, ?, 0.000, 0.00, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        generatedCode,
+        matName,
+        normalizedType,
+        item.uom || item.unit || 'NOS',
+        length || null,
+        width || null,
+        thickness || null,
+        diameter || null,
+        outerDiameter || null,
+        item.density || null,
+        item.weightPerUnit || item.weight_per_unit || null,
+        item.shapeId || item.shape_id || null,
+        item.materialId || item.material_id || null
+      ]
+    );
+    return generatedCode;
+  }
+
+  return itemCode;
+};
+
 const getAllStockEntries = async (filters = {}) => {
   let query = `
     SELECT se.*, 
@@ -319,20 +458,29 @@ const createStockEntry = async (data, userId) => {
 
     if (data.items && data.items.length > 0) {
       for (const item of data.items) {
+        const correctedItemCode = await getCorrectItemCode(item, connection);
         await connection.execute(
           `INSERT INTO stock_entry_items 
-           (stock_entry_id, item_code, material_name, material_type, quantity, uom, batch_no, valuation_rate, amount)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (stock_entry_id, item_code, material_name, material_type, quantity, uom, batch_no, valuation_rate, amount,
+            shape_id, length, width, thickness, diameter, outer_diameter, weight_per_unit)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             entryId,
-            item.itemCode,
+            correctedItemCode,
             item.materialName || null,
             item.materialType || null,
             item.quantity,
             item.uom || null,
             item.batchNo || null,
             item.valuationRate || 0,
-            (item.quantity * (item.valuationRate || 0))
+            (item.quantity * (item.valuationRate || 0)),
+            item.shapeId || null,
+            item.length || null,
+            item.width || null,
+            item.thickness || null,
+            item.diameter || null,
+            item.outerDiameter || null,
+            item.weightPerUnit || null
           ]
         );
       }
@@ -403,7 +551,14 @@ const processStockMovement = async (entryId, connection, userId) => {
       valuationRate: item.valuation_rate,
       materialName: item.material_name,
       materialType: item.material_type,
-      unit: item.uom
+      unit: item.uom,
+      // Dimension fields for dimension-wise stock balance tracking
+      shape_id: item.shape_id || null,
+      length: item.length ? parseFloat(item.length) : undefined,
+      width: item.width ? parseFloat(item.width) : undefined,
+      thickness: item.thickness ? parseFloat(item.thickness) : undefined,
+      diameter: item.diameter ? parseFloat(item.diameter) : undefined,
+      outer_diameter: item.outer_diameter ? parseFloat(item.outer_diameter) : undefined
     };
 
     if (entry.entry_type === 'Material Receipt') {
@@ -785,20 +940,29 @@ const updateStockEntry = async (id, data, userId) => {
     // 4. Insert new items
     if (data.items && data.items.length > 0) {
       for (const item of data.items) {
+        const correctedItemCode = await getCorrectItemCode(item, connection);
         await connection.execute(
           `INSERT INTO stock_entry_items 
-           (stock_entry_id, item_code, material_name, material_type, quantity, uom, batch_no, valuation_rate, amount)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (stock_entry_id, item_code, material_name, material_type, quantity, uom, batch_no, valuation_rate, amount,
+            shape_id, length, width, thickness, diameter, outer_diameter, weight_per_unit)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             id,
-            item.itemCode || item.item_code,
+            correctedItemCode,
             item.materialName || item.material_name || null,
             item.materialType || item.material_type || null,
             item.quantity,
             item.uom || null,
             item.batchNo || item.batch_no || null,
             item.valuationRate || item.valuation_rate || 0,
-            (item.quantity * (item.valuationRate || item.valuation_rate || 0))
+            (item.quantity * (item.valuationRate || item.valuation_rate || 0)),
+            item.shapeId || item.shape_id || null,
+            item.length || null,
+            item.width || null,
+            item.thickness || null,
+            item.diameter || null,
+            item.outerDiameter || item.outer_diameter || null,
+            item.weightPerUnit || item.weight_per_unit || null
           ]
         );
       }

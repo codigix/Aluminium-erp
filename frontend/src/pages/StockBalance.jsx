@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
-import { Card, DataTable, Modal, StatusBadge, FormControl } from '../components/ui.jsx';
-import { 
-  Box, 
-  Layers, 
-  AlertTriangle, 
-  RefreshCw, 
-  Plus, 
-  FileEdit, 
-  Trash2, 
+import { Card, DataTable, Modal, StatusBadge, FormControl, SearchableSelect } from '../components/ui.jsx';
+import {
+  Box,
+  Layers,
+  AlertTriangle,
+  RefreshCw,
+  Plus,
+  FileEdit,
+  Trash2,
   Search,
   CheckCircle2,
   X,
@@ -32,6 +32,11 @@ const StockBalance = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [materials, setMaterials] = useState([]);
+  const [materialsLoading, setMaterialsLoading] = useState(false);
+  const [masterItems, setMasterItems] = useState([]);
+  const [masterItemsLoading, setMasterItemsLoading] = useState(false);
+
 
   useEffect(() => {
     const isAdd = location.pathname.includes('/add');
@@ -60,7 +65,18 @@ const StockBalance = () => {
     defaultUom: 'Nos',
     valuationRate: 0,
     drawingNo: '',
-    materialGrade: ''
+    materialGrade: '',
+    // KG-wise dimension fields
+    materialId: '',
+    density: '',
+    shapeId: '',
+    length: '',
+    width: '',
+    thickness: '',
+    diameter: '',
+    outerDiameter: '',
+    weightPerUnit: 0,
+    weightUom: 'Kg'
   });
   const [stats, setStats] = useState({
     totalItems: 0,
@@ -71,7 +87,46 @@ const StockBalance = () => {
   useEffect(() => {
     fetchStockBalance();
     fetchShapes();
+    fetchMaterials();
+    fetchMasterItems();
   }, []);
+
+  const fetchMasterItems = async () => {
+    try {
+      setMasterItemsLoading(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/stock/balance?includeAll=true`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setMasterItems(data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch master items:', error);
+    } finally {
+      setMasterItemsLoading(false);
+    }
+  };
+
+
+  const fetchMaterials = async () => {
+    try {
+      setMaterialsLoading(true);
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/materials`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setMaterials(data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch materials:', error);
+    } finally {
+      setMaterialsLoading(false);
+    }
+  };
 
   const fetchShapes = async () => {
     try {
@@ -90,6 +145,59 @@ const StockBalance = () => {
       setShapesLoading(false);
     }
   };
+
+  // Compute selected shape name from newItem.shapeId
+  const selectedNewShapeName = (() => {
+    const s = shapes.find(s => String(s.id) === String(newItem.shapeId));
+    return (s?.name || '').toLowerCase().trim();
+  })();
+
+  // Auto-calculate weight per unit from dimensions + density
+  useEffect(() => {
+    const shape = selectedNewShapeName;
+    const density = parseFloat(newItem.density) || 0;
+    if (density <= 0 || !shape) return;
+
+    let calculatedWeight = 0;
+    if (shape === 'plate') {
+      const l = parseFloat(newItem.length) || 0;
+      const w = parseFloat(newItem.width) || 0;
+      const t = parseFloat(newItem.thickness) || 0;
+      calculatedWeight = (l * w * t * density) / 1000000;
+    } else if (shape === 'round') {
+      const d = parseFloat(newItem.diameter) || 0;
+      const l = parseFloat(newItem.length) || 0;
+      calculatedWeight = (Math.PI * Math.pow(d, 2) / 4 * l * density) / 1000000;
+    } else if (shape === 'pipe') {
+      const od = parseFloat(newItem.outerDiameter) || 0;
+      const t = parseFloat(newItem.thickness) || 0;
+      const l = parseFloat(newItem.length) || 0;
+      const id = od - 2 * t;
+      if (id >= 0) calculatedWeight = (Math.PI * (Math.pow(od, 2) - Math.pow(id, 2)) / 4 * l * density) / 1000000;
+    } else if (shape.includes('square tube')) {
+      const a = parseFloat(newItem.width) || 0;
+      const t = parseFloat(newItem.thickness) || 0;
+      const l = parseFloat(newItem.length) || 0;
+      calculatedWeight = ((a * a - Math.pow(a - 2 * t, 2)) * l * density) / 1000000;
+    } else if (shape.includes('rectangular tube')) {
+      const b = parseFloat(newItem.width) || 0;
+      const h = parseFloat(newItem.outerDiameter) || 0;
+      const t = parseFloat(newItem.thickness) || 0;
+      const l = parseFloat(newItem.length) || 0;
+      calculatedWeight = ((b * h - (b - 2 * t) * (h - 2 * t)) * l * density) / 1000000;
+    } else if (shape === 'hexagonal bar') {
+      const af = parseFloat(newItem.width) || 0;
+      const l = parseFloat(newItem.length) || 0;
+      calculatedWeight = ((Math.sqrt(3) / 2) * af * af * l * density) / 1000000;
+    }
+
+    if (calculatedWeight > 0) {
+      setNewItem(prev => ({ ...prev, weightPerUnit: parseFloat(calculatedWeight.toFixed(4)) }));
+    }
+  }, [
+    newItem.length, newItem.width, newItem.thickness,
+    newItem.diameter, newItem.outerDiameter, newItem.density, selectedNewShapeName
+  ]);
 
   const handleCreateItem = async (e) => {
     e.preventDefault();
@@ -268,7 +376,7 @@ const StockBalance = () => {
       key: 'length',
       render: (_, row) => {
         const parts = [];
-        
+
         if (row.outer_diameter && parseFloat(row.outer_diameter) > 0) {
           parts.push(`OD:${parseFloat(row.outer_diameter)}`);
         }
@@ -362,7 +470,7 @@ const StockBalance = () => {
               <Box className="w-3 h-3" />
             </div>
           </div>
-          
+
           <div className="bg-white border border-slate-200 rounded p-5 flex items-center justify-between hover: transition-all">
             <div>
               <p className="text-xs text-slate-500    mb-1">Total Balance</p>
@@ -410,9 +518,9 @@ const StockBalance = () => {
       />
 
       {/* Add Item Modal */}
-      <Modal 
-        isOpen={showAddModal} 
-        onClose={() => navigate('/inventory/stock-balance')} 
+      <Modal
+        isOpen={showAddModal}
+        onClose={() => navigate('/inventory/stock-balance')}
         title="Add New Master Item"
         size="2xl"
       >
@@ -424,7 +532,7 @@ const StockBalance = () => {
                 type="text"
                 required
                 value={newItem.itemName}
-                onChange={(e) => setNewItem({...newItem, itemName: e.target.value})}
+                onChange={(e) => setNewItem({ ...newItem, itemName: e.target.value })}
                 className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
                 placeholder="e.g. MS Plate 10mm"
               />
@@ -433,7 +541,7 @@ const StockBalance = () => {
             <FormControl label="Item Group">
               <select
                 value={newItem.itemGroup}
-                onChange={(e) => setNewItem({...newItem, itemGroup: e.target.value})}
+                onChange={(e) => setNewItem({ ...newItem, itemGroup: e.target.value })}
                 className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all appearance-none cursor-pointer"
               >
                 <option value="Raw Material">Raw Material</option>
@@ -444,24 +552,61 @@ const StockBalance = () => {
               </select>
             </FormControl>
 
-            <FormControl label="Item Code (Manual)">
-              <input
-                type="text"
+            <FormControl label="Item Code">
+              <SearchableSelect
+                options={[
+                  { id: 'auto-generated', label: 'Auto-generated', value: 'Auto-generated' },
+                  ...masterItems.map(item => ({
+                    id: item.item_code,
+                    label: `${item.material_name || item.item_description || 'Unnamed'} (${item.item_code})`,
+                    value: item.item_code
+                  }))
+                ]}
                 value={newItem.itemCode}
-                onChange={(e) => setNewItem({...newItem, itemCode: e.target.value})}
-                className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
-                placeholder="Leave 'Auto-generated' for default"
+                onChange={(e) => {
+                  const val = e.target.value;
+                  const selected = masterItems.find(i => i.item_code === val);
+                  setNewItem(prev => ({
+                    ...prev,
+                    itemCode: val,
+                    itemName: selected?.material_name || selected?.item_description || prev.itemName,
+                    itemGroup: selected?.material_type ? (
+                      selected.material_type.toUpperCase() === 'RAW_MATERIAL' ? 'Raw Material' : selected.material_type
+                    ) : prev.itemGroup,
+                    defaultUom: selected?.unit || prev.defaultUom,
+                    valuationRate: selected?.valuation_rate || prev.valuationRate,
+                    drawingNo: selected?.drawing_no || prev.drawingNo,
+                    materialGrade: selected?.material_grade || prev.materialGrade,
+                    shapeId: selected?.shape_id ? String(selected.shape_id) : prev.shapeId,
+                    density: selected?.density ? String(selected.density) : prev.density,
+                    materialId: selected?.material_id ? String(selected.material_id) : prev.materialId,
+                    length: selected?.length ? String(selected.length) : prev.length,
+                    width: selected?.width ? String(selected.width) : prev.width,
+                    thickness: selected?.thickness ? String(selected.thickness) : prev.thickness,
+                    diameter: selected?.diameter ? String(selected.diameter) : prev.diameter,
+                    outerDiameter: selected?.outer_diameter ? String(selected.outer_diameter) : prev.outerDiameter,
+                    weightPerUnit: selected?.weight_per_unit || prev.weightPerUnit
+                  }));
+                }}
+                allowCustom={true}
+                placeholder="Select or enter code..."
+                className="text-xs bg-white w-full"
               />
             </FormControl>
 
+
             <FormControl label="Default UOM">
-              <input
-                type="text"
+              <select
                 value={newItem.defaultUom}
-                onChange={(e) => setNewItem({...newItem, defaultUom: e.target.value})}
-                className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
-                placeholder="Nos, Kg, Ltr, etc."
-              />
+                onChange={(e) => setNewItem({ ...newItem, defaultUom: e.target.value })}
+                className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all appearance-none cursor-pointer"
+              >
+                <option value="Nos">Nos</option>
+                <option value="Kg">Kg</option>
+                <option value="Mtr">Mtr</option>
+                <option value="Set">Set</option>
+                <option value="Pkt">Pkt</option>
+              </select>
             </FormControl>
 
             <FormControl label="Valuation Rate">
@@ -469,7 +614,7 @@ const StockBalance = () => {
                 type="number"
                 step="0.01"
                 value={newItem.valuationRate}
-                onChange={(e) => setNewItem({...newItem, valuationRate: parseFloat(e.target.value) || 0})}
+                onChange={(e) => setNewItem({ ...newItem, valuationRate: parseFloat(e.target.value) || 0 })}
                 className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
               />
             </FormControl>
@@ -478,11 +623,111 @@ const StockBalance = () => {
               <input
                 type="text"
                 value={newItem.drawingNo}
-                onChange={(e) => setNewItem({...newItem, drawingNo: e.target.value})}
+                onChange={(e) => setNewItem({ ...newItem, drawingNo: e.target.value })}
                 className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
               />
             </FormControl>
           </div>
+
+          {/* Dimension Fields for KG-based materials */}
+          {(newItem.defaultUom === 'Kg' || newItem.defaultUom === 'Kgs') && (
+            <div className="space-y-2 p-3 bg-indigo-50/60 border border-indigo-100 rounded">
+              <div className="text-xs font-semibold text-indigo-700 flex items-center gap-1.5">
+                <div className="w-1.5 h-1.5 rounded-full bg-indigo-500"></div>
+                Material &amp; Shape Dimensions (all in mm)
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {/* Material Type */}
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-500 font-medium">Material Type</label>
+                  <select
+                    className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none focus:ring-2 focus:ring-indigo-500/20"
+                    value={newItem.materialId}
+                    onChange={e => {
+                      const mId = e.target.value;
+                      const mat = materials.find(m => String(m.id) === String(mId));
+                      setNewItem(prev => ({
+                        ...prev,
+                        materialId: mId,
+                        density: mat?.density || ''
+                      }));
+                    }}
+                  >
+                    <option value="">Select Material</option>
+                    {materials.map(m => (
+                      <option key={m.id} value={m.id}>{m.name}</option>
+                    ))}
+                  </select>
+                </div>
+                {/* Shape Type */}
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-500 font-medium">Shape Type</label>
+                  <select
+                    className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none focus:ring-2 focus:ring-indigo-500/20"
+                    value={newItem.shapeId}
+                    onChange={e => {
+                      const sId = e.target.value;
+                      setNewItem(prev => ({
+                        ...prev,
+                        shapeId: sId,
+                        length: '', width: '', thickness: '', diameter: '', outerDiameter: ''
+                      }));
+                    }}
+                  >
+                    <option value="">Select Shape</option>
+                    {shapes.map(s => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Shape-wise inputs */}
+              {selectedNewShapeName && (
+                <div className="grid grid-cols-3 gap-2">
+                  {selectedNewShapeName === 'plate' && (<>
+                    <div className="space-y-1"><label className="text-xs text-slate-500">Length (mm)</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0" value={newItem.length} onChange={e => setNewItem(p => ({ ...p, length: e.target.value }))} /></div>
+                    <div className="space-y-1"><label className="text-xs text-slate-500">Width (mm)</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0" value={newItem.width} onChange={e => setNewItem(p => ({ ...p, width: e.target.value }))} /></div>
+                    <div className="space-y-1"><label className="text-xs text-slate-500">Thickness (mm)</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0" value={newItem.thickness} onChange={e => setNewItem(p => ({ ...p, thickness: e.target.value }))} /></div>
+                  </>)}
+                  {selectedNewShapeName === 'round' && (<>
+                    <div className="space-y-1"><label className="text-xs text-slate-500">Diameter (mm)</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0" value={newItem.diameter} onChange={e => setNewItem(p => ({ ...p, diameter: e.target.value }))} /></div>
+                    <div className="space-y-1"><label className="text-xs text-slate-500">Length (mm)</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0" value={newItem.length} onChange={e => setNewItem(p => ({ ...p, length: e.target.value }))} /></div>
+                  </>)}
+                  {selectedNewShapeName === 'pipe' && (<>
+                    <div className="space-y-1"><label className="text-xs text-slate-500">Outer Dia (mm)</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0" value={newItem.outerDiameter} onChange={e => setNewItem(p => ({ ...p, outerDiameter: e.target.value }))} /></div>
+                    <div className="space-y-1"><label className="text-xs text-slate-500">Thickness (mm)</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0" value={newItem.thickness} onChange={e => setNewItem(p => ({ ...p, thickness: e.target.value }))} /></div>
+                    <div className="space-y-1"><label className="text-xs text-slate-500">Length (mm)</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0" value={newItem.length} onChange={e => setNewItem(p => ({ ...p, length: e.target.value }))} /></div>
+                  </>)}
+                  {selectedNewShapeName.includes('square tube') && (<>
+                    <div className="space-y-1"><label className="text-xs text-slate-500">Side A (mm)</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0" value={newItem.width} onChange={e => setNewItem(p => ({ ...p, width: e.target.value }))} /></div>
+                    <div className="space-y-1"><label className="text-xs text-slate-500">Thickness (mm)</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0" value={newItem.thickness} onChange={e => setNewItem(p => ({ ...p, thickness: e.target.value }))} /></div>
+                    <div className="space-y-1"><label className="text-xs text-slate-500">Length (mm)</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0" value={newItem.length} onChange={e => setNewItem(p => ({ ...p, length: e.target.value }))} /></div>
+                  </>)}
+                  {selectedNewShapeName.includes('rectangular tube') && (<>
+                    <div className="space-y-1"><label className="text-xs text-slate-500">Width B (mm)</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0" value={newItem.width} onChange={e => setNewItem(p => ({ ...p, width: e.target.value }))} /></div>
+                    <div className="space-y-1"><label className="text-xs text-slate-500">Height H (mm)</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0" value={newItem.outerDiameter} onChange={e => setNewItem(p => ({ ...p, outerDiameter: e.target.value }))} /></div>
+                    <div className="space-y-1"><label className="text-xs text-slate-500">Thickness (mm)</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0" value={newItem.thickness} onChange={e => setNewItem(p => ({ ...p, thickness: e.target.value }))} /></div>
+                    <div className="space-y-1"><label className="text-xs text-slate-500">Length (mm)</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0" value={newItem.length} onChange={e => setNewItem(p => ({ ...p, length: e.target.value }))} /></div>
+                  </>)}
+                  {selectedNewShapeName === 'hexagonal bar' && (<>
+                    <div className="space-y-1"><label className="text-xs text-slate-500">Across Flats AF (mm)</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0" value={newItem.width} onChange={e => setNewItem(p => ({ ...p, width: e.target.value }))} /></div>
+                    <div className="space-y-1"><label className="text-xs text-slate-500">Length (mm)</label><input type="number" step="0.01" className="w-full bg-white border border-slate-200 rounded p-1.5 text-xs outline-none" placeholder="0" value={newItem.length} onChange={e => setNewItem(p => ({ ...p, length: e.target.value }))} /></div>
+                  </>)}
+                </div>
+              )}
+
+              {/* Auto weight display */}
+              {parseFloat(newItem.weightPerUnit || 0) > 0 && (
+                <div className="flex items-center gap-2 mt-1 px-2 py-1 bg-emerald-50 border border-emerald-200 rounded text-xs text-emerald-700">
+                  <span className="font-semibold">Weight/Unit:</span>
+                  <span>{parseFloat(newItem.weightPerUnit || 0).toFixed(4)} Kg</span>
+                  <span className="text-emerald-500 ml-1">(auto-calculated)</span>
+                </div>
+              )}
+            </div>
+          )}
+
 
           <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
             <button
@@ -505,9 +750,9 @@ const StockBalance = () => {
       </Modal>
 
       {/* Edit Item Modal */}
-      <Modal 
-        isOpen={showEditModal} 
-        onClose={() => navigate('/inventory/stock-balance')} 
+      <Modal
+        isOpen={showEditModal}
+        onClose={() => navigate('/inventory/stock-balance')}
         title="Edit Master Item"
         size="2xl"
       >
@@ -519,15 +764,15 @@ const StockBalance = () => {
                   type="text"
                   required
                   value={editingItem.material_name || ''}
-                  onChange={(e) => setEditingItem({...editingItem, material_name: e.target.value})}
+                  onChange={(e) => setEditingItem({ ...editingItem, material_name: e.target.value })}
                   className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
                 />
               </FormControl>
-              
+
               <FormControl label="Item Group">
                 <select
                   value={editingItem.material_type || ''}
-                  onChange={(e) => setEditingItem({...editingItem, material_type: e.target.value})}
+                  onChange={(e) => setEditingItem({ ...editingItem, material_type: e.target.value })}
                   className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all appearance-none cursor-pointer"
                 >
                   <option value="Raw Material">Raw Material</option>
@@ -551,7 +796,7 @@ const StockBalance = () => {
                 <input
                   type="text"
                   value={editingItem.unit || ''}
-                  onChange={(e) => setEditingItem({...editingItem, unit: e.target.value})}
+                  onChange={(e) => setEditingItem({ ...editingItem, unit: e.target.value })}
                   className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
                 />
               </FormControl>
@@ -561,7 +806,7 @@ const StockBalance = () => {
                   type="number"
                   step="0.01"
                   value={editingItem.valuation_rate || 0}
-                  onChange={(e) => setEditingItem({...editingItem, valuation_rate: parseFloat(e.target.value) || 0})}
+                  onChange={(e) => setEditingItem({ ...editingItem, valuation_rate: parseFloat(e.target.value) || 0 })}
                   className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
                 />
               </FormControl>
@@ -570,7 +815,7 @@ const StockBalance = () => {
                 <input
                   type="text"
                   value={editingItem.drawing_no || ''}
-                  onChange={(e) => setEditingItem({...editingItem, drawing_no: e.target.value})}
+                  onChange={(e) => setEditingItem({ ...editingItem, drawing_no: e.target.value })}
                   className="w-full p-2 bg-white border border-slate-200 rounded  text-xs  text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all"
                 />
               </FormControl>
