@@ -1225,8 +1225,11 @@ const POMaterialRequest = () => {
 
              const allAvailable = filteredItems.length > 0 && filteredItems.every(item => {
                const required = parseFloat(item.quantity || 0);
+               const released = parseFloat(item.allocated_quantity || 0);
+               const remaining = Math.max(0, required - released);
                const available = parseFloat(item.total_stock || 0);
-               return (available + 0.0001) >= required;
+               // Item is "available" if nothing remains OR available stock covers the remaining qty
+               return remaining === 0 || (available + 0.0001) >= remaining;
              });
              
              const releasedMaterialsCount = filteredItems.filter(item => parseFloat(item.allocated_quantity || 0) > 0).length;

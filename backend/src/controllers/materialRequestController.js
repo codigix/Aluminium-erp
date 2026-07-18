@@ -9,7 +9,7 @@ const resolveDimensionItemCode = async (connection, item) => {
     const thicknessVal = parseFloat(item.thickness || 0);
     const diameterVal = parseFloat(item.diameter || 0);
     const outerDiameterVal = parseFloat(item.outer_diameter || item.outerDiameter || 0);
-    
+
     const [rows] = await connection.query(`
       SELECT item_code 
       FROM stock_balance
@@ -33,6 +33,7 @@ const resolveDimensionItemCode = async (connection, item) => {
     if (rows.length > 0) {
       return rows[0].item_code;
     }
+    return null;
   }
   return item.item_code;
 };
@@ -183,7 +184,7 @@ const materialRequestController = {
 
       const request = requests[0];
 
-       const [items] = await pool.query(`
+      const [items] = await pool.query(`
         SELECT mri.*, 
                COALESCE(mri.item_name, sb.material_name, sb.item_description, mri.item_code) as name, 
                COALESCE(mri.uom, sb.unit) as uom,
@@ -227,42 +228,72 @@ const materialRequestController = {
 
       // Fetch stock info for each item
       const selectedWh = warehouse || request.source_warehouse;
-      
+
       let allItemsAvailable = true;
 
       for (let item of items) {
         const resolvedItemCode = await resolveDimensionItemCode(pool, item);
 
-        // Fetch stock across ALL warehouses
-        const [stockRows] = await pool.query(`
-          SELECT warehouse as warehouse_name, current_balance as current_stock
-          FROM stock_balance
-          WHERE item_code = ? AND current_balance > 0
-        `, [resolvedItemCode]);
-        
+        let stockRows;
+        const uom = (item.uom || '').toLowerCase().trim();
+        if (uom === 'kg' || uom === 'kgs') {
+          const lengthVal = parseFloat(item.length || 0);
+          const widthVal = parseFloat(item.width || 0);
+          const thicknessVal = parseFloat(item.thickness || 0);
+          const diameterVal = parseFloat(item.diameter || 0);
+          const outerDiameterVal = parseFloat(item.outer_diameter || item.outerDiameter || 0);
+          
+          [stockRows] = await pool.query(`
+            SELECT warehouse as warehouse_name, current_balance as current_stock
+            FROM stock_balance
+            WHERE LOWER(TRIM(material_name)) = LOWER(TRIM(?))
+              AND current_balance > 0
+              AND (
+                (COALESCE(length, 0) = ? OR (? = 0 AND length IS NULL)) AND
+                (COALESCE(width, 0) = ? OR (? = 0 AND width IS NULL)) AND
+                (COALESCE(thickness, 0) = ? OR (? = 0 AND thickness IS NULL)) AND
+                (COALESCE(diameter, 0) = ? OR (? = 0 AND diameter IS NULL)) AND
+                (COALESCE(outer_diameter, 0) = ? OR (? = 0 AND outer_diameter IS NULL))
+              )
+          `, [
+            item.item_name || item.name || item.item_code,
+            lengthVal, lengthVal,
+            widthVal, widthVal,
+            thicknessVal, thicknessVal,
+            diameterVal, diameterVal,
+            outerDiameterVal, outerDiameterVal
+          ]);
+        } else {
+          [stockRows] = await pool.query(`
+            SELECT warehouse as warehouse_name, current_balance as current_stock
+            FROM stock_balance
+            WHERE item_code = ? AND current_balance > 0
+          `, [resolvedItemCode]);
+        }
+
         item.stocks = stockRows;
-        
+
         // Calculate total stock across all warehouses
         const totalStock = stockRows.reduce((sum, row) => sum + parseFloat(row.current_stock), 0);
         item.total_stock = totalStock;
 
         // Determine suggested warehouse (one with the most stock)
-        const suggestedWh = stockRows.length > 0 
+        const suggestedWh = stockRows.length > 0
           ? stockRows.reduce((prev, current) => (parseFloat(prev.current_stock) > parseFloat(current.current_stock)) ? prev : current)
           : null;
-        
+
         item.suggested_warehouse = suggestedWh ? suggestedWh.warehouse_name : null;
-        
+
         // Use the selected warehouse stock for display, but fallback to total stock logic
         const matchingWh = stockRows.find(s => s.warehouse_name === selectedWh);
         item.current_stock = matchingWh ? parseFloat(matchingWh.current_stock) : 0;
-        
+
         // An item is "Available" if total stock >= required quantity
         const requiredQty = parseFloat(item.quantity || item.design_qty || 0);
         const allocatedQty = parseFloat(item.allocated_quantity || 0);
         const remainingQty = Math.max(0, requiredQty - allocatedQty);
         item.fulfillment_source = (remainingQty <= 0 || totalStock >= remainingQty) ? 'STOCK' : 'PURCHASE';
-        
+
         if (remainingQty > 0 && totalStock < remainingQty) {
           allItemsAvailable = false;
         }
@@ -283,27 +314,27 @@ const materialRequestController = {
     try {
       const { id } = req.params;
       const { source_warehouse, target_warehouse } = req.body;
-      
+
       const updates = [];
       const params = [];
-      
+
       if (source_warehouse !== undefined) {
         updates.push('source_warehouse = ?');
         params.push(source_warehouse);
       }
-      
+
       if (target_warehouse !== undefined) {
         updates.push('target_warehouse = ?');
         params.push(target_warehouse);
       }
-      
+
       if (updates.length === 0) {
         return res.status(400).json({ message: 'No warehouse provided' });
       }
-      
+
       params.push(id);
       await pool.query(`UPDATE material_requests SET ${updates.join(', ')} WHERE id = ?`, params);
-      
+
       res.json({ message: 'Warehouses updated successfully' });
     } catch (error) {
       console.error('Error in updateWarehouse:', error);
@@ -332,9 +363,12 @@ const materialRequestController = {
         // Only process stock out if it wasn't already completed/fulfilled
         if (mr.status?.toUpperCase() !== 'COMPLETED' && mr.status?.toUpperCase() !== 'FULFILLED') {
           const [items] = await connection.query('SELECT * FROM material_request_items WHERE mr_id = ?', [id]);
-          
+
           for (const item of items) {
             const resolvedItemCode = await resolveDimensionItemCode(connection, item);
+            if (!resolvedItemCode && (item.uom || '').toLowerCase().trim().includes('kg')) {
+              throw new Error(`No matching stock record found in inventory for material '${item.item_name || item.item_code}' with requested dimensions.`);
+            }
             const requiredQty = parseFloat(item.quantity || item.design_qty || 0);
             const releasedQty = mr.status?.toUpperCase() === 'PARTIALLY_RELEASED' ? parseFloat(item.allocated_quantity || 0) : 0;
             const remainingQty = Math.max(0, requiredQty - releasedQty);
@@ -423,6 +457,10 @@ const materialRequestController = {
         // Loop items and deduct available stock
         for (const item of items) {
           const resolvedItemCode = await resolveDimensionItemCode(connection, item);
+          if (!resolvedItemCode && (item.uom || '').toLowerCase().trim().includes('kg')) {
+            // Skip this item during partial release since no matching stock is available
+            continue;
+          }
 
           // Get total stock available across all warehouses for this item
           const [stockRows] = await connection.query(`
@@ -443,7 +481,7 @@ const materialRequestController = {
           }
 
           let amountToDeduct = remainingQty;
-          
+
           for (const stockRow of stockRows) {
             if (amountToDeduct <= 0) break;
             const availableInWarehouse = parseFloat(stockRow.current_balance || 0);
@@ -518,7 +556,7 @@ const materialRequestController = {
       }
 
       await connection.query('UPDATE material_requests SET status = ? WHERE id = ?', [finalStatus, id]);
-      
+
       await connection.commit();
       res.json({ message: `Material Request status updated to ${finalStatus}` });
     } catch (error) {
@@ -711,7 +749,7 @@ const materialRequestController = {
 
       // Delete items first
       await connection.query('DELETE FROM material_request_items WHERE mr_id = ?', [id]);
-      
+
       // Delete request
       const [result] = await connection.query('DELETE FROM material_requests WHERE id = ?', [id]);
 

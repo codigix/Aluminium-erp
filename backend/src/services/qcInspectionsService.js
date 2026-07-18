@@ -89,7 +89,11 @@ const getCorrectItemCode = async (item, connection) => {
     if (existing.length > 0) {
       const ext = existing[0];
       const hasDimensions = (parseFloat(ext.length || 0) > 0 || parseFloat(ext.width || 0) > 0 || parseFloat(ext.thickness || 0) > 0 || parseFloat(ext.diameter || 0) > 0 || parseFloat(ext.outer_diameter || 0) > 0);
-      if (hasDimensions) {
+      const incomingHasDimensions = (length > 0 || width > 0 || thickness > 0 || diameter > 0 || outerDiameter > 0);
+      
+      if (incomingHasDimensions && (!hasDimensions || itemCode.startsWith('RM-'))) {
+        isMismatch = true;
+      } else if (hasDimensions) {
         const lengthDiff = Math.abs(parseFloat(ext.length || 0) - length) >= 0.0001;
         const widthDiff = Math.abs(parseFloat(ext.width || 0) - width) >= 0.0001;
         const thicknessDiff = Math.abs(parseFloat(ext.thickness || 0) - thickness) >= 0.0001;

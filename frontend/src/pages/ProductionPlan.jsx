@@ -2955,11 +2955,11 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                           setNewItemShapeId(item.shape_id || '');
                           setNewItemShapeType(shapeObj ? shapeObj.name : '');
 
-                          setNewItemLength(item.length || '');
-                          setNewItemWidth(item.width || '');
-                          setNewItemThickness(item.thickness || '');
-                          setNewItemDiameter(item.diameter || '');
-                          setNewItemOuterDiameter(item.outer_diameter || '');
+                          setNewItemLength('');
+                          setNewItemWidth('');
+                          setNewItemThickness('');
+                          setNewItemDiameter('');
+                          setNewItemOuterDiameter('');
                           setNewItemRate(item.valuation_rate || 0);
                         } else {
                           setNewItemQty(1);
@@ -3057,6 +3057,12 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                           const selectedShp = shapes.find(s => String(s.id) === String(sId));
                           setNewItemShapeId(sId);
                           setNewItemShapeType(selectedShp ? selectedShp.name : '');
+                          // Clear dimension values on shape change to start fresh
+                          setNewItemLength('');
+                          setNewItemWidth('');
+                          setNewItemThickness('');
+                          setNewItemDiameter('');
+                          setNewItemOuterDiameter('');
                         }}
                       >
                         <option value="">Select Shape</option>
@@ -3321,6 +3327,40 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                           return;
                         }
 
+                        let finalLen = 0;
+                        let finalWid = 0;
+                        let finalThk = 0;
+                        let finalDia = 0;
+                        let finalOd = 0;
+
+                        if (isKg) {
+                          const shape = (newItemShapeType || '').toLowerCase().trim();
+                          if (shape === 'plate') {
+                            finalLen = parseFloat(newItemLength) || 0;
+                            finalWid = parseFloat(newItemWidth) || 0;
+                            finalThk = parseFloat(newItemThickness) || 0;
+                          } else if (shape === 'round') {
+                            finalLen = parseFloat(newItemLength) || 0;
+                            finalDia = parseFloat(newItemDiameter) || 0;
+                          } else if (shape === 'pipe') {
+                            finalLen = parseFloat(newItemLength) || 0;
+                            finalThk = parseFloat(newItemThickness) || 0;
+                            finalOd = parseFloat(newItemOuterDiameter) || 0;
+                          } else if (shape.includes('square tube')) {
+                            finalLen = parseFloat(newItemLength) || 0;
+                            finalWid = parseFloat(newItemWidth) || 0;
+                            finalThk = parseFloat(newItemThickness) || 0;
+                          } else if (shape.includes('rectangular tube')) {
+                            finalLen = parseFloat(newItemLength) || 0;
+                            finalWid = parseFloat(newItemWidth) || 0;
+                            finalThk = parseFloat(newItemThickness) || 0;
+                            finalOd = parseFloat(newItemOuterDiameter) || 0;
+                          } else if (shape === 'hexagonal bar') {
+                            finalLen = parseFloat(newItemLength) || 0;
+                            finalWid = parseFloat(newItemWidth) || 0;
+                          }
+                        }
+
                         const payload = {
                           item_code: itemCode,
                           material_name: itemName,
@@ -3334,11 +3374,11 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                           shape_type: isKg ? (newItemShapeType || '') : '',
                           weight_per_unit: isKg ? parseFloat(newItemWeight || 0) : 0,
                           density: isKg ? parseFloat(newItemDensity || 0) : 0,
-                          length: isKg ? (parseFloat(newItemLength) || 0) : 0,
-                          width: isKg ? (parseFloat(newItemWidth) || 0) : 0,
-                          thickness: isKg ? (parseFloat(newItemThickness) || 0) : 0,
-                          diameter: isKg ? (parseFloat(newItemDiameter) || 0) : 0,
-                          outer_diameter: isKg ? (parseFloat(newItemOuterDiameter) || 0) : 0
+                          length: finalLen,
+                          width: finalWid,
+                          thickness: finalThk,
+                          diameter: finalDia,
+                          outer_diameter: finalOd
                         };
 
                         try {

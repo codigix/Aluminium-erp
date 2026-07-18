@@ -1654,19 +1654,33 @@ const getMaterialRequestItemsForPlan = async (planId) => {
            COALESCE(NULLIF(ppm.outer_diameter, 0), actual_sb.outer_diameter, 0) as outer_diameter
     FROM production_plan_materials ppm
     LEFT JOIN (
-        SELECT 
-            material_name, 
-            MAX(item_code) as item_code, 
-            MAX(valuation_rate) as valuation_rate, 
-            SUM(current_balance) as current_balance,
-            MAX(length) as length, 
-            MAX(width) as width, 
-            MAX(thickness) as thickness, 
-            MAX(diameter) as diameter, 
-            MAX(outer_diameter) as outer_diameter
-        FROM stock_balance 
-        GROUP BY material_name
-    ) actual_sb ON ppm.material_name = actual_sb.material_name OR (ppm.item_code = actual_sb.item_code AND ppm.item_code NOT LIKE 'PART-%' AND ppm.item_code NOT LIKE 'SA-%' AND ppm.item_code NOT LIKE 'FG-%' AND ppm.item_code NOT LIKE 'SFG-%' AND ppm.item_code NOT LIKE 'ASSEMBLY%')
+         SELECT 
+             material_name, 
+             length,
+             width,
+             thickness,
+             diameter,
+             outer_diameter,
+             MAX(item_code) as item_code, 
+             MAX(valuation_rate) as valuation_rate, 
+             SUM(current_balance) as current_balance
+         FROM stock_balance 
+         GROUP BY material_name, length, width, thickness, diameter, outer_diameter
+     ) actual_sb ON (
+         (ppm.material_name = actual_sb.material_name)
+         AND (ABS(COALESCE(ppm.length, 0) - COALESCE(actual_sb.length, 0)) < 0.0001)
+         AND (ABS(COALESCE(ppm.width, 0) - COALESCE(actual_sb.width, 0)) < 0.0001)
+         AND (ABS(COALESCE(ppm.thickness, 0) - COALESCE(actual_sb.thickness, 0)) < 0.0001)
+         AND (ABS(COALESCE(ppm.diameter, 0) - COALESCE(actual_sb.diameter, 0)) < 0.0001)
+         AND (ABS(COALESCE(ppm.outer_diameter, 0) - COALESCE(actual_sb.outer_diameter, 0)) < 0.0001)
+     ) OR (
+         (ppm.item_code = actual_sb.item_code AND ppm.item_code NOT LIKE 'PART-%' AND ppm.item_code NOT LIKE 'SA-%' AND ppm.item_code NOT LIKE 'FG-%' AND ppm.item_code NOT LIKE 'SFG-%' AND ppm.item_code NOT LIKE 'ASSEMBLY%')
+         AND (ABS(COALESCE(ppm.length, 0) - COALESCE(actual_sb.length, 0)) < 0.0001)
+         AND (ABS(COALESCE(ppm.width, 0) - COALESCE(actual_sb.width, 0)) < 0.0001)
+         AND (ABS(COALESCE(ppm.thickness, 0) - COALESCE(actual_sb.thickness, 0)) < 0.0001)
+         AND (ABS(COALESCE(ppm.diameter, 0) - COALESCE(actual_sb.diameter, 0)) < 0.0001)
+         AND (ABS(COALESCE(ppm.outer_diameter, 0) - COALESCE(actual_sb.outer_diameter, 0)) < 0.0001)
+     )
     LEFT JOIN (
     SELECT 
         mii.item_code, 
@@ -1761,17 +1775,31 @@ ON (ppm.material_name = issued.material_name) OR (ppm.item_code = issued.item_co
     LEFT JOIN (
         SELECT 
             material_name, 
+            length,
+            width,
+            thickness,
+            diameter,
+            outer_diameter,
             MAX(item_code) as item_code, 
             MAX(valuation_rate) as valuation_rate, 
-            SUM(current_balance) as current_balance,
-            MAX(length) as length, 
-            MAX(width) as width, 
-            MAX(thickness) as thickness, 
-            MAX(diameter) as diameter, 
-            MAX(outer_diameter) as outer_diameter
+            SUM(current_balance) as current_balance
         FROM stock_balance 
-        GROUP BY material_name
-    ) actual_sb ON mri.item_name = actual_sb.material_name OR mri.item_code = actual_sb.item_code
+        GROUP BY material_name, length, width, thickness, diameter, outer_diameter
+    ) actual_sb ON (
+        (mri.item_name = actual_sb.material_name)
+        AND (ABS(COALESCE(mri.length, 0) - COALESCE(actual_sb.length, 0)) < 0.0001)
+        AND (ABS(COALESCE(mri.width, 0) - COALESCE(actual_sb.width, 0)) < 0.0001)
+        AND (ABS(COALESCE(mri.thickness, 0) - COALESCE(actual_sb.thickness, 0)) < 0.0001)
+        AND (ABS(COALESCE(mri.diameter, 0) - COALESCE(actual_sb.diameter, 0)) < 0.0001)
+        AND (ABS(COALESCE(mri.outer_diameter, 0) - COALESCE(actual_sb.outer_diameter, 0)) < 0.0001)
+     ) OR (
+         mri.item_code = actual_sb.item_code
+         AND (ABS(COALESCE(mri.length, 0) - COALESCE(actual_sb.length, 0)) < 0.0001)
+         AND (ABS(COALESCE(mri.width, 0) - COALESCE(actual_sb.width, 0)) < 0.0001)
+         AND (ABS(COALESCE(mri.thickness, 0) - COALESCE(actual_sb.thickness, 0)) < 0.0001)
+         AND (ABS(COALESCE(mri.diameter, 0) - COALESCE(actual_sb.diameter, 0)) < 0.0001)
+         AND (ABS(COALESCE(mri.outer_diameter, 0) - COALESCE(actual_sb.outer_diameter, 0)) < 0.0001)
+     )
     LEFT JOIN (
         SELECT 
             mii.item_code, 
