@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Card, Modal, FormControl, StatusBadge, SearchableSelect, Tabs, Button, DataTable } from '../components/ui.jsx';
 import DrawingPreviewModal from '../components/DrawingPreviewModal.jsx';
+import ItemsMaster from './ItemsMaster.jsx';
 import {
   Eye, BarChart2, Settings, Send, Edit2, FileText, Trash2,
   Search, Filter, Plus, Zap, CheckCircle2, FileJson,
@@ -56,6 +57,25 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
   const [newItemRemarks, setNewItemRemarks] = useState('');
   const [newItemUnit, setNewItemUnit] = useState('');
   const [expandedRows, setExpandedRows] = useState(new Set());
+  const [itemSelectionModalOpen, setItemSelectionModalOpen] = useState(false);
+  const [selectedMasterItem, setSelectedMasterItem] = useState(null);
+  const [enterQtyModalOpen, setEnterQtyModalOpen] = useState(false);
+  const [shapes, setShapes] = useState([]);
+  const [newItemItemGroup, setNewItemItemGroup] = useState('');
+  const [newItemWeight, setNewItemWeight] = useState('');
+  const [newItemMaterialType, setNewItemMaterialType] = useState('');
+  const [newItemShapeType, setNewItemShapeType] = useState('');
+  const [newItemLength, setNewItemLength] = useState('');
+  const [newItemWidth, setNewItemWidth] = useState('');
+  const [newItemThickness, setNewItemThickness] = useState('');
+  const [newItemDiameter, setNewItemDiameter] = useState('');
+  const [newItemOuterDiameter, setNewItemOuterDiameter] = useState('');
+  const [newItemRate, setNewItemRate] = useState('');
+  const [itemGroups, setItemGroups] = useState([]);
+  const [materials, setMaterials] = useState([]);
+  const [newItemMaterialId, setNewItemMaterialId] = useState('');
+  const [newItemShapeId, setNewItemShapeId] = useState('');
+  const [newItemDensity, setNewItemDensity] = useState(0);
 
   const [newPlan, setNewPlan] = useState({
     planCode: '',
@@ -77,6 +97,42 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
   useEffect(() => {
     fetchPlans();
     fetchWorkstations();
+    // Fetch shapes, groups, and materials for selector
+    const fetchMasterData = async () => {
+      try {
+        const token = localStorage.getItem('authToken');
+        
+        // 1. Shapes
+        const shapesRes = await fetch(`${API_BASE}/shapes`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (shapesRes.ok) {
+          const shapesData = await shapesRes.json();
+          setShapes(shapesData);
+        }
+
+        // 2. Groups
+        const groupsRes = await fetch(`${API_BASE}/stock/groups`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (groupsRes.ok) {
+          const groupsData = await groupsRes.json();
+          setItemGroups(groupsData);
+        }
+
+        // 3. Materials
+        const materialsRes = await fetch(`${API_BASE}/materials`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (materialsRes.ok) {
+          const materialsData = await materialsRes.json();
+          setMaterials(materialsData);
+        }
+      } catch (e) {
+        console.error('Failed to fetch master data:', e);
+      }
+    };
+    fetchMasterData();
   }, []);
 
   useEffect(() => {
@@ -86,6 +142,62 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
       handleOrderSelect(sId.toString());
     }
   }, [propSalesOrderId, location.state?.salesOrderId]);
+
+  // Auto-calculate Weight per Unit for Material Request Item
+  useEffect(() => {
+    if (!newItemShapeType) return;
+    const shape = newItemShapeType.toLowerCase();
+    const density = parseFloat(newItemDensity) || 0;
+    let calculatedWeight = 0;
+
+    if (density > 0) {
+      if (shape === 'plate') {
+        const l = parseFloat(newItemLength) || 0;
+        const w = parseFloat(newItemWidth) || 0;
+        const t = parseFloat(newItemThickness) || 0;
+        calculatedWeight = (l * w * t * density) / 1000000;
+      } else if (shape === 'round') {
+        const d = parseFloat(newItemDiameter) || 0;
+        const l = parseFloat(newItemLength) || 0;
+        calculatedWeight = (Math.PI * Math.pow(d, 2) / 4 * l * density) / 1000000;
+      } else if (shape === 'pipe') {
+        const od = parseFloat(newItemOuterDiameter) || 0;
+        const t = parseFloat(newItemThickness) || 0;
+        const l = parseFloat(newItemLength) || 0;
+        const id = od - (2 * t);
+        if (id >= 0) {
+          calculatedWeight = (Math.PI * (Math.pow(od, 2) - Math.pow(id, 2)) / 4 * l * density) / 1000000;
+        }
+      } else if (shape.includes('square tube')) {
+        const a = parseFloat(newItemWidth) || 0;
+        const t = parseFloat(newItemThickness) || 0;
+        const l = parseFloat(newItemLength) || 0;
+        calculatedWeight = ((a * a - Math.pow(a - 2 * t, 2)) * l * density) / 1000000;
+      } else if (shape.includes('rectangular tube')) {
+        const b = parseFloat(newItemWidth) || 0;
+        const h = parseFloat(newItemOuterDiameter) || 0;
+        const t = parseFloat(newItemThickness) || 0;
+        const l = parseFloat(newItemLength) || 0;
+        calculatedWeight = ((b * h - (b - 2 * t) * (h - 2 * t)) * l * density) / 1000000;
+      } else if (shape === 'hexagonal bar') {
+        const af = parseFloat(newItemWidth) || 0;
+        const l = parseFloat(newItemLength) || 0;
+        calculatedWeight = ((Math.sqrt(3) / 2) * af * af * l * density) / 1000000;
+      }
+    }
+
+    if (calculatedWeight > 0) {
+      setNewItemWeight(parseFloat(calculatedWeight.toFixed(3)));
+    }
+  }, [
+    newItemLength,
+    newItemWidth,
+    newItemThickness,
+    newItemDiameter,
+    newItemOuterDiameter,
+    newItemDensity,
+    newItemShapeType
+  ]);
 
   // Sync item quantities with header target quantity
   useEffect(() => {
@@ -393,9 +505,16 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
       setTransmittingMr(true);
       const token = localStorage.getItem('authToken');
 
-      // Send all items that haven't been requested yet
-      // We now request ALL items (including in-stock) to ensure full visibility in Inventory
-      const itemsToRequest = mrItems.filter(item => !item.request_exists);
+      // Send all items that haven't been requested yet (including IN STOCK items for MR visibility)
+      const itemsToRequest = mrItems
+        .filter(item => !item.request_exists)
+        .map(item => ({
+          ...item,
+          // If quantity is 0 (e.g. IN STOCK item added manually), fall back to design_qty or 1
+          quantity: (Number(item.quantity) > 0)
+            ? item.quantity
+            : (Number(item.design_qty) > 0 ? item.design_qty : 1)
+        }));
 
       if (itemsToRequest.length === 0) {
         errorToast('No new items found to request');
@@ -431,7 +550,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
   const fetchAllStockItems = async () => {
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE}/stock/balance`, {
+      const response = await fetch(`${API_BASE}/stock/balance?includeAll=true`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
@@ -450,18 +569,37 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
     const itemCode = selectedNewItem.item_code;
     const itemName = selectedNewItem.item_name || selectedNewItem.material_name;
 
-    // Check if item already exists in mrItems
-    const exists = mrItems.some(item =>
-      item.item_code === itemCode ||
-      item.material_name === itemName
-    );
+    // Build a dimension signature for the incoming item
+    const incomingDimSig = [
+      selectedNewItem.length || '',
+      selectedNewItem.width || '',
+      selectedNewItem.thickness || '',
+      selectedNewItem.diameter || '',
+      selectedNewItem.outer_diameter || ''
+    ].join('|');
+
+    // Allow same material code but different dimensions. Block only exact duplicates.
+    const exists = mrItems.some(item => {
+      if (item.item_code !== itemCode && item.material_name !== itemName) return false;
+      const d = item.dimensions || {};
+      const existingSig = [
+        d.length || '',
+        d.width || '',
+        d.thickness || '',
+        d.diameter || '',
+        d.outer_diameter || ''
+      ].join('|');
+      return existingSig === incomingDimSig;
+    });
 
     if (exists) {
-      errorToast('Item already exists in the request list');
+      errorToast('This item with the same dimensions already exists in the request list');
       return;
     }
 
+    // Assign a unique localId so deletion is always precise
     const newItem = {
+      localId: `local-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       item_code: itemCode,
       material_name: itemName,
       quantity: Number(newItemQty),
@@ -715,24 +853,24 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
         const seen = new Set();
         const filteredBoms = rawItems.filter(item => {
           if (!item) return false;
-          
+
           // Ensure item belongs to the selected order (some fallback items might not)
           const itemOrderId = item.order_id || item.sales_order_id;
           if (itemOrderId && String(itemOrderId) !== String(orderId)) return false;
-          
+
           // 1. Exclude Child Parts (parent_bom_id must be null or undefined)
           if (item.parent_bom_id !== null && item.parent_bom_id !== undefined) return false;
-          
+
           // 2. Exclude "No Code" / placeholder BOMs (e.g. XXX, No Code, or null/empty item code)
           const code = (item.item_code || '').toUpperCase().trim();
           const desc = (item.description || '').toUpperCase().trim();
           if (!code || code === 'XXX' || code === 'NO CODE' || code.includes('NO CODE') || desc.includes('NO CODE') || code.startsWith('XXX-') || code.includes('NO_CODE')) return false;
-          
+
           // 3. Prevent duplicate PART BOMs by keeping track of uniqueness
           const identityKey = `${code}-${(item.drawing_no || '').trim()}`;
           if (seen.has(identityKey)) return false;
           seen.add(identityKey);
-          
+
           return true;
         });
         setAvailableBoms(filteredBoms);
@@ -1426,7 +1564,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
         label: 'Design Qty',
         key: 'designQty',
         className: 'text-center',
-        render: (val, sa) => Number(isViewing ? (sa.design_qty || sa.required_qty) : (val || 0)).toFixed(3)
+        render: (val, sa) => Number(isViewing ? (sa.design_qty || sa.required_qty) : (val || 0)).toFixed(0)
       },
       {
         label: 'Planned Qty',
@@ -1504,7 +1642,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
         label: 'Design Qty',
         key: 'design_qty',
         className: 'text-right',
-        render: (val, mat) => Number(isViewing ? (val || newPlan.targetQuantity) : mat.totalDesignQty).toFixed(3)
+        render: (val, mat) => Number(isViewing ? (val || newPlan.targetQuantity) : mat.totalDesignQty).toFixed(0)
       },
       {
         label: 'Planned Qty',
@@ -1781,8 +1919,8 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                         value={newPlan.targetQuantity === 0 ? '' : newPlan.targetQuantity}
                         onChange={(e) => {
                           const val = e.target.value;
-                          setNewPlan(prev => ({ 
-                            ...prev, 
+                          setNewPlan(prev => ({
+                            ...prev,
                             targetQuantity: val === '' ? '' : (parseFloat(val) || 0)
                           }));
                         }}
@@ -1900,7 +2038,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                                 </div>
                               </td>
                               <td className="p-2  text-center  text-slate-700">
-                                {Number(isViewing ? (sa.design_qty || sa.required_qty) : (sa.designQty || 0)).toFixed(3)}
+                                {Number(isViewing ? (sa.design_qty || sa.required_qty) : (sa.designQty || 0)).toFixed(0)}
                               </td>
                               <td className="p-2  text-center">
                                 <div className=" text-rose-600">{Number(isViewing ? sa.required_qty : (sa.plannedQty || 0)).toFixed(3)}</div>
@@ -2002,7 +2140,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                               </div>
                             </td>
                             <td className="p-2  text-right  text-slate-700">
-                              {Number(isViewing ? (mat.design_qty || newPlan.targetQuantity) : mat.totalDesignQty).toFixed(3)}
+                              {Number(isViewing ? (mat.design_qty || newPlan.targetQuantity) : mat.totalDesignQty).toFixed(0)}
                             </td>
                             <td className="p-2  text-right">
                               <div className=" text-amber-600 ">
@@ -2073,7 +2211,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                               </div>
                             </td>
                             <td className="p-2  text-right  text-slate-700">
-                              {Number(isViewing ? (mat.design_qty || newPlan.targetQuantity) : mat.totalDesignQty).toFixed(3)}
+                              {Number(isViewing ? (mat.design_qty || newPlan.targetQuantity) : mat.totalDesignQty).toFixed(0)}
                             </td>
                             <td className="p-2  text-right">
                               <div className=" text-rose-600 ">
@@ -2240,8 +2378,8 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
     }
 
     if (!newPlan.id && selectedOrderId && selectedBomId) {
-      const duplicateExists = plans.some(plan => 
-        String(plan.sales_order_id) === String(selectedOrderId) && 
+      const duplicateExists = plans.some(plan =>
+        String(plan.sales_order_id) === String(selectedOrderId) &&
         String(plan.bom_no).trim().toLowerCase() === String(selectedBomId).trim().toLowerCase()
       );
 
@@ -2346,13 +2484,47 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
 
   const mrColumns = [
     {
-      label: 'Material',
+      label: 'Material Name',
       key: 'material_name',
       render: (val, row) => (
-        <div className="flex flex-col">
-          <span className="text-xs  text-slate-800">{val}</span>
-          <span className="text-[10px] text-slate-400 uppercase er">{row.item_code}</span>
-          {renderDimensions(row)}
+        <span className="text-xs font-semibold text-slate-800">{val || row.itemName || '—'}</span>
+      )
+    },
+    {
+      label: 'Item Code',
+      key: 'item_code',
+      render: (val) => (
+        <span className="text-[10px] text-slate-500 font-mono font-medium uppercase">{val || '—'}</span>
+      )
+    },
+    {
+      label: 'Dimensions',
+      key: 'dimensions',
+      render: (_, row) => renderDimensions(row)
+    },
+    {
+      label: 'Design Qty',
+      key: 'design_qty',
+      className: 'text-center',
+      render: (val, row) => (
+        <div className="flex flex-col items-center">
+          <span className="text-xs font-semibold text-slate-800">
+            {val !== undefined && val !== null ? Number(val).toFixed(0) : '—'}
+          </span>
+          <span className="text-[9px] text-slate-400 uppercase">Nos</span>
+        </div>
+      )
+    },
+    {
+      label: 'Required Qty',
+      key: 'quantity',
+      className: 'text-center',
+      render: (val, row) => (
+        <div className="flex flex-col items-center">
+          <span className="text-xs font-semibold text-indigo-600">
+            {Number(val || 0).toFixed(2)}
+          </span>
+          <span className="text-[9px] text-slate-400 uppercase">{row.uom || row.unit || 'Nos'}</span>
         </div>
       )
     },
@@ -2365,37 +2537,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
           <span className={`text-xs font-semibold ${parseFloat(val || 0) > 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
             {Number(val || 0).toFixed(2)}
           </span>
-          <span className="text-[9px] text-slate-400 uppercase">{row.uom}</span>
-        </div>
-      )
-    },
-    {
-      label: 'Design Qty',
-      key: 'design_qty',
-      className: 'text-center',
-      render: (val, row) => (
-        <div className="flex flex-col items-center">
-          <span className="text-xs text-slate-800">
-            {row.is_manual 
-              ? (val !== null && val !== undefined ? Number(val).toFixed(0) : '-') 
-              : Number(val || 0).toFixed(0)}
-          </span>
-          {!(row.is_manual && (val === null || val === undefined)) && (
-            <span className="text-[9px] text-slate-400 uppercase">Nos</span>
-          )}
-        </div>
-      )
-    },
-    {
-      label: 'Req Qty',
-      key: 'quantity',
-      className: 'text-center',
-      render: (val, row) => (
-        <div className="flex flex-col items-center">
-          <span className="text-xs  text-indigo-600">
-            {Number(val || 0).toFixed(2)}
-          </span>
-          <span className="text-[9px] text-slate-400 uppercase">{row.uom}</span>
+          <span className="text-[9px] text-slate-400 uppercase">{row.uom || row.unit || 'Nos'}</span>
         </div>
       )
     },
@@ -2409,39 +2551,39 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
         if (val) {
           if (inv >= req) {
             return (
-              <div className="flex items-center gap-1 text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded text-[10px]  border border-emerald-100 font-medium">
+              <div className="flex items-center gap-1 text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded text-[10px] border border-emerald-100 font-medium">
                 <CheckCircle2 className="w-3 h-3" />
                 FULFILLED
               </div>
             );
           } else if (inv > 0) {
             return (
-              <div className="flex items-center gap-1 text-amber-600 bg-amber-50 px-2 py-0.5 rounded text-[10px]  border border-amber-100 font-medium">
+              <div className="flex items-center gap-1 text-amber-600 bg-amber-50 px-2 py-0.5 rounded text-[10px] border border-amber-100 font-medium">
                 <Clock className="w-3 h-3" />
                 PARTIALLY FULFILLED
               </div>
             );
           } else {
             return (
-              <div className="flex items-center gap-1 text-blue-600 bg-blue-50 px-2 py-0.5 rounded text-[10px]  border border-blue-100 font-medium">
+              <div className="flex items-center gap-1 text-blue-600 bg-blue-50 px-2 py-0.5 rounded text-[10px] border border-blue-100 font-medium">
                 <Clock className="w-3 h-3" />
                 REQUESTED
               </div>
             );
           }
         }
-        
+
         if (inv >= req) {
           return (
-            <div className="flex items-center gap-1 text-blue-600 bg-blue-50 px-2 py-0.5 rounded text-[10px]  border border-blue-100">
+            <div className="flex items-center gap-1 text-blue-600 bg-blue-50 px-2 py-0.5 rounded text-[10px] border border-blue-100">
               <Package className="w-3 h-3" />
               IN STOCK
             </div>
           );
         }
-        
+
         return (
-          <div className="flex items-center gap-1 text-amber-600 bg-amber-50 px-2 py-0.5 rounded text-[10px]  border border-amber-100">
+          <div className="flex items-center gap-1 text-amber-600 bg-amber-50 px-2 py-0.5 rounded text-[10px] border border-amber-100">
             <Clock className="w-3 h-3" />
             PENDING
           </div>
@@ -2451,16 +2593,37 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
     {
       label: 'Actions',
       key: 'actions',
-      className: 'text-right',
-      render: (_, row) => !row.request_exists && (
+      className: 'text-center',
+      render: (_, row) => row.is_manual && !row.request_exists && (
         <button
-          onClick={() => {
-            setMrItems(prev => prev.filter(item => item.item_code !== row.item_code));
+          onClick={async () => {
+            if (row.ppm_id) {
+              try {
+                const token = localStorage.getItem('authToken');
+                const res = await fetch(`${API_BASE}/production-plans/${mrPlanDetails?.id}/materials/${row.ppm_id}`, {
+                  method: 'DELETE',
+                  headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) {
+                  errorToast('Failed to remove item');
+                  return;
+                }
+              } catch (e) {
+                errorToast('Failed to remove item');
+                return;
+              }
+            }
+            // Use localId for newly added items, ppm_id for DB items.
+            // Never filter by item_code alone — multiple rows can share the same code (different dimensions).
+            setMrItems(prev => prev.filter(item => {
+              if (row.localId) return item.localId !== row.localId;
+              return item.ppm_id !== row.ppm_id;
+            }));
           }}
-          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-all"
-          title="Remove from request"
+          className="p-1 text-rose-500 hover:bg-rose-50 rounded"
+          title="Remove"
         >
-          <Trash2 className="w-3.5 h-3.5" />
+          <Trash2 size={14} />
         </button>
       )
     }
@@ -2542,8 +2705,8 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
       key: 'status',
       render: (val, row) => {
         const statusColor = val === 'Draft' ? 'text-amber-600 bg-amber-50 border-amber-100' :
-                            val === 'Completed' ? 'text-emerald-600 bg-emerald-50 border-emerald-100' :
-                            'text-indigo-600 bg-indigo-50 border-indigo-100';
+          val === 'Completed' ? 'text-emerald-600 bg-emerald-50 border-emerald-100' :
+            'text-indigo-600 bg-indigo-50 border-indigo-100';
         const mrColor = row.mr_status === 'Completed' ? 'text-emerald-600' : 'text-slate-400';
         const mrLabel = row.mr_status === 'Completed' ? 'MR: Fulfilled' : (row.mr_status ? `MR: ${row.mr_status}` : 'MR: Pending');
         return (
@@ -2568,7 +2731,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
         let progress = 0;
         if (total > 0) progress = Math.round((completed / total) * 100);
         else if (status === 'COMPLETED') progress = 100;
-        
+
         return (
           <div className="w-28 flex flex-col">
             <div className="flex items-center justify-between mb-1">
@@ -2720,104 +2883,523 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                 <div className="w-1.5 h-6 bg-indigo-500 rounded" />
                 <span className="text-xs   text-slate-700">Items to Request ({mrItems.filter(item => !item.request_exists && (parseFloat(item.inventory || 0) < parseFloat(item.quantity) || item.is_manual)).length})</span>
               </div>
-              {!mrPlanDetails?.mrId && (
-                <button
-                  onClick={() => setShowAddItem(!showAddItem)}
-                  className="flex items-center gap-1.5 p-1.5 bg-indigo-600 text-white rounded  hover:bg-indigo-700 transition-all text-xs  shadow-sm"
-                >
-                  <Plus className="w-3 h-3" />
-                  Add Item
-                </button>
-              )}
+              <button
+                onClick={() => setShowAddItem(!showAddItem)}
+                className="flex items-center gap-1.5 p-1.5 bg-indigo-600 text-white rounded  hover:bg-indigo-700 transition-all text-xs  shadow-sm"
+              >
+                <Plus className="w-3 h-3" />
+                Add Item
+              </button>
             </div>
           </div>
 
           {/* Items to Request Section */}
           <div className="flex-1 flex flex-col min-h-0">
             {showAddItem && (
-              <div className="p-3 bg-indigo-50/30 border border-indigo-100 rounded mb-2 space-y-3 animate-in slide-in-from-top-2">
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded mb-4 space-y-4">
+                <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+                  <h5 className="text-xs font-semibold text-slate-700 flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 bg-indigo-500 rounded"></span>
+                    Add Material Request Item
+                  </h5>
+                </div>
+
                 <div className="grid grid-cols-12 gap-3 items-end">
-                  <div className="col-span-6">
-                    <label className="text-[10px] text-slate-500 mb-1 block uppercase font-semibold">Select Material <span className="text-rose-500">*</span></label>
+                  <div className="col-span-4 space-y-1">
+                    <label className="text-xs text-slate-500 ml-1 block font-medium">Material Selection <span className="text-rose-500">*</span></label>
                     <SearchableSelect
-                      options={allStockItems.map(item => ({
-                        id: item.id,
-                        label: `${item.material_name} (${item.item_code})`,
-                        value: item.item_code
-                      }))}
-                      value={selectedNewItem?.item_code}
+                      placeholder="Select material..."
+                      onFocus={fetchAllStockItems}
+                      options={allStockItems.map(item => {
+                        // format dimensions string
+                        const parts = [];
+                        if (parseFloat(item.length || 0) > 0) parts.push(parseFloat(item.length).toFixed(0));
+                        if (parseFloat(item.width || 0) > 0) parts.push(parseFloat(item.width).toFixed(0));
+                        if (parseFloat(item.thickness || 0) > 0) parts.push(item.thickness % 1 === 0 ? parseFloat(item.thickness).toFixed(0) : parseFloat(item.thickness).toFixed(1));
+                        if (parseFloat(item.diameter || 0) > 0) parts.push(`Ø${parseFloat(item.diameter).toFixed(0)}`);
+                        if (parseFloat(item.outer_diameter || 0) > 0) parts.push(`OD ${parseFloat(item.outer_diameter).toFixed(0)}`);
+                        const dims = parts.length > 0 ? parts.join(' × ') + ' mm' : '';
+
+                        return {
+                          label: item.material_name || '',
+                          value: item.item_code || '',
+                          subLabel: `${dims ? `${dims}\n` : ''}${item.item_code || ''}${item.drawing_no && item.drawing_no !== 'N/A' ? ` [Drg: ${item.drawing_no}]` : ''}`
+                        };
+                      })}
+                      value={selectedNewItem?.item_code || ''}
                       onChange={(e) => {
-                        const code = e.target.value;
-                        const item = allStockItems.find(i => i.item_code === code);
+                        const item = allStockItems.find(i => i.item_code === e.target.value);
                         setSelectedNewItem(item || null);
-                        setNewItemUnit(item ? (item.unit || item.uom || '') : '');
+                        if (item) {
+                          setNewItemQty(1);
+                          setNewItemUnit(item.unit || item.uom || 'Nos');
+                          
+                          // Group mapping
+                          const ig = (item.material_type || item.item_group || "").toLowerCase().replace(/_/g, ' ').trim();
+                          const matchingGroup = itemGroups.find(g => {
+                            const gName = g.name.toLowerCase().replace(/_/g, ' ').trim();
+                            return gName === ig || ig.includes(gName) || gName.includes(ig);
+                          });
+                          setNewItemItemGroup(matchingGroup ? matchingGroup.name : item.material_type || item.item_group || '');
+
+                          setNewItemWeight(parseFloat(item.weight_per_unit || 0));
+                          
+                          // Material Type
+                          const materialObj = materials.find(m => String(m.id) === String(item.material_id));
+                          setNewItemMaterialId(item.material_id || '');
+                          setNewItemMaterialType(materialObj ? materialObj.name : item.material_grade || '');
+                          setNewItemDensity(materialObj ? parseFloat(materialObj.density) : parseFloat(item.density || 0));
+                          
+                          // Shape Type
+                          const shapeObj = shapes.find(s => String(s.id) === String(item.shape_id));
+                          setNewItemShapeId(item.shape_id || '');
+                          setNewItemShapeType(shapeObj ? shapeObj.name : '');
+
+                          setNewItemLength(item.length || '');
+                          setNewItemWidth(item.width || '');
+                          setNewItemThickness(item.thickness || '');
+                          setNewItemDiameter(item.diameter || '');
+                          setNewItemOuterDiameter(item.outer_diameter || '');
+                          setNewItemRate(item.valuation_rate || 0);
+                        } else {
+                          setNewItemQty(1);
+                          setNewItemUnit('');
+                          setNewItemItemGroup('');
+                          setNewItemWeight('');
+                          setNewItemMaterialId('');
+                          setNewItemMaterialType('');
+                          setNewItemDensity(0);
+                          setNewItemShapeId('');
+                          setNewItemShapeType('');
+                          setNewItemLength('');
+                          setNewItemWidth('');
+                          setNewItemThickness('');
+                          setNewItemDiameter('');
+                          setNewItemOuterDiameter('');
+                          setNewItemRate('');
+                        }
                       }}
-                      allowCustom={false}
-                      placeholder="Search material..."
-                      className="text-xs h-8 bg-white"
+                      subLabelField="subLabel"
                     />
                   </div>
-                  <div className="col-span-2">
-                    <label className="text-[10px] text-slate-500 mb-1 block uppercase font-semibold">Unit</label>
+
+                  <div className="col-span-2 space-y-1">
+                    <label className="text-xs text-slate-500 ml-1 block font-medium">Quantity <span className="text-rose-500">*</span></label>
+                    <input
+                      type="number"
+                      className="w-full p-2 bg-white border border-slate-200 rounded text-xs text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none"
+                      placeholder="0.00"
+                      step="any"
+                      value={newItemQty}
+                      onChange={(e) => setNewItemQty(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="col-span-2 space-y-1">
+                    <label className="text-xs text-slate-500 ml-1 block font-medium">UOM</label>
                     <select
+                      className="w-full p-2 bg-white border border-slate-200 rounded text-xs text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none"
                       value={newItemUnit}
                       onChange={(e) => setNewItemUnit(e.target.value)}
-                      className="w-full h-8 px-2 bg-white border border-slate-200 rounded text-xs text-slate-700 outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer font-medium"
                     >
-                      <option value="">Unit</option>
-                      {['NOS','KG','MTR','SET','LTR','SQM','GM','TON'].map(u => (
+                      {['NOS', 'KG', 'MTR', 'SET', 'LTR', 'SQM', 'GM', 'TON'].map(u => (
                         <option key={u} value={u}>{u}</option>
                       ))}
                     </select>
                   </div>
-                  <div className="col-span-4">
-                    <label className="text-[10px] text-slate-500 mb-1 block uppercase font-semibold">Required Qty <span className="text-rose-500">*</span></label>
-                    <input
-                      type="number"
-                      value={newItemQty}
-                      onChange={(e) => setNewItemQty(e.target.value)}
-                      placeholder="Qty"
-                      className="w-full h-8 px-2 bg-white border border-slate-200 rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500"
-                      min="0.001"
-                      step="any"
-                    />
+
+                  <div className="col-span-4 space-y-1">
+                    <label className="text-xs text-slate-500 ml-1 block font-medium">Item Group</label>
+                    <select
+                      className="w-full p-2 bg-white border border-slate-200 rounded text-xs text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none"
+                      value={newItemItemGroup}
+                      onChange={(e) => setNewItemItemGroup(e.target.value)}
+                    >
+                      <option value="">Select Group</option>
+                      {itemGroups.map(group => (
+                        <option key={group.id} value={group.name}>{group.name}</option>
+                      ))}
+                    </select>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-12 gap-3 items-end">
-                  <div className="col-span-4">
-                    <label className="text-[10px] text-slate-500 mb-1 block uppercase font-semibold">Design Qty (Optional)</label>
-                    <input
-                      type="number"
-                      value={newItemDesignQty}
-                      onChange={(e) => setNewItemDesignQty(e.target.value)}
-                      placeholder="Enter design qty or leave empty"
-                      className="w-full h-8 px-2 bg-white border border-slate-200 rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500"
-                      min="0"
-                      step="any"
-                    />
+                {newItemUnit.toUpperCase() === 'KG' && (
+                  <div className="grid grid-cols-12 gap-3 items-end">
+                    <div className="col-span-5 space-y-1">
+                      <label className="text-xs text-slate-500 ml-1 block font-medium font-semibold">Select Material Type</label>
+                      <select
+                        className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                        value={newItemMaterialId || ''}
+                        onChange={(e) => {
+                          const mId = e.target.value;
+                          const selectedMat = materials.find(m => String(m.id) === String(mId));
+                          setNewItemMaterialId(mId);
+                          setNewItemMaterialType(selectedMat ? selectedMat.name : '');
+                          setNewItemDensity(selectedMat ? parseFloat(selectedMat.density) : 0);
+                        }}
+                      >
+                        <option value="">Select Material</option>
+                        {materials.map(m => (
+                          <option key={m.id} value={m.id}>
+                            {m.name} {m.density ? `[Density = ${parseFloat(m.density).toFixed(4)} ${m.density_unit || 'g/cm³'}]` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="col-span-5 space-y-1">
+                      <label className="text-xs text-slate-500 ml-1 block font-medium font-semibold">Select Shape Type</label>
+                      <select
+                        className="w-full p-2 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                        value={newItemShapeId || ''}
+                        onChange={(e) => {
+                          const sId = e.target.value;
+                          const selectedShp = shapes.find(s => String(s.id) === String(sId));
+                          setNewItemShapeId(sId);
+                          setNewItemShapeType(selectedShp ? selectedShp.name : '');
+                        }}
+                      >
+                        <option value="">Select Shape</option>
+                        {shapes.map(s => (
+                          <option key={s.id} value={s.id}>{s.name}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="col-span-2 space-y-1">
+                      <label className="text-xs text-slate-500 ml-1 block font-medium font-semibold">Weight/Unit (Kg)</label>
+                      <input
+                        type="text"
+                        className="w-full p-2 bg-slate-100 border border-slate-200 rounded text-xs text-slate-500 outline-none"
+                        value={newItemWeight ? parseFloat(newItemWeight).toFixed(3) : ''}
+                        disabled
+                        placeholder="Auto"
+                      />
+                    </div>
                   </div>
-                  <div className="col-span-5">
-                    <label className="text-[10px] text-slate-500 mb-1 block uppercase font-semibold">Remarks (Optional)</label>
+                )}
+
+                {newItemUnit.toUpperCase() === 'KG' && newItemShapeType && (
+                  <div className="p-3 bg-white rounded border border-slate-200 space-y-2">
+                    <div className="flex items-center gap-2 text-indigo-700 text-xs font-semibold">
+                      <div className="w-1.5 h-1.5 rounded bg-indigo-500"></div>
+                      {newItemShapeType} Dimensions (All in mm)
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+                      {newItemShapeType.toLowerCase() === 'plate' && (
+                        <>
+                          <div className="space-y-1">
+                            <label className="text-[10px] text-slate-400 font-medium">Length (mm)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                              value={newItemLength}
+                              onChange={(e) => setNewItemLength(e.target.value)}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] text-slate-400 font-medium">Width (mm)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                              value={newItemWidth}
+                              onChange={(e) => setNewItemWidth(e.target.value)}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] text-slate-400 font-medium">Thickness (mm)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                              value={newItemThickness}
+                              onChange={(e) => setNewItemThickness(e.target.value)}
+                            />
+                          </div>
+                        </>
+                      )}
+                      {newItemShapeType.toLowerCase() === 'round' && (
+                        <>
+                          <div className="space-y-1">
+                            <label className="text-[10px] text-slate-400 font-medium">Diameter (mm)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                              value={newItemDiameter}
+                              onChange={(e) => setNewItemDiameter(e.target.value)}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] text-slate-400 font-medium">Length (mm)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                              value={newItemLength}
+                              onChange={(e) => setNewItemLength(e.target.value)}
+                            />
+                          </div>
+                        </>
+                      )}
+                      {newItemShapeType.toLowerCase() === 'pipe' && (
+                        <>
+                          <div className="space-y-1">
+                            <label className="text-[10px] text-slate-400 font-medium">Outer Diameter (mm)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                              value={newItemOuterDiameter}
+                              onChange={(e) => setNewItemOuterDiameter(e.target.value)}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] text-slate-400 font-medium">Thickness (mm)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                              value={newItemThickness}
+                              onChange={(e) => setNewItemThickness(e.target.value)}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] text-slate-400 font-medium">Length (mm)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                              value={newItemLength}
+                              onChange={(e) => setNewItemLength(e.target.value)}
+                            />
+                          </div>
+                        </>
+                      )}
+                      {newItemShapeType.toLowerCase().includes('square tube') && (
+                        <>
+                          <div className="space-y-1">
+                            <label className="text-[10px] text-slate-400 font-medium">Outside Side (A) (mm)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                              value={newItemWidth}
+                              onChange={(e) => setNewItemWidth(e.target.value)}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] text-slate-400 font-medium">Wall Thickness (T) (mm)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                              value={newItemThickness}
+                              onChange={(e) => setNewItemThickness(e.target.value)}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] text-slate-400 font-medium">Length (L) (mm)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                              value={newItemLength}
+                              onChange={(e) => setNewItemLength(e.target.value)}
+                            />
+                          </div>
+                        </>
+                      )}
+                      {newItemShapeType.toLowerCase().includes('rectangular tube') && (
+                        <>
+                          <div className="space-y-1">
+                            <label className="text-[10px] text-slate-400 font-medium">Width (B) (mm)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                              value={newItemWidth}
+                              onChange={(e) => setNewItemWidth(e.target.value)}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] text-slate-400 font-medium">Height (H) (mm)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                              value={newItemOuterDiameter}
+                              onChange={(e) => setNewItemOuterDiameter(e.target.value)}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] text-slate-400 font-medium">Wall Thickness (T) (mm)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                              value={newItemThickness}
+                              onChange={(e) => setNewItemThickness(e.target.value)}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] text-slate-400 font-medium">Length (L) (mm)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                              value={newItemLength}
+                              onChange={(e) => setNewItemLength(e.target.value)}
+                            />
+                          </div>
+                        </>
+                      )}
+                      {newItemShapeType.toLowerCase() === 'hexagonal bar' && (
+                        <>
+                          <div className="space-y-1">
+                            <label className="text-[10px] text-slate-400 font-medium">Across Flats (AF) (mm)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                              value={newItemWidth}
+                              onChange={(e) => setNewItemWidth(e.target.value)}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] text-slate-400 font-medium">Length (L) (mm)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                              value={newItemLength}
+                              onChange={(e) => setNewItemLength(e.target.value)}
+                            />
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-12 gap-3 items-end">
+                  <div className="col-span-9 space-y-1">
+                    <label className="text-xs text-slate-500 ml-1 block font-medium">Remarks (Optional)</label>
                     <input
                       type="text"
+                      className="w-full p-2 bg-white border border-slate-200 rounded text-xs text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none"
+                      placeholder="Enter remarks..."
                       value={newItemRemarks}
                       onChange={(e) => setNewItemRemarks(e.target.value)}
-                      placeholder="Remarks"
-                      className="w-full h-8 px-2 bg-white border border-slate-200 rounded text-xs outline-none focus:ring-1 focus:ring-indigo-500"
                     />
                   </div>
                   <div className="col-span-3 flex gap-2">
                     <button
-                      onClick={handleAddNewMrItem}
-                      disabled={!selectedNewItem || !newItemQty}
-                      className="flex-1 h-8 bg-indigo-600 text-white rounded text-xs  hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400 transition-all shadow-sm"
+                      onClick={async () => {
+                        if (!selectedNewItem || newItemQty <= 0) return;
+                        const itemCode = selectedNewItem.item_code;
+                        const itemName = selectedNewItem.material_name || selectedNewItem.itemName;
+
+                        const isKg = newItemUnit.toUpperCase() === 'KG';
+
+                        const exists = mrItems.some(item => {
+                          if (item.item_code !== itemCode) return false;
+                          if (isKg) {
+                            return String(item.length || '') === String(newItemLength || '') &&
+                                   String(item.width || '') === String(newItemWidth || '') &&
+                                   String(item.thickness || '') === String(newItemThickness || '') &&
+                                   String(item.diameter || '') === String(newItemDiameter || '') &&
+                                   String(item.outer_diameter || '') === String(newItemOuterDiameter || '');
+                          }
+                          return true;
+                        });
+
+                        if (exists) {
+                          errorToast('Item with same code and dimensions already exists in the request list');
+                          return;
+                        }
+
+                        const payload = {
+                          item_code: itemCode,
+                          material_name: itemName,
+                          quantity: isKg ? (parseFloat(newItemWeight || 0) * Number(newItemQty)) : Number(newItemQty),
+                          design_qty: Number(newItemQty),
+                          remarks: newItemRemarks || null,
+                          uom: newItemUnit || selectedNewItem.unit || selectedNewItem.uom || 'Nos',
+                          rate: newItemRate || selectedNewItem.valuation_rate || 0,
+                          warehouse: 'Consumables Store',
+                          is_manual: true,
+                          shape_type: isKg ? (newItemShapeType || '') : '',
+                          weight_per_unit: isKg ? parseFloat(newItemWeight || 0) : 0,
+                          density: isKg ? parseFloat(newItemDensity || 0) : 0,
+                          length: isKg ? (parseFloat(newItemLength) || 0) : 0,
+                          width: isKg ? (parseFloat(newItemWidth) || 0) : 0,
+                          thickness: isKg ? (parseFloat(newItemThickness) || 0) : 0,
+                          diameter: isKg ? (parseFloat(newItemDiameter) || 0) : 0,
+                          outer_diameter: isKg ? (parseFloat(newItemOuterDiameter) || 0) : 0
+                        };
+
+                        try {
+                          const token = localStorage.getItem('authToken');
+                          const saveRes = await fetch(`${API_BASE}/production-plans/${mrPlanDetails.id}/materials`, {
+                            method: 'POST',
+                            headers: {
+                              'Authorization': `Bearer ${token}`,
+                              'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(payload)
+                          });
+
+                          if (!saveRes.ok) {
+                            const err = await saveRes.json();
+                            errorToast(err.message || 'Failed to save material');
+                            return;
+                          }
+
+                          // Refresh items from server so manual item persists
+                          const refreshRes = await fetch(`${API_BASE}/production-plans/material-request-items/${mrPlanDetails.id}`, {
+                            headers: { 'Authorization': `Bearer ${token}` }
+                          });
+                          if (refreshRes.ok) {
+                            const data = await refreshRes.json();
+                            const items = (data.items || []).filter(item => {
+                              const code = (item.item_code || '').toUpperCase().trim();
+                              return !code.startsWith('ASSEMBLY');
+                            });
+                            setMrItems(items);
+                          }
+                        } catch (e) {
+                          errorToast('Failed to save material');
+                          return;
+                        }
+
+                        setShowAddItem(false);
+                        setSelectedNewItem(null);
+                        setNewItemQty(1);
+                        setNewItemRemarks('');
+                        setNewItemUnit('');
+                        setNewItemItemGroup('');
+                        setNewItemWeight('');
+                        setNewItemMaterialType('');
+                        setNewItemShapeType('');
+                        setNewItemLength('');
+                        setNewItemWidth('');
+                        setNewItemThickness('');
+                        setNewItemDiameter('');
+                        setNewItemOuterDiameter('');
+                        setNewItemRate('');
+                      }}
+                      disabled={!selectedNewItem || !newItemQty || newItemQty <= 0}
+                      className="flex-1 h-9 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-semibold shadow-sm transition-all"
                     >
-                      Add to Request
+                      + Add Material
                     </button>
+
                     <button
                       onClick={() => setShowAddItem(false)}
-                      className="h-8 w-8 flex items-center justify-center bg-white border border-slate-200 rounded text-slate-400 hover:text-rose-500 hover:border-rose-200 transition-all shadow-sm"
+                      className="h-9 w-9 flex items-center justify-center bg-white border border-slate-200 rounded text-slate-400 hover:text-rose-500 hover:border-rose-200 transition-all shadow-sm"
                     >
                       <X className="w-4 h-4" />
                     </button>
@@ -2839,46 +3421,38 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
           </div>
           {/* Modal Actions */}
           <div className="flex items-center justify-end gap-2 pt-6 border-t border-slate-100">
-            {mrPlanDetails?.mrId ? (
+            <button
+              onClick={() => setMrModalOpen(false)}
+              disabled={transmittingMr}
+              className="p-2 text-xs text-slate-400 hover:text-slate-600 transition-colors"
+            >
+              Close
+            </button>
+            {mrItems.length > 0 && mrItems.some(item => !item.request_exists) && (
               <button
-                onClick={() => setMrModalOpen(false)}
-                className="px-6 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-xs transition-all font-medium"
+                onClick={confirmTransmitMR}
+                disabled={transmittingMr}
+                className="flex items-center gap-2 px-6 py-2.5 bg-slate-900 text-white rounded  hover:bg-slate-800 transition-all text-xs  shadow-lg shadow-slate-200 disabled:opacity-50"
               >
-                Close
-              </button>
-            ) : (
-              <>
-                <button
-                  onClick={() => setMrModalOpen(false)}
-                  disabled={transmittingMr}
-                  className="p-2 text-xs  text-slate-400 hover:text-slate-600 transition-colors"
-                >
-                  Abort Request
-                </button>
-                {mrItems.length > 0 && mrItems.some(item => !item.request_exists) && (
-                  <button
-                    onClick={confirmTransmitMR}
-                    disabled={transmittingMr}
-                    className="flex items-center gap-2 px-6 py-2.5 bg-slate-900 text-white rounded  hover:bg-slate-800 transition-all text-xs  shadow-lg shadow-slate-200 disabled:opacity-50"
-                  >
-                    {transmittingMr ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded animate-spin" />
-                        Transmitting...
-                      </>
-                    ) : (
-                      <>
-                        <Send className="w-3.5 h-3.5" />
-                        Material Request
-                      </>
-                    )}
-                  </button>
+                {transmittingMr ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded animate-spin" />
+                    Transmitting...
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-3.5 h-3.5" />
+                    Material Request
+                  </>
                 )}
-              </>
+              </button>
             )}
           </div>
+
         </div>
       </Modal>
+
+
 
       {/* Configure Work Order Modal */}
       <Modal
@@ -2972,9 +3546,9 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                                     const displayType = itemCodeStr.startsWith('ASSEMBLY-')
                                       ? 'ASSEMBLY'
                                       : (itemCodeStr.startsWith('PART-')
-                                          ? 'PART'
-                                          : (op.item_type === 'FG' ? 'ASSEMBLY' : 'PART')
-                                        );
+                                        ? 'PART'
+                                        : (op.item_type === 'FG' ? 'ASSEMBLY' : 'PART')
+                                      );
                                     const isAssembly = displayType === 'ASSEMBLY';
                                     return (
                                       <span className={isAssembly ? 'text-indigo-500' : 'text-rose-500'}>

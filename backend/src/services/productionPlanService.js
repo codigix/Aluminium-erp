@@ -1503,11 +1503,57 @@ const getItemBOMDetails = async (salesOrderItemId) => {
   };
 };
 
+const addManualMaterialToPlan = async (planId, item) => {
+  const len = Number(item.length) || 0;
+  const wid = Number(item.width) || 0;
+  const thk = Number(item.thickness) || 0;
+  const dia = Number(item.diameter) || 0;
+  const od = Number(item.outer_diameter) || 0;
+  const dens = Number(item.density) || 0;
+  const wpu = Number(item.weight_per_unit) || 0;
+  const isKg = (item.uom || '').toUpperCase() === 'KG';
+
+  const [result] = await pool.execute(
+    `INSERT INTO production_plan_materials (
+      plan_id, item_code, material_name, design_qty, required_qty, rate, uom, warehouse,
+      bom_ref, is_kg_material, material_category, status, length, width, thickness,
+      diameter, outer_diameter, density, weight_per_unit, is_manual
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'CORE', NULL, ?, ?, ?, ?, ?, ?, ?, 1)`,
+    [
+      planId,
+      item.item_code || item.material_name,
+      item.material_name,
+      item.design_qty !== undefined && item.design_qty !== null ? Number(item.design_qty) : null,
+      Number(item.quantity) || 0,
+      Number(item.rate) || 0,
+      item.uom || 'Nos',
+      item.warehouse || 'Consumables Store',
+      'MANUAL',
+      isKg ? 1 : 0,
+      len, wid, thk, dia, od, dens, wpu
+    ]
+  );
+  return { id: result.insertId };
+};
+
+const removeManualMaterialFromPlan = async (planId, materialId) => {
+  const [rows] = await pool.query(
+    'SELECT id FROM production_plan_materials WHERE id = ? AND plan_id = ? AND is_manual = 1',
+    [materialId, planId]
+  );
+  if (rows.length === 0) {
+    throw new Error('Manual material not found or cannot be deleted');
+  }
+  await pool.execute('DELETE FROM production_plan_materials WHERE id = ? AND plan_id = ? AND is_manual = 1', [materialId, planId]);
+  return true;
+};
+
 const getMaterialRequestItemsForPlan = async (planId) => {
   const [plans] = await pool.query(
     'SELECT * FROM production_plans WHERE id = ?',
     [planId]
   );
+
 
   if (plans.length === 0) {
     throw new Error('Production Plan not found');
@@ -1517,7 +1563,7 @@ const getMaterialRequestItemsForPlan = async (planId) => {
   const planCode = plan.plan_code;
   const aggregatedMap = new Map();
 
-  const addToMap = (itemCode, qty, uom, name, warehouse, category, rate, designQty, currentBalance, isFulfilled, requestExists, dimensions = {}, isExistingRequest = false) => {
+  const addToMap = (itemCode, qty, uom, name, warehouse, category, rate, designQty, currentBalance, isFulfilled, requestExists, dimensions = {}, isExistingRequest = false, isManual = false, ppmId = null) => {
     if (!itemCode && !name) return;
 
     const code = (itemCode || name).trim();
@@ -1577,7 +1623,7 @@ const getMaterialRequestItemsForPlan = async (planId) => {
       aggregatedMap.set(key, {
         item_code: code,
         quantity: Number(qty),
-        design_qty: Number(designQty || 0),
+        design_qty: (designQty !== null && designQty !== undefined) ? Number(designQty) : null,
         uom: uom || 'Nos',
         material_name: name || code,
         warehouse: warehouse,
@@ -1586,7 +1632,9 @@ const getMaterialRequestItemsForPlan = async (planId) => {
         inventory: Math.max(0, Number(currentBalance || 0)),
         is_fulfilled: !!isFulfilled,
         request_exists: !!requestExists,
-        dimensions: dimensions || {}
+        dimensions: dimensions || {},
+        is_manual: !!isManual,
+        ppm_id: ppmId
       });
     }
   };
@@ -1689,9 +1737,13 @@ ON (ppm.material_name = issued.material_name) OR (ppm.item_code = issued.item_co
         thickness: mat.thickness,
         diameter: mat.diameter,
         outer_diameter: mat.outer_diameter
-      }
+      },
+      false,             // isExistingRequest
+      !!mat.is_manual,   // isManual
+      mat.id             // ppmId
     );
   }
+
 
   // Step 2: Fetch and add items that are already in a transmitted/created material request for this plan
   const [mrItems] = await pool.query(`
@@ -1811,7 +1863,9 @@ const createMaterialRequestFromPlan = async (planId, userId, customItems = null)
     const issueMap = new Map();
 
     const addToPurposeMap = (map, itemCode, qty, uom, name, warehouse, category, rate, designQty, dimensions = {}, itemSource = 'BOM', remarks = null) => {
-      if (!itemCode && !name || qty <= 0) return;
+      // Allow qty=0 for manually added items (e.g. IN STOCK items) so they appear in the MR for visibility
+      if (!itemCode && !name) return;
+      if (qty <= 0 && itemSource !== 'MANUAL') return;
 
       const code = (itemCode || name).trim();
       const len = Number(dimensions?.length) || 0;
@@ -2102,5 +2156,7 @@ module.exports = {
   getItemBOMDetails,
   deleteProductionPlan,
   createMaterialRequestFromPlan,
-  getMaterialRequestItemsForPlan
+  getMaterialRequestItemsForPlan,
+  addManualMaterialToPlan,
+  removeManualMaterialFromPlan
 };

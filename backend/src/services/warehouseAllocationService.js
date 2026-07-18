@@ -37,7 +37,9 @@ const allocateWarehouse = async (allocationData, userId) => {
     const [grnItems] = await connection.query(`
       SELECT 
         gi.id, gi.grn_id, gi.accepted_qty, gi.allocated_qty, 
-        poi.item_code, poi.material_name, poi.material_type
+        poi.item_code, poi.material_name, poi.material_type,
+        gi.length, gi.width, gi.thickness, gi.diameter, gi.outer_diameter, gi.density, gi.weight_per_unit,
+        NULL as shape_id, NULL as material_id
       FROM grn_items gi
       JOIN purchase_order_items poi ON gi.po_item_id = poi.id
       WHERE gi.id = ? FOR UPDATE
@@ -91,7 +93,16 @@ const allocateWarehouse = async (allocationData, userId) => {
         connection, 
         warehouse: 'RM-HOLD',
         materialName: item.material_name,
-        materialType: item.material_type
+        materialType: item.material_type,
+        length: item.length,
+        width: item.width,
+        thickness: item.thickness,
+        diameter: item.diameter,
+        outer_diameter: item.outer_diameter,
+        density: item.density,
+        weight_per_unit: item.weight_per_unit,
+        shape_id: item.shape_id,
+        material_id: item.material_id
       }
     );
 
@@ -109,7 +120,16 @@ const allocateWarehouse = async (allocationData, userId) => {
         connection, 
         warehouse: target_warehouse,
         materialName: item.material_name,
-        materialType: item.material_type
+        materialType: item.material_type,
+        length: item.length,
+        width: item.width,
+        thickness: item.thickness,
+        diameter: item.diameter,
+        outer_diameter: item.outer_diameter,
+        density: item.density,
+        weight_per_unit: item.weight_per_unit,
+        shape_id: item.shape_id,
+        material_id: item.material_id
       }
     );
 

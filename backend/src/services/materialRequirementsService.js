@@ -64,6 +64,11 @@ const getMaterialRequirements = async () => {
         material_name: m.material_name,
         material_type: m.material_type,
         uom: m.uom,
+        length: m.length || 0,
+        width: m.width || 0,
+        thickness: m.thickness || 0,
+        diameter: m.diameter || 0,
+        outer_diameter: m.outer_diameter || 0,
         total_required: parseFloat(m.qty_per_pc || 0) * parseFloat(ppi.planned_qty),
         project_name: ppi.project_name,
         item_code: ppi.item_code,
@@ -72,15 +77,20 @@ const getMaterialRequirements = async () => {
     }
   }
 
-  // Aggregate by material name to see global requirement
+  // Aggregate by material name and dimensions to see global requirement per size
   const aggregated = {};
   for (const row of rows) {
-    const key = `${row.material_name}|${row.material_type}`;
+    const key = `${row.material_name}|${row.material_type}|${row.length}|${row.width}|${row.thickness}|${row.diameter}|${row.outer_diameter}`;
     if (!aggregated[key]) {
       aggregated[key] = {
         material_name: row.material_name,
         material_type: row.material_type,
         uom: row.uom,
+        length: row.length,
+        width: row.width,
+        thickness: row.thickness,
+        diameter: row.diameter,
+        outer_diameter: row.outer_diameter,
         required_qty: 0,
         details: []
       };
@@ -94,12 +104,22 @@ const getMaterialRequirements = async () => {
     });
   }
 
-  // Fetch stock levels for these materials
+  // Fetch stock levels for these materials matching name, type, and dimensions
   const materialList = Object.values(aggregated);
   for (const mat of materialList) {
     const [stockRows] = await pool.query(
-      'SELECT SUM(current_balance) as total_stock FROM stock_balance WHERE material_name = ? AND material_type = ?',
-      [mat.material_name, mat.material_type]
+      `SELECT SUM(current_balance) as total_stock FROM stock_balance 
+       WHERE LOWER(TRIM(material_name)) = LOWER(TRIM(?)) 
+         AND (material_type = ? OR UPPER(REPLACE(material_type, ' ', '_')) = UPPER(REPLACE(?, ' ', '_')))
+         AND (ABS(COALESCE(length, 0) - COALESCE(?, 0)) < 0.0001)
+         AND (ABS(COALESCE(width, 0) - COALESCE(?, 0)) < 0.0001)
+         AND (ABS(COALESCE(thickness, 0) - COALESCE(?, 0)) < 0.0001)
+         AND (ABS(COALESCE(diameter, 0) - COALESCE(?, 0)) < 0.0001)
+         AND (ABS(COALESCE(outer_diameter, 0) - COALESCE(?, 0)) < 0.0001)`,
+      [
+        mat.material_name, mat.material_type, mat.material_type,
+        mat.length, mat.width, mat.thickness, mat.diameter, mat.outer_diameter
+      ]
     );
     mat.available_qty = stockRows[0]?.total_stock || 0;
     mat.shortage = Math.max(0, mat.required_qty - mat.available_qty);
@@ -161,22 +181,32 @@ const getProjectMaterialRequirements = async (projectId) => {
         material_type: m.material_type,
         uom: m.uom,
         item_group: m.item_group,
+        length: m.length || 0,
+        width: m.width || 0,
+        thickness: m.thickness || 0,
+        diameter: m.diameter || 0,
+        outer_diameter: m.outer_diameter || 0,
         total_required: parseFloat(m.qty_per_pc || 0) * parseFloat(item.quantity),
         project_name: item.project_name
       });
     }
   }
 
-  // Aggregate by material name
+  // Aggregate by material name, type, and dimensions
   const aggregated = {};
   for (const row of rows) {
-    const key = `${row.material_name}|${row.material_type}`;
+    const key = `${row.material_name}|${row.material_type}|${row.length}|${row.width}|${row.thickness}|${row.diameter}|${row.outer_diameter}`;
     if (!aggregated[key]) {
       aggregated[key] = {
         material_name: row.material_name,
         material_type: row.material_type,
         uom: row.uom,
         item_group: row.item_group,
+        length: row.length,
+        width: row.width,
+        thickness: row.thickness,
+        diameter: row.diameter,
+        outer_diameter: row.outer_diameter,
         total_required: 0,
         project_name: row.project_name
       };
@@ -188,15 +218,25 @@ const getProjectMaterialRequirements = async (projectId) => {
 
   for (const mat of result) {
     const [stockRows] = await pool.query(
-      'SELECT SUM(current_balance) as total_stock FROM stock_balance WHERE material_name = ? AND material_type = ?',
-      [mat.material_name, mat.material_type]
+      `SELECT SUM(current_balance) as total_stock FROM stock_balance 
+       WHERE LOWER(TRIM(material_name)) = LOWER(TRIM(?)) 
+         AND (material_type = ? OR UPPER(REPLACE(material_type, ' ', '_')) = UPPER(REPLACE(?, ' ', '_')))
+         AND (ABS(COALESCE(length, 0) - COALESCE(?, 0)) < 0.0001)
+         AND (ABS(COALESCE(width, 0) - COALESCE(?, 0)) < 0.0001)
+         AND (ABS(COALESCE(thickness, 0) - COALESCE(?, 0)) < 0.0001)
+         AND (ABS(COALESCE(diameter, 0) - COALESCE(?, 0)) < 0.0001)
+         AND (ABS(COALESCE(outer_diameter, 0) - COALESCE(?, 0)) < 0.0001)`,
+      [
+        mat.material_name, mat.material_type, mat.material_type,
+        mat.length, mat.width, mat.thickness, mat.diameter, mat.outer_diameter
+      ]
     );
     mat.available_qty = stockRows[0]?.total_stock || 0;
     mat.shortage = Math.max(0, parseFloat(mat.total_required) - mat.available_qty);
   }
 
   return result;
-}
+};
 
 module.exports = {
   getMaterialRequirements,

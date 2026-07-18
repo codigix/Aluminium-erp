@@ -64,10 +64,16 @@ const getItemMaterials = async (itemId, itemCode = null, drawingNo = null, drawi
                 MAX(selling_rate) as selling_rate, MAX(valuation_rate) as valuation_rate,
                 MAX(material_type) as material_type,
                 MAX(length) as length, MAX(width) as width, MAX(thickness) as thickness,
+                MAX(diameter) as diameter, MAX(outer_diameter) as outer_diameter,
                 MAX(weight_per_unit) as weight_per_unit
          FROM stock_balance 
-         GROUP BY material_name
-       ) i ON m.material_name = i.material_name
+         GROUP BY material_name, length, width, thickness, diameter, outer_diameter
+       ) i ON LOWER(TRIM(m.material_name)) = LOWER(TRIM(i.material_name))
+         AND (ABS(COALESCE(i.length, 0) - COALESCE(m.length, 0)) < 0.0001)
+         AND (ABS(COALESCE(i.width, 0) - COALESCE(m.width, 0)) < 0.0001)
+         AND (ABS(COALESCE(i.thickness, 0) - COALESCE(m.thickness, 0)) < 0.0001)
+         AND (ABS(COALESCE(i.diameter, 0) - COALESCE(m.diameter, 0)) < 0.0001)
+         AND (ABS(COALESCE(i.outer_diameter, 0) - COALESCE(m.outer_diameter, 0)) < 0.0001)
        WHERE m.sales_order_item_id = ? 
        ORDER BY m.created_at ASC`,
       [parsedItemId]
@@ -100,10 +106,16 @@ const getItemMaterials = async (itemId, itemCode = null, drawingNo = null, drawi
                             MAX(selling_rate) as selling_rate, MAX(valuation_rate) as valuation_rate,
                             MAX(material_type) as material_type,
                             MAX(length) as length, MAX(width) as width, MAX(thickness) as thickness,
+                            MAX(diameter) as diameter, MAX(outer_diameter) as outer_diameter,
                             MAX(weight_per_unit) as weight_per_unit
                      FROM stock_balance 
-                     GROUP BY material_name
-                   ) i ON m.material_name = i.material_name 
+                     GROUP BY material_name, length, width, thickness, diameter, outer_diameter
+                   ) i ON LOWER(TRIM(m.material_name)) = LOWER(TRIM(i.material_name))
+                     AND (ABS(COALESCE(i.length, 0) - COALESCE(m.length, 0)) < 0.0001)
+                     AND (ABS(COALESCE(i.width, 0) - COALESCE(m.width, 0)) < 0.0001)
+                     AND (ABS(COALESCE(i.thickness, 0) - COALESCE(m.thickness, 0)) < 0.0001)
+                     AND (ABS(COALESCE(i.diameter, 0) - COALESCE(m.diameter, 0)) < 0.0001)
+                     AND (ABS(COALESCE(i.outer_diameter, 0) - COALESCE(m.outer_diameter, 0)) < 0.0001)
                    WHERE m.sales_order_item_id = ?`;
 
       [rows] = await pool.query(query + ' ORDER BY m.created_at ASC', [fallbackId]);

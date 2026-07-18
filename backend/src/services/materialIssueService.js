@@ -66,13 +66,33 @@ const createMaterialIssue = async (data, userId) => {
       let itemIdentifier = item.itemCode;
       
       if (!itemIdentifier) {
-        // Try to find item_code from stock_balance based on material_name and type
+        // Try to find item_code from stock_balance based on material_name, type, and dimensions
         const [stockRows] = await connection.query(
-          'SELECT item_code FROM stock_balance WHERE material_name = ? AND material_type = ? LIMIT 1',
-          [item.materialName, item.materialType]
+          `SELECT item_code FROM stock_balance 
+           WHERE LOWER(TRIM(material_name)) = LOWER(TRIM(?)) 
+             AND (material_type = ? OR UPPER(REPLACE(material_type, ' ', '_')) = UPPER(REPLACE(?, ' ', '_')))
+             AND (ABS(COALESCE(length, 0) - COALESCE(?, 0)) < 0.0001)
+             AND (ABS(COALESCE(width, 0) - COALESCE(?, 0)) < 0.0001)
+             AND (ABS(COALESCE(thickness, 0) - COALESCE(?, 0)) < 0.0001)
+             AND (ABS(COALESCE(diameter, 0) - COALESCE(?, 0)) < 0.0001)
+             AND (ABS(COALESCE(outer_diameter, 0) - COALESCE(?, 0)) < 0.0001)
+           LIMIT 1`,
+          [
+            item.materialName, item.materialType,
+            item.length || 0, item.width || 0, item.thickness || 0, item.diameter || 0, item.outer_diameter || item.outerDiameter || 0
+          ]
         );
         if (stockRows.length > 0) {
           itemIdentifier = stockRows[0].item_code;
+        } else {
+          // Fallback to name only if still not found
+          const [stockNameOnly] = await connection.query(
+            'SELECT item_code FROM stock_balance WHERE LOWER(TRIM(material_name)) = LOWER(TRIM(?)) LIMIT 1',
+            [item.materialName]
+          );
+          if (stockNameOnly.length > 0) {
+            itemIdentifier = stockNameOnly[0].item_code;
+          }
         }
       }
       

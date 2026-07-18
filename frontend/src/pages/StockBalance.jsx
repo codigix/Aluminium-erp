@@ -253,38 +253,40 @@ const StockBalance = () => {
       key: 'material_name',
       sortable: true,
       render: (val, row) => {
-        const shapeName = (shapes.find(s => String(s.id) === String(row.shape_id))?.name || '').toLowerCase().trim();
-        const dims = [];
-        
-        if (shapeName === 'plate' || shapeName === 'sheet') {
-          if (row.length) dims.push(`${parseFloat(row.length)}mm`);
-          if (row.width) dims.push(`${parseFloat(row.width)}mm`);
-          if (row.thickness) dims.push(`${parseFloat(row.thickness)}mm`);
-        } else if (shapeName === 'round' || shapeName === 'bar') {
-          if (row.diameter) dims.push(`D:${parseFloat(row.diameter)}mm`);
-          if (row.length) dims.push(`${parseFloat(row.length)}mm`);
-        } else if (shapeName === 'pipe' || shapeName === 'tube') {
-          if (row.outer_diameter) dims.push(`OD:${parseFloat(row.outer_diameter)}mm`);
-          if (row.thickness) dims.push(`${parseFloat(row.thickness)}mm`);
-          if (row.length) dims.push(`${parseFloat(row.length)}mm`);
-        } else {
-          // General fallback for other shapes
-          if (row.length) dims.push(`${parseFloat(row.length)}mm`);
-          if (row.width) dims.push(`${parseFloat(row.width)}mm`);
-          if (row.thickness) dims.push(`${parseFloat(row.thickness)}mm`);
-          if (row.diameter) dims.push(`D:${parseFloat(row.diameter)}mm`);
-        }
-
-        const dimensionStr = dims.length > 0 ? ` (${dims.join(' x ')})` : '';
-        
         return (
           <div className="flex flex-col">
-            <span className="text-slate-900 ">{val || '—'}{dimensionStr}</span>
+            <span className="text-slate-900 ">{val || '—'}</span>
             {row.material_grade && (
               <span className="text-xs  text-slate-400 leading-none mt-0.5">{row.material_grade}</span>
             )}
           </div>
         );
+      }
+    },
+    {
+      label: 'Dimension',
+      key: 'length',
+      render: (_, row) => {
+        const parts = [];
+        
+        if (row.outer_diameter && parseFloat(row.outer_diameter) > 0) {
+          parts.push(`OD:${parseFloat(row.outer_diameter)}`);
+        }
+        if (row.diameter && parseFloat(row.diameter) > 0) {
+          parts.push(`D:${parseFloat(row.diameter)}`);
+        }
+        if (row.width && parseFloat(row.width) > 0) {
+          parts.push(`W:${parseFloat(row.width)}`);
+        }
+        if (row.thickness && parseFloat(row.thickness) > 0) {
+          parts.push(`T:${parseFloat(row.thickness)}`);
+        }
+        if (row.length && parseFloat(row.length) > 0) {
+          parts.push(`L:${parseFloat(row.length)}`);
+        }
+
+        const dimensionStr = parts.length > 0 ? `${parts.join(' × ')} mm` : '—';
+        return <span className="text-slate-500 text-xs">{dimensionStr}</span>;
       }
     },
     {

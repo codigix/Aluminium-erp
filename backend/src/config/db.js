@@ -1720,6 +1720,15 @@ const ensureProductionPlanTables = async () => {
     if (!existingPpmCols.has('outer_diameter')) {
       await connection.query('ALTER TABLE production_plan_materials ADD COLUMN outer_diameter DECIMAL(12, 4) DEFAULT 0');
     }
+    if (!existingPpmCols.has('density')) {
+      await connection.query('ALTER TABLE production_plan_materials ADD COLUMN density DECIMAL(12, 6) DEFAULT 0');
+    }
+    if (!existingPpmCols.has('weight_per_unit')) {
+      await connection.query('ALTER TABLE production_plan_materials ADD COLUMN weight_per_unit DECIMAL(12, 6) DEFAULT 0');
+    }
+    if (!existingPpmCols.has('is_manual')) {
+      await connection.query('ALTER TABLE production_plan_materials ADD COLUMN is_manual BOOLEAN DEFAULT 0');
+    }
 
     // Create production_plan_operations table
     await connection.query(`

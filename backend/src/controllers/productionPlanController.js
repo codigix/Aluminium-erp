@@ -111,6 +111,24 @@ const getMaterialRequestItemsForPlan = async (req, res, next) => {
   }
 };
 
+const addManualMaterial = async (req, res, next) => {
+  try {
+    const result = await productionPlanService.addManualMaterialToPlan(req.params.id, req.body);
+    res.status(201).json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const removeManualMaterial = async (req, res, next) => {
+  try {
+    await productionPlanService.removeManualMaterialFromPlan(req.params.id, req.params.materialId);
+    res.json({ message: 'Manual material removed successfully' });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   listProductionPlans,
   getProductionPlanById,
@@ -123,5 +141,7 @@ module.exports = {
   getItemBOMDetails,
   deleteProductionPlan,
   createMaterialRequestFromPlan,
-  getMaterialRequestItemsForPlan
+  getMaterialRequestItemsForPlan,
+  addManualMaterial,
+  removeManualMaterial
 };

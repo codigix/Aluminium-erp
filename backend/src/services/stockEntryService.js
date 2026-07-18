@@ -515,28 +515,46 @@ const getStockEntryItemsFromGRN = async (grnId, connection = null) => {
       COALESCE(qci.item_code, poi.item_code) as item_code,
       gi.id as grn_item_id,
       gi.accepted_qty as quantity,
-      COALESCE(poi.unit, 'NOS') as uom,
+      COALESCE(poi.unit, gi.uom, 'NOS') as uom,
       COALESCE(poi.unit_rate, 0) as valuation_rate,
       poi.material_type,
-      poi.material_name
+      poi.material_name,
+      gi.length,
+      gi.width,
+      gi.thickness,
+      gi.diameter,
+      gi.outer_diameter,
+      gi.density,
+      gi.weight_per_unit
     FROM grn_items gi
     LEFT JOIN purchase_order_items poi ON gi.po_item_id = poi.id
     LEFT JOIN qc_inspection_items qci ON qci.grn_item_id = gi.id
     WHERE gi.grn_id = ?
   `, [grnId]);
   
-  // For all items, try to find the "correct" item_code from stock_balance by matching name/type
+  // For all items, try to find the "correct" item_code from stock_balance by matching name + dimensions
   for (const item of items) {
     if (item.material_name) {
-      // 0. If we already have a specific item code that exists in stock_balance and matches the name, use it!
+      const length = item.length || 0;
+      const width = item.width || 0;
+      const thickness = item.thickness || 0;
+      const diameter = item.diameter || 0;
+      const outerDiameter = item.outer_diameter || 0;
+
+      // 0. If we already have a specific item code that exists in stock_balance and matches name + dimensions, use it!
       // We prioritize the one already in the item object (which might come from QC)
       if (item.item_code && item.item_code !== 'auto-generated') {
         const [existing] = await executor.query(
           `SELECT item_code, material_type FROM stock_balance 
            WHERE (item_code = ? OR drawing_no = ?) 
-           AND LOWER(TRIM(material_name)) = LOWER(TRIM(?)) 
+             AND LOWER(TRIM(material_name)) = LOWER(TRIM(?)) 
+             AND (ABS(COALESCE(length, 0) - COALESCE(?, 0)) < 0.0001)
+             AND (ABS(COALESCE(width, 0) - COALESCE(?, 0)) < 0.0001)
+             AND (ABS(COALESCE(thickness, 0) - COALESCE(?, 0)) < 0.0001)
+             AND (ABS(COALESCE(diameter, 0) - COALESCE(?, 0)) < 0.0001)
+             AND (ABS(COALESCE(outer_diameter, 0) - COALESCE(?, 0)) < 0.0001)
            LIMIT 1`,
-          [item.item_code, item.item_code, item.material_name]
+          [item.item_code, item.item_code, item.material_name, length, width, thickness, diameter, outerDiameter]
         );
         if (existing.length > 0) {
           item.item_code = existing[0].item_code;
@@ -547,31 +565,65 @@ const getStockEntryItemsFromGRN = async (grnId, connection = null) => {
         }
       }
 
-      // 1. Try matching by name and material type
+      // 1. Try matching by name, material type, and dimensions
       const [sb] = await executor.query(
         `SELECT item_code FROM stock_balance 
          WHERE LOWER(TRIM(material_name)) = LOWER(TRIM(?)) 
-         AND (material_type = ? OR UPPER(REPLACE(material_type, ' ', '_')) = UPPER(REPLACE(?, ' ', '_')))
+           AND (material_type = ? OR UPPER(REPLACE(material_type, ' ', '_')) = UPPER(REPLACE(?, ' ', '_')))
+           AND (ABS(COALESCE(length, 0) - COALESCE(?, 0)) < 0.0001)
+           AND (ABS(COALESCE(width, 0) - COALESCE(?, 0)) < 0.0001)
+           AND (ABS(COALESCE(thickness, 0) - COALESCE(?, 0)) < 0.0001)
+           AND (ABS(COALESCE(diameter, 0) - COALESCE(?, 0)) < 0.0001)
+           AND (ABS(COALESCE(outer_diameter, 0) - COALESCE(?, 0)) < 0.0001)
          LIMIT 1`,
-        [item.material_name, item.material_type, item.material_type]
+        [item.material_name, item.material_type, item.material_type, length, width, thickness, diameter, outerDiameter]
       );
       
       if (sb.length > 0) {
         item.item_code = sb[0].item_code;
       } else {
-        // 2. If not found, try matching by name only (more flexible)
-        const [sbNameOnly] = await executor.query(
+        // 2. Try matching by name and dimensions only (more flexible type match)
+        const [sbNameDims] = await executor.query(
           `SELECT item_code FROM stock_balance 
            WHERE LOWER(TRIM(material_name)) = LOWER(TRIM(?)) 
+             AND (ABS(COALESCE(length, 0) - COALESCE(?, 0)) < 0.0001)
+             AND (ABS(COALESCE(width, 0) - COALESCE(?, 0)) < 0.0001)
+             AND (ABS(COALESCE(thickness, 0) - COALESCE(?, 0)) < 0.0001)
+             AND (ABS(COALESCE(diameter, 0) - COALESCE(?, 0)) < 0.0001)
+             AND (ABS(COALESCE(outer_diameter, 0) - COALESCE(?, 0)) < 0.0001)
            LIMIT 1`,
-          [item.material_name]
+          [item.material_name, length, width, thickness, diameter, outerDiameter]
         );
         
-        if (sbNameOnly.length > 0) {
-          item.item_code = sbNameOnly[0].item_code;
-        } else if (!item.item_code || item.item_code === 'auto-generated') {
-          // 3. Fallback: Only generate a standard item code if no code exists at all
-          item.item_code = await stockService.generateItemCode(item.material_name, item.material_type);
+        if (sbNameDims.length > 0) {
+          item.item_code = sbNameDims[0].item_code;
+        } else {
+          // 3. Fallback: Generate a standard item code and create a new master record in stock_balance
+          const generatedCode = await stockService.generateItemCode(item.material_name, item.material_type);
+          
+          const normalizedType = (item.material_type || '').toUpperCase().trim().replace(/ /g, '_');
+          await executor.execute(
+            `INSERT INTO stock_balance (
+              item_code, material_name, material_type, unit, current_balance, valuation_rate,
+              length, width, thickness, diameter, outer_diameter, density, weight_per_unit, shape_id, material_id
+            ) VALUES (?, ?, ?, ?, 0.000, 0.00, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              generatedCode,
+              item.material_name,
+              normalizedType,
+              item.uom || 'NOS',
+              item.length || null,
+              item.width || null,
+              item.thickness || null,
+              item.diameter || null,
+              item.outer_diameter || null,
+              item.density || null,
+              item.weight_per_unit || null,
+              item.shape_id || null,
+              item.material_id || null
+            ]
+          );
+          item.item_code = generatedCode;
         }
       }
     } else if (!item.item_code) {

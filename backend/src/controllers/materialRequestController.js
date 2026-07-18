@@ -1,6 +1,42 @@
 const pool = require('../config/db');
 const stockService = require('../services/stockService');
 
+const resolveDimensionItemCode = async (connection, item) => {
+  const uom = (item.uom || item.unit || '').toLowerCase().trim();
+  if (uom === 'kg' || uom === 'kgs') {
+    const lengthVal = parseFloat(item.length || 0);
+    const widthVal = parseFloat(item.width || 0);
+    const thicknessVal = parseFloat(item.thickness || 0);
+    const diameterVal = parseFloat(item.diameter || 0);
+    const outerDiameterVal = parseFloat(item.outer_diameter || item.outerDiameter || 0);
+    
+    const [rows] = await connection.query(`
+      SELECT item_code 
+      FROM stock_balance
+      WHERE LOWER(TRIM(material_name)) = LOWER(TRIM(?))
+        AND (
+          (COALESCE(length, 0) = ? OR (? = 0 AND length IS NULL)) AND
+          (COALESCE(width, 0) = ? OR (? = 0 AND width IS NULL)) AND
+          (COALESCE(thickness, 0) = ? OR (? = 0 AND thickness IS NULL)) AND
+          (COALESCE(diameter, 0) = ? OR (? = 0 AND diameter IS NULL)) AND
+          (COALESCE(outer_diameter, 0) = ? OR (? = 0 AND outer_diameter IS NULL))
+        )
+      LIMIT 1
+    `, [
+      item.item_name || item.name || item.item_code,
+      lengthVal, lengthVal,
+      widthVal, widthVal,
+      thicknessVal, thicknessVal,
+      diameterVal, diameterVal,
+      outerDiameterVal, outerDiameterVal
+    ]);
+    if (rows.length > 0) {
+      return rows[0].item_code;
+    }
+  }
+  return item.item_code;
+};
+
 const materialRequestController = {
   getAll: async (req, res) => {
     try {
@@ -48,7 +84,23 @@ const materialRequestController = {
         (
           SELECT CASE 
             WHEN COUNT(*) = 0 THEN 'available'
-            WHEN COUNT(*) = SUM(CASE WHEN (SELECT SUM(current_balance) FROM stock_balance WHERE item_code = mri.item_code) >= COALESCE(NULLIF(mri.quantity, 0), mri.design_qty, 0) THEN 1 ELSE 0 END) THEN 'available'
+            WHEN COUNT(*) = SUM(CASE WHEN (
+              SELECT SUM(sb.current_balance) 
+              FROM stock_balance sb 
+              WHERE (
+                (LOWER(TRIM(mri.uom)) NOT IN ('kg', 'kgs') AND sb.item_code = mri.item_code)
+                OR
+                (
+                  LOWER(TRIM(mri.uom)) IN ('kg', 'kgs') 
+                  AND LOWER(TRIM(sb.material_name)) = LOWER(TRIM(COALESCE(mri.item_name, mri.item_code)))
+                  AND (COALESCE(sb.length, 0) = COALESCE(mri.length, 0))
+                  AND (COALESCE(sb.width, 0) = COALESCE(mri.width, 0))
+                  AND (COALESCE(sb.thickness, 0) = COALESCE(mri.thickness, 0))
+                  AND (COALESCE(sb.diameter, 0) = COALESCE(mri.diameter, 0))
+                  AND (COALESCE(sb.outer_diameter, 0) = COALESCE(mri.outer_diameter, 0))
+                )
+              )
+            ) >= COALESCE(NULLIF(mri.quantity, 0), mri.design_qty, 0) THEN 1 ELSE 0 END) THEN 'available'
             ELSE 'unavailable'
           END
           FROM material_request_items mri
@@ -179,12 +231,14 @@ const materialRequestController = {
       let allItemsAvailable = true;
 
       for (let item of items) {
+        const resolvedItemCode = await resolveDimensionItemCode(pool, item);
+
         // Fetch stock across ALL warehouses
         const [stockRows] = await pool.query(`
           SELECT warehouse as warehouse_name, current_balance as current_stock
           FROM stock_balance
           WHERE item_code = ? AND current_balance > 0
-        `, [item.item_code]);
+        `, [resolvedItemCode]);
         
         item.stocks = stockRows;
         
@@ -280,6 +334,7 @@ const materialRequestController = {
           const [items] = await connection.query('SELECT * FROM material_request_items WHERE mr_id = ?', [id]);
           
           for (const item of items) {
+            const resolvedItemCode = await resolveDimensionItemCode(connection, item);
             const requiredQty = parseFloat(item.quantity || item.design_qty || 0);
             const releasedQty = mr.status?.toUpperCase() === 'PARTIALLY_RELEASED' ? parseFloat(item.allocated_quantity || 0) : 0;
             const remainingQty = Math.max(0, requiredQty - releasedQty);
@@ -291,12 +346,12 @@ const materialRequestController = {
                 FROM stock_balance 
                 WHERE item_code = ?
                 ORDER BY current_balance DESC LIMIT 1
-              `, [item.item_code]);
+              `, [resolvedItemCode]);
 
               const sourceWarehouse = stockRows.length > 0 ? stockRows[0].warehouse : (mr.source_warehouse || 'Main');
 
               await stockService.addStockLedgerEntry(
-                item.item_code,
+                resolvedItemCode,
                 'OUT',
                 remainingQty,
                 'Material Request',
@@ -367,13 +422,15 @@ const materialRequestController = {
 
         // Loop items and deduct available stock
         for (const item of items) {
+          const resolvedItemCode = await resolveDimensionItemCode(connection, item);
+
           // Get total stock available across all warehouses for this item
           const [stockRows] = await connection.query(`
             SELECT warehouse, current_balance 
             FROM stock_balance 
             WHERE item_code = ? AND current_balance > 0
             ORDER BY current_balance DESC
-          `, [item.item_code]);
+          `, [resolvedItemCode]);
 
           const totalStock = stockRows.reduce((sum, row) => sum + parseFloat(row.current_balance), 0);
           const requiredQty = parseFloat(item.quantity || item.design_qty || 0);
@@ -400,13 +457,13 @@ const materialRequestController = {
                 await connection.execute(
                   `INSERT INTO material_issue_items (issue_id, material_name, material_type, item_code, quantity, uom, warehouse)
                    VALUES (?, ?, ?, ?, ?, ?, ?)`,
-                  [issueId, item.item_name, item.item_type, item.item_code, issueQty, item.uom, stockRow.warehouse]
+                  [issueId, item.item_name, item.item_type, resolvedItemCode, issueQty, item.uom, stockRow.warehouse]
                 );
               }
 
               // Deduct from stock ledger
               await stockService.addStockLedgerEntry(
-                item.item_code,
+                resolvedItemCode,
                 'OUT',
                 issueQty,
                 issueId ? 'MATERIAL_ISSUE' : 'Material Request',

@@ -11,17 +11,27 @@ const mustache = require('mustache');
 const getCorrectItemCode = async (item, connection) => {
   let itemCode = item.item_code || item.drawing_no;
 
-  // 0. If we already have a specific item code that exists in stock_balance and matches the name, use it!
+  const length = item.length || 0;
+  const width = item.width || 0;
+  const thickness = item.thickness || 0;
+  const diameter = item.diameter || 0;
+  const outerDiameter = item.outer_diameter || item.outerDiameter || 0;
+
+  // 0. If we already have a specific item code that exists in stock_balance and matches name + dimensions, use it!
   if (itemCode && itemCode !== 'auto-generated') {
     const [existing] = await connection.query(
       `SELECT item_code, material_type FROM stock_balance 
        WHERE (item_code = ? OR drawing_no = ?) 
-       AND LOWER(TRIM(material_name)) = LOWER(TRIM(?)) 
+         AND LOWER(TRIM(material_name)) = LOWER(TRIM(?))
+         AND (ABS(COALESCE(length, 0) - COALESCE(?, 0)) < 0.0001)
+         AND (ABS(COALESCE(width, 0) - COALESCE(?, 0)) < 0.0001)
+         AND (ABS(COALESCE(thickness, 0) - COALESCE(?, 0)) < 0.0001)
+         AND (ABS(COALESCE(diameter, 0) - COALESCE(?, 0)) < 0.0001)
+         AND (ABS(COALESCE(outer_diameter, 0) - COALESCE(?, 0)) < 0.0001)
        LIMIT 1`,
-      [itemCode, itemCode, item.material_name]
+      [itemCode, itemCode, item.material_name, length, width, thickness, diameter, outerDiameter]
     );
     if (existing.length > 0) {
-      // Update item type to match the existing one if needed
       if (existing[0].material_type) {
         item.material_type = existing[0].material_type;
       }
@@ -30,38 +40,101 @@ const getCorrectItemCode = async (item, connection) => {
   }
 
   if (item.material_name) {
-    // 1. Try matching by name and material type
+    // 1. Try matching by name, material type, and dimensions
     const [sb] = await connection.query(
       `SELECT item_code FROM stock_balance 
        WHERE LOWER(TRIM(material_name)) = LOWER(TRIM(?)) 
-       AND (material_type = ? OR UPPER(REPLACE(material_type, ' ', '_')) = UPPER(REPLACE(?, ' ', '_')))
+         AND (material_type = ? OR UPPER(REPLACE(material_type, ' ', '_')) = UPPER(REPLACE(?, ' ', '_')))
+         AND (ABS(COALESCE(length, 0) - COALESCE(?, 0)) < 0.0001)
+         AND (ABS(COALESCE(width, 0) - COALESCE(?, 0)) < 0.0001)
+         AND (ABS(COALESCE(thickness, 0) - COALESCE(?, 0)) < 0.0001)
+         AND (ABS(COALESCE(diameter, 0) - COALESCE(?, 0)) < 0.0001)
+         AND (ABS(COALESCE(outer_diameter, 0) - COALESCE(?, 0)) < 0.0001)
        LIMIT 1`,
-      [item.material_name, item.material_type, item.material_type]
+      [item.material_name, item.material_type, item.material_type, length, width, thickness, diameter, outerDiameter]
     );
 
     if (sb.length > 0) {
       return sb[0].item_code;
     }
 
-    // 2. If not found, try matching by name only (more flexible)
-    const [sbNameOnly] = await connection.query(
+    // 2. Try matching by name and dimensions only (more flexible type match)
+    const [sbNameDims] = await connection.query(
       `SELECT item_code FROM stock_balance 
        WHERE LOWER(TRIM(material_name)) = LOWER(TRIM(?)) 
+         AND (ABS(COALESCE(length, 0) - COALESCE(?, 0)) < 0.0001)
+         AND (ABS(COALESCE(width, 0) - COALESCE(?, 0)) < 0.0001)
+         AND (ABS(COALESCE(thickness, 0) - COALESCE(?, 0)) < 0.0001)
+         AND (ABS(COALESCE(diameter, 0) - COALESCE(?, 0)) < 0.0001)
+         AND (ABS(COALESCE(outer_diameter, 0) - COALESCE(?, 0)) < 0.0001)
        LIMIT 1`,
-      [item.material_name]
+      [item.material_name, length, width, thickness, diameter, outerDiameter]
     );
 
-    if (sbNameOnly.length > 0) {
-      return sbNameOnly[0].item_code;
+    if (sbNameDims.length > 0) {
+      return sbNameDims[0].item_code;
     }
   }
 
-  // If we have an item code, return it as is if no match found in stock_balance
-  if (itemCode && itemCode !== 'auto-generated') return itemCode;
+  // 3. Fallback: If we have an item code, check if it exists in stock_balance with different dimensions.
+  // If it does, we ignore it (isMismatch = true) so we generate a new unique code.
+  // If it doesn't exist, or has empty dimensions, or matches, we reuse it.
+  let isMismatch = false;
+  if (itemCode && itemCode !== 'auto-generated') {
+    const [existing] = await connection.query(
+      `SELECT item_code, length, width, thickness, diameter, outer_diameter FROM stock_balance 
+       WHERE item_code = ? LIMIT 1`,
+      [itemCode]
+    );
+    if (existing.length > 0) {
+      const ext = existing[0];
+      const hasDimensions = (parseFloat(ext.length || 0) > 0 || parseFloat(ext.width || 0) > 0 || parseFloat(ext.thickness || 0) > 0 || parseFloat(ext.diameter || 0) > 0 || parseFloat(ext.outer_diameter || 0) > 0);
+      if (hasDimensions) {
+        const lengthDiff = Math.abs(parseFloat(ext.length || 0) - length) >= 0.0001;
+        const widthDiff = Math.abs(parseFloat(ext.width || 0) - width) >= 0.0001;
+        const thicknessDiff = Math.abs(parseFloat(ext.thickness || 0) - thickness) >= 0.0001;
+        const diameterDiff = Math.abs(parseFloat(ext.diameter || 0) - diameter) >= 0.0001;
+        const outerDiameterDiff = Math.abs(parseFloat(ext.outer_diameter || 0) - outerDiameter) >= 0.0001;
+        
+        if (lengthDiff || widthDiff || thicknessDiff || diameterDiff || outerDiameterDiff) {
+          isMismatch = true;
+        }
+      }
+    }
+  }
 
-  // 3. Fallback: Generate a standard item code using stockService logic if we have name/type
+  if (itemCode && itemCode !== 'auto-generated' && !isMismatch) {
+    return itemCode;
+  }
+
+  // 4. Fallback: Generate a standard item code and create a new master record in stock_balance
   if (item.material_name) {
-    return await stockService.generateItemCode(item.material_name, item.material_type);
+    const generatedCode = await stockService.generateItemCode(item.material_name, item.material_type);
+    
+    // Create new blank record in stock_balance for the new item so future lookups match it
+    const normalizedType = (item.material_type || '').toUpperCase().trim().replace(/ /g, '_');
+    await connection.execute(
+      `INSERT INTO stock_balance (
+        item_code, material_name, material_type, unit, current_balance, valuation_rate,
+        length, width, thickness, diameter, outer_diameter, density, weight_per_unit, shape_id, material_id
+      ) VALUES (?, ?, ?, ?, 0.000, 0.00, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        generatedCode,
+        item.material_name,
+        normalizedType,
+        item.unit || 'NOS',
+        item.length || null,
+        item.width || null,
+        item.thickness || null,
+        item.diameter || null,
+        item.outer_diameter || null,
+        item.density || null,
+        item.weight_per_unit || null,
+        item.shape_id || null,
+        item.material_id || null
+      ]
+    );
+    return generatedCode;
   }
 
   return null;
@@ -507,7 +580,15 @@ const createQC = async (grnId, inspectionDate, passQuantity, failQuantity, defec
         gi.accepted_qty, 
         gi.rejected_qty, 
         gi.status,
-        gi.warehouse_id
+        gi.warehouse_id,
+        COALESCE(poi.unit, gi.uom, 'NOS') as unit,
+        gi.length,
+        gi.width,
+        gi.thickness,
+        gi.diameter,
+        gi.outer_diameter,
+        gi.density,
+        gi.weight_per_unit
        FROM grn_items gi
        LEFT JOIN purchase_order_items poi ON gi.po_item_id = poi.id
        WHERE gi.grn_id = ?`,
@@ -1484,5 +1565,6 @@ module.exports = {
   deleteQCAttachment,
   getRejectedItems,
   createShipmentFromQC,
-  generateQcPdf
+  generateQcPdf,
+  getCorrectItemCode
 };

@@ -16,6 +16,8 @@ router.post('/', authorize(['PROD_MANAGE']), productionPlanController.createProd
 router.put('/:id', authorize(['PROD_MANAGE']), productionPlanController.updateProductionPlan);
 router.post('/transmit-mr/:id', authorize(['PROD_MANAGE']), productionPlanController.createMaterialRequestFromPlan);
 router.get('/material-request-items/:id', authorize(['PROD_VIEW']), productionPlanController.getMaterialRequestItemsForPlan);
+router.post('/:id/materials', authorize(['PROD_MANAGE']), productionPlanController.addManualMaterial);
+router.delete('/:id/materials/:materialId', authorize(['PROD_MANAGE']), productionPlanController.removeManualMaterial);
 router.delete('/:id', authorize(['PROD_MANAGE']), productionPlanController.deleteProductionPlan);
 
 module.exports = router;
