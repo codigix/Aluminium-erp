@@ -535,7 +535,7 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
     // Validation to prevent negative stock
     if (transactionType === 'OUT' || ((transactionType === 'ADJUSTMENT' || transactionType === 'RETURN') && qty < 0)) {
       const deductionQty = Math.abs(qty);
-      if (currentBalance < deductionQty) {
+      if (currentBalance + 0.0001 < deductionQty) {
         throw new Error(`Insufficient stock. Available Qty: ${currentBalance}. Negative stock is not allowed.`);
       }
     }

@@ -370,7 +370,7 @@ const materialRequestController = {
               throw new Error(`No matching stock record found in inventory for material '${item.item_name || item.item_code}' with requested dimensions.`);
             }
             const requiredQty = parseFloat(item.quantity || item.design_qty || 0);
-            const releasedQty = mr.status?.toUpperCase() === 'PARTIALLY_RELEASED' ? parseFloat(item.allocated_quantity || 0) : 0;
+            const releasedQty = parseFloat(item.allocated_quantity || 0);
             const remainingQty = Math.max(0, requiredQty - releasedQty);
 
             if (remainingQty > 0) {
