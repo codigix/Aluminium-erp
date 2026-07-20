@@ -2554,7 +2554,7 @@ const Quotations = () => {
                           );
                         })()}
                       </div>
-                      {!formData.rfq_id && (
+                      {/* {!formData.rfq_id && (
                         <button
                           type="button"
                           onClick={handleAddItem}
@@ -2562,7 +2562,7 @@ const Quotations = () => {
                         >
                           + Add Item
                         </button>
-                      )}
+                      )} */}
                     </div>
 
                     {formData.items.length === 0 ? (
@@ -2844,13 +2844,13 @@ const Quotations = () => {
                           </button>
                         )}
                       </div>
-                      <button
+                      {/* <button
                         type="button"
                         onClick={handleRecordAddEmptyItem}
                         className="p-2  bg-blue-600 text-white text-xs rounded  hover:bg-blue-700"
                       >
                         + Add Item
-                      </button>
+                      </button> */}
                     </div>
 
                     <div className="border rounded  overflow-visible">

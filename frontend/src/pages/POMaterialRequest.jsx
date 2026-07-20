@@ -1311,13 +1311,13 @@ const POMaterialRequest = () => {
                   <h4 className="text-xs  text-slate-900">Line Items</h4>
                 </div>
                 <div className="flex gap-2">
-                  <button 
+                  {/* <button 
                     onClick={() => setIsAddingViewItem(!isAddingViewItem)}
                     className="p-2 bg-emerald-50 text-emerald-600 rounded text-xs flex items-center gap-2 hover:bg-emerald-100 transition-colors"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     {isAddingViewItem ? 'Close Form' : 'Add Item'}
-                  </button>
+                  </button> */}
                   <button 
                     onClick={() => fulfillmentWarehouse && handleWarehouseChange(fulfillmentWarehouse)}
                     className="p-2 bg-indigo-50 text-indigo-600 rounded text-xs flex items-center gap-2 hover:bg-indigo-100 transition-colors"

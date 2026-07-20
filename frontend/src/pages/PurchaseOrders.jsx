@@ -1808,14 +1808,14 @@ const PurchaseOrders = () => {
                     </div>
                     <h3 className="text-sm  text-slate-700">Purchase Order Items</h3>
                   </div>
-                  <button
+                  {/* <button
                     type="button"
                     onClick={handleAddManualItem}
                     className="flex items-center gap-1.5 p-1.5 bg-white border border-blue-200 text-blue-600 rounded  text-xs  hover:bg-blue-50 transition-all "
                   >
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
                     Add Item
-                  </button>
+                  </button> */}
                 </div>
                 <div className="p-0 overflow-x-auto">
                   <table className="w-full text-sm">

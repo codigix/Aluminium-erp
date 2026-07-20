@@ -1620,14 +1620,14 @@ const POReceipts = () => {
                     <p className="text-xs text-slate-400   ">Verify received quantities against PO</p>
                   </div>
                 </div>
-                <button
+                {/* <button
                   type="button"
                   onClick={handleAddLineItem}
                   className="flex items-center gap-2  p-2  bg-white border border-blue-100 text-blue-600 rounded text-xs   hover:bg-blue-50 transition-all  active:scale-95"
                 >
                   <Plus className="w-4 h-4" />
                   Add Line Item
-                </button>
+                </button> */}
               </div>
 
               <div className="bg-white border border-slate-100 rounded overflow-visible">
