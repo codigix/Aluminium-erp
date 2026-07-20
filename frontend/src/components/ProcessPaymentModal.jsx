@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Truck, CreditCard, Package } from 'lucide-react';
 import { Modal, FormControl, SearchableSelect } from './ui.jsx';
 import { errorToast, successToast } from '../utils/toast';
+import { formatDimensions } from '../utils/formatters';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -529,6 +530,9 @@ const ProcessPaymentModal = ({ isOpen, onClose, invoice, onSuccess }) => {
                               <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
                                 <td className="p-2">
                                   <p className="text-[11px]  text-slate-800 leading-tight">{item.material_name || item.description || 'N/A'}</p>
+                                  {formatDimensions(item) && (
+                                    <span className="text-[10px] text-slate-400 block mt-0.5">{formatDimensions(item)}</span>
+                                  )}
                                 </td>
                                 <td className="p-2 text-[11px] text-slate-600 text-center">
                                   {item.quantity} {item.unit}

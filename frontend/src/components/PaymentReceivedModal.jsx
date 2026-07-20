@@ -334,12 +334,6 @@ const PaymentReceivedModal = ({ isOpen, onClose, invoice, onSuccess }) => {
       if (!formData.chequeDate) newErrors.chequeDate = 'Cheque date is required';
     }
 
-    if ((formData.paymentMode === 'CREDIT_CARD' || formData.paymentMode === 'DEBIT_CARD')) {
-      if (!formData.cardType) newErrors.cardType = 'Card type is required';
-      if (!formData.last4Digits) newErrors.last4Digits = 'Last 4 digits are required';
-      if (!formData.authorizationCode) newErrors.authorizationCode = 'Authorization code is required';
-    }
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
