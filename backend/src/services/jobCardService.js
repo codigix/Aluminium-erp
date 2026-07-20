@@ -645,7 +645,7 @@ const updateJobCardProgressInternal = async (connection, id, data) => {
 
         // Find the next job card in sequence for this work order
         const [nextJcRows] = await connection.query(
-          'SELECT id, status FROM job_cards WHERE work_order_id = ? AND sequence_no > ? ORDER BY sequence_no ASC, id ASC LIMIT 1',
+          'SELECT id, status, operation_name FROM job_cards WHERE work_order_id = ? AND sequence_no > ? ORDER BY sequence_no ASC, id ASC LIMIT 1',
           [work_order_id, sequence_no]
         );
 
@@ -657,6 +657,16 @@ const updateJobCardProgressInternal = async (connection, id, data) => {
         if (nextJcRows.length > 0) {
           targetJcId = nextJcRows[0].id;
           targetJcStatus = nextJcRows[0].status;
+          
+          const nextOpName = String(nextJcRows[0].operation_name || '').toLowerCase();
+          if (nextOpName === 'shipment' || nextOpName === 'dispatch') {
+            // Automatically enable the Shipment operation when preceding manufacturing operations are completed
+            await connection.execute(
+              "UPDATE job_cards SET status = 'PENDING', planned_qty = ? WHERE id = ?",
+              [carryQty, targetJcId]
+            );
+            targetJcStatus = 'PENDING';
+          }
         } else {
           // If no next operation in the same work order, check if this is a child work order
           const [woRows] = await connection.query(
@@ -1997,6 +2007,15 @@ const deleteJobCard = async (id) => {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
+
+    // Block deleting shipment operation
+    const [jcRow] = await connection.query('SELECT operation_name FROM job_cards WHERE id = ?', [id]);
+    if (jcRow.length > 0) {
+      const opName = String(jcRow[0].operation_name || '').toLowerCase();
+      if (opName === 'shipment' || opName === 'dispatch') {
+        throw new Error('Cannot delete Shipment (Dispatch) operation: it is a required sequence.');
+      }
+    }
 
     // Delete associated logs first
     await connection.execute('DELETE FROM job_card_time_logs WHERE job_card_id = ?', [id]);

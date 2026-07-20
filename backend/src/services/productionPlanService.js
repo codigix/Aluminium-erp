@@ -178,18 +178,132 @@ const getProductionPlanById = async (id) => {
     }
   }));
 
-  // 5. Fetch Operations
-  const [operations] = await pool.query(
-    `SELECT * FROM production_plan_operations 
-     WHERE plan_id = ? 
-     ORDER BY 
-       CASE 
-         WHEN UPPER(item_type) = 'SUB ASSEMBLY' OR UPPER(item_type) = 'SA' THEN 0 
-         ELSE 1 
-       END ASC, 
-       step_no ASC`,
-    [id]
-  );
+  // 5. Fetch Operations — always load LIVE from BOM (sales_order_item_operations) so that
+  //    any BOM Process Routing update is immediately reflected in Configure Work Order.
+  //    Fallback to stored production_plan_operations if no BOM operations exist.
+
+  let operations = [];
+
+  // Collect all unique plan items to fetch live BOM operations.
+  // Key insight: production_plan_items.sales_order_item_id references order_items (not sales_order_items).
+  // The BOM operations live in sales_order_item_operations keyed to sales_order_items.id.
+  // We look up by drawing_no: order_items.drawing_no → sales_order_items (latest with that drawing_no).
+  const allPlanItems = [...items, ...(subAssemblies || [])];
+  const seenDrawingKeys = new Set();
+  const seenOpIds = new Set(); // dedup only by row ID — allows same-named ops (e.g., 2x Cutting)
+  const bomOpsList = [];
+
+  for (const planItem of allPlanItems) {
+    const soiId = planItem.sales_order_item_id; // this is an order_items.id
+    const itemCode = planItem.item_code;
+
+    const dedupeKey = soiId || itemCode;
+    if (!dedupeKey || seenDrawingKeys.has(dedupeKey)) continue;
+    seenDrawingKeys.add(dedupeKey);
+
+    // Step 1: get drawing_no from order_items using soiId
+    let drawingNo = null;
+    if (soiId) {
+      const [orderItem] = await pool.query(
+        `SELECT drawing_no FROM order_items WHERE id = ? LIMIT 1`,
+        [soiId]
+      );
+      if (orderItem.length > 0 && orderItem[0].drawing_no) {
+        drawingNo = orderItem[0].drawing_no;
+      }
+    }
+    // Fallback: use item_code as drawing_no (common pattern in this ERP)
+    if (!drawingNo) drawingNo = itemCode;
+
+    // Step 2: find the latest sales_order_item matching this drawing_no
+    // (get the highest ID so we always pick up the most recent BOM revision)
+    let latestSoiId = null;
+    if (drawingNo) {
+      const [latestItem] = await pool.query(
+        `SELECT id FROM sales_order_items WHERE TRIM(drawing_no) = ? ORDER BY id DESC LIMIT 1`,
+        [drawingNo]
+      );
+      if (latestItem.length > 0) latestSoiId = latestItem[0].id;
+    }
+
+    if (!latestSoiId) continue;
+
+    // Step 3: fetch all operations for that latest BOM item
+    const [bomOps] = await pool.query(
+      `SELECT soio.*, COALESCE(om.hourly_rate, soio.hourly_rate, 0) as hourly_rate
+       FROM sales_order_item_operations soio
+       LEFT JOIN operations om ON LOWER(TRIM(om.operation_name)) = LOWER(TRIM(soio.operation_name))
+       WHERE soio.sales_order_item_id = ?
+       ORDER BY soio.created_at ASC`,
+      [latestSoiId]
+    );
+
+    for (const op of bomOps) {
+      if (seenOpIds.has(op.id)) continue;
+      seenOpIds.add(op.id);
+      bomOpsList.push({
+        id: op.id,
+        plan_id: id,
+        step_no: bomOpsList.length + 1,
+        operation_name: op.operation_name,
+        workstation: op.workstation || null,
+        process_type: op.operation_type || 'In-House',
+        operation_type: op.operation_type || 'In-House',
+        cycle_time_min: op.cycle_time_min || 0,
+        setup_time_min: op.setup_time_min || 0,
+        hourly_rate: op.hourly_rate || 0,
+        base_time: op.base_time || 0,
+        net_time: op.net_time || 0,
+        source_item: planItem.item_code || null,
+        item_type: planItem.source_type === 'SA' ? 'SA' : (op.item_type || 'FG')
+      });
+    }
+  }
+
+  if (bomOpsList.length > 0) {
+    // Use live BOM operations (step_no already indexed during push)
+    operations = bomOpsList;
+  } else {
+    // Fallback: use stored production_plan_operations when no BOM operations found
+    const [storedOps] = await pool.query(
+      `SELECT ppo.*, COALESCE(om.hourly_rate, 0) as hourly_rate
+       FROM production_plan_operations ppo
+       LEFT JOIN operations om ON LOWER(TRIM(om.operation_name)) = LOWER(TRIM(ppo.operation_name))
+       WHERE ppo.plan_id = ? 
+       ORDER BY 
+         CASE 
+           WHEN UPPER(ppo.item_type) = 'SUB ASSEMBLY' OR UPPER(ppo.item_type) = 'SA' THEN 0 
+           ELSE 1 
+         END ASC, 
+         ppo.step_no ASC`,
+      [id]
+    );
+    operations = storedOps;
+  }
+
+  // Always append Shipment as the last operation if not already present
+  const hasShipment = operations.some(op => {
+    const name = String(op.operation_name || '').toLowerCase();
+    return name === 'shipment' || name === 'dispatch';
+  });
+  if (!hasShipment) {
+    operations.push({
+      id: 999999,
+      plan_id: id,
+      step_no: operations.length + 1,
+      operation_name: 'Shipment',
+      workstation: 'Dispatch',
+      process_type: 'In-House',
+      operation_type: 'In-House',
+      cycle_time_min: 0,
+      setup_time_min: 0,
+      hourly_rate: 0,
+      base_time: 0,
+      net_time: 0,
+      source_item: 'Main Item'
+    });
+  }
+
   plan.operations = operations;
 
   return plan;

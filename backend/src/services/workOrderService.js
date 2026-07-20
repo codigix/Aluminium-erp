@@ -487,6 +487,25 @@ const createJobCardsForWorkOrder = async (workOrderId, connection, initialStatus
     }));
   }
   
+  // Auto-append Shipment operation if it does not exist
+  const hasShipment = operationsToUse.some(op => {
+    const name = String(op.operation_name || op.operationName || '').toLowerCase();
+    return name === 'shipment' || name === 'dispatch';
+  });
+  if (!hasShipment) {
+    operationsToUse.push({
+      operation_name: 'Shipment',
+      workstation: 'Dispatch',
+      base_time: 0,
+      net_time: 0,
+      time_uom: 'Min',
+      hourly_rate: 0,
+      execution_type: 'In-House',
+      cycle_time_min: 0,
+      setup_time_min: 0
+    });
+  }
+
   // 4. Create Job Cards for defined operations
   for (let i = 0; i < operationsToUse.length; i++) {
     const op = operationsToUse[i];

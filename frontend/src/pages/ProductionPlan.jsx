@@ -3543,7 +3543,6 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                       <th className="py-3 px-2  text-slate-400   text-right">Net Time (M/U)</th>
                       <th className="py-3 px-2  text-slate-400   text-right text-indigo-500">Execution Time</th>
                       <th className="py-3 px-2  text-slate-400   text-right">Rate/Hr</th>
-                      <th className="py-3 px-2  text-slate-400   text-right text-emerald-600">Total Cost</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50 ">
@@ -3558,11 +3557,12 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                                 <div className="text-xs  text-slate-400 font-normal  flex items-center gap-1">
                                   {(() => {
                                     const itemCodeStr = (op.source_item || op.itemCode || '').toUpperCase();
+                                    const itemType = (op.item_type || '').toUpperCase();
                                     const displayType = itemCodeStr.startsWith('ASSEMBLY-')
                                       ? 'ASSEMBLY'
                                       : (itemCodeStr.startsWith('PART-')
                                         ? 'PART'
-                                        : (op.item_type === 'FG' ? 'ASSEMBLY' : 'PART')
+                                        : (itemType === 'SA' || itemType === 'SUB ASSEMBLY' || itemType === 'SUB-ASSEMBLY' ? 'ASSEMBLY' : 'PART')
                                       );
                                     const isAssembly = displayType === 'ASSEMBLY';
                                     return (
@@ -3593,7 +3593,6 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                             )} min
                           </td>
                           <td className="py-4 px-2 text-right text-slate-400">₹{op.hourly_rate || 0}</td>
-                          <td className="py-4 px-2 text-right  text-emerald-600">₹{(parseFloat(op.base_time || 0) * (selectedPlanConfig.target_qty || 1) * parseFloat(op.hourly_rate || 0)).toFixed(2)}</td>
                         </tr>
                       ))
                     ) : (
