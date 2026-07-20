@@ -121,16 +121,17 @@ const WorkOrder = () => {
       render: (val, row) => {
         const itemCodeUpper = (row.item_code || '').toUpperCase();
         const itemNameUpper = (row.item_name || '').toUpperCase();
-        let isPart = false;
+        const valUpper = (val || '').toUpperCase();
 
-        if (itemCodeUpper.startsWith('PART-') || itemCodeUpper.includes('PART') ||
-            itemNameUpper.includes('PET PUSHER') || itemNameUpper.includes('SLIDING PLATE')) {
-          isPart = true;
-        } else if (itemCodeUpper.startsWith('ASSEMBLY-') || itemCodeUpper.includes('ASSEMBLY')) {
-          isPart = false;
-        } else {
-          isPart = (val !== 'FG' && val !== 'ASSEMBLY');
-        }
+        const isAssembly = itemCodeUpper.startsWith('ASSEMBLY-') ||
+                           itemCodeUpper.includes('ASSEMBLY') ||
+                           itemNameUpper.includes('ASSEMBLY') ||
+                           valUpper === 'SA' ||
+                           valUpper === 'SUB ASSEMBLY' ||
+                           valUpper === 'SUB-ASSEMBLY' ||
+                           valUpper === 'SFG';
+
+        const isPart = !isAssembly;
 
         return (
           <span className={`text-[10px]  ${

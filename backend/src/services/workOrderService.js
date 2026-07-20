@@ -612,7 +612,16 @@ const deleteWorkOrder = async (id) => {
     `, [id]);
     await connection.execute('DELETE FROM material_issues WHERE work_order_id = ?', [id]);
 
-    // 3. Delete associated job cards
+    // 3. Dissociate payments linked to the job card quality logs to avoid FK constraint fails
+    await connection.execute(`
+      UPDATE payments p
+      JOIN job_card_quality_logs ql ON p.job_card_quality_log_id = ql.id
+      JOIN job_cards jc ON ql.job_card_id = jc.id
+      SET p.job_card_quality_log_id = NULL
+      WHERE jc.work_order_id = ?
+    `, [id]);
+
+    // 4. Delete associated job cards
     await connection.execute('DELETE FROM job_cards WHERE work_order_id = ?', [id]);
 
     // 5. Delete the work order

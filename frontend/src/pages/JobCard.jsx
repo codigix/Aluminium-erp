@@ -6426,9 +6426,16 @@ const JobCard = () => {
         const sourceType = (row.source_type || '').toUpperCase();
         const itemName = (row.item_name || '').toUpperCase();
         const itemCode = (row.item_code || '').toUpperCase();
-        const isSA = sourceType === 'SA' || sourceType === 'SUB ASSEMBLY' || sourceType === 'SFG' ||
-          itemName.includes('PET PUSHER') || itemName.includes('SLIDING PLATE') ||
-          itemCode.startsWith('PART-') || itemCode.includes('PART');
+
+        const isAssembly = itemCode.startsWith('ASSEMBLY-') ||
+                           itemCode.includes('ASSEMBLY') ||
+                           itemName.includes('ASSEMBLY') ||
+                           sourceType === 'SA' ||
+                           sourceType === 'SUB ASSEMBLY' ||
+                           sourceType === 'SUB-ASSEMBLY' ||
+                           sourceType === 'SFG';
+
+        const isPart = !isAssembly;
 
         let modeText = 'In-house';
         let modeClass = 'text-blue-600';
@@ -6443,8 +6450,8 @@ const JobCard = () => {
         return (
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center gap-2">
-              <span className={`text-[10px]  ${isSA ? 'text-amber-700' : 'text-indigo-700'}`}>
-                {isSA ? 'PART' : 'ASSEMBLY'}
+              <span className={`text-[10px]  ${isPart ? 'text-amber-700' : 'text-indigo-700'}`}>
+                {isPart ? 'PART' : 'ASSEMBLY'}
               </span>
               <span className={`text-[10px]  uppercase  ${modeClass}`}>
                 ({modeText})
@@ -6454,7 +6461,7 @@ const JobCard = () => {
             <div className="flex flex-col">
               <span className="text-[11px]  text-slate-900 leading-tight" title={val}>{val}</span>
 
-              {isSA && row.source_fg && (
+              {isPart && row.source_fg && (
                 <div className="flex items-center gap-1 mt-0.5">
                   <span className="text-[9px] text-indigo-600  leading-tight">{row.source_fg}</span>
                 </div>

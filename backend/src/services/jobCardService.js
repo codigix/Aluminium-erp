@@ -2017,6 +2017,14 @@ const deleteJobCard = async (id) => {
       }
     }
 
+    // Dissociate payments first to avoid FK constraint fails
+    await connection.execute(`
+      UPDATE payments p
+      JOIN job_card_quality_logs ql ON p.job_card_quality_log_id = ql.id
+      SET p.job_card_quality_log_id = NULL
+      WHERE ql.job_card_id = ?
+    `, [id]);
+
     // Delete associated logs first
     await connection.execute('DELETE FROM job_card_time_logs WHERE job_card_id = ?', [id]);
     await connection.execute('DELETE FROM job_card_quality_logs WHERE job_card_id = ?', [id]);
