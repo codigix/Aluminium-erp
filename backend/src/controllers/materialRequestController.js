@@ -101,7 +101,7 @@ const materialRequestController = {
                   AND (COALESCE(sb.outer_diameter, 0) = COALESCE(mri.outer_diameter, 0))
                 )
               )
-            ) >= COALESCE(NULLIF(mri.quantity, 0), mri.design_qty, 0) THEN 1 ELSE 0 END) THEN 'available'
+            ) >= (COALESCE(NULLIF(mri.quantity, 0), mri.design_qty, 0) - COALESCE(mri.allocated_quantity, 0)) THEN 1 ELSE 0 END) THEN 'available'
             ELSE 'unavailable'
           END
           FROM material_request_items mri
