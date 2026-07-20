@@ -109,8 +109,48 @@ const generateQcPdf = async (data) => {
           statusColor = '#2563eb'; // Blue
         }
 
+        const getReason = (itm, q) => {
+          const status = (itm.status || q.status || 'PENDING').toUpperCase().trim();
+          if (status === 'PASSED' || status === 'ACCEPTED') {
+            return 'Accepted';
+          }
+          if (status === 'FAILED' || status === 'REJECTED') {
+            return 'Rejected';
+          }
+          if (status === 'REWORK' || status === 'REWORK_REQUIRED') {
+            return 'Rework Required';
+          }
+          if (status === 'HOLD') {
+            return 'Hold';
+          }
+          if (status === 'DEVIATION' || status === 'DEVIATION_ACCEPTED') {
+            return 'Deviation Accepted';
+          }
+          if (status === 'PENDING') {
+            return 'Hold';
+          }
+
+          if (parseFloat(itm.rejected_qty || 0) > 0 && parseFloat(itm.accepted_qty || 0) === 0) {
+            return 'Rejected';
+          }
+          if (parseFloat(itm.accepted_qty || 0) > 0 && parseFloat(itm.rejected_qty || 0) === 0) {
+            return 'Accepted';
+          }
+
+          if (status.includes('REWORK')) return 'Rework Required';
+          if (status.includes('DEVIATION')) return 'Deviation Accepted';
+          if (status.includes('HOLD') || status.includes('WAITING') || status.includes('PENDING')) return 'Hold';
+          if (status.includes('PASS') || status.includes('ACCEPT')) return 'Accepted';
+          if (status.includes('FAIL') || status.includes('REJECT')) return 'Rejected';
+
+          return 'Hold';
+        };
+
         return {
           sr: idx + 1,
+          poNo: item.po_number || qc.po_number || '—',
+          partNo: item.item_code || '—',
+          drawingNo: item.drawing_no || '—',
           description: item.material_name || item.description || '—',
           itemCode: item.item_code || '—',
           uom: item.uom || 'Nos',
@@ -120,7 +160,8 @@ const generateQcPdf = async (data) => {
           shortage: shortage.toFixed(3),
           overage: overage.toFixed(3),
           itemStatus: itemStatus,
-          statusColor: statusColor
+          statusColor: statusColor,
+          reason: getReason(item, qc)
         };
       })
     };

@@ -242,24 +242,30 @@
     </table>
 
     <!-- Item Table -->
-    <table class="item-table">
+    <table class="item-table" style="font-size: 8px;">
       <thead>
         <tr>
-          <th style="width: 40px;">Sr. No.</th>
+          <th style="width: 30px;">Sr. No.</th>
+          <th>PO No.</th>
+          <th>Part No.</th>
+          <th>Drawing No.</th>
           <th>Item Description</th>
-          <th style="width: 100px;">Design Qty</th>
-          <th style="width: 100px;">Required</th>
-          <th style="width: 100px;">Received Qty</th>
-          <th style="width: 100px;">Item Status</th>
+          <th style="width: 70px;">Design Qty</th>
+          <th style="width: 70px;">Required Qty</th>
+          <th style="width: 70px;">Received Qty</th>
+          <th style="width: 70px;">Item Status</th>
+          <th style="width: 80px;">Reason</th>
         </tr>
       </thead>
       <tbody>
         {{#items}}
         <tr>
           <td class="center">{{sr}}</td>
+          <td class="center">{{poNo}}</td>
+          <td class="center">{{partNo}}</td>
+          <td class="center">{{drawingNo}}</td>
           <td>
             <strong>{{description}}</strong>
-            <span class="item-code">{{itemCode}}</span>
           </td>
           <td class="center">{{designQty}} {{uom}}</td>
           <td class="center">{{requiredQty}} {{uom}}</td>
@@ -267,6 +273,7 @@
           <td class="center">
             <span style="color: {{statusColor}}">{{itemStatus}}</span>
           </td>
+          <td class="center">{{reason}}</td>
         </tr>
         {{/items}}
       </tbody>
