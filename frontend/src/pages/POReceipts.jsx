@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
+import { formatDimensions } from '../utils/formatters';
 import { getFileUrl } from '../utils/url';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
@@ -1251,13 +1252,9 @@ const POReceipts = () => {
                         <td className="p-2">
                           <div className="text-xs text-slate-900 font-medium">{item.item_code}</div>
                           <div className="text-xs text-slate-500 mt-0.5">{item.material_name || item.description}</div>
-                          {(item.length > 0 || item.width > 0 || item.thickness > 0 || item.diameter > 0 || item.outer_diameter > 0) && (
-                            <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1">
-                              {item.diameter > 0 && <span className="text-xs text-slate-400">Dia: {item.diameter}</span>}
-                              {item.outer_diameter > 0 && <span className="text-xs text-slate-400">OD: {item.outer_diameter}</span>}
-                              {item.width > 0 && <span className="text-xs text-slate-400">W: {item.width}</span>}
-                              {item.thickness > 0 && <span className="text-xs text-slate-400">T: {item.thickness}</span>}
-                              {item.length > 0 && <span className="text-xs text-slate-400">L: {item.length}</span>}
+                          {formatDimensions(item) && (
+                            <div className="mt-1">
+                              <span className="text-xs text-slate-400">{formatDimensions(item)}</span>
                             </div>
                           )}
                         </td>
@@ -1696,13 +1693,9 @@ const POReceipts = () => {
                               subLabelField="item_code"
                               allowCustom={true}
                             />
-                            {(item.length > 0 || item.width > 0 || item.thickness > 0 || item.diameter > 0 || item.outer_diameter > 0) && (
-                              <div className="flex flex-wrap gap-x-2 gap-y-1 mt-1 opacity-70">
-                                {item.diameter > 0 && <span className="text-xs text-slate-400">Dia: {item.diameter}</span>}
-                                {item.outer_diameter > 0 && <span className="text-xs text-slate-400">OD: {item.outer_diameter}</span>}
-                                {item.width > 0 && <span className="text-xs text-slate-400">W: {item.width}</span>}
-                                {item.thickness > 0 && <span className="text-xs text-slate-400">T: {item.thickness}</span>}
-                                {item.length > 0 && <span className="text-xs text-slate-400">L: {item.length}</span>}
+                            {formatDimensions(item) && (
+                              <div className="mt-1 opacity-70">
+                                <span className="text-xs text-slate-400">{formatDimensions(item)}</span>
                               </div>
                             )}
                             <div className="mt-1 flex items-center gap-1.5">

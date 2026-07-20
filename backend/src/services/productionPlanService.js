@@ -1563,6 +1563,12 @@ const getMaterialRequestItemsForPlan = async (planId) => {
   const planCode = plan.plan_code;
   const aggregatedMap = new Map();
 
+  const [mrCheck] = await pool.query(
+    'SELECT 1 FROM material_requests WHERE plan_id = ? LIMIT 1',
+    [planId]
+  );
+  const hasRequests = mrCheck.length > 0;
+
   const addToMap = (itemCode, qty, uom, name, warehouse, category, rate, designQty, currentBalance, isFulfilled, requestExists, dimensions = {}, isExistingRequest = false, isManual = false, ppmId = null) => {
     if (!itemCode && !name) return;
 
@@ -1717,6 +1723,10 @@ ON (ppm.material_name = issued.material_name) OR (ppm.item_code = issued.item_co
   `, [planId, planId, `%${planCode}%`, planId]);
 
   for (const mat of materials) {
+    if (hasRequests && (mat.status_rank || 0) > 0) {
+      continue;
+    }
+
     let code = (mat.actual_item_code || '').toUpperCase();
     if (!code || code.startsWith('PART-') || code.startsWith('SA-') || code.startsWith('FG-') || code.startsWith('SFG-') || code.startsWith('ASSEMBLY')) {
       code = (mat.material_name || '').trim().toUpperCase();

@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
+import { formatDimensions } from '../utils/formatters';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -56,29 +57,6 @@ const formatCurrency = (value) => {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(value);
-};
-
-const formatDimensions = (item) => {
-  const len = parseFloat(item.length || 0);
-  const wid = parseFloat(item.width || 0);
-  const thk = parseFloat(item.thickness || 0);
-  const dia = parseFloat(item.diameter || 0);
-  const od = parseFloat(item.outer_diameter || 0);
-
-  if (len > 0 || wid > 0 || thk > 0 || dia > 0 || od > 0) {
-    let parts = [];
-    // OD first
-    if (od > 0) parts.push(`OD:${od.toFixed(0)}`);
-    // Width, Thickness, Diameter in middle
-    if (wid > 0) parts.push(`W:${wid.toFixed(0)}`);
-    if (thk > 0) parts.push(`T:${thk.toFixed(1)}`);
-    if (dia > 0) parts.push(`Dia:${dia.toFixed(0)}`);
-    // Length last
-    if (len > 0) parts.push(`L:${len.toFixed(0)}`);
-
-    return parts.join(' × ') + ' mm';
-  }
-  return '';
 };
 
 const getCorrectMaterialType = (itemCode, currentType) => {

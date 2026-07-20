@@ -4,6 +4,7 @@ import { Card, StatusBadge, DataTable, SearchableSelect, Tabs, Button, FormContr
 import { Plus, Search, RefreshCw, Package, Layers, Trash2, Edit2, Copy, AlertTriangle } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast, infoToast } from '../utils/toast';
+import { formatDimensions } from '../utils/formatters';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -658,44 +659,15 @@ const ItemsMaster = () => {
       key: 'material_name', 
       sortable: true,
       render: (val, row) => {
-        const shapeName = (shapes.find(s => String(s.id) === String(row.shape_id))?.name || '').toLowerCase().trim();
-        const dims = [];
-        
-        if (shapeName === 'plate') {
-          if (row.length) dims.push(`${parseFloat(row.length)}mm`);
-          if (row.width) dims.push(`${parseFloat(row.width)}mm`);
-          if (row.thickness) dims.push(`${parseFloat(row.thickness)}mm`);
-        } else if (shapeName === 'round') {
-          if (row.diameter) dims.push(`D:${parseFloat(row.diameter)}mm`);
-          if (row.length) dims.push(`${parseFloat(row.length)}mm`);
-        } else if (shapeName === 'pipe') {
-          if (row.outer_diameter) dims.push(`OD:${parseFloat(row.outer_diameter)}mm`);
-          if (row.thickness) dims.push(`${parseFloat(row.thickness)}mm`);
-          if (row.length) dims.push(`${parseFloat(row.length)}mm`);
-        } else if (shapeName.includes('square tube')) {
-          if (row.width) dims.push(`Side:${parseFloat(row.width)}mm`);
-          if (row.thickness) dims.push(`T:${parseFloat(row.thickness)}mm`);
-          if (row.length) dims.push(`${parseFloat(row.length)}mm`);
-        } else if (shapeName.includes('rectangular tube')) {
-          if (row.width) dims.push(`W:${parseFloat(row.width)}mm`);
-          if (row.outer_diameter) dims.push(`H:${parseFloat(row.outer_diameter)}mm`);
-          if (row.thickness) dims.push(`T:${parseFloat(row.thickness)}mm`);
-          if (row.length) dims.push(`${parseFloat(row.length)}mm`);
-        } else {
-          // Fallback for other shapes
-          if (row.length) dims.push(`${parseFloat(row.length)}mm`);
-          if (row.width) dims.push(`${parseFloat(row.width)}mm`);
-          if (row.thickness) dims.push(`${parseFloat(row.thickness)}mm`);
-          if (row.diameter) dims.push(`D:${parseFloat(row.diameter)}mm`);
-          if (row.outer_diameter) dims.push(`OD:${parseFloat(row.outer_diameter)}mm`);
-        }
+        const shapeName = (shapes.find(s => String(s.id) === String(row.shape_id))?.name || '');
+        const formatted = formatDimensions({ ...row, shape_type: shapeName });
         
         return (
           <div className="flex flex-col gap-0.5">
             <span className=" text-slate-900 font-medium">{val}</span>
-            {dims.length > 0 && (
+            {formatted && (
               <span className="text-xs  text-slate-400 mt-0.5">
-                {dims.join(' x ')}
+                {formatted}
               </span>
             )}
             {row.drawing_no && row.drawing_no !== 'N/A' && row.drawing_no !== '—' && (

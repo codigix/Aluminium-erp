@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
+import { formatDimensions } from '../utils/formatters';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -375,26 +376,7 @@ const StockBalance = () => {
       label: 'Dimension',
       key: 'length',
       render: (_, row) => {
-        const parts = [];
-
-        if (row.outer_diameter && parseFloat(row.outer_diameter) > 0) {
-          parts.push(`OD:${parseFloat(row.outer_diameter)}`);
-        }
-        if (row.diameter && parseFloat(row.diameter) > 0) {
-          parts.push(`D:${parseFloat(row.diameter)}`);
-        }
-        if (row.width && parseFloat(row.width) > 0) {
-          parts.push(`W:${parseFloat(row.width)}`);
-        }
-        if (row.thickness && parseFloat(row.thickness) > 0) {
-          parts.push(`T:${parseFloat(row.thickness)}`);
-        }
-        if (row.length && parseFloat(row.length) > 0) {
-          parts.push(`L:${parseFloat(row.length)}`);
-        }
-
-        const dimensionStr = parts.length > 0 ? `${parts.join(' × ')} mm` : '—';
-        return <span className="text-slate-500 text-xs">{dimensionStr}</span>;
+        return <span className="text-slate-500 text-xs">{formatDimensions(row) || '—'}</span>;
       }
     },
     {

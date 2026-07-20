@@ -4,6 +4,7 @@ import { Card, DataTable, Modal, FormControl, Tabs, Button } from '../components
 import { Beaker, Clock, Inbox, Search, CheckCircle2, Eye, Edit, Trash2, ListTodo, AlertTriangle, RefreshCw, X, CheckCircle, XCircle, ShieldCheck, Mail, Paperclip, Send, Database, ShoppingCart, Truck, FileText, Plus } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
+import { formatDimensions } from '../utils/formatters';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -866,13 +867,11 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
           <div className="inline-flex items-center p-1 rounded-md bg-slate-100 text-slate-600 text-xs  w-fit  border border-slate-200">
             {item.item_code}
           </div>
-          {(item.length || item.width || item.thickness || item.diameter || item.outer_diameter) && (
-            <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1">
-              {item.diameter > 0 && <span className="text-[9px] text-slate-500 bg-slate-50 px-1 border border-slate-100 rounded">Dia: {parseFloat(item.diameter).toFixed(4)}</span>}
-              {item.outer_diameter > 0 && <span className="text-[9px] text-slate-500 bg-slate-50 px-1 border border-slate-100 rounded">OD: {parseFloat(item.outer_diameter).toFixed(4)}</span>}
-              {item.width > 0 && <span className="text-[9px] text-slate-500 bg-slate-50 px-1 border border-slate-100 rounded">W: {parseFloat(item.width).toFixed(4)}</span>}
-              {item.thickness > 0 && <span className="text-[9px] text-slate-500 bg-slate-50 px-1 border border-slate-100 rounded">T: {parseFloat(item.thickness).toFixed(4)}</span>}
-              {item.length > 0 && <span className="text-[9px] text-slate-500 bg-slate-50 px-1 border border-slate-100 rounded">L: {parseFloat(item.length).toFixed(4)}</span>}
+          {formatDimensions(item) && (
+            <div className="mt-1">
+              <span className="text-[9px] text-slate-500 bg-slate-50 px-1 border border-slate-100 rounded">
+                {formatDimensions(item)}
+              </span>
             </div>
           )}
           {item.description && item.description !== val && (
@@ -961,13 +960,11 @@ const IncomingQC = ({ initialTab = 'incoming' }) => {
           <div className="inline-flex items-center p-1 rounded-md bg-slate-100 text-slate-600 text-xs  w-fit  border border-slate-200">
             {item.item_code}
           </div>
-          {(item.length || item.width || item.thickness || item.diameter || item.outer_diameter) && (
-            <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1">
-              {item.diameter > 0 && <span className="text-[9px] text-slate-500 bg-slate-50 px-1 border border-slate-100 rounded">Dia: {parseFloat(item.diameter).toFixed(4)}</span>}
-              {item.outer_diameter > 0 && <span className="text-[9px] text-slate-500 bg-slate-50 px-1 border border-slate-100 rounded">OD: {parseFloat(item.outer_diameter).toFixed(4)}</span>}
-              {item.width > 0 && <span className="text-[9px] text-slate-500 bg-slate-50 px-1 border border-slate-100 rounded">W: {parseFloat(item.width).toFixed(4)}</span>}
-              {item.thickness > 0 && <span className="text-[9px] text-slate-500 bg-slate-50 px-1 border border-slate-100 rounded">T: {parseFloat(item.thickness).toFixed(4)}</span>}
-              {item.length > 0 && <span className="text-[9px] text-slate-500 bg-slate-50 px-1 border border-slate-100 rounded">L: {parseFloat(item.length).toFixed(4)}</span>}
+          {formatDimensions(item) && (
+            <div className="mt-1">
+              <span className="text-[9px] text-slate-500 bg-slate-50 px-1 border border-slate-100 rounded">
+                {formatDimensions(item)}
+              </span>
             </div>
           )}
           {item.description && item.description !== val && (

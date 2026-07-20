@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast.js';
+import { formatDimensions } from '../utils/formatters';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -134,28 +135,9 @@ const StockLedger = () => {
       label: 'Material',
       sortable: true,
       render: (val, row) => {
-        const shapeName = (shapes.find(s => String(s.id) === String(row.shape_id))?.name || '').toLowerCase().trim();
-        const dims = [];
-        
-        if (shapeName === 'plate' || shapeName === 'sheet') {
-          if (row.length) dims.push(`${parseFloat(row.length)}mm`);
-          if (row.width) dims.push(`${parseFloat(row.width)}mm`);
-          if (row.thickness) dims.push(`${parseFloat(row.thickness)}mm`);
-        } else if (shapeName === 'round' || shapeName === 'bar') {
-          if (row.diameter) dims.push(`D:${parseFloat(row.diameter)}mm`);
-          if (row.length) dims.push(`${parseFloat(row.length)}mm`);
-        } else if (shapeName === 'pipe' || shapeName === 'tube') {
-          if (row.outer_diameter) dims.push(`OD:${parseFloat(row.outer_diameter)}mm`);
-          if (row.thickness) dims.push(`${parseFloat(row.thickness)}mm`);
-          if (row.length) dims.push(`${parseFloat(row.length)}mm`);
-        } else {
-          if (row.length) dims.push(`${parseFloat(row.length)}mm`);
-          if (row.width) dims.push(`${parseFloat(row.width)}mm`);
-          if (row.thickness) dims.push(`${parseFloat(row.thickness)}mm`);
-          if (row.diameter) dims.push(`D:${parseFloat(row.diameter)}mm`);
-        }
-
-        const dimensionStr = dims.length > 0 ? ` (${dims.join(' x ')})` : '';
+        const shapeName = (shapes.find(s => String(s.id) === String(row.shape_id))?.name || '');
+        const formatted = formatDimensions({ ...row, shape_type: shapeName });
+        const dimensionStr = formatted ? ` (${formatted})` : '';
 
         return (
           <div className="flex flex-col">

@@ -8,6 +8,7 @@ import { Card, DataTable, SearchableSelect, Button, Tabs } from '../components/u
 import PurchaseOrderDetail from './PurchaseOrderDetail.jsx';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
+import { formatDimensions } from '../utils/formatters';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -1863,13 +1864,9 @@ const PurchaseOrders = () => {
                                 className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs text-slate-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                                 placeholder="Material Name"
                               />
-                              {(item.length > 0 || item.width > 0 || item.thickness > 0 || item.diameter > 0 || item.outer_diameter > 0) && (
-                                <div className="flex flex-wrap gap-x-2 gap-y-0.5 px-1 text-[10px] text-slate-400">
-                                  {item.diameter > 0 && <span>Dia: {item.diameter}</span>}
-                                  {item.outer_diameter > 0 && <span>OD: {item.outer_diameter}</span>}
-                                  {item.width > 0 && <span>W: {item.width}</span>}
-                                  {item.thickness > 0 && <span>T: {item.thickness}</span>}
-                                  {item.length > 0 && <span>L: {item.length}</span>}
+                              {formatDimensions(item) && (
+                                <div className="px-1 text-[10px] text-slate-400">
+                                  {formatDimensions(item)}
                                 </div>
                               )}
                             </div>

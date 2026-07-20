@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import { Card } from '../components/ui.jsx';
 import { successToast, errorToast } from '../utils/toast';
+import { formatDimensions } from '../utils/formatters';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -206,13 +207,9 @@ const POReceiptDetails = () => {
                         <tr key={idx} className="border-t border-slate-100">
                           <td className="p-2  text-slate-600">
                             <div>{item.material_name || item.description || '—'}</div>
-                            {(item.length > 0 || item.width > 0 || item.thickness > 0 || item.diameter > 0) && (
-                              <div className="flex flex-wrap gap-x-2 gap-y-1 mt-1 opacity-70">
-                                {item.diameter > 0 && <span className="text-xs  text-slate-400">Dia: {item.diameter}</span>}
-                                {item.outer_diameter > 0 && <span className="text-xs  text-slate-400">OD: {item.outer_diameter}</span>}
-                                {item.width > 0 && <span className="text-xs  text-slate-400">W: {item.width}</span>}
-                                {item.thickness > 0 && <span className="text-xs  text-slate-400">T: {item.thickness}</span>}
-                                {item.length > 0 && <span className="text-xs  text-slate-400">L: {item.length}</span>}
+                            {formatDimensions(item) && (
+                              <div className="mt-1 opacity-70">
+                                <span className="text-xs text-slate-400">{formatDimensions(item)}</span>
                               </div>
                             )}
                           </td>

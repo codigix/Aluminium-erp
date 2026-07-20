@@ -1,5 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { formatDimensions } from '../utils/formatters';
 import { 
   ArrowLeft, 
   ChevronRight, 
@@ -397,25 +398,6 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
                     const isDwgCodePattern = /^(RM-|OTH-|SFG-|FG-|GEN-|CAT-)/i.test(item.drawing_no || '');
                     const cleanDwgNo = isDwgCodePattern ? '—' : (item.drawing_no || '—');
 
-                    const formatSize = (i) => {
-                      const len = parseFloat(i.length || 0);
-                      const wid = parseFloat(i.width || 0);
-                      const thk = parseFloat(i.thickness || 0);
-                      const dia = parseFloat(i.diameter || 0);
-                      const od = parseFloat(i.outer_diameter || 0);
-
-                      let parts = [];
-                      if (dia > 0) parts.push(`Ø${dia}`);
-                      else if (od > 0) parts.push(`OD ${od}`);
-                      
-                      if (wid > 0) parts.push(wid);
-                      if (thk > 0) parts.push(thk);
-                      if (len > 0) parts.push(len);
-
-                      if (parts.length === 0) return '—';
-                      return parts.join(' × ') + ' mm';
-                    };
-                    
                     return (
                       <tr key={idx} className="hover:bg-slate-50/50 transition-colors group">
                         <td className="p-2 text-xs font-bold text-slate-900">
@@ -430,7 +412,7 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
                           )}
                         </td>
                         <td className="p-2 text-xs text-slate-900 font-mono font-bold">
-                          {formatSize(item)}
+                          {formatDimensions(item) || '—'}
                         </td>
                         <td className="p-2  text-center">
                           <span className="text-xs  text-slate-800">
@@ -775,24 +757,6 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
                 const isDwgCodePattern = /^(RM-|OTH-|SFG-|FG-|GEN-|CAT-)/i.test(item.drawing_no || '');
                 const cleanDwgNo = isDwgCodePattern ? '—' : (item.drawing_no || '—');
                 
-                const formatSize = (i) => {
-                  const len = parseFloat(i.length || 0);
-                  const wid = parseFloat(i.width || 0);
-                  const thk = parseFloat(i.thickness || 0);
-                  const dia = parseFloat(i.diameter || 0);
-                  const od = parseFloat(i.outer_diameter || 0);
-
-                  let parts = [];
-                  if (dia > 0) parts.push(`Ø${dia}`);
-                  else if (od > 0) parts.push(`OD ${od}`);
-                  if (wid > 0) parts.push(wid);
-                  if (thk > 0) parts.push(thk);
-                  if (len > 0) parts.push(len);
-
-                  if (parts.length === 0) return '—';
-                  return parts.join(' × ') + ' mm';
-                };
-
                 return (
                   <tr key={idx} className="border-b border-slate-200">
                     <td className="p-2 text-center border-r border-slate-200 font-bold">{idx + 1}</td>
@@ -805,7 +769,7 @@ const PurchaseOrderDetail = ({ po, onBack, onRefresh }) => {
                         </span>
                       )}
                     </td>
-                    <td className="p-2 border-r border-slate-200 font-mono font-bold">{formatSize(item)}</td>
+                    <td className="p-2 border-r border-slate-200 font-mono font-bold">{formatDimensions(item) || '—'}</td>
                     <td className="p-2 text-center border-r border-slate-200 font-semibold">
                       {Number(item.planned_qty || item.design_qty || 0).toFixed(3)} NOS
                     </td>

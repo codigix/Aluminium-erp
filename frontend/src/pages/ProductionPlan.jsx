@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
+import { formatDimensions } from '../utils/formatters';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -368,30 +369,11 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
   };
 
   const renderDimensions = (dims) => {
-    if (!dims) return null;
-    const parts = [];
-    const length = parseFloat(dims.length) || parseFloat(dims.dimensions?.length) || 0;
-    const width = parseFloat(dims.width) || parseFloat(dims.dimensions?.width) || 0;
-    const thickness = parseFloat(dims.thickness) || parseFloat(dims.dimensions?.thickness) || 0;
-    const diameter = parseFloat(dims.diameter) || parseFloat(dims.dimensions?.diameter) || 0;
-    const outer_diameter = parseFloat(dims.outer_diameter) || parseFloat(dims.dimensions?.outer_diameter) || 0;
-
-    if (length > 0) parts.push(`${length}`);
-    if (width > 0) parts.push(`${width}`);
-    if (thickness > 0) parts.push(`${thickness}`);
-    if (diameter > 0) parts.push(`Ø${diameter}`);
-    if (outer_diameter > 0) parts.push(`OD${outer_diameter}`);
-
-    if (parts.length === 0) return null;
+    const formatted = formatDimensions(dims);
+    if (!formatted) return null;
     return (
       <div className="flex flex-wrap items-center gap-1 mt-0.5 text-xs text-slate-500">
-        {parts.map((p, i) => (
-          <React.Fragment key={i}>
-            <span>{p}</span>
-            {i < parts.length - 1 && <span className="text-slate-300">×</span>}
-          </React.Fragment>
-        ))}
-        <span className="ml-0.5 text-slate-400">mm</span>
+        <span>{formatted}</span>
       </div>
     );
   };
@@ -2911,14 +2893,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                       placeholder="Select material..."
                       onFocus={fetchAllStockItems}
                       options={allStockItems.map(item => {
-                        // format dimensions string
-                        const parts = [];
-                        if (parseFloat(item.length || 0) > 0) parts.push(parseFloat(item.length).toFixed(0));
-                        if (parseFloat(item.width || 0) > 0) parts.push(parseFloat(item.width).toFixed(0));
-                        if (parseFloat(item.thickness || 0) > 0) parts.push(item.thickness % 1 === 0 ? parseFloat(item.thickness).toFixed(0) : parseFloat(item.thickness).toFixed(1));
-                        if (parseFloat(item.diameter || 0) > 0) parts.push(`Ø${parseFloat(item.diameter).toFixed(0)}`);
-                        if (parseFloat(item.outer_diameter || 0) > 0) parts.push(`OD ${parseFloat(item.outer_diameter).toFixed(0)}`);
-                        const dims = parts.length > 0 ? parts.join(' × ') + ' mm' : '';
+                        const dims = formatDimensions(item);
 
                         return {
                           label: item.material_name || '',

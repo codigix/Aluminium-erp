@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
+import { formatDimensions } from '../utils/formatters';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -422,18 +423,7 @@ const compareVersions = (a, b) => {
 };
 
 const getDimensionString = (item) => {
-  if (!item) return '';
-  const dimensions = [];
-  if (item.length && parseFloat(item.length) > 0) dimensions.push(`${parseFloat(item.length)}`);
-  if (item.width && parseFloat(item.width) > 0) dimensions.push(`${parseFloat(item.width)}`);
-  if (item.thickness && parseFloat(item.thickness) > 0) dimensions.push(`${parseFloat(item.thickness)}`);
-  if (item.diameter && parseFloat(item.diameter) > 0) dimensions.push(`Ø${parseFloat(item.diameter)}`);
-  if (item.outer_diameter && parseFloat(item.outer_diameter) > 0) dimensions.push(`OD${parseFloat(item.outer_diameter)}`);
-
-  if (dimensions.length === 0) return '';
-
-  const unit = (item.uom === 'Kg' || !item.uom) ? 'mm' : item.uom;
-  return `${dimensions.join(' × ')} ${unit}`;
+  return formatDimensions(item);
 };
 
 const cleanDwgNo = (dwg) => {
