@@ -323,9 +323,8 @@ const getStockBalance = async (drawingNo = null, includeAll = false) => {
       params.push(drawingNo);
     }
 
-    conditions.push("UPPER(sb.material_type) NOT IN ('FG', 'FINISHED GOOD', 'SUB_ASSEMBLY', 'SUB ASSEMBLY')");
+    conditions.push("UPPER(sb.material_type) NOT IN ('FG', 'FINISHED GOOD', 'FINISHED GOODS', 'FINISHED_GOODS', 'SUB_ASSEMBLY', 'SUB ASSEMBLY', 'SA', 'ASSEMBLY', 'PART')");
 
-    // Hide generic parent material entries for materials that are tracked in Kg/Kg-dimension-wise in Stock Balance
     conditions.push(`
       NOT (
         (COALESCE(sb.length, 0) = 0) AND 
@@ -337,6 +336,7 @@ const getStockBalance = async (drawingNo = null, includeAll = false) => {
           SELECT 1 FROM stock_balance sb2 
           WHERE LOWER(TRIM(sb2.material_name)) = LOWER(TRIM(sb.material_name))
             AND (LOWER(TRIM(sb2.unit)) = 'kg' OR LOWER(TRIM(sb2.unit)) = 'kgs')
+            AND (COALESCE(sb2.length, 0) > 0 OR COALESCE(sb2.width, 0) > 0 OR COALESCE(sb2.thickness, 0) > 0 OR COALESCE(sb2.diameter, 0) > 0 OR COALESCE(sb2.outer_diameter, 0) > 0)
         )
       )
     `);

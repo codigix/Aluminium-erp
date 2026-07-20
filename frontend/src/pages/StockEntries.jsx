@@ -1018,7 +1018,15 @@ const StockEntries = () => {
                             materialName: selected?.material_name || selected?.item_name || '',
                             materialType: selected?.material_type || '',
                             uom: selected?.unit || selected?.uom || prev.uom,
-                            valuationRate: selected?.valuation_rate || selected?.rate || prev.valuationRate
+                            valuationRate: selected?.valuation_rate || selected?.rate || prev.valuationRate,
+                            materialId: selected?.material_id || '',
+                            shapeId: selected?.shape_id || '',
+                            length: selected?.length || '',
+                            width: selected?.width || '',
+                            thickness: selected?.thickness || '',
+                            diameter: selected?.diameter || '',
+                            outerDiameter: selected?.outer_diameter || '',
+                            density: selected?.density || ''
                           }));
                         }}
                         allowCustom={false}
