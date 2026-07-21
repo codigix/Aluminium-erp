@@ -4,7 +4,7 @@ import { Card, StatusBadge, DataTable, SearchableSelect, Tabs, Button, FormContr
 import { Plus, Search, RefreshCw, Package, Layers, Trash2, Edit2, Copy, AlertTriangle } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast, infoToast } from '../utils/toast';
-import { formatDimensions } from '../utils/formatters';
+import { formatDimensions, calculateWeight, validateShapeDimensions } from '../utils/formatters';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -55,6 +55,7 @@ const ItemsMaster = () => {
     thickness: '',
     diameter: '',
     outerDiameter: '',
+    threadPitch: '',
     hsnCode: ''
   });
   const [isSubmittingItem, setIsSubmittingItem] = useState(false);
@@ -802,57 +803,26 @@ const ItemsMaster = () => {
     }
   ], [handleDeleteMaterial]);
 
-  const selectedShape = (shapes.find(s => String(s.id) === String(itemFormData.shapeId))?.name || '').trim();
+  const selectedShapeObj = shapes.find(s => String(s.id) === String(itemFormData.shapeId) || String(s.name).trim().toLowerCase() === String(itemFormData.shapeId || '').trim().toLowerCase());
+  const selectedShape = String(selectedShapeObj?.name || itemFormData.shapeId || '').trim();
 
   // Auto-calculate Weight per Unit
   useEffect(() => {
-    const shape = selectedShape.toLowerCase();
-    const density = parseFloat(itemFormData.density) || 0;
-    let calculatedWeight = 0;
-
-    if (density > 0) {
-      if (shape === 'plate') {
-        const l = parseFloat(itemFormData.length) || 0;
-        const w = parseFloat(itemFormData.width) || 0;
-        const t = parseFloat(itemFormData.thickness) || 0;
-        // Formula: L * W * T * Density / 1,000,000
-        calculatedWeight = (l * w * t * density) / 1000000;
-      } else if (shape === 'round') {
-        const d = parseFloat(itemFormData.diameter) || 0;
-        const l = parseFloat(itemFormData.length) || 0;
-        // Formula: π * (D² / 4) * Length * Density / 1,000,000
-        calculatedWeight = (Math.PI * Math.pow(d, 2) / 4 * l * density) / 1000000;
-      } else if (shape === 'pipe') {
-        const od = parseFloat(itemFormData.outerDiameter) || 0;
-        const t = parseFloat(itemFormData.thickness) || 0;
-        const l = parseFloat(itemFormData.length) || 0;
-        const id = od - (2 * t);
-        // Formula: π * (OD² - ID²) / 4 * Length * Density / 1,000,000
-        if (id >= 0) {
-          calculatedWeight = (Math.PI * (Math.pow(od, 2) - Math.pow(id, 2)) / 4 * l * density) / 1000000;
-        }
-      } else if (shape.includes('square tube')) {
-        const a = parseFloat(itemFormData.width) || 0;
-        const t = parseFloat(itemFormData.thickness) || 0;
-        const l = parseFloat(itemFormData.length) || 0;
-        calculatedWeight = ((a * a - Math.pow(a - 2 * t, 2)) * l * density) / 1000000;
-      } else if (shape.includes('rectangular tube')) {
-        const b = parseFloat(itemFormData.width) || 0;
-        const h = parseFloat(itemFormData.outerDiameter) || 0;
-        const t = parseFloat(itemFormData.thickness) || 0;
-        const l = parseFloat(itemFormData.length) || 0;
-        calculatedWeight = ((b * h - (b - 2 * t) * (h - 2 * t)) * l * density) / 1000000;
-      } else if (shape === 'hexagonal bar') {
-        const af = parseFloat(itemFormData.width) || 0;
-        const l = parseFloat(itemFormData.length) || 0;
-        calculatedWeight = ((Math.sqrt(3) / 2) * af * af * l * density) / 1000000;
-      }
-    }
+    const calculatedWeight = calculateWeight({
+      shape: selectedShape,
+      density: itemFormData.density,
+      length: itemFormData.length,
+      width: itemFormData.width,
+      thickness: itemFormData.thickness,
+      diameter: itemFormData.diameter,
+      outerDiameter: itemFormData.outerDiameter,
+      threadPitch: itemFormData.threadPitch
+    });
 
     if (calculatedWeight > 0) {
       setItemFormData(prev => ({
         ...prev,
-        weightPerUnit: parseFloat(calculatedWeight.toFixed(3)),
+        weightPerUnit: calculatedWeight,
         weightUom: 'Kg'
       }));
     }
@@ -862,6 +832,7 @@ const ItemsMaster = () => {
     itemFormData.thickness, 
     itemFormData.diameter, 
     itemFormData.outerDiameter, 
+    itemFormData.threadPitch,
     itemFormData.density, 
     selectedShape
   ]);
@@ -1130,7 +1101,7 @@ const ItemsMaster = () => {
                             {selectedShape} Dimensions (All in mm)
                           </div>
                           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                            {selectedShape.toLowerCase() === 'plate' && (
+                            {(selectedShape.toLowerCase() === 'plate' || selectedShape.toLowerCase().includes('plate') || selectedShape.toLowerCase().includes('sheet') || selectedShape.toLowerCase().includes('flat')) && (
                               <>
                                 <div className="space-y-1.5">
                                   <label className="text-xs    font-semibold text-slate-400">Length (mm) *</label>
@@ -1146,7 +1117,7 @@ const ItemsMaster = () => {
                                 </div>
                               </>
                             )}
-                            {selectedShape.toLowerCase() === 'round' && (
+                            {(selectedShape.toLowerCase() === 'round' || (selectedShape.toLowerCase().includes('round') || selectedShape.toLowerCase().includes('rod') || selectedShape.toLowerCase().includes('bar')) && !selectedShape.toLowerCase().includes('hex') && !selectedShape.toLowerCase().includes('threaded') && !selectedShape.toLowerCase().includes('thread')) && (
                               <>
                                 <div className="space-y-1.5">
                                   <label className="text-xs    font-semibold text-slate-400">Diameter (mm) *</label>
@@ -1222,6 +1193,41 @@ const ItemsMaster = () => {
                                 </div>
                               </>
                             )}
+                            {(selectedShape.toLowerCase().includes('threaded') || selectedShape.toLowerCase().includes('thread')) && (
+                              <>
+                                <div className="space-y-1.5">
+                                  <label className="text-xs font-semibold text-slate-400">Outer Diameter (D) (mm) *</label>
+                                  <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.diameter || itemFormData.outerDiameter} onChange={(e) => setItemFormData({...itemFormData, diameter: e.target.value, outerDiameter: e.target.value})} required />
+                                </div>
+                                <div className="space-y-1.5">
+                                  <label className="text-xs font-semibold text-slate-400">Thread Pitch (P) (mm) *</label>
+                                  <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.threadPitch} onChange={(e) => setItemFormData({...itemFormData, threadPitch: e.target.value})} required />
+                                </div>
+                                <div className="space-y-1.5 md:col-span-2">
+                                  <label className="text-xs font-semibold text-slate-400">Length (L) (mm) *</label>
+                                  <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-200 rounded text-xs" placeholder="0.00" value={itemFormData.length} onChange={(e) => setItemFormData({...itemFormData, length: e.target.value})} required />
+                                </div>
+                              </>
+                            )}
+                            {(() => {
+                              const valResult = validateShapeDimensions({
+                                shape: selectedShape,
+                                width: itemFormData.width,
+                                thickness: itemFormData.thickness,
+                                diameter: itemFormData.diameter,
+                                outerDiameter: itemFormData.outerDiameter,
+                                outer_diameter: itemFormData.outerDiameter,
+                                threadPitch: itemFormData.threadPitch
+                              });
+                              if (!valResult.isValid) {
+                                return (
+                                  <div className="text-xs text-rose-600 font-semibold bg-rose-50 border border-rose-200 p-2 rounded flex items-center gap-1.5 md:col-span-2 mt-1">
+                                    <span>❌ {valResult.error}</span>
+                                  </div>
+                                );
+                              }
+                              return null;
+                            })()}
                           </div>
                         </div>
                       )}
