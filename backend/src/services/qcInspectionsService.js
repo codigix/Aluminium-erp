@@ -247,6 +247,7 @@ const getQCWithDetails = async (qcId) => {
         qci.accepted_qty, 
         qci.rejected_qty, 
         qci.status,
+        grn.po_number as po_number,
         COALESCE(poi.material_name, pri.material_name) as material_name,
         COALESCE(poi.description, pri.material_name, pri.item_code) as description,
         poi.unit_rate,
@@ -287,6 +288,8 @@ const getQCWithDetails = async (qcId) => {
     qc.items_detail = qcItems.map(item => ({
       id: item.id,
       item_code: item.item_code,
+      po_number: item.po_number,
+      status: item.status,
       material_name: item.material_name,
       description: item.description,
       drawing_no: item.drawing_no || null,

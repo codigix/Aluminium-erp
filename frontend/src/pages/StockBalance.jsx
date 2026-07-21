@@ -291,7 +291,7 @@ const StockBalance = () => {
       const data = await response.json();
       const filteredData = (Array.isArray(data) ? data : []).filter(item => {
         const type = (item.material_type || '').toUpperCase();
-        return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY';
+        return type !== 'FG' && type !== 'FINISHED GOOD' && type !== 'FINISHED GOODS' && type !== 'FINISHED_GOODS' && type !== 'SUB_ASSEMBLY' && type !== 'SUB ASSEMBLY' && type !== 'SA' && type !== 'ASSEMBLY' && type !== 'PART';
       });
       setBalances(filteredData);
 
