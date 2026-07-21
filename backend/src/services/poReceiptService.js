@@ -228,7 +228,13 @@ const getPOReceiptById = async (receiptId) => {
             COALESCE(NULLIF(pri.diameter, 0), poi.diameter, 0) as diameter,
             COALESCE(NULLIF(pri.outer_diameter, 0), poi.outer_diameter, 0) as outer_diameter,
             COALESCE(NULLIF(pri.density, 0), poi.density, 0) as density,
-            COALESCE(NULLIF(pri.weight_per_unit, 0), poi.weight_per_unit, 0) as weight_per_unit
+            COALESCE(NULLIF(pri.weight_per_unit, 0), poi.weight_per_unit, 0) as weight_per_unit,
+            (
+              SELECT s.name FROM shapes s 
+              JOIN stock_balance sb ON s.id = sb.shape_id 
+              WHERE sb.item_code = COALESCE(poi.item_code, pri.item_code) 
+              LIMIT 1
+            ) as shape_name
      FROM po_receipt_items pri
      LEFT JOIN purchase_order_items poi ON poi.id = pri.po_item_id
      WHERE pri.receipt_id = ?`,

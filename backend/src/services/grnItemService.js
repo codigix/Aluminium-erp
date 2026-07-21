@@ -339,11 +339,38 @@ const getGRNItemsByGrnId = async (grnId) => {
       poi.material_name,
       poi.material_type,
       poi.drawing_no,
+      COALESCE(NULLIF(poi.length, 0), 0) as length,
+      COALESCE(NULLIF(poi.width, 0), 0) as width,
+      COALESCE(NULLIF(poi.thickness, 0), 0) as thickness,
+      COALESCE(NULLIF(poi.diameter, 0), 0) as diameter,
+      COALESCE(NULLIF(poi.outer_diameter, 0), 0) as outer_diameter,
+      COALESCE(NULLIF(poi.density, 0), 0) as density,
+      COALESCE(NULLIF(poi.weight_per_unit, 0), 0) as weight_per_unit,
+      COALESCE(shape_lookup.shape_name, (SELECT name FROM shapes WHERE id = sb.shape_id LIMIT 1)) as shape_type,
+      COALESCE(shape_lookup.shape_name, (SELECT name FROM shapes WHERE id = sb.shape_id LIMIT 1)) as shape_name,
       gea.id as excess_approval_id,
       gea.status as excess_approval_status,
       gea.excess_qty
     FROM grn_items gi
     LEFT JOIN purchase_order_items poi ON gi.po_item_id = poi.id
+    LEFT JOIN (
+        SELECT item_code, MAX(shape_id) as shape_id FROM stock_balance GROUP BY item_code
+    ) sb ON poi.item_code = sb.item_code
+    LEFT JOIN (
+        SELECT som.material_name, som.length, som.width, som.thickness, som.diameter, som.outer_diameter,
+               MAX(s.name) as shape_name
+        FROM sales_order_item_materials som
+        LEFT JOIN shapes s ON som.shape_id = s.id
+        WHERE s.id IS NOT NULL
+        GROUP BY som.material_name, som.length, som.width, som.thickness, som.diameter, som.outer_diameter
+    ) shape_lookup ON (
+        LOWER(TRIM(REPLACE(poi.material_name, '\t', ''))) = LOWER(TRIM(REPLACE(shape_lookup.material_name, '\t', '')))
+        AND ABS(COALESCE(poi.length, 0) - COALESCE(shape_lookup.length, 0)) < 0.0001
+        AND ABS(COALESCE(poi.width, 0) - COALESCE(shape_lookup.width, 0)) < 0.0001
+        AND ABS(COALESCE(poi.thickness, 0) - COALESCE(shape_lookup.thickness, 0)) < 0.0001
+        AND ABS(COALESCE(poi.diameter, 0) - COALESCE(shape_lookup.diameter, 0)) < 0.0001
+        AND ABS(COALESCE(poi.outer_diameter, 0) - COALESCE(shape_lookup.outer_diameter, 0)) < 0.0001
+    )
     LEFT JOIN grn_excess_approvals gea ON gi.id = gea.grn_item_id
     WHERE gi.grn_id = ?
     ORDER BY gi.created_at ASC`,
@@ -352,6 +379,7 @@ const getGRNItemsByGrnId = async (grnId) => {
 
   return items;
 };
+
 
 const getPOBalance = async (poItemId, excludeGrnId = null) => {
   let query = `

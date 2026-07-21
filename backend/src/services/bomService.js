@@ -54,11 +54,13 @@ const getItemMaterials = async (itemId, itemCode = null, drawingNo = null, drawi
     }
 
     [rows] = await pool.query(
-      `SELECT m.*, i.item_code as actual_item_code, i.material_name as actual_item_name,
+      `SELECT m.*, s.name as shape_type, s.name as shape_name, s.name as shape,
+              i.item_code as actual_item_code, i.material_name as actual_item_name,
               i.selling_rate as latest_selling_rate, i.valuation_rate as latest_valuation_rate, i.material_type as latest_material_type,
               i.length as latest_length, i.width as latest_width, i.thickness as latest_thickness,
               i.weight_per_unit as latest_weight_per_unit
        FROM sales_order_item_materials m
+       LEFT JOIN shapes s ON m.shape_id = s.id
        LEFT JOIN (
          SELECT material_name, MIN(item_code) as item_code,
                 MAX(selling_rate) as selling_rate, MAX(valuation_rate) as valuation_rate,
@@ -96,11 +98,13 @@ const getItemMaterials = async (itemId, itemCode = null, drawingNo = null, drawi
 
     const fallbackId = await getLatestMasterItemId(itemCode, drawingNo, drawingId);
     if (fallbackId) {
-      let query = `SELECT m.*, i.item_code as actual_item_code, i.material_name as actual_item_name,
+      let query = `SELECT m.*, s.name as shape_type, s.name as shape_name, s.name as shape,
+                          i.item_code as actual_item_code, i.material_name as actual_item_name,
                           i.selling_rate as latest_selling_rate, i.valuation_rate as latest_valuation_rate, i.material_type as latest_material_type,
                           i.length as latest_length, i.width as latest_width, i.thickness as latest_thickness,
                           i.weight_per_unit as latest_weight_per_unit
                    FROM sales_order_item_materials m 
+                   LEFT JOIN shapes s ON m.shape_id = s.id
                    LEFT JOIN (
                      SELECT material_name, MIN(item_code) as item_code,
                             MAX(selling_rate) as selling_rate, MAX(valuation_rate) as valuation_rate,

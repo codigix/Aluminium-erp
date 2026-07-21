@@ -393,13 +393,20 @@ const ItemsMaster = () => {
       const url = isEditingItem ? `${API_BASE}/stock/items/${editingItemId}` : `${API_BASE}/stock/items`;
       const method = isEditingItem ? 'PUT' : 'POST';
       
+      const payload = { ...itemFormData };
+      const shapeObj = shapes.find(s => String(s.id) === String(payload.shapeId));
+      const shapeName = shapeObj ? String(shapeObj.name).toLowerCase() : '';
+      if (shapeName.includes('threaded') || shapeName.includes('thread')) {
+        payload.thickness = payload.threadPitch || payload.thread_pitch || payload.thickness || 0;
+      }
+
       const response = await fetch(url, {
         method: method,
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(itemFormData)
+        body: JSON.stringify(payload)
       });
       
       if (!response.ok) {
@@ -1221,8 +1228,8 @@ const ItemsMaster = () => {
                               });
                               if (!valResult.isValid) {
                                 return (
-                                  <div className="text-xs text-rose-600 font-semibold bg-rose-50 border border-rose-200 p-2 rounded flex items-center gap-1.5 md:col-span-2 mt-1">
-                                    <span>❌ {valResult.error}</span>
+                                  <div className="text-xs text-amber-700 font-semibold bg-amber-50 border border-amber-200 p-2 rounded flex items-center gap-1.5 md:col-span-2 mt-1">
+                                    <span>⚠️ {valResult.error}</span>
                                   </div>
                                 );
                               }

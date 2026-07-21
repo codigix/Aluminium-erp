@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { successToast, errorToast } from '../utils/toast';
-import { formatDimensions } from '../utils/formatters';
+import { formatDimensions, validateShapeDimensions } from '../utils/formatters';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000');
 
@@ -71,6 +71,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
   const [newItemThickness, setNewItemThickness] = useState('');
   const [newItemDiameter, setNewItemDiameter] = useState('');
   const [newItemOuterDiameter, setNewItemOuterDiameter] = useState('');
+  const [newItemThreadPitch, setNewItemThreadPitch] = useState('');
   const [newItemRate, setNewItemRate] = useState('');
   const [itemGroups, setItemGroups] = useState([]);
   const [materials, setMaterials] = useState([]);
@@ -184,6 +185,14 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
         const af = parseFloat(newItemWidth) || 0;
         const l = parseFloat(newItemLength) || 0;
         calculatedWeight = ((Math.sqrt(3) / 2) * af * af * l * density) / 1000000;
+      } else if (shape.includes('threaded') || shape.includes('thread')) {
+        const d = parseFloat(newItemDiameter) || 0;
+        const p = parseFloat(newItemThreadPitch) || 0;
+        const l = parseFloat(newItemLength) || 0;
+        if (d > 0 && p > 0 && p < d && l > 0) {
+          const tensileArea = 0.7854 * Math.pow(d - (0.9382 * p), 2);
+          calculatedWeight = (tensileArea * l * density) / 1000000;
+        }
       }
     }
 
@@ -196,6 +205,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
     newItemThickness,
     newItemDiameter,
     newItemOuterDiameter,
+    newItemThreadPitch,
     newItemDensity,
     newItemShapeType
   ]);
@@ -2935,6 +2945,8 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                           setNewItemThickness('');
                           setNewItemDiameter('');
                           setNewItemOuterDiameter('');
+                          setNewItemThreadPitch('');
+                          setNewItemThreadPitch(item.thread_pitch || item.threadPitch || '');
                           setNewItemRate(item.valuation_rate || 0);
                         } else {
                           setNewItemQty(1);
@@ -2951,6 +2963,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                           setNewItemThickness('');
                           setNewItemDiameter('');
                           setNewItemOuterDiameter('');
+                          setNewItemThreadPitch('');
                           setNewItemRate('');
                         }
                       }}
@@ -2998,7 +3011,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                   </div>
                 </div>
 
-                {newItemUnit.toUpperCase() === 'KG' && (
+                {(newItemUnit.toUpperCase() === 'KG' || (newItemItemGroup || '').toLowerCase().includes('raw') || !!newItemShapeType) && (
                   <div className="grid grid-cols-12 gap-3 items-end">
                     <div className="col-span-5 space-y-1">
                       <label className="text-xs text-slate-500 ml-1 block font-medium font-semibold">Select Material Type</label>
@@ -3060,7 +3073,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                   </div>
                 )}
 
-                {newItemUnit.toUpperCase() === 'KG' && newItemShapeType && (
+                {(newItemUnit.toUpperCase() === 'KG' || (newItemItemGroup || '').toLowerCase().includes('raw') || !!newItemShapeType) && newItemShapeType && (
                   <div className="p-3 bg-white rounded border border-slate-200 space-y-2">
                     <div className="flex items-center gap-2 text-indigo-700 text-xs font-semibold">
                       <div className="w-1.5 h-1.5 rounded bg-indigo-500"></div>
@@ -3261,6 +3274,59 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                           </div>
                         </>
                       )}
+                      {(newItemShapeType.toLowerCase().includes('threaded') || newItemShapeType.toLowerCase().includes('thread')) && (
+                        <>
+                          <div className="space-y-1">
+                            <label className="text-[10px] text-slate-400 font-medium">Outer Diameter (D) (mm)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                              value={newItemDiameter}
+                              onChange={(e) => setNewItemDiameter(e.target.value)}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] text-slate-400 font-medium">Thread Pitch (P) (mm)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                              value={newItemThreadPitch}
+                              onChange={(e) => setNewItemThreadPitch(e.target.value)}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] text-slate-400 font-medium">Length (L) (mm)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                              value={newItemLength}
+                              onChange={(e) => setNewItemLength(e.target.value)}
+                            />
+                          </div>
+                        </>
+                      )}
+                      {(() => {
+                        const valResult = validateShapeDimensions({
+                          shape: newItemShapeType,
+                          width: newItemWidth,
+                          thickness: newItemThickness,
+                          diameter: newItemDiameter,
+                          outerDiameter: newItemOuterDiameter,
+                          outer_diameter: newItemOuterDiameter,
+                          threadPitch: newItemThreadPitch
+                        });
+                        if (!valResult.isValid) {
+                          return (
+                            <div className="col-span-full text-xs text-amber-700 font-semibold bg-amber-50 border border-amber-200 p-2 rounded flex items-center gap-1.5 mt-2">
+                              <span>⚠️ {valResult.error}</span>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
                     </div>
                   </div>
                 )}
@@ -3283,7 +3349,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                         const itemCode = selectedNewItem.item_code;
                         const itemName = selectedNewItem.material_name || selectedNewItem.itemName;
 
-                        const isKg = newItemUnit.toUpperCase() === 'KG';
+                        const isKg = newItemUnit.toUpperCase() === 'KG' || (newItemItemGroup || '').toLowerCase().includes('raw') || !!newItemShapeType;
 
                         const exists = mrItems.some(item => {
                           if (item.item_code !== itemCode) return false;
@@ -3292,7 +3358,8 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                                    String(item.width || '') === String(newItemWidth || '') &&
                                    String(item.thickness || '') === String(newItemThickness || '') &&
                                    String(item.diameter || '') === String(newItemDiameter || '') &&
-                                   String(item.outer_diameter || '') === String(newItemOuterDiameter || '');
+                                   String(item.outer_diameter || '') === String(newItemOuterDiameter || '') &&
+                                   String(item.thread_pitch || item.threadPitch || '') === String(newItemThreadPitch || '');
                           }
                           return true;
                         });
@@ -3307,6 +3374,7 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                         let finalThk = 0;
                         let finalDia = 0;
                         let finalOd = 0;
+                        let finalPitch = 0;
 
                         if (isKg) {
                           const shape = (newItemShapeType || '').toLowerCase().trim();
@@ -3333,6 +3401,11 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                           } else if (shape === 'hexagonal bar') {
                             finalLen = parseFloat(newItemLength) || 0;
                             finalWid = parseFloat(newItemWidth) || 0;
+                          } else if (shape.includes('threaded') || shape.includes('thread')) {
+                            finalLen = parseFloat(newItemLength) || 0;
+                            finalDia = parseFloat(newItemDiameter) || 0;
+                            finalPitch = parseFloat(newItemThreadPitch) || 0;
+                            finalThk = finalPitch;
                           }
                         }
 
@@ -3353,7 +3426,9 @@ const ProductionPlan = ({ salesOrderId: propSalesOrderId }) => {
                           width: finalWid,
                           thickness: finalThk,
                           diameter: finalDia,
-                          outer_diameter: finalOd
+                          outer_diameter: finalOd,
+                          thread_pitch: finalPitch,
+                          threadPitch: finalPitch
                         };
 
                         try {

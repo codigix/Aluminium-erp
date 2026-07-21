@@ -19,8 +19,9 @@ export const cleanProjectName = (name, clientName = '') => {
 
 /**
  * Standardized function to format dimensions of different material shapes
+ * Uses engineering standard prefix format: e.g. "RB Ø20 × 1000 mm", "PL 300 × 200 × 10 mm"
  * @param {object} item - The item containing dimension fields
- * @returns {string} - Formatted dimension string (e.g. "A:100 × T:3 × L:6000 mm")
+ * @returns {string} - Formatted dimension string with shape prefix
  */
 export const formatDimensions = (item) => {
   if (!item) return '';
@@ -60,18 +61,32 @@ export const formatDimensions = (item) => {
     matchedShape = 'rectangular bar';
   } else if (shape.includes('hex') || shape.includes('hexagonal')) {
     matchedShape = 'hexagonal bar';
+  } else if (shape.includes('unequal angle') || shape.includes('ua ')) {
+    matchedShape = 'unequal angle';
+  } else if (shape.includes('equal angle') || shape.includes('ea ')) {
+    matchedShape = 'equal angle';
+  } else if (shape.includes('angle')) {
+    matchedShape = 'angle';
   } else if (shape.includes('plate') || shape.includes('sheet')) {
     matchedShape = 'plate';
   } else if (shape.includes('flat')) {
-    matchedShape = 'flat';
+    matchedShape = 'flat bar';
   } else if (shape.includes('pipe') || shape.includes('tube')) {
     matchedShape = 'pipe';
   } else if (shape.includes('round') || shape.includes('rod') || shape.includes('bar')) {
-    matchedShape = 'round';
+    if (thk > 0) {
+      matchedShape = 'threaded rod';
+    } else {
+      matchedShape = 'round bar';
+    }
   } else {
     // Fallback detection by dimension values
     if (dia > 0) {
-      matchedShape = 'round';
+      if (thk > 0) {
+        matchedShape = 'threaded rod';
+      } else {
+        matchedShape = 'round bar';
+      }
     } else if (od > 0 && thk > 0) {
       matchedShape = 'pipe';
     } else if (wid > 0 && od > 0 && thk > 0 && len > 0) {
@@ -85,44 +100,79 @@ export const formatDimensions = (item) => {
     }
   }
 
-  const fmt = (label, val) => {
+  // Format a numeric value (omit decimal if whole number)
+  const n = (val) => {
     if (val === undefined || val === null || val === '' || isNaN(parseFloat(val))) return null;
     const num = parseFloat(val);
-    const formatted = num % 1 === 0 ? num.toFixed(0) : num.toFixed(1);
-    return `${label}:${formatted}`;
+    return num % 1 === 0 ? num.toFixed(0) : num.toFixed(1);
   };
 
-  let parts = [];
-  if (matchedShape === 'plate' || matchedShape === 'flat') {
-    parts = [fmt('L', len), fmt('W', wid), fmt('T', thk)];
-  } else if (matchedShape === 'round') {
+  let prefix = '';
+  let dimStr = '';
+
+  if (matchedShape === 'plate') {
+    prefix = 'PL';
+    const parts = [n(wid), n(len), n(thk)].filter(Boolean);
+    dimStr = parts.join(' × ');
+  } else if (matchedShape === 'flat bar') {
+    prefix = 'FB';
+    const parts = [n(wid), n(thk), n(len)].filter(Boolean);
+    dimStr = parts.join(' × ');
+  } else if (matchedShape === 'round bar') {
+    prefix = 'RB';
     const dVal = dia > 0 ? dia : (od > 0 ? od : wid);
-    parts = [fmt('D', dVal), fmt('L', len)];
+    const parts = [`Ø${n(dVal)}`, n(len)].filter(Boolean);
+    dimStr = parts.join(' × ');
   } else if (matchedShape === 'hexagonal bar') {
-    parts = [fmt('AF', wid), fmt('L', len)];
+    prefix = 'HEX';
+    const parts = [`AF${n(wid)}`, n(len)].filter(Boolean);
+    dimStr = parts.join(' × ');
   } else if (matchedShape === 'square bar') {
-    parts = [fmt('W', wid), fmt('L', len)];
+    prefix = 'SQ';
+    const parts = [n(wid), n(len)].filter(Boolean);
+    dimStr = parts.join(' × ');
   } else if (matchedShape === 'rectangular bar') {
-    parts = [fmt('W', wid), fmt('H', od), fmt('L', len)];
+    prefix = 'REC';
+    const parts = [n(wid), n(od), n(len)].filter(Boolean);
+    dimStr = parts.join(' × ');
   } else if (matchedShape === 'pipe') {
+    prefix = 'PIPE';
     const odVal = od > 0 ? od : dia;
-    parts = [fmt('OD', odVal), fmt('T', thk), fmt('L', len)];
+    const parts = [`OD${n(odVal)}`, n(thk), n(len)].filter(Boolean);
+    dimStr = parts.join(' × ');
   } else if (matchedShape === 'square tube') {
-    parts = [fmt('W', wid), fmt('T', thk), fmt('L', len)];
+    prefix = 'SQT';
+    const parts = [n(wid), n(thk), n(len)].filter(Boolean);
+    dimStr = parts.join(' × ');
   } else if (matchedShape === 'rectangular tube') {
-    parts = [fmt('W', wid), fmt('H', od), fmt('T', thk), fmt('L', len)];
+    prefix = 'RCT';
+    const parts = [n(wid), n(od), n(thk), n(len)].filter(Boolean);
+    dimStr = parts.join(' × ');
   } else if (matchedShape === 'threaded rod') {
+    prefix = 'TR';
     const dVal = dia > 0 ? dia : od;
-    const pVal = parseFloat(item.thread_pitch || item.threadPitch || item.dimensions?.thread_pitch || item.dimensions?.threadPitch || 0);
-    parts = [fmt('OD', dVal), fmt('P', pVal), fmt('L', len)];
+    const pVal = parseFloat(item.thread_pitch || item.threadPitch || item.dimensions?.thread_pitch || item.dimensions?.threadPitch || thk || item.thickness || item.dimensions?.thickness || 0);
+    const parts = [`M${n(dVal)}`, pVal > 0 ? n(pVal) : null, n(len)].filter(Boolean);
+    dimStr = parts.join(' × ');
+  } else if (matchedShape === 'angle') {
+    prefix = 'L';
+    const parts = [n(wid), n(od || thk), n(thk), n(len)].filter(Boolean);
+    dimStr = parts.join(' × ');
+  } else if (matchedShape === 'equal angle') {
+    prefix = 'EA';
+    const parts = [n(wid), n(wid), n(thk), n(len)].filter(Boolean);
+    dimStr = parts.join(' × ');
+  } else if (matchedShape === 'unequal angle') {
+    prefix = 'UA';
+    const parts = [n(wid), n(od), n(thk), n(len)].filter(Boolean);
+    dimStr = parts.join(' × ');
   } else {
-    parts = [fmt('OD', od), fmt('W', wid), fmt('H', od), fmt('T', thk), fmt('Dia', dia), fmt('L', len)];
+    const parts = [n(wid), n(od), n(thk), n(dia), n(len)].filter(Boolean);
+    dimStr = parts.join(' × ');
   }
 
-  // Filter out null/undefined/empty parts
-  const cleanParts = parts.filter(Boolean);
-  if (cleanParts.length === 0) return '';
-  return cleanParts.join(' × ') + ' mm';
+  if (!dimStr) return '';
+  return `${prefix} ${dimStr} mm`.trim();
 };
 
 /**

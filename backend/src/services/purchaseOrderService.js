@@ -225,6 +225,7 @@ const createPurchaseOrder = async (data, existingConnection = null) => {
       const [mrItems] = await connection.query(`
         SELECT mri.*, sb.valuation_rate,
                mri.length, mri.width, mri.thickness, mri.diameter, mri.outer_diameter, mri.density, mri.weight_per_unit,
+               COALESCE(shape_lookup.shape_name, (SELECT name FROM shapes WHERE id = sb.shape_id LIMIT 1)) as shape_type,
                COALESCE(
                  (SELECT MAX(bom_cost) FROM sales_order_items soi WHERE (soi.item_code = mri.item_code OR soi.drawing_no = mri.item_code) AND soi.bom_cost > 0),
                  (SELECT MAX(rate) FROM production_plan_materials ppm WHERE ppm.plan_id = ? AND ppm.item_code = mri.item_code AND ppm.rate > 0),
@@ -235,7 +236,22 @@ const createPurchaseOrder = async (data, existingConnection = null) => {
                  mri.unit_rate
                ) as bom_rate
         FROM material_request_items mri
-        LEFT JOIN (SELECT item_code, MAX(valuation_rate) as valuation_rate FROM stock_balance GROUP BY item_code) sb ON mri.item_code = sb.item_code
+        LEFT JOIN (SELECT item_code, MAX(valuation_rate) as valuation_rate, MAX(shape_id) as shape_id FROM stock_balance GROUP BY item_code) sb ON mri.item_code = sb.item_code
+        LEFT JOIN (
+            SELECT som.material_name, som.length, som.width, som.thickness, som.diameter, som.outer_diameter,
+                   MAX(s.name) as shape_name
+            FROM sales_order_item_materials som
+            LEFT JOIN shapes s ON som.shape_id = s.id
+            WHERE s.id IS NOT NULL
+            GROUP BY som.material_name, som.length, som.width, som.thickness, som.diameter, som.outer_diameter
+        ) shape_lookup ON (
+            LOWER(TRIM(REPLACE(mri.item_name, '\t', ''))) = LOWER(TRIM(REPLACE(shape_lookup.material_name, '\t', '')))
+            AND ABS(COALESCE(mri.length, 0) - COALESCE(shape_lookup.length, 0)) < 0.0001
+            AND ABS(COALESCE(mri.width, 0) - COALESCE(shape_lookup.width, 0)) < 0.0001
+            AND ABS(COALESCE(mri.thickness, 0) - COALESCE(shape_lookup.thickness, 0)) < 0.0001
+            AND ABS(COALESCE(mri.diameter, 0) - COALESCE(shape_lookup.diameter, 0)) < 0.0001
+            AND ABS(COALESCE(mri.outer_diameter, 0) - COALESCE(shape_lookup.outer_diameter, 0)) < 0.0001
+        )
         WHERE mri.mr_id = ?
       `, [planId, planId, planId, actualMrId]);
 
@@ -1172,7 +1188,9 @@ const getPurchaseOrderById = async (poId) => {
       (SELECT status FROM sales_order_items soi 
        WHERE (poi.drawing_no = soi.drawing_no OR poi.item_code = soi.item_code) 
        AND soi.sales_order_id = ? 
-       LIMIT 1) as sales_order_item_status
+       LIMIT 1) as sales_order_item_status,
+      COALESCE(shape_lookup.shape_name, (SELECT name FROM shapes WHERE id = sb.shape_id LIMIT 1)) as shape_name,
+      COALESCE(shape_lookup.shape_name, (SELECT name FROM shapes WHERE id = sb.shape_id LIMIT 1)) as shape_type
      FROM purchase_order_items poi
      LEFT JOIN (
        SELECT 
@@ -1184,10 +1202,26 @@ const getPurchaseOrderById = async (poId) => {
          MAX(diameter) as diameter,
          MAX(outer_diameter) as outer_diameter,
          MAX(density) as density,
-         MAX(weight_per_unit) as weight_per_unit
+         MAX(weight_per_unit) as weight_per_unit,
+         MAX(shape_id) as shape_id
        FROM stock_balance 
        GROUP BY item_code
      ) sb ON poi.item_code = sb.item_code
+     LEFT JOIN (
+         SELECT som.material_name, som.length, som.width, som.thickness, som.diameter, som.outer_diameter,
+                MAX(s.name) as shape_name
+         FROM sales_order_item_materials som
+         LEFT JOIN shapes s ON som.shape_id = s.id
+         WHERE s.id IS NOT NULL
+         GROUP BY som.material_name, som.length, som.width, som.thickness, som.diameter, som.outer_diameter
+     ) shape_lookup ON (
+         LOWER(TRIM(REPLACE(poi.material_name, '\t', ''))) = LOWER(TRIM(REPLACE(shape_lookup.material_name, '\t', '')))
+         AND ABS(COALESCE(poi.length, 0) - COALESCE(shape_lookup.length, 0)) < 0.0001
+         AND ABS(COALESCE(poi.width, 0) - COALESCE(shape_lookup.width, 0)) < 0.0001
+         AND ABS(COALESCE(poi.thickness, 0) - COALESCE(shape_lookup.thickness, 0)) < 0.0001
+         AND ABS(COALESCE(poi.diameter, 0) - COALESCE(shape_lookup.diameter, 0)) < 0.0001
+         AND ABS(COALESCE(poi.outer_diameter, 0) - COALESCE(shape_lookup.outer_diameter, 0)) < 0.0001
+     )
      LEFT JOIN purchase_orders po ON poi.purchase_order_id = po.id
      WHERE poi.purchase_order_id = ?`,
     [po.sales_order_id, po.id]
@@ -2424,15 +2458,51 @@ const generatePurchaseOrderPDF = async (poId) => {
       const dia = parseFloat(i.diameter || 0);
       const od = parseFloat(i.outer_diameter || 0);
 
-      let parts = [];
-      if (dia > 0) parts.push(`Ø${dia.toFixed(0)}`);
-      else if (od > 0) parts.push(`OD ${od.toFixed(0)}`);
-      
-      if (wid > 0) parts.push(wid.toFixed(0));
-      if (thk > 0) parts.push(thk % 1 === 0 ? thk.toFixed(0) : thk.toFixed(1));
-      if (len > 0) parts.push(len.toFixed(0));
+      const nf = (v) => { if (!v || isNaN(parseFloat(v)) || parseFloat(v) === 0) return null; const num = parseFloat(v); return num % 1 === 0 ? num.toFixed(0) : num.toFixed(1); };
+      const shapeRaw = (i.shape_type || i.shape_name || i.shape || i.material_name || '').toLowerCase();
 
-      const sizeStr = parts.length > 0 ? parts.join(' × ') + ' mm' : '—';
+      let ms = '';
+      if (shapeRaw.includes('threaded') || shapeRaw.includes('thread')) ms = 'threaded rod';
+      else if (shapeRaw.includes('square tube') || (shapeRaw.includes('square') && shapeRaw.includes('tube'))) ms = 'square tube';
+      else if (shapeRaw.includes('rectangular tube') || shapeRaw.includes('rect tube') || (shapeRaw.includes('rect') && shapeRaw.includes('tube'))) ms = 'rectangular tube';
+      else if (shapeRaw.includes('square bar') || (shapeRaw.includes('square') && shapeRaw.includes('bar'))) ms = 'square bar';
+      else if (shapeRaw.includes('rectangular bar') || (shapeRaw.includes('rect') && shapeRaw.includes('bar'))) ms = 'rectangular bar';
+      else if (shapeRaw.includes('hex')) ms = 'hexagonal bar';
+      else if (shapeRaw.includes('unequal angle')) ms = 'unequal angle';
+      else if (shapeRaw.includes('equal angle')) ms = 'equal angle';
+      else if (shapeRaw.includes('angle')) ms = 'angle';
+      else if (shapeRaw.includes('plate') || shapeRaw.includes('sheet')) ms = 'plate';
+      else if (shapeRaw.includes('flat')) ms = 'flat bar';
+      else if (shapeRaw.includes('pipe') || shapeRaw.includes('tube')) ms = 'pipe';
+      else if (shapeRaw.includes('round') || shapeRaw.includes('rod') || shapeRaw.includes('bar')) {
+        if (thk > 0) ms = 'threaded rod';
+        else ms = 'round bar';
+      }
+      else if (dia > 0) {
+        if (thk > 0) ms = 'threaded rod';
+        else ms = 'round bar';
+      }
+      else if (od > 0 && thk > 0) ms = 'pipe';
+      else if (wid > 0 && thk > 0 && len > 0) ms = 'plate';
+      else ms = 'plate';
+
+      let pfx = '', dp = [];
+      if (ms === 'plate')              { pfx = 'PL';   dp = [nf(wid), nf(len), nf(thk)]; }
+      else if (ms === 'flat bar')      { pfx = 'FB';   dp = [nf(wid), nf(thk), nf(len)]; }
+      else if (ms === 'round bar')     { pfx = 'RB';   const dv = dia > 0 ? dia : (od > 0 ? od : wid); dp = [`Ø${nf(dv)}`, nf(len)]; }
+      else if (ms === 'hexagonal bar') { pfx = 'HEX';  dp = [`AF${nf(wid)}`, nf(len)]; }
+      else if (ms === 'square bar')    { pfx = 'SQ';   dp = [nf(wid), nf(len)]; }
+      else if (ms === 'rectangular bar') { pfx = 'REC'; dp = [nf(wid), nf(od), nf(len)]; }
+      else if (ms === 'pipe')          { pfx = 'PIPE'; const ov = od > 0 ? od : dia; dp = [`OD${nf(ov)}`, nf(thk), nf(len)]; }
+      else if (ms === 'square tube')   { pfx = 'SQT';  dp = [nf(wid), nf(thk), nf(len)]; }
+      else if (ms === 'rectangular tube') { pfx = 'RCT'; dp = [nf(wid), nf(od), nf(thk), nf(len)]; }
+      else if (ms === 'threaded rod')  { pfx = 'TR';   const dv = dia > 0 ? dia : od; const pv = parseFloat(i.thread_pitch || i.threadPitch || thk || i.thickness || 0); dp = [`M${nf(dv)}`, pv > 0 ? nf(pv) : null, nf(len)]; }
+      else if (ms === 'angle')         { pfx = 'L';    dp = [nf(wid), nf(od || thk), nf(thk), nf(len)]; }
+      else if (ms === 'equal angle')   { pfx = 'EA';   dp = [nf(wid), nf(wid), nf(thk), nf(len)]; }
+      else if (ms === 'unequal angle') { pfx = 'UA';   dp = [nf(wid), nf(od), nf(thk), nf(len)]; }
+      else { dp = [nf(wid), nf(od), nf(thk), nf(dia), nf(len)]; }
+
+      const sizeStr = dp.filter(Boolean).length > 0 ? `${pfx} ${dp.filter(Boolean).join(' × ')} mm`.trim() : '—';
 
       return {
         ...i,

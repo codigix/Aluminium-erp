@@ -620,7 +620,15 @@ const getQuotationById = async (quotationId) => {
               0
             ) as outer_diameter,
             COALESCE(NULLIF(qi.density, 0), mri.density, sb.density, 0) as density,
-            COALESCE(NULLIF(qi.weight_per_unit, 0), mri.weight_per_unit, sb.weight_per_unit, 0) as weight_per_unit
+            COALESCE(NULLIF(qi.weight_per_unit, 0), mri.weight_per_unit, sb.weight_per_unit, 0) as weight_per_unit,
+            COALESCE(
+              shape_lookup.shape_name,
+              (SELECT name FROM shapes WHERE id = sb.shape_id LIMIT 1)
+            ) as shape_name,
+            COALESCE(
+              shape_lookup.shape_name,
+              (SELECT name FROM shapes WHERE id = sb.shape_id LIMIT 1)
+            ) as shape_type
      FROM quotation_items qi
      LEFT JOIN quotations q ON qi.quotation_id = q.id
      LEFT JOIN material_request_items mri ON q.mr_id = mri.mr_id AND qi.item_code = mri.item_code AND ABS(qi.quantity - mri.quantity) < 0.01
@@ -628,10 +636,26 @@ const getQuotationById = async (quotationId) => {
        SELECT item_code, 
               MAX(length) as length, MAX(width) as width, MAX(thickness) as thickness, 
               MAX(diameter) as diameter, MAX(outer_diameter) as outer_diameter,
-              MAX(density) as density, MAX(weight_per_unit) as weight_per_unit
+              MAX(density) as density, MAX(weight_per_unit) as weight_per_unit,
+              MAX(shape_id) as shape_id
        FROM stock_balance 
        GROUP BY item_code
      ) sb ON qi.item_code = sb.item_code
+     LEFT JOIN (
+         SELECT som.material_name, som.length, som.width, som.thickness, som.diameter, som.outer_diameter,
+                MAX(s.name) as shape_name
+         FROM sales_order_item_materials som
+         LEFT JOIN shapes s ON som.shape_id = s.id
+         WHERE s.id IS NOT NULL
+         GROUP BY som.material_name, som.length, som.width, som.thickness, som.diameter, som.outer_diameter
+     ) shape_lookup ON (
+         LOWER(TRIM(REPLACE(qi.material_name, '\t', ''))) = LOWER(TRIM(REPLACE(shape_lookup.material_name, '\t', '')))
+         AND ABS(COALESCE(qi.length, 0) - COALESCE(shape_lookup.length, 0)) < 0.0001
+         AND ABS(COALESCE(qi.width, 0) - COALESCE(shape_lookup.width, 0)) < 0.0001
+         AND ABS(COALESCE(qi.thickness, 0) - COALESCE(shape_lookup.thickness, 0)) < 0.0001
+         AND ABS(COALESCE(qi.diameter, 0) - COALESCE(shape_lookup.diameter, 0)) < 0.0001
+         AND ABS(COALESCE(qi.outer_diameter, 0) - COALESCE(shape_lookup.outer_diameter, 0)) < 0.0001
+     )
      WHERE qi.quotation_id = ?`,
     [quotationId]
   );
@@ -1534,39 +1558,57 @@ const generateQuotationPDF = async (quotationId) => {
       const od = parseFloat(i.outer_diameter || 0);
 
       let dimsSpec = '';
+      let itemSize = '—';
       if (len > 0 || wid > 0 || thk > 0 || dia > 0 || od > 0) {
-        let parts = [];
-        if (dia > 0) parts.push(`Ø${dia.toFixed(0)}`);
-        else if (od > 0) parts.push(`OD ${od.toFixed(0)}`);
-        
-        if (wid > 0) parts.push(wid.toFixed(0));
-        if (thk > 0) parts.push(thk % 1 === 0 ? thk.toFixed(0) : thk.toFixed(1));
-        if (len > 0) parts.push(len.toFixed(0));
-        
-        dimsSpec = parts.join(' × ') + ' mm';
-      }
-      
-      let sizeParts = [];
-      if (dia > 0) {
-        sizeParts.push(`Ø${dia.toFixed(0)}`);
-      } else if (od > 0) {
-        sizeParts.push(`OD ${od.toFixed(0)}`);
-      }
-      
-      let otherParts = [];
-      if (wid > 0) otherParts.push(`${wid.toFixed(0)}`);
-      if (thk > 0) {
-        otherParts.push(thk % 1 === 0 ? thk.toFixed(0) : thk.toFixed(1));
-      }
-      if (len > 0) otherParts.push(`${len.toFixed(0)}`);
-      
-      if (otherParts.length > 0) {
-        sizeParts.push(otherParts.join(' × '));
-      }
-      
-      let itemSize = sizeParts.join(' × ');
-      if (itemSize) {
-        itemSize += ' mm';
+        const shapeRaw = (i.shape_type || i.shape_name || i.shape || i.material_name || '').toLowerCase();
+        const nf = (v) => { if (!v || isNaN(parseFloat(v)) || parseFloat(v) === 0) return null; const num = parseFloat(v); return num % 1 === 0 ? num.toFixed(0) : num.toFixed(1); };
+
+        let ms = '';
+        if (shapeRaw.includes('threaded') || shapeRaw.includes('thread')) ms = 'threaded rod';
+        else if (shapeRaw.includes('square tube') || (shapeRaw.includes('square') && shapeRaw.includes('tube'))) ms = 'square tube';
+        else if (shapeRaw.includes('rectangular tube') || shapeRaw.includes('rect tube') || (shapeRaw.includes('rect') && shapeRaw.includes('tube'))) ms = 'rectangular tube';
+        else if (shapeRaw.includes('square bar') || (shapeRaw.includes('square') && shapeRaw.includes('bar'))) ms = 'square bar';
+        else if (shapeRaw.includes('rectangular bar') || (shapeRaw.includes('rect') && shapeRaw.includes('bar'))) ms = 'rectangular bar';
+        else if (shapeRaw.includes('hex')) ms = 'hexagonal bar';
+        else if (shapeRaw.includes('unequal angle')) ms = 'unequal angle';
+        else if (shapeRaw.includes('equal angle')) ms = 'equal angle';
+        else if (shapeRaw.includes('angle')) ms = 'angle';
+        else if (shapeRaw.includes('plate') || shapeRaw.includes('sheet')) ms = 'plate';
+        else if (shapeRaw.includes('flat')) ms = 'flat bar';
+        else if (shapeRaw.includes('pipe') || shapeRaw.includes('tube')) ms = 'pipe';
+        else if (shapeRaw.includes('round') || shapeRaw.includes('rod') || shapeRaw.includes('bar')) {
+          if (thk > 0) ms = 'threaded rod';
+          else ms = 'round bar';
+        }
+        else if (dia > 0) {
+          if (thk > 0) ms = 'threaded rod';
+          else ms = 'round bar';
+        }
+        else if (od > 0 && thk > 0) ms = 'pipe';
+        else if (wid > 0 && thk > 0 && len > 0) ms = 'plate';
+        else ms = 'plate';
+
+        let pfx = '', dp = [];
+        if (ms === 'plate')              { pfx = 'PL';   dp = [nf(wid), nf(len), nf(thk)]; }
+        else if (ms === 'flat bar')      { pfx = 'FB';   dp = [nf(wid), nf(thk), nf(len)]; }
+        else if (ms === 'round bar')     { pfx = 'RB';   const dv = dia > 0 ? dia : (od > 0 ? od : wid); dp = [`Ø${nf(dv)}`, nf(len)]; }
+        else if (ms === 'hexagonal bar') { pfx = 'HEX';  dp = [`AF${nf(wid)}`, nf(len)]; }
+        else if (ms === 'square bar')    { pfx = 'SQ';   dp = [nf(wid), nf(len)]; }
+        else if (ms === 'rectangular bar') { pfx = 'REC'; dp = [nf(wid), nf(od), nf(len)]; }
+        else if (ms === 'pipe')          { pfx = 'PIPE'; const ov = od > 0 ? od : dia; dp = [`OD${nf(ov)}`, nf(thk), nf(len)]; }
+        else if (ms === 'square tube')   { pfx = 'SQT';  dp = [nf(wid), nf(thk), nf(len)]; }
+        else if (ms === 'rectangular tube') { pfx = 'RCT'; dp = [nf(wid), nf(od), nf(thk), nf(len)]; }
+        else if (ms === 'threaded rod')  { pfx = 'TR';   const dv = dia > 0 ? dia : od; const pv = parseFloat(i.thread_pitch || i.threadPitch || thk || i.thickness || 0); dp = [`M${nf(dv)}`, pv > 0 ? nf(pv) : null, nf(len)]; }
+        else if (ms === 'angle')         { pfx = 'L';    dp = [nf(wid), nf(od || thk), nf(thk), nf(len)]; }
+        else if (ms === 'equal angle')   { pfx = 'EA';   dp = [nf(wid), nf(wid), nf(thk), nf(len)]; }
+        else if (ms === 'unequal angle') { pfx = 'UA';   dp = [nf(wid), nf(od), nf(thk), nf(len)]; }
+        else { dp = [nf(wid), nf(od), nf(thk), nf(dia), nf(len)]; }
+
+        const clean = dp.filter(Boolean);
+        if (clean.length > 0) {
+          dimsSpec = `${pfx} ${clean.join(' × ')} mm`.trim();
+          itemSize = dimsSpec;
+        }
       }
 
       const designQtyVal = parseFloat(i.planned_qty || i.design_qty || 0);

@@ -186,6 +186,7 @@ const materialRequestController = {
 
       const [items] = await pool.query(`
         SELECT mri.*, 
+               shape_lookup.shape_name as shape_type,
                COALESCE(mri.item_name, sb.material_name, sb.item_description, mri.item_code) as name, 
                COALESCE(mri.uom, sb.unit) as uom,
                COALESCE(mri.item_type, sb.material_type) as material_type,
@@ -223,6 +224,20 @@ const materialRequestController = {
           FROM stock_balance 
           GROUP BY item_code
         ) sb ON mri.item_code = sb.item_code
+        LEFT JOIN (
+            SELECT som.material_name, som.length, som.width, som.thickness, som.diameter, som.outer_diameter,
+                   MAX(s.name) as shape_name
+            FROM sales_order_item_materials som
+            LEFT JOIN shapes s ON som.shape_id = s.id
+            GROUP BY som.material_name, som.length, som.width, som.thickness, som.diameter, som.outer_diameter
+        ) shape_lookup ON (
+            LOWER(TRIM(REPLACE(mri.item_name, '\t', ''))) = LOWER(TRIM(REPLACE(shape_lookup.material_name, '\t', '')))
+            AND ABS(COALESCE(mri.length, 0) - COALESCE(shape_lookup.length, 0)) < 0.0001
+            AND ABS(COALESCE(mri.width, 0) - COALESCE(shape_lookup.width, 0)) < 0.0001
+            AND ABS(COALESCE(mri.thickness, 0) - COALESCE(shape_lookup.thickness, 0)) < 0.0001
+            AND ABS(COALESCE(mri.diameter, 0) - COALESCE(shape_lookup.diameter, 0)) < 0.0001
+            AND ABS(COALESCE(mri.outer_diameter, 0) - COALESCE(shape_lookup.outer_diameter, 0)) < 0.0001
+        )
         WHERE mri.mr_id = ?
       `, [id]);
 

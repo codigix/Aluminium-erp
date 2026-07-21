@@ -164,19 +164,40 @@ const getProductionPlanById = async (id) => {
 
   // 4. Fetch Materials
   const [materials] = await pool.query(
-    'SELECT * FROM production_plan_materials WHERE plan_id = ?',
+    `SELECT ppm.*, MAX(s.name) as shape_type
+     FROM production_plan_materials ppm
+     LEFT JOIN sales_order_item_materials som ON (
+          LOWER(TRIM(REPLACE(ppm.material_name, '\t', ''))) = LOWER(TRIM(REPLACE(som.material_name, '\t', '')))
+         AND ABS(COALESCE(ppm.length, 0) - COALESCE(som.length, 0)) < 0.0001
+         AND ABS(COALESCE(ppm.width, 0) - COALESCE(som.width, 0)) < 0.0001
+         AND ABS(COALESCE(ppm.thickness, 0) - COALESCE(som.thickness, 0)) < 0.0001
+         AND ABS(COALESCE(ppm.diameter, 0) - COALESCE(som.diameter, 0)) < 0.0001
+         AND ABS(COALESCE(ppm.outer_diameter, 0) - COALESCE(som.outer_diameter, 0)) < 0.0001
+     )
+     LEFT JOIN shapes s ON som.shape_id = s.id
+     WHERE ppm.plan_id = ?
+     GROUP BY ppm.id`,
     [id]
   );
-  plan.materials = materials.map(m => ({
-    ...m,
-    dimensions: {
-      length: m.length,
-      width: m.width,
-      thickness: m.thickness,
-      diameter: m.diameter,
-      outer_diameter: m.outer_diameter
+  plan.materials = materials.map(m => {
+    let shapeType = m.shape_type || '';
+    if (m.bom_ref && m.bom_ref.startsWith('MANUAL:')) {
+      shapeType = m.bom_ref.substring(7);
     }
-  }));
+    return {
+      ...m,
+      shape_type: shapeType,
+      shape_name: shapeType,
+      shape: shapeType,
+      dimensions: {
+        length: m.length,
+        width: m.width,
+        thickness: m.thickness,
+        diameter: m.diameter,
+        outer_diameter: m.outer_diameter
+      }
+    };
+  });
 
   // 5. Fetch Operations — always load LIVE from BOM (sales_order_item_operations) so that
   //    any BOM Process Routing update is immediately reflected in Configure Work Order.
@@ -1260,7 +1281,12 @@ const getItemBOMDetails = async (salesOrderItemId) => {
       const targetSoIds = isArray ? soItemId : [soItemId || null];
       const refId = isArray ? soItemId[0] : (soItemId || null);
 
-      const [soM] = await pool.query('SELECT * FROM sales_order_item_materials WHERE sales_order_item_id IN (?) AND parent_id <=> ?', [targetSoIds, parentId]);
+      const [soM] = await pool.query(`
+        SELECT m.*, s.name as shape_type, s.name as shape_name, s.name as shape 
+        FROM sales_order_item_materials m
+        LEFT JOIN shapes s ON m.shape_id = s.id
+        WHERE m.sales_order_item_id IN (?) AND m.parent_id <=> ?
+      `, [targetSoIds, parentId]);
 
       // Join with sales_order_items to get item_type for components
       const [soC] = await pool.query(`
@@ -1344,7 +1370,12 @@ const getItemBOMDetails = async (salesOrderItemId) => {
         if (globalMatch.length > 0) {
           const gId = globalMatch[0].id;
           console.log(`[explodeBOM] Found GLOBAL fallback ID ${gId} for ${itemCode}`);
-          const [gM] = await pool.query('SELECT * FROM sales_order_item_materials WHERE sales_order_item_id = ? AND parent_id IS NULL', [gId]);
+          const [gM] = await pool.query(`
+            SELECT m.*, s.name as shape_type, s.name as shape_name, s.name as shape 
+            FROM sales_order_item_materials m
+            LEFT JOIN shapes s ON m.shape_id = s.id
+            WHERE m.sales_order_item_id = ? AND m.parent_id IS NULL
+          `, [gId]);
           const [gC] = await pool.query(`
             SELECT c.*, MAX(soi.item_type) as item_type, MAX(soi.item_group) as item_group
             FROM sales_order_item_components c
@@ -1627,6 +1658,9 @@ const addManualMaterialToPlan = async (planId, item) => {
   const wpu = Number(item.weight_per_unit) || 0;
   const isKg = (item.uom || '').toUpperCase() === 'KG';
 
+  const shapeName = item.shape_type || item.shape_name || item.shape || '';
+  const bomRef = shapeName ? `MANUAL:${shapeName}` : 'MANUAL';
+
   const [result] = await pool.execute(
     `INSERT INTO production_plan_materials (
       plan_id, item_code, material_name, design_qty, required_qty, rate, uom, warehouse,
@@ -1642,7 +1676,7 @@ const addManualMaterialToPlan = async (planId, item) => {
       Number(item.rate) || 0,
       item.uom || 'Nos',
       item.warehouse || 'Consumables Store',
-      'MANUAL',
+      bomRef,
       isKg ? 1 : 0,
       len, wid, thk, dia, od, dens, wpu
     ]
@@ -1683,7 +1717,7 @@ const getMaterialRequestItemsForPlan = async (planId) => {
   );
   const hasRequests = mrCheck.length > 0;
 
-  const addToMap = (itemCode, qty, uom, name, warehouse, category, rate, designQty, currentBalance, isFulfilled, requestExists, dimensions = {}, isExistingRequest = false, isManual = false, ppmId = null) => {
+  const addToMap = (itemCode, qty, uom, name, warehouse, category, rate, designQty, currentBalance, isFulfilled, requestExists, dimensions = {}, isExistingRequest = false, isManual = false, ppmId = null, shapeType = '') => {
     if (!itemCode && !name) return;
 
     const code = (itemCode || name).trim();
@@ -1739,6 +1773,9 @@ const getMaterialRequestItemsForPlan = async (planId) => {
       if (dimensions && Object.keys(dimensions).length > 0 && !existing.dimensions) {
         existing.dimensions = dimensions;
       }
+      if (shapeType && !existing.shape_type) {
+        existing.shape_type = shapeType;
+      }
     } else {
       aggregatedMap.set(key, {
         item_code: code,
@@ -1754,7 +1791,8 @@ const getMaterialRequestItemsForPlan = async (planId) => {
         request_exists: !!requestExists,
         dimensions: dimensions || {},
         is_manual: !!isManual,
-        ppm_id: ppmId
+        ppm_id: ppmId,
+        shape_type: shapeType || ''
       });
     }
   };
@@ -1762,6 +1800,7 @@ const getMaterialRequestItemsForPlan = async (planId) => {
   // Step 1: Add Materials (ONLY materials should be in Material Request)
   const [materials] = await pool.query(`
     SELECT ppm.*, 
+           shape_lookup.shape_name as shape_type,
            COALESCE(actual_sb.item_code, ppm.item_code) as actual_item_code,
            COALESCE(actual_sb.valuation_rate, 0) as stock_rate,
            COALESCE(actual_sb.current_balance, 0) as current_balance,
@@ -1773,6 +1812,20 @@ const getMaterialRequestItemsForPlan = async (planId) => {
            COALESCE(NULLIF(ppm.diameter, 0), actual_sb.diameter, 0) as diameter, 
            COALESCE(NULLIF(ppm.outer_diameter, 0), actual_sb.outer_diameter, 0) as outer_diameter
     FROM production_plan_materials ppm
+    LEFT JOIN (
+        SELECT som.material_name, som.length, som.width, som.thickness, som.diameter, som.outer_diameter,
+               MAX(s.name) as shape_name
+        FROM sales_order_item_materials som
+        LEFT JOIN shapes s ON som.shape_id = s.id
+        GROUP BY som.material_name, som.length, som.width, som.thickness, som.diameter, som.outer_diameter
+    ) shape_lookup ON (
+        LOWER(TRIM(REPLACE(ppm.material_name, '\t', ''))) = LOWER(TRIM(REPLACE(shape_lookup.material_name, '\t', '')))
+        AND ABS(COALESCE(ppm.length, 0) - COALESCE(shape_lookup.length, 0)) < 0.0001
+        AND ABS(COALESCE(ppm.width, 0) - COALESCE(shape_lookup.width, 0)) < 0.0001
+        AND ABS(COALESCE(ppm.thickness, 0) - COALESCE(shape_lookup.thickness, 0)) < 0.0001
+        AND ABS(COALESCE(ppm.diameter, 0) - COALESCE(shape_lookup.diameter, 0)) < 0.0001
+        AND ABS(COALESCE(ppm.outer_diameter, 0) - COALESCE(shape_lookup.outer_diameter, 0)) < 0.0001
+    )
     LEFT JOIN (
          SELECT 
              material_name, 
@@ -1787,32 +1840,31 @@ const getMaterialRequestItemsForPlan = async (planId) => {
          FROM stock_balance 
          GROUP BY material_name, length, width, thickness, diameter, outer_diameter
      ) actual_sb ON (
-         (ppm.material_name = actual_sb.material_name)
-         AND (ABS(COALESCE(ppm.length, 0) - COALESCE(actual_sb.length, 0)) < 0.0001)
-         AND (ABS(COALESCE(ppm.width, 0) - COALESCE(actual_sb.width, 0)) < 0.0001)
-         AND (ABS(COALESCE(ppm.thickness, 0) - COALESCE(actual_sb.thickness, 0)) < 0.0001)
-         AND (ABS(COALESCE(ppm.diameter, 0) - COALESCE(actual_sb.diameter, 0)) < 0.0001)
-         AND (ABS(COALESCE(ppm.outer_diameter, 0) - COALESCE(actual_sb.outer_diameter, 0)) < 0.0001)
+          (ppm.material_name = actual_sb.material_name)
+          AND (ABS(COALESCE(ppm.length, 0) - COALESCE(actual_sb.length, 0)) < 0.0001)
+          AND (ABS(COALESCE(ppm.width, 0) - COALESCE(actual_sb.width, 0)) < 0.0001)
+          AND (ABS(COALESCE(ppm.thickness, 0) - COALESCE(actual_sb.thickness, 0)) < 0.0001)
+          AND (ABS(COALESCE(ppm.diameter, 0) - COALESCE(actual_sb.diameter, 0)) < 0.0001)
+          AND (ABS(COALESCE(ppm.outer_diameter, 0) - COALESCE(actual_sb.outer_diameter, 0)) < 0.0001)
      ) OR (
-         (ppm.item_code = actual_sb.item_code AND ppm.item_code NOT LIKE 'PART-%' AND ppm.item_code NOT LIKE 'SA-%' AND ppm.item_code NOT LIKE 'FG-%' AND ppm.item_code NOT LIKE 'SFG-%' AND ppm.item_code NOT LIKE 'ASSEMBLY%')
-         AND (ABS(COALESCE(ppm.length, 0) - COALESCE(actual_sb.length, 0)) < 0.0001)
-         AND (ABS(COALESCE(ppm.width, 0) - COALESCE(actual_sb.width, 0)) < 0.0001)
-         AND (ABS(COALESCE(ppm.thickness, 0) - COALESCE(actual_sb.thickness, 0)) < 0.0001)
-         AND (ABS(COALESCE(ppm.diameter, 0) - COALESCE(actual_sb.diameter, 0)) < 0.0001)
-         AND (ABS(COALESCE(ppm.outer_diameter, 0) - COALESCE(actual_sb.outer_diameter, 0)) < 0.0001)
+          (ppm.item_code = actual_sb.item_code AND ppm.item_code NOT LIKE 'PART-%' AND ppm.item_code NOT LIKE 'SA-%' AND ppm.item_code NOT LIKE 'FG-%' AND ppm.item_code NOT LIKE 'SFG-%' AND ppm.item_code NOT LIKE 'ASSEMBLY%')
+          AND (ABS(COALESCE(ppm.length, 0) - COALESCE(actual_sb.length, 0)) < 0.0001)
+          AND (ABS(COALESCE(ppm.width, 0) - COALESCE(actual_sb.width, 0)) < 0.0001)
+          AND (ABS(COALESCE(ppm.thickness, 0) - COALESCE(actual_sb.thickness, 0)) < 0.0001)
+          AND (ABS(COALESCE(ppm.diameter, 0) - COALESCE(actual_sb.diameter, 0)) < 0.0001)
+          AND (ABS(COALESCE(ppm.outer_diameter, 0) - COALESCE(actual_sb.outer_diameter, 0)) < 0.0001)
      )
     LEFT JOIN (
-    SELECT 
-        mii.item_code, 
-        mii.material_name,
-        SUM(mii.quantity) as issued_qty
-    FROM material_issue_items mii
-    JOIN material_issues mi ON mii.issue_id = mi.id
-    JOIN work_orders wo ON mi.work_order_id = wo.id
-    WHERE wo.plan_id = ?
-    GROUP BY mii.item_code, mii.material_name
-) issued 
-ON (ppm.material_name = issued.material_name) OR (ppm.item_code = issued.item_code AND ppm.item_code NOT LIKE 'PART-%' AND ppm.item_code NOT LIKE 'SA-%' AND ppm.item_code NOT LIKE 'FG-%' AND ppm.item_code NOT LIKE 'SFG-%' AND ppm.item_code NOT LIKE 'ASSEMBLY%')
+        SELECT 
+            mii.item_code, 
+            mii.material_name,
+            SUM(mii.quantity) as issued_qty
+        FROM material_issue_items mii
+        JOIN material_issues mi ON mii.issue_id = mi.id
+        JOIN work_orders wo ON mi.work_order_id = wo.id
+        WHERE wo.plan_id = ?
+        GROUP BY mii.item_code, mii.material_name
+    ) issued ON (ppm.material_name = issued.material_name) OR (ppm.item_code = issued.item_code AND ppm.item_code NOT LIKE 'PART-%' AND ppm.item_code NOT LIKE 'SA-%' AND ppm.item_code NOT LIKE 'FG-%' AND ppm.item_code NOT LIKE 'SFG-%' AND ppm.item_code NOT LIKE 'ASSEMBLY%')
     LEFT JOIN (
         SELECT 
             LOWER(TRIM(mri.item_code)) as join_item_code,
@@ -1857,6 +1909,11 @@ ON (ppm.material_name = issued.material_name) OR (ppm.item_code = issued.item_co
       ? Math.max(Number(mat.required_qty), Number(mat.current_balance) + Number(mat.issued_qty))
       : Number(mat.current_balance) + Number(mat.issued_qty);
 
+    let shapeType = mat.shape_type || '';
+    if (mat.bom_ref && mat.bom_ref.startsWith('MANUAL:')) {
+      shapeType = mat.bom_ref.substring(7);
+    }
+
     addToMap(
       code,
       mat.required_qty,
@@ -1878,7 +1935,8 @@ ON (ppm.material_name = issued.material_name) OR (ppm.item_code = issued.item_co
       },
       false,             // isExistingRequest
       !!mat.is_manual,   // isManual
-      mat.id             // ppmId
+      mat.id,            // ppmId
+      shapeType          // shapeType
     );
   }
 
@@ -1886,6 +1944,8 @@ ON (ppm.material_name = issued.material_name) OR (ppm.item_code = issued.item_co
   // Step 2: Fetch and add items that are already in a transmitted/created material request for this plan
   const [mrItems] = await pool.query(`
     SELECT mri.*, mri.quantity as required_qty, mr.status,
+           ppm.bom_ref as ppm_bom_ref,
+           shape_lookup.shape_name as shape_type,
            COALESCE(actual_sb.valuation_rate, 0) as stock_rate,
            COALESCE(actual_sb.current_balance, 0) as current_balance,
            COALESCE(issued.issued_qty, 0) as issued_qty,
@@ -1896,6 +1956,29 @@ ON (ppm.material_name = issued.material_name) OR (ppm.item_code = issued.item_co
            COALESCE(NULLIF(mri.outer_diameter, 0), actual_sb.outer_diameter, 0) as outer_diameter
     FROM material_requests mr
     JOIN material_request_items mri ON mr.id = mri.mr_id
+    LEFT JOIN production_plan_materials ppm ON (
+        (mri.item_name = ppm.material_name)
+        AND ABS(COALESCE(mri.length, 0) - COALESCE(ppm.length, 0)) < 0.0001
+        AND ABS(COALESCE(mri.width, 0) - COALESCE(ppm.width, 0)) < 0.0001
+        AND ABS(COALESCE(mri.thickness, 0) - COALESCE(ppm.thickness, 0)) < 0.0001
+        AND ABS(COALESCE(mri.diameter, 0) - COALESCE(ppm.diameter, 0)) < 0.0001
+        AND ABS(COALESCE(mri.outer_diameter, 0) - COALESCE(ppm.outer_diameter, 0)) < 0.0001
+        AND ppm.plan_id = mr.plan_id
+    )
+    LEFT JOIN (
+        SELECT som.material_name, som.length, som.width, som.thickness, som.diameter, som.outer_diameter,
+               MAX(s.name) as shape_name
+        FROM sales_order_item_materials som
+        LEFT JOIN shapes s ON som.shape_id = s.id
+        GROUP BY som.material_name, som.length, som.width, som.thickness, som.diameter, som.outer_diameter
+    ) shape_lookup ON (
+        LOWER(TRIM(mri.item_name)) = LOWER(TRIM(shape_lookup.material_name))
+        AND ABS(COALESCE(mri.length, 0) - COALESCE(shape_lookup.length, 0)) < 0.0001
+        AND ABS(COALESCE(mri.width, 0) - COALESCE(shape_lookup.width, 0)) < 0.0001
+        AND ABS(COALESCE(mri.thickness, 0) - COALESCE(shape_lookup.thickness, 0)) < 0.0001
+        AND ABS(COALESCE(mri.diameter, 0) - COALESCE(shape_lookup.diameter, 0)) < 0.0001
+        AND ABS(COALESCE(mri.outer_diameter, 0) - COALESCE(shape_lookup.outer_diameter, 0)) < 0.0001
+    )
     LEFT JOIN (
         SELECT 
             material_name, 
@@ -1935,8 +2018,8 @@ ON (ppm.material_name = issued.material_name) OR (ppm.item_code = issued.item_co
         WHERE wo.plan_id = ?
         GROUP BY mii.item_code, mii.material_name
     ) issued ON (mri.item_name = issued.material_name) OR (mri.item_code = issued.item_code)
-    WHERE mr.plan_id = ?
-  `, [planId, planId]);
+    WHERE mr.plan_id = ? OR mr.notes LIKE ?
+  `, [planId, planId, `%${planCode}%`]);
 
   for (const mri of mrItems) {
     let code = (mri.item_code || '').toUpperCase();
@@ -1953,6 +2036,11 @@ ON (ppm.material_name = issued.material_name) OR (ppm.item_code = issued.item_co
     const effectiveInventory = isFulfilled
       ? Math.max(Number(mri.required_qty), Number(mri.current_balance) + Number(mri.issued_qty))
       : Number(mri.current_balance) + Number(mri.issued_qty);
+
+    let shapeType = mri.shape_type || '';
+    if (mri.ppm_bom_ref && mri.ppm_bom_ref.startsWith('MANUAL:')) {
+      shapeType = mri.ppm_bom_ref.substring(7);
+    }
 
     addToMap(
       code,
@@ -1973,7 +2061,10 @@ ON (ppm.material_name = issued.material_name) OR (ppm.item_code = issued.item_co
         diameter: mri.diameter,
         outer_diameter: mri.outer_diameter
       },
-      true // isExistingRequest
+      true, // isExistingRequest
+      !!(mri.item_source === 'MANUAL'), // isManual
+      null, // ppmId
+      shapeType // shapeType
     );
   }
 

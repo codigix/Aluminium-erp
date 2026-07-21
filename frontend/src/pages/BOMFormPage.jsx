@@ -1605,6 +1605,9 @@ const BOMFormPage = () => {
         payload.shape = resolvedShapeName;
         payload.thread_pitch = formData.threadPitch || formData.thread_pitch || '';
         payload.threadPitch = formData.threadPitch || formData.thread_pitch || '';
+        if (String(resolvedShapeName).toLowerCase().includes('threaded') || String(resolvedShapeName).toLowerCase().includes('thread')) {
+          payload.thickness = payload.thread_pitch || payload.threadPitch || payload.thickness || 0;
+        }
         payload.material_id = formData.materialId || '';
         payload.materialId = formData.materialId || '';
         payload.density = formData.density || '';
@@ -1700,6 +1703,9 @@ const BOMFormPage = () => {
         payload.shape = resolvedShapeName;
         payload.thread_pitch = formData.threadPitch || formData.thread_pitch || '';
         payload.threadPitch = formData.threadPitch || formData.thread_pitch || '';
+        if (String(resolvedShapeName).toLowerCase().includes('threaded') || String(resolvedShapeName).toLowerCase().includes('thread')) {
+          payload.thickness = payload.thread_pitch || payload.threadPitch || payload.thickness || 0;
+        }
         payload.material_id = formData.materialId || '';
         payload.materialId = formData.materialId || '';
         payload.density = formData.density || '';
@@ -3472,8 +3478,8 @@ const BOMFormPage = () => {
                                   });
                                   if (!valResult.isValid) {
                                     return (
-                                      <div className="text-xs text-rose-600 font-semibold bg-rose-50 border border-rose-200 p-2 rounded flex items-center gap-1.5 mt-2">
-                                        <span>❌ {valResult.error}</span>
+                                      <div className="text-xs text-amber-700 font-semibold bg-amber-50 border border-amber-200 p-2 rounded flex items-center gap-1.5 mt-2">
+                                        <span>⚠️ {valResult.error}</span>
                                       </div>
                                     );
                                   }

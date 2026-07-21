@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Vendor Tax Invoice</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: Arial, Helvetica, 'Segoe UI', sans-serif;
+      font-size: 10.5px;
+      color: #000000;
+      line-height: 1.35;
+      background: #ffffff;
+      padding: 10px;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      text-rendering: optimizeLegibility;
+    }
+
+    /* Borders and structures */
+    .border-box {
+      border: 1px solid #000000;
+      border-radius: 2px;
+      margin-bottom: 8px;
+      overflow: hidden;
+    }
+
+    .header-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .header-table td {
+      padding: 8px 12px;
+      vertical-align: middle;
+    }
+
+    .logo-container {
+      width: 110px;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .logo-img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+    }
+
+    .company-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #000000;
+      letter-spacing: 0.3px;
+      margin-bottom: 2px;
+    }
+
+    .company-details {
+      font-size: 9.5px;
+      color: #000000;
+      line-height: 1.35;
+      font-weight: 500;
+    }
+
+    .grn-title-cell {
+      text-align: center;
+      vertical-align: middle;
+    }
+
+    .grn-title {
+      font-size: 16px;
+      font-weight: 800;
+      color: #000000;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      border: 1.5px solid #000000;
+      padding: 4px 10px;
+      display: inline-block;
+      border-radius: 2px;
+      background-color: #f8fafc;
+    }
+
+    /* Cards layouts */
+    .cards-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .card-half {
+      flex: 1;
+      border: 1px solid #000000;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .card-header {
+      background-color: #f1f5f9;
+      border-bottom: 1px solid #000000;
+      padding: 5px 8px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .card-header-icon {
+      display: inline-flex;
+      align-items: center;
+      color: #000000;
+    }
+
+    .card-header-title {
+      font-size: 9.5px;
+      font-weight: 700;
+      color: #000000;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+
+    .card-body {
+      padding: 8px 10px;
+      min-height: 110px;
+    }
+
+    .card-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .card-table td {
+      padding: 2.5px 0;
+      vertical-align: top;
+      font-size: 9.5px;
+    }
+
+    .card-table td.label-col {
+      width: 36%;
+      color: #000000;
+      font-weight: 700;
+    }
+
+    .card-table td.colon-col {
+      width: 4%;
+      color: #000000;
+      font-weight: 700;
+    }
+
+    .card-table td.val-col {
+      width: 60%;
+      color: #000000;
+      font-weight: 600;
+    }
+
+    /* Project Reference Card */
+    .card-full {
+      border: 1px solid #000000;
+      border-radius: 2px;
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+
+    .card-full .card-body {
+      min-height: auto;
+      padding: 8px 12px;
+    }
+
+    .proj-name {
+      font-weight: 700;
+      color: #000000;
+      font-size: 10.5px;
+      margin-bottom: 2px;
+    }
+
+    .proj-detail {
+      color: #000000;
+      font-size: 9.5px;
+      line-height: 1.35;
+      font-weight: 500;
+    }
+
+    /* Items Table styling */
+    .items-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 8px;
+    }
+
+    .items-table th {
+      border: 1px solid #000000;
+      background-color: #f1f5f9;
+      color: #000000;
+      font-size: 9.5px;
+      font-weight: 700;
+      padding: 6px 8px;
+      text-align: center;
+    }
+
+    .items-table td {
+      border: 1px solid #000000;
+      padding: 6px 8px;
+      vertical-align: top;
+      font-size: 9.5px;
+      color: #000000;
+    }
+
+    .cell-center {
+      text-align: center;
+    }
+
+    .cell-right {
+      text-align: right;
+    }
+
+    .item-bold {
+      font-weight: 700;
+      color: #000000;
+    }
+
+    .item-subtext {
+      font-size: 9px;
+      color: #000000;
+      margin-top: 1px;
+    }
+
+    /* Totals Box */
+    .totals-wrapper {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 8px;
+    }
+
+    .totals-table {
+      width: 44%;
+      border-collapse: collapse;
+      border: 1px solid #000000;
+      border-radius: 2px;
+    }
+
+    .totals-table td {
+      border: 1px solid #000000;
+      padding: 5px 10px;
+      font-size: 9.5px;
+    }
+
+    .totals-table td.label-cell {
+      text-align: left;
+      color: #000000;
+      font-weight: 700;
+    }
+
+    .totals-table td.val-cell {
+      text-align: right;
+      font-weight: 700;
+      color: #000000;
+    }
+
+    .totals-table tr.grand-total-row td {
+      background-color: #f1f5f9;
+      font-weight: 700;
+      color: #000000;
+      font-size: 11px;
+    }
+
+    /* Terms & Notes Cards */
+    .terms-card {
+      border: 1px solid #000000;
+      border-radius: 2px;
+      padding: 8px 12px;
+      margin-bottom: 8px;
+      background-color: #f1f5f9;
+    }
+
+    .terms-row {
+      display: flex;
+      font-size: 9.5px;
+      margin-bottom: 3px;
+    }
+
+    .terms-row:last-child {
+      margin-bottom: 0;
+    }
+
+    .terms-label {
+      width: 120px;
+      color: #000000;
+      font-weight: 700;
+    }
+
+    .terms-val {
+      color: #000000;
+      font-weight: 700;
+    }
+
+    .instructions-card {
+      border: 1px solid #000000;
+      border-radius: 2px;
+      padding: 8px 12px;
+      margin-bottom: 8px;
+    }
+
+    .instructions-title {
+      font-weight: 700;
+      font-size: 10px;
+      color: #000000;
+      margin-bottom: 4px;
+    }
+
+    .instructions-list {
+      padding-left: 14px;
+      font-size: 9px;
+      color: #000000;
+      line-height: 1.4;
+      font-weight: 500;
+    }
+
+    /* Signature table */
+    .sig-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 15px;
+      margin-bottom: 25px;
+    }
+
+    .sig-table td {
+      width: 20%;
+      text-align: center;
+      vertical-align: bottom;
+      font-size: 8.5px;
+      color: #475569;
+      font-weight: 600;
+    }
+
+    .sig-line {
+      border-top: 1px dashed #cbd5e1;
+      margin: 0 10px 5px 10px;
+    }
+
+    /* Footer */
+    .footer-section {
+      border-top: 1px solid #cbd5e1;
+      padding-top: 6px;
+      font-size: 8px;
+      color: #64748b;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+  </style>
+</head>
+<body>
+  <!-- HEADER BLOCK -->
+  <div class="border-box">
+    <table class="header-table">
+      <tr>
+        <td style="width: 80px;">
+          <div class="logo-container">
+            {{#hostCompanyLogo}}
+            <img src="{{hostCompanyLogo}}" alt="Company Logo" class="logo-img" />
+            {{/hostCompanyLogo}}
+            {{^hostCompanyLogo}}
+            <div style="font-size: 18px; font-weight: 800; color: #2563eb;">{{hostCompanyShortName}}</div>
+            {{/hostCompanyLogo}}
+          </div>
+        </td>
+        <td>
+          <div class="company-title">{{hostCompanyName}}</div>
+          <div class="company-details">
+            {{hostCompanyAddress}}<br />
+            {{#hostCompanyGST}}GSTIN/UIN: {{hostCompanyGST}}{{/hostCompanyGST}}
+          </div>
+        </td>
+        <td class="grn-title-cell">
+          <div class="grn-title">RECEIPT</div>
+        </td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- CARDS ROW: VENDOR INFORMATION & INVOICE DETAILS -->
+  <div class="cards-row">
+    <!-- LEFT CARD: VENDOR INFORMATION -->
+    <div class="card-half">
+      <div class="card-header">
+        <span class="card-header-icon">👤</span>
+        <span class="card-header-title">VENDOR INFORMATION</span>
+      </div>
+      <div class="card-body">
+        <table class="card-table">
+          <tr>
+            <td class="label-col">Vendor Name</td>
+            <td class="colon-col">:</td>
+            <td class="val-col" style="font-weight: 700; color: #0f172a;">{{vendorName}}</td>
+          </tr>
+          <tr>
+            <td class="label-col">Vendor Code</td>
+            <td class="colon-col">:</td>
+            <td class="val-col">{{vendorCode}}</td>
+          </tr>
+          <tr>
+            <td class="label-col">Contact Person</td>
+            <td class="colon-col">:</td>
+            <td class="val-col">{{contactPerson}}</td>
+          </tr>
+          <tr>
+            <td class="label-col">Email</td>
+            <td class="colon-col">:</td>
+            <td class="val-col">{{vendorEmail}}</td>
+          </tr>
+          <tr>
+            <td class="label-col">Phone</td>
+            <td class="colon-col">:</td>
+            <td class="val-col">{{vendorPhone}}</td>
+          </tr>
+          <tr>
+            <td class="label-col">GST No</td>
+            <td class="colon-col">:</td>
+            <td class="val-col">{{vendorGST}}</td>
+          </tr>
+          <tr>
+            <td class="label-col">Address</td>
+            <td class="colon-col">:</td>
+            <td class="val-col">{{vendorAddress}}</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- RIGHT CARD: INVOICE DETAILS -->
+    <div class="card-half">
+      <div class="card-header">
+        <span class="card-header-icon">📄</span>
+        <span class="card-header-title">INVOICE DETAILS</span>
+      </div>
+      <div class="card-body">
+        <table class="card-table">
+          <tr>
+            <td class="label-col">Supplier PO No.</td>
+            <td class="colon-col">:</td>
+            <td class="val-col" style="font-weight: 700;">{{poNumber}}</td>
+          </tr>
+          <tr>
+            <td class="label-col">Vendor Invoice No.</td>
+            <td class="colon-col">:</td>
+            <td class="val-col" style="font-weight: 700; color: #2563eb;">{{invoiceNo}}</td>
+          </tr>
+          <tr>
+            <td class="label-col">Vendor Invoice Date</td>
+            <td class="colon-col">:</td>
+            <td class="val-col">{{invoiceDate}}</td>
+          </tr>
+          <tr>
+            <td class="label-col">GRN No.</td>
+            <td class="colon-col">:</td>
+            <td class="val-col">{{grnNo}}</td>
+          </tr>
+          <tr>
+            <td class="label-col">GRN Date</td>
+            <td class="colon-col">:</td>
+            <td class="val-col">{{grnDate}}</td>
+          </tr>
+          <tr>
+            <td class="label-col">Payment Terms</td>
+            <td class="colon-col">:</td>
+            <td class="val-col">{{paymentTerms}}</td>
+          </tr>
+          <tr>
+            <td class="label-col">Due Date</td>
+            <td class="colon-col">:</td>
+            <td class="val-col">{{dueDate}}</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- COMPANY INFORMATION CARD -->
+  <div class="card-full">
+    <div class="card-header">
+      <span class="card-header-icon">🏢</span>
+      <span class="card-header-title">COMPANY INFORMATION</span>
+    </div>
+    <div class="card-body">
+      <div class="proj-name">{{hostCompanyName}}</div>
+      <div class="proj-detail">
+        {{hostCompanyAddress}}<br />
+        {{#hostCompanyGST}}GSTIN : {{hostCompanyGST}}{{/hostCompanyGST}}
+      </div>
+    </div>
+  </div>
+
+  <!-- MATERIAL DETAILS TABLE -->
+  <table class="items-table">
+    <thead>
+      <tr>
+        <th style="width: 5%;">Sr.</th>
+        <th style="width: 25%;">Drawing No / Item Code</th>
+        <th style="width: 26%;">Description / Material Name</th>
+        <th style="width: 8%;">HSN</th>
+        <th style="width: 10%;">Qty</th>
+        <th style="width: 9%;">Weight</th>
+        <th style="width: 8%;">Rate (₹)</th>
+        <th style="width: 9%;">Amount (₹)</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{#items}}
+      <tr>
+        <td class="cell-center">{{sr}}</td>
+        <td>
+          <div class="item-bold">{{drawingNoOrCode}}</div>
+          <div class="item-subtext">Item Code: {{itemCode}}</div>
+          {{#dimsSpec}}<div class="item-subtext" style="font-family: monospace;">Dimensions: {{dimsSpec}}</div>{{/dimsSpec}}
+        </td>
+        <td>
+          <div class="item-bold">{{materialName}}</div>
+          <div class="item-subtext">{{description}}</div>
+        </td>
+        <td class="cell-center">{{hsnCode}}</td>
+        <td class="cell-center">{{qty}}</td>
+        <td class="cell-center">{{weight}}</td>
+        <td class="cell-right">{{rate}}</td>
+        <td class="cell-right">{{amount}}</td>
+      </tr>
+      {{/items}}
+    </tbody>
+  </table>
+
+  <!-- TOTALS / TAX SUMMARY -->
+  <div class="totals-wrapper">
+    <table class="totals-table">
+      <tr>
+        <td class="label-cell">Sub Total (Before Tax)</td>
+        <td class="val-cell">₹{{subTotal}}</td>
+      </tr>
+      <tr>
+        <td class="label-cell">CGST ({{cgstRate}}%)</td>
+        <td class="val-cell">₹{{cgstAmount}}</td>
+      </tr>
+      <tr>
+        <td class="label-cell">SGST ({{sgstRate}}%)</td>
+        <td class="val-cell">₹{{sgstAmount}}</td>
+      </tr>
+      <tr class="grand-total-row">
+        <td class="label-cell">Grand Total</td>
+        <td class="val-cell">₹{{grandTotal}}</td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- REMARKS / NOTES -->
+  <div class="instructions-card">
+    <div class="instructions-title">Notes / Remarks</div>
+    <ul class="instructions-list">
+      <li>Invoice verified against Supplier PO and GRN.</li>
+      <li>Material received successfully into ERP inventory stock balance.</li>
+    </ul>
+  </div>
+
+  <!-- APPROVAL SIGNATURES -->
+  <table class="sig-table">
+    <tr>
+      <td>
+        <div class="sig-line"></div>
+        Prepared By
+      </td>
+      <td>
+        <div class="sig-line"></div>
+        Purchase
+      </td>
+      <td>
+        <div class="sig-line"></div>
+        Authorized Signatory
+      </td>
+    </tr>
+  </table>
+
+  <!-- FOOTER -->
+  <div class="footer-section">
+    <div>This is a system generated document and does not require physical signature.</div>
+    <div>{{hostCompanyName}}</div>
+    <div>Page 1 of 1</div>
+  </div>
+</body>
+</html>

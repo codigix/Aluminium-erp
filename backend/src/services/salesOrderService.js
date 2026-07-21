@@ -1157,11 +1157,13 @@ const getOrderTimeline = async salesOrderId => {
 
   // Fetch all related data in bulk
   const [allMaterials] = await pool.query(
-    `SELECT * FROM sales_order_item_materials 
-     WHERE sales_order_item_id IN (?) 
-     OR (item_code IN (?) AND sales_order_item_id IS NULL)
-     OR (drawing_no IN (?) AND sales_order_item_id IS NULL AND item_code IS NULL)
-     ORDER BY created_at ASC`,
+    `SELECT m.*, s.name as shape_type, s.name as shape_name, s.name as shape 
+     FROM sales_order_item_materials m
+     LEFT JOIN shapes s ON m.shape_id = s.id
+     WHERE m.sales_order_item_id IN (?) 
+     OR (m.item_code IN (?) AND m.sales_order_item_id IS NULL)
+     OR (m.drawing_no IN (?) AND m.sales_order_item_id IS NULL AND m.item_code IS NULL)
+     ORDER BY m.created_at ASC`,
     [itemIds, itemCodes.length > 0 ? itemCodes : [null], drawingNosForLookup.length > 0 ? drawingNosForLookup : [null]]
   );
 

@@ -1,6 +1,8 @@
 const pool = require('../config/db');
 const puppeteer = require('puppeteer');
 const mustache = require('mustache');
+const path = require('path');
+const fs = require('fs');
 const emailService = require('./emailService');
 
 const generatePaymentVoucherNo = async () => {
@@ -726,75 +728,55 @@ const formatDimensions = (item) => {
     return '';
   }
 
-  // Determine shape
-  let shape = (
-    item.shape_type || 
-    item.shape_name || 
-    item.shape || 
-    item.material_name || 
-    item.name || 
-    item.item_name || 
-    item.item_code || 
-    ''
+  const shape = (
+    item.shape_type || item.shape_name || item.shape ||
+    item.material_name || item.name || item.item_name || item.item_code || ''
   ).toLowerCase();
 
   let matchedShape = '';
-  if (shape.includes('square') || shape.includes('sq') || shape.includes('box')) {
-    matchedShape = 'square tube';
-  } else if (shape.includes('rectangular') || shape.includes('rect') || shape.includes('rt')) {
-    matchedShape = 'rectangular tube';
-  } else if (shape.includes('hex') || shape.includes('hexagonal')) {
-    matchedShape = 'hexagonal bar';
-  } else if (shape.includes('plate') || shape.includes('sheet') || shape.includes('flat') || shape.includes('profile')) {
-    matchedShape = 'plate';
-  } else if (shape.includes('pipe') || shape.includes('tube')) {
-    matchedShape = 'pipe';
-  } else if (shape.includes('round') || shape.includes('rod') || shape.includes('bar')) {
-    matchedShape = 'round';
-  } else {
-    // Fallback detection by dimension values
-    if (dia > 0) {
-      matchedShape = 'round';
-    } else if (od > 0 && thk > 0) {
-      matchedShape = 'pipe';
-    } else if (wid > 0 && thk > 0 && len > 0) {
-      matchedShape = 'plate';
-    } else if (wid > 0 && len > 0) {
-      matchedShape = 'hexagonal bar';
-    } else {
-      matchedShape = 'plate';
-    }
-  }
+  if (shape.includes('threaded') || shape.includes('thread')) matchedShape = 'threaded rod';
+  else if (shape.includes('square tube') || (shape.includes('square') && shape.includes('tube'))) matchedShape = 'square tube';
+  else if (shape.includes('rectangular tube') || shape.includes('rect tube') || (shape.includes('rect') && shape.includes('tube'))) matchedShape = 'rectangular tube';
+  else if (shape.includes('square bar') || (shape.includes('square') && shape.includes('bar'))) matchedShape = 'square bar';
+  else if (shape.includes('rectangular bar') || (shape.includes('rect') && shape.includes('bar'))) matchedShape = 'rectangular bar';
+  else if (shape.includes('hex') || shape.includes('hexagonal')) matchedShape = 'hexagonal bar';
+  else if (shape.includes('unequal angle')) matchedShape = 'unequal angle';
+  else if (shape.includes('equal angle')) matchedShape = 'equal angle';
+  else if (shape.includes('angle')) matchedShape = 'angle';
+  else if (shape.includes('plate') || shape.includes('sheet')) matchedShape = 'plate';
+  else if (shape.includes('flat')) matchedShape = 'flat bar';
+  else if (shape.includes('pipe') || shape.includes('tube')) matchedShape = 'pipe';
+  else if (shape.includes('round') || shape.includes('rod') || shape.includes('bar')) matchedShape = 'round bar';
+  else if (dia > 0) matchedShape = 'round bar';
+  else if (od > 0 && thk > 0) matchedShape = 'pipe';
+  else if (wid > 0 && thk > 0 && len > 0) matchedShape = 'plate';
+  else matchedShape = 'plate';
 
-  const fmt = (label, val) => {
-    if (!val || parseFloat(val) === 0) return null;
-    const num = parseFloat(val);
-    const formatted = num % 1 === 0 ? num.toFixed(0) : num.toFixed(1);
-    return `${label}:${formatted}`;
+  const nf = (v) => {
+    if (!v || isNaN(parseFloat(v)) || parseFloat(v) === 0) return null;
+    const num = parseFloat(v);
+    return num % 1 === 0 ? num.toFixed(0) : num.toFixed(1);
   };
 
-  let parts = [];
-  if (matchedShape === 'square tube') {
-    parts = [fmt('A', wid), fmt('T', thk), fmt('L', len)];
-  } else if (matchedShape === 'rectangular tube') {
-    parts = [fmt('W', wid), fmt('H', od), fmt('T', thk), fmt('L', len)];
-  } else if (matchedShape === 'round') {
-    const dVal = dia > 0 ? dia : (od > 0 ? od : wid);
-    parts = [fmt('D', dVal), fmt('L', len)];
-  } else if (matchedShape === 'pipe') {
-    const odVal = od > 0 ? od : dia;
-    parts = [fmt('OD', odVal), fmt('T', thk), fmt('L', len)];
-  } else if (matchedShape === 'hexagonal bar') {
-    parts = [fmt('AF', wid), fmt('L', len)];
-  } else if (matchedShape === 'plate') {
-    parts = [fmt('W', wid), fmt('T', thk), fmt('L', len)];
-  } else {
-    parts = [fmt('OD', od), fmt('W', wid), fmt('T', thk), fmt('Dia', dia), fmt('L', len)];
-  }
+  let prefix = '', dimParts = [];
+  if (matchedShape === 'plate')              { prefix = 'PL';   dimParts = [nf(wid), nf(len), nf(thk)]; }
+  else if (matchedShape === 'flat bar')      { prefix = 'FB';   dimParts = [nf(wid), nf(thk), nf(len)]; }
+  else if (matchedShape === 'round bar')     { prefix = 'RB';   const dv = dia > 0 ? dia : (od > 0 ? od : wid); dimParts = [`Ø${nf(dv)}`, nf(len)]; }
+  else if (matchedShape === 'hexagonal bar') { prefix = 'HEX';  dimParts = [`AF${nf(wid)}`, nf(len)]; }
+  else if (matchedShape === 'square bar')    { prefix = 'SQ';   dimParts = [nf(wid), nf(len)]; }
+  else if (matchedShape === 'rectangular bar') { prefix = 'REC'; dimParts = [nf(wid), nf(od), nf(len)]; }
+  else if (matchedShape === 'pipe')          { prefix = 'PIPE'; const ov = od > 0 ? od : dia; dimParts = [`OD${nf(ov)}`, nf(thk), nf(len)]; }
+  else if (matchedShape === 'square tube')   { prefix = 'SQT';  dimParts = [nf(wid), nf(thk), nf(len)]; }
+  else if (matchedShape === 'rectangular tube') { prefix = 'RCT'; dimParts = [nf(wid), nf(od), nf(thk), nf(len)]; }
+  else if (matchedShape === 'threaded rod')  { prefix = 'TR';   const dv = dia > 0 ? dia : od; const pv = parseFloat(item.thread_pitch || item.threadPitch || thk || item.thickness || 0); dimParts = [`M${nf(dv)}`, pv > 0 ? nf(pv) : null, nf(len)]; }
+  else if (matchedShape === 'angle')         { prefix = 'L';    dimParts = [nf(wid), nf(od || thk), nf(thk), nf(len)]; }
+  else if (matchedShape === 'equal angle')   { prefix = 'EA';   dimParts = [nf(wid), nf(wid), nf(thk), nf(len)]; }
+  else if (matchedShape === 'unequal angle') { prefix = 'UA';   dimParts = [nf(wid), nf(od), nf(thk), nf(len)]; }
+  else { dimParts = [nf(wid), nf(od), nf(thk), nf(dia), nf(len)]; }
 
-  const cleanParts = parts.filter(Boolean);
-  if (cleanParts.length === 0) return '';
-  return cleanParts.join(' × ') + ' mm';
+  const clean = dimParts.filter(Boolean);
+  if (clean.length === 0) return '';
+  return `${prefix} ${clean.join(' × ')} mm`.trim();
 };
 
 const generateVendorInvoicePDF = async (id, type) => {
@@ -888,7 +870,8 @@ const generateVendorInvoicePDF = async (id, type) => {
     }));
   } else {
     const [poRows] = await pool.query(
-      `SELECT po.*, v.vendor_name, v.gstin as vendor_gstin, v.location as vendor_address
+      `SELECT po.*, v.vendor_code, v.vendor_name, v.gstin as vendor_gstin, v.location as vendor_address,
+              v.email as vendor_email, v.phone as vendor_phone
        FROM purchase_orders po
        LEFT JOIN vendors v ON po.vendor_id = v.id
        WHERE po.id = ?`,
@@ -898,12 +881,22 @@ const generateVendorInvoicePDF = async (id, type) => {
     if (poRows.length === 0) throw new Error('Purchase Order not found');
     const po = poRows[0];
 
-    vendor_name = po.vendor_name;
+    // Fetch related GRN if available
+    const [grnRows] = await pool.query(
+      `SELECT g.* FROM grns g
+       JOIN po_receipts pr ON g.po_receipt_id = pr.id
+       WHERE pr.po_id = ?
+       ORDER BY g.id DESC LIMIT 1`,
+      [id]
+    );
+    const grn = grnRows.length > 0 ? grnRows[0] : null;
+
+    vendor_name = po.vendor_name || 'N/A';
     vendor_address = po.vendor_address || 'N/A';
     vendor_gstin = po.vendor_gstin || 'N/A';
-    invoice_no = po.po_number;
+    invoice_no = `INV-${po.po_number || po.id}`;
     created_at = formatDate(po.created_at);
-    po_number = po.po_number;
+    po_number = po.po_number || 'N/A';
     po_date = formatDate(po.created_at);
 
     const [itemRows] = await pool.query(
@@ -920,294 +913,168 @@ const generateVendorInvoicePDF = async (id, type) => {
     subtotal = itemRows.reduce((sum, item) => sum + (item.quantity * item.unit_rate), 0);
     cgst_total = itemRows.reduce((sum, item) => sum + parseFloat(item.cgst_amount || 0), 0);
     sgst_total = itemRows.reduce((sum, item) => sum + parseFloat(item.sgst_amount || 0), 0);
-    net_total = parseFloat(po.total_amount || 0);
+    net_total = parseFloat(po.total_amount || (subtotal + cgst_total + sgst_total));
 
-    itemsList = itemRows.map((item, idx) => ({
-      index: idx + 1,
-      description: item.material_name || item.material_code,
-      hsn_code: item.hsn_code,
-      quantity: item.quantity,
-      unit: item.unit || 'Nos',
-      rate: parseFloat(item.unit_rate || 0).toFixed(2),
-      item_amount: (item.quantity * (item.unit_rate || 0)).toFixed(2),
-      dimensions: formatDimensions(item)
-    }));
-  }
+    itemsList = itemRows.map((item, idx) => {
+      let weightVal = parseFloat(item.calculated_weight || item.weight || item.total_weight || item.unit_weight || 0);
+      if (weightVal === 0) {
+        const len = parseFloat(item.length || item.dimensions?.length || 0);
+        const wid = parseFloat(item.width || item.dimensions?.width || 0);
+        const thk = parseFloat(item.thickness || item.dimensions?.thickness || 0);
+        const dia = parseFloat(item.diameter || item.dimensions?.diameter || 0);
+        const od = parseFloat(item.outer_diameter || item.outerDiameter || item.dimensions?.outer_diameter || 0);
+        const density = parseFloat(item.density || 7.85);
+        const shapeStr = String(item.shape_type || item.shape_name || item.shape || item.material_name || '').trim().toLowerCase();
 
-  const [paymentRows] = await pool.query(
-    type === 'SUBCONTRACTING'
-      ? `SELECT COALESCE(SUM(payment_amount), 0) as paid_amount FROM payments WHERE job_card_quality_log_id = ? AND status = 'CONFIRMED'`
-      : `SELECT COALESCE(SUM(payment_amount), 0) as paid_amount FROM payments WHERE po_id = ? AND status = 'CONFIRMED'`,
-    [id]
-  );
-  const paidAmount = Number(paymentRows[0].paid_amount || 0);
-  const balanceAmount = net_total - paidAmount;
-  let paymentStatus = 'Pending';
-  if (balanceAmount <= 0) {
-    paymentStatus = 'Completed';
-  } else if (paidAmount > 0) {
-    paymentStatus = 'Partial';
-  }
+        if (shapeStr.includes('threaded') || shapeStr.includes('thread')) {
+          const dVal = dia > 0 ? dia : od;
+          const pVal = parseFloat(item.thread_pitch || item.threadPitch || item.dimensions?.thread_pitch || item.dimensions?.threadPitch || 0);
+          if (dVal > 0 && pVal > 0 && pVal < dVal && len > 0) {
+            const tensileArea = 0.7854 * Math.pow(dVal - (0.9382 * pVal), 2);
+            weightVal = (tensileArea * len * density) / 1000000;
+          }
+        } else if (len > 0 && wid > 0 && thk > 0) {
+          weightVal = (len * wid * thk * density) / 1000000;
+        } else if (len > 0 && dia > 0) {
+          weightVal = (Math.PI * Math.pow(dia, 2) / 4 * len * density) / 1000000;
+        }
+      }
+      const weightFormatted = weightVal > 0 ? `${weightVal.toFixed(3)} Kg` : '—';
+      const qtyFormatted = `${parseFloat(item.quantity || 0).toFixed(3)} ${item.unit || 'Nos'}`;
 
-  const invoice_summary = {
-    invoice_amount: net_total.toFixed(2),
-    paid_amount: paidAmount.toFixed(2),
-    balance_amount: balanceAmount.toFixed(2),
-    status: paymentStatus !== 'Pending' ? paymentStatus : null
-  };
+      // Engineering standard size formatting (matches frontend formatters.js)
+      const len = parseFloat(item.length || item.dimensions?.length || 0);
+      const wid = parseFloat(item.width || item.dimensions?.width || 0);
+      const thk = parseFloat(item.thickness || item.dimensions?.thickness || 0);
+      const dia = parseFloat(item.diameter || item.dimensions?.diameter || 0);
+      const od = parseFloat(item.outer_diameter || item.outerDiameter || item.dimensions?.outer_diameter || 0);
+      const shapeRaw = (item.shape_type || item.shape_name || item.shape || item.material_name || '').toLowerCase();
 
-  const net_total_words = numberToWords(net_total);
-  const empty_rows = Array(Math.max(0, 5 - itemsList.length)).fill({});
+      const nf = (v) => { if (!v || isNaN(parseFloat(v))) return null; const num = parseFloat(v); return num % 1 === 0 ? num.toFixed(0) : num.toFixed(1); };
 
-  const htmlTemplate = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <style>
-        @page { size: A4; margin: 10mm; }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #000; line-height: 1.3; margin: 0; font-size: 10px; }
-        .invoice-container { border: 1px solid #000; min-height: 270mm; position: relative; }
-        
-        .tax-invoice-label { text-align: center; border-bottom: 1px solid #000; font-weight: bold; font-size: 14px; padding: 5px; }
-        
-        .header-section { display: flex; border-bottom: 1px solid #000; }
-        .header-left { flex: 1.5; padding: 10px; border-right: 1px solid #000; }
-        .header-right { flex: 1; padding: 10px; }
-        
-        .company-name { font-size: 16px; font-weight: bold; margin-bottom: 5px; }
-        .address-text { font-size: 9px; margin-bottom: 2px; }
-        
-        .info-grid { display: grid; grid-template-columns: 1fr 1fr; width: 100%; border-bottom: 1px solid #000; }
-        .info-box { padding: 8px; border-right: 1px solid #000; min-height: 80px; }
-        .info-box:last-child { border-right: none; }
-        .label { font-weight: bold; text-decoration: underline; margin-bottom: 5px; display: block; font-size: 11px; }
-        
-        .meta-table { width: 100%; border-collapse: collapse; }
-        .meta-table td { padding: 4px; border: 1px solid #000; }
-        .meta-label { font-weight: bold; width: 40%; }
-        
-        .items-table { width: 100%; border-collapse: collapse; border-bottom: 1px solid #000; }
-        .items-table th { border: 1px solid #000; padding: 6px; background: #f0f0f0; font-weight: bold; text-align: center; font-size: 9px; }
-        .items-table td { border-left: 1px solid #000; border-right: 1px solid #000; padding: 6px; vertical-align: top; }
-        .items-table tr.item-row { min-height: 30px; }
-        
-        .total-section { display: flex; border-bottom: 1px solid #000; }
-        .words-section { flex: 1.5; padding: 10px; border-right: 1px solid #000; }
-        .calc-section { flex: 1; }
-        
-        .calc-table { width: 100%; border-collapse: collapse; }
-        .calc-table td { padding: 5px; border-bottom: 1px solid #000; text-align: right; }
-        .calc-table td:first-child { text-align: left; font-weight: bold; border-right: 1px solid #000; }
-        .calc-table tr:last-child td { border-bottom: none; font-size: 12px; font-weight: bold; }
-        
-        .footer-section { display: flex; padding: 20px 10px; border-top: 1px solid #000; position: absolute; bottom: 0; width: 100%; box-sizing: border-box; }
-        .footer-col { flex: 1; text-align: center; }
-        .signature-box { margin-top: 40px; border-top: 1px dashed #000; display: inline-block; min-width: 150px; padding-top: 5px; }
-      </style>
-    </head>
-    <body>
-      <div class="invoice-container">
-        <div class="tax-invoice-label">TAX INVOICE</div>
-        
-        <div class="header-section">
-          <div class="header-left">
-            <div class="company-name">{{vendor_name}}</div>
-            <div class="address-text">{{vendor_address}}</div>
-            {{#vendor_gstin}}<div class="address-text">GSTIN/UIN: {{vendor_gstin}}</div>{{/vendor_gstin}}
-          </div>
-          <div class="header-right">
-            <table class="meta-table">
-              <tr>
-                <td class="meta-label">Invoice No.</td>
-                <td>{{invoice_no}}</td>
-              </tr>
-              <tr>
-                <td class="meta-label">Dated</td>
-                <td>{{created_at}}</td>
-              </tr>
-              <tr>
-                <td class="meta-label">Buyer's Order No.</td>
-                <td>{{po_number}}</td>
-              </tr>
-              <tr>
-                <td class="meta-label">PO Date</td>
-                <td>{{po_date}}</td>
-              </tr>
-            </table>
-          </div>
-        </div>
-        
-        <div class="info-grid">
-          <div class="info-box">
-            <span class="label">Consignee (Ship to)</span>
-            <div style="font-weight: bold; font-size: 11px;">{{hostCompanyName}}</div>
-            {{#hostCompanyAddressLines}}
-            <div class="address-text">{{.}}</div>
-            {{/hostCompanyAddressLines}}
-            <div class="address-text">GSTIN/UIN: {{hostGSTIN}}</div>
-          </div>
-          <div class="info-box">
-            <span class="label">Buyer (Bill to)</span>
-            <div style="font-weight: bold; font-size: 11px;">{{hostCompanyName}}</div>
-            {{#hostCompanyAddressLines}}
-            <div class="address-text">{{.}}</div>
-            {{/hostCompanyAddressLines}}
-            <div class="address-text">GSTIN/UIN: {{hostGSTIN}}</div>
-          </div>
-        </div>
+      let matchedShape = '';
+      if (shapeRaw.includes('threaded') || shapeRaw.includes('thread')) matchedShape = 'threaded rod';
+      else if (shapeRaw.includes('square tube') || (shapeRaw.includes('square') && shapeRaw.includes('tube'))) matchedShape = 'square tube';
+      else if (shapeRaw.includes('rectangular tube') || shapeRaw.includes('rect tube') || (shapeRaw.includes('rect') && shapeRaw.includes('tube'))) matchedShape = 'rectangular tube';
+      else if (shapeRaw.includes('square bar') || (shapeRaw.includes('square') && shapeRaw.includes('bar'))) matchedShape = 'square bar';
+      else if (shapeRaw.includes('rectangular bar') || (shapeRaw.includes('rect') && shapeRaw.includes('bar'))) matchedShape = 'rectangular bar';
+      else if (shapeRaw.includes('hex')) matchedShape = 'hexagonal bar';
+      else if (shapeRaw.includes('unequal angle')) matchedShape = 'unequal angle';
+      else if (shapeRaw.includes('equal angle')) matchedShape = 'equal angle';
+      else if (shapeRaw.includes('angle')) matchedShape = 'angle';
+      else if (shapeRaw.includes('plate') || shapeRaw.includes('sheet')) matchedShape = 'plate';
+      else if (shapeRaw.includes('flat')) matchedShape = 'flat bar';
+      else if (shapeRaw.includes('pipe') || shapeRaw.includes('tube')) matchedShape = 'pipe';
+      else if (shapeRaw.includes('round') || shapeRaw.includes('rod') || shapeRaw.includes('bar')) {
+        if (thk > 0) matchedShape = 'threaded rod';
+        else matchedShape = 'round bar';
+      }
+      else if (dia > 0) {
+        if (thk > 0) matchedShape = 'threaded rod';
+        else matchedShape = 'round bar';
+      }
+      else if (od > 0 && thk > 0) matchedShape = 'pipe';
+      else if (wid > 0 && thk > 0 && len > 0) matchedShape = 'plate';
 
-        <table class="items-table">
-          <thead>
-            <tr>
-              <th style="width: 30px;">Sl No.</th>
-              <th>Description of Goods</th>
-              <th style="width: 70px;">HSN/SAC</th>
-              <th style="width: 60px;">Quantity</th>
-              <th style="width: 80px;">Rate</th>
-              <th style="width: 40px;">per</th>
-              <th style="width: 90px;">Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            {{#items}}
-            <tr class="item-row">
-              <td style="text-align: center;">{{index}}</td>
-              <td>
-                <div style="font-weight: bold;">{{description}}</div>
-                {{#dimensions}}
-                <div style="font-size: 8px; color: #555; margin-top: 2px;">{{dimensions}}</div>
-                {{/dimensions}}
-              </td>
-              <td style="text-align: center;">{{hsn_code}}</td>
-              <td style="text-align: center;">{{quantity}} {{unit}}</td>
-              <td style="text-align: right;">{{rate}}</td>
-              <td style="text-align: center;">{{unit}}</td>
-              <td style="text-align: right; font-weight: bold;">{{item_amount}}</td>
-            </tr>
-            {{/items}}
-            {{#empty_rows}}
-            <tr style="height: 25px;">
-              <td></td><td></td><td></td><td></td><td></td><td></td><td></td>
-            </tr>
-            {{/empty_rows}}
-          </tbody>
-        </table>
+      let dimPrefix = '', dimParts = [];
+      if (matchedShape === 'plate')           { dimPrefix = 'PL';   dimParts = [nf(wid), nf(len), nf(thk)]; }
+      else if (matchedShape === 'flat bar')   { dimPrefix = 'FB';   dimParts = [nf(wid), nf(thk), nf(len)]; }
+      else if (matchedShape === 'round bar')  { dimPrefix = 'RB';   const dv = dia > 0 ? dia : (od > 0 ? od : wid); dimParts = [`Ø${nf(dv)}`, nf(len)]; }
+      else if (matchedShape === 'hexagonal bar') { dimPrefix = 'HEX'; dimParts = [`AF${nf(wid)}`, nf(len)]; }
+      else if (matchedShape === 'square bar') { dimPrefix = 'SQ';   dimParts = [nf(wid), nf(len)]; }
+      else if (matchedShape === 'rectangular bar') { dimPrefix = 'REC'; dimParts = [nf(wid), nf(od), nf(len)]; }
+      else if (matchedShape === 'pipe')       { dimPrefix = 'PIPE'; const ov = od > 0 ? od : dia; dimParts = [`OD${nf(ov)}`, nf(thk), nf(len)]; }
+      else if (matchedShape === 'square tube') { dimPrefix = 'SQT'; dimParts = [nf(wid), nf(thk), nf(len)]; }
+      else if (matchedShape === 'rectangular tube') { dimPrefix = 'RCT'; dimParts = [nf(wid), nf(od), nf(thk), nf(len)]; }
+      else if (matchedShape === 'threaded rod') { dimPrefix = 'TR'; const dv = dia > 0 ? dia : od; const pv = parseFloat(item.thread_pitch || item.threadPitch || thk || item.thickness || 0); dimParts = [`M${nf(dv)}`, pv > 0 ? nf(pv) : null, nf(len)]; }
+      else if (matchedShape === 'angle')      { dimPrefix = 'L';   dimParts = [nf(wid), nf(od || thk), nf(thk), nf(len)]; }
+      else if (matchedShape === 'equal angle') { dimPrefix = 'EA'; dimParts = [nf(wid), nf(wid), nf(thk), nf(len)]; }
+      else if (matchedShape === 'unequal angle') { dimPrefix = 'UA'; dimParts = [nf(wid), nf(od), nf(thk), nf(len)]; }
+      else { dimParts = [nf(wid), nf(od), nf(thk), nf(dia), nf(len)]; }
 
-        <div class="total-section">
-          <div class="words-section">
-            <div style="font-style: italic; margin-bottom: 10px;">Amount Chargeable (in words)</div>
-            <div style="font-weight: bold; font-size: 11px;">{{net_total_words}}</div>
-          </div>
-          <div class="calc-section">
-            <table class="calc-table">
-              <tr>
-                <td>Total Taxable Value</td>
-                <td>{{subtotal}}</td>
-              </tr>
-              {{#cgst_total}}
-              <tr>
-                <td>CGST @ {{cgst_rate}}%</td>
-                <td>{{cgst_total}}</td>
-              </tr>
-              {{/cgst_total}}
-              {{#sgst_total}}
-              <tr>
-                <td>SGST @ {{sgst_rate}}%</td>
-                <td>{{sgst_total}}</td>
-              </tr>
-              {{/sgst_total}}
-              <tr>
-                <td>Total</td>
-                <td>₹ {{net_total}}</td>
-              </tr>
-            </table>
-            {{#invoice_summary}}
-            <div style="border-top: 1px solid #000; border-bottom: 1px solid #000; padding: 4px 6px; font-size: 8px; font-weight: bold; background: #f5f5f5; text-align: center; text-transform: uppercase; letter-spacing: 0.5px;">
-              Invoice Summary
-            </div>
-            <table class="calc-table" style="border-top: none;">
-              <tr>
-                <td>Invoice Amount</td>
-                <td style="font-weight: bold;">₹ {{invoice_amount}}</td>
-              </tr>
-              <tr>
-                <td>Paid Amount</td>
-                <td style="font-weight: bold; color: #16a34a;">₹ {{paid_amount}}</td>
-              </tr>
-              <tr>
-                <td>Balance Amount</td>
-                <td style="font-weight: bold; color: #dc2626;">₹ {{balance_amount}}</td>
-              </tr>
-              {{#status}}
-              <tr>
-                <td>Status</td>
-                <td style="font-weight: bold; text-transform: uppercase;">{{status}}</td>
-              </tr>
-              {{/status}}
-            </table>
-            {{/invoice_summary}}
-          </div>
-        </div>
+      const dimPartsClean = dimParts.filter(Boolean);
+      const dimsSpec = dimPartsClean.length > 0 ? `${dimPrefix} ${dimPartsClean.join(' × ')} mm`.trim() : '';
 
-        <div class="footer-section">
-          <div class="footer-col" style="text-align: left;">
-            <div style="font-weight: bold; margin-bottom: 5px;">Declaration:</div>
-            <div style="font-size: 8px; line-height: 1.2;">We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.</div>
-          </div>
-          <div class="footer-col" style="text-align: right;">
-            <div>For {{vendor_name}}</div>
-            <div class="signature-box">Authorized Signatory</div>
-          </div>
-        </div>
-      </div>
-    </body>
-    </html>
-  `;
 
-  const browser = await puppeteer.launch({
-    headless: 'new',
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
-  });
-  const page = await browser.newPage();
+      return {
+        sr: idx + 1,
+        drawingNoOrCode: item.drawing_no || item.material_code || item.item_code || 'N/A',
+        itemCode: item.material_code || item.item_code || 'N/A',
+        materialName: item.material_name || item.material_code || 'N/A',
+        description: item.material_name || item.material_code || 'N/A',
+        hsnCode: item.hsn_code || '84790000',
+        qty: qtyFormatted,
+        weight: weightFormatted,
+        unit: item.unit || 'Nos',
+        rate: parseFloat(item.unit_rate || 0).toFixed(2),
+        amount: (item.quantity * (item.unit_rate || 0)).toFixed(2),
+        dimsSpec
+      };
+    });
 
-  const renderedHtml = mustache.render(htmlTemplate, {
-    hostCompanyName,
-    hostCompanyAddressLines,
-    hostGSTIN,
-    hostPAN,
-    vendor_name,
-    vendor_address,
-    vendor_gstin,
-    invoice_no,
-    created_at,
-    po_number,
-    po_date,
-    items: itemsList,
-    subtotal: subtotal.toFixed(2),
-    cgst_total: cgst_total > 0 ? cgst_total.toFixed(2) : null,
-    sgst_total: sgst_total > 0 ? sgst_total.toFixed(2) : null,
-    cgst_rate,
-    sgst_rate,
-    net_total: net_total.toFixed(2),
-    net_total_words,
-    empty_rows,
-    invoice_summary
-  });
-
-  await page.setContent(renderedHtml, { waitUntil: 'networkidle0' });
-  const pdfBuffer = await page.pdf({
-    format: 'A4',
-    printBackground: true,
-    margin: {
-      top: '10mm',
-      bottom: '10mm',
-      left: '10mm',
-      right: '10mm'
+    let logoBase64 = null;
+    if (activeCompany && activeCompany.company_logo) {
+      const uploadedLogoPath = path.join(__dirname, '../../', activeCompany.company_logo);
+      if (fs.existsSync(uploadedLogoPath)) {
+        logoBase64 = `data:image/png;base64,${fs.readFileSync(uploadedLogoPath).toString('base64')}`;
+      }
     }
-  });
+    if (!logoBase64) {
+      const logoPath = path.join(__dirname, '../../../frontend/src/assets/sptechpioneer logo.png');
+      if (fs.existsSync(logoPath)) {
+        logoBase64 = `data:image/png;base64,${fs.readFileSync(logoPath).toString('base64')}`;
+      }
+    }
 
-  await browser.close();
-  return pdfBuffer;
+    // Data packet for vendor-tax-invoice.html template
+    const templateData = {
+      hostCompanyName,
+      hostCompanyShortName: activeCompany?.short_name || 'SPTP',
+      hostCompanyAddress: hostCompanyAddress.replace(/\n/g, ', '),
+      hostCompanyGST: hostGSTIN,
+      hostCompanyLogo: logoBase64,
+      vendorName: po.vendor_name || 'N/A',
+      vendorCode: po.vendor_code || 'VEN-001',
+      contactPerson: po.contact_person || 'N/A',
+      vendorEmail: po.vendor_email || 'N/A',
+      vendorPhone: po.vendor_phone || 'N/A',
+      vendorGST: po.vendor_gstin || 'N/A',
+      vendorAddress: po.vendor_address || 'N/A',
+      poNumber: po.po_number || 'N/A',
+      invoiceNo: `INV-${po.po_number || po.id}`,
+      invoiceDate: formatDate(po.created_at),
+      grnNo: grn ? (grn.grn_no || `GRN-${grn.id}`) : 'GRN-PENDING',
+      grnDate: grn ? formatDate(grn.grn_date || grn.created_at) : formatDate(po.created_at),
+      paymentTerms: po.payment_terms || '30 Days',
+      dueDate: formatDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)),
+      items: itemsList,
+      subTotal: subtotal.toFixed(2),
+      cgstRate: cgst_rate,
+      cgstAmount: (cgst_total || (subtotal * 0.09)).toFixed(2),
+      sgstRate: sgst_rate,
+      sgstAmount: (sgst_total || (subtotal * 0.09)).toFixed(2),
+      grandTotal: net_total.toFixed(2),
+      paymentStatus: 'Pending'
+    };
+
+    const templatePath = path.join(__dirname, '../../templates/vendor-tax-invoice.html');
+    const templateSource = fs.readFileSync(templatePath, 'utf8');
+    const renderedHtml = mustache.render(templateSource, templateData);
+
+    const browser = await puppeteer.launch({
+      headless: 'new',
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
+    const page = await browser.newPage();
+    await page.setContent(renderedHtml, { waitUntil: 'networkidle0' });
+    const pdfBuffer = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      margin: { top: '10mm', right: '10mm', bottom: '10mm', left: '10mm' }
+    });
+    await browser.close();
+    return pdfBuffer;
+  }
 };
 
 const sendVendorInvoiceEmail = async (id, type, emailData = {}) => {

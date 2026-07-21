@@ -1094,14 +1094,57 @@ const PurchaseOrders = () => {
     }
   };
 
+  const handleDownloadPOInvoice = async (po) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE}/payments/vendor-invoice/${po.id}/pdf?type=PO`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!response.ok) throw new Error('Failed to generate Tax Invoice PDF');
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `Tax_Invoice_${po.po_number || po.id}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Error downloading invoice:', err);
+      errorToast('Failed to download invoice');
+    }
+  };
+
   const handleSendToAccounts = async (po) => {
     const result = await Swal.fire({
       title: 'Send to Accounts?',
-      text: `Are you sure you want to forward Purchase Order ${po.po_number} to Accounts? This will automatically create a Vendor Invoice.`,
+      html: `
+        <div class="text-sm text-slate-600 space-y-3">
+          <p>Are you sure you want to forward Purchase Order <strong>${po.po_number}</strong> to Accounts?</p>
+          <p class="text-xs text-slate-500">This will automatically create a Vendor Invoice.</p>
+          <hr class="my-3 border-slate-200" />
+          <div class="p-2.5 bg-slate-50 border border-slate-200 rounded flex items-center justify-between">
+            <span class="text-xs font-semibold text-slate-700 flex items-center gap-1.5">📄 Preview Invoice</span>
+            <button id="swal-download-invoice-btn" type="button" class="px-2.5 py-1 text-xs bg-slate-200 hover:bg-slate-300 text-slate-700 font-medium rounded transition-all">
+              Download Invoice
+            </button>
+          </div>
+        </div>
+      `,
       icon: 'question',
       showCancelButton: true,
       confirmButtonText: 'Yes, Send',
-      cancelButtonText: 'Cancel'
+      cancelButtonText: 'Cancel',
+      confirmButtonColor: '#4f46e5',
+      didOpen: () => {
+        const dlBtn = document.getElementById('swal-download-invoice-btn');
+        if (dlBtn) {
+          dlBtn.addEventListener('click', () => {
+            handleDownloadPOInvoice(po);
+          });
+        }
+      }
     });
 
     if (result.isConfirmed) {
@@ -1478,8 +1521,8 @@ const PurchaseOrders = () => {
                   setShowAttachmentModal(true);
                 }}
                 className={`p-1.5 rounded transition-all active:scale-90 flex items-center justify-center gap-1 ${row.invoice_url && row.invoice_url.trim().length > 0
-                    ? 'text-emerald-600 bg-emerald-50 hover:bg-emerald-100/70 border border-emerald-100'
-                    : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50 border border-transparent'
+                  ? 'text-emerald-600 bg-emerald-50 hover:bg-emerald-100/70 border border-emerald-100'
+                  : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50 border border-transparent'
                   }`}
                 title="Manage Attachments"
               >
@@ -2886,7 +2929,7 @@ const PurchaseOrders = () => {
 
                   {(() => {
                     const searchLower = mergeSearchTerm.toLowerCase();
-                    const filteredPOs = eligiblePOs.filter(po => 
+                    const filteredPOs = eligiblePOs.filter(po =>
                       String(po.po_number || '').toLowerCase().includes(searchLower) ||
                       String(po.project_name || '').toLowerCase().includes(searchLower) ||
                       String(po.drawing_no || '').toLowerCase().includes(searchLower)
@@ -2901,48 +2944,48 @@ const PurchaseOrders = () => {
                       );
                     }
                     return (
-                    <div className="border border-slate-100 rounded-xl overflow-hidden bg-white">
-                      <table className="w-full text-xs text-left">
-                        <thead>
-                          <tr className="bg-slate-50 border-b border-slate-100 text-slate-400 font-bold uppercase tracking-wider text-[10px]">
-                            <th className="p-3 w-12 text-center">Select</th>
-                            <th className="p-3">PO No</th>
-                            <th className="p-3">Project</th>
-                            <th className="p-3">Drawing</th>
-                            <th className="p-3 text-right">Items</th>
-                            <th className="p-3 text-right">Amount</th>
-                            <th className="p-3">Status</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                          {filteredPOs.map(po => {
-                            const isChecked = selectedPoIdsForMerge.includes(po.id);
-                            return (
-                              <tr key={po.id} className="hover:bg-slate-50/50 transition-all cursor-pointer" onClick={() => handleTogglePoSelectionForMerge(po.id)}>
-                                <td className="p-3 text-center" onClick={e => e.stopPropagation()}>
-                                  <input
-                                    type="checkbox"
-                                    checked={isChecked}
-                                    onChange={() => handleTogglePoSelectionForMerge(po.id)}
-                                    className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500/20"
-                                  />
-                                </td>
-                                <td className="p-3 font-semibold text-slate-700">{po.po_number}</td>
-                                <td className="p-3 text-slate-600">{po.project_name || '—'}</td>
-                                <td className="p-3 text-slate-600 font-mono">{po.drawing_no || '—'}</td>
-                                <td className="p-3 text-right text-slate-500 font-bold">{po.total_quantity || 0}</td>
-                                <td className="p-3 text-right font-bold text-slate-700">{formatCurrency(po.total_amount)}</td>
-                                <td className="p-3">
-                                  <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] uppercase font-bold ${poStatusColors[po.status]?.badge}`}>
-                                    {poStatusColors[po.status]?.label}
-                                  </span>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
+                      <div className="border border-slate-100 rounded-xl overflow-hidden bg-white">
+                        <table className="w-full text-xs text-left">
+                          <thead>
+                            <tr className="bg-slate-50 border-b border-slate-100 text-slate-400 font-bold uppercase tracking-wider text-[10px]">
+                              <th className="p-3 w-12 text-center">Select</th>
+                              <th className="p-3">PO No</th>
+                              <th className="p-3">Project</th>
+                              <th className="p-3">Drawing</th>
+                              <th className="p-3 text-right">Items</th>
+                              <th className="p-3 text-right">Amount</th>
+                              <th className="p-3">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {filteredPOs.map(po => {
+                              const isChecked = selectedPoIdsForMerge.includes(po.id);
+                              return (
+                                <tr key={po.id} className="hover:bg-slate-50/50 transition-all cursor-pointer" onClick={() => handleTogglePoSelectionForMerge(po.id)}>
+                                  <td className="p-3 text-center" onClick={e => e.stopPropagation()}>
+                                    <input
+                                      type="checkbox"
+                                      checked={isChecked}
+                                      onChange={() => handleTogglePoSelectionForMerge(po.id)}
+                                      className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500/20"
+                                    />
+                                  </td>
+                                  <td className="p-3 font-semibold text-slate-700">{po.po_number}</td>
+                                  <td className="p-3 text-slate-600">{po.project_name || '—'}</td>
+                                  <td className="p-3 text-slate-600 font-mono">{po.drawing_no || '—'}</td>
+                                  <td className="p-3 text-right text-slate-500 font-bold">{po.total_quantity || 0}</td>
+                                  <td className="p-3 text-right font-bold text-slate-700">{formatCurrency(po.total_amount)}</td>
+                                  <td className="p-3">
+                                    <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] uppercase font-bold ${poStatusColors[po.status]?.badge}`}>
+                                      {poStatusColors[po.status]?.label}
+                                    </span>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
                     );
                   })()}
                 </div>

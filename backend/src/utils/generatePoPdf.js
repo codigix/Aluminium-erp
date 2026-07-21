@@ -225,15 +225,52 @@ const generatePoPdf = async (data) => {
 
       let dimsSpec = '';
       if (len > 0 || wid > 0 || thk > 0 || dia > 0 || od > 0) {
-        let parts = [];
-        if (dia > 0) parts.push(`Ø${dia.toFixed(0)}`);
-        else if (od > 0) parts.push(`OD ${od.toFixed(0)}`);
-        
-        if (wid > 0) parts.push(wid.toFixed(0));
-        if (thk > 0) parts.push(thk % 1 === 0 ? thk.toFixed(0) : thk.toFixed(1));
-        if (len > 0) parts.push(len.toFixed(0));
-        
-        dimsSpec = parts.join(' × ') + ' mm';
+        const shapeRaw = (item.shape_type || item.shape_name || item.shape || item.material_name || '').toLowerCase();
+        const nf = (v) => { if (!v || isNaN(parseFloat(v)) || parseFloat(v) === 0) return null; const num = parseFloat(v); return num % 1 === 0 ? num.toFixed(0) : num.toFixed(1); };
+
+        let ms = '';
+        if (shapeRaw.includes('threaded') || shapeRaw.includes('thread')) ms = 'threaded rod';
+        else if (shapeRaw.includes('square tube') || (shapeRaw.includes('square') && shapeRaw.includes('tube'))) ms = 'square tube';
+        else if (shapeRaw.includes('rectangular tube') || shapeRaw.includes('rect tube') || (shapeRaw.includes('rect') && shapeRaw.includes('tube'))) ms = 'rectangular tube';
+        else if (shapeRaw.includes('square bar') || (shapeRaw.includes('square') && shapeRaw.includes('bar'))) ms = 'square bar';
+        else if (shapeRaw.includes('rectangular bar') || (shapeRaw.includes('rect') && shapeRaw.includes('bar'))) ms = 'rectangular bar';
+        else if (shapeRaw.includes('hex')) ms = 'hexagonal bar';
+        else if (shapeRaw.includes('unequal angle')) ms = 'unequal angle';
+        else if (shapeRaw.includes('equal angle')) ms = 'equal angle';
+        else if (shapeRaw.includes('angle')) ms = 'angle';
+        else if (shapeRaw.includes('plate') || shapeRaw.includes('sheet')) ms = 'plate';
+        else if (shapeRaw.includes('flat')) ms = 'flat bar';
+        else if (shapeRaw.includes('pipe') || shapeRaw.includes('tube')) ms = 'pipe';
+        else if (shapeRaw.includes('round') || shapeRaw.includes('rod') || shapeRaw.includes('bar')) {
+          if (thk > 0) ms = 'threaded rod';
+          else ms = 'round bar';
+        }
+        else if (dia > 0) {
+          if (thk > 0) ms = 'threaded rod';
+          else ms = 'round bar';
+        }
+        else if (od > 0 && thk > 0) ms = 'pipe';
+        else if (wid > 0 && thk > 0 && len > 0) ms = 'plate';
+        else ms = 'plate';
+
+        let pfx = '', dp = [];
+        if (ms === 'plate')              { pfx = 'PL';   dp = [nf(wid), nf(len), nf(thk)]; }
+        else if (ms === 'flat bar')      { pfx = 'FB';   dp = [nf(wid), nf(thk), nf(len)]; }
+        else if (ms === 'round bar')     { pfx = 'RB';   const dv = dia > 0 ? dia : (od > 0 ? od : wid); dp = [`Ø${nf(dv)}`, nf(len)]; }
+        else if (ms === 'hexagonal bar') { pfx = 'HEX';  dp = [`AF${nf(wid)}`, nf(len)]; }
+        else if (ms === 'square bar')    { pfx = 'SQ';   dp = [nf(wid), nf(len)]; }
+        else if (ms === 'rectangular bar') { pfx = 'REC'; dp = [nf(wid), nf(od), nf(len)]; }
+        else if (ms === 'pipe')          { pfx = 'PIPE'; const ov = od > 0 ? od : dia; dp = [`OD${nf(ov)}`, nf(thk), nf(len)]; }
+        else if (ms === 'square tube')   { pfx = 'SQT';  dp = [nf(wid), nf(thk), nf(len)]; }
+        else if (ms === 'rectangular tube') { pfx = 'RCT'; dp = [nf(wid), nf(od), nf(thk), nf(len)]; }
+        else if (ms === 'threaded rod')  { pfx = 'TR';   const dv = dia > 0 ? dia : od; const pv = parseFloat(item.thread_pitch || item.threadPitch || thk || item.thickness || 0); dp = [`M${nf(dv)}`, pv > 0 ? nf(pv) : null, nf(len)]; }
+        else if (ms === 'angle')         { pfx = 'L';    dp = [nf(wid), nf(od || thk), nf(thk), nf(len)]; }
+        else if (ms === 'equal angle')   { pfx = 'EA';   dp = [nf(wid), nf(wid), nf(thk), nf(len)]; }
+        else if (ms === 'unequal angle') { pfx = 'UA';   dp = [nf(wid), nf(od), nf(thk), nf(len)]; }
+        else { dp = [nf(wid), nf(od), nf(thk), nf(dia), nf(len)]; }
+
+        const clean = dp.filter(Boolean);
+        if (clean.length > 0) dimsSpec = `${pfx} ${clean.join(' × ')} mm`.trim();
       }
 
       return {

@@ -525,7 +525,9 @@ const Quotations = () => {
               diameter: item.diameter || 0,
               outer_diameter: item.outer_diameter || 0,
               density: item.density || 0,
-              weight_per_unit: item.weight_per_unit || 0
+              weight_per_unit: item.weight_per_unit || 0,
+              shape_type: item.shape_type || item.shape_name || item.shape || '',
+              shape_name: item.shape_name || item.shape_type || item.shape || ''
             }));
 
           setFormData(prev => ({
@@ -1439,7 +1441,9 @@ const Quotations = () => {
       diameter: item.diameter || 0,
       outer_diameter: item.outer_diameter || 0,
       density: item.density || 0,
-      weight_per_unit: item.weight_per_unit || 0
+      weight_per_unit: item.weight_per_unit || 0,
+      shape_type: item.shape_type || item.shape_name || item.shape || '',
+      shape_name: item.shape_name || item.shape_type || item.shape || ''
     }));
 
     const activeHost = hostCompanies.find(c => c.status === 'ACTIVE') || hostCompanies[0];
@@ -1587,7 +1591,9 @@ const Quotations = () => {
               diameter: item.diameter || 0,
               outer_diameter: item.outer_diameter || 0,
               density: item.density || 0,
-              weight_per_unit: item.weight_per_unit || 0
+              weight_per_unit: item.weight_per_unit || 0,
+              shape_type: item.shape_type || item.shape_name || item.shape || '',
+              shape_name: item.shape_name || item.shape_type || item.shape || ''
             })),
             received_pdf_path: finalPaths.join(','),
             status: selectedQuotation.status
@@ -1652,7 +1658,9 @@ const Quotations = () => {
         diameter: item.diameter || 0,
         outer_diameter: item.outer_diameter || 0,
         density: item.density || 0,
-        weight_per_unit: item.weight_per_unit || 0
+        weight_per_unit: item.weight_per_unit || 0,
+        shape_type: item.shape_type || item.shape_name || item.shape || '',
+        shape_name: item.shape_name || item.shape_type || item.shape || ''
       };
     });
 
@@ -1722,7 +1730,9 @@ const Quotations = () => {
           diameter: item.diameter || 0,
           outer_diameter: item.outer_diameter || 0,
           density: item.density || 0,
-          weight_per_unit: item.weight_per_unit || 0
+          weight_per_unit: item.weight_per_unit || 0,
+          shape_type: item.shape_type || item.shape_name || item.shape || '',
+          shape_name: item.shape_name || item.shape_type || item.shape || ''
         }));
 
         const payload = {
@@ -2886,6 +2896,10 @@ const Quotations = () => {
                                         if (selected?.outer_diameter) handleRecordItemChange(idx, 'outer_diameter', selected.outer_diameter);
                                         if (selected?.density) handleRecordItemChange(idx, 'density', selected.density);
                                         if (selected?.weight_per_unit) handleRecordItemChange(idx, 'weight_per_unit', selected.weight_per_unit);
+                                        if (selected?.shape_type || selected?.shape_name) {
+                                          handleRecordItemChange(idx, 'shape_type', selected.shape_type || selected.shape_name);
+                                          handleRecordItemChange(idx, 'shape_name', selected.shape_name || selected.shape_type);
+                                        }
                                       }}
                                       placeholder="Select Item"
                                       labelField="material_name"
@@ -3355,6 +3369,10 @@ const Quotations = () => {
                                   if (selected?.outer_diameter) newItems[idx].outer_diameter = selected.outer_diameter;
                                   if (selected?.density) newItems[idx].density = selected.density;
                                   if (selected?.weight_per_unit) newItems[idx].weight_per_unit = selected.weight_per_unit;
+                                  if (selected?.shape_type || selected?.shape_name) {
+                                    newItems[idx].shape_type = selected.shape_type || selected.shape_name;
+                                    newItems[idx].shape_name = selected.shape_name || selected.shape_type;
+                                  }
                                   setEditFormData({ ...editFormData, items: newItems });
                                 }}
                                 placeholder="Select Item"
@@ -3447,6 +3465,10 @@ const Quotations = () => {
                                   if (selected?.outer_diameter) newItems[idx].outer_diameter = selected.outer_diameter;
                                   if (selected?.density) newItems[idx].density = selected.density;
                                   if (selected?.weight_per_unit) newItems[idx].weight_per_unit = selected.weight_per_unit;
+                                  if (selected?.shape_type || selected?.shape_name) {
+                                    newItems[idx].shape_type = selected.shape_type || selected.shape_name;
+                                    newItems[idx].shape_name = selected.shape_name || selected.shape_type;
+                                  }
                                   setEditFormData({ ...editFormData, items: newItems });
                                 }}
                                 placeholder="Select Item"
@@ -3803,6 +3825,9 @@ const Quotations = () => {
                         <div className="flex flex-col">
                           <span>{itemCode}</span>
                           <span className="text-xs text-slate-400 font-normal">{firstItem?.material_name}</span>
+                          {formatDimensions(firstItem) && (
+                            <span className="text-[10px] text-slate-400 font-mono mt-0.5">{formatDimensions(firstItem)}</span>
+                          )}
                         </div>
                       </td>
                       <td className="p-2 border text-center text-slate-400">

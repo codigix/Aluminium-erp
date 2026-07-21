@@ -178,13 +178,30 @@ const _enrichRfqs = async (rfqs) => {
 
     const [items] = await pool.query(`
         SELECT i.*, 
-               COALESCE(i.material_name, sb.material_name, sb.item_description, i.item_code) as material_name
+               COALESCE(i.material_name, sb.material_name, sb.item_description, i.item_code) as material_name,
+               COALESCE(shape_lookup.shape_name, (SELECT name FROM shapes WHERE id = sb.shape_id LIMIT 1)) as shape_type
         FROM procurement_rfq_items i 
         JOIN procurement_rfqs r ON i.rfq_id = r.id
         LEFT JOIN (
-            SELECT item_code, MAX(material_name) as material_name, MAX(item_description) as item_description 
+            SELECT item_code, MAX(material_name) as material_name, MAX(item_description) as item_description,
+                   MAX(shape_id) as shape_id
             FROM stock_balance GROUP BY item_code
         ) sb ON i.item_code = sb.item_code
+        LEFT JOIN (
+            SELECT som.material_name, som.length, som.width, som.thickness, som.diameter, som.outer_diameter,
+                   MAX(s.name) as shape_name
+            FROM sales_order_item_materials som
+            LEFT JOIN shapes s ON som.shape_id = s.id
+            WHERE s.id IS NOT NULL
+            GROUP BY som.material_name, som.length, som.width, som.thickness, som.diameter, som.outer_diameter
+        ) shape_lookup ON (
+            LOWER(TRIM(REPLACE(i.material_name, '\t', ''))) = LOWER(TRIM(REPLACE(shape_lookup.material_name, '\t', '')))
+            AND ABS(COALESCE(i.length, 0) - COALESCE(shape_lookup.length, 0)) < 0.0001
+            AND ABS(COALESCE(i.width, 0) - COALESCE(shape_lookup.width, 0)) < 0.0001
+            AND ABS(COALESCE(i.thickness, 0) - COALESCE(shape_lookup.thickness, 0)) < 0.0001
+            AND ABS(COALESCE(i.diameter, 0) - COALESCE(shape_lookup.diameter, 0)) < 0.0001
+            AND ABS(COALESCE(i.outer_diameter, 0) - COALESCE(shape_lookup.outer_diameter, 0)) < 0.0001
+        )
         WHERE i.rfq_id IN (?)
         AND (r.mr_id IS NULL OR EXISTS (
             SELECT 1 FROM material_request_items mri 
@@ -192,6 +209,7 @@ const _enrichRfqs = async (rfqs) => {
         ))`,
         [rfqIds]
     );
+
 
     // Get linked quotations
     const [quotations] = await pool.query(
