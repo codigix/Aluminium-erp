@@ -554,12 +554,39 @@ const processStockMovement = async (entryId, connection, userId) => {
       unit: item.uom,
       // Dimension fields for dimension-wise stock balance tracking
       shape_id: item.shape_id || null,
-      length: item.length ? parseFloat(item.length) : undefined,
-      width: item.width ? parseFloat(item.width) : undefined,
-      thickness: item.thickness ? parseFloat(item.thickness) : undefined,
-      diameter: item.diameter ? parseFloat(item.diameter) : undefined,
-      outer_diameter: item.outer_diameter ? parseFloat(item.outer_diameter) : undefined
+      shape_type: item.shape_type || null,
+      length: item.length !== null && item.length !== undefined ? parseFloat(item.length) : undefined,
+      width: item.width !== null && item.width !== undefined ? parseFloat(item.width) : undefined,
+      thickness: item.thickness !== null && item.thickness !== undefined ? parseFloat(item.thickness) : undefined,
+      diameter: item.diameter !== null && item.diameter !== undefined ? parseFloat(item.diameter) : undefined,
+      outer_diameter: item.outer_diameter !== null && item.outer_diameter !== undefined ? parseFloat(item.outer_diameter) : undefined,
+      density: item.density !== null && item.density !== undefined ? parseFloat(item.density) : undefined,
+      weight_per_unit: item.weight_per_unit !== null && item.weight_per_unit !== undefined ? parseFloat(item.weight_per_unit) : undefined
     };
+
+    // Fallback: If dimensions are missing from stock_entry_item but entry has grn_id, fetch from grn_items
+    if (entry.grn_id && (ledgerOptions.length === undefined || ledgerOptions.width === undefined)) {
+      const [grnItemDims] = await connection.query(`
+        SELECT gi.length, gi.width, gi.thickness, gi.diameter, gi.outer_diameter, gi.density, gi.weight_per_unit, COALESCE(gi.shape_type, poi.shape_type) as shape_type
+        FROM grn_items gi
+        LEFT JOIN purchase_order_items poi ON gi.po_item_id = poi.id
+        LEFT JOIN qc_inspection_items qci ON qci.grn_item_id = gi.id
+        WHERE gi.grn_id = ? AND (COALESCE(qci.item_code, poi.item_code) = ? OR gi.po_item_id IN (SELECT id FROM purchase_order_items WHERE item_code = ?))
+        LIMIT 1
+      `, [entry.grn_id, item.item_code, item.item_code]);
+
+      if (grnItemDims.length > 0) {
+        const d = grnItemDims[0];
+        if (d.length !== null && d.length !== undefined) ledgerOptions.length = parseFloat(d.length);
+        if (d.width !== null && d.width !== undefined) ledgerOptions.width = parseFloat(d.width);
+        if (d.thickness !== null && d.thickness !== undefined) ledgerOptions.thickness = parseFloat(d.thickness);
+        if (d.diameter !== null && d.diameter !== undefined) ledgerOptions.diameter = parseFloat(d.diameter);
+        if (d.outer_diameter !== null && d.outer_diameter !== undefined) ledgerOptions.outer_diameter = parseFloat(d.outer_diameter);
+        if (d.density !== null && d.density !== undefined) ledgerOptions.density = parseFloat(d.density);
+        if (d.weight_per_unit !== null && d.weight_per_unit !== undefined) ledgerOptions.weight_per_unit = parseFloat(d.weight_per_unit);
+        if (d.shape_type) ledgerOptions.shape_type = d.shape_type;
+      }
+    }
 
     if (entry.entry_type === 'Material Receipt') {
       ledgerOptions.warehouse = toWarehouseName;
@@ -877,10 +904,20 @@ const autoCreateStockEntryFromGRN = async (grnId, userId, providedConnection = n
 
     // 5. Create Stock Entry Items
     for (const item of items) {
+      let shapeId = item.shape_id || null;
+      if (!shapeId && item.shape_type) {
+        const [shapeRows] = await connection.query(
+          'SELECT id FROM shapes WHERE name = ? OR LOWER(name) = LOWER(?) LIMIT 1',
+          [item.shape_type, item.shape_type]
+        );
+        if (shapeRows.length > 0) shapeId = shapeRows[0].id;
+      }
+
       await connection.execute(
         `INSERT INTO stock_entry_items 
-         (stock_entry_id, item_code, material_name, material_type, quantity, uom, valuation_rate, amount)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+         (stock_entry_id, item_code, material_name, material_type, quantity, uom, valuation_rate, amount,
+          length, width, thickness, diameter, outer_diameter, density, weight_per_unit, shape_id, shape_type)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           entryId,
           item.item_code,
@@ -889,7 +926,16 @@ const autoCreateStockEntryFromGRN = async (grnId, userId, providedConnection = n
           item.quantity,
           item.uom || 'NOS',
           item.valuation_rate || 0,
-          (parseFloat(item.quantity) * parseFloat(item.valuation_rate || 0))
+          (parseFloat(item.quantity) * parseFloat(item.valuation_rate || 0)),
+          item.length || null,
+          item.width || null,
+          item.thickness || null,
+          item.diameter || null,
+          item.outer_diameter || null,
+          item.density || null,
+          item.weight_per_unit || null,
+          shapeId,
+          item.shape_type || null
         ]
       );
     }

@@ -522,17 +522,16 @@ const addStockLedgerEntry = async (itemCode, transactionType, quantity, refDocTy
     // Get existing balance for this item and warehouse
     let existingBalance = await getStockBalanceByItemAndWarehouse(itemCode, warehouse, useConnection);
 
-    // If not found for this specific warehouse, check if a "Master/Generic" entry exists (item with no warehouse)
-    // and we should probably use that or update it if this is the first movement.
-    if (!existingBalance && warehouse) {
-      const [genericBalance] = await useConnection.query(
-        'SELECT * FROM stock_balance WHERE item_code = ? AND (warehouse IS NULL OR warehouse = "") LIMIT 1',
+    // If not found for this specific warehouse, check if any balance entry exists for this item_code
+    if (!existingBalance) {
+      const [anyBalance] = await useConnection.query(
+        'SELECT * FROM stock_balance WHERE item_code = ? ORDER BY current_balance DESC LIMIT 1',
         [itemCode]
       );
-      if (genericBalance.length > 0) {
-        existingBalance = genericBalance[0];
-        // If the generic record has 0 balance, we can "adopt" it for this warehouse
-        if (parseFloat(existingBalance.current_balance) === 0) {
+      if (anyBalance.length > 0) {
+        existingBalance = anyBalance[0];
+        // If the generic record has 0 balance and warehouse is provided, adopt it for this warehouse
+        if (parseFloat(existingBalance.current_balance) === 0 && warehouse) {
           await useConnection.execute(
             'UPDATE stock_balance SET warehouse = ? WHERE id = ?',
             [warehouse, existingBalance.id]
@@ -739,6 +738,29 @@ const createQCStockLedgerEntry = async (qcId, grnId, grnItemId, itemCode, passQt
 
     console.log(`[Stock] Creating entry for QC:${qcId}, GRN:${grnId}, Item:${itemCode}, Qty:${passQty}`);
 
+    // Fetch dimension details from GRN/PO item
+    let itemDims = {};
+    if (grnItemId) {
+      const [dimRows] = await useConnection.query(`
+        SELECT 
+          COALESCE(NULLIF(gi.length, 0), NULLIF(poi.length, 0)) as length,
+          COALESCE(NULLIF(gi.width, 0), NULLIF(poi.width, 0)) as width,
+          COALESCE(NULLIF(gi.thickness, 0), NULLIF(poi.thickness, 0)) as thickness,
+          COALESCE(NULLIF(gi.diameter, 0), NULLIF(poi.diameter, 0)) as diameter,
+          COALESCE(NULLIF(gi.outer_diameter, 0), NULLIF(poi.outer_diameter, 0)) as outer_diameter,
+          COALESCE(NULLIF(gi.density, 0), NULLIF(poi.density, 0)) as density,
+          COALESCE(NULLIF(gi.weight_per_unit, 0), NULLIF(poi.weight_per_unit, 0)) as weight_per_unit,
+          poi.shape_type as shape_type,
+          poi.material_name as material_name,
+          poi.material_type as material_type
+        FROM grn_items gi
+        LEFT JOIN purchase_order_items poi ON gi.po_item_id = poi.id
+        WHERE gi.id = ?
+        LIMIT 1
+      `, [grnItemId]);
+      if (dimRows.length > 0) itemDims = dimRows[0];
+    }
+
     // Duplicate check
     const [existing] = await useConnection.query(
       `SELECT id FROM stock_ledger 
@@ -771,7 +793,17 @@ const createQCStockLedgerEntry = async (qcId, grnId, grnItemId, itemCode, passQt
         connection: useConnection,
         qcId: qcId,
         grnItemId: grnItemId,
-        warehouse: 'RM-HOLD' // Default warehouse for GRN Receipt as per warehouseAllocationService
+        warehouse: 'RM-HOLD', // Default warehouse for GRN Receipt as per warehouseAllocationService
+        length: itemDims.length !== null && itemDims.length !== undefined ? parseFloat(itemDims.length) : undefined,
+        width: itemDims.width !== null && itemDims.width !== undefined ? parseFloat(itemDims.width) : undefined,
+        thickness: itemDims.thickness !== null && itemDims.thickness !== undefined ? parseFloat(itemDims.thickness) : undefined,
+        diameter: itemDims.diameter !== null && itemDims.diameter !== undefined ? parseFloat(itemDims.diameter) : undefined,
+        outer_diameter: itemDims.outer_diameter !== null && itemDims.outer_diameter !== undefined ? parseFloat(itemDims.outer_diameter) : undefined,
+        density: itemDims.density !== null && itemDims.density !== undefined ? parseFloat(itemDims.density) : undefined,
+        weight_per_unit: itemDims.weight_per_unit !== null && itemDims.weight_per_unit !== undefined ? parseFloat(itemDims.weight_per_unit) : undefined,
+        shape_type: itemDims.shape_type || undefined,
+        materialName: itemDims.material_name || undefined,
+        materialType: itemDims.material_type || undefined
       }
     );
 

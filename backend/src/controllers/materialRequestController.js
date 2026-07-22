@@ -2,21 +2,51 @@ const pool = require('../config/db');
 const stockService = require('../services/stockService');
 
 const resolveDimensionItemCode = async (connection, item) => {
-  const uom = (item.uom || item.unit || '').toLowerCase().trim();
-  if (uom === 'kg' || uom === 'kgs') {
-    const lengthVal = parseFloat(item.length || 0);
-    const widthVal = parseFloat(item.width || 0);
-    const thicknessVal = parseFloat(item.thickness || 0);
-    const diameterVal = parseFloat(item.diameter || 0);
-    const outerDiameterVal = parseFloat(item.outer_diameter || item.outerDiameter || 0);
+  const lengthVal = parseFloat(item.length || 0);
+  const widthVal = parseFloat(item.width || 0);
+  const thicknessVal = parseFloat(item.thickness || 0);
+  const diameterVal = parseFloat(item.diameter || 0);
+  const outerDiameterVal = parseFloat(item.outer_diameter || item.outerDiameter || 0);
+  const hasDimensions = (lengthVal > 0 || widthVal > 0 || thicknessVal > 0 || diameterVal > 0 || outerDiameterVal > 0);
 
+  // If item has NO dimensions specified, match stock_balance by material_name with positive balance
+  if (!hasDimensions && (item.item_name || item.material_name)) {
+    const [nameOnly] = await connection.query(`
+      SELECT item_code FROM stock_balance 
+      WHERE (LOWER(TRIM(material_name)) = LOWER(TRIM(?)) OR LOWER(TRIM(material_name)) = LOWER(TRIM(?)))
+        AND current_balance > 0
+      ORDER BY current_balance DESC LIMIT 1
+    `, [item.item_name || item.item_code, item.material_name || item.item_name || item.item_code]);
+    if (nameOnly.length > 0) return nameOnly[0].item_code;
+  }
+
+  // 1. Check if item.item_code exists in stock_balance WITH positive stock AND matching dimensions
+  if (item.item_code) {
+    let query = 'SELECT item_code FROM stock_balance WHERE item_code = ? AND current_balance > 0';
+    const params = [item.item_code];
+
+    if (hasDimensions) {
+      if (lengthVal > 0) { query += ' AND (ABS(COALESCE(length, 0) - ?) < 0.0001)'; params.push(lengthVal); }
+      if (widthVal > 0) { query += ' AND (ABS(COALESCE(width, 0) - ?) < 0.0001)'; params.push(widthVal); }
+      if (thicknessVal > 0) { query += ' AND (ABS(COALESCE(thickness, 0) - ?) < 0.0001)'; params.push(thicknessVal); }
+      if (diameterVal > 0) { query += ' AND (ABS(COALESCE(diameter, 0) - ?) < 0.0001)'; params.push(diameterVal); }
+      if (outerDiameterVal > 0) { query += ' AND (ABS(COALESCE(outer_diameter, 0) - ?) < 0.0001)'; params.push(outerDiameterVal); }
+    }
+    query += ' LIMIT 1';
+
+    const [existing] = await connection.query(query, params);
+    if (existing.length > 0) return existing[0].item_code;
+  }
+
+  // 2. Check dimension matching for rows with positive stock
+  {
     let dimensionConditions = [];
     let dimensionParams = [];
 
     dimensionConditions.push('(COALESCE(length, 0) = ? OR (? = 0 AND length IS NULL))');
     dimensionParams.push(lengthVal, lengthVal);
 
-    const shapeLower = (item.shape_type || '').toLowerCase();
+    const shapeLower = (item.shape_type || item.shape_name || '').toLowerCase();
 
     if (shapeLower.includes('threaded rod') || shapeLower.includes('tr')) {
       dimensionConditions.push('(COALESCE(thickness, 0) = ? OR (? = 0 AND thickness IS NULL))');
@@ -31,29 +61,184 @@ const resolveDimensionItemCode = async (connection, item) => {
     } else if (shapeLower.includes('round bar') || shapeLower.includes('round') || shapeLower.includes('rb') || shapeLower.includes('wire')) {
       dimensionConditions.push('(COALESCE(diameter, 0) = ? OR (? = 0 AND diameter IS NULL))');
       dimensionParams.push(diameterVal, diameterVal);
-    } else {
+    } else if (shapeLower.includes('hex')) {
       dimensionConditions.push('(COALESCE(width, 0) = ? OR (? = 0 AND width IS NULL))');
       dimensionParams.push(widthVal, widthVal);
-      dimensionConditions.push('(COALESCE(thickness, 0) = ? OR (? = 0 AND thickness IS NULL))');
-      dimensionParams.push(thicknessVal, thicknessVal);
+    } else if (shapeLower.includes('square') || shapeLower.includes('sq')) {
+      dimensionConditions.push('(COALESCE(width, 0) = ? OR (? = 0 AND width IS NULL))');
+      dimensionParams.push(widthVal, widthVal);
+    } else {
+      if (widthVal > 0) {
+        dimensionConditions.push('(COALESCE(width, 0) = ? OR (? = 0 AND width IS NULL))');
+        dimensionParams.push(widthVal, widthVal);
+      }
+      if (thicknessVal > 0) {
+        dimensionConditions.push('(COALESCE(thickness, 0) = ? OR (? = 0 AND thickness IS NULL))');
+        dimensionParams.push(thicknessVal, thicknessVal);
+      }
+      if (outerDiameterVal > 0) {
+        dimensionConditions.push('(COALESCE(outer_diameter, 0) = ? OR (? = 0 AND outer_diameter IS NULL))');
+        dimensionParams.push(outerDiameterVal, outerDiameterVal);
+      }
     }
 
     const [rows] = await connection.query(`
       SELECT item_code 
       FROM stock_balance
-      WHERE LOWER(TRIM(material_name)) = LOWER(TRIM(?))
+      WHERE (LOWER(TRIM(material_name)) = LOWER(TRIM(?)) OR LOWER(TRIM(material_name)) = LOWER(TRIM(?)))
+        AND current_balance > 0
         AND ${dimensionConditions.join(' AND ')}
+      ORDER BY current_balance DESC
       LIMIT 1
     `, [
       item.item_name || item.name || item.item_code,
+      item.material_name || item.item_name || item.item_code,
       ...dimensionParams
     ]);
     if (rows.length > 0) {
       return rows[0].item_code;
     }
-    return null;
+
+    // 3. Fallback without current_balance > 0
+    const [rowsAny] = await connection.query(`
+      SELECT item_code 
+      FROM stock_balance
+      WHERE (LOWER(TRIM(material_name)) = LOWER(TRIM(?)) OR LOWER(TRIM(material_name)) = LOWER(TRIM(?)))
+        AND ${dimensionConditions.join(' AND ')}
+      LIMIT 1
+    `, [
+      item.item_name || item.name || item.item_code,
+      item.material_name || item.item_name || item.item_code,
+      ...dimensionParams
+    ]);
+    if (rowsAny.length > 0) {
+      return rowsAny[0].item_code;
+    }
   }
+
+  // 4. Final fallback check if item_code exists at all in stock_balance
+  if (item.item_code) {
+    const [existingAny] = await connection.query('SELECT item_code FROM stock_balance WHERE item_code = ? LIMIT 1', [item.item_code]);
+    if (existingAny.length > 0) return existingAny[0].item_code;
+  }
+
   return item.item_code;
+};
+
+const calculateItemStockAndAvailability = async (connection, item, mrStatus = '') => {
+  const resolvedItemCode = await resolveDimensionItemCode(connection, item);
+
+  let stockRows = [];
+  const candidateCodes = Array.from(new Set([resolvedItemCode, item.item_code].filter(Boolean)));
+
+  // 1. Check by candidate item_codes in stock_balance
+  for (const code of candidateCodes) {
+    const [byCode] = await connection.query(`
+      SELECT warehouse as warehouse_name, current_balance as current_stock
+      FROM stock_balance
+      WHERE item_code = ? AND current_balance > 0
+    `, [code]);
+    if (byCode.length > 0) {
+      stockRows = byCode;
+      break;
+    }
+  }
+
+  // 2. If no stock by code, perform dimension-based fallback lookup across stock_balance
+  if (stockRows.length === 0) {
+    const lengthVal = parseFloat(item.length || 0);
+    const widthVal = parseFloat(item.width || 0);
+    const thicknessVal = parseFloat(item.thickness || 0);
+    const diameterVal = parseFloat(item.diameter || 0);
+    const outerDiameterVal = parseFloat(item.outer_diameter || item.outerDiameter || 0);
+
+    let dimensionConditions = [];
+    let dimensionParams = [];
+
+    dimensionConditions.push('(COALESCE(length, 0) = ? OR (? = 0 AND length IS NULL))');
+    dimensionParams.push(lengthVal, lengthVal);
+
+    const shapeLower = (item.shape_type || item.shape_name || '').toLowerCase();
+
+    if (shapeLower.includes('threaded rod') || shapeLower.includes('tr')) {
+      dimensionConditions.push('(COALESCE(thickness, 0) = ? OR (? = 0 AND thickness IS NULL))');
+      dimensionParams.push(thicknessVal, thicknessVal);
+      dimensionConditions.push('(COALESCE(diameter, 0) = ? OR (? = 0 AND diameter IS NULL))');
+      dimensionParams.push(diameterVal, diameterVal);
+    } else if ((shapeLower.includes('pipe') || shapeLower.includes('round tube') || shapeLower.includes('tube')) && !shapeLower.includes('square') && !shapeLower.includes('rectangular')) {
+      dimensionConditions.push('(COALESCE(thickness, 0) = ? OR (? = 0 AND thickness IS NULL))');
+      dimensionParams.push(thicknessVal, thicknessVal);
+      dimensionConditions.push('(COALESCE(outer_diameter, 0) = ? OR (? = 0 AND outer_diameter IS NULL))');
+      dimensionParams.push(outerDiameterVal, outerDiameterVal);
+    } else if (shapeLower.includes('round bar') || shapeLower.includes('round') || shapeLower.includes('rb') || shapeLower.includes('wire')) {
+      dimensionConditions.push('(COALESCE(diameter, 0) = ? OR (? = 0 AND diameter IS NULL))');
+      dimensionParams.push(diameterVal, diameterVal);
+    } else if (shapeLower.includes('hex')) {
+      dimensionConditions.push('(COALESCE(width, 0) = ? OR (? = 0 AND width IS NULL))');
+      dimensionParams.push(widthVal, widthVal);
+    } else if (shapeLower.includes('square') || shapeLower.includes('sq')) {
+      dimensionConditions.push('(COALESCE(width, 0) = ? OR (? = 0 AND width IS NULL))');
+      dimensionParams.push(widthVal, widthVal);
+    } else {
+      if (widthVal > 0) {
+        dimensionConditions.push('(COALESCE(width, 0) = ? OR (? = 0 AND width IS NULL))');
+        dimensionParams.push(widthVal, widthVal);
+      }
+      if (thicknessVal > 0) {
+        dimensionConditions.push('(COALESCE(thickness, 0) = ? OR (? = 0 AND thickness IS NULL))');
+        dimensionParams.push(thicknessVal, thicknessVal);
+      }
+      if (outerDiameterVal > 0) {
+        dimensionConditions.push('(COALESCE(outer_diameter, 0) = ? OR (? = 0 AND outer_diameter IS NULL))');
+        dimensionParams.push(outerDiameterVal, outerDiameterVal);
+      }
+    }
+
+    const [byDim] = await connection.query(`
+      SELECT warehouse as warehouse_name, current_balance as current_stock
+      FROM stock_balance
+      WHERE (LOWER(TRIM(material_name)) = LOWER(TRIM(?)) OR LOWER(TRIM(material_name)) = LOWER(TRIM(?)))
+        AND current_balance > 0
+        AND ${dimensionConditions.join(' AND ')}
+    `, [
+      item.item_name || item.name || item.item_code,
+      item.material_name || item.item_name || item.item_code,
+      ...dimensionParams
+    ]);
+    if (byDim.length > 0) {
+      stockRows = byDim;
+    }
+  }
+
+  const totalStock = Math.round(stockRows.reduce((sum, row) => sum + parseFloat(row.current_stock || 0), 0) * 1000) / 1000;
+
+  const requiredQty = Math.round(parseFloat(item.quantity || item.design_qty || 0) * 1000) / 1000;
+  const releasedQty = Math.round(parseFloat(item.allocated_quantity || item.issued_qty || 0) * 1000) / 1000;
+  const remainingQty = Math.max(0, Math.round((requiredQty - releasedQty) * 1000) / 1000);
+
+  const statusUpper = (mrStatus || '').toUpperCase().trim().replace(/ /g, '_');
+  let targetQty = requiredQty;
+  if (statusUpper === 'PARTIALLY_RELEASED' || statusUpper === 'PARTIAL_RELEASED' || statusUpper === 'PARTIAL' || releasedQty > 0) {
+    targetQty = remainingQty;
+  }
+
+  let isAvailable = false;
+  if (statusUpper === 'FULFILLED' || statusUpper === 'COMPLETED') {
+    isAvailable = totalStock > 0;
+  } else {
+    isAvailable = (totalStock + 0.001) >= targetQty;
+  }
+
+  return {
+    resolvedItemCode,
+    totalStock,
+    requiredQty,
+    releasedQty,
+    remainingQty,
+    targetQty,
+    available: isAvailable,
+    stocks: stockRows
+  };
 };
 
 const materialRequestController = {
@@ -148,7 +333,7 @@ const materialRequestController = {
           mriMap[mri.mr_id].push(mri);
         }
 
-        // Process availability in JS
+        // Process availability in JS using calculateItemStockAndAvailability
         for (const mr of rows) {
           const mrItems = mriMap[mr.id] || [];
           if (mrItems.length === 0) {
@@ -159,54 +344,8 @@ const materialRequestController = {
           let mrAvailability = 'available';
 
           for (const item of mrItems) {
-            let availableStock = 0;
-            const uom = (item.uom || '').toLowerCase().trim();
-
-            if (uom === 'kg' || uom === 'kgs') {
-              const lengthVal = parseFloat(item.length || 0);
-              const widthVal = parseFloat(item.width || 0);
-              const thicknessVal = parseFloat(item.thickness || 0);
-              const diameterVal = parseFloat(item.diameter || 0);
-              const outerDiameterVal = parseFloat(item.outer_diameter || item.outerDiameter || 0);
-              const shapeLower = (item.shape_type || '').toLowerCase();
-
-              // Filter stock rows by name + shape dimensions
-              const matchingStocks = sbRows.filter(sb => {
-                const sbName = (sb.material_name || '').toLowerCase().trim();
-                const itemName = (item.item_name || item.item_code || '').toLowerCase().trim();
-                if (sbName !== itemName) return false;
-
-                // Length
-                if (Math.abs((parseFloat(sb.length) || 0) - lengthVal) >= 0.0001) return false;
-
-                if (shapeLower.includes('threaded rod') || shapeLower.includes('tr')) {
-                  if (Math.abs((parseFloat(sb.thickness) || 0) - thicknessVal) >= 0.0001) return false;
-                  if (Math.abs((parseFloat(sb.diameter) || 0) - diameterVal) >= 0.0001) return false;
-                } else if (shapeLower.includes('pipe') || shapeLower.includes('round tube') || shapeLower.includes('tube')) {
-                  if (Math.abs((parseFloat(sb.thickness) || 0) - thicknessVal) >= 0.0001) return false;
-                  if (Math.abs((parseFloat(sb.outer_diameter) || 0) - outerDiameterVal) >= 0.0001) return false;
-                } else if (shapeLower.includes('round bar') || shapeLower.includes('round') || shapeLower.includes('rb') || shapeLower.includes('wire')) {
-                  if (Math.abs((parseFloat(sb.diameter) || 0) - diameterVal) >= 0.0001) return false;
-                } else {
-                  if (Math.abs((parseFloat(sb.width) || 0) - widthVal) >= 0.0001) return false;
-                  if (Math.abs((parseFloat(sb.thickness) || 0) - thicknessVal) >= 0.0001) return false;
-                }
-
-                return true;
-              });
-
-              availableStock = matchingStocks.reduce((sum, sb) => sum + (parseFloat(sb.current_balance) || 0), 0);
-            } else {
-              const matchingStocks = sbRows.filter(sb => sb.item_code === item.item_code);
-              availableStock = matchingStocks.reduce((sum, sb) => sum + (parseFloat(sb.current_balance) || 0), 0);
-            }
-
-            // Common availability logic: currentStock > 0 ? "available" : "unavailable"
-            const itemAvailability = availableStock > 0 ? 'available' : 'unavailable';
-
-            // Aggregate MR availability:
-            // - If any item is 'unavailable' -> 'unavailable'
-            if (itemAvailability === 'unavailable') {
+            const availInfo = await calculateItemStockAndAvailability(pool, item, mr.status);
+            if (!availInfo.available) {
               mrAvailability = 'unavailable';
             }
           }
@@ -345,87 +484,24 @@ const materialRequestController = {
       let allItemsAvailable = true;
 
       for (let item of items) {
-        const resolvedItemCode = await resolveDimensionItemCode(pool, item);
+        const availInfo = await calculateItemStockAndAvailability(pool, item, request.status);
 
-        let stockRows;
-        const uom = (item.uom || '').toLowerCase().trim();
-        if (uom === 'kg' || uom === 'kgs') {
-          const lengthVal = parseFloat(item.length || 0);
-          const widthVal = parseFloat(item.width || 0);
-          const thicknessVal = parseFloat(item.thickness || 0);
-          const diameterVal = parseFloat(item.diameter || 0);
-          const outerDiameterVal = parseFloat(item.outer_diameter || item.outerDiameter || 0);
-          
-          let dimensionConditions = [];
-          let dimensionParams = [];
+        item.resolved_item_code = availInfo.resolvedItemCode;
+        item.stocks = availInfo.stocks;
+        item.total_stock = availInfo.totalStock;
 
-          dimensionConditions.push('(COALESCE(length, 0) = ? OR (? = 0 AND length IS NULL))');
-          dimensionParams.push(lengthVal, lengthVal);
-
-          const shapeLower = (item.shape_type || '').toLowerCase();
-
-          if (shapeLower.includes('threaded rod') || shapeLower.includes('tr')) {
-            dimensionConditions.push('(COALESCE(thickness, 0) = ? OR (? = 0 AND thickness IS NULL))');
-            dimensionParams.push(thicknessVal, thicknessVal);
-            dimensionConditions.push('(COALESCE(diameter, 0) = ? OR (? = 0 AND diameter IS NULL))');
-            dimensionParams.push(diameterVal, diameterVal);
-          } else if ((shapeLower.includes('pipe') || shapeLower.includes('round tube') || shapeLower.includes('tube')) && !shapeLower.includes('square') && !shapeLower.includes('rectangular')) {
-            dimensionConditions.push('(COALESCE(thickness, 0) = ? OR (? = 0 AND thickness IS NULL))');
-            dimensionParams.push(thicknessVal, thicknessVal);
-            dimensionConditions.push('(COALESCE(outer_diameter, 0) = ? OR (? = 0 AND outer_diameter IS NULL))');
-            dimensionParams.push(outerDiameterVal, outerDiameterVal);
-          } else if (shapeLower.includes('round bar') || shapeLower.includes('round') || shapeLower.includes('rb') || shapeLower.includes('wire')) {
-            dimensionConditions.push('(COALESCE(diameter, 0) = ? OR (? = 0 AND diameter IS NULL))');
-            dimensionParams.push(diameterVal, diameterVal);
-          } else {
-            dimensionConditions.push('(COALESCE(width, 0) = ? OR (? = 0 AND width IS NULL))');
-            dimensionParams.push(widthVal, widthVal);
-            dimensionConditions.push('(COALESCE(thickness, 0) = ? OR (? = 0 AND thickness IS NULL))');
-            dimensionParams.push(thicknessVal, thicknessVal);
-          }
-
-          [stockRows] = await pool.query(`
-            SELECT warehouse as warehouse_name, current_balance as current_stock
-            FROM stock_balance
-            WHERE LOWER(TRIM(material_name)) = LOWER(TRIM(?))
-              AND current_balance > 0
-              AND ${dimensionConditions.join(' AND ')}
-          `, [
-            item.item_name || item.name || item.item_code,
-            ...dimensionParams
-          ]);
-        } else {
-          [stockRows] = await pool.query(`
-            SELECT warehouse as warehouse_name, current_balance as current_stock
-            FROM stock_balance
-            WHERE item_code = ? AND current_balance > 0
-          `, [resolvedItemCode]);
-        }
-
-        item.stocks = stockRows;
-
-        // Calculate total stock across all warehouses
-        const totalStock = stockRows.reduce((sum, row) => sum + parseFloat(row.current_stock), 0);
-        item.total_stock = totalStock;
-
-        // Determine suggested warehouse (one with the most stock)
-        const suggestedWh = stockRows.length > 0
-          ? stockRows.reduce((prev, current) => (parseFloat(prev.current_stock) > parseFloat(current.current_stock)) ? prev : current)
+        const suggestedWh = availInfo.stocks.length > 0
+          ? availInfo.stocks.reduce((prev, current) => (parseFloat(prev.current_stock) > parseFloat(current.current_stock)) ? prev : current)
           : null;
 
         item.suggested_warehouse = suggestedWh ? suggestedWh.warehouse_name : null;
 
-        // Use the selected warehouse stock for display, but fallback to total stock logic
-        const matchingWh = stockRows.find(s => s.warehouse_name === selectedWh);
+        const matchingWh = availInfo.stocks.find(s => s.warehouse_name === selectedWh);
         item.current_stock = matchingWh ? parseFloat(matchingWh.current_stock) : 0;
 
-        // An item is "Available" if total stock >= required quantity
-        const requiredQty = parseFloat(item.quantity || item.design_qty || 0);
-        const allocatedQty = parseFloat(item.allocated_quantity || 0);
-        const remainingQty = Math.max(0, requiredQty - allocatedQty);
-        item.fulfillment_source = (remainingQty <= 0 || totalStock >= remainingQty) ? 'STOCK' : 'PURCHASE';
+        item.fulfillment_source = (availInfo.remainingQty <= 0 || availInfo.totalStock >= availInfo.remainingQty) ? 'STOCK' : 'PURCHASE';
 
-        if (remainingQty > 0 && totalStock < remainingQty) {
+        if (!availInfo.available) {
           allItemsAvailable = false;
         }
       }
@@ -505,41 +581,89 @@ const materialRequestController = {
             const remainingQty = Math.max(0, requiredQty - releasedQty);
 
             if (remainingQty > 0) {
-              // Find a warehouse with enough stock, or just the one with most stock
-              const [stockRows] = await connection.query(`
-                SELECT warehouse, current_balance 
+              // Find warehouses with positive stock balance for this item
+              let [stockRows] = await connection.query(`
+                SELECT item_code, warehouse, current_balance 
                 FROM stock_balance 
-                WHERE item_code = ?
-                ORDER BY current_balance DESC LIMIT 1
+                WHERE item_code = ? AND current_balance > 0
+                ORDER BY current_balance DESC
               `, [resolvedItemCode]);
 
-              const sourceWarehouse = stockRows.length > 0 ? stockRows[0].warehouse : (mr.source_warehouse || 'Main');
+              if (stockRows.length === 0 && item.item_code && item.item_code !== resolvedItemCode) {
+                [stockRows] = await connection.query(`
+                  SELECT item_code, warehouse, current_balance 
+                  FROM stock_balance 
+                  WHERE item_code = ? AND current_balance > 0
+                  ORDER BY current_balance DESC
+                `, [item.item_code]);
+              }
 
-              await stockService.addStockLedgerEntry(
-                resolvedItemCode,
-                'OUT',
-                remainingQty,
-                'Material Request',
-                mr.id,
-                mr.mr_number,
-                {
-                  remarks: `Material released for MR: ${mr.mr_number}`,
-                  userId: req.user?.id || 1,
-                  warehouse: sourceWarehouse,
-                  materialName: item.item_name,
-                  materialType: item.item_type,
-                  unit: item.uom,
-                  length: item.length,
-                  width: item.width,
-                  thickness: item.thickness,
-                  diameter: item.diameter,
-                  outer_diameter: item.outer_diameter,
-                  density: item.density,
-                  weight_per_unit: item.weight_per_unit,
-                  shape_type: item.shape_type
-                },
-                connection
-              );
+              let amountToDeduct = remainingQty;
+
+              if (stockRows.length > 0) {
+                for (const stockRow of stockRows) {
+                  if (amountToDeduct <= 0) break;
+                  const availableInWh = parseFloat(stockRow.current_balance || 0);
+                  if (availableInWh <= 0) continue;
+
+                  const issueQty = Math.min(amountToDeduct, availableInWh);
+
+                  await stockService.addStockLedgerEntry(
+                    stockRow.item_code,
+                    'OUT',
+                    issueQty,
+                    'Material Request',
+                    mr.id,
+                    mr.mr_number,
+                    {
+                      remarks: `Material released for MR: ${mr.mr_number}`,
+                      userId: req.user?.id || 1,
+                      warehouse: stockRow.warehouse,
+                      materialName: item.item_name,
+                      materialType: item.item_type,
+                      unit: item.uom,
+                      length: item.length,
+                      width: item.width,
+                      thickness: item.thickness,
+                      diameter: item.diameter,
+                      outer_diameter: item.outer_diameter,
+                      density: item.density,
+                      weight_per_unit: item.weight_per_unit,
+                      shape_type: item.shape_type
+                    },
+                    connection
+                  );
+
+                  amountToDeduct -= issueQty;
+                }
+              } else {
+                // If no positive stock rows found, fall back to resolved item code and default warehouse
+                await stockService.addStockLedgerEntry(
+                  resolvedItemCode,
+                  'OUT',
+                  remainingQty,
+                  'Material Request',
+                  mr.id,
+                  mr.mr_number,
+                  {
+                    remarks: `Material released for MR: ${mr.mr_number}`,
+                    userId: req.user?.id || 1,
+                    warehouse: mr.source_warehouse || 'Main Warehouse',
+                    materialName: item.item_name,
+                    materialType: item.item_type,
+                    unit: item.uom,
+                    length: item.length,
+                    width: item.width,
+                    thickness: item.thickness,
+                    diameter: item.diameter,
+                    outer_diameter: item.outer_diameter,
+                    density: item.density,
+                    weight_per_unit: item.weight_per_unit,
+                    shape_type: item.shape_type
+                  },
+                  connection
+                );
+              }
             }
 
             // Always update allocated_quantity to requiredQty on completion

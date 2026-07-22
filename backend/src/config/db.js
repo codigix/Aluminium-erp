@@ -2476,6 +2476,33 @@ const ensureStockEntryTables = async () => {
     if (!existingSeItemsCols.has('material_type')) {
       await connection.query("ALTER TABLE stock_entry_items ADD COLUMN material_type VARCHAR(100) AFTER material_name");
     }
+    if (!existingSeItemsCols.has('length')) {
+      await connection.query("ALTER TABLE stock_entry_items ADD COLUMN length DECIMAL(12, 3) NULL");
+    }
+    if (!existingSeItemsCols.has('width')) {
+      await connection.query("ALTER TABLE stock_entry_items ADD COLUMN width DECIMAL(12, 3) NULL");
+    }
+    if (!existingSeItemsCols.has('thickness')) {
+      await connection.query("ALTER TABLE stock_entry_items ADD COLUMN thickness DECIMAL(12, 3) NULL");
+    }
+    if (!existingSeItemsCols.has('diameter')) {
+      await connection.query("ALTER TABLE stock_entry_items ADD COLUMN diameter DECIMAL(12, 3) NULL");
+    }
+    if (!existingSeItemsCols.has('outer_diameter')) {
+      await connection.query("ALTER TABLE stock_entry_items ADD COLUMN outer_diameter DECIMAL(12, 3) NULL");
+    }
+    if (!existingSeItemsCols.has('density')) {
+      await connection.query("ALTER TABLE stock_entry_items ADD COLUMN density DECIMAL(10, 4) NULL");
+    }
+    if (!existingSeItemsCols.has('weight_per_unit')) {
+      await connection.query("ALTER TABLE stock_entry_items ADD COLUMN weight_per_unit DECIMAL(12, 4) NULL");
+    }
+    if (!existingSeItemsCols.has('shape_id')) {
+      await connection.query("ALTER TABLE stock_entry_items ADD COLUMN shape_id INT NULL");
+    }
+    if (!existingSeItemsCols.has('shape_type')) {
+      await connection.query("ALTER TABLE stock_entry_items ADD COLUMN shape_type VARCHAR(100) NULL");
+    }
     console.log('Stock Entry tables synchronized');
   } catch (error) {
     console.error('Stock Entry table sync failed', error.message);

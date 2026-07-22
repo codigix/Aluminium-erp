@@ -754,6 +754,19 @@ const updateQC = async (qcId, updates) => {
             'UPDATE grn_items SET status = ? WHERE id = ?',
             ['APPROVED', item.id]
           );
+
+          // Trigger stock ledger IN entry for approved QC item
+          const [qciData] = await connection.query(
+            'SELECT accepted_qty, item_code FROM qc_inspection_items WHERE qc_inspection_id = ? AND grn_item_id = ? LIMIT 1',
+            [qcId, item.id]
+          );
+
+          const passQty = qciData.length > 0 ? parseFloat(qciData[0].accepted_qty || 0) : parseFloat(item.accepted_qty || 0);
+          const itemCode = qciData.length > 0 ? qciData[0].item_code : null;
+
+          if (passQty > 0 && itemCode) {
+            await stockService.createQCStockLedgerEntry(qcId, grnId, item.id, itemCode, passQty, connection);
+          }
         }
       } else if (currentStatus === 'FAILED' || currentStatus === 'REJECTED') {
         for (const item of grnItems) {
@@ -851,7 +864,7 @@ const updateQCItem = async (qcItemId, updates) => {
     );
 
     const [qcItem] = await connection.query(
-      'SELECT grn_item_id, accepted_qty, rejected_qty, status FROM qc_inspection_items WHERE id = ?',
+      'SELECT grn_item_id, item_code, accepted_qty, rejected_qty, status FROM qc_inspection_items WHERE id = ?',
       [qcItemId]
     );
 
@@ -865,6 +878,27 @@ const updateQCItem = async (qcItemId, updates) => {
         'UPDATE grn_items SET accepted_qty = ?, rejected_qty = ?, status = ? WHERE id = ?',
         [finalAcceptedQty, finalRejectedQty, finalStatus, grnItemId]
       );
+
+      // Trigger stock ledger entry if item is passed/accepted/available
+      const passQty = parseFloat(finalAcceptedQty || 0);
+      const statusUpper = (finalStatus || '').toUpperCase();
+      if (passQty > 0 && (statusUpper === 'PASSED' || statusUpper === 'ACCEPTED' || statusUpper === 'AVAILABLE' || statusUpper === 'APPROVED')) {
+        const [qcData] = await connection.query('SELECT qc_inspection_id FROM qc_inspection_items WHERE id = ?', [qcItemId]);
+        if (qcData.length) {
+          const qcId = qcData[0].qc_inspection_id;
+          const [grnData] = await connection.query('SELECT grn_id FROM qc_inspections WHERE id = ?', [qcId]);
+          if (grnData.length) {
+            await stockService.createQCStockLedgerEntry(
+              qcId,
+              grnData[0].grn_id,
+              grnItemId,
+              qcItem[0].item_code,
+              passQty,
+              connection
+            );
+          }
+        }
+      }
     }
 
     await connection.commit();
